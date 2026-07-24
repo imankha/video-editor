@@ -125,7 +125,7 @@ def test_generate_poster_slowmo_samples_first_half(monkeypatch):
 
     # Caller resolves the FULL section; the poster samples the FIRST HALF.
     res = generate_and_store_poster(USER_ID, "reel.mp4", (2.0, 6.0))
-    assert res == "reel.mp4.v2.jpg"  # T5682: versioned for resized thumbs
+    assert res == "reel.mp4.jpg"
     assert captured["window"] == (2.0, 4.0)
 
 
@@ -148,7 +148,7 @@ def test_generate_poster_no_slowmo_uses_first_frame(monkeypatch):
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
     # No section resolved (no slow-mo) -> first frame.
-    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.v2.jpg"  # T5682
+    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
     assert called.get("yes")
 
 
@@ -170,8 +170,8 @@ def test_generate_poster_missing_segments_uses_first_frame(monkeypatch):
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
     # Explicit None AND the default both -> first frame (no fabricated section).
-    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.v2.jpg"  # T5682
-    assert generate_and_store_poster(USER_ID, "reel.mp4") == "reel.mp4.v2.jpg"
+    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
+    assert generate_and_store_poster(USER_ID, "reel.mp4") == "reel.mp4.jpg"
     assert called.get("yes")
 
 

@@ -83,9 +83,10 @@ def test_ensure_recap_poster_generates_whole_clip(tmp_path):
 
     captured = {}
 
-    def fake_extract(source, output_path, window=None):
+    def fake_extract(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         captured["window"] = window
         captured["source"] = source
+        captured["resize_width"] = resize_width  # T5682: default None = full-size (og:image)
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpegbytes")
         return True
@@ -100,6 +101,8 @@ def test_ensure_recap_poster_generates_whole_clip(tmp_path):
          patch.object(poster_mod, "_jpeg_dimensions", return_value=(1280, 720)), \
          patch("app.storage.upload_bytes_to_r2_global", side_effect=fake_upload):
         assert poster_mod.ensure_recap_poster(RECAP_KEY, POSTER_KEY) is True
+    # T5682: this shared og:image object stays FULL-SIZE (no resize) by default.
+    assert captured["resize_width"] is None
 
     # Whole-clip policy: NO window (reel slow-mo policy must not apply to recaps).
     assert captured["window"] is None

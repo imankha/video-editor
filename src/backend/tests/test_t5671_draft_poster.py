@@ -31,7 +31,7 @@ from app.services.export_helpers import SourceUnavailable
 USER_ID = "test-user-t5671"
 PROFILE_ID = "t5671prof"
 PROJECT_ID = 777
-REL_PATH = f"posters/drafts/{PROJECT_ID}.jpg"
+REL_PATH = f"posters/drafts/{PROJECT_ID}.v2.jpg"  # T5682: versioned, forces regen at card size
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ REL_PATH = f"posters/drafts/{PROJECT_ID}.jpg"
 
 def test_draft_poster_rel_path_is_deterministic():
     assert poster_mod.draft_poster_rel_path(PROJECT_ID) == REL_PATH
-    assert poster_mod.draft_poster_rel_path(1) == "posters/drafts/1.jpg"
+    assert poster_mod.draft_poster_rel_path(1) == "posters/drafts/1.v2.jpg"
 
 
 # ---------------------------------------------------------------------------
@@ -218,28 +218,33 @@ def test_invalidate_draft_poster_never_raises():
 # GET /api/projects/{id}/poster.jpg + _serve_draft_poster_jpeg
 # ---------------------------------------------------------------------------
 
-def _fake_jpeg_client(status_code=200, content=b"\xff\xd8jpegbytes"):
+def _fake_poster_r2_client(status_code=200, content=b"\xff\xd8jpegbytes", etag='"r2etag123"'):
+    """A stand-in for storage.get_poster_r2_client() -- the pooled client used
+    to fetch a presigned R2 URL (T5682, replaces the old per-request
+    httpx.AsyncClient())."""
+    from unittest.mock import AsyncMock
     fake_resp = MagicMock(status_code=status_code, content=content)
+    fake_resp.headers = {"etag": etag} if etag else {}
+    client = MagicMock()
+    client.get = AsyncMock(return_value=fake_resp)
+    return client
 
-    class _FakeClient:
-        def __init__(self, *a, **k): ...
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        async def get(self, url): return fake_resp
 
-    return _FakeClient
+def _fake_request(if_none_match=None):
+    """A minimal Request stand-in exposing .headers.get() (T5682)."""
+    req = MagicMock()
+    req.headers = {"if-none-match": if_none_match} if if_none_match else {}
+    return req
 
 
 def test_get_draft_poster_serves_jpeg():
-    import httpx
-
     from app.routers import projects
 
     with patch("app.services.poster.ensure_draft_poster", return_value=REL_PATH), \
          patch("app.routers.projects.get_current_user_id", return_value=USER_ID), \
          patch.object(projects, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
-        resp = asyncio.run(projects.get_draft_poster(PROJECT_ID))
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
+        resp = asyncio.run(projects.get_draft_poster(PROJECT_ID, _fake_request()))
 
     assert resp.media_type == "image/jpeg"
     assert resp.headers["cache-control"] == "private, max-age=86400"  # T5682: long cache + ETag
@@ -251,10 +256,27 @@ def test_get_draft_poster_404_when_no_poster():
     from app.routers import projects
     with patch("app.services.poster.ensure_draft_poster", return_value=None), \
          patch("app.routers.projects.get_current_user_id", return_value=USER_ID):
-        resp = asyncio.run(projects.get_draft_poster(PROJECT_ID))
+        resp = asyncio.run(projects.get_draft_poster(PROJECT_ID, _fake_request()))
     # T5682: negative cache on 404s
     assert resp.status_code == 404
     assert resp.headers["cache-control"] == "private, max-age=60"
+
+
+def test_get_draft_poster_304_when_if_none_match_matches():
+    # T5682: a matching If-None-Match short-circuits to 304 via a SINGLE HEAD
+    # against the deterministic key -- BEFORE ensure_draft_poster's own
+    # cache-check HEAD runs.
+    from app.routers import projects
+
+    with patch("app.services.poster.ensure_draft_poster") as ensure, \
+         patch("app.routers.projects.get_current_user_id", return_value=USER_ID), \
+         patch("app.storage.r2_head_object", return_value={"ETag": '"r2etag123"'}) as head:
+        resp = asyncio.run(projects.get_draft_poster(PROJECT_ID, _fake_request('"r2etag123"')))
+
+    assert resp.status_code == 304
+    head.assert_called_once_with(USER_ID, REL_PATH)
+    # Short-circuited before ensure_draft_poster ran at all.
+    ensure.assert_not_called()
 
 
 def test_serve_draft_poster_404_when_no_presign():
@@ -267,12 +289,10 @@ def test_serve_draft_poster_404_when_no_presign():
 
 
 def test_serve_draft_poster_502_on_bad_fetch():
-    import httpx
-
     from app.routers import projects
     with patch("app.routers.projects.get_current_user_id", return_value=USER_ID), \
          patch.object(projects, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client(status_code=403)), \
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client(status_code=403)), \
          pytest.raises(HTTPException) as e:
         asyncio.run(projects._serve_draft_poster_jpeg(REL_PATH))
     assert e.value.status_code == 502

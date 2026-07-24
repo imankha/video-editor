@@ -31,17 +31,23 @@ PROFILE_ID = "t5681prof"
 GAME_ID = 1001
 
 
-def _fake_jpeg_client(status_code=200, content=b"\xff\xd8jpegbytes"):
-    """Mock httpx.AsyncClient that returns a fake JPEG."""
+def _fake_poster_r2_client(status_code=200, content=b"\xff\xd8jpegbytes", etag='"r2etag123"'):
+    """A stand-in for storage.get_poster_r2_client() -- the pooled client used
+    to fetch a presigned R2 URL (T5682, replaces the old per-request
+    httpx.AsyncClient())."""
+    from unittest.mock import AsyncMock
     fake_resp = MagicMock(status_code=status_code, content=content)
+    fake_resp.headers = {"etag": etag} if etag else {}
+    client = MagicMock()
+    client.get = AsyncMock(return_value=fake_resp)
+    return client
 
-    class _FakeClient:
-        def __init__(self, *a, **k): ...
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        async def get(self, url): return fake_resp
 
-    return _FakeClient
+def _fake_request(if_none_match=None):
+    """A minimal Request stand-in exposing .headers.get() (T5682)."""
+    req = MagicMock()
+    req.headers = {"if-none-match": if_none_match} if if_none_match else {}
+    return req
 
 
 def _fake_db_with_row(row):
@@ -76,7 +82,6 @@ def test_game_poster_key_derives_from_game_id():
 
 def test_get_game_poster_serves_jpeg_when_present():
     """200 image/jpeg when game exists, has recap, and poster object is present."""
-    import httpx
     from app.services import poster
 
     game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
@@ -86,8 +91,8 @@ def test_get_game_poster_serves_jpeg_when_present():
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
-        resp = asyncio.run(games.get_game_poster(GAME_ID))
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
 
     assert resp.media_type == "image/jpeg"
     assert resp.headers["cache-control"] == "private, max-age=86400"  # T5682: long cache + ETag
@@ -101,7 +106,6 @@ def test_get_game_poster_ensure_recap_poster_gets_env_prefixed_keys():
     _recap_poster_r2_key. A key missing the {APP_ENV}/ prefix silently 404s
     every game (caught by live QA against the real account: all 6 games 404'd
     despite 2 having real recaps, because the keys were built without APP_ENV)."""
-    import httpx
     from app.services import poster
     from app.storage import APP_ENV
 
@@ -112,19 +116,22 @@ def test_get_game_poster_ensure_recap_poster_gets_env_prefixed_keys():
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=True) as ensure, \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
-        asyncio.run(games.get_game_poster(GAME_ID))
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
+        asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
 
+    # T5682: owner-facing tile uses a SEPARATE card-size key (`.card.jpg`) from
+    # the full-size og:image poster shares.py reads -- never resizes that one.
     ensure.assert_called_once_with(
         f"{APP_ENV}/users/{USER_ID}/profiles/{PROFILE_ID}/recaps/{GAME_ID}.mp4",
-        f"{APP_ENV}/users/{USER_ID}/profiles/{PROFILE_ID}/recaps/posters/{GAME_ID}.jpg",
+        f"{APP_ENV}/users/{USER_ID}/profiles/{PROFILE_ID}/recaps/posters/{GAME_ID}.card.jpg",
+        resize_width=480, jpeg_quality=3,
     )
 
 
 def test_get_game_poster_404_when_game_missing():
     """404 when game row doesn't exist."""
     with patch.object(games, "get_db_connection", _fake_db_with_row(None)):
-        resp = asyncio.run(games.get_game_poster(GAME_ID))
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
     # T5682: negative cache on 404s
     assert resp.status_code == 404
     assert resp.headers["cache-control"] == "private, max-age=60"
@@ -141,16 +148,16 @@ def test_get_game_poster_404_when_no_recap_and_no_source():
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_game_source_poster", return_value=False):
-        resp = asyncio.run(games.get_game_poster(GAME_ID))
-    # T5682: negative cache on 404s (merged: source-frame path returns False)
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
+    # T5682: negative cache on 404s (source-frame path returns False)
     assert resp.status_code == 404
     assert resp.headers["cache-control"] == "private, max-age=60"
 
 
 def test_get_game_poster_source_frame_served_when_no_recap():
     """200 image/jpeg for an ACTIVE game with NO recap: the source-frame poster is
-    generated (highest-rated clip frame) and served from the same key (T5681)."""
-    import httpx
+    generated (highest-rated clip frame) and served from the same card key (T5681
+    + T5682: card-size)."""
     from app.services import poster
 
     game_row = {"id": GAME_ID, "recap_video_url": None}
@@ -161,8 +168,8 @@ def test_get_game_poster_source_frame_served_when_no_recap():
          patch.object(poster, "ensure_game_source_poster", return_value=True) as gen, \
          patch.object(poster, "ensure_recap_poster") as recap_gen, \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
-        resp = asyncio.run(games.get_game_poster(GAME_ID))
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
 
     assert resp.media_type == "image/jpeg"
     assert resp.body == b"\xff\xd8jpegbytes"
@@ -174,7 +181,6 @@ def test_get_game_poster_source_frame_served_when_no_recap():
 def test_get_game_poster_recap_wins_over_source_frame():
     """Recap-derived poster wins whenever a recap exists: the source-frame path is
     NEVER invoked for a game that has a recap (T5681 item 3)."""
-    import httpx
     from app.services import poster
 
     game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
@@ -185,8 +191,8 @@ def test_get_game_poster_recap_wins_over_source_frame():
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(poster, "ensure_game_source_poster") as source_gen, \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
-        asyncio.run(games.get_game_poster(GAME_ID))
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
+        asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
 
     source_gen.assert_not_called()
 
@@ -201,7 +207,7 @@ def test_get_game_poster_404_when_ensure_recap_poster_fails():
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=False):
-        resp = asyncio.run(games.get_game_poster(GAME_ID))
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
     # T5682: negative cache on 404s
     assert resp.status_code == 404
     assert resp.headers["cache-control"] == "private, max-age=60"
@@ -218,7 +224,7 @@ def test_get_game_poster_404_when_presign_fails():
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value=None):
-        resp = asyncio.run(games.get_game_poster(GAME_ID))
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
     # T5682: negative cache on 404s
     assert resp.status_code == 404
     assert resp.headers["cache-control"] == "private, max-age=60"
@@ -226,7 +232,6 @@ def test_get_game_poster_404_when_presign_fails():
 
 def test_get_game_poster_502_when_r2_fails():
     """502 when httpx client gets non-200 from R2."""
-    import httpx
     from app.services import poster
 
     game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
@@ -236,16 +241,15 @@ def test_get_game_poster_502_when_r2_fails():
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client(status_code=502)), \
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client(status_code=502)), \
          pytest.raises(HTTPException) as e:
-        asyncio.run(games.get_game_poster(GAME_ID))
+        asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
     assert e.value.status_code == 502
     assert "Poster fetch failed" in e.value.detail
 
 
 def test_get_game_poster_session_auth_uses_current_profile():
     """Session auth: presigned URL derives from current user_id/profile_id."""
-    import httpx
     from app.services import poster
 
     game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
@@ -255,8 +259,8 @@ def test_get_game_poster_session_auth_uses_current_profile():
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1") as presign, \
-         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
-        asyncio.run(games.get_game_poster(GAME_ID))
+         patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
+        asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
 
     # relative_path is relative to users/{uid}/ -- generate_presigned_url's r2_key()
     # ALREADY inserts /profiles/{current_profile_id}/ internally, so the call must
@@ -264,7 +268,7 @@ def test_get_game_poster_session_auth_uses_current_profile():
     # caught by live QA against the real account, see T5681 QA notes).
     presign.assert_called_once_with(
         USER_ID,
-        f"recaps/posters/{GAME_ID}.jpg",
+        f"recaps/posters/{GAME_ID}.card.jpg",  # T5682: card-size key
         expires_in=3600,
         content_type="image/jpeg"
     )
@@ -366,8 +370,9 @@ def test_primary_video_hash_prefers_sequence_one():
 def _extract_capture(captured):
     """A stand-in for extract_first_frame_jpeg that records the seek and writes a
     fake JPEG so the caller's read_bytes() succeeds."""
-    def _fake(source, output_path, seek=0.0):
+    def _fake(source, output_path, seek=0.0, resize_width=None, jpeg_quality=3):
         captured["seek"] = seek
+        captured["resize_width"] = resize_width  # T5682: card-size on source path
         from pathlib import Path as _P
         _P(output_path).write_bytes(b"\xff\xd8fake")
         return True
@@ -454,3 +459,26 @@ def test_ensure_game_source_poster_false_when_no_hash():
          patch.object(poster, "_choose_game_poster_frame", return_value=None), \
          patch.object(poster, "_primary_game_video_hash", return_value=None):
         assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is False
+
+
+def test_get_game_poster_304_when_if_none_match_matches():
+    # T5682: matching If-None-Match short-circuits to 304 via a SINGLE HEAD
+    # against the deterministic card key -- BEFORE ensure_recap_poster's own
+    # cache-check HEAD runs against the same key.
+    from app.services import poster
+    from app.storage import APP_ENV
+
+    game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
+    card_key = f"{APP_ENV}/users/{USER_ID}/profiles/{PROFILE_ID}/recaps/posters/{GAME_ID}.card.jpg"
+
+    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
+         patch.object(games, "get_current_user_id", return_value=USER_ID), \
+         patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_recap_poster") as ensure, \
+         patch("app.storage.r2_head_object_global", return_value={"ETag": '"r2etag123"'}) as head:
+        resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request('"r2etag123"')))
+
+    assert resp.status_code == 304
+    head.assert_called_once_with(card_key)
+    # Short-circuited before ensure_recap_poster ran at all.
+    ensure.assert_not_called()

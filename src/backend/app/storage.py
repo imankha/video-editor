@@ -857,6 +857,55 @@ def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
         return False
 
 
+def r2_head_object(user_id: str, relative_path: str) -> dict | None:
+    """HEAD a per-profile R2 object (current profile context) and return its
+    ETag/size/metadata, or None if absent/R2-disabled (T5682).
+
+    Used for conditional-request (If-None-Match) support: the caller can HEAD
+    to get R2's own ETag (a body-free round trip) and compare against the
+    client's cached ETag before deciding whether a full GET is needed."""
+    client = get_r2_client()
+    if not client:
+        return None
+    key = r2_key(user_id, relative_path)
+    try:
+        from .utils.retry import TIER_2, retry_r2_call
+        response = retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"head {key}", **TIER_2,
+        )
+        return {
+            'ETag': response.get('ETag'),
+            'ContentLength': response.get('ContentLength'),
+            'Metadata': response.get('Metadata', {}),
+        }
+    except Exception:
+        return None
+
+
+# T5682: shared pooled httpx client for poster-serving proxies (games/downloads/
+# projects routers all fetch a presigned R2 URL to proxy poster bytes to the
+# client). A fresh `httpx.AsyncClient()` per request pays a full TLS handshake to
+# R2 every time (~300-600ms observed) -- the same landmine T4773 fixed for
+# `working_video/stream` (export-pipeline.md). Module-level + keepalive avoids
+# that tax on repeat requests.
+_poster_r2_client = None
+
+
+def get_poster_r2_client():
+    """Pooled httpx.AsyncClient for proxying poster JPEGs from a presigned R2
+    URL (T5682). Reused across requests -- TLS handshake happens once, not per
+    request. Timeouts sized for a small (~25-80KB) JPEG fetch."""
+    import httpx
+    global _poster_r2_client
+    if _poster_r2_client is None or _poster_r2_client.is_closed:
+        _poster_r2_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(15.0, connect=5.0),
+            limits=httpx.Limits(max_keepalive_connections=24, keepalive_expiry=30.0),
+        )
+    return _poster_r2_client
+
+
 # Thread-local storage for tracking database version and writes per request
 _request_context = threading.local()
 
@@ -1585,6 +1634,7 @@ def r2_head_object_global(key: str) -> dict | None:
             'Metadata': response.get('Metadata', {}),
             'ContentType': response.get('ContentType'),
             'LastModified': response.get('LastModified'),
+            'ETag': response.get('ETag'),  # T5682: conditional-request (If-None-Match) support
         }
     except Exception:
         return None
