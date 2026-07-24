@@ -1173,35 +1173,59 @@ async def get_working_video_playback_url(project_id: int):
     return {"url": presigned_url, "expires_in": 3600}
 
 
-async def _serve_draft_poster_jpeg(rel_path: str):
+async def _serve_draft_poster_jpeg(rel_path: str, if_none_match: str | None = None):
     """Proxy a draft poster object with a FRESH presign per request.
 
     Mirrors `shares.py::_serve_poster_jpeg`, but the key is PROFILE-scoped (the
     draft's owner), resolved through `generate_presigned_url` (current-context
     profile prefix). 404 when the object/presign is absent; 502 on an R2 fetch
-    failure. `private` cache (session-authed, user-specific) with a short TTL so
-    a first-clip change surfaces on the tile without a hard reload.
+    failure. T5682: long cache (86400s) + ETag (R2's own, no extra hashing) for
+    304 cache hits on 200s; short negative cache (60s) on 404s.
+
+    `if_none_match` (T5682): when the caller has a cached ETag, this HEADs R2
+    first (body-free round trip) to compare -- a match short-circuits to a 304
+    WITHOUT a full GET. No `if_none_match` -> the original single-GET hot path,
+    unchanged (no extra R2 round trip for first-time visitors).
+
+    Uses the shared pooled httpx client (`get_poster_r2_client`) -- a fresh
+    `AsyncClient()` per request paid a full TLS handshake to R2 every time
+    (~300-600ms observed), the T4773 landmine repeated here (T5682 fix).
     """
-    import httpx
     from fastapi.responses import Response
 
+    from app.storage import get_poster_r2_client, r2_head_object
+
     user_id = get_current_user_id()
+
+    if if_none_match:
+        head = r2_head_object(user_id, rel_path)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
+
     url = generate_presigned_url(user_id, rel_path, expires_in=3600, content_type="image/jpeg")
     if not url:
         raise HTTPException(status_code=404, detail="No poster for this draft")
-    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
-        resp = await client.get(url)
+    resp = await get_poster_r2_client().get(url)
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
+    etag = resp.headers.get("etag", "")
+    headers = {"Cache-Control": "private, max-age=86400"}
+    if etag:
+        headers["ETag"] = etag
     return Response(
         content=resp.content,
         media_type="image/jpeg",
-        headers={"Cache-Control": "private, max-age=300"},
+        headers=headers,
     )
 
 
 @router.get("/{project_id}/poster.jpg")
-async def get_draft_poster(project_id: int):
+async def get_draft_poster(project_id: int, request: Request):
     """Poster thumbnail for a reel DRAFT (T5671).
 
     Cache-first from R2 (`posters/drafts/{project_id}.jpg`, per-profile);
@@ -1212,14 +1236,41 @@ async def get_draft_poster(project_id: int):
     404 when the project has no clips OR the source video is expired/missing --
     the frontend renders its no-poster fallback tile; we never fabricate an image
     (no-silent-fallback rule). Poster generation is best-effort and never fails
-    a parent operation.
+    a parent operation. T5682: 404s are cached (private, 60s negative cache).
+
+    `If-None-Match` (T5682): checked FIRST against the deterministic key with a
+    SINGLE HEAD, before `ensure_draft_poster`'s own cache-check HEAD runs -- a
+    match short-circuits to 304 with exactly one R2 round trip (avoids stacking
+    two HEADs against the same key, which pushed 304s to ~300ms).
     """
-    from app.services.poster import ensure_draft_poster
+    from fastapi.responses import Response
+
+    from app.services.poster import draft_poster_rel_path, ensure_draft_poster
+    from app.storage import r2_head_object
 
     user_id = get_current_user_id()
+
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match:
+        rel_path = draft_poster_rel_path(project_id)
+        head = r2_head_object(user_id, rel_path)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
+
     rel_path = ensure_draft_poster(project_id, user_id)
     if not rel_path:
-        raise HTTPException(status_code=404, detail="No poster for this draft")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
+    # if_none_match was already checked above (single HEAD, short-circuits to
+    # 304); reaching here means it didn't match (or wasn't sent) -- no need for
+    # _serve_draft_poster_jpeg to re-check it (would be a wasted second HEAD).
     return await _serve_draft_poster_jpeg(rel_path)
 
 

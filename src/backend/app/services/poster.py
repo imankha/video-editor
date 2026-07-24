@@ -39,7 +39,13 @@ POSTER_SUBDIR = "posters"
 
 
 def poster_basename(final_filename: str) -> str:
-    """The poster object's basename for a final video filename: `{name}.jpg`."""
+    """The poster object's basename for a final video filename: `{name}.jpg`.
+
+    This is the FULL-SIZE og:image object shares.py's `_build_poster_r2_key`
+    reads for share unfurls -- NEVER resized or re-keyed (T5682). The owner-facing
+    My Reels tile reads a SEPARATE card-size thumbnail derived from this one; see
+    `reel_card_poster_rel_path`/`ensure_reel_card_poster`.
+    """
     return f"{final_filename}.jpg"
 
 
@@ -74,7 +80,8 @@ def _probe_duration(source: str) -> float | None:
 
 
 def extract_clearest_frame_jpeg(
-    source: str, output_path: str, window: tuple[float, float] | None = None
+    source: str, output_path: str, window: tuple[float, float] | None = None,
+    resize_width: int | None = None, jpeg_quality: int = 3
 ) -> bool:
     """Pick the CLEAREST frame among a handful of samples (largest JPEG wins).
 
@@ -88,8 +95,12 @@ def extract_clearest_frame_jpeg(
     on the final timeline) - used by the reel poster policy (T5090) to sample only
     within the first half of the first slow-mo section. Without a window, samples
     across the whole clip (recap posters, T5180; legacy behavior). Falls back to
-    the plain first frame when probing/sampling fails. Returns True when
-    output_path holds a poster; never raises.
+    the plain first frame when probing/sampling fails.
+
+    `resize_width` (pixels) scales the frame to a card-sized thumbnail (e.g. 480 for
+    home tiles); aspect ratio preserved. T5682: card-size thumbnails for faster TTFB.
+    `jpeg_quality` is ffmpeg's q:v (3=~70%, 2=~80%, 1=~90%; lower = smaller file).
+    Returns True when output_path holds a poster; never raises.
     """
     if window is not None:
         start, end = window
@@ -112,9 +123,10 @@ def extract_clearest_frame_jpeg(
                 "-ss", f"{ts:.3f}",
                 "-i", source,
                 "-frames:v", "1",
-                "-q:v", "3",
-                cand,
             ]
+            if resize_width:
+                cmd.extend(["-vf", f"scale={resize_width}:-1"])
+            cmd.extend(["-q:v", str(jpeg_quality), cand])
             try:
                 subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
             except Exception:
@@ -126,29 +138,36 @@ def extract_clearest_frame_jpeg(
                     best_bytes = data
 
     if best_bytes is None:
-        return extract_first_frame_jpeg(source, output_path)
+        return extract_first_frame_jpeg(
+            source, output_path, resize_width=resize_width, jpeg_quality=jpeg_quality
+        )
     Path(output_path).write_bytes(best_bytes)
     return True
 
 
-def extract_first_frame_jpeg(source: str, output_path: str, seek: float = 0.0) -> bool:
+def extract_first_frame_jpeg(
+    source: str, output_path: str, seek: float = 0.0,
+    resize_width: int | None = None, jpeg_quality: int = 3
+) -> bool:
     """Grab a single frame of a video to a JPEG via ffmpeg.
 
     `source` may be a local path OR a presigned HTTPS URL -- ffmpeg reads remote
     URLs directly (range requests), so no full download is needed. `seek` is the
     ABSOLUTE timestamp (seconds) to grab; defaults to the first frame (0.0). For a
     faststart MP4 a remote seek is a ranged read, not a full download (T5681 game
-    source poster picks the highest-rated clip's timestamp here). Returns True on
-    success, False on any failure (never raises).
+    source poster picks the highest-rated clip's timestamp here). `resize_width`
+    and `jpeg_quality` match extract_clearest_frame_jpeg (T5682: card-size thumbs).
+    Returns True on success, False on any failure (never raises).
     """
     cmd = [
         "ffmpeg", "-y",
         "-ss", f"{seek:.3f}",
         "-i", source,
         "-frames:v", "1",
-        "-q:v", "3",
-        output_path,
     ]
+    if resize_width:
+        cmd.extend(["-vf", f"scale={resize_width}:-1"])
+    cmd.extend(["-q:v", str(jpeg_quality), output_path])
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=60)
         return Path(output_path).exists() and Path(output_path).stat().st_size > 0
@@ -443,6 +462,10 @@ def generate_and_store_poster(
             f"[Poster] {final_filename}: no slow-mo section -> plain first frame"
         )
 
+    # T5682: this is the FULL-SIZE og:image object (shares.py's _build_poster_r2_key
+    # reads the SAME poster_basename/poster_rel_path) -- NEVER resized. The
+    # owner-facing My Reels tile gets its own separate card-size thumbnail
+    # (ensure_reel_card_poster, downscaled from this full-size JPEG on demand).
     basename = poster_basename(final_filename)
     with tempfile.TemporaryDirectory() as tmp:
         out_path = str(Path(tmp) / basename)
@@ -529,7 +552,94 @@ def generate_poster_at_publish(
         return None
 
 
-def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
+# ---------------------------------------------------------------------------
+# Reel card-size poster thumbnail (T5682): the owner-facing My Reels tile needs
+# a small (~480px) image for fast TTFB, but the FULL-SIZE poster
+# (poster_basename/poster_rel_path) is the og:image object shares.py reads for
+# share unfurls and must stay untouched. So the card thumb is a SEPARATE R2
+# object, generated on first request by downscaling the EXISTING full-size JPEG
+# already in R2 (no re-seek into the source video -- cheap image resize).
+# ---------------------------------------------------------------------------
+
+def reel_card_poster_rel_path(basename: str) -> str:
+    """Profile-relative R2 path for a reel's card-size poster thumbnail,
+    derived from the full-size poster basename (`{basename}.card.jpg`)."""
+    return f"final_videos/{POSTER_SUBDIR}/{basename}.card.jpg"
+
+
+def _resize_jpeg(source_path: str, output_path: str, width: int, jpeg_quality: int) -> bool:
+    """Downscale an on-disk JPEG to `width` (aspect preserved) via ffmpeg.
+    Image-to-image, not a video seek -- cheap. Never raises; False on failure."""
+    cmd = [
+        "ffmpeg", "-y", "-i", source_path,
+        "-vf", f"scale={width}:-1",
+        "-q:v", str(jpeg_quality),
+        output_path,
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        return Path(output_path).exists() and Path(output_path).stat().st_size > 0
+    except Exception as e:
+        logger.info(f"[ReelCardPoster] resize failed: {e}")
+        return False
+
+
+def ensure_reel_card_poster(user_id: str, filename_basename: str) -> str | None:
+    """Cache-first card-size (480px) reel poster thumbnail (T5682).
+
+    `filename_basename` is `poster_basename(final_videos.filename)` -- the SAME
+    basename the full-size og:image poster uses, so the card key derives
+    deterministically (`reel_card_poster_rel_path`). Steps:
+      1. Card object already cached -> return its path, no work.
+      2. Else the full-size poster (og:image object) must already exist -- this
+         function does NOT generate the full-size poster (that only happens at
+         publish, `generate_poster_at_publish`); a reel with no full-size poster
+         yet (pre-T5280 / generation failed) yields None here too.
+      3. Downscale the full-size JPEG (already in R2, fetched via presigned URL)
+         to 480px width and upload to the card key.
+
+    Returns the card poster's profile-relative R2 path, or None (best-effort,
+    caller 404s -- never raises).
+    """
+    from ..storage import file_exists_in_r2, upload_bytes_to_r2
+
+    card_rel_path = reel_card_poster_rel_path(filename_basename)
+    try:
+        if file_exists_in_r2(user_id, card_rel_path):
+            return card_rel_path
+
+        full_rel_path = poster_rel_path(filename_basename)
+        full_url = generate_presigned_url(user_id, full_rel_path, expires_in=3600)
+        if not full_url:
+            logger.info(f"[ReelCardPoster] no full-size poster at {full_rel_path}; no card thumb")
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = str(Path(tmp) / "card.jpg")
+            if not _resize_jpeg(full_url, out_path, width=480, jpeg_quality=3):
+                return None
+            data = Path(out_path).read_bytes()
+            dims = _jpeg_dimensions(out_path)
+
+        metadata = {"width": dims[0], "height": dims[1]} if dims else None
+        if not upload_bytes_to_r2(
+            user_id, card_rel_path, data,
+            fast=True, content_type="image/jpeg", metadata=metadata,
+        ):
+            logger.info(f"[ReelCardPoster] R2 upload failed for {card_rel_path}")
+            return None
+
+        logger.info(f"[ReelCardPoster] stored {card_rel_path} ({len(data)} bytes, dims={dims or 'unknown'})")
+        return card_rel_path
+    except Exception as e:
+        logger.info(f"[ReelCardPoster] error for {filename_basename}: {e}")
+        return None
+
+
+def ensure_recap_poster(
+    recap_key: str, recap_poster_key: str,
+    resize_width: int | None = None, jpeg_quality: int = 3,
+) -> bool:
     """Generate-on-first-request poster for a game recap (T5180).
 
     `recap_key` / `recap_poster_key` are FULL (env-prefixed) R2 keys under the
@@ -538,6 +648,14 @@ def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
     (recaps are stitched artifacts with no per-segment slow-mo data, so the reel
     slow-mo-first policy does NOT apply -- and the selection helper is NOT
     modified here).
+
+    `resize_width`/`jpeg_quality` (T5682): the DEFAULT (None) keeps this FULL-SIZE
+    -- this is the shared og:image object read by `shares.py`'s teammate poster
+    (`_recap_poster_r2_key`) and warmed by `warm_recap_poster`, so it must NOT
+    shrink. The owner-facing card-tile endpoint (`games.py::get_game_poster`)
+    passes `resize_width=480` against its OWN separate key
+    (`ensure_recap_card_poster`) instead of calling this with a resize -- do not
+    resize this shared object.
 
     Idempotent + overwrite-safe:
       - poster already cached -> True without re-encoding (cheap HEAD);
@@ -563,7 +681,9 @@ def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
             return False
         with tempfile.TemporaryDirectory() as tmp:
             out_path = str(Path(tmp) / "recap_poster.jpg")
-            if not extract_clearest_frame_jpeg(recap_url, out_path):
+            if not extract_clearest_frame_jpeg(recap_url, out_path,
+                                              resize_width=resize_width,
+                                              jpeg_quality=jpeg_quality):
                 logger.info(f"[RecapPoster] extraction failed for {recap_key}")
                 return False
             data = Path(out_path).read_bytes()
@@ -586,14 +706,26 @@ def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
 
 
 def recap_poster_r2_keys(user_id: str, profile_id: str, game_id: int) -> tuple[str, str]:
-    """Full R2 keys for a game's recap master and its poster, under the sharer's
-    profile prefix. Deterministic -- mirrors the key scheme `ensure_recap_poster`
-    expects (`recaps/{game_id}.mp4` -> `recaps/posters/{game_id}.jpg`)."""
+    """Full R2 keys for a game's recap master and its FULL-SIZE poster, under the
+    sharer's profile prefix. Deterministic -- mirrors the key scheme
+    `ensure_recap_poster` expects (`recaps/{game_id}.mp4` ->
+    `recaps/posters/{game_id}.jpg`). This is the og:image object (shares.py teammate
+    poster + warm_recap_poster) -- NEVER resized (T5682)."""
     from ..storage import profile_r2_key
     return (
         profile_r2_key(user_id, profile_id, f"recaps/{game_id}.mp4"),
         profile_r2_key(user_id, profile_id, f"recaps/posters/{game_id}.jpg"),
     )
+
+
+def recap_card_poster_r2_key(user_id: str, profile_id: str, game_id: int) -> str:
+    """Full R2 key for a game's CARD-SIZE (480px) poster thumbnail (T5682), used
+    ONLY by the owner-facing home/games-tab tile (`games.py::get_game_poster`) --
+    a SEPARATE object from the full-size og:image poster
+    (`recap_poster_r2_keys`/`_recap_poster_r2_key` in shares.py), which must stay
+    untouched for share unfurls."""
+    from ..storage import profile_r2_key
+    return profile_r2_key(user_id, profile_id, f"recaps/posters/{game_id}.card.jpg")
 
 
 async def warm_recap_poster(user_id: str, profile_id: str, game_id: int) -> None:
@@ -688,8 +820,14 @@ def _primary_game_video_hash(cursor, game_id: int) -> str | None:
 
 def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bool:
     """Cache-first poster for an ACTIVE game with NO recap, from its live source
-    video (T5681). Generate-on-miss; caches at the recap poster key so the endpoint
-    serves it identically.
+    video (T5681). Generate-on-miss; caches at the CARD-SIZE recap poster key
+    (`recap_card_poster_r2_key`, `.card.jpg`) so the endpoint serves it identically
+    to the recap-derived card thumbnail.
+
+    T5682: the frame is written at card size (480px, q~70) -- the same resize the
+    recap-derived tile uses -- for fast TTFB. Games without a recap have no
+    share/og:image consumer (a share requires a recap master), so there is no
+    full-size object to preserve; the source frame goes straight to the card key.
 
     Returns True when the poster object exists (already cached or freshly stored),
     False when it could not be produced -- the endpoint then 404s and the frontend
@@ -698,11 +836,12 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
     (expired/reclaimed) -> an expired game with no recap stays 404.
 
     Steps:
-      1. Poster already in R2 -> True without ffmpeg (cache hit).
+      1. Card poster already in R2 -> True without ffmpeg (cache hit).
       2. Pick the frame: highest-rated clip's (video_hash, start_time); no clips ->
          (primary video hash, GAME_POSTER_FALLBACK_OFFSET_SEC).
       3. HEAD-probe `games/{hash}.mp4` (global). Missing -> False (no live source).
-      4. Presign + extract ONE frame at the timestamp + upload to the poster key.
+      4. Presign + extract ONE card-size frame at the timestamp + upload to the
+         card key.
 
     Best effort: never raises. Runs blocking ffmpeg/R2 work, so callers on the
     event loop wrap it in asyncio.to_thread.
@@ -714,7 +853,7 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
         upload_bytes_to_r2_global,
     )
 
-    _, poster_key = recap_poster_r2_keys(user_id, profile_id, game_id)
+    poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
     try:
         # 1. Cache hit.
         if r2_head_object_global(poster_key) is not None:
@@ -748,7 +887,10 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
         # 4. Extract ONE frame at the chosen timestamp (single ranged seek).
         with tempfile.TemporaryDirectory() as tmp:
             out_path = str(Path(tmp) / f"{game_id}.jpg")
-            if not extract_first_frame_jpeg(source_url, out_path, seek=timestamp):
+            if not extract_first_frame_jpeg(
+                source_url, out_path, seek=timestamp,
+                resize_width=480, jpeg_quality=3,
+            ):
                 logger.info(
                     f"[GamePoster] extraction failed for game {game_id} @ {timestamp:.3f}s"
                 )
@@ -788,6 +930,7 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
 # ---------------------------------------------------------------------------
 
 DRAFT_POSTER_SUBDIR = "posters/drafts"
+DRAFT_POSTER_VERSION = "v2"  # T5682: card-size (480px) thumbnails; bump forces regen
 
 
 def draft_poster_rel_path(project_id: int) -> str:
@@ -795,9 +938,12 @@ def draft_poster_rel_path(project_id: int) -> str:
 
     Deterministic from the project id -- no DB column, no migration. Stored
     under the CURRENT profile prefix like every other per-user artifact
-    (`{env}/users/{user_id}/profiles/{profile_id}/posters/drafts/{id}.jpg`).
+    (`{env}/users/{user_id}/profiles/{profile_id}/posters/drafts/{id}.v2.jpg`).
+    No og:image/share consumer reads this key (drafts are unpublished), so it's
+    safe to version freely -- T5682 bumped it to force existing full-size
+    cached objects to regenerate at the new 480px card size.
     """
-    return f"{DRAFT_POSTER_SUBDIR}/{project_id}.jpg"
+    return f"{DRAFT_POSTER_SUBDIR}/{project_id}.{DRAFT_POSTER_VERSION}.jpg"
 
 
 def _load_first_clip_for_poster(project_id: int) -> dict | None:
@@ -889,12 +1035,13 @@ def ensure_draft_poster(project_id: int, user_id: str) -> str | None:
 
         # 4. Clearest frame within the clip's region (whole-clip heuristic scoped
         #    to [in, out]); the helper falls back to the first frame on a bad
-        #    window or ffprobe failure.
+        #    window or ffprobe failure. T5682: resize to card-size thumbnail.
         window = (in_off, out_off) if out_off > in_off else None
         basename = f"{project_id}.jpg"
         with tempfile.TemporaryDirectory() as tmp:
             out_path = str(Path(tmp) / basename)
-            if not extract_clearest_frame_jpeg(source_url, out_path, window=window):
+            if not extract_clearest_frame_jpeg(source_url, out_path, window=window,
+                                              resize_width=480, jpeg_quality=3):
                 logger.info(f"[DraftPoster] extraction failed for project {project_id}; no poster")
                 return None
             data = Path(out_path).read_bytes()

@@ -903,64 +903,133 @@ async def rename_download(download_id: int, body: dict):
         return {"success": True, "name": name}
 
 
-async def _serve_reel_poster_jpeg(rel_path: str):
+async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = None):
     """Proxy a published reel's poster object with a FRESH presign per request.
 
     Per-profile (the owner's current profile prefix), resolved through
     `generate_presigned_url`. Mirrors `projects._serve_draft_poster_jpeg`. The
     caller verifies object existence first, so a missing poster is a clean 404
-    upstream rather than a 502 from a signed GET of a nonexistent key. `private`
-    cache (session-authed, user-specific) with a short TTL.
+    upstream rather than a 502 from a signed GET of a nonexistent key.
+    T5682: long cache (86400s) + ETag (R2's own) for 304 cache hits.
+
+    `if_none_match` (T5682): HEADs R2 first (body-free) when present -> a match
+    short-circuits to 304 without a full GET. No header -> unchanged single-GET
+    hot path.
+
+    Uses the shared pooled httpx client (`get_poster_r2_client`) -- a fresh
+    `AsyncClient()` per request paid a full TLS handshake to R2 every time
+    (~300-600ms observed), the T4773 landmine repeated here (T5682 fix).
     """
-    import httpx
     from fastapi.responses import Response
 
+    from app.storage import get_poster_r2_client, r2_head_object
+
+    user_id = get_current_user_id()
+
+    if if_none_match:
+        head = r2_head_object(user_id, rel_path)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
+
     url = generate_presigned_url(
-        get_current_user_id(), rel_path, expires_in=3600, content_type="image/jpeg"
+        user_id, rel_path, expires_in=3600, content_type="image/jpeg"
     )
     if not url:
         raise HTTPException(status_code=404, detail="No poster for this reel")
-    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
-        resp = await client.get(url)
+    resp = await get_poster_r2_client().get(url)
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
+    etag = resp.headers.get("etag", "")
+    headers = {"Cache-Control": "private, max-age=86400"}
+    if etag:
+        headers["ETag"] = etag
     return Response(
         content=resp.content,
         media_type="image/jpeg",
-        headers={"Cache-Control": "private, max-age=300"},
+        headers=headers,
     )
 
 
 @router.get("/{download_id}/poster.jpg")
-async def get_reel_poster(download_id: int):
-    """Poster thumbnail for a PUBLISHED reel (T5673).
+async def get_reel_poster(download_id: int, request: Request):
+    """Poster THUMBNAIL for a PUBLISHED reel's My Reels tile (T5673, card-size
+    since T5682).
 
-    Serves the T5280/T4890 publish poster -- captured at publish time and frozen
-    on the `final_videos` row -- at `final_videos/posters/{filename}.jpg`, in the
-    owner's current profile prefix. Session-authed by the same middleware as every
-    other `/api/downloads` route. The key is derived from the reel's stored
-    filename (`poster_basename`), the same scheme the share-unfurl path uses.
+    T5682: this tile serves a SEPARATE card-size (480px) thumbnail
+    (`ensure_reel_card_poster`), generated on first request by downscaling the
+    existing full-size og:image poster (`final_videos/posters/{filename}.jpg`,
+    captured at publish -- T5280/T4890). The full-size object is NEVER resized
+    here -- it's what `shares.py`'s `_build_poster_r2_key` reads for share
+    unfurls, and must stay untouched. Session-authed by the same middleware as
+    every other `/api/downloads` route.
 
-    404 when the reel row is missing OR has no poster object (pre-T5280 reels;
-    poster generation was best-effort and never fabricated) -> the drawer renders
-    its branded fallback tile. We never fabricate an image (no-silent-fallback
-    rule, CLAUDE.md).
+    404 when the reel row is missing OR the full-size poster doesn't exist
+    (pre-T5280 reels; poster generation was best-effort and never fabricated)
+    -> the drawer renders its branded fallback tile. We never fabricate an
+    image (no-silent-fallback rule, CLAUDE.md). T5682: 404s are cached
+    (private, 60s negative cache).
+
+    `If-None-Match` (T5682): the card key is DETERMINISTIC from `basename`, so
+    it's checked FIRST with a SINGLE HEAD, before `profile_object_exists` +
+    `ensure_reel_card_poster` run their own HEADs against the same/adjacent
+    keys -- a match short-circuits to 304 in one R2 round trip (stacking three
+    HEADs pushed 304s to ~300ms).
     """
+    from fastapi.responses import Response
+
+    from app.services.poster import ensure_reel_card_poster, reel_card_poster_rel_path
+    from app.storage import r2_head_object
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
         row = cursor.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Reel not found")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
-    rel_path = poster_rel_path(poster_basename(row["filename"]))
+    basename = poster_basename(row["filename"])
+    full_rel_path = poster_rel_path(basename)
+    card_rel_path = reel_card_poster_rel_path(basename)
+    user_id = get_current_user_id()
+
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match:
+        head = r2_head_object(user_id, card_rel_path)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
 
     # Existence check under the current profile prefix: a poster-less reel must be
     # a clean 404 (branded fallback), NOT a 502 from signing a nonexistent object.
-    if not profile_object_exists(get_current_user_id(), get_current_profile_id(), rel_path):
-        raise HTTPException(status_code=404, detail="No poster for this reel")
+    if not profile_object_exists(user_id, get_current_profile_id(), full_rel_path):
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
-    return await _serve_reel_poster_jpeg(rel_path)
+    generated_card_path = ensure_reel_card_poster(user_id, basename)
+    if not generated_card_path:
+        # Card generation failed (transient) but the full-size poster IS present
+        # -> degrade gracefully to serving the full-size poster rather than 404.
+        generated_card_path = full_rel_path
+
+    # if_none_match was already checked above (single HEAD); no need for
+    # _serve_reel_poster_jpeg to re-check it (would be a wasted second HEAD).
+    return await _serve_reel_poster_jpeg(generated_card_path)
 
 
 class MoveToProfileRequest(BaseModel):
