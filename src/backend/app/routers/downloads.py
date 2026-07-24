@@ -209,6 +209,8 @@ class DownloadItem(BaseModel):
     quality_score: float | None = None  # Frozen single-clip star (T3630); seed + secondary ordering
     clip_count: int | None = None  # Distinct constituent clips (T3630); 1 = collection-eligible
     clip_game_start_time: float | None = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
+    season_rank: int | None = None  # T5679: 1-indexed rank among ACTUALLY-RANKED reels (match_count > 0), top-20 only. NULL for unranked (seeded-only) or rank > 20 reels.
+    leading_reel_id: int | None = None  # Representative reel id for collapsed rows (T5673 item 2)
     # Game grouping info
     watched_at: str | None = None  # ISO timestamp when first played in gallery
     game_ids: list[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -286,7 +288,8 @@ async def list_downloads(
                 fv.rating,
                 fv.quality_score,
                 fv.clip_count,
-                fv.clip_game_start_time
+                fv.clip_game_start_time,
+                fv.match_count
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
@@ -415,6 +418,18 @@ async def list_downloads(
                     project_games[project_id]['game_names'].append(display_name)
                     project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
+        # Compute season_rank (T5679): position among ACTUALLY-RANKED reels only
+        # (match_count > 0 -- has been through >= 1 Glicko matchup). A reel whose
+        # rating is merely SEEDED from quality_score (match_count == 0, rd == RD_MAX)
+        # has never been ranked by the user and must get no badge, even though it
+        # carries a rating and sorts high via ORDER_BY_RANK's quality-score fallback.
+        # `rows` is already in ORDER_BY_RANK order, so a running counter over the
+        # match_count > 0 subsequence gives the correct 1-indexed rank; unranked
+        # rows are skipped without consuming a rank slot. Track leading_reel_id
+        # per bucket alongside (T5673 item 2: leading poster).
+        leading_reel_ids = {}  # bucket_key -> first_reel_id
+        ranked_counter = 0
+
         downloads = []
         for row in rows:
             # Get file size if file exists
@@ -515,6 +530,18 @@ async def list_downloads(
                 # Convert space to 'T' for ISO format and append 'Z' for UTC
                 created_at_utc = created_at_utc.replace(' ', 'T') + 'Z'
 
+            # season_rank: only for actually-ranked reels (match_count > 0);
+            # top-20 of that ranked subsequence only (T5679).
+            season_rank = None
+            if (row['match_count'] or 0) > 0:
+                ranked_counter += 1
+                if ranked_counter <= 20:
+                    season_rank = ranked_counter
+
+            # Track leading_reel_id per group for collapsed rows (T5673)
+            if group_key and group_key not in leading_reel_ids:
+                leading_reel_ids[group_key] = row['id']
+
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
@@ -533,6 +560,8 @@ async def list_downloads(
                 quality_score=row['quality_score'],
                 clip_count=row['clip_count'],
                 clip_game_start_time=row['clip_game_start_time'],
+                season_rank=season_rank,
+                leading_reel_id=leading_reel_ids.get(group_key),
                 watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,

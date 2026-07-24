@@ -410,6 +410,7 @@ export function DownloadsPanel({
       canMoveProfiles={canMoveProfiles}
       onDelete={handleDelete}
       onRename={renameReel}
+      seasonRank={download.season_rank}
     />
   );
 
