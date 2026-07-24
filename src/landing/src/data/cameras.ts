@@ -4,6 +4,11 @@
  * These target camera-name queries ("how to edit GoPro footage into a highlight
  * reel"), which are high-intent and low-competition.
  *
+ * ORDER: the array order drives the listing on /works-with, the footer, and
+ * llms.txt. Trace and Veo lead (owner's call -- the team-camera-system angle
+ * first), then the rest run roughly by how common they are for filming youth
+ * sports: phone, GoPro, auto-follow mount, then dedicated action cams.
+ *
  * HONESTY RULE: ReelBallers has no hardware integrations. It accepts uploaded
  * video files. Every page here must say so plainly -- the claim is "your
  * footage from X works", never "we integrate with X". For team systems (Veo,
@@ -30,6 +35,42 @@ export interface Camera {
 }
 
 export const CAMERAS: Camera[] = [
+  {
+    slug: 'trace',
+    name: 'Trace',
+    title: 'Edit Trace Footage Into a Highlight Reel',
+    description:
+      'Export Trace match video into a personal highlight reel with follow-framing and a player spotlight. Works with the exported file. Free to start.',
+    h1: 'How to edit Trace footage into a highlight reel',
+    answer:
+      'Download your match video from Trace, upload the file to ReelBallers, and build a reel from it. There is no direct Trace integration -- ReelBallers works with the exported video file, so you can add per-player editing to footage your club already captures.',
+    reality:
+      'Trace produces automated player clips using a wearable tracker, which is useful but limited: you get the clips its algorithm chose, in the format it chose. Editing the full match export yourself is how you get the plays it missed, the framing you want, and a reel of the length a specific coach asked for.',
+    tips: [
+      'Export the full match rather than only the auto-generated personal clips -- the auto-cut typically misses off-ball work entirely.',
+      'Trace footage is panoramic and wide, which is ideal input for a follow-crop.',
+      'Keep the original export. Re-encoding a clip that was already compressed once visibly softens it.',
+    ],
+    exportOnly: true,
+  },
+  {
+    slug: 'veo',
+    name: 'Veo',
+    title: 'Edit Veo Footage Into a Highlight Reel',
+    description:
+      'Export your Veo match footage and turn it into a highlight reel with per-player follow-framing and a spotlight. Works with the exported file. Free.',
+    h1: 'How to edit Veo footage into a highlight reel',
+    answer:
+      'Download the match video from your Veo account, upload the file to ReelBallers, and build a reel from it. ReelBallers does not connect to Veo directly -- it works with the exported video file, which means you keep your club Veo setup and add per-player editing on top.',
+    reality:
+      'Veo is a club-level capture system: an expensive fixed camera that records the whole match and auto-follows play. What it does not do well is make one specific player the subject. Most parents on a Veo club still cannot get a personal highlight reel for their own child without editing the export themselves.',
+    tips: [
+      'Export the full match at the highest quality your Veo plan allows rather than a pre-cut clip -- you want the moments the auto-editor skipped.',
+      'Veo footage is very wide by design, so it crops well. This is the ideal input for a follow-crop.',
+      'If your club restricts downloads, ask the coach or club admin -- match exports are usually available to the team.',
+    ],
+    exportOnly: true,
+  },
   {
     slug: 'iphone',
     name: 'iPhone',
@@ -87,50 +128,33 @@ export const CAMERAS: Camera[] = [
     ],
   },
   {
-    slug: 'veo',
-    name: 'Veo',
-    title: 'Edit Veo Footage Into a Highlight Reel',
+    slug: 'dji-osmo-action',
+    name: 'DJI Osmo Action 6',
+    title: 'Edit DJI Osmo Action Footage Into Highlight Reels',
     description:
-      'Export your Veo match footage and turn it into a highlight reel with per-player follow-framing and a spotlight. Works with the exported file. Free.',
-    h1: 'How to edit Veo footage into a highlight reel',
+      'Turn DJI Osmo Action 6 game footage into a highlight reel. Best field-of-view and stabilization settings, and how to auto-follow your player. Free.',
+    h1: 'How to edit DJI Osmo Action footage into a highlight reel',
     answer:
-      'Download the match video from your Veo account, upload the file to ReelBallers, and build a reel from it. ReelBallers does not connect to Veo directly -- it works with the exported video file, which means you keep your club Veo setup and add per-player editing on top.',
+      'Upload the MP4 straight off your DJI Osmo Action 6, mark the plays you want, and ReelBallers crops and follows your player automatically. Its wide field of view is an advantage: more of the field in shot means more room for the follow-crop to work with.',
     reality:
-      'Veo is a club-level capture system: an expensive fixed camera that records the whole match and auto-follows play. What it does not do well is make one specific player the subject. Most parents on a Veo club still cannot get a personal highlight reel for their own child without editing the export themselves.',
+      'A DJI Osmo Action mounted on a fence or tripod records the whole field unattended, which is exactly what you want -- nobody has to operate it. The trade-offs mirror any action cam: everyone is small in the frame and the widest field of view bends the lines. Cropping in on one player fixes both at once.',
     tips: [
-      'Export the full match at the highest quality your Veo plan allows rather than a pre-cut clip -- you want the moments the auto-editor skipped.',
-      'Veo footage is very wide by design, so it crops well. This is the ideal input for a follow-crop.',
-      'If your club restricts downloads, ask the coach or club admin -- match exports are usually available to the team.',
+      'Shoot 4K at 30fps in a Standard or Dewarp field of view rather than the widest Ultra-Wide setting -- less lens distortion means a cleaner crop.',
+      'Mount high and central -- a fence post at the halfway line beats a corner. Height matters more than proximity for field sports.',
+      'Turn RockSteady stabilization on for handheld or pole mounts, and off for a locked-down tripod where it only crops the frame for nothing.',
+      'Bring a spare battery or a charging case. An action camera will not survive two full halves plus warmups on one charge in the cold.',
+      'Upload the original MP4 from the card rather than a phone-app re-export, which re-compresses and costs detail the upscaler could have used.',
     ],
-    exportOnly: true,
-  },
-  {
-    slug: 'trace',
-    name: 'Trace',
-    title: 'Edit Trace Footage Into a Highlight Reel',
-    description:
-      'Export Trace match video into a personal highlight reel with follow-framing and a player spotlight. Works with the exported file. Free to start.',
-    h1: 'How to edit Trace footage into a highlight reel',
-    answer:
-      'Download your match video from Trace, upload the file to ReelBallers, and build a reel from it. There is no direct Trace integration -- ReelBallers works with the exported video file, so you can add per-player editing to footage your club already captures.',
-    reality:
-      'Trace produces automated player clips using a wearable tracker, which is useful but limited: you get the clips its algorithm chose, in the format it chose. Editing the full match export yourself is how you get the plays it missed, the framing you want, and a reel of the length a specific coach asked for.',
-    tips: [
-      'Export the full match rather than only the auto-generated personal clips -- the auto-cut typically misses off-ball work entirely.',
-      'Trace footage is panoramic and wide, which is ideal input for a follow-crop.',
-      'Keep the original export. Re-encoding a clip that was already compressed once visibly softens it.',
-    ],
-    exportOnly: true,
   },
   {
     slug: 'action-camera',
     name: 'action camera',
     title: 'Edit Action Camera Footage Into Highlight Reels',
     description:
-      'Turn footage from any action camera -- DJI, Insta360, Akaso -- into a highlight reel with auto-follow framing and a player spotlight. Free to start.',
+      'Turn footage from any action camera -- Insta360, Akaso and others -- into a highlight reel with auto-follow framing and a player spotlight. Free.',
     h1: 'How to edit action camera footage into a highlight reel',
     answer:
-      'Upload the MP4 from any action camera -- DJI Osmo Action, Insta360, Akaso, or similar -- mark the plays worth keeping, and ReelBallers crops and follows your player automatically. If the camera writes a standard video file, it works.',
+      'Upload the MP4 from any action camera -- Insta360, Akaso, or a GoPro or DJI alternative -- mark the plays worth keeping, and ReelBallers crops and follows your player automatically. If the camera writes a standard video file, it works.',
     reality:
       'Action cameras all share the same profile for sports: very wide lens, unattended mounting, good stabilisation, small subjects. That combination is close to ideal for automated follow-framing, because there are plenty of pixels around the player to crop into.',
     tips: [
