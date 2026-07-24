@@ -301,9 +301,16 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       )}
 
-      {/* Auto-created marker */}
+      {/* Auto-created marker — labeled chip instead of bare icon */}
       {project.is_auto_created && (
-        <Star size={14} className="absolute top-1.5 left-1.5 z-10 text-yellow-400 drop-shadow" fill="currentColor" title="Auto-created reel" />
+        <span
+          className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-500/90 text-white shadow hover:bg-amber-400 transition-colors"
+          title="Created automatically by the system"
+          aria-label="Auto-created reel"
+        >
+          <Star size={12} fill="currentColor" />
+          Auto
+        </span>
       )}
 
       {/* Ready-to-publish badge (Q3) — persistent affordance; tap publishes (also on mobile) */}

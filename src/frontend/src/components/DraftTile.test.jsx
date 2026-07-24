@@ -116,4 +116,19 @@ describe('DraftTile (T5672)', () => {
     renderTile({ clip_game_start_time: 705 });
     expect(screen.getByText(/11'45/)).toBeTruthy();
   });
+
+  it('renders an auto-created marker chip with star icon and label', () => {
+    renderTile({ is_auto_created: true });
+    const chip = screen.getByText('Auto').closest('span');
+    expect(chip).toBeTruthy();
+    expect(chip.getAttribute('title')).toMatch(/Created automatically/);
+    expect(chip.getAttribute('aria-label')).toMatch(/Auto-created/);
+    // Star icon should be present (rendered via Lucide)
+    expect(chip.querySelector('svg')).toBeTruthy();
+  });
+
+  it('does not show auto-created marker if not auto-created', () => {
+    renderTile({ is_auto_created: false });
+    expect(screen.queryByText('Auto')).toBeNull();
+  });
 });
