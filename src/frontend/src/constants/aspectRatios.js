@@ -43,3 +43,18 @@ export function ratioDisplay(ratio) {
   const label = ratioLabel(ratio);
   return glyph ? `${glyph} ${label}` : label;
 }
+
+/**
+ * Splits a list into one bucket per aspect ratio present, portrait first
+ * (RATIO_ORDER), dropping empty buckets. A single-aspect list yields a
+ * single-entry array, so callers can treat "one row" and "N rows" the same
+ * way without a separate branch (T5672 draft rows, My Reels game rows).
+ */
+export function splitByAspect(list) {
+  return RATIO_ORDER
+    .map(ratio => ({
+      ratio,
+      projects: list.filter(item => (item.aspect_ratio || RATIO.PORTRAIT) === ratio),
+    }))
+    .filter(bucket => bucket.projects.length > 0);
+}

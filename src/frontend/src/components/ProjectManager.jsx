@@ -34,7 +34,7 @@ import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
-import { RATIO, RATIO_ORDER } from '../constants/aspectRatios';
+import { splitByAspect } from '../constants/aspectRatios';
 
 const SCORING_TAGS = new Set([
   'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
@@ -94,19 +94,6 @@ function TagBadges({ tagBadges }) {
   }
   if (pills.length === 0) return null;
   return <>{pills}</>;
-}
-
-// Splits a project list into one bucket per aspect ratio present, portrait
-// first (RATIO_ORDER), dropping empty buckets. A single-aspect list yields a
-// single-entry array, so callers can treat "one row" and "N rows" the same
-// way without a separate branch.
-export function splitByAspect(list) {
-  return RATIO_ORDER
-    .map(ratio => ({
-      ratio,
-      projects: list.filter(p => (p.aspect_ratio || RATIO.PORTRAIT) === ratio),
-    }))
-    .filter(bucket => bucket.projects.length > 0);
 }
 
 /**

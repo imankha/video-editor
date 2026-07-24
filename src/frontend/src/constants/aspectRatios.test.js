@@ -1,19 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
-
-// jsdom lacks matchMedia (useIsMobile) — stub it, since ProjectManager.jsx
-// imports several hooks/components at module scope that touch it indirectly.
-vi.mock('../hooks/useIsMobile', () => ({
-  useIsMobile: () => false,
-  useIsLandscape: () => false,
-}));
-
-import { splitByAspect } from './ProjectManager';
+import { describe, it, expect } from 'vitest';
+import { splitByAspect } from './aspectRatios';
 
 /**
- * splitByAspect (T5672) - the grouping split behind the "one carousel row per
- * aspect ratio present" feature: a game with both 9:16 and 16:9 drafts must
- * render two rows (portrait first), while a single-aspect game must produce
- * exactly one bucket so it renders identically to before the split.
+ * splitByAspect (T5672) - the grouping split behind "one carousel row per
+ * aspect ratio present": a game/group with both 9:16 and 16:9 items must
+ * split into two buckets (portrait first), while a single-aspect group must
+ * produce exactly one bucket so callers can render it identically to before
+ * the split. Shared by ProjectManager's Reel Drafts rows and the My Reels
+ * drawer's GameCollectionGroup rows.
  */
 describe('splitByAspect (T5672 aspect-split rows)', () => {
   const portrait = (id) => ({ id, aspect_ratio: '9:16' });
