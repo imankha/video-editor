@@ -996,6 +996,35 @@ async def _list_games_impl(skip_presigned_urls=False):
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
+
+        # T5683: Warm game source posters for visible games without recaps
+        # (non-blocking background). Recap posters are warmed at share creation.
+        async def warm_visible_game_sources():
+            """Warm game source posters (games without recaps) with bounded concurrency."""
+            warmer = get_poster_warmer()
+            user_id = get_current_user_id()
+            profile_id = _profile
+            tasks = []
+            for game in games:
+                # Only warm source posters for games without recap (recap already warmed at share).
+                if not game['recap_video_url']:
+                    game_id = game['id']
+                    coro = warmer.warm_game_source_poster_async(
+                        user_id, profile_id, game_id
+                    )
+                    tasks.append(warmer.warm_with_semaphore(coro))
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+                logger.info(f"[ListWarm] warmed {len(tasks)} game source posters for {len(games)} visible games")
+
+        # Fire-and-forget warming (never fails the list endpoint).
+        if games and not skip_presigned_urls:
+            try:
+                from app.services.poster_warmer import get_poster_warmer
+                asyncio.create_task(warm_visible_game_sources())
+            except Exception as e:
+                logger.info(f"[ListWarm] game warming task creation failed: {e}")
+
         return {'games': games}
 
 

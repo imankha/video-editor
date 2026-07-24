@@ -499,6 +499,39 @@ async def list_projects():
                 clip_game_start_time=clip_game_start_time
             ))
 
+        # T5683: Warm draft posters for visible projects (non-blocking background).
+        # Collect project IDs with missing posters and warm them with bounded concurrency.
+        import asyncio
+        from app.services.poster_warmer import get_poster_warmer
+        from app.user_context import get_current_user_id
+        from app.profile_context import get_current_profile_id
+        from app.storage import file_exists_in_r2
+        from app.services.poster import draft_poster_rel_path
+
+        async def warm_visible_drafts():
+            """Warm draft posters for visible projects (max 3-4 in flight)."""
+            warmer = get_poster_warmer()
+            user_id = get_current_user_id()
+            profile_id = get_current_profile_id()
+            tasks = []
+            for project in result:
+                # Skip if poster already exists (cache hit).
+                if file_exists_in_r2(user_id, draft_poster_rel_path(project.id)):
+                    continue
+                # Queue warming with bounded semaphore.
+                coro = warmer.warm_draft_poster_async(user_id, profile_id, project.id)
+                tasks.append(warmer.warm_with_semaphore(coro))
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+                logger.info(f"[ListWarm] warmed {len(tasks)} draft posters for {len(result)} visible projects")
+
+        # Fire-and-forget warming (never fails the list endpoint).
+        if result:
+            try:
+                asyncio.create_task(warm_visible_drafts())
+            except Exception as e:
+                logger.info(f"[ListWarm] draft warming task creation failed: {e}")
+
         return result
 
 
