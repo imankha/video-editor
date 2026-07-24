@@ -23,7 +23,7 @@ from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.materialization import _open_profile_db, ensure_profile_db_local
-from app.services.poster import generate_poster_at_publish, poster_rel_path
+from app.services.poster import generate_poster_at_publish, poster_basename, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
     R2_ENABLED,
@@ -872,6 +872,66 @@ async def rename_download(download_id: int, body: dict):
             raise HTTPException(status_code=404, detail="Download not found")
         conn.commit()
         return {"success": True, "name": name}
+
+
+async def _serve_reel_poster_jpeg(rel_path: str):
+    """Proxy a published reel's poster object with a FRESH presign per request.
+
+    Per-profile (the owner's current profile prefix), resolved through
+    `generate_presigned_url`. Mirrors `projects._serve_draft_poster_jpeg`. The
+    caller verifies object existence first, so a missing poster is a clean 404
+    upstream rather than a 502 from a signed GET of a nonexistent key. `private`
+    cache (session-authed, user-specific) with a short TTL.
+    """
+    import httpx
+    from fastapi.responses import Response
+
+    url = generate_presigned_url(
+        get_current_user_id(), rel_path, expires_in=3600, content_type="image/jpeg"
+    )
+    if not url:
+        raise HTTPException(status_code=404, detail="No poster for this reel")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+        resp = await client.get(url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Poster fetch failed")
+    return Response(
+        content=resp.content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
+@router.get("/{download_id}/poster.jpg")
+async def get_reel_poster(download_id: int):
+    """Poster thumbnail for a PUBLISHED reel (T5673).
+
+    Serves the T5280/T4890 publish poster -- captured at publish time and frozen
+    on the `final_videos` row -- at `final_videos/posters/{filename}.jpg`, in the
+    owner's current profile prefix. Session-authed by the same middleware as every
+    other `/api/downloads` route. The key is derived from the reel's stored
+    filename (`poster_basename`), the same scheme the share-unfurl path uses.
+
+    404 when the reel row is missing OR has no poster object (pre-T5280 reels;
+    poster generation was best-effort and never fabricated) -> the drawer renders
+    its branded fallback tile. We never fabricate an image (no-silent-fallback
+    rule, CLAUDE.md).
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
+        row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Reel not found")
+
+    rel_path = poster_rel_path(poster_basename(row["filename"]))
+
+    # Existence check under the current profile prefix: a poster-less reel must be
+    # a clean 404 (branded fallback), NOT a 502 from signing a nonexistent object.
+    if not profile_object_exists(get_current_user_id(), get_current_profile_id(), rel_path):
+        raise HTTPException(status_code=404, detail="No poster for this reel")
+
+    return await _serve_reel_poster_jpeg(rel_path)
 
 
 class MoveToProfileRequest(BaseModel):

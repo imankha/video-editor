@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CardCarousel } from '../shared/CardCarousel';
 import { LockedCollectionCard } from './LockedCollectionCard';
 import { LockedReasonModal } from './LockedReasonModal';
 
@@ -30,9 +31,11 @@ export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard })
         currentSec={currentSec}
         onClick={() => setShowReason(true)}
       />
-      <div className="space-y-2">
-        {reels.map((d) => renderCard(d))}
-      </div>
+      {reels.length > 0 && (
+        <CardCarousel ariaLabel={`${cardName} ${ratio} reels`}>
+          {reels.map((d) => renderCard(d))}
+        </CardCarousel>
+      )}
 
       {showReason && (
         <LockedReasonModal

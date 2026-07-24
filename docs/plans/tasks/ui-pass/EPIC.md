@@ -77,13 +77,13 @@ Annotate, Framing, and Overlay. Code map from a parallel audit of `ProjectManage
 | ID | Task | Status |
 |----|------|--------|
 | T5671 | [Draft poster thumbnails (backend)](T5671-draft-poster-thumbnails.md) | IN PROGRESS |
-| T5672 | [Reel Drafts as tiles in per-game carousels](T5672-drafts-tiles-carousel.md) | TODO |
-| T5673 | [My Reels drawer: visual tiles](T5673-my-reels-visual-tiles.md) | TODO |
+| T5672 | [Reel Drafts as tiles in per-game carousels](T5672-drafts-tiles-carousel.md) | IN PROGRESS |
+| T5673 | [My Reels drawer: visual tiles](T5673-my-reels-visual-tiles.md) | IN PROGRESS |
 | T5674 | [Overlap & overflow fixes (report pill, panel scrollbar, crop label)](T5674-overlap-overflow-fixes.md) | IN PROGRESS |
 | T5675 | [Home header/hero + games-card legibility](T5675-home-hero-legibility.md) | IN PROGRESS |
 | T5676 | [Aspect-aware video stage (kill the 9:16 pillarbox)](T5676-aspect-aware-video-stage.md) | IN PROGRESS |
 | T5677 | [Home tab deep-links + unknown-route fallback](T5677-home-deeplinks-route-fallback.md) | IN PROGRESS |
-| T5678 | [Remove batch Select flow from My Reels](T5678-remove-batch-select-my-reels.md) — bundled into the T5673 worker | TODO |
+| T5678 | [Remove batch Select flow from My Reels](T5678-remove-batch-select-my-reels.md) — bundled into the T5673 worker | IN PROGRESS |
 
 T5671 → T5672 → T5673 are sequenced (thumbnails unlock tiles). T5674–T5677 are independent of
 the tile track and of each other; they may run in parallel workers (file-ownership check: T5675
