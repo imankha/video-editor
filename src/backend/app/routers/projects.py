@@ -528,7 +528,8 @@ async def list_projects():
         # Fire-and-forget warming (never fails the list endpoint).
         if result:
             try:
-                asyncio.create_task(warm_visible_drafts())
+                from app.services.poster_warmer import fire_and_forget
+                fire_and_forget(warm_visible_drafts())
             except Exception as e:
                 logger.info(f"[ListWarm] draft warming task creation failed: {e}")
 

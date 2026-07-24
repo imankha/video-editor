@@ -764,11 +764,10 @@ async def activate_game(game_id: int):
 
     # T5683: Warm the game source poster at gesture (non-blocking background task).
     # Best-effort -- never fails the activation.
-    import asyncio
-    from app.services.poster_warmer import warm_game_source_poster_background
+    from app.services.poster_warmer import fire_and_forget, warm_game_source_poster_background
     from app.user_context import get_current_user_id
     from app.profile_context import get_current_profile_id
-    asyncio.create_task(
+    fire_and_forget(
         warm_game_source_poster_background(
             get_current_user_id(), get_current_profile_id(), game_id
         )
@@ -1020,8 +1019,8 @@ async def _list_games_impl(skip_presigned_urls=False):
         # Fire-and-forget warming (never fails the list endpoint).
         if games and not skip_presigned_urls:
             try:
-                from app.services.poster_warmer import get_poster_warmer
-                asyncio.create_task(warm_visible_game_sources())
+                from app.services.poster_warmer import fire_and_forget, get_poster_warmer
+                fire_and_forget(warm_visible_game_sources())
             except Exception as e:
                 logger.info(f"[ListWarm] game warming task creation failed: {e}")
 

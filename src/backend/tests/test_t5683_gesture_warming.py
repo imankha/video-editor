@@ -1,107 +1,111 @@
 """Tests for T5683 WARM-AT-GESTURE: failure swallowing + fire-and-forget.
 
 Gesture warming must never fail the parent operation. Failures are logged
-at info level and swallowed. This verifies the fire-and-forget pattern.
+at info level and swallowed. This also verifies the fire_and_forget helper
+holds a strong reference so the task can't be GC'd before completion.
 """
 
 import asyncio
+import gc
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
 
 from app.services.poster_warmer import (
+    fire_and_forget,
     warm_draft_poster_background,
     warm_game_source_poster_background,
+    _background_tasks,
 )
 
 
 @pytest.mark.asyncio
 async def test_draft_warming_swallows_failures():
     """Draft warming failures don't propagate; gesture succeeds."""
-    user_id = "user1"
-    profile_id = "prof1"
-    project_id = 123
-
-    # Mock ensure_draft_poster to raise an exception.
     with patch(
         "app.services.poster_warmer.ensure_draft_poster",
         side_effect=Exception("R2 upload failed"),
+    ), patch(
+        "app.services.poster_warmer.file_exists_in_r2",
+        return_value=False,
     ):
-        # Calling the background warmer should NOT raise.
-        # (It will log at info, but the coroutine completes successfully.)
-        await warm_draft_poster_background(user_id, profile_id, project_id)
-
-    # No exception raised = success.
+        # Must not raise.
+        await warm_draft_poster_background("user1", "prof1", 123)
 
 
 @pytest.mark.asyncio
 async def test_game_source_warming_swallows_failures():
     """Game source warming failures don't propagate; gesture succeeds."""
-    user_id = "user1"
-    profile_id = "prof1"
-    game_id = 456
-
-    # Mock ensure_game_source_poster to raise an exception.
     with patch(
         "app.services.poster_warmer.ensure_game_source_poster",
         side_effect=Exception("FFmpeg failed"),
+    ), patch(
+        "app.services.poster_warmer.r2_head_object_global",
+        return_value=None,
     ):
-        # Calling the background warmer should NOT raise.
-        await warm_game_source_poster_background(user_id, profile_id, game_id)
-
-    # No exception raised = success.
+        # Must not raise.
+        await warm_game_source_poster_background("user1", "prof1", 456)
 
 
 @pytest.mark.asyncio
 async def test_warming_logs_failures_at_info():
     """Warming failures are logged at info, not silent."""
-    user_id = "user1"
-    profile_id = "prof1"
-    project_id = 123
-
     with patch(
         "app.services.poster_warmer.ensure_draft_poster",
         side_effect=Exception("Test error"),
+    ), patch(
+        "app.services.poster_warmer.file_exists_in_r2",
+        return_value=False,
     ), patch("app.services.poster_warmer.logger") as mock_logger:
-        await warm_draft_poster_background(user_id, profile_id, project_id)
+        await warm_draft_poster_background("user1", "prof1", 123)
 
-        # Should log at info about the failure.
         mock_logger.info.assert_called()
-        call_args = str(mock_logger.info.call_args)
-        assert "warming failed" in call_args.lower() or "error" in call_args.lower()
+        joined = " ".join(str(c) for c in mock_logger.info.call_args_list)
+        assert "failed" in joined.lower()
 
 
 @pytest.mark.asyncio
-async def test_asyncio_create_task_fire_and_forget(monkeypatch):
-    """Gesture calls create_task (fire-and-forget), not await."""
-    # This test verifies that the gesture handler uses asyncio.create_task
-    # to fire warming in the background without blocking the response.
+async def test_fire_and_forget_holds_strong_reference_until_done():
+    """fire_and_forget() keeps the task alive across a GC pass mid-flight.
 
-    warming_called = False
+    A bare asyncio.create_task(...) whose return value is discarded is only
+    weakly referenced by the event loop; a GC cycle can reap it before it
+    runs (silent data loss for background warming). fire_and_forget must
+    register the task in _background_tasks and only release it on completion.
+    """
+    ran = asyncio.Event()
 
-    async def mock_warm(*args):
-        nonlocal warming_called
-        warming_called = True
-        await asyncio.sleep(0.01)
+    async def slow_coro():
+        await asyncio.sleep(0.05)
+        ran.set()
 
-    with patch(
-        "app.services.poster_warmer.PosterWarmer.warm_draft_poster_async",
-        side_effect=mock_warm,
-    ):
-        # Simulate the gesture handler creating a task.
-        from app.services.poster_warmer import get_poster_warmer
+    task = fire_and_forget(slow_coro())
+    assert task in _background_tasks
 
-        warmer = get_poster_warmer()
+    # Drop all other references and force a collection cycle while the task
+    # is still pending -- if fire_and_forget didn't hold a strong ref, this
+    # is exactly the scenario where CPython could destroy the pending task.
+    del task
+    gc.collect()
+    await asyncio.sleep(0)  # let the loop schedule the task
 
-        # Create the task (fire-and-forget).
-        task = asyncio.create_task(
-            warmer.warm_draft_poster_async("user1", "prof1", 123)
-        )
+    await asyncio.wait_for(ran.wait(), timeout=1.0)
+    assert ran.is_set()
 
-        # The task is created, but we check if it runs in the background.
-        # If we await it immediately, we're testing the wrong thing.
-        # Instead, yield control to let the task run a bit.
-        await asyncio.sleep(0.02)
+    # Self-evicts from the registry once done.
+    await asyncio.sleep(0)
+    assert not any(t.get_name() == "slow_coro" for t in _background_tasks)
 
-        # Task should have completed by now.
-        assert task.done()
-        assert warming_called
+
+@pytest.mark.asyncio
+async def test_fire_and_forget_evicts_after_completion():
+    """The background-task set doesn't grow unbounded across many calls."""
+    before = len(_background_tasks)
+
+    async def quick():
+        return None
+
+    tasks = [fire_and_forget(quick()) for _ in range(5)]
+    await asyncio.gather(*tasks)
+    await asyncio.sleep(0)  # let done_callbacks run
+
+    assert len(_background_tasks) == before

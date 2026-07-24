@@ -12,9 +12,42 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from .poster import (
+    draft_poster_rel_path,
+    ensure_draft_poster,
+    ensure_game_source_poster,
+    recap_card_poster_r2_key,
+)
+from ..profile_context import set_current_profile_id
+from ..storage import file_exists_in_r2, r2_head_object_global
+from ..user_context import set_current_user_id
+
 logger = logging.getLogger(__name__)
 
 MAX_POSTER_CONCURRENT = 3  # Max ffmpeg processes in flight per LIST batch
+
+# asyncio.create_task() only stores a WEAK reference to the task on the event
+# loop -- a task with no other referent can be garbage-collected mid-flight
+# (CPython, not hypothetical: see the asyncio docs' "Save a reference" note).
+# Every fire-and-forget warming call must go through fire_and_forget() so the
+# task is held here until it finishes, instead of calling asyncio.create_task
+# directly and discarding the returned Task.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def fire_and_forget(coro) -> asyncio.Task:
+    """Schedule a background coroutine with a strong reference.
+
+    Use for all gesture/list warming call sites instead of a bare
+    `asyncio.create_task(...)` whose result is thrown away -- the returned
+    Task is registered in a module-level set and self-removes via
+    add_done_callback once it completes (success or failure), so the set
+    never grows unbounded and the task can't be silently GC'd before it runs.
+    """
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 class PosterWarmer:
@@ -52,11 +85,6 @@ class PosterWarmer:
         Returns the poster rel_path on success, None on failure (best-effort).
         Concurrent calls for the same project_id await the same task.
         """
-        from .poster import draft_poster_rel_path, ensure_draft_poster
-        from ..profile_context import set_current_profile_id
-        from ..user_context import set_current_user_id
-        from ..storage import file_exists_in_r2
-
         key = f"draft:{profile_id}:{project_id}"
         self._last_access[key] = datetime.now()
 
@@ -100,14 +128,23 @@ class PosterWarmer:
                     logger.info(f"[PosterWarm] draft {key} warming failed: {e}")
                     return None
 
-            # Cache the task so concurrent requests await it.
+            # Cache the task so concurrent requests await it. Shield from the
+            # caller's own cancellation (e.g. request disconnect) so a client
+            # abort doesn't kill work another waiter is relying on -- the
+            # warming continues in the background and self-evicts from
+            # _warming_tasks in its own finally block either way.
             task = asyncio.create_task(do_warm())
             self._warming_tasks[key] = task
             try:
-                result = await task
+                result = await asyncio.shield(task)
                 return result
+            except asyncio.CancelledError:
+                # This waiter was cancelled; the underlying task keeps running
+                # for any other waiter (or completes solo) and cleans itself up.
+                raise
             finally:
-                self._warming_tasks.pop(key, None)
+                if task.done():
+                    self._warming_tasks.pop(key, None)
 
     async def warm_game_source_poster_async(
         self, user_id: str, profile_id: str, game_id: int
@@ -116,12 +153,6 @@ class PosterWarmer:
 
         Returns True when poster exists (cached or freshly generated), False on failure.
         """
-        from .poster import ensure_game_source_poster
-        from ..profile_context import set_current_profile_id
-        from ..user_context import set_current_user_id
-        from ..storage import r2_head_object_global
-        from .poster import recap_card_poster_r2_key
-
         key = f"game_source:{profile_id}:{game_id}"
         self._last_access[key] = datetime.now()
 
@@ -132,7 +163,7 @@ class PosterWarmer:
                 if result:
                     logger.info(f"[PosterWarm] game_source {key} cache hit (dedup)")
                     return True
-            except:
+            except (asyncio.CancelledError, Exception):
                 pass
 
         if key not in self._locks:
@@ -164,10 +195,13 @@ class PosterWarmer:
             task = asyncio.create_task(do_warm())
             self._warming_tasks[key] = task
             try:
-                result = await task
+                result = await asyncio.shield(task)
                 return result
+            except asyncio.CancelledError:
+                raise
             finally:
-                self._warming_tasks.pop(key, None)
+                if task.done():
+                    self._warming_tasks.pop(key, None)
 
     async def warm_with_semaphore(self, coro):
         """Enforce bounded concurrency (max 3-4 in flight).

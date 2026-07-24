@@ -1622,10 +1622,10 @@ async def add_clip_to_project(
 
     # T5683: Warm the draft poster at gesture (non-blocking background task).
     # Best-effort -- never fails the clip action.
-    from app.services.poster_warmer import warm_draft_poster_background
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.user_context import get_current_user_id
     from app.profile_context import get_current_profile_id
-    asyncio.create_task(
+    fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
         )
@@ -1764,10 +1764,10 @@ async def upload_clip_with_metadata(
 
     # T5683: Warm the draft poster at gesture (non-blocking background task).
     # Best-effort -- never fails the clip action.
-    from app.services.poster_warmer import warm_draft_poster_background
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.user_context import get_current_user_id
     from app.profile_context import get_current_profile_id
-    asyncio.create_task(
+    fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
         )
@@ -1797,10 +1797,10 @@ async def reorder_clips(project_id: int, clip_ids: list[int]):
 
     # T5683: Warm the draft poster at gesture (non-blocking background task).
     # Best-effort -- never fails the clip action.
-    from app.services.poster_warmer import warm_draft_poster_background
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.user_context import get_current_user_id
     from app.profile_context import get_current_profile_id
-    asyncio.create_task(
+    fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
         )
@@ -2342,10 +2342,10 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
 
     # T5683: Warm the draft poster at gesture (non-blocking background task).
     # Best-effort -- never fails the clip action.
-    from app.services.poster_warmer import warm_draft_poster_background
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.user_context import get_current_user_id
     from app.profile_context import get_current_profile_id
-    asyncio.create_task(
+    fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
         )
