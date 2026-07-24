@@ -94,6 +94,7 @@ export function GameCollectionGroup({
             shareDefinition={shareScope ? { scope: shareScope, filter: {}, aspect_ratio: ratio } : undefined}
             onShare={onShare}
             onCopyLink={onCopyLink}
+            leadingReelId={collection.leading_reel_id}
           />
           {members
             ? (
