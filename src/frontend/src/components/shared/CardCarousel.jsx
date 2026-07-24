@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
@@ -26,8 +26,15 @@ export function CardCarousel({ children, ariaLabel, className = '' }) {
 
   useEffect(() => {
     // Detect fine pointer at mount (never changes during a session)
-    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
-    setIsFinePointer(mediaQuery.matches);
+    // Feature-detect matchMedia for test environments where it may not be available
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+      setIsFinePointer(mediaQuery.matches);
+    } else {
+      // In test environments without matchMedia, assume false (coarse pointer)
+      // Real browsers always have matchMedia
+      setIsFinePointer(false);
+    }
   }, []);
 
   const updateScrollState = () => {
