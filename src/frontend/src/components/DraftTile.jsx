@@ -50,6 +50,10 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  // Q3 (item 3): the draft whose project is currently loaded in the editor gets a
+  // persistent accent ring so the user can spot "the one I'm working on" in the row.
+  const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
+  const isCurrentProject = selectedProjectId != null && selectedProjectId === project.id;
 
   const publishProject = async ({ openGallery }) => {
     setIsPublishing(true);
@@ -201,16 +205,30 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       return;
     }
     if (!canOpen) return;
-    const needsOverlay = project.has_working_video && (
-      !project.has_final_video ||
-      (project.working_video_created_at && project.final_video_created_at &&
-       project.working_video_created_at > project.final_video_created_at)
-    );
-    if (needsOverlay) {
+    // Item 6 — open the FURTHEST stage the draft has reached:
+    //   overlay started (a working video exists) -> Overlay
+    //   else framing started (any clip framed/exported) -> Framing (first clip)
+    //   else the earliest applicable stage -> default open (Framing, clip 0)
+    // Ready-to-publish drafts don't reach here: their tile click is the publish
+    // badge, not this handler (see the wrapper's onClick guard).
+    if (project.has_working_video) {
       onSelectWithMode({ mode: 'overlay' });
+    } else if (project.clips_in_progress > 0 || project.clips_exported > 0) {
+      onSelectWithMode({ mode: 'framing', clipIndex: 0 });
     } else {
       onSelect();
     }
+  };
+
+  // Keyboard activation (item 3): the tile is a real button-like target, so Enter
+  // and Space open it (unless it's the Ready-to-publish state, which owns its own
+  // badge button). Matches the wrapper onClick guard below.
+  const handleCardKeyDown = (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (isRenaming) return;
+    e.preventDefault();
+    if (isReadyToPublish) return;
+    handleCardClick();
   };
 
   const handleTouchStart = () => {
@@ -281,14 +299,25 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     <div
       data-testid="project-card"
       onClick={isReadyToPublish ? undefined : handleCardClick}
+      onKeyDown={handleCardKeyDown}
       onTouchStart={isMobile ? handleTouchStart : undefined}
       onTouchMove={isMobile ? handleTouchMove : undefined}
       onTouchEnd={isMobile ? handleTouchEnd : undefined}
-      className={`group/tile relative shrink-0 snap-start ${sizeClass} rounded-lg overflow-hidden bg-gray-800 border transition-colors ${
-        canOpen ? `cursor-pointer border-gray-700 ${REEL.borderHover}` : 'cursor-not-allowed border-gray-700 opacity-75'
+      role="button"
+      tabIndex={canOpen ? 0 : -1}
+      aria-current={isCurrentProject ? 'true' : undefined}
+      className={`group/tile relative shrink-0 snap-start ${sizeClass} rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:border-cyan-400 focus-visible:z-10 ${
+        canOpen
+          ? `cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 ${
+              isCurrentProject
+                ? 'border-cyan-400 ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-gray-900'
+                : 'border-gray-700'
+            }`
+          : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
     >
-      {/* Poster image (lazy — 13+ tiles must not fire eager requests) */}
+      {/* Poster image (lazy — 13+ tiles must not fire eager requests); fades in on load */}
       {posterState !== 'error' && (
         <img
           src={posterUrl}
@@ -296,12 +325,14 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           loading="lazy"
           onLoad={() => setPosterState('loaded')}
           onError={() => setPosterState('error')}
-          className="absolute inset-0 w-full h-full object-cover"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+            posterState === 'loaded' ? 'opacity-100' : 'opacity-0'
+          }`}
         />
       )}
-      {/* Skeleton shimmer while the poster loads */}
+      {/* Skeleton shimmer while the poster loads (item 5 — not the branded fallback) */}
       {posterState === 'loading' && (
-        <div className="absolute inset-0 bg-gray-700 animate-pulse" />
+        <div className="absolute inset-0 skeleton-shimmer" />
       )}
       {/* Branded fallback on 404 / decode error (no broken image) */}
       {posterState === 'error' && (
