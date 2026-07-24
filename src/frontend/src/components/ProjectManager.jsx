@@ -33,12 +33,34 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
+import { GameTile } from './GameTile';
 
 const SCORING_TAGS = new Set([
   'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
   'Scoring', 'Dunk', 'Try',
 ]);
 const PLAYMAKING_TAGS = new Set(['Assist', 'Chance Creation', 'Shot']);
+
+// Group games by month (YYYY-MM) in chronological order (newest first)
+function groupGamesByMonth(games) {
+  const groups = {};
+  const order = [];
+
+  // Sort games by created_at (newest first)
+  const sorted = [...games].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  sorted.forEach(game => {
+    const date = new Date(game.created_at);
+    const key = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    if (!groups[key]) {
+      groups[key] = [];
+      order.push(key);
+    }
+    groups[key].push(game);
+  });
+
+  return { groups, order };
+}
 
 // The active tab is URL state (/home/games -> Games, /home/reels -> Reel Drafts),
 // never persisted. Map a pathname to its tab, or null when the URL names no tab
@@ -779,7 +801,7 @@ export function ProjectManager({
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
-          <div className="w-full max-w-2xl">
+          <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Active Upload Section - Currently uploading */}
             {activeUpload && (
               <div className="mb-6">
@@ -829,29 +851,46 @@ export function ProjectManager({
               );
             })()}
 
-            {/* Your Games Section */}
-            {games.length > 0 && (
-              <>
-                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                  Your Games
-                </h2>
-                <div ref={gamesContainerRef} className="space-y-2">
-                  {games.map(game => (
-                    <div key={game.id} data-game-id={game.id}>
-                      <GameCard
-                        game={game}
-                        onLoad={() => onLoadGame(game.id)}
-                        onDelete={() => onDeleteGame(game.id)}
-                        onExtend={() => setExtensionGame(game)}
-                        onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
-                        onShare={() => setShareGame(game)}
-                        onEdit={() => setEditGame(game)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            {/* Your Games Section - Chronological Poster Grid (T5681) */}
+            {games.length > 0 && (() => {
+              const { groups, order } = groupGamesByMonth(games);
+              return (
+                <>
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
+                    Your Games
+                  </h2>
+                  <div ref={gamesContainerRef} className="space-y-6">
+                    {order.map(monthKey => (
+                      <div key={monthKey}>
+                        {/* Month header with game count */}
+                        <div className="mb-3 flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-gray-300">{monthKey}</h3>
+                          <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                            {groups[monthKey].length} game{groups[monthKey].length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {/* Landscape tile grid: 6-up desktop, 3-up tablet, 2-up mobile */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+                          {groups[monthKey].map(game => (
+                            <div key={game.id} data-game-id={game.id}>
+                              <GameTile
+                                game={game}
+                                onLoad={() => onLoadGame(game.id)}
+                                onDelete={() => onDeleteGame(game.id)}
+                                onExtend={() => setExtensionGame(game)}
+                                onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                                onShare={() => setShareGame(game)}
+                                onEdit={() => setEditGame(game)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )
       ) : (
@@ -878,7 +917,7 @@ export function ProjectManager({
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
              audit finding #13 desktop dead-space fix); the Games tab stays max-w-2xl. */
-          <div className="w-full max-w-6xl">
+          <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
             {showFilters && (
