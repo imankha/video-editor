@@ -2,7 +2,7 @@
 T4940: Credit-pack repricing + single-sourced packs via /payments/config.
 
 Covers:
-- The repriced ladder (60/120/260 at $3.99/$6.99/$12.99) is correct.
+- The repriced ladder (80/160/340 at $3.99/$6.99/$12.99) is correct.
 - /payments/config returns the three packs so the frontend renders backend truth.
 - The upload cost formula stays cost-recovering at the new CREDIT_VALUE (0.05).
 """

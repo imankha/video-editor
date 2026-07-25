@@ -2,7 +2,7 @@
  * T4940 QA — live-drive the credit transparency + repricing surfaces.
  *
  * Verifies (per acceptance criteria) against the running dev app with a real account:
- *  - Buy-credits modal renders the repriced 60/120/260 packs single-sourced from backend.
+ *  - Buy-credits modal renders the repriced 80/160/340 packs single-sourced from backend.
  *  - "1 credit = 1 second of exported video" rule is visible; free actions listed.
  *  - Usage history surface renders from /credits/transactions.
  *  - Game upload preview shows credit cost + 30-day window before activation.
@@ -30,13 +30,13 @@ test('desktop: buy-credits rule + repriced packs + explainer', async ({ context,
   await page.goto('/');
   await openBuyCredits(page);
 
-  await expect(page.getByText('60 credits').first()).toBeVisible();
-  await expect(page.getByText('120 credits').first()).toBeVisible();
-  await expect(page.getByText('260 credits').first()).toBeVisible();
+  await expect(page.getByText('80 credits').first()).toBeVisible();
+  await expect(page.getByText('160 credits').first()).toBeVisible();
+  await expect(page.getByText('340 credits').first()).toBeVisible();
   await expect(page.getByText('$3.99')).toBeVisible();
   await expect(page.getByText('$6.99')).toBeVisible();
   await expect(page.getByText('$12.99')).toBeVisible();
-  await expect(page.getByText(/4m 20s of exported video/)).toBeVisible();
+  await expect(page.getByText(/5m 40s of exported video/)).toBeVisible();
   await page.screenshot({ path: `${EVID}/buy-credits-desktop.png` });
 
   await page.getByText('How credits work').click();
@@ -81,7 +81,7 @@ test('mobile 375: buy-credits + upload preview render', async ({ context, page }
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto('/');
   await openBuyCredits(page);
-  await expect(page.getByText('260 credits')).toBeVisible();
+  await expect(page.getByText('340 credits')).toBeVisible();
   await expect(page.getByText('$12.99')).toBeVisible();
   await page.screenshot({ path: `${EVID}/buy-credits-mobile-375.png` });
 

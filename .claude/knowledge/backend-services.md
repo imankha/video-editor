@@ -173,8 +173,9 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   Stripe value" heal, collapsed section — Stripe pass runs only on explicit click). Tests:
   `test_revenue_reconciliation.py`. No schema change / no new table (computed on demand).
 - **Credit packs single-sourced + ~5c repricing (T4940, 2026-07-25).** `CREDIT_PACKS`
-  (`payments.py:68`) repriced to the value ladder **starter 60/$3.99, popular 120/$6.99,
-  best_value 260/$12.99** (top tier = 5.00c/credit). `GET /api/payments/config` now returns
+  (`payments.py:68`) repriced to the sub-$1-per-clip ladder **starter 80/$3.99, popular
+  160/$6.99, best_value 340/$12.99** (starter = worst-case 4.99c/credit, best_value =
+  3.82c/credit). `GET /api/payments/config` now returns
   `{publishable_key, packs[]}` — the **only** source of pack pricing; frontend
   `BuyCreditsModal.jsx` renders packs from it (the old duplicate frontend `PACKS` array is
   gone; only presentational icon/badge stay client-side in `PACK_META`). Grants read pack

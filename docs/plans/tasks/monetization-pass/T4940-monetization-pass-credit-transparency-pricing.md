@@ -143,7 +143,8 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 
 **2026-07-25**: Workstreams A+B implemented (M-tier, container worker; branch
 `feature/T4940-monetization-pass-credit-transparency-pricing`). A: `CREDIT_PACKS` repriced to
-60/$3.99 · 120/$6.99 · 260/$12.99 (top = 5.00c/cr); `/payments/config` now returns `packs[]`
+80/$3.99 · 160/$6.99 · 340/$12.99 (starter = worst-case 4.99c/cr → CREDIT_VALUE anchor 0.05;
+best_value 3.82c/cr); `/payments/config` now returns `packs[]`
 (single source); `BuyCreditsModal` renders from config (duplicate `PACKS` array removed, only
 `PACK_META` icon/badge stays client-side); `CREDIT_VALUE` 0.072→0.05 in both `storage_credits.py`
 and its frontend mirror `utils/storageCost.js`. B: "1 credit = 1 second" rule + "How credits work"
