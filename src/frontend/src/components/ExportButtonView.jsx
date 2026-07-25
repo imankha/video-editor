@@ -54,6 +54,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // T530: Credit system
   showInsufficientCredits,
   onCloseInsufficientCredits,
+  // T5790: pre-flight credit-cost estimate (Framing only)
+  estimatedCredits = null,
+  insufficientForEstimate = false,
+  creditBalance = 0,
   // T525/T526: Stripe purchase
   showBuyCredits,
   onOpenBuyCredits,
@@ -140,6 +144,27 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             : 'Add Spotlight'
         }
       </Button>
+
+      {/* T5790: pre-flight credit-cost estimate — Framing only. Derived from the SAME
+          effectiveDuration + Math.ceil the click-time credit check uses, so this number
+          matches the insufficient-credits modal. Hidden while exporting and when the
+          output duration is unknown (no fabricated number). Amber when it exceeds the
+          balance so the user learns BEFORE clicking; the click still runs the
+          authoritative backend check (refresh balance -> 402 -> buy credits). */}
+      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null && (
+        <div
+          data-testid="export-credit-estimate"
+          className={`flex items-center justify-center gap-1.5 text-xs ${
+            insufficientForEstimate ? 'text-amber-400' : 'text-gray-400'
+          }`}
+        >
+          {insufficientForEstimate && <AlertCircle size={12} />}
+          <span>
+            {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
+            {insufficientForEstimate ? ' — add credits to export' : ''}
+          </span>
+        </div>
+      )}
 
       {/* Disconnected state - recoverable, not an error */}
       {disconnected && !error && (
