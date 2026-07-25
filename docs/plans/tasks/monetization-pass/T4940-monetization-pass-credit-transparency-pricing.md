@@ -141,6 +141,26 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 
 ### Progress Log
 
+**2026-07-25**: Workstreams A+B implemented (M-tier, container worker; branch
+`feature/T4940-monetization-pass-credit-transparency-pricing`). A: `CREDIT_PACKS` repriced to
+80/$3.99 · 160/$6.99 · 340/$12.99 (starter = worst-case 4.99c/cr → CREDIT_VALUE anchor 0.05;
+best_value 3.82c/cr); `/payments/config` now returns `packs[]`
+(single source); `BuyCreditsModal` renders from config (duplicate `PACKS` array removed, only
+`PACK_META` icon/badge stays client-side); `CREDIT_VALUE` 0.072→0.05 in both `storage_credits.py`
+and its frontend mirror `utils/storageCost.js`. B: "1 credit = 1 second" rule + "How credits work"
+explainer (free actions listed) on the buy modal; rule line added to `InsufficientCreditsModal`;
+upload cost preview already shipped in `GameDetailsModal` (now derives from 0.05, verified live);
+new `CreditHistoryModal` (usage history via existing `/credits/transactions`, running balance walked
+back from authoritative balance) linked from the buy modal near the balance. **Step 0 NOT run**:
+overlay-render GPU cost needs Modal (unavailable in container) — remains an operator measurement;
+overlay stays free per product decision; framing ~0.3c/s anchor re-confirmed. Tests:
+`test_t4940_pack_pricing.py` (+ updated `test_storage_extension.py` numbers), `BuyCreditsModal.test.jsx`,
+`CreditHistoryModal.test.jsx` (+ updated `StorageExtensionModal.test.jsx`). Live QA (real account,
+Playwright): buy-credits + upload preview + usage history verified desktop 1280 + mobile 375 —
+evidence in `qa-evidence/T4940/`. Workstream C remnant done: `deploy-frontend.yml:29` `pk_test`
+hardcode → `secrets.VITE_STRIPE_PUBLIC_KEY_STAGING` (operator must create the secret). Prior
+test-mode-grant cleanup: documented decision, NOT executed. Committed, NOT pushed (supervisor pushes).
+
 **2026-07-12**: Task created after investigation. Economics: marginal cloud cost ~0.4-0.5c/credit vs 5c proposed price -> ~90% gross margin; 5c is safely profitable. Key mechanical dependency found: `CREDIT_VALUE` constant couples pack pricing to upload cost formula. Key UX gap: cost is computed pre-flight but only shown on insufficiency.
 
 **2026-07-22**: Workstream C EXECUTED (go-live). User created live keys + live webhook endpoint (we_1TwEyDIxob3dHqK0tsqqfVJN, payment_intent.succeeded + checkout.session.completed); `.env.prod` and `src/frontend/.env.production` flipped to sk_live/pk_live/live whsec. Keys validated against Stripe API pre-deploy (account acct_1TCpejIxob3dHqK0, charges_enabled=true). Deployed backend+frontend (deploy/backend/2026-07-22-3, deploy/frontend/2026-07-22-2). Verified: pk_live baked in deployed BuyCreditsModal chunk; sk_live/whsec on Fly machine. FOUND+FIXED launch blocker (commit 0576a422): db_sync middleware 401'd the webhook (no session on server-to-server calls) — allowlisted `/api/payments/webhook` + added `sync_user_db_to_r2_explicit` after webhook grants (allowlisted requests skip middleware R2 sync). Post-fix probe: webhook returns 400 Invalid signature (secret verifying) instead of 401. REMAINING: user verifies 4242 declined on prod + one real purchase lands in live dashboard; staging workflow pk_test -> GitHub secret; decision on prior test-mode credit grants.

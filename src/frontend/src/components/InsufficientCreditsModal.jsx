@@ -37,6 +37,9 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
             Your balance:{' '}
             <strong className="text-white">{available} credits</strong>.
           </p>
+          <p className="text-xs text-gray-400">
+            <span className="text-yellow-400 font-medium">1 credit = 1 second</span> of exported video.
+          </p>
         </div>
 
         <div className="mt-6 flex gap-3">

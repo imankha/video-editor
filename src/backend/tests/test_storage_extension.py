@@ -36,7 +36,7 @@ class TestUploadCostIncludesSurcharge:
 
     def test_10gb_upload_cost(self):
         size = int(10.0 * 1024 ** 3)
-        assert calculate_upload_cost(size, 30) == 4  # 3 storage + 1 surcharge
+        assert calculate_upload_cost(size, 30) == 5  # 4 storage + 1 surcharge (CREDIT_VALUE=0.05)
 
 
 class TestExtensionCostNoSurcharge:
@@ -61,7 +61,7 @@ class TestExtensionCostNoSurcharge:
 
     def test_very_large_game_30_days(self):
         size = int(10.0 * 1024 ** 3)
-        assert calculate_extension_cost(size, 30) == 3
+        assert calculate_extension_cost(size, 30) == 4  # CREDIT_VALUE=0.05
 
     def test_cost_scales_with_days(self):
         size = int(5.0 * 1024 ** 3)
@@ -117,19 +117,19 @@ class TestDaysPerCreditFormula:
     def test_2_5_gb_game(self):
         size = int(2.5 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc == 52
+        assert dpc == 36  # CREDIT_VALUE=0.05
         assert calculate_extension_cost(size, dpc) == 1
 
     def test_5_gb_game(self):
         size = int(5.0 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc == 26
+        assert dpc == 18  # CREDIT_VALUE=0.05
         assert calculate_extension_cost(size, dpc) == 1
 
     def test_10_gb_game(self):
         size = int(10.0 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc == 13
+        assert dpc == 9  # CREDIT_VALUE=0.05
         assert calculate_extension_cost(size, dpc) == 1
 
     def test_1_gb_game(self):

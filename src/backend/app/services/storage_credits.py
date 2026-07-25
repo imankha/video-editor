@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # R2 cost basis
 R2_RATE_PER_GB_MONTH = 0.015  # $/GB/month
-CREDIT_VALUE = 0.072  # worst-case per-credit (Best Value pack)
+CREDIT_VALUE = 0.05  # worst-case per-credit ($/credit at the Starter pack rate, ~4.99c, T4940)
 MARGIN = 0.10
 
 # Storage defaults

@@ -66,8 +66,8 @@ describe('StorageExtensionModal', () => {
 
   it('calculates correct days-per-credit step for 5 GB', () => {
     render(<StorageExtensionModal {...defaultProps} />);
-    // 5 GB -> daysPerCredit = 26 days
-    expect(screen.getByText(/1 credit \(26d\)/)).toBeTruthy();
+    // 5 GB -> daysPerCredit = 18 days (CREDIT_VALUE=0.05, T4940)
+    expect(screen.getByText(/1 credit \(18d\)/)).toBeTruthy();
   });
 
   it('calls correct endpoint on extend', async () => {
@@ -90,7 +90,7 @@ describe('StorageExtensionModal', () => {
         expect.stringContaining('/api/games/42/extend-storage'),
         expect.objectContaining({
           method: 'POST',
-          body: expect.stringContaining('"days":26'),
+          body: expect.stringContaining('"days":18'),
         }),
       );
     });
@@ -124,9 +124,9 @@ describe('StorageExtensionModal', () => {
     render(<StorageExtensionModal {...defaultProps} />);
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '3' } });
-    // 3 credits * 26 days/credit = 78 days
-    expect(screen.getByText(/\+78 days/)).toBeTruthy();
-    expect(screen.getByText(/3 credits for 78 days/)).toBeTruthy();
+    // 3 credits * 18 days/credit = 54 days (CREDIT_VALUE=0.05, T4940)
+    expect(screen.getByText(/\+54 days/)).toBeTruthy();
+    expect(screen.getByText(/3 credits for 54 days/)).toBeTruthy();
   });
 
   it('shows credit balance', () => {

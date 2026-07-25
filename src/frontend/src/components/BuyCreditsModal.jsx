@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { X, Coins, Star, Gem, Loader2, ArrowLeft } from 'lucide-react';
+import { X, Coins, Star, Gem, Loader2, ArrowLeft, Info, History } from 'lucide-react';
 import { Button } from './shared/Button';
+import { CreditHistoryModal } from './CreditHistoryModal';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useEditorStore, useProjectsStore } from '../stores';
@@ -9,7 +10,8 @@ import { useEditorStore, useProjectsStore } from '../stores';
 /**
  * BuyCreditsModal - Two-step inline payment flow (T526)
  *
- * Step 1: Pack selection (same as T525)
+ * Step 1: Pack selection — packs render FROM the backend /payments/config
+ *         endpoint (single-sourced, T4940). No duplicate frontend pricing table.
  * Step 2: Stripe Payment Element renders inline — user pays without leaving the page
  *
  * Props:
@@ -18,8 +20,9 @@ import { useEditorStore, useProjectsStore } from '../stores';
  *   insufficientCredits: { required, available, videoSeconds } | null
  */
 
-// Module-level cache: fetch publishable key from backend once, then reuse
+// Module-level caches: fetch config (publishable key + packs) from backend once.
 let stripePromiseCache = null;
+let packsCache = null;
 
 async function getStripePromise() {
   if (stripePromiseCache) return stripePromiseCache;
@@ -42,38 +45,52 @@ async function getStripePromise() {
   return stripePromiseCache;
 }
 
-const PACKS = [
-  {
-    key: 'starter',
-    name: 'Starter',
-    credits: 40,
-    price: '$3.99',
-    minutes: '~3 clips',
-    icon: Coins,
-    badge: null,
-    badgeColor: null,
-  },
-  {
-    key: 'popular',
-    name: 'Popular',
-    credits: 85,
-    price: '$6.99',
-    minutes: '~6 clips',
-    icon: Star,
-    badge: 'Most Popular',
-    badgeColor: 'bg-purple-600',
-  },
-  {
-    key: 'best_value',
-    name: 'Best Value',
-    credits: 180,
-    price: '$12.99',
-    minutes: '~14 clips',
-    icon: Gem,
-    badge: 'Best Value',
-    badgeColor: 'bg-green-600',
-  },
-];
+// Fetch the pack ladder from the backend (single source of truth, T4940).
+async function getPacks() {
+  if (packsCache) return packsCache;
+  const res = await apiFetch(`${API_BASE}/api/payments/config`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!Array.isArray(data.packs) || data.packs.length === 0) return null;
+  packsCache = data.packs;
+  return packsCache;
+}
+
+// Presentational metadata (icon/badge/label) keyed by pack — NOT pricing.
+// Credits and prices come from the backend config, not from here.
+const PACK_META = {
+  starter: { label: 'Starter', icon: Coins, badge: null, badgeColor: null },
+  popular: { label: 'Popular', icon: Star, badge: 'Most Popular', badgeColor: 'bg-purple-600' },
+  best_value: { label: 'Best Value', icon: Gem, badge: 'Best Value', badgeColor: 'bg-green-600' },
+};
+
+function formatPrice(priceCents) {
+  return `$${(priceCents / 100).toFixed(2)}`;
+}
+
+// 1 credit = 1 second of exported video — render an honest conversion.
+function secondsToClock(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  if (m === 0) return `${s}s`;
+  if (s === 0) return m === 1 ? '1 min' : `${m} min`;
+  return `${m}m ${s}s`;
+}
+
+// Merge backend pack (credits/price/name) with presentational meta.
+function toDisplayPack(pack) {
+  const meta = PACK_META[pack.key] || { label: pack.name, icon: Coins, badge: null, badgeColor: null };
+  return {
+    key: pack.key,
+    label: meta.label,
+    credits: pack.credits,
+    price: formatPrice(pack.price_cents),
+    exportedVideo: secondsToClock(pack.credits),
+    icon: meta.icon,
+    badge: meta.badge,
+    badgeColor: meta.badgeColor,
+  };
+}
 
 const STRIPE_APPEARANCE = {
   theme: 'night',
@@ -85,6 +102,36 @@ const STRIPE_APPEARANCE = {
     borderRadius: '8px',
   },
 };
+
+// ---------------------------------------------------------------------------
+// "How credits work" explainer — states the rule + what's free (T4940)
+// ---------------------------------------------------------------------------
+
+function CreditsExplainer() {
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-gray-900/60 border border-white/10 text-xs text-gray-300 space-y-2">
+      <p className="text-white font-medium">How credits work</p>
+      <p><span className="text-yellow-400 font-medium">1 credit = 1 second</span> of exported video.</p>
+      <div>
+        <p className="text-gray-400">Credits are spent on:</p>
+        <ul className="list-disc list-inside text-gray-300">
+          <li>Exporting video (1 credit per second)</li>
+          <li>Uploading a game (storage for 30 days)</li>
+        </ul>
+      </div>
+      <div>
+        <p className="text-gray-400">Always free:</p>
+        <ul className="list-disc list-inside text-gray-300">
+          <li>Spotlight &amp; highlight render</li>
+          <li>Player detection</li>
+          <li>Downloads &amp; sharing</li>
+          <li>Storing your exported reels</li>
+        </ul>
+      </div>
+      <p className="text-gray-400">Credits never expire.</p>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Step 2: Payment Form (rendered inside <Elements> provider)
@@ -190,9 +237,11 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
         </button>
         <div>
           <h3 className="text-lg font-semibold text-white">
-            {selectedPack.name} — {selectedPack.credits.toLocaleString()} credits
+            {selectedPack.label} — {selectedPack.credits.toLocaleString()} credits
           </h3>
-          <p className="text-gray-400 text-sm">{selectedPack.price}</p>
+          <p className="text-gray-400 text-sm">
+            {selectedPack.price} · ≈ {selectedPack.exportedVideo} of exported video
+          </p>
         </div>
         <button
           type="button"
@@ -257,14 +306,32 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
 // ---------------------------------------------------------------------------
 
 export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits }) {
+  const [packs, setPacks] = useState(null);
   const [selectedPack, setSelectedPack] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
   const [stripePromise, setStripePromise] = useState(null);
   const [loadingPack, setLoadingPack] = useState(null);
   const [error, setError] = useState(null);
+  const [showExplainer, setShowExplainer] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load the pack ladder from backend config once when the modal opens.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fetched = await getPacks();
+      if (cancelled) return;
+      if (!fetched) {
+        setError('Could not load credit packs. Please try again.');
+        return;
+      }
+      setPacks(fetched.map(toDisplayPack));
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleSelectPack(packKey) {
-    const pack = PACKS.find(p => p.key === packKey);
+    const pack = (packs || []).find(p => p.key === packKey);
     if (!pack) return;
 
     setLoadingPack(packKey);
@@ -369,8 +436,8 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
   // Step 1: Pack selection
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <Coins size={20} className="text-yellow-400" />
             Buy Credits
@@ -382,6 +449,14 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
           >
             <X size={20} />
           </button>
+        </div>
+
+        {/* The rule, stated up front — value-forward (T4940) */}
+        <div className="mb-3 p-3 rounded-lg bg-purple-900/20 border border-purple-500/20 text-sm">
+          <p className="text-white">
+            <span className="text-yellow-400 font-semibold">1 credit = 1 second</span> of exported video.
+          </p>
+          <p className="text-gray-400 text-xs mt-0.5">Your credits go further now.</p>
         </div>
 
         {insufficientCredits && (
@@ -399,57 +474,85 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
           </div>
         )}
 
-        <div className="space-y-3">
-          {PACKS.map((pack) => {
-            const Icon = pack.icon;
-            const isLoading = loadingPack === pack.key;
-            const isDisabled = loadingPack && !isLoading;
+        {!packs && !error && (
+          <div className="py-8 flex justify-center">
+            <Loader2 size={24} className="text-purple-400 animate-spin" />
+          </div>
+        )}
 
-            return (
-              <button
-                key={pack.key}
-                onClick={() => handleSelectPack(pack.key)}
-                disabled={isDisabled || isLoading}
-                className={[
-                  'w-full text-left p-4 rounded-lg border transition-all relative',
-                  isDisabled
-                    ? 'border-white/5 bg-gray-700/30 opacity-50 cursor-not-allowed'
-                    : isLoading
-                    ? 'border-purple-500 bg-purple-900/20 cursor-wait'
-                    : 'border-white/10 bg-gray-700/50 hover:border-purple-500/50 hover:bg-gray-700 cursor-pointer',
-                ].join(' ')}
-              >
-                {pack.badge && (
-                  <span
-                    className={`absolute -top-2 right-3 px-2 py-0.5 rounded-full text-xs font-medium text-white ${pack.badgeColor}`}
-                  >
-                    {pack.badge}
-                  </span>
-                )}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {isLoading ? (
-                      <Loader2 size={20} className="text-purple-400 animate-spin" />
-                    ) : (
-                      <Icon size={20} className="text-yellow-400" />
-                    )}
-                    <div>
-                      <div className="text-white font-medium">
-                        {pack.credits.toLocaleString()} credits
+        {packs && (
+          <div className="space-y-3">
+            {packs.map((pack) => {
+              const Icon = pack.icon;
+              const isLoading = loadingPack === pack.key;
+              const isDisabled = loadingPack && !isLoading;
+
+              return (
+                <button
+                  key={pack.key}
+                  onClick={() => handleSelectPack(pack.key)}
+                  disabled={isDisabled || isLoading}
+                  className={[
+                    'w-full text-left p-4 rounded-lg border transition-all relative',
+                    isDisabled
+                      ? 'border-white/5 bg-gray-700/30 opacity-50 cursor-not-allowed'
+                      : isLoading
+                      ? 'border-purple-500 bg-purple-900/20 cursor-wait'
+                      : 'border-white/10 bg-gray-700/50 hover:border-purple-500/50 hover:bg-gray-700 cursor-pointer',
+                  ].join(' ')}
+                >
+                  {pack.badge && (
+                    <span
+                      className={`absolute -top-2 right-3 px-2 py-0.5 rounded-full text-xs font-medium text-white ${pack.badgeColor}`}
+                    >
+                      {pack.badge}
+                    </span>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {isLoading ? (
+                        <Loader2 size={20} className="text-purple-400 animate-spin" />
+                      ) : (
+                        <Icon size={20} className="text-yellow-400" />
+                      )}
+                      <div>
+                        <div className="text-white font-medium">
+                          {pack.credits.toLocaleString()} credits
+                        </div>
+                        <div className="text-gray-400 text-xs">≈ {pack.exportedVideo} of exported video</div>
                       </div>
-                      <div className="text-gray-400 text-xs">{pack.minutes} of video</div>
                     </div>
+                    <div className="text-white font-semibold">{pack.price}</div>
                   </div>
-                  <div className="text-white font-semibold">{pack.price}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {error && (
           <p className="mt-3 text-red-400 text-sm">{error}</p>
         )}
+
+        {/* Transparency links: explainer + usage history */}
+        <div className="mt-4 flex items-center justify-between text-xs">
+          <button
+            type="button"
+            onClick={() => setShowExplainer((v) => !v)}
+            className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
+          >
+            <Info size={13} /> How credits work
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
+          >
+            <History size={13} /> Usage history
+          </button>
+        </div>
+
+        {showExplainer && <CreditsExplainer />}
 
         <p className="mt-4 text-gray-500 text-xs text-center">
           Credits never expire. Secure checkout by Stripe.
@@ -461,6 +564,8 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
           </Button>
         </div>
       </div>
+
+      {showHistory && <CreditHistoryModal onClose={() => setShowHistory(false)} />}
     </div>
   );
 }

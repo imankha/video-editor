@@ -172,6 +172,27 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   `components/admin/RevenueReconciliation.jsx` (drifted-only table + per-user/all "Adopt
   Stripe value" heal, collapsed section — Stripe pass runs only on explicit click). Tests:
   `test_revenue_reconciliation.py`. No schema change / no new table (computed on demand).
+- **Credit packs single-sourced + ~5c repricing (T4940, 2026-07-25).** `CREDIT_PACKS`
+  (`payments.py:68`) repriced to the sub-$1-per-clip ladder **starter 80/$3.99, popular
+  160/$6.99, best_value 340/$12.99** (starter = worst-case 4.99c/credit, best_value =
+  3.82c/credit). `GET /api/payments/config` now returns
+  `{publishable_key, packs[]}` — the **only** source of pack pricing; frontend
+  `BuyCreditsModal.jsx` renders packs from it (the old duplicate frontend `PACKS` array is
+  gone; only presentational icon/badge stay client-side in `PACK_META`). Grants read pack
+  metadata off the Stripe session/PI, not the constant, so existing balances + in-flight
+  payments are unaffected by a reprice. `storage_credits.CREDIT_VALUE` → **0.05** (worst-case
+  $/credit, was 0.072) — the frontend mirror `utils/storageCost.js` must stay in lockstep or
+  the upload preview disagrees with the charge. Lower CREDIT_VALUE ⇒ more credits per GB (a 4GB
+  game 2→3 cr incl. surcharge), still cost-recovering (R2 cost × 1.10 margin). Usage history:
+  `GET /api/credits/transactions` (unchanged) surfaced via `CreditHistoryModal.jsx` (running
+  balance walked back from the authoritative current balance; deductions store negative
+  `amount`, grants positive). "1 credit = 1 second of exported video" rule stated on every
+  credit surface. Tests: `test_t4940_pack_pricing.py`, `BuyCreditsModal.test.jsx`,
+  `CreditHistoryModal.test.jsx`. **OPERATOR follow-ups:** (a) create GitHub secret
+  `VITE_STRIPE_PUBLIC_KEY_STAGING` — `deploy-frontend.yml:29` now references it instead of a
+  hardcoded `pk_test_`; (b) overlay-render GPU cost remains an unmeasured operator measurement
+  (see modal-gpu.md) — overlay stays free per product decision; (c) prior test-mode-era credit
+  grants (T5760 `test_mode_era` classification) — documented decision, no cleanup executed.
 - **`GET /api/version` + `AppVersionHeaderMiddleware` + `POST /api/sync/flush-verify` (T5070).**
   Backend advertises its build id as `X-App-Version` on every response — middleware added LAST
   (outermost) so the header survives 401s/preflight; CORS `expose_headers` includes it. Value =
