@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from '../components/shared';
 import { useAppState } from '../contexts';
@@ -13,10 +13,34 @@ import { HighlightEffect } from '../constants/highlightEffects';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
-import { calculateEffectiveDuration, buildClipMetadata } from '../utils/effectiveDuration';
+import { calculateEffectiveDuration, sumEffectiveDurations, buildClipMetadata } from '../utils/effectiveDuration';
 
 // Re-exported for existing importers (T5780: definitions moved to utils/effectiveDuration.js)
 export { calculateEffectiveDuration, buildClipMetadata };
+
+/**
+ * T5790: estimated credit cost of a Framing export.
+ *
+ * Uses the SAME calculator + rounding the click-time credit check uses
+ * (`handleExport` below → `sumEffectiveDurations` → `creditStore.getRequiredCredits`,
+ * i.e. `Math.ceil` of output seconds), so the number shown on the button never
+ * disagrees with the insufficient-credits modal or the backend charge (EPIC.md:
+ * "one cost calculator").
+ *
+ * Fail-closed (EPIC.md "no fabricated numbers"): returns `null` when the effective
+ * output duration is unknown / NaN / non-positive, so the UI HIDES the estimate
+ * rather than showing a guess that would be short of the real charge.
+ *
+ * @param {Array} clips - Clips carrying live (selected) or saved segment state
+ * @returns {number|null} required credits, or null when duration is unknown
+ */
+export function estimateExportCredits(clips) {
+  const totalVideoSeconds = sumEffectiveDurations(clips);
+  if (totalVideoSeconds == null || Number.isNaN(totalVideoSeconds) || totalVideoSeconds <= 0) {
+    return null;
+  }
+  return useCreditStore.getState().getRequiredCredits(totalVideoSeconds);
+}
 
 // Export configuration - centralized for easy A/B testing
 export const EXPORT_CONFIG = {
@@ -974,6 +998,26 @@ export function ExportButtonContainer({
   // Determine button text based on mode
   const isFramingMode = editorMode === EDITOR_MODES.FRAMING;
 
+  // T5790: live credit-cost estimate for the Framing export button. Derived at render
+  // (no new state — no-redundant-state rule) from the live total effective duration via
+  // the shared estimator, so it ticks the instant a speed/trim/split/clip-count edit
+  // updates `clips` (clipsWithCurrentState from FramingContainer). Framing only —
+  // Overlay export does not run the per-second credit check, so it stays null there.
+  // Fail-closed: null when the output duration is unknown (missing metadata); we log
+  // once per relevant change, mirroring the click-time fail-closed warning in handleExport.
+  const estimatedCredits = useMemo(() => {
+    if (!isFramingMode) return null;
+    const credits = estimateExportCredits(clips);
+    if (credits == null && clips && clips.length > 0) {
+      console.warn('[ExportButtonContainer] Credit estimate hidden: effective output duration unknown (missing clip metadata) — showing no number');
+    }
+    return credits;
+  }, [isFramingMode, clips]);
+
+  // Optimistic warning: estimate exceeds the (already-in-container) balance. Informational
+  // only — the click still runs the authoritative refresh-balance → 402 → buy-credits flow.
+  const insufficientForEstimate = estimatedCredits != null && estimatedCredits > creditBalance;
+
   // T740: Extraction check removed — framing reads game video directly
 
   // Check if any clips haven't been worked on (no crop or meaningful segment edits)
@@ -1051,6 +1095,9 @@ export function ExportButtonContainer({
     showInsufficientCredits,
     onCloseInsufficientCredits: () => setShowInsufficientCredits(null),
     creditBalance,
+    // T5790: pre-flight credit-cost estimate (Framing only, derived — no new state)
+    estimatedCredits,
+    insufficientForEstimate,
     // T525/T526: Stripe purchase
     showBuyCredits,
     onOpenBuyCredits: () => { console.log('[ExportButtonContainer] Opening BuyCreditsModal'); setShowBuyCredits(true); },

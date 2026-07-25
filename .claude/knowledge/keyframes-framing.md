@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-25 (T5780 live effective-duration indicator: utils/effectiveDuration.js, live-vs-saved segment source, fail-closed hide)
+updated: 2026-07-25 (T5790 export-button credit-cost estimate: effectiveDuration -> getRequiredCredits, Framing-only, fail-closed hide)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -99,6 +99,34 @@ project total into a credit estimate, and the backend charge must use the same m
   `e2e/T5780-framing-effective-duration.qa.spec.js` (live speed tick, trim drop, source-timeline
   readout unchanged, responsive 375/desktop; asserts the chip against the segment track's OWN
   reported visual durations, so it's clip-duration-agnostic).
+
+### Export-button credit estimate (T5790)
+
+The Framing Export button shows a live credit-cost estimate under it (`~9 credits · balance 42`,
+`ExportButtonView` `data-testid="export-credit-estimate"`). Derived at render — NO new state
+(no-redundant-state / T350). `estimateExportCredits(clips)` (exported from `ExportButtonContainer.jsx`)
+= `sumEffectiveDurations(clips)` → `creditStore.getRequiredCredits` (`Math.ceil` of output seconds,
+`creditStore.js:58`) — the SAME calculator + rounding the click-time credit check in `handleExport`
+uses, so the button number NEVER disagrees with the insufficient-credits modal or the backend charge
+(EPIC.md "one cost calculator"). The container's `clips` prop is `clipsWithCurrentState` (live
+selected-clip segments + saved others), so the estimate ticks the instant a speed/trim/split/clip-count
+gesture lands — no save/export.
+- **Framing ONLY.** Gated on `isFramingMode` in both container (returns null otherwise) and view
+  (line hidden). Overlay export runs no per-second credit check → button byte-identical.
+- **Fail-closed (no fabricated number):** unknown/NaN/≤0 effective duration → `estimateExportCredits`
+  returns null → line hidden (logs a warn, mirroring `handleExport`'s fail-closed path). Also hidden
+  while exporting.
+- **Warning, not a gate:** `insufficientForEstimate = estimatedCredits > creditBalance` styles the
+  line amber (`AlertCircle` + "add credits to export") so the user learns BEFORE clicking; the click
+  still runs the authoritative refresh-balance → 402 → buy-credits flow. Balance stays on existing
+  gestures (mount/export/purchase) — the estimate does NOT poll/`fetchCredits` on edits.
+- Coverage: Vitest `src/containers/ExportButtonContainer.test.js` (`estimateExportCredits`: 6s+3s@0.5x
+  →9 == modal required, trim reduces, Math.ceil, multi-clip sum→23, fail-closed null, empty/null) +
+  `src/components/ExportButtonView.test.jsx` (line shown/singularized/amber-warning/hidden-when-null/
+  hidden-while-exporting/absent-in-Overlay) + real-browser
+  `e2e/T5790-export-credit-cost-estimate.qa.spec.js` (estimate == ceil(track total), live tick on
+  speed/trim, amber warning at balance 0, click-time modal "required" == button number via a stubbed
+  `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules
 - **Flat list, no permanent boundaries** (permanent-frame model removed ~2026-06-21).
