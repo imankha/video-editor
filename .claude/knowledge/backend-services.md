@@ -137,6 +137,41 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   (no days branch: `26h`, not `1d 2h`). Decisions: NO backfill (values self-correct as new
   sessions accrue), all-time cumulative window (unchanged). Tests: `test_analytics.py`
   (`TestSessionEngagedSeconds`, `TestCloseSessionBanking`, `TestHeartbeatGapCap`).
+- **Stripe revenue reconciliation (T5760).** Stripe is the source of truth for money;
+  `user_segments.total_spent_cents` is a local cache written at fulfillment (admin-view
+  speed — no per-page-load Stripe latency). **`total_spent_cents` is NET of refunds AND
+  lost disputes/chargebacks** ("what the user paid us and we kept" — Stripe's Revenue
+  Recognition standard; contra-revenue for both). Reconciliation is **on-demand only, NEVER
+  on the `list_users` load path** (Stripe latency isolation — the reason the local column
+  exists). Pure classifier lives in `app/services/revenue_reconciliation.py`
+  (`build_stripe_net_by_user` + `classify_users` are pure over fetched data → unit-testable
+  with mocked Stripe; only `fetch_stripe_intents` touches network — `PaymentIntent.list`
+  auto-paginated, `expand=['data.latest_charge','data.latest_charge.dispute']` to avoid N+1;
+  **status is filtered client-side** — `PaymentIntent.list` has no server-side status param).
+  Group by `metadata.user_id` (on the PI, never customer id — wiped by user_db v007). Per
+  user `net = Σ(amount_captured - amount_refunded - lost_dispute_amount)`; subtract a dispute
+  ONLY when `dispute.status in {lost, charge_refunded}` (won/open never subtracted; open →
+  `has_pending_dispute`). **The lost-dispute amount is netted against the charge's refund**
+  (`max(dispute.amount - amount_refunded, 0)`): a `charge_refunded`-status dispute sets BOTH
+  `amount_refunded` and the dispute amount for the same money, so subtracting both would
+  double-count and drive net negative. `DriftCause` priority: aligned → `test_mode_era` (pi_count==0 &
+  local>0, zero live history = pre-go-live 2026-07-22 noise) → `dispute` → `refund` →
+  `unknown`. Endpoints (admin.py, both `_require_admin()` + `_require_stripe_configured()`):
+  `GET /api/admin/revenue-reconciliation` (report: rows drifted-first + summary), `POST
+  /api/admin/revenue-reconciliation/heal` (`{user_ids?|all_drifted}` — recomputes Stripe net
+  server-side, never trusts a client amount, sets `total_spent_cents` via
+  `analytics.set_total_spent`; explicit admin gesture, never automatic). Heal helpers next to
+  `increment_total_spent`: `set_total_spent` (returns prior value) + `decrement_total_spent`
+  (reads-then-writes, floors at 0 with a WARNING — never persist a negative aggregate).
+  **Webhook hardening:** `charge.refunded` branch in payments.py decrements at refund time
+  (delta = newest `charge.refunds.data[0].amount`, fallback cumulative `amount_refunded`;
+  user_id via `charge.metadata` then `PaymentIntent.retrieve` since we set metadata on the PI
+  not the Charge). **OPERATOR STEP:** add `charge.refunded` to the LIVE-mode webhook endpoint
+  in the Stripe dashboard (events are per-endpoint + per-mode) or it never fires. Dispute
+  webhooks are a deliberate follow-up (the on-demand pass is their safety net). Frontend:
+  `components/admin/RevenueReconciliation.jsx` (drifted-only table + per-user/all "Adopt
+  Stripe value" heal, collapsed section — Stripe pass runs only on explicit click). Tests:
+  `test_revenue_reconciliation.py`. No schema change / no new table (computed on demand).
 - **`GET /api/version` + `AppVersionHeaderMiddleware` + `POST /api/sync/flush-verify` (T5070).**
   Backend advertises its build id as `X-App-Version` on every response — middleware added LAST
   (outermost) so the header survives 401s/preflight; CORS `expose_headers` includes it. Value =

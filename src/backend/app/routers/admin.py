@@ -495,6 +495,145 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
 
 
 # ---------------------------------------------------------------------------
+# T5760: Stripe revenue reconciliation (Stripe as source of truth for money)
+#
+# On-demand only — NEVER on the main user-table load path (list_users makes zero
+# Stripe calls). total_spent_cents is a local cache for admin speed; this compares
+# it against per-user Stripe NET revenue (net of refunds AND lost disputes) and
+# offers an explicit heal gesture. No new table — computed on demand.
+# ---------------------------------------------------------------------------
+
+
+def _load_local_spent_positive() -> dict:
+    """user_id -> {email, local_cents} for every user whose local spend is > 0."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT u.user_id, u.email, s.total_spent_cents AS cents
+            FROM user_segments s
+            JOIN users u ON u.user_id = s.user_id
+            WHERE s.total_spent_cents > 0
+        """)
+        return {
+            r["user_id"]: {"email": r["email"], "local_cents": r["cents"] or 0}
+            for r in cur.fetchall()
+        }
+
+
+def _emails_for(user_ids: list[str]) -> dict:
+    if not user_ids:
+        return {}
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id, email FROM users WHERE user_id = ANY(%s)", (user_ids,))
+        return {r["user_id"]: r["email"] for r in cur.fetchall()}
+
+
+def _compute_reconciliation() -> tuple[list, dict]:
+    """Return (rows, stripe_agg). Fetches Stripe once; pure classification after.
+
+    Covers only users with local spend > 0 OR live Stripe history — aligned rows for
+    the whole user base would be noise. Stripe-only users get their email backfilled.
+    """
+    from ..services.revenue_reconciliation import (
+        build_stripe_net_by_user,
+        classify_users,
+        fetch_stripe_intents,
+    )
+
+    stripe_agg = build_stripe_net_by_user(fetch_stripe_intents())
+    local = _load_local_spent_positive()
+
+    stripe_only = [uid for uid in stripe_agg if uid not in local]
+    if stripe_only:
+        for uid, email in _emails_for(stripe_only).items():
+            local[uid] = {"email": email, "local_cents": 0}
+
+    rows = classify_users(local, stripe_agg)
+    return rows, stripe_agg
+
+
+def _require_stripe_configured():
+    import stripe
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+
+@router.get("/revenue-reconciliation")
+async def revenue_reconciliation():
+    """Per-user local vs Stripe-net revenue with delta + cause. Admin only, on-demand."""
+    _require_admin()
+    _require_stripe_configured()
+
+    from ..services.revenue_reconciliation import GO_LIVE_DATE
+
+    rows, _ = _compute_reconciliation()
+    drifted = [r for r in rows if r["drifted"]]
+    summary = {
+        "total_users": len(rows),
+        "drifted_users": len(drifted),
+        "aligned_users": len(rows) - len(drifted),
+        "total_local_cents": sum(r["local_cents"] for r in rows),
+        "total_stripe_net_cents": sum(r["stripe_net_cents"] for r in rows),
+        "total_delta_cents": sum(r["delta_cents"] for r in rows),
+    }
+    return {
+        "rows": rows,
+        "summary": summary,
+        "go_live_date": GO_LIVE_DATE.isoformat(),
+    }
+
+
+class RevenueHealRequest(BaseModel):
+    user_ids: list[str] | None = None
+    all_drifted: bool = False
+
+
+@router.post("/revenue-reconciliation/heal")
+async def heal_revenue_reconciliation(request: RevenueHealRequest):
+    """Adopt the Stripe net figure into total_spent_cents. Explicit admin gesture.
+
+    Recomputes Stripe truth server-side (never trusts a client-supplied amount) and
+    sets each target user's total_spent_cents to their Stripe net (net of refunds and
+    lost disputes). ``all_drifted`` heals every drifted user; otherwise heals the
+    given ``user_ids``.
+    """
+    _require_admin()
+    _require_stripe_configured()
+
+    from ..analytics import set_total_spent
+
+    rows, stripe_agg = _compute_reconciliation()
+    row_by_uid = {r["user_id"]: r for r in rows}
+
+    if request.all_drifted:
+        targets = [r["user_id"] for r in rows if r["drifted"]]
+    elif request.user_ids:
+        targets = request.user_ids
+    else:
+        raise HTTPException(status_code=400, detail="Provide user_ids or all_drifted")
+
+    results = []
+    for uid in targets:
+        # Only heal users present in the freshly recomputed report. A user_id the
+        # client sends that isn't in the report (never had local spend or live
+        # Stripe history) would otherwise be silently zeroed — skip it instead.
+        if uid not in row_by_uid:
+            results.append({"user_id": uid, "skipped": "not in report", "healed": False})
+            continue
+        net_cents = stripe_agg.get(uid, {}).get("net_cents", 0)
+        old_cents = set_total_spent(uid, net_cents)
+        results.append({
+            "user_id": uid,
+            "old_cents": old_cents,
+            "new_cents": net_cents,
+            "healed": old_cents is not None,
+        })
+
+    return {"results": results, "healed": sum(1 for r in results if r["healed"])}
+
+
+# ---------------------------------------------------------------------------
 # T1510: Impersonation
 # ---------------------------------------------------------------------------
 

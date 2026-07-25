@@ -9,6 +9,7 @@ import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CohortGrid } from '../components/admin/CohortGrid';
 import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
+import { RevenueReconciliation } from '../components/admin/RevenueReconciliation';
 
 function CollapsibleSection({ title, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -192,6 +193,12 @@ export function AdminScreen({ onBack }) {
           {!loading && !error && knownUsers.length > 0 && (
             <UserTable users={knownUsers} onUserClick={(userId) => fetchUserDetail(userId)} funnelTotals={funnelTotals} />
           )}
+        </CollapsibleSection>
+
+        {/* Revenue reconciliation -- Stripe as source of truth (T5760). Collapsed by
+            default; the Stripe pass only runs when the admin clicks inside. */}
+        <CollapsibleSection title="Revenue Reconciliation (Stripe)">
+          <RevenueReconciliation />
         </CollapsibleSection>
 
         {(userDetailData || userDetailLoading) && (

@@ -19,7 +19,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from ..analytics import increment_total_spent, record_milestone
+from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
 from ..database import sync_user_db_to_r2_explicit
 from ..services.user_db import (
     get_stripe_customer_id,
@@ -358,8 +358,66 @@ async def stripe_webhook(request: Request):
         )
         return {"status": "credits_granted", "credits": credits, "balance": new_balance}
 
+    # Handle refunds (T5760 — keep total_spent_cents net of refunds in steady state)
+    #
+    # total_spent_cents means NET of refunds, so a refund lowers it at refund time,
+    # keeping steady-state drift from Stripe truth near zero (the on-demand
+    # reconciliation pass is the safety net, not the routine correction). OPERATOR
+    # STEP: this only fires once `charge.refunded` is added to the LIVE-mode webhook
+    # endpoint in the Stripe dashboard (webhook events are per-endpoint + per-mode).
+    #
+    # IDEMPOTENCY LIMITATION (documented follow-up, NOT fixed here): unlike the
+    # credit-grant branches, this decrement has no processed-marker guard, because a
+    # durable one would need a new refund-ledger table and T5760 is constrained to no
+    # schema change. A Stripe redelivery would double-decrement, leaving local BELOW
+    # Stripe net — which the reconciliation pass detects (negative delta) and heal
+    # corrects. Durable refund idempotency is a follow-up alongside dispute webhooks.
+    if event["type"] == "charge.refunded":
+        charge = event["data"]["object"]
+        user_id = _user_id_for_charge(charge)
+        if not user_id:
+            logger.error(f"[Payments] charge.refunded without resolvable user_id: charge={charge.get('id')}")
+            return {"status": "error", "message": "No user_id"}
+
+        refund_cents = _latest_refund_amount(charge)
+        if refund_cents <= 0:
+            logger.info(f"[Payments] charge.refunded with zero refund delta: charge={charge.get('id')}")
+            return {"status": "ignored", "type": "charge.refunded"}
+
+        decrement_total_spent(user_id, refund_cents)
+        logger.info(f"[Payments] Refund recorded: user={user_id}, charge={charge.get('id')}, cents={refund_cents}")
+        return {"status": "refund_recorded", "user_id": user_id, "cents": refund_cents}
+
     # Return 200 for all other event types (Stripe expects it)
     return {"status": "ignored", "type": event["type"]}
+
+
+def _user_id_for_charge(charge) -> str | None:
+    """Resolve our user_id for a Charge. We set metadata.user_id on the PaymentIntent,
+    not the Charge, so fall back to retrieving the PI when the charge carries none."""
+    meta = charge.get("metadata") or {}
+    user_id = meta.get("user_id")
+    if user_id:
+        return user_id
+    pi_id = charge.get("payment_intent")
+    if pi_id:
+        try:
+            pi = stripe.PaymentIntent.retrieve(pi_id)
+            return (pi.get("metadata") or {}).get("user_id")
+        except stripe.StripeError as e:
+            logger.error(f"[Payments] Failed to retrieve PI {pi_id} for refund: {e}")
+    return None
+
+
+def _latest_refund_amount(charge) -> int:
+    """Cents refunded by THIS refund event. The newest entry in charge.refunds.data is
+    the just-created refund; using it (not the cumulative amount_refunded) keeps partial
+    and repeated refunds correct. Falls back to cumulative if the list is absent."""
+    refunds = charge.get("refunds") or {}
+    data = refunds.get("data") if isinstance(refunds, dict) else None
+    if data:
+        return data[0].get("amount", 0) or 0
+    return charge.get("amount_refunded", 0) or 0
 
 
 # ---------------------------------------------------------------------------
