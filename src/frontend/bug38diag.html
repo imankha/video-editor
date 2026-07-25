@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  Bug 38 DEV-ONLY diagnostic harness (glitch 2 auto-select + glitch 3 paused
+  frame-step). NOT a production page: not listed in vite build rollupOptions.input
+  (only index.html is), so it never ships. Served by the dev server only, for the
+  Playwright real-browser QA of the two glitches when no exported reel exists.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bug 38 diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; color: #e5e7eb; overflow-x: hidden; max-width: 100%; }
+      #bug38diag-root { overflow-x: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="bug38diag-root"></div>
+    <script type="module" src="/src/bug38diag/main.jsx"></script>
+  </body>
+</html>
