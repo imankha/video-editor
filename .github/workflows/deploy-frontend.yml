@@ -26,7 +26,11 @@ jobs:
         env:
           VITE_API_BASE: https://reel-ballers-api-staging.fly.dev
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_STRIPE_PUBLIC_KEY: pk_test_51TCpejIxob3dHqK0cc9lcMJFnC4CzfmkRNYmxak1xtasVZ3173uhDp12g8XXN1aiJ9sAbJnwX48Ca0zQpqHWCrrH00xfT5YAbq
+          # T4940: staging Stripe publishable key. A pk_ is not secret, but no keys
+          # are hardcoded in workflows (standard). OPERATOR: create the repo secret
+          # VITE_STRIPE_PUBLIC_KEY_STAGING with the staging pk_test_ value before the
+          # next frontend deploy, or this build ships without a Stripe key.
+          VITE_STRIPE_PUBLIC_KEY: ${{ secrets.VITE_STRIPE_PUBLIC_KEY_STAGING }}
 
       - run: npx wrangler pages deploy dist --project-name=reel-ballers-staging --branch=master
         working-directory: src/frontend
