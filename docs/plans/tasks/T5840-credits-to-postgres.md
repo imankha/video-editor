@@ -4,7 +4,7 @@
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-07-24
-**Design-gated:** Architect approval required before implementation
+**Design-gated:** DESIGN APPROVED 2026-07-25 (user decisions recorded in [T5840-design.md](T5840-design.md) "RESOLVED" section) -- ready for implementation
 
 ## Problem
 
