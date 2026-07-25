@@ -73,6 +73,14 @@ describe('checkSyncStatus', () => {
     expect(useSyncStore.getState().syncFailed).toBe(true);
   });
 
+  it('sets syncFailed when header is "conflict" (T4310 CAS refusal)', () => {
+    const mockResponse = {
+      headers: new Headers({ 'X-Sync-Status': 'conflict' }),
+    };
+    checkSyncStatus(mockResponse);
+    expect(useSyncStore.getState().syncFailed).toBe(true);
+  });
+
   it('clears syncFailed when header is absent', () => {
     useSyncStore.getState().setSyncFailed(true);
     const mockResponse = {

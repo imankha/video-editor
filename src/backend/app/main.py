@@ -342,14 +342,26 @@ def _graceful_shutdown(signum, frame):
                     # handler runs with NO request context, so the ContextVar is
                     # unset (r2_key would raise) or stale (mis-keys). Key off the
                     # profile_id parsed from the path.
+                    # T4310: CAS ON (skip_version_check=False) — the signal handler
+                    # is never on a request thread, so the HEAD adds no request
+                    # latency. A stale machine going down mid-conflict must not
+                    # overwrite R2 with its stale copy; storage.py refuses the
+                    # upload on conflict (no re-download — see storage.py MAJOR-2 —
+                    # the local baseline stays frozen, refused again on next boot).
                     version = get_local_db_version(user_id, profile_id)
-                    success, _new_version = sync_database_to_r2_with_version(
-                        user_id, db_file, version, skip_version_check=True, profile_id=profile_id)
+                    success, new_version = sync_database_to_r2_with_version(
+                        user_id, db_file, version, skip_version_check=False, profile_id=profile_id)
                     if success:
                         synced += 1
                     else:
                         failed += 1
-                        logger.warning(f"[Shutdown] R2 sync failed for user={user_id} profile={profile_id}")
+                        if new_version is not None:
+                            logger.warning(
+                                f"[Shutdown] R2 version conflict for user={user_id} "
+                                f"profile={profile_id} — refused (R2 at v{new_version})"
+                            )
+                        else:
+                            logger.warning(f"[Shutdown] R2 sync failed for user={user_id} profile={profile_id}")
                 except Exception as e:
                     failed += 1
                     logger.error(f"[Shutdown] Error syncing user={user_id} profile={profile_id}: {e}")
@@ -369,14 +381,20 @@ def _graceful_shutdown(signum, frame):
                     conn.close()
                     logger.info(f"[Shutdown] WAL checkpoint for user={user_id} user.sqlite: {pages}")
 
-                    # Sync to R2
+                    # Sync to R2. T4310: CAS ON — see the profile.sqlite loop above.
                     version = get_local_user_db_version(user_id)
-                    success, _new_version = sync_user_db_to_r2_with_version(user_id, db_file, version, skip_version_check=True)
+                    success, new_version = sync_user_db_to_r2_with_version(user_id, db_file, version, skip_version_check=False)
                     if success:
                         synced += 1
                     else:
                         failed += 1
-                        logger.warning(f"[Shutdown] R2 sync failed for user={user_id} user.sqlite")
+                        if new_version is not None:
+                            logger.warning(
+                                f"[Shutdown] R2 version conflict for user={user_id} "
+                                f"user.sqlite — refused (R2 at v{new_version})"
+                            )
+                        else:
+                            logger.warning(f"[Shutdown] R2 sync failed for user={user_id} user.sqlite")
                 except Exception as e:
                     failed += 1
                     logger.error(f"[Shutdown] Error syncing user={user_id} user.sqlite: {e}")

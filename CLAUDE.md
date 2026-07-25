@@ -358,6 +358,7 @@ NEVER (reactive):
 4. **Restore is read-only**: Loading data from DB into hooks must not trigger a write-back
 5. **Single write path per data**: Each piece of persistent data has exactly ONE code path that writes it
 6. **Full-state saves require explicit gesture**: `saveCurrentClipState` only runs on export button click, never reactively
+7. **A write path must prove its copy is current, or fail loudly** (T4310). The gesture rules above govern *what triggers* a write; this governs *whether it's safe to land*. Read-modify-write on a snapshot the writer never confirmed is current is a silent-clobber risk — a stale machine can force-push over newer state with no error. Compare-and-swap (R2 version metadata vs. the loaded-from version) refuses a stale upload instead of overwriting; on conflict: freeze that write (do not upload), log CRITICAL, and surface the existing failed-sync/Retry UX — never auto-merge, never blind-retry an overwrite. See [persistence-sync.md](.claude/knowledge/persistence-sync.md) § CAS / SyncResult.
 
 **How to check if you're about to violate this:**
 - Am I writing a `useEffect` that calls an API or updates a store? → Probably wrong. Move the persistence call into the gesture handler instead.

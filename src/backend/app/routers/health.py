@@ -189,13 +189,18 @@ async def retry_sync():
 
     user_id = get_current_user_id()
     logger.info(f"[SYNC] Manual retry requested by user {user_id}")
-    success = sync_db_to_cloud()
+    status = sync_db_to_cloud()
 
-    if success:
+    # T4310 reviewer round 2 (BLOCKING-2): sync_db_to_cloud returns a STRING
+    # ("ok" | "conflict" | "failed"), and every non-empty string is truthy in
+    # Python -- `if success:` treated a refused "conflict" (and even "failed")
+    # as success, clearing .sync_pending after a sync that never landed.
+    # Compare explicitly so only a real "ok" reports success / clears the marker.
+    if status == "ok":
         set_sync_failed(user_id, False)
         return {"success": True}
     else:
-        return {"success": False, "message": "Sync to R2 failed"}
+        return {"success": False, "message": f"Sync to R2 {status}"}
 
 
 @router.get("/api/export/progress/{export_id}")

@@ -133,7 +133,11 @@ async def create_profile(
     set_current_profile_id(new_id)
     from app.database import ensure_database, sync_db_to_r2_explicit
     ensure_database()  # create local profile.sqlite for the new profile
-    if not sync_db_to_r2_explicit(user_id, new_id):
+    # T4310: sync_db_to_r2_explicit defaults to CAS ON (skip_version_check=False),
+    # but this call is synchronous on the request thread (not asyncio.to_thread) —
+    # skip_version_check=True here preserves the T1020/T2720 no-HEAD-on-request
+    # guarantee. A brand-new profile has no prior R2 object to conflict with anyway.
+    if not sync_db_to_r2_explicit(user_id, new_id, skip_version_check=True):
         logger.warning(
             f"[Profiles] durable R2 sync of new profile.sqlite FAILED for "
             f"user={user_id} profile={new_id} — not registering; returning 503"
