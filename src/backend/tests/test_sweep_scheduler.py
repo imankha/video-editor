@@ -397,6 +397,7 @@ class TestDoSweep:
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
         mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
 
+    @patch("app.storage.APP_ENV", "production")
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old1", "hash_old2"])
@@ -407,6 +408,7 @@ class TestDoSweep:
         self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
+        """Production reclaims grace-expired game objects."""
         from app.services.sweep_scheduler import do_sweep
 
         do_sweep()
@@ -415,6 +417,28 @@ class TestDoSweep:
         mock_r2_delete.assert_any_call("games/hash_old1.mp4")
         mock_r2_delete.assert_any_call("games/hash_old2.mp4")
         assert mock_del_grace.call_count == 2
+
+    @patch("app.storage.APP_ENV", "staging")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old1", "hash_old2"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_sweep_grace_phase_skipped_in_non_prod(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, isolated_profile_db
+    ):
+        """Non-production MUST NOT delete game videos: they are a shared, env-
+        prefix-free R2 resource and a staging/dev sweep cannot see prod's refs.
+        The grace rows are left queued (not deleted) so prod remains the sole
+        authority that reclaims the bytes."""
+        from app.services.sweep_scheduler import do_sweep
+
+        do_sweep()
+
+        mock_r2_delete.assert_not_called()
+        mock_del_grace.assert_not_called()
 
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")
@@ -481,7 +505,15 @@ class TestDoSweep:
 class TestGraceDeletionLiveRefGuard:
     """The bug that lost imankh games 2/3/5: the grace deletion fires off a
     drift-prone counter (game_ref_counts.ref_count <= 0) and permanently deletes
-    a video that a profile still holds a live, non-expired ref to."""
+    a video that a profile still holds a live, non-expired ref to.
+
+    Phase 2 deletion is production-only (non-prod skips it — see
+    sweep_scheduler._game_deletion_allowed), so these tests of the live-ref gate
+    run as production to exercise the reclamation path they guard."""
+
+    @pytest.fixture(autouse=True)
+    def _production_env(self, monkeypatch):
+        monkeypatch.setattr("app.storage.APP_ENV", "production")
 
     @patch(f"{M}.heal_ref_count")
     @patch(f"{M}.delete_grace_deletion")

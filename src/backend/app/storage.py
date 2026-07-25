@@ -1650,6 +1650,19 @@ def r2_delete_object_global(key: str) -> bool:
     Returns:
         True if deleted successfully, False otherwise
     """
+    # HARD GUARD: game videos (games/{hash}.mp4) are a SHARED, env-prefix-free
+    # resource across dev/staging/prod. A non-production environment cannot see
+    # prod's refs, so it must NEVER delete a game object — doing so 404s the video
+    # for prod users (the incident that lost imankh's game videos). Only production
+    # may delete the shared game namespace. Env-prefixed keys ("{env}/users/...",
+    # bug assets, etc.) are env-local and unaffected.
+    if key.startswith("games/") and APP_ENV != "production":
+        logger.error(
+            f"[R2] BLOCKED delete of shared game object in non-production "
+            f"(APP_ENV={APP_ENV}): {key}"
+        )
+        return False
+
     client = get_r2_client()
     if not client:
         return False

@@ -39,6 +39,24 @@ STARTUP_DELAY = 60  # Wait for app to stabilize
 GRACE_PERIOD_DAYS = 14
 
 
+def _app_env() -> str:
+    """Read APP_ENV live (so a monkeypatch of app.storage.APP_ENV is honored)."""
+    from ..storage import APP_ENV
+    return APP_ENV
+
+
+def _game_deletion_allowed() -> bool:
+    """Whether THIS environment may delete a game video from R2.
+
+    Game videos live in a SHARED, env-prefix-free R2 namespace (games/{hash}.mp4)
+    used by dev, staging, AND prod. A non-production sweep can only see its OWN
+    environment's refs, so it would delete a video prod still references (prod's
+    refs are invisible here) — stranding a prod user with a "ready" game and a 404
+    video. Only production may reclaim the shared game namespace.
+    """
+    return _app_env() == "production"
+
+
 async def start_sweep_loop():
     """Start the sweep loop as a background task. Called from app startup."""
     global _sweep_task
@@ -162,6 +180,18 @@ def do_sweep():
 
     # Phase 2: delete R2 objects whose grace period has elapsed
     grace_expired = get_expired_grace_deletions()
+    # HARD ENV GATE: only production may delete the shared, cross-env game
+    # namespace. A non-prod sweep sees only its own refs and would orphan a video
+    # prod still uses (see _game_deletion_allowed). Non-prod still ran Phase 1
+    # bookkeeping above but must NEVER delete; leave the grace rows queued so
+    # production's sweep is the single authority that reclaims the bytes.
+    if grace_expired and not _game_deletion_allowed():
+        logger.warning(
+            f"[Sweep] Non-production env (APP_ENV={_app_env()}) — skipping R2 "
+            f"deletion of {len(grace_expired)} grace-expired game object(s). Game "
+            f"videos are a shared cross-env resource; only production deletes them."
+        )
+        grace_expired = []
     if grace_expired:
         logger.info(f"[Sweep] Phase 2: deleting {len(grace_expired)} grace-expired R2 objects")
     for blake3_hash in grace_expired:

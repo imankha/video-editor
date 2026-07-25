@@ -475,7 +475,16 @@ def _read_storage_expiry(db_path, blake3_hash):
 class TestSweepPhase2ExpiresGameStorage:
     """After Phase 2 deletes an R2 object, any lingering game_storage rows
     (e.g. future-expiry refs that Phase 1 didn't touch) must be expired.
+
+    Phase 2 game-video deletion is a PRODUCTION-only operation (game videos are a
+    shared, env-prefix-free R2 resource; non-prod sweeps skip deletion — see
+    sweep_scheduler._game_deletion_allowed). These tests exercise that reclamation
+    path, so they run as production.
     """
+
+    @pytest.fixture(autouse=True)
+    def _production_env(self, monkeypatch):
+        monkeypatch.setattr("app.storage.APP_ENV", "production")
 
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_deleted"])
     @patch(f"{M}.r2_delete_object_global", return_value=True)
