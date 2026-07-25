@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { flushDurableState } from '../utils/updateFlush';
+import { acknowledgeAppVersion } from '../utils/appVersion';
 import { useAuthStore } from './authStore';
 
 /**
@@ -24,7 +25,21 @@ export const useUpdateGateStore = create((set, get) => ({
   setUpdateSW: (fn) => set({ _updateSW: fn }),
 
   requireUpdate: (reason) => {
-    if (get().isUpdateRequired) return;
+    const { isUpdateRequired, reason: current } = get();
+    // Normally idempotent — the first reason to fire wins. The ONE exception:
+    // a waiting service worker ('sw') supersedes a bare 'version-mismatch'.
+    // bug39 symptom 2 ("do it twice"): the aggressive version-mismatch check
+    // (first API response) beats the freshly-installing SW's onNeedRefresh, so
+    // the gate latched reason 'version-mismatch' even though a new bundle was
+    // waiting. runUpdate's version-mismatch branch does window.location.reload(),
+    // which does NOT skipWaiting the waiting SW — so the old SW re-serves the
+    // old bundle and the update only lands on the SECOND try. Letting 'sw'
+    // upgrade the reason routes runUpdate through updateSW(true) (skipWaiting)
+    // so a SINGLE update activates the new bundle. By the time the user reads
+    // the modal and clicks, onNeedRefresh has fired, so the upgrade is in place.
+    if (isUpdateRequired && !(reason === 'sw' && current === 'version-mismatch')) {
+      return;
+    }
     set({ isUpdateRequired: true, reason });
   },
 
@@ -51,6 +66,12 @@ export const useUpdateGateStore = create((set, get) => ({
         return;
       }
     }
+
+    // Record the build we are reloading onto BEFORE the reload/activation, so a
+    // post-reload boot that latches an older mixed-fleet sha does not re-gate
+    // for this already-accepted version (bug39 symptoms 1 & 3). This write is
+    // part of the "Update now" gesture, not a reactive effect.
+    acknowledgeAppVersion();
 
     const { reason, _updateSW: updateSW } = get();
     if (reason === 'sw' && updateSW) {
