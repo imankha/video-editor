@@ -7,7 +7,7 @@ name: Branch CI
 
 on:
   push:
-    branches: ['feature/**', 'integration/**']
+    branches: ['feature/**', 'integration/**', 'fix/**']
   workflow_dispatch:
 
 concurrency:
