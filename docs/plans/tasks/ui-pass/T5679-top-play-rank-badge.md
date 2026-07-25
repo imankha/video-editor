@@ -1,6 +1,6 @@
 # T5679: "Top Play" rank badge on My Reels tiles
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-23
