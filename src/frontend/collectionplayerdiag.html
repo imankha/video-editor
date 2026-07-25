@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  T5860 DEV-ONLY diagnostic harness proving CollectionPlayer is modal (backdrop
+  swallows gutter clicks; no pass-through to tiles). NOT a production page:
+  Vite's default build entry is index.html only, and this file is not added to
+  rollupOptions.input, so it never ships in the built app (same as the other
+  *diag.html harnesses). Served by the dev server only, for the Playwright
+  real-browser verification.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CollectionPlayer modal diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="collectionplayerdiag-root"></div>
+    <script type="module" src="/src/collectionplayerdiag/main.jsx"></script>
+  </body>
+</html>
