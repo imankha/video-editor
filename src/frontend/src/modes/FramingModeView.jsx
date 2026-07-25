@@ -13,6 +13,31 @@ import { FramingMode, CropOverlay } from './framing';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 
 /**
+ * OutputLengthChip - live post-trim/post-speed output duration (T5780).
+ *
+ * The playback timer intentionally shows source-timeline position, so a 6s clip with
+ * 3s of 0.5x slow-mo still reads 0:06 there while it EXPORTS as 0:09. This chip surfaces
+ * that output length (what the user gets, and is billed for). Emphasized (blue) only when
+ * the output differs from the source length; otherwise a subtle gray so an un-edited clip
+ * doesn't shout. Purely presentational — the value is derived upstream, never persisted.
+ */
+function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '', testId = 'output-length-chip' }) {
+  return (
+    <span
+      data-testid={testId}
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${
+        emphasized ? 'bg-blue-500/25 text-blue-200' : 'bg-white/10 text-gray-400'
+      } ${className}`}
+      title={emphasized
+        ? 'Output length after slow-motion / trim — what you export and are billed for'
+        : 'Output length (matches source — no speed or trim changes)'}
+    >
+      {label}: {formatTimeSimple(seconds)}
+    </span>
+  );
+}
+
+/**
  * ExportButtonSection - Container+View composition for Framing mode export
  *
  * Follows MVC pattern: Container handles logic, View handles presentation.
@@ -202,6 +227,8 @@ export function FramingModeView({
   // Clips
   hasClips,
   clipsWithCurrentState,
+  selectedClipEffectiveDuration = null,
+  projectEffectiveDuration = null,
   globalAspectRatio,
   onAspectRatioChange,
   globalTransition,
@@ -235,6 +262,14 @@ export function FramingModeView({
   // controls does NOT clear the rotation: a set angle keeps rotating the video
   // (CropOverlay CSS-rotate + OOB mask stay ungated); only the editing UI toggles.
   const [straightenVisible, setStraightenVisible] = useState(false);
+
+  // T5780: emphasize the selected clip's output chip only when it differs from the
+  // source-timeline length the playback timer shows (slow-mo or trim present).
+  const sourceLength = duration || clipDuration || 0;
+  const outputDiffersFromSource = selectedClipEffectiveDuration != null &&
+    Math.abs(selectedClipEffectiveDuration - sourceLength) > 0.05;
+  // Project total is redundant with the per-clip chip when there's a single clip.
+  const isMultiClip = hasClips && (clipsWithCurrentState?.length || 0) > 1;
 
   return (
     <>
@@ -287,6 +322,15 @@ export function FramingModeView({
                 <span className="text-gray-600">•</span>
                 <span>{formatTimeSimple(duration || clipDuration)}</span>
               </>
+              {selectedClipEffectiveDuration != null && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <OutputLengthChip
+                    seconds={selectedClipEffectiveDuration}
+                    emphasized={outputDiffersFromSource}
+                  />
+                </>
+              )}
               {metadata.framerate && (
                 <>
                   <span className="text-gray-600">•</span>
@@ -469,12 +513,20 @@ export function FramingModeView({
           {/* Mobile-only clip title — minimal, under video */}
           {clipTitle && !isFullscreen && !mobileFs && (
             <div className="lg:hidden flex items-center justify-between gap-2 px-2 py-0.5 text-sm text-gray-300">
-              <div className="truncate">
+              <div className="truncate min-w-0">
                 <span className="font-medium text-white">{clipTitle}</span>
                 {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
               </div>
-              {/* Aspect ratio is reel-wide; read-only on mobile (change it on desktop). */}
-              <AspectRatioSelector aspectRatio={globalAspectRatio} readOnly />
+              {/* T5780: output length + reel-wide aspect (read-only on mobile). */}
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedClipEffectiveDuration != null && (
+                  <OutputLengthChip
+                    seconds={selectedClipEffectiveDuration}
+                    emphasized={outputDiffersFromSource}
+                  />
+                )}
+                <AspectRatioSelector aspectRatio={globalAspectRatio} readOnly />
+              </div>
             </div>
           )}
 
@@ -638,6 +690,21 @@ export function FramingModeView({
             </>
           )}
         </div>
+
+        {/* T5780: live project output total (multi-clip) — the billable output length
+            T5790 turns into a credit estimate. Hidden for a single clip (redundant with
+            the per-clip chip) and when unknown (fail-closed, no fabricated number). */}
+        {videoUrl && !isFullscreen && !mobileFs && isMultiClip && projectEffectiveDuration != null && (
+          <div className="mt-4 sm:mt-6 -mb-2 flex items-center justify-end gap-2 text-sm text-gray-300">
+            <span className="text-gray-400">Total output</span>
+            <OutputLengthChip
+              seconds={projectEffectiveDuration}
+              emphasized
+              label="Total"
+              testId="project-output-length-chip"
+            />
+          </div>
+        )}
 
         {/* Export Button - hidden in fullscreen and on mobile */}
         {videoUrl && !isFullscreen && !mobileFs && (

@@ -8,6 +8,7 @@ import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
 import { useQuestStore } from '../stores/questStore';
+import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effectiveDuration';
 
 /**
  * Frame-keyed persist adapter for crop keyframes (T3800). Crop keys by frame
@@ -262,6 +263,37 @@ export function FramingContainer({
       };
     });
   }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio, clipMetadataCache]);
+
+  /**
+   * DERIVED (T5780): live output length of the SELECTED clip, from the live useSegments
+   * hook state (boundaries/speeds/trim) so the Framing indicator ticks the instant a
+   * speed/trim gesture lands — no save or export needed. Pure render-time derivation:
+   * NO new state, NO store field, NO persistence (no-redundant-state rule; T350 doctrine).
+   * The saved clip.segments is stale mid-edit, so we build the frontend-format object
+   * from the hook and feed it to the one cost calculator. Fail-closed to null when the
+   * source duration is unknown (never show a fabricated number).
+   */
+  const selectedClipEffectiveDuration = useMemo(() => {
+    if (!duration || Number.isNaN(duration)) return null;
+    const eff = calculateEffectiveDuration({
+      id: selectedClipId,
+      duration,
+      segments: { boundaries: segmentBoundaries, segmentSpeeds, trimRange },
+    });
+    return (eff == null || Number.isNaN(eff)) ? null : eff;
+  }, [duration, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange]);
+
+  /**
+   * DERIVED (T5780): live project total = summed effective duration of every clip —
+   * live for the selected clip (clipsWithCurrentState merges its hook state) and saved
+   * segments_data for the rest. This is the billable output length T5790 turns into a
+   * credit estimate. Fail-closed: null if any clip's duration is unknown, so the total
+   * hides rather than under-reporting the real charge.
+   */
+  const projectEffectiveDuration = useMemo(() => {
+    if (!hasClips || !clipsWithCurrentState || clipsWithCurrentState.length === 0) return null;
+    return sumEffectiveDurations(clipsWithCurrentState);
+  }, [hasClips, clipsWithCurrentState]);
 
   /**
    * Save current clip's framing state to backend
@@ -1019,6 +1051,10 @@ export function FramingContainer({
     hasFramingEdits,
     clipsWithCurrentState,
     getFilteredKeyframesForExport,
+
+    // T5780: live output-length indicators (derived at render, never persisted)
+    selectedClipEffectiveDuration,
+    projectEffectiveDuration,
 
     // Handlers
     handleCropChange,

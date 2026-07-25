@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-22 (T5640 per-clip rotation / horizon straighten: working_clips.rotation v029, rotate-before-crop, safe-area clamp, CSS-rotate preview)
+updated: 2026-07-25 (T5780 live effective-duration indicator: utils/effectiveDuration.js, live-vs-saved segment source, fail-closed hide)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -58,6 +58,47 @@ gesture (drag/resize/delete) in FramingContainer
   server-side center-preserving crop refit per clip (T3910). `useCrop.updateAspectRatio` deliberately
   does NOT rewrite keyframes locally (useCrop.js:265-268). Empty-crop clips stay empty; export
   defaults them.
+
+## Effective (output) duration — the ONE cost calculator (T5780)
+
+`src/frontend/src/utils/effectiveDuration.js` (extracted from `ExportButtonContainer.jsx`
+in commit d702efcd) is the SINGLE calculator for post-trim/post-speed output length.
+`calculateEffectiveDuration(clip)` = Σ over segments of `(end-start)/speed`, clipped to
+`trimRange` (0.5x doubles that segment's output); `sumEffectiveDurations(clips)` sums it
+across clips and **fails closed** (returns `null` if ANY clip's duration is NaN, so the UI
+HIDES rather than showing a guess — same no-fabricated-numbers rule as the poster). Consumed
+by `ExportButtonContainer`, `useProjectLoader`, and the Framing indicator; T5790 will turn the
+project total into a credit estimate, and the backend charge must use the same model.
+
+- **Data-format tolerance:** reads `clip.segments` (frontend live `{boundaries, segmentSpeeds,
+  trimRange}`) OR `clip.segments_data` (saved blob, same frontend shape — see Data flow) OR the
+  DB `{segments:[{start,end,speed}], trim_start/trim_end}` array form. Give it whichever the clip
+  carries; `duration` is only a fallback end-bound (unused when `boundaries`/`trimRange` present).
+- **Live-vs-saved segment source (THE subtlety):** the SELECTED clip's saved `segments` is STALE
+  while editing — its live speed/trim lives in the `useSegments` hook. `FramingContainer`'s
+  `clipsWithCurrentState` already injects the hook state as frontend-format `segments` onto the
+  selected clip (line ~225) and leaves every OTHER clip with its saved `segments_data`. So feeding
+  `clipsWithCurrentState` to the calculator gives a LIVE selected-clip number + SAVED others in one
+  pass. The two derived memos (`selectedClipEffectiveDuration`, `projectEffectiveDuration`,
+  `FramingContainer.jsx` ~L272-296) are PURE render-time derivations — **no new state, no store
+  field, no persistence** (T350 doctrine); the chip ticks the instant a speed/trim gesture updates
+  the hook, with no save/export.
+- **`duration` in Framing is the CLIP length, not the source game.** `useVideo.duration` (threaded
+  as the container/view `duration` prop) is already the ~clip-length value the playback timer and
+  the existing duration readout show — NOT the raw `<video>.duration`, which is the full
+  concatenated source game (~88min). A 5.1s clip correctly reads `Output: 0:05`. (On first load
+  there is a sub-second transient where the chip shows the source length before the clip's saved
+  segment state restores; it self-corrects — do not "fix" it with a guard.)
+- **View (`FramingModeView.OutputLengthChip`):** presentational chip near the duration readout;
+  emphasized (blue) only when output differs from source length (slow-mo present), else subtle gray.
+  A `Total` chip renders near the export area only for multi-clip projects (redundant for one clip).
+  The playback timer is deliberately UNCHANGED — it shows source-timeline position; only the chip
+  reflects output length. Reuses `formatTimeSimple` from `components/shared/clipConstants` (floors).
+- Coverage: Vitest `src/utils/effectiveDuration.test.js` (15: 6s+3s@0.5x→9s, trim, multi-clip
+  sum→23, live-over-saved precedence, DB-array format, fail-closed NaN) + real-browser
+  `e2e/T5780-framing-effective-duration.qa.spec.js` (live speed tick, trim drop, source-timeline
+  readout unchanged, responsive 375/desktop; asserts the chip against the segment track's OWN
+  reported visual durations, so it's clip-duration-agnostic).
 
 ## Invariants & rules
 - **Flat list, no permanent boundaries** (permanent-frame model removed ~2026-06-21).
