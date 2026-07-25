@@ -82,15 +82,28 @@ class TestSyncDatabaseToR2WithVersion:
             # upload should NOT have been called
             mock_retry.assert_not_called()
 
-    def test_conflict_triggers_redownload(self, local_db, mock_r2_enabled, mock_client):
-        """On conflict, download_from_r2 is called to re-download newer version."""
+    def test_conflict_refuses_without_redownload(self, local_db, mock_r2_enabled, mock_client):
+        """T4310 round 2 (MAJOR-2): on conflict, storage.py refuses the upload
+        but does NOT re-download R2's copy over the local file -- that swap
+        used to run here but went LIVE (and WAL-unsafe) once T4310 turned CAS
+        on for the normal write path: profile.sqlite is WAL-mode and
+        _background_sync runs outside the per-user write lock, so replacing
+        the main DB file while a stale -wal sits beside it risks cross-DB page
+        mixing. Refusing alone is safe -- the caller freezes the baseline
+        instead of adopting R2's version, so the same conflict is refused
+        again on every retry until T4315's restore path heals it."""
         with patch(f"{MODULE}.get_db_version_from_r2", return_value=8), \
-             patch(f"{RETRY_MODULE}.retry_r2_call"), \
-             patch(f"{MODULE}.download_from_r2", return_value=True) as mock_dl:
-            sync_database_to_r2_with_version("user1", local_db, current_version=5)
-            # T5340: sync_database_to_r2_with_version threads profile_id through the
-            # re-download; None here keeps the ContextVar request-path behavior.
-            mock_dl.assert_called_once_with("user1", "profile.sqlite", local_db, profile_id=None)
+             patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry, \
+             patch(f"{MODULE}.download_from_r2") as mock_dl:
+            success, returned_version = sync_database_to_r2_with_version(
+                "user1", local_db, current_version=5
+            )
+            assert success is False
+            assert returned_version == 8
+            mock_dl.assert_not_called()
+            mock_retry.assert_not_called()
+            # The local file itself must be untouched -- no WAL-unsafe swap.
+            assert local_db.read_bytes() == b"fake-db-content"
 
     def test_r2_disabled(self, local_db):
         """R2 disabled → returns (False, None)."""
@@ -193,14 +206,20 @@ class TestSyncUserDbToR2WithVersion:
                 # upload_file should not appear
                 assert call[0][0] != mock_client.upload_file
 
-    def test_conflict_triggers_redownload(self, local_db, mock_r2_enabled, mock_client):
-        """On conflict, re-download via retry_r2_call with download_file."""
+    def test_conflict_refuses_without_redownload(self, local_db, mock_r2_enabled, mock_client):
+        """T4310 round 2 (MAJOR-2): on conflict, no re-download -- see the
+        profile-DB twin above for the WAL-corruption rationale. retry_r2_call
+        must not be invoked at all (the old code used it for the
+        download_file re-fetch); the local file is left untouched."""
         with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=8), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry:
-            sync_user_db_to_r2_with_version("user1", local_db, current_version=5)
-            # Should have called retry_r2_call with client.download_file
-            mock_retry.assert_called_once()
-            assert mock_retry.call_args[0][0] == mock_client.download_file
+            success, returned_version = sync_user_db_to_r2_with_version(
+                "user1", local_db, current_version=5
+            )
+            assert success is False
+            assert returned_version == 8
+            mock_retry.assert_not_called()
+            assert local_db.read_bytes() == b"fake-db-content"
 
     def test_r2_disabled(self, local_db):
         """R2 disabled → returns (False, None)."""

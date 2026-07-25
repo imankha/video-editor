@@ -79,12 +79,17 @@ class TestSyncDbToR2Explicit:
     @patch("app.database.sync_database_to_r2_with_version")
     @patch("app.database.get_local_db_version", return_value=3)
     @patch("app.database.check_database_size")
-    def test_conflict_returns_conflict_and_updates_version_to_r2s(
+    def test_conflict_returns_conflict_and_freezes_version(
         self, mock_check, mock_get_ver, mock_sync, tmp_path,
     ):
-        """T4310: CAS refusal (storage.py already re-downloaded the newer copy)
-        returns SyncResult.CONFLICT and updates the local baseline to the R2
-        version -- so the NEXT attempt doesn't compare against stale data again."""
+        """T4310 round 2 (BLOCKING-1/MAJOR-2): CAS refusal returns
+        SyncResult.CONFLICT and the local baseline stays FROZEN at
+        current_version -- storage.py no longer re-downloads R2's newer copy
+        (that swap was WAL-unsafe outside the write lock), so advancing the
+        baseline here without a confirmed refresh would let the NEXT attempt
+        compare stale local data against "confirmed" R2 data and silently
+        force-push it. The same conflict is refused again on every retry until
+        the T4315 restore path heals the local copy."""
         from app.database import sync_db_to_r2_explicit
 
         mock_sync.return_value = (False, 9)  # conflict: refused, R2 is at v9
@@ -100,7 +105,7 @@ class TestSyncDbToR2Explicit:
         assert result is SyncResult.CONFLICT
         assert result == "conflict"  # str-Enum: comparable to the raw status string
         assert not result  # falsy, same as a plain failure for legacy bool callers
-        mock_set_ver.assert_called_once_with("u1", "p1", 9)
+        mock_set_ver.assert_not_called()
 
     @patch("app.database.R2_ENABLED", True)
     @patch("app.database.sync_database_to_r2_with_version")
@@ -178,9 +183,11 @@ class TestSyncUserDbToR2Explicit:
         mock_set_ver.assert_called_once_with("u1", 3)
 
     @patch("app.database.get_local_user_db_version", return_value=2)
-    def test_conflict_returns_conflict_and_updates_version_to_r2s(self, mock_get_ver, tmp_path):
-        """T4310: CAS refusal returns SyncResult.CONFLICT and updates the local
-        baseline to the R2 version."""
+    def test_conflict_returns_conflict_and_freezes_version(self, mock_get_ver, tmp_path):
+        """T4310 round 2 (BLOCKING-1/MAJOR-2): CAS refusal returns
+        SyncResult.CONFLICT and the local baseline stays FROZEN -- see the
+        profile-DB twin above for the WAL-corruption rationale for why
+        storage.py no longer re-downloads and adopts R2's version here."""
         from app.database import sync_user_db_to_r2_explicit
 
         db_path = tmp_path / "u1" / "user.sqlite"
@@ -194,7 +201,7 @@ class TestSyncUserDbToR2Explicit:
 
         assert result is SyncResult.CONFLICT
         assert not result
-        mock_set_ver.assert_called_once_with("u1", 9)
+        mock_set_ver.assert_not_called()
 
     @patch("app.database.get_local_user_db_version", return_value=2)
     def test_returns_false_on_failure_no_version_update(self, mock_get_ver):
