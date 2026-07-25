@@ -205,6 +205,54 @@ def ensure_user_database(user_id: str) -> None:
         _initialized_user_dbs.add(user_id)
 
 
+def ensure_user_database_fresh(user_id: str) -> None:
+    """Write-path sibling of ensure_user_database: restore-if-newer, not just
+    restore-if-absent (T4315).
+
+    ensure_user_database only re-checks R2 when `local_version is None`
+    (first access) -- once a machine has materialized this user's file it
+    serves that snapshot for the rest of the process lifetime and never
+    looks at R2 again. That is fine for reads, but a WRITER must not force-
+    push (skip_version_check=True on upload) on top of an R2 copy it never
+    confirmed is still the one it loaded from: an out-of-band R2 edit, or a
+    write that landed elsewhere while this machine was pinned away and back,
+    would otherwise be silently reverted on this machine's next write (the
+    "editing R2 out-of-band is futile" failure mode from the 2026-07-24
+    incident). Raises RefreshFailed instead of proceeding when R2 can't be
+    reached -- never build on an unconfirmed copy.
+
+    Callers resolving a user.sqlite they are about to WRITE (not their own
+    ambient session's lenient read) should call this via
+    services.db_refresh.confirm_current_before_write(user_id) rather than
+    ensure_user_database directly.
+    """
+    ensure_user_database(user_id)
+
+    from ..database import get_local_user_db_version, set_local_user_db_version
+    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
+    from .db_refresh import RefreshFailed, clear_stale_wal_sidecars
+
+    if not R2_ENABLED:
+        return
+
+    db_path = _get_user_db_path(user_id)
+    local_version = get_local_user_db_version(user_id)
+    downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
+        user_id, db_path, local_version
+    )
+    if was_error:
+        raise RefreshFailed(
+            f"could not confirm user.sqlite for {user_id} is current (R2 error)"
+        )
+    if downloaded:
+        # WAL safety: see db_refresh.clear_stale_wal_sidecars -- the download
+        # just swapped db_path's content; a stale -wal/-shm from the file it
+        # replaced must not survive to be misapplied to the new content.
+        clear_stale_wal_sidecars(db_path)
+    if new_version is not None:
+        set_local_user_db_version(user_id, new_version)
+
+
 def forget_user_db(user_id: str) -> None:
     """Drop every in-process cache entry for a user's user.sqlite + profile DBs.
 

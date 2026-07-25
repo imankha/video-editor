@@ -13,6 +13,7 @@ from pathlib import Path
 
 from app.database import USER_DATA_BASE
 from app.services.auth_db import get_game_storage_ref, insert_game_storage_ref
+from app.services.db_refresh import RefreshFailed, clear_stale_wal_sidecars
 from app.services.pg import get_pg
 from app.services.sharing_db import mark_game_share_materialized
 from app.utils.encoding import decode_data, encode_data
@@ -40,7 +41,7 @@ def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None
     return conn
 
 
-class ProfileDBRefreshFailed(RuntimeError):
+class ProfileDBRefreshFailed(RefreshFailed):
     """R2 was unreachable, so a profile DB could not be confirmed current.
 
     Only raised for WRITE callers (require_fresh=True). Serving a stale copy to a
@@ -78,6 +79,13 @@ def ensure_profile_db_local(
         downloaded, new_version, was_error = sync_database_from_r2_if_newer(
             user_id, db_path, local_version
         )
+        if downloaded:
+            # T4315/WAL safety: the download already swapped db_path's content
+            # atomically, but a stale -wal/-shm sidecar from the file it
+            # replaced would still be sitting next to it -- see
+            # db_refresh.clear_stale_wal_sidecars for why that corrupts the
+            # next connection's reads instead of just serving old data.
+            clear_stale_wal_sidecars(db_path)
         if downloaded and new_version is not None:
             # Cache bookkeeping only (db_version table); not owner data.
             set_local_db_version(user_id, profile_id, new_version)
@@ -500,6 +508,20 @@ def materialize_game_share(
         hashes = _collect_video_hashes(sharer_conn, game_id)
     else:
         hashes = []
+
+    # T4315: _open_profile_db is a raw, R2-oblivious local read ("only opens
+    # locally-cached DBs -- does NOT download from R2") -- but this call site
+    # WRITES into recipient_conn below (inserts games/clips) and commits.
+    # Resolving it via ensure_profile_db_local(require_fresh=True) first
+    # (the same guard move_reels uses) means an R2 error aborts loudly
+    # instead of materializing the share on top of a stale/unconfirmed
+    # recipient snapshot.
+    try:
+        ensure_profile_db_local(recipient_user_id, recipient_profile_id, require_fresh=True)
+    except ProfileDBRefreshFailed:
+        if sharer_conn:
+            sharer_conn.close()
+        raise
 
     recipient_conn = _open_profile_db(recipient_user_id, recipient_profile_id)
     if recipient_conn is None:

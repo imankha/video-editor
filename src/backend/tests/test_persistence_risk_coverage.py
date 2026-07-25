@@ -159,15 +159,28 @@ class TestRefreshTargetUserDb:
         assert calls["set_version"] == []
 
     def test_up_to_date_is_a_noop(self, refresh_env):
+        """T4315: _refresh_target_user_db now delegates to the shared
+        confirm_current_before_write -> ensure_user_database_fresh, which
+        follows the design's own confirm_current_before_write pseudocode
+        literally: record whatever version R2 confirms, downloaded or not
+        (a harmless re-write of the same in-memory value -- no disk I/O,
+        see set_local_user_db_version). The meaningful invariant (no version
+        recorded on an unconfirmed/error read) is covered by
+        test_r2_error_does_not_raise_and_does_not_bump_version below."""
         monkeypatch, storage, calls = refresh_env
         monkeypatch.setattr(storage, "sync_user_db_from_r2_if_newer",
                             lambda uid, path, v: (False, 3, False))
         from app.routers import admin
         admin._refresh_target_user_db(GRANTEE)
-        assert calls["set_version"] == []
+        assert calls["set_version"] == [(GRANTEE, 3)]
 
     def test_r2_disabled_skips_entirely(self, refresh_env):
-        """No R2 -> nothing to refresh; must not touch ensure/sync at all."""
+        """No R2 -> nothing to SYNC (never a network call, never records a
+        version). T4315: the shared helper's write-path entry point
+        (ensure_user_database_fresh) always ensures the local schema first
+        -- cheap and purely local, unconditionally on the R2 flag, mirroring
+        ensure_user_database's own unconditional table-creation step -- then
+        exits before touching R2."""
         monkeypatch, storage, calls = refresh_env
         monkeypatch.setattr(storage, "R2_ENABLED", False)
         # If sync were called it would explode (not patched to succeed meaningfully)
@@ -175,5 +188,5 @@ class TestRefreshTargetUserDb:
                             lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not sync")))
         from app.routers import admin
         admin._refresh_target_user_db(GRANTEE)
-        assert calls["ensured"] == []
+        assert calls["ensured"] == [GRANTEE]
         assert calls["set_version"] == []
