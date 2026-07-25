@@ -2,10 +2,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useUpdateGateStore } from './updateGateStore';
 import { useAuthStore } from './authStore';
 
-const { flushDurableStateMock } = vi.hoisted(() => ({ flushDurableStateMock: vi.fn() }));
+const { flushDurableStateMock, acknowledgeAppVersionMock } = vi.hoisted(() => ({
+  flushDurableStateMock: vi.fn(),
+  acknowledgeAppVersionMock: vi.fn(),
+}));
 
 vi.mock('../utils/updateFlush', () => ({
   flushDurableState: flushDurableStateMock,
+}));
+
+vi.mock('../utils/appVersion', () => ({
+  acknowledgeAppVersion: acknowledgeAppVersionMock,
 }));
 
 const INITIAL_STATE = {
@@ -23,6 +30,7 @@ describe('updateGateStore', () => {
 
   beforeEach(() => {
     flushDurableStateMock.mockReset();
+    acknowledgeAppVersionMock.mockReset();
     useUpdateGateStore.setState(INITIAL_STATE);
     useAuthStore.setState({ isAuthenticated: true });
     // jsdom's window.location.reload is non-configurable, so vi.spyOn can't
@@ -52,6 +60,24 @@ describe('updateGateStore', () => {
 
     it('is idempotent — a second call does not overwrite the reason', () => {
       useUpdateGateStore.getState().requireUpdate('sw');
+      useUpdateGateStore.getState().requireUpdate('version-mismatch');
+      expect(useUpdateGateStore.getState().reason).toBe('sw');
+    });
+
+    it('bug39 symptom 2: a waiting SW ("sw") UPGRADES an existing version-mismatch gate', () => {
+      // The aggressive version-mismatch check wins the race and latches first...
+      useUpdateGateStore.getState().requireUpdate('version-mismatch');
+      expect(useUpdateGateStore.getState().reason).toBe('version-mismatch');
+
+      // ...then the freshly-installed SW's onNeedRefresh fires. It must promote
+      // the reason so runUpdate takes the skipWaiting path (single-reload fix).
+      useUpdateGateStore.getState().requireUpdate('sw');
+      expect(useUpdateGateStore.getState().reason).toBe('sw');
+    });
+
+    it('does NOT downgrade an sw gate back to version-mismatch', () => {
+      useUpdateGateStore.getState().requireUpdate('sw');
+      useUpdateGateStore.getState().requireUpdate('version-mismatch');
       useUpdateGateStore.getState().requireUpdate('version-mismatch');
       expect(useUpdateGateStore.getState().reason).toBe('sw');
     });
@@ -109,6 +135,39 @@ describe('updateGateStore', () => {
       expect(state.phase).toBe('error');
       expect(state.error).toBe('Could not confirm your latest changes were saved.');
       expect(updateSW).not.toHaveBeenCalled();
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('bug39: acknowledges the target build (persist acknowledged id) as part of the update gesture', async () => {
+      flushDurableStateMock.mockResolvedValue(undefined);
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(acknowledgeAppVersionMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT acknowledge when the flush barrier fails (no reload, no accepted build)', async () => {
+      flushDurableStateMock.mockRejectedValue(new Error('flush failed'));
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(acknowledgeAppVersionMock).not.toHaveBeenCalled();
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('bug39 symptom 2: an upgraded (version-mismatch -> sw) gate activates the waiting SW, not a plain reload', async () => {
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const updateSW = vi.fn();
+      // Gate raised by version-mismatch first, then upgraded to sw by the SW.
+      useUpdateGateStore.getState().requireUpdate('version-mismatch');
+      useUpdateGateStore.getState().requireUpdate('sw');
+      useUpdateGateStore.getState().setUpdateSW(updateSW);
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(updateSW).toHaveBeenCalledWith(true);
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 

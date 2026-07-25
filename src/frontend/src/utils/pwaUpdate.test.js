@@ -26,12 +26,18 @@ function setup({ waiting = null } = {}) {
   vi.spyOn(document, 'addEventListener').mockImplementation((type, handler) => {
     if (type === 'visibilitychange') visibilityHandler = handler;
   });
+  // pageshow (Safari bfcache restore) is registered on window, not document.
+  let pageshowHandler = null;
+  vi.spyOn(window, 'addEventListener').mockImplementation((type, handler) => {
+    if (type === 'pageshow') pageshowHandler = handler;
+  });
 
   setupPwaUpdatePrompt();
   const handlers = registerSWMock.mock.calls.at(-1)[0];
   const registration = { waiting, update: vi.fn().mockResolvedValue(undefined) };
   const returnToApp = () => visibilityHandler?.();
-  return { updateSW, handlers, registration, returnToApp };
+  const pageshow = (persisted) => pageshowHandler?.({ persisted });
+  return { updateSW, handlers, registration, returnToApp, pageshow };
 }
 
 describe('setupPwaUpdatePrompt', () => {
@@ -146,5 +152,43 @@ describe('setupPwaUpdatePrompt', () => {
   it('does not throw calling registration.update when no registration was ever provided', () => {
     const { returnToApp } = setup();
     expect(() => returnToApp()).not.toThrow();
+  });
+
+  describe('bug39 symptom 3 — Safari bfcache (pageshow) restore', () => {
+    it('re-checks the backend version on a bfcache restore (persisted=true), like any other return', () => {
+      const { handlers, registration, pageshow } = setup();
+      handlers.onRegisteredSW('/sw.js', registration);
+      fetch.mockClear();
+
+      pageshow(true);
+
+      // Same path as a visibility return: re-verify against the persisted
+      // boot/acknowledged version (which, on a current build, will NOT re-gate).
+      expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
+      expect(registration.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores a non-persisted pageshow (a normal fresh load handled by the on-load check)', () => {
+      const { handlers, registration, pageshow } = setup();
+      handlers.onRegisteredSW('/sw.js', registration);
+      fetch.mockClear();
+
+      pageshow(false);
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(registration.update).not.toHaveBeenCalled();
+    });
+
+    it('re-requires the gate on a bfcache restore while an update is still waiting', () => {
+      const { handlers, registration, pageshow } = setup({ waiting: {} });
+      handlers.onRegisteredSW('/sw.js', registration);
+      useUpdateGateStore.setState({ isUpdateRequired: false, reason: null });
+
+      pageshow(true);
+
+      expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
+      expect(useUpdateGateStore.getState().reason).toBe('sw');
+      expect(registration.update).not.toHaveBeenCalled();
+    });
   });
 });
