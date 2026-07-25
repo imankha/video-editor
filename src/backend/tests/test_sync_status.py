@@ -99,10 +99,17 @@ class TestRetrySyncEndpoint:
         data = response.json()
         assert data["success"] is True
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value=True)
+    @patch("app.routers.health.sync_db_to_cloud", return_value="ok")
     @patch("app.routers.health.R2_ENABLED", True)
     def test_retry_sync_success(self, mock_sync, client):
-        """Successful sync should clear the failure marker."""
+        """Successful sync should clear the failure marker.
+
+        sync_db_to_cloud returns the STRING "ok" (not a bare bool) -- the mock
+        must match the real contract, otherwise this test would have kept
+        passing under the round-2 BLOCKING-2 truthiness bug (`if success:`
+        treated ANY non-empty string, including "conflict"/"failed", as
+        success too).
+        """
         set_sync_failed(TEST_USER_ID, True)
 
         response = client.post("/api/retry-sync")
@@ -112,14 +119,32 @@ class TestRetrySyncEndpoint:
         assert is_sync_failed(TEST_USER_ID) is False
         mock_sync.assert_called_once()
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value=False)
+    @patch("app.routers.health.sync_db_to_cloud", return_value="failed")
     @patch("app.routers.health.R2_ENABLED", True)
     def test_retry_sync_failure(self, mock_sync, client):
-        """Failed sync should return success=False."""
+        """A transient failure should return success=False."""
         response = client.post("/api/retry-sync")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
+        mock_sync.assert_called_once()
+
+    @patch("app.routers.health.sync_db_to_cloud", return_value="conflict")
+    @patch("app.routers.health.R2_ENABLED", True)
+    def test_retry_sync_conflict_reports_failure_not_success(self, mock_sync, client):
+        """T4310 reviewer round 2 (BLOCKING-2): a CAS conflict ("conflict") is
+        a non-empty string and was truthy under the old `if success:` check,
+        so a REFUSED sync reported {"success": true} and cleared
+        .sync_pending -- masking a stale local DB as durably saved. Must
+        report success=False and leave the failure marker in place."""
+        set_sync_failed(TEST_USER_ID, True)
+
+        response = client.post("/api/retry-sync")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert is_sync_failed(TEST_USER_ID) is True, \
+            "a refused (conflict) sync must not clear .sync_pending"
         mock_sync.assert_called_once()
 
 

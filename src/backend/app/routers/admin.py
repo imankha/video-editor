@@ -69,11 +69,13 @@ def _refresh_target_user_db(target_user_id: str) -> None:
     (`get_credit_stats_for_admin`), so the admin's machine is likely holding a
     stale copy of the grantee.
 
-    That matters because the write-back uses `skip_version_check=True` and
-    force-pushes the whole file. Granting against a stale snapshot would upload it
-    over the grantee's newer state -- losing their recent activity AND, once their
-    own machine syncs again, the grant too. Read the authoritative copy first so
-    this is a real read-modify-write instead of a write against a snapshot.
+    That matters independent of CAS: `_persist_target_user_db`'s write-back
+    (`sync_user_db_to_r2_explicit`, CAS ON since T4310) refuses to upload over a
+    NEWER R2 copy, but a STALE local READ still means the credit math is computed
+    from old data -- the resulting (wrong) total then gets written under this
+    machine's own version, which CAS happily accepts since it isn't a conflict.
+    Read the authoritative copy first so this is a real read-modify-write instead
+    of a write against a stale snapshot.
     """
     from ..database import (
         USER_DATA_BASE,

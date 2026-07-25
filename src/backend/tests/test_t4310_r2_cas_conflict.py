@@ -12,9 +12,14 @@ conflict is distinguishable from a transient failure and the middleware's
 
 Covers:
 1. sync_db_to_r2_explicit / sync_user_db_to_r2_explicit run real CAS against a
-   fake R2: a stale loaded-version is REFUSED (no upload), re-downloads the
-   newer copy, and updates the local baseline so the next attempt isn't stuck
-   comparing against stale data forever (regression-pins the arshia class).
+   fake R2: a stale loaded-version is REFUSED (no upload), and the local
+   baseline stays FROZEN (regression-pins the arshia class) -- reviewer round 2
+   (MAJOR-2) removed the re-download that used to run here: it was dead code
+   pre-T4310 (every caller skipped the check) but went LIVE on the normal write
+   path, where profile.sqlite is WAL-mode and _background_sync runs outside the
+   per-user write lock, so swapping the main DB file mid-conflict risked
+   cross-DB WAL page mixing. Refusing alone is safe: the same conflict is
+   simply refused again on every retry until T4315's restore path heals it.
 2. A matching/older loaded-version uploads normally (no false positives).
 3. _background_sync routes SyncResult.CONFLICT to sync_status="conflict" and
    leaves the sync_failed marker set (surfaces via the existing X-Sync-Status
@@ -70,9 +75,16 @@ def _make_user_db(base, user_id=USER, marker="v0"):
 
 class TestProfileDbCasConflict:
 
-    def test_stale_writer_refused_and_baseline_updated(self, tmp_path):
+    def test_stale_writer_refused_and_baseline_frozen(self, tmp_path):
         """Regression-pin the arshia move_reels class: a machine whose loaded
-        version (v3) is behind R2's (v9) must be REFUSED, not overwrite R2."""
+        version (v3) is behind R2's (v9) must be REFUSED, not overwrite R2.
+
+        Reviewer round 2 (MAJOR-2): storage.py no longer re-downloads on
+        conflict (WAL-unsafe swap outside the write lock), so the baseline
+        stays frozen at v3 -- never advanced without a confirmed refresh. A
+        second attempt with the same stale baseline must refuse AGAIN (never
+        silently upload the stale copy once the local "loaded" version happens
+        to no longer look newer than the last conflict)."""
         from app.database import (
             get_local_db_version,
             set_local_db_version,
@@ -95,9 +107,18 @@ class TestProfileDbCasConflict:
             assert fake._objects[key]["data"] == b"NEWER_R2_COPY"
             assert not any(c[1] == key for c in fake.upload_calls), \
                 "CAS must refuse the upload entirely, not upload-then-detect"
-            # Baseline updated to the re-downloaded version -- the NEXT attempt
-            # compares against fresh data instead of looping on stale v3 forever.
-            assert get_local_db_version(USER, PROFILE) == 9
+            # No re-download either -- the local file is untouched and the
+            # baseline stays frozen at the ORIGINAL stale version.
+            assert not fake.download_calls, "conflict must not trigger a re-download (WAL-unsafe)"
+            assert get_local_db_version(USER, PROFILE) == 3
+
+            # Retry with the still-stale baseline: CAS must refuse AGAIN.
+            result2 = sync_db_to_r2_explicit(USER, PROFILE)
+
+            assert result2 is SyncResult.CONFLICT
+            assert fake._objects[key]["data"] == b"NEWER_R2_COPY", \
+                "the stale local copy must never land on R2"
+            assert get_local_db_version(USER, PROFILE) == 3
 
     def test_matching_version_uploads_and_bumps(self, tmp_path):
         """No false positives: a writer whose loaded version matches R2 (or R2
@@ -137,7 +158,8 @@ class TestProfileDbCasConflict:
 
 class TestUserDbCasConflict:
 
-    def test_stale_writer_refused_and_baseline_updated(self, tmp_path):
+    def test_stale_writer_refused_and_baseline_frozen(self, tmp_path):
+        """Reviewer round 2 (MAJOR-2): no re-download -- baseline stays frozen."""
         from app.database import (
             get_local_user_db_version,
             set_local_user_db_version,
@@ -157,7 +179,14 @@ class TestUserDbCasConflict:
             assert result is SyncResult.CONFLICT
             assert not result
             assert fake._objects[key]["data"] == b"NEWER_R2_USER"
-            assert get_local_user_db_version(USER) == 5
+            assert not fake.download_calls, "conflict must not trigger a re-download (WAL-unsafe)"
+            assert get_local_user_db_version(USER) == 2
+
+            result2 = sync_user_db_to_r2_explicit(USER)
+
+            assert result2 is SyncResult.CONFLICT
+            assert fake._objects[key]["data"] == b"NEWER_R2_USER"
+            assert get_local_user_db_version(USER) == 2
 
     def test_matching_version_uploads_and_bumps(self, tmp_path):
         from app.database import (
@@ -175,79 +204,6 @@ class TestUserDbCasConflict:
 
             assert result is SyncResult.OK
             assert get_local_user_db_version(USER) == 1
-
-
-# ---------------------------------------------------------------------------
-# Reviewer BLOCKING-1: a conflict whose re-download FAILS must not advance the
-# baseline. Advancing it anyway re-opens the arshia clobber -- the next retry
-# would compare the still-stale local copy against the "confirmed" r2_version,
-# see no conflict, and silently force-push the stale data over the newer R2 copy.
-# ---------------------------------------------------------------------------
-
-class TestConflictRedownloadFailure:
-
-    def test_profile_redownload_failure_does_not_advance_baseline_or_reupload(self, tmp_path):
-        from app.database import (
-            get_local_db_version,
-            set_local_db_version,
-            sync_db_to_r2_explicit,
-        )
-        from app.storage import profile_r2_key
-
-        fake = FakeR2()
-        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
-            _make_profile_db(tmp_path, marker="stale_local")
-            key = profile_r2_key(USER, PROFILE, "profile.sqlite")
-            fake._objects[key] = {"data": b"NEWER_R2_COPY", "metadata": {"db-version": "9"}}
-            set_local_db_version(USER, PROFILE, 3)
-            fake.fail_download = True
-
-            result = sync_db_to_r2_explicit(USER, PROFILE)
-
-            assert result is SyncResult.FAILED
-            assert not result
-            # Baseline must NOT move -- the local copy was never confirmed refreshed.
-            assert get_local_db_version(USER, PROFILE) == 3
-            assert fake._objects[key]["data"] == b"NEWER_R2_COPY"
-
-            # Retry once the R2 blip clears: CAS must refuse AGAIN (still stale
-            # baseline), never silently upload the stale v3 local copy as "clean".
-            fake.fail_download = False
-            result2 = sync_db_to_r2_explicit(USER, PROFILE)
-
-            assert result2 is SyncResult.CONFLICT
-            assert fake._objects[key]["data"] == b"NEWER_R2_COPY", \
-                "the stale local copy must never land on R2"
-            assert get_local_db_version(USER, PROFILE) == 9
-
-    def test_user_db_redownload_failure_does_not_advance_baseline_or_reupload(self, tmp_path):
-        from app.database import (
-            get_local_user_db_version,
-            set_local_user_db_version,
-            sync_user_db_to_r2_explicit,
-        )
-        from app.storage import _user_db_r2_key
-
-        fake = FakeR2()
-        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
-            _make_user_db(tmp_path, marker="stale_local")
-            key = _user_db_r2_key(USER)
-            fake._objects[key] = {"data": b"NEWER_R2_USER", "metadata": {"db-version": "5"}}
-            set_local_user_db_version(USER, 2)
-            fake.fail_download = True
-
-            result = sync_user_db_to_r2_explicit(USER)
-
-            assert result is SyncResult.FAILED
-            assert get_local_user_db_version(USER) == 2
-            assert fake._objects[key]["data"] == b"NEWER_R2_USER"
-
-            fake.fail_download = False
-            result2 = sync_user_db_to_r2_explicit(USER)
-
-            assert result2 is SyncResult.CONFLICT
-            assert fake._objects[key]["data"] == b"NEWER_R2_USER"
-            assert get_local_user_db_version(USER) == 5
 
 
 # ---------------------------------------------------------------------------
@@ -292,9 +248,14 @@ class TestBackgroundSyncConflictRouting:
         # persistent "edits aren't saving - Retry" for the user.
         assert has_sync_pending(user_id), "conflict must NOT silently clear the retry marker"
 
-    def test_ok_after_prior_conflict_clears_both_markers(self):
-        """A subsequent successful sync (e.g. after the user hits Retry) must
-        clear both the generic pending marker and the conflict-specific one."""
+    def test_ok_status_clears_pending_marker(self):
+        """Reviewer round 2 (MINOR, test name over-promise): this test mocks
+        away sync_db_to_r2_explicit entirely, so it can only exercise
+        _background_sync's OWN clear_sync_pending-on-"ok" handling -- it never
+        reaches the real clear_sync_conflict (that lives inside the mocked
+        function). Renamed from *_clears_both_markers, which it didn't actually
+        assert. See TestSetSyncFailedClearsConflictMarker below for the real
+        both-markers behavior (set_sync_failed)."""
         from app.database import (
             clear_sync_pending,
             has_sync_pending,
@@ -331,12 +292,140 @@ class TestBackgroundSyncConflictRouting:
 
 
 # ---------------------------------------------------------------------------
+# Reviewer round 2 BLOCKING-2/MINOR: a real sync success must clear BOTH the
+# pending and conflict markers, or a stale .sync_conflict sticks around and
+# mislabels every later transient failure as "conflict".
+# ---------------------------------------------------------------------------
+
+class TestSetSyncFailedClearsConflictMarker:
+
+    def test_clearing_sync_failed_also_clears_conflict_marker(self, tmp_path, monkeypatch):
+        import app.database as db_module
+        from app.database import has_sync_conflict, has_sync_pending, mark_sync_conflict, mark_sync_pending
+        from app.middleware.db_sync import set_sync_failed
+
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        user_id = "test-t4310-clear-both"
+        mark_sync_pending(user_id)
+        mark_sync_conflict(user_id)
+        assert has_sync_pending(user_id) and has_sync_conflict(user_id)
+
+        set_sync_failed(user_id, False)
+
+        assert not has_sync_pending(user_id)
+        assert not has_sync_conflict(user_id), \
+            "a stale conflict marker must not survive a real sync success"
+
+    def test_marking_sync_failed_does_not_touch_conflict_marker(self, tmp_path, monkeypatch):
+        """Marking a NEW plain failure (failed=True) must not fabricate a
+        conflict marker that was never set."""
+        import app.database as db_module
+        from app.database import has_sync_conflict
+        from app.middleware.db_sync import set_sync_failed
+
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        user_id = "test-t4310-plain-failure"
+
+        set_sync_failed(user_id, True)
+
+        assert not has_sync_conflict(user_id)
+
+
+# ---------------------------------------------------------------------------
+# Reviewer round 2 MINOR: the both-DBs parallel branch runs _sync_profile and
+# _sync_user CONCURRENTLY (asyncio.gather), and each independently
+# mark_sync_conflict/clear_sync_conflict via database.py for the SAME per-user
+# marker file -- one thread's clear can race and stomp the other's concurrent
+# mark, degrading a real conflict down to a plain "failed" on the header.
+# ---------------------------------------------------------------------------
+
+class TestParallelSyncMarkerRaceFixed:
+
+    @pytest.fixture(autouse=True)
+    def isolate(self, tmp_path, monkeypatch):
+        import app.database as db_module
+        from app.middleware import db_sync as m
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
+        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", set())
+
+    def test_profile_ok_user_conflict_marks_conflict_even_if_profile_clears_first(self):
+        """Simulates the race: profile sync succeeds (would clear_sync_conflict)
+        while user.sqlite sync hits a genuine conflict (marks it) -- regardless
+        of which of the two threads' own mark/clear runs last, the reassertion
+        after asyncio.gather must leave the marker set, so the header reports
+        "conflict" and not a demoted "failed"."""
+        from app.database import has_sync_conflict, mark_sync_pending
+        from app.middleware.db_sync import RequestContextMiddleware, _begin_sync_attempt
+
+        user_id = "test-t4310-marker-race"
+        mark_sync_pending(user_id)
+        _begin_sync_attempt(user_id)
+        middleware = RequestContextMiddleware(app=None)
+
+        async def runner():
+            with patch(
+                "app.middleware.db_sync.sync_db_to_r2_explicit",
+                return_value=SyncResult.OK,
+            ), patch(
+                "app.middleware.db_sync.sync_user_db_to_r2_explicit",
+                return_value=SyncResult.CONFLICT,
+            ):
+                return await middleware._background_sync(
+                    user_id, "prof1", "rid1", "POST", "/api/test",
+                    had_writes=True, had_user_db_writes=True,
+                    do_profile=False, force_profile=False,
+                )
+
+        status = asyncio.run(runner())
+
+        assert status == "conflict"
+        assert has_sync_conflict(user_id), \
+            "the reassertion after gather must leave the conflict marker set, race or not"
+
+    def test_both_ok_clears_conflict_marker(self):
+        """Both DBs succeed: the reassertion after gather must clear a
+        leftover conflict marker from a prior attempt."""
+        from app.database import has_sync_conflict, mark_sync_conflict, mark_sync_pending
+        from app.middleware.db_sync import RequestContextMiddleware, _begin_sync_attempt
+
+        user_id = "test-t4310-marker-race-recover"
+        mark_sync_pending(user_id)
+        mark_sync_conflict(user_id)
+        _begin_sync_attempt(user_id)
+        middleware = RequestContextMiddleware(app=None)
+
+        async def runner():
+            with patch(
+                "app.middleware.db_sync.sync_db_to_r2_explicit",
+                return_value=SyncResult.OK,
+            ), patch(
+                "app.middleware.db_sync.sync_user_db_to_r2_explicit",
+                return_value=SyncResult.OK,
+            ):
+                return await middleware._background_sync(
+                    user_id, "prof1", "rid1", "POST", "/api/test",
+                    had_writes=True, had_user_db_writes=True,
+                    do_profile=False, force_profile=False,
+                )
+
+        status = asyncio.run(runner())
+
+        assert status == "ok"
+        assert not has_sync_conflict(user_id)
+
+
+# ---------------------------------------------------------------------------
 # 4. retry_pending_sync — conflict never blind-overwrites
 # ---------------------------------------------------------------------------
 
 class TestRetryPendingSyncConflict:
 
-    def test_conflict_updates_baseline_and_reports_not_ok(self, tmp_path):
+    def test_conflict_freezes_baseline_and_reports_not_ok(self, tmp_path):
+        """Reviewer round 2 (MAJOR-2): storage.py no longer re-downloads on
+        conflict, so retry_pending_sync must NOT advance the baseline either --
+        it stays frozen until T4315's restore path heals it. Only the conflict
+        marker gets set."""
         from app.middleware.db_sync import retry_pending_sync
 
         profile_dir = tmp_path / USER / "profiles" / PROFILE
@@ -349,15 +438,16 @@ class TestRetryPendingSyncConflict:
              patch("app.database.set_local_db_version") as mock_set_ver, \
              patch("app.database.get_local_user_db_version", return_value=None), \
              patch("app.database.set_local_user_db_version"), \
+             patch("app.middleware.db_sync.mark_sync_conflict") as mock_mark_conflict, \
              patch("app.database.USER_DATA_BASE", tmp_path):
             result = retry_pending_sync(USER, profile_id=PROFILE)
 
         assert result is False, "a conflict is not a successful retry"
         # CAS is on (skip_version_check=False) for this always-off-thread path.
         assert mock_sync.call_args.kwargs["skip_version_check"] is False
-        # The baseline is still updated to the re-downloaded R2 version, so the
-        # NEXT retry compares against fresh data instead of repeating forever.
-        mock_set_ver.assert_called_once_with(USER, PROFILE, 9)
+        # Baseline must NOT move -- no confirmed refresh happened.
+        mock_set_ver.assert_not_called()
+        mock_mark_conflict.assert_called_once_with(USER)
 
 
 # ---------------------------------------------------------------------------
@@ -470,3 +560,76 @@ class TestRequestThreadStillSkipsHead:
 
         assert result["status"] == "credits_granted"
         assert calls == [True], "payments webhook must pass skip_version_check=True explicitly"
+
+
+# ---------------------------------------------------------------------------
+# Reviewer round 2 BLOCKING-2: /api/retry-sync's underlying sync_db_to_cloud
+# must run real CAS (skip_version_check=False), not force-push a stale local
+# DB over a newer R2 copy. Regression-pins the manual-retry clobber + R2
+# version-regression-backwards bug (9 -> 4, which would disarm CAS for every
+# other machine comparing r2_version > current_version).
+# ---------------------------------------------------------------------------
+
+class TestSyncDbToCloudConflict:
+
+    def test_conflict_refuses_upload_baseline_frozen_version_not_regressed(self, tmp_path):
+        from app.database import (
+            get_local_db_version,
+            set_local_db_version,
+            sync_db_to_cloud,
+        )
+        from app.profile_context import set_current_profile_id
+        from app.storage import profile_r2_key
+        from app.user_context import set_current_user_id
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            _make_profile_db(tmp_path, marker="stale_local")
+            key = profile_r2_key(USER, PROFILE, "profile.sqlite")
+            fake._objects[key] = {"data": b"NEWER_R2_COPY", "metadata": {"db-version": "9"}}
+            set_local_db_version(USER, PROFILE, 3)
+            set_current_user_id(USER)
+            set_current_profile_id(PROFILE)
+
+            status = sync_db_to_cloud()
+
+            assert status == "conflict"
+            # The stale local copy must NOT land on R2, and the version must
+            # NOT regress backwards (9 -> 4) -- a regression would disarm CAS
+            # for every other machine, whose r2_version > current_version test
+            # would then falsely read "no conflict".
+            assert fake._objects[key]["data"] == b"NEWER_R2_COPY"
+            assert fake._objects[key]["metadata"]["db-version"] == "9"
+            assert not any(c[1] == key for c in fake.upload_calls)
+            # Baseline stays frozen -- never advanced without a confirmed refresh.
+            assert get_local_db_version(USER, PROFILE) == 3
+
+
+class TestRetrySyncEndpointConflictMapping:
+    """health.py's retry_sync() maps sync_db_to_cloud's string status to the
+    JSON response. Round 2 BLOCKING-2: `if success:` treated the strings
+    "conflict"/"failed" as truthy (any non-empty string is truthy in Python),
+    reporting {"success": true} and clearing .sync_pending after a sync that
+    was actually refused."""
+
+    def test_conflict_status_reports_failure_and_does_not_clear_pending(self, tmp_path, monkeypatch):
+        import app.database as db_module
+        from app.database import has_sync_pending, mark_sync_pending
+        from app.middleware.db_sync import is_sync_failed
+        from app.routers import health as health_mod
+        from app.user_context import set_current_user_id
+
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        user_id = "test-t4310-retry-conflict"
+        monkeypatch.setattr(health_mod, "R2_ENABLED", True)
+        monkeypatch.setattr(health_mod, "sync_db_to_cloud", lambda: "conflict")
+        set_current_user_id(user_id)
+        mark_sync_pending(user_id)
+
+        import asyncio as _asyncio
+        result = _asyncio.run(health_mod.retry_sync())
+
+        assert result["success"] is False
+        assert has_sync_pending(user_id), \
+            "a refused (conflict) sync must not clear .sync_pending"
+        assert is_sync_failed(user_id)

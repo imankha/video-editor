@@ -345,8 +345,9 @@ def _graceful_shutdown(signum, frame):
                     # T4310: CAS ON (skip_version_check=False) — the signal handler
                     # is never on a request thread, so the HEAD adds no request
                     # latency. A stale machine going down mid-conflict must not
-                    # overwrite R2 with its stale copy; storage.py already refuses
-                    # the upload and re-downloads the newer copy on conflict.
+                    # overwrite R2 with its stale copy; storage.py refuses the
+                    # upload on conflict (no re-download — see storage.py MAJOR-2 —
+                    # the local baseline stays frozen, refused again on next boot).
                     version = get_local_db_version(user_id, profile_id)
                     success, new_version = sync_database_to_r2_with_version(
                         user_id, db_file, version, skip_version_check=False, profile_id=profile_id)
@@ -357,7 +358,7 @@ def _graceful_shutdown(signum, frame):
                         if new_version is not None:
                             logger.warning(
                                 f"[Shutdown] R2 version conflict for user={user_id} "
-                                f"profile={profile_id} — refused, re-downloaded v{new_version}"
+                                f"profile={profile_id} — refused (R2 at v{new_version})"
                             )
                         else:
                             logger.warning(f"[Shutdown] R2 sync failed for user={user_id} profile={profile_id}")
@@ -390,7 +391,7 @@ def _graceful_shutdown(signum, frame):
                         if new_version is not None:
                             logger.warning(
                                 f"[Shutdown] R2 version conflict for user={user_id} "
-                                f"user.sqlite — refused, re-downloaded v{new_version}"
+                                f"user.sqlite — refused (R2 at v{new_version})"
                             )
                         else:
                             logger.warning(f"[Shutdown] R2 sync failed for user={user_id} user.sqlite")

@@ -72,7 +72,6 @@ class FakeR2:
         self.upload_calls = []       # (op, key, db_version)
         self.download_calls = []     # (op, key)
         self.fail_profile_upload = False
-        self.fail_download = False
         self.upload_latency = 0.0
         self.exceptions = type("exc", (), {"ClientError": ClientError, "NoSuchKey": _NoSuchKey})
 
@@ -123,10 +122,6 @@ class FakeR2:
         self.upload_calls.append(("upload_fileobj", Key, None))
 
     def download_file(self, Bucket, Key, Filename, ExtraArgs=None, Callback=None, Config=None):
-        if self.fail_download:
-            # Non-transient (403) so retry_r2_call raises immediately instead of
-            # burning through TIER_1's backoff schedule in the test.
-            raise ClientError({"Error": {"Code": "403", "Message": "forced download failure"}}, "GetObject")
         with self._lock:
             obj = self._objects.get(Key)
         if obj is None:

@@ -42,6 +42,7 @@ from starlette.responses import JSONResponse, Response
 from ..database import (
     SyncResult,
     clear_request_context,
+    clear_sync_conflict,
     clear_sync_pending,
     get_request_has_user_db_writes,
     get_request_has_writes,
@@ -260,6 +261,10 @@ def set_sync_failed(user_id: str, failed: bool) -> None:
             logger.warning(f"[SYNC] User {user_id} entered degraded state - R2 sync failed")
     else:
         clear_sync_pending(user_id)
+        # T4310 reviewer round 2 (BLOCKING-2/MINOR): a real sync success clears
+        # BOTH markers. Without this, a stale .sync_conflict marker sticks around
+        # and mislabels every later transient failure as "conflict".
+        clear_sync_conflict(user_id)
         if was_failed:
             logger.info(f"[SYNC] User {user_id} recovered - R2 sync succeeded")
 
@@ -300,9 +305,11 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
             db_module.clear_sync_conflict(user_id)
             profile_ok = True
         elif not success and new_version is not None:
-            # Conflict: update the baseline to the re-downloaded version so the
-            # NEXT retry isn't comparing against the same stale version again.
-            db_module.set_local_db_version(user_id, profile_id, new_version)
+            # T4310 reviewer round 2 (MAJOR-2): conflict — baseline stays frozen
+            # (storage.py no longer re-downloads; see storage.py for why the
+            # swap is WAL-unsafe). Advancing it without a confirmed refresh
+            # would let the NEXT retry compare stale local data against
+            # "confirmed" R2 data and silently force-push it.
             mark_sync_conflict(user_id)
             profile_ok = False
         else:
@@ -320,7 +327,8 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
             db_module.clear_sync_conflict(user_id)
             user_ok = True
         elif not success and new_version is not None:
-            db_module.set_local_user_db_version(user_id, new_version)
+            # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see the
+            # profile branch above.
             mark_sync_conflict(user_id)
             user_ok = False
         else:
@@ -917,6 +925,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 db_status = _status_for_result(profile_ok)
                 user_status = _status_for_result(user_ok)
                 user_sync_success = bool(user_ok)
+
+                # T4310 reviewer round 2 (MINOR): _sync_profile/_sync_user just ran
+                # CONCURRENTLY in separate threads, and each independently calls
+                # mark_sync_conflict/clear_sync_conflict (via sync_db_to_r2_explicit/
+                # sync_user_db_to_r2_explicit) for the SAME per-user marker file --
+                # one thread's clear can race and stomp the other's concurrent mark,
+                # degrading a real conflict to a plain "failed" on the header.
+                # asyncio.gather has now joined both threads, so this reassertion
+                # runs strictly after any race and is the authoritative last write.
+                if "conflict" in (db_status, user_status):
+                    mark_sync_conflict(user_id)
+                elif db_status == "ok" and user_status == "ok":
+                    clear_sync_conflict(user_id)
 
                 if PROFILING_ENABLED:
                     parallel_ms = (time.perf_counter() - sync_start) * 1000

@@ -1307,8 +1307,14 @@ def sync_db_to_cloud() -> str:
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
+    # T4310 reviewer round 2 (BLOCKING-2): this is the /api/retry-sync request
+    # wrapper, called synchronously from a request handler but only on an
+    # explicit manual-retry gesture (not the hot request-path), so a HEAD here
+    # adds no meaningful latency. skip_version_check=True previously let a
+    # confirmed-refused-elsewhere conflict force-push over R2 on retry AND
+    # regress the R2 version backwards, disarming CAS for every other machine.
     success, new_version = sync_database_to_r2_with_version(
-        user_id, db_path, current_version, skip_version_check=True
+        user_id, db_path, current_version, skip_version_check=False
     )
 
     if success and new_version is not None:
@@ -1316,9 +1322,11 @@ def sync_db_to_cloud() -> str:
         logger.debug(f"Database synced to R2 for user: {user_id}, profile: {profile_id}, version: {new_version}")
         return "ok"
     elif not success and new_version is not None:
-        # T950: Conflict detected — storage.py re-downloaded newer version
-        set_local_db_version(user_id, profile_id, new_version)
-        logger.warning(f"Version conflict for user: {user_id}, profile: {profile_id}, updated to v{new_version}")
+        # T4310 reviewer round 2 (MAJOR-2): storage.py no longer re-downloads on
+        # conflict (WAL-unsafe swap off the write lock — see storage.py), so the
+        # baseline must NOT advance here either; advancing it without a confirmed
+        # refresh is exactly the silent-clobber bug this task exists to prevent.
+        logger.warning(f"Version conflict for user: {user_id}, profile: {profile_id}, R2 at v{new_version}")
         return "conflict"
     elif not success:
         logger.warning(f"Failed to sync database to R2 for user: {user_id}, profile: {profile_id}")
@@ -1419,15 +1427,18 @@ def sync_db_to_r2_explicit(
         logger.debug(f"[ExportWorker] Database synced to R2: user={user_id}, profile={profile_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:
-        # T4310: CAS conflict — storage.py already refused the upload and
-        # re-downloaded the newer copy. Update the local baseline to that
-        # newer version so the NEXT attempt compares against fresh data
-        # instead of looping on the same stale version forever.
-        set_local_db_version(user_id, profile_id, new_version)
+        # T4310 reviewer round 2 (MAJOR-2): storage.py refuses the conflicting
+        # upload but no longer re-downloads (WAL-unsafe swap outside the write
+        # lock — see storage.py). The baseline must stay frozen at
+        # current_version: advancing it to new_version without a confirmed
+        # refresh would let the NEXT attempt compare the still-stale local
+        # copy against "confirmed" data and silently force-push it. A frozen
+        # baseline means this conflict is detected and refused again on every
+        # retry (safe) until T4315's restore path heals the local copy.
         mark_sync_conflict(user_id)
         logger.warning(
             f"[ExportWorker] R2 version conflict for user={user_id}, profile={profile_id} "
-            f"— refused, re-downloaded v{new_version}"
+            f"— refused (R2 at v{new_version}), baseline frozen at v{current_version}"
         )
         return SyncResult.CONFLICT
     else:
@@ -1479,12 +1490,12 @@ def sync_user_db_to_r2_explicit(
         logger.debug(f"[ExportWorker] user.sqlite synced to R2: user={user_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:
-        # T4310: CAS conflict — see sync_db_to_r2_explicit for the rationale.
-        set_local_user_db_version(user_id, new_version)
+        # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see
+        # sync_db_to_r2_explicit for the rationale.
         mark_sync_conflict(user_id)
         logger.warning(
             f"[ExportWorker] user.sqlite R2 version conflict for user={user_id} "
-            f"— refused, re-downloaded v{new_version}"
+            f"— refused (R2 at v{new_version}), baseline frozen at v{local_version}"
         )
         return SyncResult.CONFLICT
     else:
