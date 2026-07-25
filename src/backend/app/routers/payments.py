@@ -313,7 +313,9 @@ async def stripe_webhook(request: Request):
             increment_total_spent(user_id, pack_info["price_cents"])
         # T4940: webhook runs outside a user session (middleware allowlist), so the
         # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
-        sync_user_db_to_r2_explicit(user_id)
+        # T4310: called synchronously on the request thread (not asyncio.to_thread)
+        # -- skip_version_check=True preserves the T1020/T2720 no-HEAD guarantee.
+        sync_user_db_to_r2_explicit(user_id, skip_version_check=True)
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -351,7 +353,9 @@ async def stripe_webhook(request: Request):
             increment_total_spent(user_id, pack_info["price_cents"])
         # T4940: webhook runs outside a user session (middleware allowlist), so the
         # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
-        sync_user_db_to_r2_explicit(user_id)
+        # T4310: called synchronously on the request thread (not asyncio.to_thread)
+        # -- skip_version_check=True preserves the T1020/T2720 no-HEAD guarantee.
+        sync_user_db_to_r2_explicit(user_id, skip_version_check=True)
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"

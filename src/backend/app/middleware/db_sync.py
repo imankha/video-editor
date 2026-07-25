@@ -40,6 +40,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from ..database import (
+    SyncResult,
     clear_request_context,
     clear_sync_pending,
     get_request_has_user_db_writes,
@@ -48,6 +49,7 @@ from ..database import (
     get_request_written_user_dbs,
     has_sync_pending,
     init_request_context,
+    mark_sync_conflict,
     mark_sync_pending,
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
@@ -234,6 +236,15 @@ async def _maybe_write_lock(user_id: str | None, method: str, path: str, req_id:
 # truth and makes the degraded state survive backend restarts.
 
 
+def _status_for_result(result) -> str:
+    """Map a SyncResult (or a plain bool from an older mock/test) to the
+    "ok" | "conflict" | "failed" status string _background_sync tracks.
+    """
+    if result == SyncResult.CONFLICT:
+        return "conflict"
+    return "ok" if result else "failed"
+
+
 def is_sync_failed(user_id: str) -> bool:
     """Check if the given user has a pending sync failure."""
     return has_sync_pending(user_id)
@@ -259,7 +270,16 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     Uses explicit helpers that take user_id/profile_id directly rather than
     request-scoped ContextVars, so it works in any calling context.
 
-    Returns True iff both profile.sqlite and user.sqlite synced successfully.
+    T4310: CAS is ON (skip_version_check=False) — this always runs via
+    asyncio.to_thread (see the one caller in _dispatch_impl), so the HEAD adds
+    no request-thread latency. On a conflict, storage.py already refused the
+    upload and re-downloaded the newer copy; the local version baseline is
+    updated so the retry isn't stuck comparing against a stale version forever,
+    and the conflict marker is set (mark_sync_conflict) instead of a blind
+    "still failing" — a conflicted retry re-download/reconciles, never overwrites.
+
+    Returns True iff both profile.sqlite and user.sqlite synced successfully
+    (False for either a conflict or a genuine failure).
     """
     from app import database as db_module
     from app import storage as storage_module
@@ -272,11 +292,18 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     if db_path is not None and db_path.exists():
         current_version = db_module.get_local_db_version(user_id, profile_id)
         success, new_version = storage_module.sync_database_to_r2_with_version(
-            user_id, db_path, current_version, skip_version_check=True, profile_id=profile_id,
+            user_id, db_path, current_version, skip_version_check=False, profile_id=profile_id,
         )
         if success and new_version is not None:
             db_module.set_local_db_version(user_id, profile_id, new_version)
+            db_module.clear_sync_conflict(user_id)
             profile_ok = True
+        elif not success and new_version is not None:
+            # Conflict: update the baseline to the re-downloaded version so the
+            # NEXT retry isn't comparing against the same stale version again.
+            db_module.set_local_db_version(user_id, profile_id, new_version)
+            mark_sync_conflict(user_id)
+            profile_ok = False
         else:
             profile_ok = False
 
@@ -285,11 +312,16 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     if user_db_path.exists():
         local_version = db_module.get_local_user_db_version(user_id)
         success, new_version = storage_module.sync_user_db_to_r2_with_version(
-            user_id, user_db_path, local_version, skip_version_check=True,
+            user_id, user_db_path, local_version, skip_version_check=False,
         )
         if success and new_version is not None:
             db_module.set_local_user_db_version(user_id, new_version)
+            db_module.clear_sync_conflict(user_id)
             user_ok = True
+        elif not success and new_version is not None:
+            db_module.set_local_user_db_version(user_id, new_version)
+            mark_sync_conflict(user_id)
+            user_ok = False
         else:
             user_ok = False
 
@@ -877,8 +909,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         f"user_ok={user_ok} path={path} method={method}"
                     )
 
-                db_status = "ok" if profile_ok else "failed"
-                user_sync_success = user_ok
+                db_status = _status_for_result(profile_ok)
+                user_status = _status_for_result(user_ok)
+                user_sync_success = bool(user_ok)
 
                 if PROFILING_ENABLED:
                     parallel_ms = (time.perf_counter() - sync_start) * 1000
@@ -893,15 +926,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 result = await asyncio.to_thread(
                     sync_db_to_r2_explicit, user_id, profile_id, lock_timeout
                 )
-                db_status = "ok" if result else "failed"
+                db_status = _status_for_result(result)
+                user_status = "ok"
                 user_sync_success = True
             else:
                 db_status = "ok"
-                user_sync_success = await asyncio.to_thread(
+                result = await asyncio.to_thread(
                     sync_user_db_to_r2_explicit, user_id, lock_timeout
                 )
+                user_status = _status_for_result(result)
+                user_sync_success = bool(result)
 
-            if db_status == "conflict":
+            # T4310: conflict takes precedence over a generic failure — a conflict
+            # is diagnosable (CAS refused a stale write, storage.py already
+            # re-downloaded) where "failed" could be any transient R2 error.
+            if "conflict" in (db_status, user_status):
                 sync_status = "conflict"
             elif db_status == "failed" or not user_sync_success:
                 sync_status = "failed"
@@ -910,33 +949,43 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # user's. Each owner gets its own sync + its own sync-pending marker,
             # so a failure is attributed to the DB that actually failed.
             for foreign_uid in sorted(foreign_user_dbs or ()):
-                ok = await asyncio.to_thread(
+                result = await asyncio.to_thread(
                     sync_user_db_to_r2_explicit, foreign_uid, lock_timeout
                 )
-                if ok:
+                if result:
                     logger.info(
                         f"[SYNC] {method} {path} -> synced FOREIGN user.sqlite "
                         f"user={foreign_uid} (session user={user_id})"
                     )
                 else:
                     mark_sync_pending(foreign_uid)
-                    sync_status = "failed"
+                    if result == SyncResult.CONFLICT:
+                        mark_sync_conflict(foreign_uid)
+                        if sync_status == "ok":
+                            sync_status = "conflict"
+                    else:
+                        sync_status = "failed"
                     logger.error(
                         f"[SYNC] {method} {path} -> FAILED to sync foreign user.sqlite "
                         f"user={foreign_uid} (session user={user_id}); change is local-only"
                     )
             for foreign_uid, foreign_pid in sorted(foreign_profile_dbs or ()):
-                ok = await asyncio.to_thread(
+                result = await asyncio.to_thread(
                     sync_db_to_r2_explicit, foreign_uid, foreign_pid, lock_timeout
                 )
-                if ok:
+                if result:
                     logger.info(
                         f"[SYNC] {method} {path} -> synced FOREIGN profile.sqlite "
                         f"user={foreign_uid} profile={foreign_pid}"
                     )
                 else:
                     mark_sync_pending(foreign_uid)
-                    sync_status = "failed"
+                    if result == SyncResult.CONFLICT:
+                        mark_sync_conflict(foreign_uid)
+                        if sync_status == "ok":
+                            sync_status = "conflict"
+                    else:
+                        sync_status = "failed"
                     logger.error(
                         f"[SYNC] {method} {path} -> FAILED to sync foreign profile.sqlite "
                         f"user={foreign_uid} profile={foreign_pid}; change is local-only"

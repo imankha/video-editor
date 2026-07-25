@@ -12,7 +12,7 @@ to ContextVar-keying fails loudly.
 """
 
 import os
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from unittest.mock import patch
 
 import pytest
@@ -24,11 +24,19 @@ PROFILE_B = "bbbb2222"   # the ARG (target) profile — differs from the Context
 
 class _FakeR2:
     """In-memory R2: {key: (data, metadata)}. Only the surface the explicit
-    profile-sync path touches (upload_file; head_object for completeness)."""
+    profile-sync path touches (upload_file; head_object for completeness).
+
+    T4310: sync_db_to_r2_explicit/sync_user_db_to_r2_explicit now default to
+    CAS on (skip_version_check=False), so every call HEADs the object -- the
+    `.exceptions.ClientError` surface is exercised even on the happy path
+    (NOT_FOUND for a never-before-seen key), not just in conflict tests.
+    """
 
     def __init__(self):
         self.objects = {}
         self.upload_keys = []
+        from botocore.exceptions import ClientError
+        self.exceptions = type("exc", (), {"ClientError": ClientError})
 
     def upload_file(self, Filename, Bucket, Key, ExtraArgs=None, Callback=None, Config=None):
         with open(Filename, "rb") as f:
@@ -95,7 +103,7 @@ def _set_contextvar(profile_id):
 # --------------------------------------------------------------------------- #
 
 def test_sync_db_to_r2_explicit_keys_off_arg_not_contextvar(tmp_path):
-    from app.database import sync_db_to_r2_explicit, set_local_db_version
+    from app.database import SyncResult, set_local_db_version, sync_db_to_r2_explicit
 
     with _env(tmp_path) as (fake, base):
         db_b = _write_profile_db(base, PROFILE_B, "profile_b_db")
@@ -104,7 +112,7 @@ def test_sync_db_to_r2_explicit_keys_off_arg_not_contextvar(tmp_path):
         # ContextVar points at A; we sync B. Pre-T5340 this uploaded to A's key.
         _set_contextvar(PROFILE_A)
 
-        assert sync_db_to_r2_explicit(USER, PROFILE_B) is True
+        assert sync_db_to_r2_explicit(USER, PROFILE_B) is SyncResult.OK
 
         assert _profile_key(PROFILE_B) in fake.objects, "B's DB did not land on B's key"
         assert _profile_key(PROFILE_A) not in fake.objects, \
@@ -121,7 +129,7 @@ def test_move_reels_target_sync_leaves_source_r2_intact(tmp_path):
     (ContextVar) profile is the SOURCE; the handler syncs the TARGET's DB via
     sync_db_to_r2_explicit(user, target). The source's durable R2 copy must NOT
     be touched, and the target's copy must receive the moved-in DB."""
-    from app.database import sync_db_to_r2_explicit, set_local_db_version
+    from app.database import SyncResult, set_local_db_version, sync_db_to_r2_explicit
 
     with _env(tmp_path) as (fake, base):
         # Seed the SOURCE profile's durable R2 copy (its pre-move state).
@@ -133,7 +141,7 @@ def test_move_reels_target_sync_leaves_source_r2_intact(tmp_path):
 
         # Request profile is the SOURCE (as in a real move-reels request).
         _set_contextvar(PROFILE_A)
-        assert sync_db_to_r2_explicit(USER, PROFILE_B) is True
+        assert sync_db_to_r2_explicit(USER, PROFILE_B) is SyncResult.OK
 
         # Target got the moved reels.
         assert fake.objects[_profile_key(PROFILE_B)][0] == expected
@@ -184,7 +192,7 @@ def test_primitive_key_source_switches_on_profile_id(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_user_db_key_is_profile_independent(tmp_path):
-    from app.database import sync_user_db_to_r2_explicit, set_local_user_db_version
+    from app.database import SyncResult, set_local_user_db_version, sync_user_db_to_r2_explicit
     from app.storage import _user_db_r2_key
 
     with _env(tmp_path) as (fake, base):
@@ -193,7 +201,7 @@ def test_user_db_key_is_profile_independent(tmp_path):
         set_local_user_db_version(USER, 0)
         _set_contextvar(PROFILE_A)  # irrelevant to the user.sqlite key
 
-        assert sync_user_db_to_r2_explicit(USER) is True
+        assert sync_user_db_to_r2_explicit(USER) is SyncResult.OK
         key = _user_db_r2_key(USER)
         assert key in fake.objects
         assert "/profiles/" not in key, "user.sqlite key must not be profile-scoped"

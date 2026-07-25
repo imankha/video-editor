@@ -8,9 +8,9 @@ Covers:
 """
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
+from app.database import SyncResult
 
 
 def _patch_path_exists(target_path):
@@ -50,9 +50,10 @@ class TestSyncDbToR2Explicit:
 
         # T5340: profile_id is threaded through so the R2 upload key is derived
         # from the ARG (profile_r2_key), never get_current_profile_id().
+        # T4310: CAS is ON by default for background-worker callers.
         mock_sync.assert_called_once_with(
-            "u1", db_path, 5, skip_version_check=True, lock_timeout=None, profile_id="p1")
-        assert result is True
+            "u1", db_path, 5, skip_version_check=False, lock_timeout=None, profile_id="p1")
+        assert result is SyncResult.OK
 
     @patch("app.database.R2_ENABLED", True)
     @patch("app.database.sync_database_to_r2_with_version")
@@ -71,8 +72,35 @@ class TestSyncDbToR2Explicit:
              patch("app.database.set_local_db_version") as mock_set_ver:
             result = sync_db_to_r2_explicit("u1", "p1")
 
-        assert result is True
+        assert result is SyncResult.OK
         mock_set_ver.assert_called_once_with("u1", "p1", 4)
+
+    @patch("app.database.R2_ENABLED", True)
+    @patch("app.database.sync_database_to_r2_with_version")
+    @patch("app.database.get_local_db_version", return_value=3)
+    @patch("app.database.check_database_size")
+    def test_conflict_returns_conflict_and_updates_version_to_r2s(
+        self, mock_check, mock_get_ver, mock_sync, tmp_path,
+    ):
+        """T4310: CAS refusal (storage.py already re-downloaded the newer copy)
+        returns SyncResult.CONFLICT and updates the local baseline to the R2
+        version -- so the NEXT attempt doesn't compare against stale data again."""
+        from app.database import sync_db_to_r2_explicit
+
+        mock_sync.return_value = (False, 9)  # conflict: refused, R2 is at v9
+        fake_base = Path("/fake/user_data")
+        db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
+
+        with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
+             _patch_path_exists(db_path), \
+             patch("app.database.USER_DATA_BASE", tmp_path), \
+             patch("app.database.set_local_db_version") as mock_set_ver:
+            result = sync_db_to_r2_explicit("u1", "p1")
+
+        assert result is SyncResult.CONFLICT
+        assert result == "conflict"  # str-Enum: comparable to the raw status string
+        assert not result  # falsy, same as a plain failure for legacy bool callers
+        mock_set_ver.assert_called_once_with("u1", "p1", 9)
 
     @patch("app.database.R2_ENABLED", True)
     @patch("app.database.sync_database_to_r2_with_version")
@@ -91,7 +119,8 @@ class TestSyncDbToR2Explicit:
              patch("app.database.set_local_db_version") as mock_set_ver:
             result = sync_db_to_r2_explicit("u1", "p1")
 
-        assert result is False
+        assert result is SyncResult.FAILED
+        assert not result
         mock_set_ver.assert_not_called()
 
     @patch("app.database.R2_ENABLED", False)
@@ -100,7 +129,8 @@ class TestSyncDbToR2Explicit:
         from app.database import sync_db_to_r2_explicit
 
         result = sync_db_to_r2_explicit("u1", "p1")
-        assert result is True
+        assert result is SyncResult.OK
+        assert result
 
 
 # ---------------------------------------------------------------------------
@@ -125,8 +155,9 @@ class TestSyncUserDbToR2Explicit:
             mock_sync.return_value = (True, 3)
             result = sync_user_db_to_r2_explicit("u1")
 
-        mock_sync.assert_called_once_with("u1", db_path, 2, skip_version_check=True, lock_timeout=None)
-        assert result is True
+        # T4310: CAS is ON by default for background-worker callers.
+        mock_sync.assert_called_once_with("u1", db_path, 2, skip_version_check=False, lock_timeout=None)
+        assert result is SyncResult.OK
 
     @patch("app.database.get_local_user_db_version", return_value=2)
     def test_returns_true_on_success_updates_version(self, mock_get_ver):
@@ -143,8 +174,27 @@ class TestSyncUserDbToR2Explicit:
              patch("app.database.set_local_user_db_version") as mock_set_ver:
             result = sync_user_db_to_r2_explicit("u1")
 
-        assert result is True
+        assert result is SyncResult.OK
         mock_set_ver.assert_called_once_with("u1", 3)
+
+    @patch("app.database.get_local_user_db_version", return_value=2)
+    def test_conflict_returns_conflict_and_updates_version_to_r2s(self, mock_get_ver, tmp_path):
+        """T4310: CAS refusal returns SyncResult.CONFLICT and updates the local
+        baseline to the R2 version."""
+        from app.database import sync_user_db_to_r2_explicit
+
+        db_path = tmp_path / "u1" / "user.sqlite"
+
+        with patch("app.database.R2_ENABLED", True), \
+             patch("app.database.USER_DATA_BASE", tmp_path), \
+             _patch_path_exists(db_path), \
+             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(False, 9)), \
+             patch("app.database.set_local_user_db_version") as mock_set_ver:
+            result = sync_user_db_to_r2_explicit("u1")
+
+        assert result is SyncResult.CONFLICT
+        assert not result
+        mock_set_ver.assert_called_once_with("u1", 9)
 
     @patch("app.database.get_local_user_db_version", return_value=2)
     def test_returns_false_on_failure_no_version_update(self, mock_get_ver):
@@ -161,7 +211,8 @@ class TestSyncUserDbToR2Explicit:
              patch("app.database.set_local_user_db_version") as mock_set_ver:
             result = sync_user_db_to_r2_explicit("u1")
 
-        assert result is False
+        assert result is SyncResult.FAILED
+        assert not result
         mock_set_ver.assert_not_called()
 
     @patch("app.database.R2_ENABLED", False)
@@ -170,7 +221,8 @@ class TestSyncUserDbToR2Explicit:
         from app.database import sync_user_db_to_r2_explicit
 
         result = sync_user_db_to_r2_explicit("u1")
-        assert result is True
+        assert result is SyncResult.OK
+        assert result
 
 
 # ---------------------------------------------------------------------------

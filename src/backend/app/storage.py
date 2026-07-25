@@ -69,6 +69,9 @@ APP_ENV = os.getenv("APP_ENV", "dev")
 R2_ENABLED = os.getenv("R2_ENABLED", "false").lower() == "true"
 R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
 
+# T4310: identifies which machine refused a CAS conflict, for the CRITICAL log.
+FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
+
 # ---------------------------------------------------------------------------
 # T4120: durability test seams (gated; PROD AND STAGING inert)
 # ---------------------------------------------------------------------------
@@ -1076,9 +1079,10 @@ def sync_database_to_r2_with_version(
         # If R2 has a newer version than what we loaded, we have a conflict
         # T950: Fail instead of overwriting — re-download the newer version
         if r2_version > 0 and current_version is not None and r2_version > current_version:
-            logger.error(
-                f"[SYNC] Version conflict for {user_id}: loaded v{current_version}, "
-                f"R2 has v{r2_version}. NOT uploading — would overwrite newer data."
+            logger.critical(
+                f"[SYNC_CONFLICT] user={user_id} profile={profile_id} "
+                f"loaded=v{current_version} r2=v{r2_version} machine={FLY_MACHINE_ID} "
+                f"— NOT uploading, re-downloading"
             )
             # Re-download the newer version so next request uses fresh data
             try:
@@ -1317,9 +1321,9 @@ def sync_user_db_to_r2_with_version(
 
         # T950: Fail on conflict instead of overwriting
         if r2_version > 0 and current_version is not None and r2_version > current_version:
-            logger.error(
-                f"[SYNC] user.sqlite version conflict for {user_id}: loaded v{current_version}, "
-                f"R2 has v{r2_version}. NOT uploading."
+            logger.critical(
+                f"[SYNC_CONFLICT] user={user_id} db=user.sqlite loaded=v{current_version} "
+                f"r2=v{r2_version} machine={FLY_MACHINE_ID} — NOT uploading, re-downloading"
             )
             try:
                 user_key = _user_db_r2_key(user_id)

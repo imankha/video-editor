@@ -373,7 +373,10 @@ def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     else:
         mark_sync_pending(user_id)
         logger.warning(f"[SYNC] EXPORT user={user_id} -> R2 sync FAILED - marked pending for retry")
-    return ok
+    # T4310: sync_db_to_r2_explicit/sync_user_db_to_r2_explicit now return a
+    # 3-state SyncResult; this function's declared -> bool contract still holds,
+    # so coerce at the boundary rather than leaking the enum through `and`-chaining.
+    return bool(ok)
 
 
 def export_sync_failed_data(export_type: str, project_id: int, project_name: str) -> dict:

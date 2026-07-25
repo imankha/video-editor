@@ -133,7 +133,10 @@ async def _persist_target_user_db(target_user_id: str) -> bool:
             f"[Admin] R2 sync FAILED for target user {target_user_id} -- credit change is "
             f"NOT durable and will be lost if this machine is replaced; reported as synced=false"
         )
-    return synced
+    # T4310: sync_user_db_to_r2_explicit now returns a 3-state SyncResult; this
+    # function's contract (and the JSON `synced` field callers return) is a plain
+    # bool, so coerce at the boundary rather than leaking the enum's string value.
+    return bool(synced)
 
 
 def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:

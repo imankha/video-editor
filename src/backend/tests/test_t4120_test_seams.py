@@ -79,8 +79,12 @@ def test_explicit_sync_short_circuits_in_dev(monkeypatch):
     import app.database as database
     monkeypatch.setattr(storage, "APP_ENV", "dev")
     set_force_r2_sync_failure(True)
-    assert database.sync_db_to_r2_explicit("u-test", "p-test") is False
-    assert database.sync_user_db_to_r2_explicit("u-test") is False
+    # T4310: these now return the 3-state SyncResult (falsy on failure), not a
+    # plain bool -- `is False` would fail an identity check against the enum.
+    assert database.sync_db_to_r2_explicit("u-test", "p-test") is database.SyncResult.FAILED
+    assert not database.sync_db_to_r2_explicit("u-test", "p-test")
+    assert database.sync_user_db_to_r2_explicit("u-test") is database.SyncResult.FAILED
+    assert not database.sync_user_db_to_r2_explicit("u-test")
 
 
 @pytest.mark.parametrize("env", ["production", "staging"])
@@ -89,9 +93,11 @@ def test_explicit_sync_not_short_circuited_outside_dev(monkeypatch, env):
     monkeypatch.setattr(storage, "APP_ENV", env)
     monkeypatch.setenv("FORCE_R2_SYNC_FAILURE", "1")
     set_force_r2_sync_failure(True)
-    # Guard inert -> falls through to the real path; R2 disabled in tests -> True.
-    assert database.sync_db_to_r2_explicit("u-test", "p-test") is True
-    assert database.sync_user_db_to_r2_explicit("u-test") is True
+    # Guard inert -> falls through to the real path; R2 disabled in tests -> OK.
+    assert database.sync_db_to_r2_explicit("u-test", "p-test") is database.SyncResult.OK
+    assert database.sync_db_to_r2_explicit("u-test", "p-test")
+    assert database.sync_user_db_to_r2_explicit("u-test") is database.SyncResult.OK
+    assert database.sync_user_db_to_r2_explicit("u-test")
 
 
 # --- Layer 3: per-handler re-check 404s when disabled -----------------------
