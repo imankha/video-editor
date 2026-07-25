@@ -1,6 +1,6 @@
 # T5860: Reel player overlay is not modal — clicks pass through to tiles/carousel underneath
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-25

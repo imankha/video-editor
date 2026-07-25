@@ -67,6 +67,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Delayed seek buffering: show spinner after 300ms if seek hasn't resolved
   const seekBufferingTimerRef = useRef(null);
 
+  // Bug 38 (glitch 3): handle for a pending requestVideoFrameCallback used to
+  // confirm the seeked frame actually PAINTED while paused (Safari/streaming
+  // frame-by-frame stepping). One-shot per seek; cancelled before the next.
+  const seekFrameCallbackRef = useRef(null);
+
   // Desync resume: cooldown + retry cap to avoid endless play() spam
   const lastDesyncResumeRef = useRef(0);
   const desyncRetriesRef = useRef(0);
@@ -432,6 +437,44 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setIsSeeking(true);
       setCurrentTime(validTime);
       videoRef.current.currentTime = target;
+
+      // Bug 38 (glitch 3): while PAUSED, some browsers (notably Safari) with a
+      // streaming source do not promptly present the seeked frame -- the frame
+      // "doesn't show" until playback resumes, so frame-by-frame stepping while
+      // paused looks frozen and the user has to "reset and pause strategically".
+      // The RAF time-update loop only repaints while PLAYING, and the 'seeked'
+      // event can lag on a paused streaming seek, so the buffering spinner
+      // covers a frame that is (or is about to be) decoded. requestVideoFrameCallback
+      // fires when a NEW frame is actually presented to the compositor --
+      // including a seeked frame while paused -- giving a paint-confirmed signal
+      // to clear the seek/buffering state immediately so the stepped frame shows.
+      // Scoped to the paused branch (playback repaints via the RAF loop); a
+      // graceful no-op where rVFC is unsupported (falls back to 'seeked').
+      const vid = videoRef.current;
+      if (seekFrameCallbackRef.current && typeof vid.cancelVideoFrameCallback === 'function') {
+        vid.cancelVideoFrameCallback(seekFrameCallbackRef.current);
+      }
+      seekFrameCallbackRef.current = null;
+      if (vid.paused && typeof vid.requestVideoFrameCallback === 'function') {
+        seekFrameCallbackRef.current = vid.requestVideoFrameCallback(() => {
+          seekFrameCallbackRef.current = null;
+          // Seeked frame is now presented -- clear spinner/seek state so it's
+          // visible (mirrors handleSeeked; idempotent if 'seeked' also fires).
+          if (seekBufferingTimerRef.current) {
+            clearTimeout(seekBufferingTimerRef.current);
+            seekBufferingTimerRef.current = null;
+          }
+          if (seekWatchdogRef.current) {
+            clearTimeout(seekWatchdogRef.current);
+            seekWatchdogRef.current = null;
+          }
+          setIsBuffering(false);
+          setIsSeeking(false);
+          if (videoRef.current) {
+            setCurrentTime(videoToClip(videoRef.current.currentTime));
+          }
+        });
+      }
 
       // Show buffering spinner if seek takes >300ms (out-of-buffer seek)
       if (seekBufferingTimerRef.current) clearTimeout(seekBufferingTimerRef.current);
@@ -1359,6 +1402,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (seekBufferingTimerRef.current) {
         clearTimeout(seekBufferingTimerRef.current);
         seekBufferingTimerRef.current = null;
+      }
+      if (seekFrameCallbackRef.current && videoRef.current
+          && typeof videoRef.current.cancelVideoFrameCallback === 'function') {
+        videoRef.current.cancelVideoFrameCallback(seekFrameCallbackRef.current);
+        seekFrameCallbackRef.current = null;
       }
     };
   }, []);

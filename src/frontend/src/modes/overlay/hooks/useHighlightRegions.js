@@ -4,6 +4,11 @@ import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
 import { useOverlayHighlightColor } from '../../../stores/overlayStore';
 import { HighlightColor } from '../../../constants/highlightColors';
 import { track } from '../../../utils/analytics';
+import {
+  pickPrimaryDetectionBox,
+  detectionBoxesNearestTime,
+  highlightFromDetectionBox,
+} from '../utils/primaryDetection';
 
 /**
  * useHighlightRegions - Manages highlight regions as self-contained units
@@ -142,6 +147,47 @@ export default function useHighlightRegions(videoMetadata) {
   }, [highlightColor]);
 
   /**
+   * Default spotlight for a region that has NO user keyframes yet -- the
+   * "auto/pre-selected" spotlight.
+   *
+   * Bug 38 (glitch 2): this used to always return `calculateDefaultHighlight`
+   * (the geometric frame center), so the auto pick never landed on the main
+   * player. Now, when the region carries YOLO detections, we spotlight the
+   * MAIN CENTERED + prominent player (`pickPrimaryDetectionBox`). The box is
+   * taken from the detection nearest the region START so the pick is
+   * deterministic and preview == export (`getRegionsForExport` seeds the same
+   * keyframe at region start). Detection coords are box-center in source-video
+   * space, exactly the space a user-clicked pick writes -- so no coordinate
+   * remap is needed and auto == manual shape.
+   *
+   * When there are no usable detections we fall back to the neutral centered
+   * default (NOT a fabricated player box) and surface it, per the project
+   * "no silent fallbacks for internal data" rule.
+   */
+  const defaultHighlightForRegion = useCallback((region) => {
+    const color = highlightColor || HighlightColor.WHITE;
+    const vw = region?.videoWidth || videoMetadata?.width;
+    const vh = region?.videoHeight || videoMetadata?.height;
+    const detections = region?.detections || [];
+
+    if (detections.length && vw && vh) {
+      const boxes = detectionBoxesNearestTime(detections, region.startTime, region.fps || framerate);
+      const primary = pickPrimaryDetectionBox(boxes, vw, vh);
+      if (primary) {
+        return {
+          ...highlightFromDetectionBox(primary),
+          strokeOpacity: 0.85,
+          fillOpacity: 0.05,
+          color,
+        };
+      }
+      console.warn('[useHighlightRegions] region has detections but no usable box for auto-select; using centered default');
+    }
+
+    return calculateDefaultHighlight(vw, vh);
+  }, [highlightColor, videoMetadata, framerate, calculateDefaultHighlight]);
+
+  /**
    * Initialize with video duration
    */
   const initializeWithDuration = useCallback((videoDuration) => {
@@ -221,13 +267,18 @@ export default function useHighlightRegions(videoMetadata) {
         };
       });
 
-      // If no keyframes exist, create permanent start/end keyframes with default highlight
-      // This ensures the region works like before (user can drag to add more keyframes)
+      // If no keyframes exist, create permanent start/end keyframes with the
+      // auto default. Bug 38 (glitch 2): seed on the MAIN CENTERED player from
+      // the region's detections (centered fallback only when none exist),
+      // instead of always the geometric frame center.
       if (restoredKeyframes.length === 0) {
-        const defaultHighlight = calculateDefaultHighlight(
-          saved.videoWidth || videoMetadata?.width,
-          saved.videoHeight || videoMetadata?.height
-        );
+        const defaultHighlight = defaultHighlightForRegion({
+          detections: saved.detections || [],
+          videoWidth: saved.videoWidth || videoMetadata?.width,
+          videoHeight: saved.videoHeight || videoMetadata?.height,
+          fps: saved.fps,
+          startTime,
+        });
         restoredKeyframes = [
           { frame: startFrame, ...defaultHighlight },
           { frame: endFrame, ...defaultHighlight }
@@ -279,7 +330,7 @@ export default function useHighlightRegions(videoMetadata) {
 
     setRegions(dedupedRegions);
     setSelectedRegionId(null);
-  }, [framerate]);
+  }, [framerate, defaultHighlightForRegion]);
 
   /**
    * Generate unique region ID
@@ -330,12 +381,6 @@ export default function useHighlightRegions(videoMetadata) {
       return null;
     }
 
-    // Create default highlight data
-    const defaultHighlight = calculateDefaultHighlight(
-      videoMetadata?.width,
-      videoMetadata?.height
-    );
-
     const regionId = generateRegionId();
     const startFrame = timeToFrame(startTime, framerate);
     const endFrame = timeToFrame(endTime, framerate);
@@ -343,6 +388,21 @@ export default function useHighlightRegions(videoMetadata) {
     // Snap times to exact frame boundaries to avoid floating point precision issues
     const snappedStartTime = frameToTime(startFrame, framerate);
     const snappedEndTime = frameToTime(endFrame, framerate);
+
+    // T5600: slice the held video-level payload so tracking squares for this
+    // span appear instantly, even though delete/create never persist detections.
+    const regionDetections = sliceDetections(videoDetections, snappedStartTime, snappedEndTime);
+
+    // Bug 38 (glitch 2): seed the auto spotlight on the MAIN CENTERED player
+    // from those detections (falls back to the centered default only when no
+    // usable detection exists) instead of always the geometric frame center.
+    const defaultHighlight = defaultHighlightForRegion({
+      detections: regionDetections,
+      videoWidth: videoDetections?.videoWidth || videoMetadata?.width,
+      videoHeight: videoDetections?.videoHeight || videoMetadata?.height,
+      fps: videoDetections?.fps,
+      startTime: snappedStartTime,
+    });
 
     const newRegion = {
       id: regionId,
@@ -359,9 +419,7 @@ export default function useHighlightRegions(videoMetadata) {
           ...defaultHighlight
         }
       ],
-      // T5600: slice the held video-level payload so tracking squares for this
-      // span appear instantly, even though delete/create never persist detections.
-      detections: sliceDetections(videoDetections, snappedStartTime, snappedEndTime),
+      detections: regionDetections,
       videoWidth: videoDetections?.videoWidth ?? null,
       videoHeight: videoDetections?.videoHeight ?? null,
       fps: videoDetections?.fps ?? null,
@@ -375,7 +433,7 @@ export default function useHighlightRegions(videoMetadata) {
     // surgical create_region POST from these values directly, without re-reading the
     // async `regions` state (which is stale in the same tick — the T5644 bug).
     return newRegion;
-  }, [duration, wouldOverlap, calculateDefaultHighlight, videoMetadata, framerate, videoDetections]);
+  }, [duration, wouldOverlap, defaultHighlightForRegion, videoMetadata, framerate, videoDetections]);
 
   /**
    * Delete a region by ID
@@ -685,12 +743,10 @@ export default function useHighlightRegions(videoMetadata) {
 
     const regionKeyframes = region.keyframes || [];
 
-    // If no keyframes in this region, use default
+    // If no keyframes in this region, use the auto/pre-selected default
+    // (main centered player when detections exist -- bug 38 glitch 2).
     if (regionKeyframes.length === 0) {
-      return calculateDefaultHighlight(
-        videoMetadata?.width,
-        videoMetadata?.height
-      );
+      return defaultHighlightForRegion(region);
     }
 
     const currentFrame = timeToFrame(time, framerate);
@@ -705,7 +761,7 @@ export default function useHighlightRegions(videoMetadata) {
     // Fallback to first keyframe in region
     const { frame, origin, ...data } = regionKeyframes[0];
     return data;
-  }, [getRegionAtTime, framerate, calculateDefaultHighlight, videoMetadata]);
+  }, [getRegionAtTime, framerate, defaultHighlightForRegion]);
 
   /**
    * Copy keyframe data at time
@@ -763,12 +819,11 @@ export default function useHighlightRegions(videoMetadata) {
             && kf.time >= region.startTime - TIME_EPSILON
             && kf.time <= region.endTime + TIME_EPSILON);
 
-        // If no valid keyframes, add default at start
+        // If no valid keyframes, seed a default at region start. Bug 38 glitch
+        // 2: this seeds the MAIN CENTERED player when detections exist (same
+        // pick the preview shows), instead of the geometric frame center.
         if (regionKeyframes.length === 0) {
-          const defaultHighlight = calculateDefaultHighlight(
-            videoMetadata?.width,
-            videoMetadata?.height
-          );
+          const defaultHighlight = defaultHighlightForRegion(region);
           regionKeyframes.push({
             time: region.startTime,
             ...defaultHighlight
@@ -787,7 +842,7 @@ export default function useHighlightRegions(videoMetadata) {
           fps: region.fps || null,  // Preserve fps for detection marker navigation
         };
       });
-  }, [regions, framerate, calculateDefaultHighlight, videoMetadata]);
+  }, [regions, framerate, defaultHighlightForRegion]);
 
   /**
    * Get keyframes in a region for display

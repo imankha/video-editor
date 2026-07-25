@@ -358,12 +358,15 @@ def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     ok = True
     if profile_id:
         try:
-            ok = sync_db_to_r2_explicit(user_id, profile_id) and ok
+            # Coerce at the call site: `SyncResult.CONFLICT/FAILED and ok` would
+            # otherwise short-circuit to the SyncResult enum itself (falsy operand
+            # wins in `and`), leaking a non-bool into `ok` until the final `bool()`.
+            ok = bool(sync_db_to_r2_explicit(user_id, profile_id)) and ok
         except Exception as e:
             logger.error(f"[Export] Background profile DB sync failed for user={user_id}: {e}")
             ok = False
     try:
-        ok = sync_user_db_to_r2_explicit(user_id) and ok
+        ok = bool(sync_user_db_to_r2_explicit(user_id)) and ok
     except Exception as e:
         logger.error(f"[Export] Background user DB sync failed for user={user_id}: {e}")
         ok = False
@@ -373,7 +376,10 @@ def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     else:
         mark_sync_pending(user_id)
         logger.warning(f"[SYNC] EXPORT user={user_id} -> R2 sync FAILED - marked pending for retry")
-    return ok
+    # T4310: sync_db_to_r2_explicit/sync_user_db_to_r2_explicit now return a
+    # 3-state SyncResult; this function's declared -> bool contract still holds,
+    # so coerce at the boundary rather than leaking the enum through `and`-chaining.
+    return bool(ok)
 
 
 def export_sync_failed_data(export_type: str, project_id: int, project_name: str) -> dict:

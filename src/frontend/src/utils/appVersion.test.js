@@ -16,6 +16,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 describe('checkAppVersion', () => {
   beforeEach(() => {
     vi.resetModules();
+    // Acknowledged-build id persists in sessionStorage across page loads; clear
+    // it between tests so each starts from a clean baseline (bug39).
+    sessionStorage.clear();
   });
 
   it('latches the first non-null version without raising the gate', async () => {
@@ -98,5 +101,67 @@ describe('checkAppVersion', () => {
     checkAppVersion('ghi789');
     checkAppVersion('ghi789');
     expect(useUpdateGateStore.getState().reason).toBe('version-mismatch');
+  });
+
+  /**
+   * bug39 — the acknowledged build id (persisted by the "Update now" gesture)
+   * must survive a reload and suppress re-gating for the build the user already
+   * accepted, WITHOUT suppressing a genuinely newer build.
+   */
+  describe('acknowledged-build persistence (bug39)', () => {
+    it('acknowledgeAppVersion persists the candidate that raised the gate', async () => {
+      const { checkAppVersion, acknowledgeAppVersion } = await import('./appVersion');
+
+      checkAppVersion('v1');   // boot
+      checkAppVersion('v2');   // candidate v2, count 1
+      checkAppVersion('v2');   // count 2 -> gate raised for v2
+      acknowledgeAppVersion(); // user clicked "Update now" onto v2
+
+      expect(sessionStorage.getItem('rb_ack_app_version')).toBe('v2');
+    });
+
+    it('symptom 1/3: after acknowledging v2 + reload, a mixed-fleet re-latch of v1 then v2 does NOT re-gate', async () => {
+      // Session 1: see the drift to v2 and acknowledge it.
+      const first = await import('./appVersion');
+      first.checkAppVersion('v1');
+      first.checkAppVersion('v2');
+      first.checkAppVersion('v2');
+      first.acknowledgeAppVersion(); // persists v2 across the reload
+
+      // Reload: fresh module instance, but sessionStorage (acknowledged=v2)
+      // survives. The mixed fleet answers with an OLDER machine first, so boot
+      // re-latches v1 — the exact bug39 re-latch.
+      vi.resetModules();
+      const { checkAppVersion } = await import('./appVersion');
+      const { useUpdateGateStore } = await import('../stores/updateGateStore');
+      useUpdateGateStore.setState({ isUpdateRequired: false, reason: null });
+
+      checkAppVersion('v1'); // boot latches the old machine's sha
+      checkAppVersion('v2'); // already acknowledged -> must NOT start a candidate
+      checkAppVersion('v2'); // still must NOT gate
+
+      expect(useUpdateGateStore.getState().isUpdateRequired).toBe(false);
+    });
+
+    it('still gates for a genuinely NEWER build after acknowledging v2', async () => {
+      const first = await import('./appVersion');
+      first.checkAppVersion('v1');
+      first.checkAppVersion('v2');
+      first.checkAppVersion('v2');
+      first.acknowledgeAppVersion(); // acknowledged = v2
+
+      vi.resetModules();
+      const { checkAppVersion } = await import('./appVersion');
+      const { useUpdateGateStore } = await import('../stores/updateGateStore');
+      useUpdateGateStore.setState({ isUpdateRequired: false, reason: null });
+
+      checkAppVersion('v2'); // boot on the acknowledged build
+      checkAppVersion('v3'); // a real new deploy, candidate v3 count 1
+      checkAppVersion('v3'); // count 2 -> gate
+
+      const state = useUpdateGateStore.getState();
+      expect(state.isUpdateRequired).toBe(true);
+      expect(state.reason).toBe('version-mismatch');
+    });
   });
 });

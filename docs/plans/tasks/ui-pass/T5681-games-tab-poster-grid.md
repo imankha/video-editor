@@ -1,6 +1,6 @@
 # T5681: Games tab — poster tiles for games (season-scale layout)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-24
@@ -44,3 +44,14 @@ as too sparse (header overhead beats content).
 - [ ] Expiry chips + all card actions preserved; no behavior/persistence changes beyond the
       read-only poster route
 - [ ] Real-browser evidence at both widths; unit + e2e green; style guide updated
+
+## Shipped-vs-spec note (2026-07-25 audit)
+
+Implemented and on staging (`ProjectManager.jsx` games grid + `GameTile.jsx` +
+`games.py:2473` poster route; unit `__tests__/GameTile.test.jsx` + `e2e/T5681-games-poster-grid.spec.js`).
+
+**One deliberate deviation from the spec:** the spec asked for "month/season captions flowing
+INSIDE the grid (not separate carousel rows)". The shipped layout renders a month header ABOVE
+each month's grid (`groupGamesByMonth` -> per-month `<h3>` + its own grid). This reads better at
+30-game season scale but is not what was specced -- confirm on staging, or file a follow-up if the
+in-grid caption flow is still wanted.

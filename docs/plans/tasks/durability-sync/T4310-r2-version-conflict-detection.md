@@ -1,6 +1,6 @@
 # T4310: R2 Version-Conflict Detection (CAS Uploads)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-07-03

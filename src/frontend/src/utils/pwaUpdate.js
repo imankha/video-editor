@@ -38,11 +38,14 @@ export function setupPwaUpdatePrompt() {
 
   useUpdateGateStore.getState().setUpdateSW(updateSW);
 
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
+  // Returning to the app is the moment to re-check. Shared by visibilitychange
+  // (tab switch / wake from sleep) and pageshow (Safari bfcache restore).
+  function onReturnToApp() {
     if (registration?.waiting) {
       // An update is already waiting (e.g. the gate hasn't been actioned
-      // yet) — re-require instead of fetching sw.js again.
+      // yet) — re-require instead of fetching sw.js again. 'sw' upgrades a
+      // prior 'version-mismatch' gate so runUpdate takes the skipWaiting path
+      // (bug39 symptom 2), not a plain reload that strands the waiting SW.
       useUpdateGateStore.getState().requireUpdate('sw');
       return;
     }
@@ -53,6 +56,22 @@ export function setupPwaUpdatePrompt() {
     // (offline/flaky network) — the next return to the app retries.
     registration?.update().catch(() => {});
     checkBackendVersion();
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    onReturnToApp();
+  });
+
+  // Safari (the bug39 reporter's browser) restores a backgrounded page from
+  // bfcache on back/forward WITHOUT a fresh load and, for a bfcache restore,
+  // may fire ONLY pageshow(persisted=true) — not visibilitychange. Run the same
+  // return-to-app check so a bfcache restore behaves like any other resume: it
+  // re-verifies against the (persisted) boot/acknowledged version and so does
+  // NOT re-gate an already-current build (bug39 symptom 3). A non-persisted
+  // pageshow is a normal fresh load, already handled by the on-load check.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) onReturnToApp();
   });
 
   // On-load check: the passive header check (sessionInit.js) only latches a

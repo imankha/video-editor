@@ -57,6 +57,9 @@ window.addEventListener('online', () => {
 /**
  * Check the X-Sync-Status header on a fetch Response and update the sync store.
  *
+ * "failed" (transient) and "conflict" (T4310 CAS refusal) both leave the user
+ * out of sync with R2 and need the same Retry affordance, so both flip the banner.
+ *
  * @param {Response} response - The fetch Response object
  */
 export function checkSyncStatus(response) {
@@ -65,7 +68,7 @@ export function checkSyncStatus(response) {
   const syncStatus = response.headers.get('X-Sync-Status');
   const store = useSyncStore.getState();
 
-  if (syncStatus === 'failed') {
+  if (syncStatus === 'failed' || syncStatus === 'conflict') {
     if (!store.syncFailed) {
       store.setSyncFailed(true);
     }

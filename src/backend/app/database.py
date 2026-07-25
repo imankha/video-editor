@@ -19,6 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,52 @@ def clear_sync_pending(user_id: str) -> None:
 def has_sync_pending(user_id: str) -> bool:
     """Check if this user has unsynced writes from a previous request."""
     return _sync_pending_path(user_id).exists()
+
+
+# ---------------------------------------------------------------------------
+# T4310: CAS conflict marker (distinguishes a real version conflict from a
+# transient sync failure for ops visibility — both still leave .sync_pending
+# set, so the existing sync_failed/X-Sync-Status/retry UX is unchanged).
+# ---------------------------------------------------------------------------
+
+def _sync_conflict_path(user_id: str) -> Path:
+    """Path to marker file indicating the last sync attempt hit a CAS conflict."""
+    return USER_DATA_BASE / user_id / ".sync_conflict"
+
+
+def mark_sync_conflict(user_id: str) -> None:
+    """Write marker file indicating the last upload was refused by CAS."""
+    path = _sync_conflict_path(user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(time.time()))
+
+
+def clear_sync_conflict(user_id: str) -> None:
+    """Remove the conflict marker after a subsequent sync succeeds."""
+    path = _sync_conflict_path(user_id)
+    path.unlink(missing_ok=True)
+
+
+def has_sync_conflict(user_id: str) -> bool:
+    """Check if this user's last sync attempt was refused by CAS."""
+    return _sync_conflict_path(user_id).exists()
+
+
+class SyncResult(str, Enum):
+    """3-state result of an R2 upload attempt via the *_explicit sync functions.
+
+    Truthy ONLY for OK (see __bool__) so pre-T4310 callers doing
+    `if not sync_db_to_r2_explicit(...)` keep treating CONFLICT and FAILED
+    identically as "not success" — unchanged behavior. Callers that need to
+    distinguish a conflict (freeze + escalate, never blind-retry an overwrite)
+    compare with `== SyncResult.CONFLICT`.
+    """
+    OK = "ok"
+    CONFLICT = "conflict"
+    FAILED = "failed"
+
+    def __bool__(self) -> bool:
+        return self is SyncResult.OK
 
 
 def column_exists(cursor, table: str, column: str) -> bool:
@@ -1260,8 +1307,14 @@ def sync_db_to_cloud() -> str:
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
+    # T4310 reviewer round 2 (BLOCKING-2): this is the /api/retry-sync request
+    # wrapper, called synchronously from a request handler but only on an
+    # explicit manual-retry gesture (not the hot request-path), so a HEAD here
+    # adds no meaningful latency. skip_version_check=True previously let a
+    # confirmed-refused-elsewhere conflict force-push over R2 on retry AND
+    # regress the R2 version backwards, disarming CAS for every other machine.
     success, new_version = sync_database_to_r2_with_version(
-        user_id, db_path, current_version, skip_version_check=True
+        user_id, db_path, current_version, skip_version_check=False
     )
 
     if success and new_version is not None:
@@ -1269,9 +1322,11 @@ def sync_db_to_cloud() -> str:
         logger.debug(f"Database synced to R2 for user: {user_id}, profile: {profile_id}, version: {new_version}")
         return "ok"
     elif not success and new_version is not None:
-        # T950: Conflict detected — storage.py re-downloaded newer version
-        set_local_db_version(user_id, profile_id, new_version)
-        logger.warning(f"Version conflict for user: {user_id}, profile: {profile_id}, updated to v{new_version}")
+        # T4310 reviewer round 2 (MAJOR-2): storage.py no longer re-downloads on
+        # conflict (WAL-unsafe swap off the write lock — see storage.py), so the
+        # baseline must NOT advance here either; advancing it without a confirmed
+        # refresh is exactly the silent-clobber bug this task exists to prevent.
+        logger.warning(f"Version conflict for user: {user_id}, profile: {profile_id}, R2 at v{new_version}")
         return "conflict"
     elif not success:
         logger.warning(f"Failed to sync database to R2 for user: {user_id}, profile: {profile_id}")
@@ -1304,12 +1359,23 @@ def get_user_data_path_explicit(user_id: str, profile_id: str) -> Path:
     return USER_DATA_BASE / user_id / "profiles" / profile_id
 
 
-def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | None = None) -> bool:
+def sync_db_to_r2_explicit(
+    user_id: str, profile_id: str, lock_timeout: float | None = None,
+    skip_version_check: bool = False,
+) -> SyncResult:
     """
     Sync the profile database to R2 without relying on ContextVars.
 
     Designed for background workers (e.g. export_worker) that run outside
     the request-response lifecycle where ContextVars are no longer valid.
+    T4310: CAS is ON by default here (skip_version_check=False) — every one of
+    these callers is already off the request thread (asyncio.to_thread, a
+    genuine background worker/scheduler, or an admin batch job), so the HEAD
+    adds zero request-thread latency. The lone exception is a caller that
+    invokes this function DIRECTLY and synchronously from a request handler
+    (never wrapped in asyncio.to_thread) — that caller must pass
+    skip_version_check=True explicitly to preserve the T1020/T2720 no-HEAD
+    guarantee (see profiles.py create_profile, payments.py webhook).
 
     Both halves are keyed off the ARGS: the local file comes from
     get_user_data_path_explicit(user_id, profile_id) and the R2 upload key is
@@ -1319,7 +1385,10 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | 
     syncing the target while the request profile is the source) uploaded the
     right DB to the WRONG profile's key.
 
-    Returns True on success (or if R2 is disabled), False on failure.
+    Returns SyncResult.OK on success (or if R2 is disabled/no-op),
+    SyncResult.CONFLICT if CAS refused the upload (storage.py already
+    re-downloaded the newer copy), SyncResult.FAILED otherwise. Truthy only for
+    OK, so `if not sync_db_to_r2_explicit(...)` callers are unaffected.
     """
     # T5340: no silent fallback — the whole point of this function is ContextVar
     # independence. A missing profile_id is a caller bug; fail loudly rather than
@@ -1327,47 +1396,70 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | 
     if not profile_id:
         raise ValueError("sync_db_to_r2_explicit requires a profile_id (no ContextVar fallback)")
 
-    # T4120: durability test seam (gated; inert on prod/staging). Returning False
-    # — never raising — exercises the REAL failure handling (mark_sync_pending,
-    # sync_status="failed", the retryable sync_failed surfaces) exactly as a true
-    # R2 outage would, without touching R2. Placed before the R2_ENABLED check so
-    # it is deterministic regardless of R2 config.
+    # T4120: durability test seam (gated; inert on prod/staging). Returning
+    # FAILED — never raising — exercises the REAL failure handling
+    # (mark_sync_pending, sync_status="failed", the retryable sync_failed
+    # surfaces) exactly as a true R2 outage would, without touching R2. Placed
+    # before the R2_ENABLED check so it is deterministic regardless of config.
     from .storage import _force_r2_sync_failure
     if _force_r2_sync_failure():
         logger.warning(f"[TEST] FORCE_R2_SYNC_FAILURE active — short-circuiting profile sync for user={user_id}")
-        return False
+        return SyncResult.FAILED
 
     if not R2_ENABLED:
-        return True
+        return SyncResult.OK
 
     db_path = get_user_data_path_explicit(user_id, profile_id) / "profile.sqlite"
     if not db_path.exists():
-        return True
+        return SyncResult.OK
 
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
     success, new_version = sync_database_to_r2_with_version(
-        user_id, db_path, current_version, skip_version_check=True,
+        user_id, db_path, current_version, skip_version_check=skip_version_check,
         lock_timeout=lock_timeout, profile_id=profile_id,
     )
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
+        clear_sync_conflict(user_id)
         logger.debug(f"[ExportWorker] Database synced to R2: user={user_id}, profile={profile_id}, v={new_version}")
-        return True
+        return SyncResult.OK
+    elif not success and new_version is not None:
+        # T4310 reviewer round 2 (MAJOR-2): storage.py refuses the conflicting
+        # upload but no longer re-downloads (WAL-unsafe swap outside the write
+        # lock — see storage.py). The baseline must stay frozen at
+        # current_version: advancing it to new_version without a confirmed
+        # refresh would let the NEXT attempt compare the still-stale local
+        # copy against "confirmed" data and silently force-push it. A frozen
+        # baseline means this conflict is detected and refused again on every
+        # retry (safe) until T4315's restore path heals the local copy.
+        mark_sync_conflict(user_id)
+        logger.warning(
+            f"[ExportWorker] R2 version conflict for user={user_id}, profile={profile_id} "
+            f"— refused (R2 at v{new_version}), baseline frozen at v{current_version}"
+        )
+        return SyncResult.CONFLICT
     else:
         logger.warning(f"[ExportWorker] Failed to sync database to R2: user={user_id}, profile={profile_id}")
-        return False
+        return SyncResult.FAILED
 
 
-def sync_user_db_to_r2_explicit(user_id: str, lock_timeout: float | None = None) -> bool:
+def sync_user_db_to_r2_explicit(
+    user_id: str, lock_timeout: float | None = None,
+    skip_version_check: bool = False,
+) -> SyncResult:
     """
     Sync user.sqlite to R2 without relying on ContextVars.
 
-    Designed for background workers that may modify user.sqlite (e.g. credit refunds).
+    Designed for background workers that may modify user.sqlite (e.g. credit
+    refunds). T4310: CAS is ON by default (skip_version_check=False) — see
+    sync_db_to_r2_explicit's docstring for the request-thread exception
+    (payments.py webhook passes skip_version_check=True explicitly).
 
-    Returns True on success (or if R2 is disabled), False on failure.
+    Returns SyncResult.OK on success (or if R2 is disabled/no-op),
+    SyncResult.CONFLICT on a refused CAS upload, SyncResult.FAILED otherwise.
     """
     # T4120: durability test seam (gated; inert on prod/staging). See the profile
     # sync above — short-circuit before the R2_ENABLED check so both DBs fail
@@ -1375,30 +1467,40 @@ def sync_user_db_to_r2_explicit(user_id: str, lock_timeout: float | None = None)
     from .storage import _force_r2_sync_failure
     if _force_r2_sync_failure():
         logger.warning(f"[TEST] FORCE_R2_SYNC_FAILURE active — short-circuiting user.sqlite sync for user={user_id}")
-        return False
+        return SyncResult.FAILED
 
     if not R2_ENABLED:
-        return True
+        return SyncResult.OK
 
     db_path = USER_DATA_BASE / user_id / "user.sqlite"
     if not db_path.exists():
-        return True
+        return SyncResult.OK
 
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
     success, new_version = sync_user_db_to_r2_with_version(
-        user_id, db_path, local_version, skip_version_check=True,
+        user_id, db_path, local_version, skip_version_check=skip_version_check,
         lock_timeout=lock_timeout,
     )
 
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
+        clear_sync_conflict(user_id)
         logger.debug(f"[ExportWorker] user.sqlite synced to R2: user={user_id}, v={new_version}")
-        return True
+        return SyncResult.OK
+    elif not success and new_version is not None:
+        # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see
+        # sync_db_to_r2_explicit for the rationale.
+        mark_sync_conflict(user_id)
+        logger.warning(
+            f"[ExportWorker] user.sqlite R2 version conflict for user={user_id} "
+            f"— refused (R2 at v{new_version}), baseline frozen at v{local_version}"
+        )
+        return SyncResult.CONFLICT
     else:
         logger.warning(f"[ExportWorker] Failed to sync user.sqlite to R2: user={user_id}")
-        return False
+        return SyncResult.FAILED
 
 
 # ---------------------------------------------------------------------------

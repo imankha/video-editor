@@ -74,6 +74,41 @@ describe('CollectionPlayer timeline segments (T5100)', () => {
   });
 });
 
+describe('CollectionPlayer modality (T5860)', () => {
+  const reels = [{ id: 1, name: 'A', streamUrl: 'a', aspect_ratio: '9:16', duration: null }];
+
+  it('renders a backdrop beneath the panel at all breakpoints', () => {
+    // The backdrop is `fixed inset-0` (no md: reset), so it covers the viewport
+    // on mobile AND desktop — the desktop md:inset-12 gutter can never expose tiles.
+    render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+    const backdrop = screen.getByTestId('collection-player-backdrop');
+    expect(backdrop.className).toContain('fixed');
+    expect(backdrop.className).toContain('inset-0');
+    expect(backdrop.className).not.toContain('md:inset');
+  });
+
+  it('does NOT close the player when the backdrop is clicked (project rule)', () => {
+    const onClose = vi.fn();
+    render(<CollectionPlayer reels={reels} title="T" onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('collection-player-backdrop'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('marks the panel as a modal dialog (role=dialog, aria-modal)', () => {
+    render(<CollectionPlayer reels={reels} title="My Reel" onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-label')).toBe('My Reel');
+  });
+
+  it('locks background scroll while open and restores it on unmount', () => {
+    const { unmount } = render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+    expect(document.body.style.overflow).toBe('hidden');
+    unmount();
+    expect(document.body.style.overflow).toBe('');
+  });
+});
+
 const RE_EDIT = 'Re-edit this reel';
 const reelWith = (project_id) => [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id }];
 

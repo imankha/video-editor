@@ -19,7 +19,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import database as db_module
-from app.database import mark_sync_pending, clear_sync_pending, has_sync_pending
+from app.database import has_sync_pending, mark_sync_conflict, mark_sync_pending
 from app.middleware.db_sync import is_sync_failed, set_sync_failed
 
 # Test user ID used for all client-based tests (sent via X-User-ID header)
@@ -99,10 +99,17 @@ class TestRetrySyncEndpoint:
         data = response.json()
         assert data["success"] is True
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value=True)
+    @patch("app.routers.health.sync_db_to_cloud", return_value="ok")
     @patch("app.routers.health.R2_ENABLED", True)
     def test_retry_sync_success(self, mock_sync, client):
-        """Successful sync should clear the failure marker."""
+        """Successful sync should clear the failure marker.
+
+        sync_db_to_cloud returns the STRING "ok" (not a bare bool) -- the mock
+        must match the real contract, otherwise this test would have kept
+        passing under the round-2 BLOCKING-2 truthiness bug (`if success:`
+        treated ANY non-empty string, including "conflict"/"failed", as
+        success too).
+        """
         set_sync_failed(TEST_USER_ID, True)
 
         response = client.post("/api/retry-sync")
@@ -112,14 +119,32 @@ class TestRetrySyncEndpoint:
         assert is_sync_failed(TEST_USER_ID) is False
         mock_sync.assert_called_once()
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value=False)
+    @patch("app.routers.health.sync_db_to_cloud", return_value="failed")
     @patch("app.routers.health.R2_ENABLED", True)
     def test_retry_sync_failure(self, mock_sync, client):
-        """Failed sync should return success=False."""
+        """A transient failure should return success=False."""
         response = client.post("/api/retry-sync")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
+        mock_sync.assert_called_once()
+
+    @patch("app.routers.health.sync_db_to_cloud", return_value="conflict")
+    @patch("app.routers.health.R2_ENABLED", True)
+    def test_retry_sync_conflict_reports_failure_not_success(self, mock_sync, client):
+        """T4310 reviewer round 2 (BLOCKING-2): a CAS conflict ("conflict") is
+        a non-empty string and was truthy under the old `if success:` check,
+        so a REFUSED sync reported {"success": true} and cleared
+        .sync_pending -- masking a stale local DB as durably saved. Must
+        report success=False and leave the failure marker in place."""
+        set_sync_failed(TEST_USER_ID, True)
+
+        response = client.post("/api/retry-sync")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert is_sync_failed(TEST_USER_ID) is True, \
+            "a refused (conflict) sync must not clear .sync_pending"
         mock_sync.assert_called_once()
 
 
@@ -151,3 +176,16 @@ class TestSyncStatusHeader:
         response = client.get("/api/status")
         assert response.status_code == 200
         assert response.headers.get("X-Sync-Status") == "failed"
+
+    @patch("app.middleware.db_sync.retry_pending_sync", return_value=False)
+    @patch("app.middleware.db_sync.R2_ENABLED", True)
+    def test_header_conflict_when_conflict_marker_set(self, _mock_retry, client):
+        """T4310 MAJOR-1: has_sync_conflict was write-only (zero call sites), so a
+        real CAS conflict was indistinguishable from a transient failure on the
+        wire. Now the conflict marker must surface as its own distinct value."""
+        set_sync_failed(TEST_USER_ID, True)
+        mark_sync_conflict(TEST_USER_ID)
+
+        response = client.get("/api/status")
+        assert response.status_code == 200
+        assert response.headers.get("X-Sync-Status") == "conflict"

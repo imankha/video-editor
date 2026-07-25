@@ -69,6 +69,9 @@ APP_ENV = os.getenv("APP_ENV", "dev")
 R2_ENABLED = os.getenv("R2_ENABLED", "false").lower() == "true"
 R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
 
+# T4310: identifies which machine refused a CAS conflict, for the CRITICAL log.
+FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
+
 # ---------------------------------------------------------------------------
 # T4120: durability test seams (gated; PROD AND STAGING inert)
 # ---------------------------------------------------------------------------
@@ -1073,20 +1076,29 @@ def sync_database_to_r2_with_version(
         else:
             r2_version = r2_result
 
-        # If R2 has a newer version than what we loaded, we have a conflict
-        # T950: Fail instead of overwriting — re-download the newer version
+        # If R2 has a newer version than what we loaded, we have a conflict.
+        # T950: refuse instead of overwriting. T4310 reviewer round 2 (MAJOR-2):
+        # this branch used to re-download the newer copy over local_db_path, but
+        # every prod call site previously passed skip_version_check=True so it was
+        # DEAD CODE — this task makes it live on the normal write path, where
+        # profile.sqlite is journal_mode=WAL and _background_sync runs OUTSIDE the
+        # per-user write lock (readers are lock-free too). Swapping the main DB
+        # file here while a stale -wal from the OLD file sits beside it lets the
+        # next connection recover unrelated frames onto the fresh file —
+        # cross-DB page mixing. Refusing alone (no download) is safe and
+        # sufficient: the baseline stays frozen at current_version (never
+        # advanced on a refusal — see database.py/db_sync.py), so this same
+        # conflict is detected and refused again on every subsequent attempt
+        # until a real restore path (T4315) heals the local copy under the
+        # write lock. r2_version is still returned so callers can mark the
+        # conflict distinctly, but it must NEVER be used to advance the baseline.
         if r2_version > 0 and current_version is not None and r2_version > current_version:
-            logger.error(
-                f"[SYNC] Version conflict for {user_id}: loaded v{current_version}, "
-                f"R2 has v{r2_version}. NOT uploading — would overwrite newer data."
+            logger.critical(
+                f"[SYNC_CONFLICT] user={user_id} profile={profile_id} "
+                f"loaded=v{current_version} r2=v{r2_version} machine={FLY_MACHINE_ID} "
+                f"— NOT uploading, NOT re-downloading (WAL-unsafe swap off the write lock)"
             )
-            # Re-download the newer version so next request uses fresh data
-            try:
-                if download_from_r2(user_id, "profile.sqlite", local_db_path, profile_id=profile_id):
-                    logger.info(f"[SYNC] Re-downloaded v{r2_version} from R2 after conflict")
-            except Exception as e:
-                logger.warning(f"[SYNC] Failed to re-download after conflict: {e}")
-            return False, r2_version  # Return R2 version so caller can update local tracking
+            return False, r2_version
 
         # Calculate new version
         new_version = (max(r2_version, current_version or 0)) + 1
@@ -1315,23 +1327,16 @@ def sync_user_db_to_r2_with_version(
         else:
             r2_version = r2_result
 
-        # T950: Fail on conflict instead of overwriting
+        # T950: Fail on conflict instead of overwriting. T4310 reviewer round 2
+        # (MAJOR-2): no re-download — see the profile branch above for why the
+        # swap is WAL-unsafe now that this path is live outside the write lock.
+        # Refusing alone is safe: the baseline stays frozen at current_version.
         if r2_version > 0 and current_version is not None and r2_version > current_version:
-            logger.error(
-                f"[SYNC] user.sqlite version conflict for {user_id}: loaded v{current_version}, "
-                f"R2 has v{r2_version}. NOT uploading."
+            logger.critical(
+                f"[SYNC_CONFLICT] user={user_id} db=user.sqlite loaded=v{current_version} "
+                f"r2=v{r2_version} machine={FLY_MACHINE_ID} "
+                f"— NOT uploading, NOT re-downloading (WAL-unsafe swap off the write lock)"
             )
-            try:
-                user_key = _user_db_r2_key(user_id)
-                # Re-download by fetching directly
-                from .utils.retry import TIER_1, retry_r2_call
-                retry_r2_call(
-                    client.download_file, R2_BUCKET, user_key, str(local_db_path),
-                    operation=f"user_db_conflict_redownload {user_id}", **TIER_1,
-                )
-                logger.info(f"[SYNC] Re-downloaded user.sqlite v{r2_version} after conflict")
-            except Exception as e:
-                logger.warning(f"[SYNC] Failed to re-download user.sqlite after conflict: {e}")
             return False, r2_version
 
         new_version = (max(r2_version, current_version or 0)) + 1
