@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { buildClipMetadata, calculateEffectiveDuration } from './ExportButtonContainer';
+import { buildClipMetadata, calculateEffectiveDuration } from '../utils/effectiveDuration';
 import { useProjectDataStore } from '../stores/projectDataStore';
 
 describe('ExportButtonContainer', () => {
