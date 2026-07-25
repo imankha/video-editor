@@ -110,3 +110,4 @@ CLAUDE.local.md
 
 # QA evidence artifacts (screenshots per acceptance criterion; see e2e/helpers/qa.js)
 qa/
+qa-evidence/
