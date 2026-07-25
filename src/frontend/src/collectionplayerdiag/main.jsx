@@ -32,7 +32,7 @@ function CollectionPlayerDiagHarness() {
   const [lastClick, setLastClick] = useState('none');
 
   return (
-    <div style={{ minHeight: '100vh', background: '#111827' }}>
+    <div style={{ minHeight: '100dvh', background: '#111827' }}>
       {/* Live status the spec reads to prove no tile interaction fired. */}
       <div
         data-testid="status"
