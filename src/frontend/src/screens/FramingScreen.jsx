@@ -375,6 +375,8 @@ export function FramingScreen({
 
   const {
     clipsWithCurrentState: framingClipsWithCurrentState,
+    selectedClipEffectiveDuration,
+    projectEffectiveDuration,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
     handleTrimSegment: framingHandleTrimSegment,
@@ -1213,6 +1215,8 @@ export function FramingScreen({
       onLayerSelect={setSelectedLayer}
       hasClips={hasClips}
       clipsWithCurrentState={framingClipsWithCurrentState}
+      selectedClipEffectiveDuration={selectedClipEffectiveDuration}
+      projectEffectiveDuration={projectEffectiveDuration}
       globalAspectRatio={globalAspectRatio}
       onAspectRatioChange={handleAspectRatioChange}
       globalTransition={globalTransition}
