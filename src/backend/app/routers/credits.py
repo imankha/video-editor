@@ -16,6 +16,7 @@ from ..services.user_db import (
     get_credit_transactions,
     grant_credits,
 )
+from ..storage import APP_ENV
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -39,10 +40,22 @@ async def get_balance():
 @router.post("/grant")
 async def grant(request: GrantRequest):
     """
-    Grant credits to the current user.
+    Grant credits to the CURRENT user with a client-supplied amount — test-only.
 
-    Used by quest system (T540) and admin panel (T550).
+    NOT REACHABLE IN PRODUCTION (hard 404, mirroring auth.py's dev-login gate).
+    The original docstring claimed "used by quest system (T540) and admin panel
+    (T550)", but both grant server-side today and never call this endpoint:
+      - quests    -> quests.py grant_credits(user_id, qdef["reward"], ...)  (server picks the amount)
+      - admin     -> admin.py  admin_grant_credits / admin_bulk_grant_credits (admin-gated)
+      - Stripe    -> payments.py grant_credits(..., "stripe_purchase", pi_id)
+      - signup    -> session_init.py new_account_bonus
+    No production frontend code calls it; only e2e specs do (regression-tests,
+    new-user-flow). Left open, it let ANY authenticated production user mint
+    unlimited credits for free, bypassing Stripe entirely.
     """
+    if APP_ENV == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
     user_id = get_current_user_id()
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
