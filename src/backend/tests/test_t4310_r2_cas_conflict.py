@@ -178,6 +178,79 @@ class TestUserDbCasConflict:
 
 
 # ---------------------------------------------------------------------------
+# Reviewer BLOCKING-1: a conflict whose re-download FAILS must not advance the
+# baseline. Advancing it anyway re-opens the arshia clobber -- the next retry
+# would compare the still-stale local copy against the "confirmed" r2_version,
+# see no conflict, and silently force-push the stale data over the newer R2 copy.
+# ---------------------------------------------------------------------------
+
+class TestConflictRedownloadFailure:
+
+    def test_profile_redownload_failure_does_not_advance_baseline_or_reupload(self, tmp_path):
+        from app.database import (
+            get_local_db_version,
+            set_local_db_version,
+            sync_db_to_r2_explicit,
+        )
+        from app.storage import profile_r2_key
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            _make_profile_db(tmp_path, marker="stale_local")
+            key = profile_r2_key(USER, PROFILE, "profile.sqlite")
+            fake._objects[key] = {"data": b"NEWER_R2_COPY", "metadata": {"db-version": "9"}}
+            set_local_db_version(USER, PROFILE, 3)
+            fake.fail_download = True
+
+            result = sync_db_to_r2_explicit(USER, PROFILE)
+
+            assert result is SyncResult.FAILED
+            assert not result
+            # Baseline must NOT move -- the local copy was never confirmed refreshed.
+            assert get_local_db_version(USER, PROFILE) == 3
+            assert fake._objects[key]["data"] == b"NEWER_R2_COPY"
+
+            # Retry once the R2 blip clears: CAS must refuse AGAIN (still stale
+            # baseline), never silently upload the stale v3 local copy as "clean".
+            fake.fail_download = False
+            result2 = sync_db_to_r2_explicit(USER, PROFILE)
+
+            assert result2 is SyncResult.CONFLICT
+            assert fake._objects[key]["data"] == b"NEWER_R2_COPY", \
+                "the stale local copy must never land on R2"
+            assert get_local_db_version(USER, PROFILE) == 9
+
+    def test_user_db_redownload_failure_does_not_advance_baseline_or_reupload(self, tmp_path):
+        from app.database import (
+            get_local_user_db_version,
+            set_local_user_db_version,
+            sync_user_db_to_r2_explicit,
+        )
+        from app.storage import _user_db_r2_key
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            _make_user_db(tmp_path, marker="stale_local")
+            key = _user_db_r2_key(USER)
+            fake._objects[key] = {"data": b"NEWER_R2_USER", "metadata": {"db-version": "5"}}
+            set_local_user_db_version(USER, 2)
+            fake.fail_download = True
+
+            result = sync_user_db_to_r2_explicit(USER)
+
+            assert result is SyncResult.FAILED
+            assert get_local_user_db_version(USER) == 2
+            assert fake._objects[key]["data"] == b"NEWER_R2_USER"
+
+            fake.fail_download = False
+            result2 = sync_user_db_to_r2_explicit(USER)
+
+            assert result2 is SyncResult.CONFLICT
+            assert fake._objects[key]["data"] == b"NEWER_R2_USER"
+            assert get_local_user_db_version(USER) == 5
+
+
+# ---------------------------------------------------------------------------
 # 3. _background_sync routes CONFLICT distinctly from a plain failure
 # ---------------------------------------------------------------------------
 
@@ -285,6 +358,34 @@ class TestRetryPendingSyncConflict:
         # The baseline is still updated to the re-downloaded R2 version, so the
         # NEXT retry compares against fresh data instead of repeating forever.
         mock_set_ver.assert_called_once_with(USER, PROFILE, 9)
+
+
+# ---------------------------------------------------------------------------
+# Reviewer MINOR: sync_export_db_to_r2 must return a real bool, never let the
+# 3-state SyncResult leak through the `and`-chain (SyncResult.CONFLICT/FAILED
+# are falsy, so `x and ok` short-circuits to `x` itself, not `False`).
+# ---------------------------------------------------------------------------
+
+class TestExportSyncBoolCoercion:
+
+    def test_profile_conflict_reports_plain_false_not_the_enum(self):
+        from app.services import export_helpers
+
+        with patch("app.database.sync_db_to_r2_explicit", return_value=SyncResult.CONFLICT), \
+             patch("app.database.sync_user_db_to_r2_explicit", return_value=SyncResult.OK), \
+             patch("app.database.mark_sync_pending"):
+            result = export_helpers.sync_export_db_to_r2(USER, PROFILE)
+
+        assert result is False, "must coerce to a real bool, not leak the SyncResult enum"
+
+    def test_both_ok_reports_plain_true(self):
+        from app.services import export_helpers
+
+        with patch("app.database.sync_db_to_r2_explicit", return_value=SyncResult.OK), \
+             patch("app.database.sync_user_db_to_r2_explicit", return_value=SyncResult.OK):
+            result = export_helpers.sync_export_db_to_r2(USER, PROFILE)
+
+        assert result is True
 
 
 # ---------------------------------------------------------------------------

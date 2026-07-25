@@ -358,12 +358,15 @@ def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     ok = True
     if profile_id:
         try:
-            ok = sync_db_to_r2_explicit(user_id, profile_id) and ok
+            # Coerce at the call site: `SyncResult.CONFLICT/FAILED and ok` would
+            # otherwise short-circuit to the SyncResult enum itself (falsy operand
+            # wins in `and`), leaking a non-bool into `ok` until the final `bool()`.
+            ok = bool(sync_db_to_r2_explicit(user_id, profile_id)) and ok
         except Exception as e:
             logger.error(f"[Export] Background profile DB sync failed for user={user_id}: {e}")
             ok = False
     try:
-        ok = sync_user_db_to_r2_explicit(user_id) and ok
+        ok = bool(sync_user_db_to_r2_explicit(user_id)) and ok
     except Exception as e:
         logger.error(f"[Export] Background user DB sync failed for user={user_id}: {e}")
         ok = False

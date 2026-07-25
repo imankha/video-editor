@@ -47,6 +47,7 @@ from ..database import (
     get_request_has_writes,
     get_request_written_profile_dbs,
     get_request_written_user_dbs,
+    has_sync_conflict,
     has_sync_pending,
     init_request_context,
     mark_sync_conflict,
@@ -771,12 +772,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     )
 
             # T950: Surface prior sync failure on response header.
-            # AND-gate: only show "failed" when the marker is stale and no
+            # AND-gate: only show a status when the marker is stale and no
             # sync attempt is running. For write requests, _begin_sync_attempt
             # was just called above, suppressing the header until the
             # background sync completes.
+            # T4310: a CAS conflict is a distinct condition from a transient
+            # failure (freeze + escalate, never blind-retry) — surface it as
+            # "conflict" so ops/logs can tell the two apart. The frontend still
+            # treats "conflict" the same as "failed" for the Retry banner.
             if is_sync_failed(user_id) and not is_sync_attempt_in_progress(user_id):
-                response.headers["X-Sync-Status"] = "failed"
+                response.headers["X-Sync-Status"] = "conflict" if has_sync_conflict(user_id) else "failed"
 
             # Default Cache-Control for GET JSON responses that don't set their own.
             if (

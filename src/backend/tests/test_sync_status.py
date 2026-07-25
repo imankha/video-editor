@@ -19,7 +19,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import database as db_module
-from app.database import mark_sync_pending, clear_sync_pending, has_sync_pending
+from app.database import has_sync_pending, mark_sync_conflict, mark_sync_pending
 from app.middleware.db_sync import is_sync_failed, set_sync_failed
 
 # Test user ID used for all client-based tests (sent via X-User-ID header)
@@ -151,3 +151,16 @@ class TestSyncStatusHeader:
         response = client.get("/api/status")
         assert response.status_code == 200
         assert response.headers.get("X-Sync-Status") == "failed"
+
+    @patch("app.middleware.db_sync.retry_pending_sync", return_value=False)
+    @patch("app.middleware.db_sync.R2_ENABLED", True)
+    def test_header_conflict_when_conflict_marker_set(self, _mock_retry, client):
+        """T4310 MAJOR-1: has_sync_conflict was write-only (zero call sites), so a
+        real CAS conflict was indistinguishable from a transient failure on the
+        wire. Now the conflict marker must surface as its own distinct value."""
+        set_sync_failed(TEST_USER_ID, True)
+        mark_sync_conflict(TEST_USER_ID)
+
+        response = client.get("/api/status")
+        assert response.status_code == 200
+        assert response.headers.get("X-Sync-Status") == "conflict"
