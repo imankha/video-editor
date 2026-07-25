@@ -54,22 +54,38 @@ A reconciliation pass that compares per-user Stripe truth against `user_segments
 ## Implementation
 
 ### Steps
-1. [ ] User gate: confirm refund policy (recommend net-of-refunds) + whether to include the `charge.refunded` webhook hardening
-2. [ ] Stripe truth builder + drift classifier (pure function over fetched data, unit-tested with fixtures)
-3. [ ] `GET /api/admin/revenue-reconciliation` + `POST .../heal` (explicit gesture)
-4. [ ] Admin panel UI (drifted users only, heal buttons)
-5. [ ] (If gated in) `charge.refunded` webhook branch + operator doc for adding the event in the Stripe dashboard
-6. [ ] Verify on prod: report shows imankh $3.99 aligned; test-mode-era drift classified for pre-go-live accounts
+1. [x] User gate: refund policy = NET of refunds AND lost disputes; `charge.refunded` webhook hardening included (resolved by supervisor at kickoff)
+2. [x] Stripe truth builder + drift classifier (pure function over fetched data, unit-tested with fixtures)
+3. [x] `GET /api/admin/revenue-reconciliation` + `POST .../heal` (explicit gesture)
+4. [x] Admin panel UI (drifted users only, heal buttons)
+5. [x] `charge.refunded` webhook branch + operator doc for adding the event in the Stripe dashboard
+6. [ ] Verify on prod (supervisor/user): report shows imankh $3.99 aligned; test-mode-era drift classified for pre-go-live accounts
 
 ### Progress Log
 
 **2026-07-23**: Task created from user direction after first live purchase verified end-to-end. Approach (local cache + Stripe-authoritative reconciliation, not live API reads) agreed in conversation.
 
+**2026-07-25 (implemented, M-tier)**: Refund-policy gate resolved by supervisor at kickoff — `total_spent_cents` is **NET of refunds AND lost disputes/chargebacks** (Stripe Revenue Recognition standard); `charge.refunded` webhook hardening included.
+
+- **Stripe truth builder + classifier** — `src/backend/app/services/revenue_reconciliation.py`. `build_stripe_net_by_user` + `classify_users` are PURE over fetched data (unit-tested with mocked Stripe; container has no live key). `net = Σ(amount_captured − amount_refunded − lost_dispute_amount)`, grouped by `metadata.user_id`. Lost dispute subtracted only when `dispute.status in {lost, charge_refunded}`; won/open never subtracted (open → `has_pending_dispute`). `DriftCause`: aligned → test_mode_era (pi_count==0 & local>0) → dispute → refund → unknown. `fetch_stripe_intents` auto-paginates with `expand=['data.latest_charge','data.latest_charge.dispute']`; status filtered client-side (`PaymentIntent.list` has no server-side status param — noted for the operator).
+- **Endpoints** (admin.py, `_require_admin()` + `_require_stripe_configured()`): `GET /api/admin/revenue-reconciliation` (rows drifted-first + summary), `POST /api/admin/revenue-reconciliation/heal` (`{user_ids?|all_drifted}`; recomputes Stripe net server-side, sets `total_spent_cents` via new `analytics.set_total_spent`). Explicit gesture, never automatic. `list_users` load path unchanged — zero Stripe calls (asserted).
+- **Webhook hardening**: `charge.refunded` branch in payments.py → `analytics.decrement_total_spent` (delta from newest refund; user_id via charge metadata then `PaymentIntent.retrieve`). `decrement_total_spent` floors at 0 with a WARNING.
+- **Admin panel**: `src/frontend/src/components/admin/RevenueReconciliation.jsx` (drifted-only table, per-user + all "Adopt Stripe value" heal, confirm-gated). Collapsed section in AdminScreen — Stripe pass runs only on explicit click. Store: `fetchReconciliation` / `healReconciliation` in adminStore.js.
+- **Tests**: `tests/test_revenue_reconciliation.py` — 25 tests, all green (classifier + endpoints + webhook). Full suite `test_revenue_reconciliation + test_admin + test_analytics` = 103 passed.
+
+**Reviewer round (2026-07-25)**: fresh-context Reviewer raised two MAJORs; both addressed:
+- **MAJOR (fixed)** — a dispute with status `charge_refunded` sets BOTH `amount_refunded` and the dispute amount for the same money, so `net = captured - refunded - lost_dispute` double-subtracted it (net went negative). Fixed in `build_stripe_net_by_user`: `lost_dispute = max(lost_dispute_raw - refunded, 0)` — a `charge_refunded` dispute nets to 0 (refund already counts it); a genuine lost dispute (refunded=0) still subtracts in full. Regression test `test_charge_refunded_dispute_not_double_subtracted`.
+- **MAJOR (documented follow-up, not fixed by design)** — the `charge.refunded` decrement has no idempotency marker, so a Stripe redelivery double-decrements. A durable guard needs a new refund-ledger table, which T5760 explicitly forbids (no schema change). A double-decrement leaves local BELOW Stripe net, which the reconciliation pass detects (negative delta) and heal corrects — reconciliation is the stated safety net. Flagged in code + as a follow-up alongside dispute webhooks.
+- **MINORs addressed**: heal now skips `user_ids` absent from the recomputed report instead of silently zeroing them; the per-user heal confirm warns when the user has an open dispute.
+
+**OPERATOR STEP (prod, not done here)**: add `charge.refunded` to the **LIVE-mode** webhook endpoint in the Stripe dashboard (events are per-endpoint + per-mode) or the branch never fires. **Dispute webhooks + durable refund idempotency are deliberate follow-ups** — the on-demand pass is their safety net. **Prod verification (supervisor/user)**: run the report (imankh $3.99 should show aligned; pre-go-live accounts classified `test_mode_era`), then heal test_mode_era rows to zero.
+
 ## Acceptance Criteria
 
-- [ ] Reconciliation report lists per-user local vs Stripe-net revenue with delta + cause classification
-- [ ] Heal is an explicit admin gesture and sets local to Stripe truth per the agreed refund policy
-- [ ] Main admin user table performance unchanged (no Stripe calls on its load path)
-- [ ] Milestone events untouched
-- [ ] Prod run: current drift explained (test-mode era + any refunds), then healed to zero
-- [ ] Tests pass
+- [x] Reconciliation report lists per-user local vs Stripe-net revenue with delta + cause classification
+- [x] Heal is an explicit admin gesture and sets local to Stripe truth per the agreed refund policy (net of refunds + lost disputes)
+- [x] Main admin user table performance unchanged (no Stripe calls on its load path) — asserted in `test_list_users_makes_zero_stripe_calls`
+- [x] Milestone events untouched (payment_started/payment_completed/credit_purchased unchanged)
+- [x] `charge.refunded` webhook branch decrements at refund time (unit-tested)
+- [ ] Prod run: current drift explained (test-mode era + any refunds), then healed to zero (supervisor/user step)
+- [x] Tests pass (103 passed: reconciliation + admin + analytics)

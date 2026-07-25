@@ -29,6 +29,9 @@ export const useAdminStore = create((set, get) => ({
   platformsData: null, platformsLoading: false,
   userDetailData: null, userDetailLoading: false, userDetailUserId: null,
 
+  // T5760: Stripe revenue reconciliation (on-demand — never auto-fetched, Stripe latency)
+  reconciliationData: null, reconciliationLoading: false, reconciliationError: null,
+
   setSegmentFilter: (origin, from, to) => {
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
     get().fetchUsers(1);
@@ -248,6 +251,46 @@ export const useAdminStore = create((set, get) => ({
   },
 
   clearUserDetail: () => set({ userDetailData: null, userDetailUserId: null }),
+
+  // T5760: run the on-demand reconciliation pass (compares local total_spent_cents
+  // against per-user Stripe NET revenue). Explicit gesture — this hits Stripe, so it
+  // is never fired on the main user-table load path.
+  fetchReconciliation: async () => {
+    set({ reconciliationLoading: true, reconciliationError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ reconciliationData: await res.json(), reconciliationLoading: false });
+    } catch (err) {
+      set({ reconciliationLoading: false, reconciliationError: err.message });
+    }
+  },
+
+  // T5760: adopt the Stripe net figure into total_spent_cents. Explicit admin
+  // gesture (per-user or all-drifted); re-runs the report afterward so drift clears.
+  healReconciliation: async ({ userIds = null, allDrifted = false } = {}) => {
+    set({ reconciliationLoading: true, reconciliationError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation/heal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: userIds, all_drifted: allDrifted }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      await get().fetchReconciliation();
+      return data;
+    } catch (err) {
+      set({ reconciliationLoading: false, reconciliationError: err.message });
+      throw err;
+    }
+  },
 
   setCredits: async (userId, amount) => {
     set(state => ({
