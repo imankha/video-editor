@@ -443,6 +443,11 @@ async def _startup_event():
     init_pg_schema()
     logger.info("[Startup] Postgres pool + schema initialized")
 
+    # T5683: Initialize poster warming service (in-flight dedup + bounded concurrency)
+    from app.services.poster_warmer import init_poster_warmer
+    init_poster_warmer()
+    logger.info("[Startup] Poster warming service initialized")
+
     # Default user 'a' init removed — all users now go through auth.
     # Profile context is set per-request by the middleware.
 

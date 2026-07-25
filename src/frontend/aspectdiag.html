@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  T5676 DEV-ONLY diagnostic harness for the Overlay aspect-aware video stage.
+  NOT a production page: it is not listed in vite build rollupOptions.input
+  (only index.html is), so it never ships in the built app. Served by the dev
+  server only, for the Playwright real-browser verification (no exported reel
+  needed in the live account to cover 9:16 AND 16:9 side by side).
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aspect stage diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="aspectdiag-root"></div>
+    <script type="module" src="/src/aspectdiag/main.jsx"></script>
+  </body>
+</html>

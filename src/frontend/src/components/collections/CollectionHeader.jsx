@@ -5,6 +5,7 @@ import { ratioGlyph, ratioLabel } from '../../constants/aspectRatios';
 import { formatDurationHuman } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
+import { API_BASE } from '../../config';
 
 // Collection-level Download (stitched mp4) is still deferred to T3680.
 // Share / Copy link are wired in T3620 (onShare / onCopyLink props).
@@ -34,6 +35,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * wired in T3620 (onShare/onCopyLink); Download stays disabled until T3680. The
  * max-duration slider is hidden until "Max Duration".
  *
+ * T5673 item 2: leading reel poster shown in media slot (collapsed row visual).
+ *
  * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
  * @param {number}    reelCount
@@ -48,6 +51,7 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {boolean=}  playLoading
  * @param {Function=} onShare        - open the share modal (T3620); omitted => disabled
  * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
+ * @param {number=}   leadingReelId   - representative reel id for collapsed row poster (T5673)
  */
 export function CollectionHeader({
   title,
@@ -64,6 +68,7 @@ export function CollectionHeader({
   playLoading,
   onShare,
   onCopyLink,
+  leadingReelId,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -126,7 +131,24 @@ export function CollectionHeader({
 
   return (
     <MediaCard
-      media={<CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted} />}
+      media={
+        leadingReelId ? (
+          <div className={`relative w-10 h-10 rounded-md overflow-hidden ${REEL.bgMuted}`}>
+            <img
+              src={`${API_BASE}/api/downloads/${leadingReelId}/poster.jpg`}
+              alt=""
+              loading="lazy"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.parentElement.innerHTML = `<${Film} size={16} class="${REEL.accent}" />`;
+              }}
+            />
+          </div>
+        ) : (
+          <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted} />
+        )
+      }
       actions={actions}
       footer={footer}
       stacked

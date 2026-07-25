@@ -127,6 +127,14 @@ export function OverlayScreen({
   // Export store - for dismissing "export complete" toast on changes
   const dismissExportCompleteToast = useExportStore(state => state.dismissExportCompleteToast);
 
+  // T5676: lock the Overlay Settings card (now beside the video) while THIS
+  // project's overlay export is in flight — mirrors the export container's
+  // external-export detection (ExportButtonContainer), single-sourced from the
+  // export store so the View stays presentational.
+  const exportingProject = useExportStore(state => state.exportingProject);
+  const isOverlayExporting = exportingProject?.projectId === projectId
+    && exportingProject?.stage === EDITOR_MODES.OVERLAY;
+
   // Local overlay state (drag, selection, etc.)
   const overlayState = useOverlayState();
   const {
@@ -1225,6 +1233,8 @@ export function OverlayScreen({
       framingVideoUrl={framingVideoUrl}
       // T740: Outdated framing warning
       framingOutdated={framingOutdated}
+      // T5676: lock the Overlay Settings card during an in-flight overlay export
+      settingsDisabled={isOverlayExporting}
     />
   );
 }

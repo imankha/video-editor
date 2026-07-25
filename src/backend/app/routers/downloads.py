@@ -27,7 +27,7 @@ from app.services.materialization import (
     _open_profile_db,
     ensure_profile_db_local,
 )
-from app.services.poster import generate_poster_at_publish, poster_rel_path
+from app.services.poster import generate_poster_at_publish, poster_basename, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
     R2_ENABLED,
@@ -213,6 +213,8 @@ class DownloadItem(BaseModel):
     quality_score: float | None = None  # Frozen single-clip star (T3630); seed + secondary ordering
     clip_count: int | None = None  # Distinct constituent clips (T3630); 1 = collection-eligible
     clip_game_start_time: float | None = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
+    season_rank: int | None = None  # T5679: 1-indexed rank among ACTUALLY-RANKED reels (match_count > 0), top-20 only. NULL for unranked (seeded-only) or rank > 20 reels.
+    leading_reel_id: int | None = None  # Representative reel id for collapsed rows (T5673 item 2)
     # Game grouping info
     watched_at: str | None = None  # ISO timestamp when first played in gallery
     game_ids: list[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -290,7 +292,8 @@ async def list_downloads(
                 fv.rating,
                 fv.quality_score,
                 fv.clip_count,
-                fv.clip_game_start_time
+                fv.clip_game_start_time,
+                fv.match_count
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
@@ -419,6 +422,18 @@ async def list_downloads(
                     project_games[project_id]['game_names'].append(display_name)
                     project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
+        # Compute season_rank (T5679): position among ACTUALLY-RANKED reels only
+        # (match_count > 0 -- has been through >= 1 Glicko matchup). A reel whose
+        # rating is merely SEEDED from quality_score (match_count == 0, rd == RD_MAX)
+        # has never been ranked by the user and must get no badge, even though it
+        # carries a rating and sorts high via ORDER_BY_RANK's quality-score fallback.
+        # `rows` is already in ORDER_BY_RANK order, so a running counter over the
+        # match_count > 0 subsequence gives the correct 1-indexed rank; unranked
+        # rows are skipped without consuming a rank slot. Track leading_reel_id
+        # per bucket alongside (T5673 item 2: leading poster).
+        leading_reel_ids = {}  # bucket_key -> first_reel_id
+        ranked_counter = 0
+
         downloads = []
         for row in rows:
             # Get file size if file exists
@@ -519,6 +534,18 @@ async def list_downloads(
                 # Convert space to 'T' for ISO format and append 'Z' for UTC
                 created_at_utc = created_at_utc.replace(' ', 'T') + 'Z'
 
+            # season_rank: only for actually-ranked reels (match_count > 0);
+            # top-20 of that ranked subsequence only (T5679).
+            season_rank = None
+            if (row['match_count'] or 0) > 0:
+                ranked_counter += 1
+                if ranked_counter <= 20:
+                    season_rank = ranked_counter
+
+            # Track leading_reel_id per group for collapsed rows (T5673)
+            if group_key and group_key not in leading_reel_ids:
+                leading_reel_ids[group_key] = row['id']
+
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
@@ -537,6 +564,8 @@ async def list_downloads(
                 quality_score=row['quality_score'],
                 clip_count=row['clip_count'],
                 clip_game_start_time=row['clip_game_start_time'],
+                season_rank=season_rank,
+                leading_reel_id=leading_reel_ids.get(group_key),
                 watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,
@@ -876,6 +905,135 @@ async def rename_download(download_id: int, body: dict):
             raise HTTPException(status_code=404, detail="Download not found")
         conn.commit()
         return {"success": True, "name": name}
+
+
+async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = None):
+    """Proxy a published reel's poster object with a FRESH presign per request.
+
+    Per-profile (the owner's current profile prefix), resolved through
+    `generate_presigned_url`. Mirrors `projects._serve_draft_poster_jpeg`. The
+    caller verifies object existence first, so a missing poster is a clean 404
+    upstream rather than a 502 from a signed GET of a nonexistent key.
+    T5682: long cache (86400s) + ETag (R2's own) for 304 cache hits.
+
+    `if_none_match` (T5682): HEADs R2 first (body-free) when present -> a match
+    short-circuits to 304 without a full GET. No header -> unchanged single-GET
+    hot path.
+
+    Uses the shared pooled httpx client (`get_poster_r2_client`) -- a fresh
+    `AsyncClient()` per request paid a full TLS handshake to R2 every time
+    (~300-600ms observed), the T4773 landmine repeated here (T5682 fix).
+    """
+    from fastapi.responses import Response
+
+    from app.storage import get_poster_r2_client, r2_head_object
+
+    user_id = get_current_user_id()
+
+    if if_none_match:
+        head = r2_head_object(user_id, rel_path)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
+
+    url = generate_presigned_url(
+        user_id, rel_path, expires_in=3600, content_type="image/jpeg"
+    )
+    if not url:
+        raise HTTPException(status_code=404, detail="No poster for this reel")
+    resp = await get_poster_r2_client().get(url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
+    etag = resp.headers.get("etag", "")
+    headers = {"Cache-Control": "private, max-age=86400"}
+    if etag:
+        headers["ETag"] = etag
+    return Response(
+        content=resp.content,
+        media_type="image/jpeg",
+        headers=headers,
+    )
+
+
+@router.get("/{download_id}/poster.jpg")
+async def get_reel_poster(download_id: int, request: Request):
+    """Poster THUMBNAIL for a PUBLISHED reel's My Reels tile (T5673, card-size
+    since T5682).
+
+    T5682: this tile serves a SEPARATE card-size (480px) thumbnail
+    (`ensure_reel_card_poster`), generated on first request by downscaling the
+    existing full-size og:image poster (`final_videos/posters/{filename}.jpg`,
+    captured at publish -- T5280/T4890). The full-size object is NEVER resized
+    here -- it's what `shares.py`'s `_build_poster_r2_key` reads for share
+    unfurls, and must stay untouched. Session-authed by the same middleware as
+    every other `/api/downloads` route.
+
+    404 when the reel row is missing OR the full-size poster doesn't exist
+    (pre-T5280 reels; poster generation was best-effort and never fabricated)
+    -> the drawer renders its branded fallback tile. We never fabricate an
+    image (no-silent-fallback rule, CLAUDE.md). T5682: 404s are cached
+    (private, 60s negative cache).
+
+    `If-None-Match` (T5682): the card key is DETERMINISTIC from `basename`, so
+    it's checked FIRST with a SINGLE HEAD, before `profile_object_exists` +
+    `ensure_reel_card_poster` run their own HEADs against the same/adjacent
+    keys -- a match short-circuits to 304 in one R2 round trip (stacking three
+    HEADs pushed 304s to ~300ms).
+    """
+    from fastapi.responses import Response
+
+    from app.services.poster import ensure_reel_card_poster, reel_card_poster_rel_path
+    from app.storage import r2_head_object
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
+        row = cursor.fetchone()
+    if not row:
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
+
+    basename = poster_basename(row["filename"])
+    full_rel_path = poster_rel_path(basename)
+    card_rel_path = reel_card_poster_rel_path(basename)
+    user_id = get_current_user_id()
+
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match:
+        head = r2_head_object(user_id, card_rel_path)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
+
+    # Existence check under the current profile prefix: a poster-less reel must be
+    # a clean 404 (branded fallback), NOT a 502 from signing a nonexistent object.
+    if not profile_object_exists(user_id, get_current_profile_id(), full_rel_path):
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
+
+    generated_card_path = ensure_reel_card_poster(user_id, basename)
+    if not generated_card_path:
+        # Card generation failed (transient) but the full-size poster IS present
+        # -> degrade gracefully to serving the full-size poster rather than 404.
+        generated_card_path = full_rel_path
+
+    # if_none_match was already checked above (single HEAD); no need for
+    # _serve_reel_poster_jpeg to re-check it (would be a wasted second HEAD).
+    return await _serve_reel_poster_jpeg(generated_card_path)
 
 
 class MoveToProfileRequest(BaseModel):

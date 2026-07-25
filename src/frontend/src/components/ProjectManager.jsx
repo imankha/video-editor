@@ -1,28 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, EyeOff, Play, Crop, Layers, Share2, Target, Zap } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Share2, Target, Zap, Calendar } from 'lucide-react';
 import { LogoWithText } from './Logo';
-import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
-import { useExportStore } from '../stores/exportStore';
-import { useProjectsStore } from '../stores/projectsStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
-import { generateClipName, getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
-import { formatGameClock, compareGameTime } from '../utils/timeFormat';
-import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
+import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
+import { compareGameTime } from '../utils/timeFormat';
+import { RATING_ADJECTIVES, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS } from './shared/clipConstants';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { useSyncStore } from '../stores/syncStore';
-import { useGalleryStore } from '../stores/galleryStore';
-import { useQuestStore } from '../stores/questStore';
-import { API_BASE } from '../config';
-import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { GAME, REEL } from '../config/themeColors';
 import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
@@ -35,12 +27,50 @@ import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
 import { useIsMobile } from '../hooks/useIsMobile';
+// DraftTile (the restyled ProjectCard) + SegmentedProgressStrip were extracted to their
+// own files (T5672). Re-exported below (DraftTile aliased to ProjectCard) so existing
+// tests importing them from './ProjectManager' keep resolving.
+import { DraftTile } from './DraftTile';
+import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
+import { CardCarousel } from './shared/CardCarousel';
+import { GameTile } from './GameTile';
+import { splitByAspect } from '../constants/aspectRatios';
 
 const SCORING_TAGS = new Set([
   'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
   'Scoring', 'Dunk', 'Try',
 ]);
 const PLAYMAKING_TAGS = new Set(['Assist', 'Chance Creation', 'Shot']);
+
+// Group games by month (YYYY-MM) in chronological order (newest first)
+function groupGamesByMonth(games) {
+  const groups = {};
+  const order = [];
+
+  // Sort games by created_at (newest first)
+  const sorted = [...games].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  sorted.forEach(game => {
+    const date = new Date(game.created_at);
+    const key = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    if (!groups[key]) {
+      groups[key] = [];
+      order.push(key);
+    }
+    groups[key].push(game);
+  });
+
+  return { groups, order };
+}
+
+// The active tab is URL state (/home/games -> Games, /home/reels -> Reel Drafts),
+// never persisted. Map a pathname to its tab, or null when the URL names no tab
+// (bare /home) so callers can fall back to a default. (T5677)
+function tabFromPath(pathname) {
+  if (pathname === '/home/games') return 'games';
+  if (pathname === '/home/reels') return 'projects';
+  return null;
+}
 
 function TagBadges({ tagBadges }) {
   if (!tagBadges || Object.keys(tagBadges).length === 0) return null;
@@ -116,7 +146,10 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
-  const initialTab = projects.length === 0 ? 'games' : 'projects';
+  // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
+  // tab. Bare /home falls back to the projects-count default. (T5677)
+  const initialTab = tabFromPath(window.location.pathname)
+    ?? (projects.length === 0 ? 'games' : 'projects');
   const [activeTab, setActiveTabRaw] = useState(initialTab);
   const setActiveTab = useCallback((tab) => {
     setActiveTabRaw(tab);
@@ -363,6 +396,10 @@ export function ProjectManager({
       groups[key].projects.sort((a, b) =>
         compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
       groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
+      // Portrait/landscape drafts render in separate carousel rows so tile
+      // heights stay consistent within a row (mirrors ReelTile/Collections);
+      // count/statusCounts above stay whole-game (both aspects combined).
+      groups[key].byAspect = splitByAspect(groups[key].projects);
       // Find the most recent game date in this group
       let mostRecentDate = null;
       groups[key].projects.forEach(project => {
@@ -399,7 +436,7 @@ export function ProjectManager({
       return a.localeCompare(b);
     });
 
-    return { groups, sortedKeys, ungrouped };
+    return { groups, sortedKeys, ungrouped, ungroupedByAspect: splitByAspect(ungrouped) };
   }, [filteredProjects, getProjectStatusCounts]);
 
   // Compute most recent items for "Continue Where You Left Off" section
@@ -496,6 +533,12 @@ export function ProjectManager({
       hasSetInitialTab.current = true;
       return;
     }
+    // A URL-named tab is authoritative — don't let the projects-count default
+    // flip a cold /home/games deep link over to Reel Drafts. (T5677)
+    if (tabFromPath(window.location.pathname)) {
+      hasSetInitialTab.current = true;
+      return;
+    }
     if (!hasSetInitialTab.current && !loading && projects.length > 0) {
       setActiveTab('projects');
       hasSetInitialTab.current = true;
@@ -586,35 +629,35 @@ export function ProjectManager({
       </div>
 
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
-      <div className="text-center pt-10 sm:pt-0 mb-6">
-        <LogoWithText className="mx-auto mb-4" />
-        <p className="text-gray-400">Share Your Player's Brilliance</p>
+      <div className="text-center pt-10 sm:pt-0 mb-4">
+        <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
+        <p className="text-gray-400 text-sm">Share Your Player's Brilliance</p>
       </div>
 
-      {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}
+      {/* Continue Where You Left Off - compact 2-up on mobile, full on desktop */}
       {showRecentSection && (
-        <div className="hidden sm:block w-full max-w-2xl mb-6">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="w-full max-w-2xl mb-4">
+          <div className="flex items-center gap-2 mb-2 sm:mb-3">
             <Clock size={14} className="text-gray-500" />
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Continue Where You Left Off
             </h2>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             {/* Recent Game (left) */}
             {recentItems.recentGame && (
               <button
                 onClick={() => onLoadGame(recentItems.recentGame.id)}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${GAME.bgSubtle} ${GAME.borderSubtle} ${GAME.bgSubtleHover}`}
+                className={`flex-1 min-w-0 min-h-[44px] flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all text-left ${GAME.bgSubtle} ${GAME.borderSubtle} ${GAME.bgSubtleHover}`}
               >
-                <div className={`p-2 rounded-lg ${GAME.bgIcon}`}>
+                <div className={`p-1.5 sm:p-2 rounded-lg ${GAME.bgIcon}`}>
                   <Gamepad2 size={18} className={GAME.accent} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-white font-medium truncate block">
                     {recentItems.recentGame.name}
                   </span>
-                  <div className="text-xs text-gray-500">
+                  <div className="hidden sm:block text-xs text-gray-500">
                     {recentItems.recentGame.clip_count} clip{recentItems.recentGame.clip_count !== 1 ? 's' : ''} annotated
                   </div>
                 </div>
@@ -638,9 +681,9 @@ export function ProjectManager({
                     onSelectProject(p.id);
                   }
                 }}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${REEL.bgSubtle} ${REEL.borderSubtle} ${REEL.bgSubtleHover}`}
+                className={`flex-1 min-w-0 min-h-[44px] flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all text-left ${REEL.bgSubtle} ${REEL.borderSubtle} ${REEL.bgSubtleHover}`}
               >
-                <div className={`p-2 rounded-lg ${REEL.bgIcon}`}>
+                <div className={`p-1.5 sm:p-2 rounded-lg ${REEL.bgIcon}`}>
                   <FolderOpen size={18} className={REEL.accent} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -652,7 +695,7 @@ export function ProjectManager({
                       <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
                     )}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="hidden sm:block text-xs text-gray-500">
                     {recentItems.recentProject.clip_count} clip{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
                     {' · '}
                     {recentItems.recentProject.has_final_video ? 'Complete' :
@@ -668,7 +711,7 @@ export function ProjectManager({
       )}
 
       {/* Tab Navigation - styled to match ModeSwitcher */}
-      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-6">
+      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-4">
         <button
           onClick={() => setActiveTab('games')}
           className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
@@ -708,7 +751,7 @@ export function ProjectManager({
       </div>
 
       {/* Action Button */}
-      <div className="mb-4 sm:mb-8">
+      <div className="mb-4 sm:mb-5">
         {activeTab === 'games' ? (
           <Button
             variant="success"
@@ -763,7 +806,7 @@ export function ProjectManager({
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
-          <div className="w-full max-w-2xl">
+          <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Active Upload Section - Currently uploading */}
             {activeUpload && (
               <div className="mb-6">
@@ -813,29 +856,46 @@ export function ProjectManager({
               );
             })()}
 
-            {/* Your Games Section */}
-            {games.length > 0 && (
-              <>
-                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                  Your Games
-                </h2>
-                <div ref={gamesContainerRef} className="space-y-2">
-                  {games.map(game => (
-                    <div key={game.id} data-game-id={game.id}>
-                      <GameCard
-                        game={game}
-                        onLoad={() => onLoadGame(game.id)}
-                        onDelete={() => onDeleteGame(game.id)}
-                        onExtend={() => setExtensionGame(game)}
-                        onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
-                        onShare={() => setShareGame(game)}
-                        onEdit={() => setEditGame(game)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            {/* Your Games Section - Chronological Poster Grid (T5681) */}
+            {games.length > 0 && (() => {
+              const { groups, order } = groupGamesByMonth(games);
+              return (
+                <>
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
+                    Your Games
+                  </h2>
+                  <div ref={gamesContainerRef} className="space-y-6">
+                    {order.map(monthKey => (
+                      <div key={monthKey}>
+                        {/* Month header with game count */}
+                        <div className="mb-3 flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-gray-300">{monthKey}</h3>
+                          <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                            {groups[monthKey].length} game{groups[monthKey].length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {/* Landscape tile grid: 6-up desktop, 3-up tablet, 2-up mobile */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+                          {groups[monthKey].map(game => (
+                            <div key={game.id} data-game-id={game.id}>
+                              <GameTile
+                                game={game}
+                                onLoad={() => onLoadGame(game.id)}
+                                onDelete={() => onDeleteGame(game.id)}
+                                onExtend={() => setExtensionGame(game)}
+                                onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                                onShare={() => setShareGame(game)}
+                                onEdit={() => setEditGame(game)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )
       ) : (
@@ -860,118 +920,115 @@ export function ProjectManager({
             <p className="text-sm">Create a new reel or add a game to get started</p>
           </div>
         ) : (
-          <div className="w-full max-w-2xl">
-            {/* Filters - only show when useful */}
+          /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
+             audit finding #13 desktop dead-space fix); the Games tab stays max-w-2xl. */
+          <div className="w-full max-w-6xl 2xl:max-w-7xl">
+            {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
+                and wrap onto their own line when they don't. */}
             {showFilters && (
-              <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 space-y-3">
+              <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
                 {/* Status Filter */}
                 {filterCounts.showStatusFilter && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Status</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { value: 'all', label: 'All' },
-                        // T66: 'complete' and 'uncompleted' removed - completed projects are archived
-                        { value: 'overlay', label: 'In Overlay', color: 'blue' },
-                        { value: 'editing', label: 'Framing Started', color: 'blue' },
-                        { value: 'exported', label: 'Exported', color: 'purple' },
-                        { value: 'not_started', label: 'Not Started', color: 'gray' }
-                      ].map(opt => {
-                        const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
-                        // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
-                        if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
-                        return (
-                          <button
-                            key={opt.value}
-                            onClick={() => setStatusFilter(opt.value)}
-                            className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                              statusFilter === opt.value
-                                ? opt.color === 'blue' ? 'bg-blue-600 text-white'
-                                  : opt.color === 'gray' ? 'bg-gray-600 text-white'
-                                  : `${REEL.bg} text-white`
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            {opt.label} ({count})
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Status</span>
+                    {[
+                      { value: 'all', label: 'All' },
+                      // T66: 'complete' and 'uncompleted' removed - completed projects are archived
+                      { value: 'overlay', label: 'In Overlay', color: 'blue' },
+                      { value: 'editing', label: 'Framing Started', color: 'blue' },
+                      { value: 'exported', label: 'Exported', color: 'purple' },
+                      { value: 'not_started', label: 'Not Started', color: 'gray' }
+                    ].map(opt => {
+                      const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
+                      // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
+                      if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => setStatusFilter(opt.value)}
+                          className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                            statusFilter === opt.value
+                              ? opt.color === 'blue' ? 'bg-blue-600 text-white'
+                                : opt.color === 'gray' ? 'bg-gray-600 text-white'
+                                : `${REEL.bg} text-white`
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {opt.label} ({count})
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* Aspect Ratio Filter */}
                 {filterCounts.showAspectFilter && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Aspect Ratio</label>
-                    <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Aspect Ratio</span>
+                    <button
+                      onClick={() => setAspectFilter('all')}
+                      className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        aspectFilter === 'all'
+                          ? `${REEL.bg} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {Object.entries(filterCounts.aspects).map(([ratio, count]) => (
                       <button
-                        onClick={() => setAspectFilter('all')}
-                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                          aspectFilter === 'all'
+                        key={ratio}
+                        onClick={() => setAspectFilter(ratio)}
+                        className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                          aspectFilter === ratio
                             ? `${REEL.bg} text-white`
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
                       >
-                        All
+                        {ratio} ({count})
                       </button>
-                      {Object.entries(filterCounts.aspects).map(([ratio, count]) => (
-                        <button
-                          key={ratio}
-                          onClick={() => setAspectFilter(ratio)}
-                          className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                            aspectFilter === ratio
-                              ? `${REEL.bg} text-white`
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
-                        >
-                          {ratio} ({count})
-                        </button>
-                      ))}
-                    </div>
+                    ))}
                   </div>
                 )}
 
                 {/* Creation Type Filter */}
                 {filterCounts.showCreationFilter && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Created By</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        onClick={() => setCreationFilter('all')}
-                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                          creationFilter === 'all'
-                            ? `${REEL.bg} text-white`
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setCreationFilter('auto')}
-                        className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
-                          creationFilter === 'auto'
-                            ? 'bg-yellow-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                        title="Auto-created from 5-star clips"
-                      >
-                        <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
-                        Auto ({filterCounts.auto})
-                      </button>
-                      <button
-                        onClick={() => setCreationFilter('custom')}
-                        className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
-                          creationFilter === 'custom'
-                            ? `${REEL.bg} text-white`
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                        title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
-                      >
-                        <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : REEL.accent} />
-                        Custom ({filterCounts.custom})
-                      </button>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Created By</span>
+                    <button
+                      onClick={() => setCreationFilter('all')}
+                      className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        creationFilter === 'all'
+                          ? `${REEL.bg} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setCreationFilter('auto')}
+                      className={`flex items-center gap-1 px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        creationFilter === 'auto'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title="Auto-created from 5-star clips"
+                    >
+                      <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
+                      Auto ({filterCounts.auto})
+                    </button>
+                    <button
+                      onClick={() => setCreationFilter('custom')}
+                      className={`flex items-center gap-1 px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        creationFilter === 'custom'
+                          ? `${REEL.bg} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
+                    >
+                      <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : REEL.accent} />
+                      Custom ({filterCounts.custom})
+                    </button>
                   </div>
                 )}
               </div>
@@ -1001,18 +1058,43 @@ export function ProjectManager({
                 </div>
               ) : (
                 <>
-                  {/* Ungrouped projects (no game association) shown first */}
-                  {groupedProjects.ungrouped.map(project => (
-                    <ProjectCard
-                      key={project.id}
-                      project={project}
-                      onSelect={() => onSelectProject(project.id)}
-                      onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                      onDelete={() => onDeleteProject(project.id)}
-                      exportingProject={exportingProject}
-                      pendingGameIds={pendingGameIds}
-                    />
-                  ))}
+                  {/* Ungrouped drafts (no game) -> one "Other reels" section, one carousel
+                      row per aspect ratio present (portrait first) so tiles keep their
+                      aspect-correct shape and row heights stay consistent (Q5 + aspect split) */}
+                  {groupedProjects.ungrouped.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-2 px-3 py-2 min-h-11">
+                        <span className="text-sm font-medium text-gray-200 flex-1">Other reels</span>
+                        <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                          {groupedProjects.ungrouped.length}
+                        </span>
+                      </div>
+                      {groupedProjects.ungroupedByAspect.map(({ ratio, projects: aspectProjects }) => (
+                        <div key={ratio}>
+                          {groupedProjects.ungroupedByAspect.length > 1 && (
+                            <div className="px-3 pb-1">
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+                                {ratio}
+                              </span>
+                            </div>
+                          )}
+                          <CardCarousel ariaLabel={groupedProjects.ungroupedByAspect.length > 1 ? `Other reels ${ratio}` : 'Other reels'}>
+                            {aspectProjects.map(project => (
+                              <DraftTile
+                                key={project.id}
+                                project={project}
+                                onSelect={() => onSelectProject(project.id)}
+                                onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                                onDelete={() => onDeleteProject(project.id)}
+                                exportingProject={exportingProject}
+                                pendingGameIds={pendingGameIds}
+                              />
+                            ))}
+                          </CardCarousel>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Grouped projects by game - expand if has incomplete or unpublished projects */}
                   {groupedProjects.sortedKeys.map(groupKey => {
@@ -1027,19 +1109,34 @@ export function ProjectManager({
                       statusCounts={group.statusCounts}
                       defaultExpanded={hasIncomplete || hasUnpublished}
                     >
-                      <div className="space-y-2">
-                        {group.projects.map(project => (
-                          <ProjectCard
-                            key={project.id}
-                            project={project}
-                            onSelect={() => onSelectProject(project.id)}
-                            onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                            onDelete={() => onDeleteProject(project.id)}
-                            exportingProject={exportingProject}
-                            pendingGameIds={pendingGameIds}
-                          />
-                        ))}
-                      </div>
+                      {/* One carousel row per aspect ratio present (portrait first) --
+                          a game with both 9:16 and 16:9 drafts never mixes them in one
+                          row; single-aspect games render exactly as before (one row,
+                          no aspect chip) since byAspect has exactly one entry. */}
+                      {group.byAspect.map(({ ratio, projects: aspectProjects }) => (
+                        <div key={ratio}>
+                          {group.byAspect.length > 1 && (
+                            <div className="px-3 pb-1">
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+                                {ratio}
+                              </span>
+                            </div>
+                          )}
+                          <CardCarousel ariaLabel={group.byAspect.length > 1 ? `${groupKey} drafts ${ratio}` : `${groupKey} drafts`}>
+                            {aspectProjects.map(project => (
+                              <DraftTile
+                                key={project.id}
+                                project={project}
+                                onSelect={() => onSelectProject(project.id)}
+                                onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                                onDelete={() => onDeleteProject(project.id)}
+                                exportingProject={exportingProject}
+                                pendingGameIds={pendingGameIds}
+                              />
+                            ))}
+                          </CardCarousel>
+                        </div>
+                      ))}
                     </CollapsibleGroup>
                     );
                   })}
@@ -1290,6 +1387,65 @@ export function GamesListSkeleton({ count = 4 }) {
 
 
 /**
+ * GameMetaRow - Metadata line under a game's title (date, clip count, rating
+ * counts, quality score, tag badges). Shared by the expired and normal GameCard
+ * variants so the two never drift.
+ */
+function RatingChip({ count, rating }) {
+  // Labeled rating pill (TagBadges recipe). The adjective is the human-readable
+  // label; the chess-notation constants (RATING_NOTATION) never surface in the UI.
+  const adjective = RATING_ADJECTIVES[rating];
+  const label = `${count} ${adjective.toLowerCase()} clip${count !== 1 ? 's' : ''}`;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-semibold"
+      style={{
+        color: RATING_BADGE_COLORS[rating],
+        backgroundColor: RATING_BACKGROUND_COLORS[rating],
+        borderColor: `${RATING_BADGE_COLORS[rating]}4D`, // ~30% alpha to match TagBadges
+      }}
+      title={label}
+      aria-label={label}
+    >
+      <Star size={10} />
+      {count} {adjective}
+    </span>
+  );
+}
+
+function GameMetaRow({ game }) {
+  const uploadedLabel = `Uploaded ${new Date(game.created_at).toLocaleDateString()}`;
+  const qualityScore = (game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-sm text-gray-400">
+      <span className="inline-flex items-center gap-1" aria-label={uploadedLabel}>
+        <Calendar size={12} className="text-gray-500" />
+        Uploaded {new Date(game.created_at).toLocaleDateString()}
+      </span>
+      <span>•</span>
+      <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
+      {game.clip_count > 0 && (
+        <>
+          {game.brilliant_count > 0 && (
+            <RatingChip count={game.brilliant_count} rating={5} />
+          )}
+          {game.good_count > 0 && (
+            <RatingChip count={game.good_count} rating={4} />
+          )}
+          <span
+            className="hidden sm:inline"
+            title="Footage quality score (0-100), higher is better"
+          >
+            Footage quality {qualityScore}/100
+          </span>
+          <TagBadges tagBadges={game.tag_badges} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * GameCard - Individual game in the list
  */
 export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
@@ -1383,7 +1539,11 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
       <div
         className="group relative p-3 sm:p-4 bg-yellow-950/20 rounded-lg border border-yellow-800/40 transition-all hover:bg-yellow-950/30"
       >
-        <div className="flex items-center justify-between">
+        {/* Single row: identity left, action cluster right (wraps below on very narrow
+            screens instead of reserving a dedicated button row). Hierarchy: Recap
+            (primary, only bordered/colored) > Extend (ghost) > Remove (icon-only ghost,
+            expands to a red Confirm on first click). */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <Gamepad2 size={18} className="text-yellow-500 flex-shrink-0" />
@@ -1393,67 +1553,43 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
                 Expired
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-              <span>{new Date(game.created_at).toLocaleDateString()}</span>
-              <span>•</span>
-              <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
-              {game.clip_count > 0 && (
-                <>
-                  {game.brilliant_count > 0 && (
-                    <>
-                      <span>•</span>
-                      <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
-                    </>
-                  )}
-                  {game.good_count > 0 && (
-                    <>
-                      <span>•</span>
-                      <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
-                    </>
-                  )}
-                  <span className="hidden sm:inline">•</span>
-                  <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-                    Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
-                  </span>
-                  <TagBadges tagBadges={game.tag_badges} />
-                </>
-              )}
-            </div>
+            <GameMetaRow game={game} />
           </div>
 
-          {hasAnnotations && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
-              className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
-              title="Watch the recap (annotations and highlights)"
-            >
-              <Play size={18} />
-              Recap
-            </button>
-          )}
-        </div>
-
-        <div className="mt-2 flex items-center justify-center gap-2">
-          {canExtend && (
+          <div className="flex-shrink-0 flex items-center gap-1.5">
+            {hasAnnotations && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 coarse-pointer:min-h-[44px] rounded-lg text-sm font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
+                title="Watch the recap (annotations and highlights)"
+              >
+                <Play size={16} />
+                Recap
+              </button>
+            )}
+            {canExtend && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={RefreshCw}
+                onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
+                title="Extend storage"
+              >
+                Extend
+              </Button>
+            )}
             <Button
-              variant="ghost"
+              variant={showDeleteConfirm ? 'danger' : 'ghost'}
               size="sm"
-              icon={RefreshCw}
-              onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
-              title="Extend storage"
+              icon={Trash2}
+              iconOnly={!showDeleteConfirm}
+              onClick={handleDelete}
+              title={showDeleteConfirm ? 'Click again to confirm' : 'Remove from list'}
+              aria-label={showDeleteConfirm ? 'Click again to confirm removal' : 'Remove from list'}
             >
-              Extend Storage
+              {showDeleteConfirm ? 'Confirm' : undefined}
             </Button>
-          )}
-          <Button
-            variant={showDeleteConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={Trash2}
-            onClick={handleDelete}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Remove from list'}
-          >
-            Remove
-          </Button>
+          </div>
         </div>
       </div>
     );
@@ -1485,32 +1621,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-            <span>{new Date(game.created_at).toLocaleDateString()}</span>
-            <span>•</span>
-            <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
-            {game.clip_count > 0 && (
-              <>
-                {game.brilliant_count > 0 && (
-                  <>
-                    <span>•</span>
-                    <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
-                  </>
-                )}
-                {game.good_count > 0 && (
-                  <>
-                    <span>•</span>
-                    <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
-                  </>
-                )}
-                <span className="hidden sm:inline">•</span>
-                <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-                  Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
-                </span>
-                <TagBadges tagBadges={game.tag_badges} />
-              </>
-            )}
-          </div>
+          <GameMetaRow game={game} />
         </div>
 
         {/* Edit + Share + Delete buttons - hover on desktop, long-press on mobile */}
@@ -1581,690 +1692,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
 }
 
 
-/**
- * SegmentedProgressStrip - Visual progress indicator with segments
- *
- * Shows one segment per clip + one for overlay/final export.
- * Scales from 1 to 100+ clips by adjusting segment widths.
- *
- * Colors:
- * - Green (✓): Done/Complete (solid fill is reserved for done)
- * - Yellow/Amber: Exporting (actively rendering)
- * - Blue half-fill over gray: Started (has edits, not exported)
- * - Light Blue: Ready (for overlay - working video exists)
- * - Gray (○): Not started
- *
- * Click handlers:
- * - onClipClick(clipIndex) - Called when a clip segment is clicked
- * - onOverlayClick() - Called when the overlay segment is clicked
- *
- * @param {Object} project - Project data
- * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
- */
-export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false, failedExportType = null }) {
-  const {
-    clip_count,
-    clips_exported,
-    clips_in_progress,
-    clips = [], // Clip details from backend
-    has_working_video,
-    has_overlay_edits,
-    has_final_video
-  } = project;
-
-  // Once framing is complete (has_working_video), show a single "Framing" segment
-  // instead of per-clip segments. Framing exports ALL clips into ONE working video,
-  // so per-clip progress is only meaningful BEFORE framing is done.
-  const framingComplete = has_working_video || has_final_video;
-
-  // Build segment data
-  const clipSegments = [];
-
-  if (framingComplete) {
-    // Framing done - show single "Framing" segment as complete
-    clipSegments.push({ status: 'done', label: 'Framing', tags: [] });
-  } else if (isExporting === 'framing') {
-    // Currently exporting - show single "Framing" segment as exporting (or disconnected)
-    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'Framing', tags: [] });
-  } else if (failedExportType === 'framing') {
-    // Framing export failed - show single "Framing" segment as failed
-    clipSegments.push({ status: 'export_failed', label: 'Framing', tags: [] });
-  } else {
-    // Framing not done - show per-clip editing status
-    for (let i = 0; i < clip_count; i++) {
-      const clipInfo = clips[i];
-      const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
-      const clipTags = clipInfo?.tags || [];
-
-      if (clips_in_progress > 0 && i < clips_in_progress) {
-        clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags });
-      } else {
-        clipSegments.push({ status: 'pending', label: clipName, tags: clipTags });
-      }
-    }
-  }
-
-  // Overlay segment status:
-  // - green: final video exported
-  // - yellow: exporting final video
-  // - blue: overlay edits in progress
-  // - light blue: working video exists but no overlay edits yet (ready)
-  // - gray: no working video
-  let overlayStatus = 'pending';
-  if (has_final_video) {
-    overlayStatus = 'done';
-  } else if (isExporting === 'overlay') {
-    overlayStatus = isOffline ? 'disconnected' : 'exporting';
-  } else if (failedExportType === 'overlay') {
-    overlayStatus = 'export_failed';
-  } else if (has_overlay_edits) {
-    overlayStatus = 'in_progress';
-  } else if (has_working_video) {
-    overlayStatus = 'ready';
-  }
-  const overlaySegment = { status: overlayStatus, label: 'Overlay' };
-
-  const allSegments = [...clipSegments, overlaySegment];
-
-  // Total segments for compact view calculation
-  const totalSegments = allSegments.length;
-
-  // Calculate segment width - minimum 4px, flex to fill space
-  const minWidth = 4;
-  const gapWidth = 2;
-
-  // Status to color mapping
-  // in_progress gets a gray track with a blue bottom half-fill (rendered below) so
-  // "started" reads as unfinished by shape, not just hue - solid fill means done (T3540)
-  const statusColors = {
-    done: 'bg-green-500',
-    exporting: 'bg-amber-500',
-    export_failed: 'bg-orange-500',
-    disconnected: 'bg-gray-400',
-    in_progress: 'bg-gray-600',
-    ready: 'bg-blue-300',
-    pending: 'bg-gray-600'
-  };
-
-  // For many clips, use a compact view
-  const isCompact = totalSegments > 10;
-
-  return (
-    <div className="mt-3">
-      {/* Labels row */}
-      <div className="flex justify-between text-xs text-gray-500 mb-1">
-        {has_final_video ? (
-          <span className="text-green-400 w-full text-center">Done</span>
-        ) : (
-          <>
-            <span className="flex items-center gap-2">
-              {isExporting === 'framing' && isOffline ? (
-                <span className="text-red-400">Not Connected</span>
-              ) : isExporting === 'framing' ? (
-                <span className="text-amber-400 flex items-center gap-1">
-                  <RefreshCw size={10} className="animate-spin" />
-                  Framing...
-                </span>
-              ) : framingComplete ? (
-                <span className="text-green-400">Framing</span>
-              ) : (
-                <span>Framing</span>
-              )}
-            </span>
-            {isExporting === 'overlay' && isOffline ? (
-              <span className="text-red-400">Not Connected</span>
-            ) : isExporting === 'overlay' ? (
-              <span className="text-amber-400 flex items-center gap-1">
-                <RefreshCw size={10} className="animate-spin" />
-                Exporting...
-              </span>
-            ) : (
-              <span>Overlay</span>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Segments strip */}
-      <div
-        className="flex h-3 bg-gray-700 rounded overflow-hidden"
-        style={{ gap: `${gapWidth}px` }}
-      >
-        {allSegments.map((segment, index) => {
-          const isLast = index === allSegments.length - 1;
-          const isOverlay = isLast;
-          const clipIndex = isOverlay ? -1 : index;
-
-          const handleClick = (e) => {
-            e.stopPropagation(); // Don't trigger card's onClick
-            if (isOverlay && onOverlayClick) {
-              onOverlayClick();
-            } else if (!isOverlay && onClipClick) {
-              onClipClick(clipIndex);
-            }
-          };
-
-          const isInProgress = segment.status === 'in_progress';
-
-          return (
-            <div
-              key={index}
-              onClick={handleClick}
-              className={`${statusColors[segment.status]} ${isInProgress ? 'relative overflow-hidden' : ''} transition-all cursor-pointer hover:brightness-110 ${
-                isLast ? 'rounded-r' : ''
-              } ${index === 0 ? 'rounded-l' : ''}`}
-              style={{
-                flex: isLast ? '0 0 20%' : '1 1 0',
-                minWidth: `${minWidth}px`
-              }}
-              title={`${segment.label}${segment.tags?.length ? ` [${segment.tags.join(', ')}]` : ''}: ${
-                segment.status === 'done' ? 'Complete' :
-                segment.status === 'disconnected' ? 'Not Connected' :
-                segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export framing to complete') :
-                segment.status === 'ready' ? 'Ready' :
-                'Not Started'
-              } (click to open)`}
-            >
-              {isInProgress && (
-                <div className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500 pointer-events-none" />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-    </div>
-  );
-}
-
-/**
- * ProjectCard - Individual project in the list
- *
- * Click behavior:
- * - Click on project name/info area: Open with smart mode (auto-detect next action)
- * - Click on a clip segment: Open in framing mode with that clip selected
- * - Click on overlay segment: Open in overlay mode
- */
-export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  // T4050: when a durable publish fails to reach R2 (503 sync_failed), the card
-  // stays put and we stash the gesture args so the user can Retry the exact same
-  // "Move to My Reels" with one click (no refetch, no optimistic removal).
-  const [publishRetry, setPublishRetry] = useState(null);
-  const [isPreviewing, setIsPreviewing] = useState(false);
-  const [actionsRevealed, setActionsRevealed] = useState(false);
-  const longPressTimer = useRef(null);
-  const touchMoved = useRef(false);
-  const longPressFired = useRef(false);
-  const isMobile = useIsMobile();
-  const isOffline = useSyncStore((state) => state.isOffline);
-  const [renameValue, setRenameValue] = useState('');
-  const renameInputRef = useRef(null);
-  const renameProject = useProjectsStore(state => state.renameProject);
-  const fetchProjects = useProjectsStore(state => state.fetchProjects);
-
-  const publishProject = async ({ openGallery }) => {
-    setIsPublishing(true);
-    // T4050 publish tracing: card removal is driven by fetchProjects re-reading
-    // backend state below (NOT an optimistic local removal). These [Publish] logs
-    // let a real "Move to My Reels" attempt be traced end-to-end (click -> POST ->
-    // 200 -> refetch) and correlated with the backend [Publish]/[SYNC] log lines.
-    console.log(`[Publish] click project=${project.id} openGallery=${openGallery} -> POST publish`);
-    try {
-      const response = await apiFetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
-        method: 'POST',
-      });
-      // T4050: a durable sync failure means the publish committed locally but never
-      // reached R2. Returning 200 would let fetchProjects remove the card while the
-      // reel silently reverts on the next session. Keep the card, skip the refetch,
-      // and surface Retry (same gesture) instead of the blunt alert.
-      if (response.status === 503) {
-        const error = await response.json().catch(() => ({}));
-        if (error.code === 'sync_failed') {
-          console.warn(`[Publish] project=${project.id} sync_failed (503) - card kept, offering Retry`);
-          setPublishRetry({ openGallery });
-          return;
-        }
-      }
-      if (!response.ok) {
-        const error = await response.json();
-        // Card is NOT removed on failure: we throw before fetchProjects, the catch
-        // alerts, and the draft stays put.
-        console.warn(`[Publish] project=${project.id} FAILED status=${response.status} - card kept in Drafts`);
-        throw new Error(error.detail || 'Failed to publish');
-      }
-      const result = await response.json();
-      setPublishRetry(null);
-      console.log(`[Publish] project=${project.id} 200 ok archived=${result.archived} final_video_id=${result.final_video_id}`);
-      if (!result.archived) {
-        console.warn(`[ProjectCard] Project ${project.id} published but archive failed - card stays in Drafts.`);
-      }
-      // Model changed (a reel was published) -> update count badge + dispatch the
-      // collections-changed event so the My Reels list refreshes itself.
-      useGalleryStore.getState().fetchCount({ force: true });
-      useGalleryStore.getState().notifyCollectionsChanged();
-      console.log(`[Publish] project=${project.id} refetching projects (card removal reflects backend state)`);
-      fetchProjects({ force: true });
-      // quest_4 "Move to My Reels" step — the publish gesture completes it.
-      useQuestStore.getState().recordAchievement('moved_to_my_reels');
-      if (openGallery) {
-        useGalleryStore.getState().open();
-      }
-    } catch (error) {
-      console.error('[Publish] error:', error);
-      alert(`Failed to move to ${SECTION_NAMES.LIBRARY}: ${error.message}`);
-    } finally {
-      setIsPublishing(false);
-    }
-  };
-
-  const handlePublishToMyReels = (e) => {
-    e.stopPropagation();
-    publishProject({ openGallery: true });
-  };
-
-  const handleHideFromDrafts = (e) => {
-    e.stopPropagation();
-    publishProject({ openGallery: false });
-  };
-
-  const handleStartRename = (e) => {
-    e.stopPropagation();
-    setRenameValue(project.name || '');
-    setIsRenaming(true);
-    setTimeout(() => renameInputRef.current?.select(), 0);
-  };
-
-  const handleSaveRename = async () => {
-    const trimmed = renameValue.trim();
-    if (!trimmed || trimmed === project.name) {
-      setIsRenaming(false);
-      return;
-    }
-    try {
-      await renameProject(project.id, trimmed);
-    } catch {
-      // Revert on failure — store didn't update
-    }
-    setIsRenaming(false);
-  };
-
-  const handleRenameKeyDown = (e) => {
-    e.stopPropagation();
-    if (e.key === 'Enter') {
-      handleSaveRename();
-    } else if (e.key === 'Escape') {
-      setIsRenaming(false);
-    }
-  };
-
-  // Check export store for active exports (survives refresh)
-  const activeExports = useExportStore((state) => state.activeExports);
-  const storeExport = Object.values(activeExports).find(
-    (exp) => exp.projectId === project.id && (exp.status === 'pending' || exp.status === 'processing')
-  );
-
-  // Determine if this project is currently exporting
-  // Check both context (current session) and store (recovered from server)
-  const isExporting = exportingProject?.projectId === project.id
-    ? exportingProject.stage
-    : storeExport?.type || null;
-
-  // Check for failed exports (only when not actively exporting)
-  const failedExport = !isExporting
-    ? Object.values(activeExports).find(
-        (exp) => exp.projectId === project.id && exp.status === 'error'
-      ) || null
-    : null;
-  const failedExportType = failedExport?.type || null;
-
-  const isWaitingForUpload = project.game_ids?.some(id => pendingGameIds.has(id));
-  const canOpen = !isWaitingForUpload;
-
-  const handleDelete = (e) => {
-    e.stopPropagation();
-    if (showDeleteConfirm) {
-      onDelete();
-    } else {
-      setShowDeleteConfirm(true);
-      // Auto-hide after 3 seconds
-      setTimeout(() => setShowDeleteConfirm(false), 3000);
-    }
-  };
-
-  const handleClipClick = (clipIndex) => {
-    if (!canOpen) return; // Block if no clips extracted
-    if (onSelectWithMode) {
-      onSelectWithMode({ mode: 'framing', clipIndex });
-    }
-  };
-
-  const handleOverlayClick = () => {
-    if (!canOpen) return; // Block if no clips extracted
-    if (onSelectWithMode) {
-      onSelectWithMode({ mode: 'overlay' });
-    }
-  };
-
-  const handleCardClick = () => {
-    if (isRenaming) return;
-    if (isMobile && actionsRevealed) {
-      setActionsRevealed(false);
-      return;
-    }
-    if (!canOpen) return;
-    const needsOverlay = project.has_working_video && (
-      !project.has_final_video ||
-      (project.working_video_created_at && project.final_video_created_at &&
-       project.working_video_created_at > project.final_video_created_at)
-    );
-    if (needsOverlay) {
-      onSelectWithMode({ mode: 'overlay' });
-    } else {
-      onSelect();
-    }
-  };
-
-  const handleTouchStart = () => {
-    touchMoved.current = false;
-    longPressFired.current = false;
-    longPressTimer.current = setTimeout(() => {
-      longPressTimer.current = null;
-      longPressFired.current = true;
-      setActionsRevealed(true);
-    }, 500);
-  };
-
-  const handleTouchMove = () => {
-    touchMoved.current = true;
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handleTouchEnd = (e) => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-    if (longPressFired.current) {
-      e.preventDefault();
-    }
-  };
-
-  const isComplete = project.has_final_video;
-
-  const isReadyToPublish = isComplete && !project.is_published;
-
-  return (
-    <div
-      data-testid="project-card"
-      onClick={isReadyToPublish ? undefined : handleCardClick}
-      onTouchStart={isMobile ? handleTouchStart : undefined}
-      onTouchMove={isMobile ? handleTouchMove : undefined}
-      onTouchEnd={isMobile ? handleTouchEnd : undefined}
-      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
-        isReadyToPublish
-          ? 'border-gray-700'
-          : canOpen
-            ? `hover:bg-gray-750 cursor-pointer border-gray-700 ${REEL.borderHover}`
-            : 'cursor-not-allowed border-gray-700 opacity-75'
-      }`}
-      title={undefined}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          {/* Name row */}
-          <div className="flex items-center gap-2">
-            {project.is_auto_created && (
-              <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created reel" />
-            )}
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={handleRenameKeyDown}
-                onBlur={handleSaveRename}
-                onClick={(e) => e.stopPropagation()}
-                className={`text-white font-medium bg-transparent border-b ${REEL.border} outline-none w-full`}
-                autoFocus
-              />
-            ) : (
-              <>
-                <h3 className="text-white font-medium truncate">
-                  {getProjectDisplayName(project)}
-                </h3>
-                <button
-                  onClick={handleStartRename}
-                  className={`${isMobile ? (actionsRevealed ? 'opacity-60' : 'opacity-0 pointer-events-none') : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'} text-gray-400 transition-opacity flex-shrink-0`}
-                  title="Rename reel"
-                >
-                  <Pencil size={14} />
-                </button>
-              </>
-            )}
-            {isComplete && project.is_published && (
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${REEL.bgMuted} ${REEL.accent} flex-shrink-0`}>
-                <CheckCircle size={12} />
-                In {SECTION_NAMES.LIBRARY}
-              </span>
-            )}
-            {/* T3920: clip's game time (single-clip drafts only) */}
-            {formatGameClock(project.clip_game_start_time) && (
-              <span className="shrink-0 text-sm text-gray-400" title="Game time">
-                {formatGameClock(project.clip_game_start_time)}
-              </span>
-            )}
-          </div>
-
-          {/* Tags row */}
-          {project.is_auto_created && project.clips?.[0]?.tags?.length > 0 && (
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {project.clips[0].tags.map((tag, idx) => (
-                <span
-                  key={idx}
-                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs ${REEL.bgMuted} ${REEL.accentMuted} rounded`}
-                >
-                  <Tag size={10} />
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Metadata row */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-            <span>{project.aspect_ratio}</span>
-            <span>•</span>
-            <span>{project.clip_count} clip{project.clip_count !== 1 ? 's' : ''}</span>
-            {isComplete && (
-              <>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1 text-green-400">
-                  <CheckCircle size={12} />
-                  Done
-                </span>
-              </>
-            )}
-            {!project.has_final_video && (
-              <>
-                <span>•</span>
-                <span>
-                  {isWaitingForUpload ? (
-                    <span className="text-amber-400 inline-flex items-center gap-1">
-                      <Upload size={12} />
-                      Waiting for upload
-                    </span>
-                  ) :
-                  isExporting && isOffline ? (
-                    <span className="text-gray-400">Disconnected</span>
-                  ) :
-                  isExporting === 'overlay' ? (
-                    <span className="text-amber-400">Exporting...</span>
-                  ) :
-                  isExporting === 'framing' ? (
-                    <span className="text-amber-400">Exporting...</span>
-                  ) :
-                  failedExportType ? (
-                    <span className="text-orange-400">Export Failed</span>
-                  ) :
-                  project.has_working_video ? 'In Overlay' :
-                  project.clips_in_progress > 0 ? (
-                    <span className="text-blue-400">Framing started</span>
-                  ) :
-                  project.clips_exported > 0 ? 'Exported' : 'Not Started'}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Top-right: Move CTA for ready-to-publish, delete icon for other states */}
-        {isReadyToPublish ? (
-          <button
-            onClick={handlePublishToMyReels}
-            disabled={isPublishing}
-            className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${REEL.accent} border-2 ${REEL.borderSubtle} hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500 transition-all disabled:opacity-50`}
-          >
-            {isPublishing ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Image size={18} />
-            )}
-            Move to {SECTION_NAMES.LIBRARY}
-          </button>
-        ) : (
-          <Button
-            variant={showDeleteConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={Trash2}
-            iconOnly
-            onClick={handleDelete}
-            className={isMobile
-              ? (!showDeleteConfirm && !actionsRevealed ? 'opacity-0 pointer-events-none' : '')
-              : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
-          />
-        )}
-      </div>
-
-      {publishRetry && (
-        /* T4050: durable publish couldn't reach the cloud — keep the card and let
-           the user retry the same gesture instead of silently reverting later. */
-        <div className="mt-2 flex items-center justify-center gap-2 text-sm" role="alert">
-          <span className="text-amber-400">Couldn&apos;t save to the cloud.</span>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); publishProject(publishRetry); }}
-            disabled={isPublishing}
-            className="px-3 py-1 rounded-md font-medium border border-amber-500 text-amber-300 hover:bg-amber-900/30 disabled:opacity-50"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {isComplete ? (
-        /* Secondary actions row — shown for all Done reels, published or not */
-        <div className="mt-2 flex items-center justify-center gap-2">
-          {project.final_video_id && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Play}
-              iconOnly
-              onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
-              title="Preview video"
-            />
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Crop}
-            iconOnly
-            onClick={(e) => { e.stopPropagation(); handleClipClick(0); }}
-            title="Open in Framing"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Layers}
-            iconOnly
-            onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }}
-            title="Open in Overlay"
-          />
-          {isReadyToPublish ? (
-            <Button
-              variant={showDeleteConfirm ? 'danger' : 'ghost'}
-              size="sm"
-              icon={Trash2}
-              iconOnly
-              onClick={handleDelete}
-              title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
-            />
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={EyeOff}
-              iconOnly
-              loading={isPublishing}
-              onClick={handleHideFromDrafts}
-              title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`}
-            />
-          )}
-        </div>
-      ) : (
-        /* Segmented progress strip - clickable segments for direct navigation */
-        <SegmentedProgressStrip
-          project={project}
-          onClipClick={handleClipClick}
-          onOverlayClick={handleOverlayClick}
-          isExporting={isExporting}
-          isOffline={isOffline}
-          failedExportType={failedExportType}
-        />
-      )}
-
-      {/* Video preview modal */}
-      {isPreviewing && project.final_video_id && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/80 z-[60]"
-            onClick={(e) => { e.stopPropagation(); setIsPreviewing(false); }}
-          />
-          <div className="fixed inset-4 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
-              <div className="flex items-center gap-3">
-                <Film size={20} className={REEL.accent} />
-                <h3 className="text-white font-medium">{getProjectDisplayName(project)}</h3>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={X}
-                iconOnly
-                onClick={(e) => { e.stopPropagation(); setIsPreviewing(false); }}
-              />
-            </div>
-            <div className="flex-1 min-h-0">
-              <MediaPlayer
-                src={`${API_BASE}/api/downloads/${project.final_video_id}/stream`}
-                autoPlay
-                onClose={() => setIsPreviewing(false)}
-              />
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
+// Back-compat re-exports (T5672 extraction): tests and callers import these from here.
+export { DraftTile as ProjectCard, SegmentedProgressStrip };
 
 export default ProjectManager;

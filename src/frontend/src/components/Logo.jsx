@@ -53,7 +53,7 @@ export function LogoWithText({
   logoAriaLabel,
   logoSize = 64,
   textClassName = 'text-xl',
-  widthClassName = 'w-[80px]',
+  widthClassName = '',
 }) {
   const emblem = onLogoClick ? (
     <button
@@ -69,11 +69,16 @@ export function LogoWithText({
     <Logo size={logoSize} className="self-center" />
   );
 
+  // One intentional horizontal lockup: emblem left of a single-line wordmark
+  // that never wraps. Sizes to content and centers via the caller (mx-auto /
+  // justify-center parent). widthClassName is retained for back-compat but no
+  // longer forces a fixed-width column.
   return (
-    <div className={`flex flex-col ${widthClassName} ${className}`}>
-      <span className={`${textClassName} font-bold text-white text-left`}>Reel</span>
+    <div className={`inline-flex items-center gap-2 sm:gap-3 ${widthClassName} ${className}`}>
       {emblem}
-      <span className={`${textClassName} font-bold text-white text-right`}>Ballers</span>
+      <span className={`${textClassName} font-bold text-white leading-none tracking-tight whitespace-nowrap`}>
+        Reel Ballers
+      </span>
     </div>
   );
 }

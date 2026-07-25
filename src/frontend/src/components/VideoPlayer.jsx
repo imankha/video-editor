@@ -57,7 +57,12 @@ export function VideoPlayer({
   // When false, the player is not an upload target (e.g. Framing, where clips come
   // from the game): drag-and-drop is disabled and the empty state drops the
   // "drag and drop / upload" hint.
-  allowUpload = true
+  allowUpload = true,
+  // T5676: when true (Overlay non-fullscreen), the container fills its parent
+  // instead of imposing a fixed 40/60vh height — the parent is aspect-sized to
+  // the video, so `object-contain` becomes a no-op and the 9:16 pillarbox dies.
+  // Fullscreen ignores this (CSS `:fullscreen` rules force the full viewport).
+  fitToAspect = false
 }) {
   const isBuffering = useVideoStore((s) => s.isBuffering);
   const isPlaying = useVideoStore((s) => s.isPlaying);
@@ -182,7 +187,7 @@ export function VideoPlayer({
     <div
       ref={containerRef}
       className={`video-player-container rounded-t-lg overflow-hidden relative outline-none ${
-        isFullscreen ? 'w-full h-full' : 'max-h-[40vh] sm:max-h-none sm:min-h-[60vh]'
+        isFullscreen ? 'w-full h-full' : fitToAspect ? 'w-full h-full' : 'max-h-[40vh] sm:max-h-none sm:min-h-[60vh]'
       }`}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -194,7 +199,7 @@ export function VideoPlayer({
       {videoUrl ? (
         <div
           className={`relative video-container overflow-hidden ${
-            isFullscreen ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'
+            isFullscreen ? 'w-full h-full' : fitToAspect ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'
           }`}
           onClick={(e) => {
             // Only toggle play if clicking the video area (not overlays/controls)

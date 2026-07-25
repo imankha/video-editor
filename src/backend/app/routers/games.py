@@ -761,6 +761,20 @@ async def activate_game(game_id: int):
         conn.commit()
 
     logger.info(f"Activated game {game_id}: status=ready, cost={upload_cost}cr")
+
+    # T5683: Warm the game source poster at gesture (non-blocking background task).
+    # Best-effort -- never fails the activation. get_current_user_id/
+    # get_current_profile_id are already imported at module level (top of
+    # file) -- do NOT re-import locally here: a local import makes the name
+    # local to the WHOLE function, which broke the EARLIER self-heal call at
+    # get_current_user_id()/get_current_profile_id() above (UnboundLocalError).
+    from app.services.poster_warmer import fire_and_forget, warm_game_source_poster_background
+    fire_and_forget(
+        warm_game_source_poster_background(
+            get_current_user_id(), get_current_profile_id(), game_id
+        )
+    )
+
     return {
         "game_id": game_id,
         "status": GameStatus.READY,
@@ -983,6 +997,35 @@ async def _list_games_impl(skip_presigned_urls=False):
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
+
+        # T5683: Warm game source posters for visible games without recaps
+        # (non-blocking background). Recap posters are warmed at share creation.
+        async def warm_visible_game_sources():
+            """Warm game source posters (games without recaps) with bounded concurrency."""
+            warmer = get_poster_warmer()
+            user_id = get_current_user_id()
+            profile_id = _profile
+            tasks = []
+            for game in games:
+                # Only warm source posters for games without recap (recap already warmed at share).
+                if not game['recap_video_url']:
+                    game_id = game['id']
+                    coro = warmer.warm_game_source_poster_async(
+                        user_id, profile_id, game_id
+                    )
+                    tasks.append(warmer.warm_with_semaphore(coro))
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+                logger.info(f"[ListWarm] warmed {len(tasks)} game source posters for {len(games)} visible games")
+
+        # Fire-and-forget warming (never fails the list endpoint).
+        if games and not skip_presigned_urls:
+            try:
+                from app.services.poster_warmer import fire_and_forget, get_poster_warmer
+                fire_and_forget(warm_visible_game_sources())
+            except Exception as e:
+                logger.info(f"[ListWarm] game warming task creation failed: {e}")
+
         return {'games': games}
 
 
@@ -2424,4 +2467,131 @@ async def stream_game_bounded(
             "Accept-Ranges": "bytes",
             "Cache-Control": "private, max-age=300, immutable",
         },
+    )
+
+
+@router.get("/{game_id:int}/poster.jpg")
+async def get_game_poster(game_id: int, request: Request):
+    """Poster thumbnail for a game's recap video (T5681).
+
+    Cache-first from R2 (`recaps/posters/{game_id}.card.jpg`, a SEPARATE
+    card-size key from the full-size og:image poster shares.py reads); generated
+    on first request from the game's recap video via ensure_recap_poster().
+    Session-authed by the same middleware as every other `/api/games` route.
+
+    404 when the game has no recap OR the recap video is expired/missing --
+    the frontend renders its no-poster fallback tile; we never fabricate an image
+    (no-silent-fallback rule, CLAUDE.md). Poster generation is best-effort and
+    never fails a parent operation. T5682: 404s are cached (private, 60s);
+    `If-None-Match` is honored -> 304 without a full R2 GET.
+    """
+    from fastapi.responses import Response
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, recap_video_url FROM games WHERE id = ?",
+            (game_id,),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
+
+    from app.services.poster import (
+        ensure_game_source_poster,
+        ensure_recap_poster,
+        recap_card_poster_r2_key,
+    )
+    from app.storage import APP_ENV, r2_head_object_global
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    # Full (env-prefixed) R2 keys. T5682: this owner-facing tile uses a SEPARATE
+    # card-size (480px) key from the full-size og:image poster
+    # (_recap_poster_r2_key in shares.py / recap_poster_r2_keys) -- that object is
+    # shared with the teammate share unfurl and must stay full-size untouched.
+    # BOTH producers below (recap-derived and source-frame) write this ONE card
+    # key, so the serving path is identical regardless of which produced it.
+    card_poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
+
+    # T5682: card_poster_key is DETERMINISTIC (no I/O to build) -- check
+    # If-None-Match FIRST with a SINGLE HEAD, before the generators' own
+    # cache-check HEAD runs against the same key (stacking two HEADs pushed
+    # 304s to ~300ms).
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match:
+        head = r2_head_object_global(card_poster_key)
+        if head and head.get("ETag") == if_none_match:
+            return Response(status_code=304, headers={
+                "Cache-Control": "private, max-age=86400",
+                "ETag": head["ETag"],
+            })
+
+    if row["recap_video_url"]:
+        # Recap-derived poster wins whenever a recap exists (T5681 item 3).
+        # ensure_recap_poster operates on GLOBAL (env-prefixed) keys, same scheme
+        # as the share-unfurl path (_recap_r2_key/_recap_poster_r2_key in
+        # shares.py): {env}/users/{uid}/profiles/{pid}/...
+        recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
+        # Ensure card-size poster exists (generate on first request if recap exists).
+        if not ensure_recap_poster(recap_key, card_poster_key, resize_width=480, jpeg_quality=3):
+            # T5682: negative cache on 404s (60s)
+            return Response(
+                status_code=404,
+                headers={"Cache-Control": "private, max-age=60"},
+                media_type="image/jpeg",
+            )
+    else:
+        # No recap yet: extract ONE frame from the live game source (T5681 item
+        # 2/3) -- highest-rated clip's timestamp, else a fixed offset. Written at
+        # card size (T5682) to the SAME card key so the serving path below is
+        # identical. An expired/reclaimed source (no live video) -> False -> 404.
+        if not ensure_game_source_poster(user_id, profile_id, game_id):
+            # T5682: negative cache on 404s (60s)
+            return Response(
+                status_code=404,
+                headers={"Cache-Control": "private, max-age=60"},
+                media_type="image/jpeg",
+            )
+
+    # Serve the poster with a presigned URL (private cache, session-authed).
+    # generate_presigned_url's relative_path is relative to users/{uid}/ and
+    # ALREADY inserts /profiles/{current_profile_id}/ internally (r2_key()) --
+    # passing a profiles/-prefixed path here would double it.
+    url = generate_presigned_url(
+        user_id, f"recaps/posters/{game_id}.card.jpg",
+        expires_in=3600, content_type="image/jpeg"
+    )
+    if not url:
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
+
+    # T5682: shared pooled client -- a fresh AsyncClient() per request paid a
+    # full TLS handshake to R2 every time (~300-600ms observed), the T4773
+    # landmine repeated here.
+    from app.storage import get_poster_r2_client
+    resp = await get_poster_r2_client().get(url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
+    etag = resp.headers.get("etag", "")
+    headers = {"Cache-Control": "private, max-age=86400"}
+    if etag:
+        headers["ETag"] = etag
+    return Response(
+        content=resp.content,
+        media_type="image/jpeg",
+        headers=headers,
     )

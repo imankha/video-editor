@@ -4,7 +4,7 @@
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-03
-**Epic:** [durability-sync](EPIC.md) · Audit items B8 + G3
+**Epic:** [write-correctness](EPIC.md) · Audit items B8 + G3
 
 ## Problem
 

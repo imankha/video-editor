@@ -15,8 +15,8 @@ describe('BrandedEndCard', () => {
     render(<BrandedEndCard visible={true} onReplay={() => {}} />);
     expect(screen.getByText('Make your own reel at www.reelballers.com')).toBeTruthy();
     expect(screen.getByText('Made With')).toBeTruthy();
-    expect(screen.getByText('Reel')).toBeTruthy();
-    expect(screen.getByText('Ballers')).toBeTruthy();
+    // T5675: wordmark is one single-line lockup, not split "Reel" / "Ballers" spans.
+    expect(screen.getByText('Reel Ballers')).toBeTruthy();
   });
 
   it('CTA links to reelballers.com with UTM params, opens in new tab', () => {

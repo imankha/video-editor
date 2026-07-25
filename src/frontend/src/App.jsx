@@ -440,6 +440,22 @@ function App() {
     }
   }, [editorMode, isCheckingSession, selectedProjectId]);
 
+  // T5677: A cold hit to an editor route (/framing, /overlay) with no project to
+  // edit renders home (resolveEditorScreen falls back to HOME) but leaves the URL
+  // sitting on the editor path. Normalize it with a replaceState redirect so the
+  // URL matches what's shown and the back button can't loop. Keyed on
+  // selectedProjectId (set synchronously by selectProject) — NOT the async
+  // selectedProject object — so the transient window during a project load or an
+  // auth-return restore never triggers a spurious bounce home. Redirect only; no
+  // state hydration (deep-linking INTO an editor with a project is out of scope).
+  useEffect(() => {
+    if (isCheckingSession) return;
+    const inEditorMode = editorMode === EDITOR_MODES.FRAMING || editorMode === EDITOR_MODES.OVERLAY;
+    if (inEditorMode && !selectedProjectId) {
+      redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
+    }
+  }, [editorMode, selectedProjectId, isCheckingSession, redirectToMode]);
+
   // T5195: quest_2 "return home" — record when the user lands on the home
   // (project-manager) screen AFTER saving their first reel. Gated on quest_1's
   // annotate_brilliant step because home is also the app's default landing

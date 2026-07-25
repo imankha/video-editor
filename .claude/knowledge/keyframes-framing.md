@@ -471,6 +471,30 @@ keyframed** — camera tilt is constant for a recording.
   PlayerDetectionOverlay all consume it (their local copies deleted). `videoToScreen` returns
   `{x,y,width,height}`; Highlight maps width/height→radiusX/radiusY at its call site. Drag handlers
   still hand-roll the inverse (`delta/scaleX`); `screenToVideo` is available if they migrate.
+- **Overlay stage is aspect-fit, not fixed-height (T5676, 2026-07-22).** `VideoPlayer` got an
+  opt-in `fitToAspect` prop: when true (Overlay, `!isFullscreen && !mobileFs`) the
+  `.video-player-container` + `.video-container` are `w-full h-full` (fill their parent) instead of
+  the legacy fixed `h-[40vh] sm:h-[60vh]`. `OverlayModeView` wraps VideoPlayer in a stage box
+  sized to the reel's true aspect via inline `style={{aspectRatio: 'W / H'}}` from
+  `effectiveOverlayMetadata.width/height` (class `stageBoxClass`, useAspectStage branch:
+  `mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]`) → `object-contain` becomes a
+  no-op and the 9:16 pillarbox dies (was ~2/3 black). **`.video-container` is still the
+  ResizeObserver target — do NOT remove the class; resizing it is safe BECAUSE of T5590's RO.**
+  Overlays (`HighlightOverlay`/`PlayerDetectionOverlay`) map via `useVideoDisplayRect` unchanged;
+  since the box now == video aspect, the display rect fills the container (no letterbox math to
+  drift). Fullscreen/`mobileFs` branches are byte-identical (aspect box + `fitToAspect` gated off;
+  CSS `:fullscreen` still forces 100vw/100vh). Desktop `lg+` puts the Overlay Settings card
+  (extracted to `components/OverlaySettingsCard.jsx` from `ExportButtonView`) BESIDE the video in
+  a `lg:flex-row` row (reclaimed pillarbox width); the "Add Spotlight" CTA + progress stay
+  full-width at the bottom; Controls bind to the video width (below the box, inside the
+  `lg:w-fit` video column). `ExportButtonView`'s settings card is now framing-only. Real-browser
+  proof: dev-only harness `aspectdiag.html` + `src/aspectdiag/main.jsx` (NOT a vite build input)
+  mounts the REAL VideoPlayer(fitToAspect) + REAL HighlightOverlay for a 9:16 AND a 16:9 source;
+  `e2e/T5676-aspect-stage-alignment.qa.spec.js` asserts video fills container (no pillarbox) +
+  ellipse inside the video rect at 390/768/1315 (samples fulfilled via `page.route` from /tmp —
+  vite v5 dev caches publicDir at startup so post-start public files 404). Live-account path
+  honest-skips until this account has an exported reel. Vitest `OverlayModeView.aspectStage.test.jsx`
+  pins the aspect-ratio math for both aspects + the two settings-card placements.
 - **Overlay circle input = Pointer Events; edit levers gated on the tracking layer (T5450,
   2026-07-19, SUPERSEDES T5390's select-then-manipulate)**:
   `HighlightOverlay` is `onPointerDown` + `setPointerCapture` (mouse+touch one path); move/up
@@ -610,6 +634,67 @@ keyframed** — camera tilt is constant for a recording.
   one) ≡ FramingScreen.jsx:750-784 (audit D7).
 - **FramingContainer hand-mirrors** hook→store per gesture at 8 sites (~L352-835) to dodge React
   batch ordering → T4470 (audit D1).
+
+## Aspect-aware video stage (T5676)
+
+The Overlay editor used to letterbox 9:16 portrait reels — the non-fullscreen stage box had
+no height cap (`rounded-lg` only) and `VideoPlayer`'s `.video-container` fell back to a fixed
+`h-[40vh] sm:h-[60vh]`, so a portrait video's `object-contain` shrank to fit that box's HEIGHT,
+leaving wide pillarbox on both sides. **The fix**: `OverlayModeView` computes `useAspectStage =
+!isFullscreen && !mobileFs && aspectW > 0 && aspectH > 0` from `effectiveOverlayMetadata`, and
+when true: sets the stage box's `style={{ aspectRatio: '${aspectW} / ${aspectH}' }}` (CSS
+aspect-ratio, not a Tailwind class — applies at ALL breakpoints) plus `lg:w-fit lg:h-[70vh]
+lg:max-h-[70vh]` (lg+ only: pins height, derives width from the aspect ratio so the box
+SHRINK-WRAPS instead of stretching full-column-width), and passes `VideoPlayer`
+`fitToAspect={useAspectStage}` — which swaps VideoPlayer's own container to `w-full h-full`
+(parent already has the right shape) instead of the `40/60vh` fallback, making `object-contain`
+a no-op.
+
+**Layout for A1**: lg+ screens (≥1024px viewport) place the stage box and
+`OverlaySettingsCard` side-by-side in a flex row (reclaimed pillarbox width for settings).
+Below lg (e.g. 768px), the box is `w-full max-w-full` with the aspect-ratio style still
+applied — width-bound, not height-bound, so height is DERIVED from width via aspect-ratio
+rather than pinned to 70vh. Settings card extracted from `ExportButtonView` into a new
+presentational component `OverlaySettingsCard.jsx` (all props, no store/hook logic).
+
+- **Implementation files**:
+  - `src/frontend/src/components/VideoPlayer.jsx`: added `fitToAspect` boolean prop; when
+    true, both the outer `video-player-container` and inner `.video-container` swap their
+    non-fullscreen branch to `w-full h-full` instead of the `40vh/60vh` fallback classes.
+  - `src/frontend/src/modes/OverlayModeView.jsx`: owns `useAspectStage`/`stageBoxClass`/
+    `stageBoxStyle` (the aspect-ratio CSS + lg:70vh cap) and the A1 flex-row/stack layout;
+    passes `fitToAspect={useAspectStage}` to `VideoPlayer` and renders `OverlaySettingsCard`
+    beside it on lg+.
+  - `src/frontend/src/components/OverlaySettingsCard.jsx` (new): presentational card with
+    color, shape, stroke, fill, dim, effect controls.
+  - `src/frontend/src/components/ExportButtonView.jsx`: removed settings card (moved to
+    `OverlayModeView` for the beside-video placement).
+  - `src/frontend/src/screens/OverlayScreen.jsx`: unrelated-to-layout T5676 change — locks
+    `OverlaySettingsCard` (`settingsDisabled` prop) while THIS project's overlay export is
+    in flight, mirrored from the export store (`exportingProject`).
+
+**KNOWN TRADE-OFF (measured, not a bug)**: for a PORTRAIT (9:16) reel on desktop, the new
+box is PINNED to `lg:h-[70vh]` vs the pre-fix fixed `sm:h-[60vh]` — ~10vh MORE vertical stage
+height in exchange for killing the horizontal pillarbox and enabling the beside-video settings
+layout. At a 748px-tall viewport this measured as the timeline needing ~75px MORE scroll to
+reach for portrait reels specifically (landscape reels aren't affected — their width, not the
+70vh height cap, is normally the binding constraint at lg breakpoints). Approved as part of the
+A1 design; do not "fix" by shrinking 70vh without a design conversation.
+
+**QA validation**: `e2e/T5676-aspect-stage-alignment.qa.spec.js` — real-account real-browser
+test (390/768/1315px, fullscreen, mobileFs) PLUS a dev-only harness (`aspectdiag.html` +
+`src/aspectdiag/main.jsx`, following the established `overlaydiag.html`/`cropdiag.html`
+pattern) mounting the REAL `VideoPlayer(fitToAspect)` + REAL `HighlightOverlay` for a 9:16 AND
+a 16:9 sample, since the QA account (imankh@gmail.com, profile 9fa7378c) has ZERO 16:9 projects
+(verified via direct sqlite query — every `projects.aspect_ratio` row is `9:16`). Harness
+samples must be 1080p-class (not 720p): a lower-resolution `<video>` can render BELOW the
+harness box's CSS width at medium viewports because `VideoPlayer`'s video element uses
+`max-w-full max-h-full` (pre-existing, unchanged by T5676 — never upscales past intrinsic
+size), which produced a harness-only gap at 768px that does not reproduce with the real
+account's higher-resolution export.
+
+**Unchanged**: `useVideoDisplayRect`, fullscreen mode CSS (`:fullscreen` rules force 100vw/100vh
+before any fitToAspect logic), no changes to zoom/pan or mobileFs enter/exit.
 
 ## Active/upcoming work
 - **T4220**: `remove_segment_split` wipes ALL segment speeds (clips.py ~483-497, literal "for now

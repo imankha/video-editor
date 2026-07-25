@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, MessageSquare } from 'lucide-react';
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
@@ -73,8 +73,14 @@ async function captureScreenshot() {
  * everything to admins silently.
  *
  * T1650: Gated by VITE_ENABLE_PROBLEM_REPORT env var (default: enabled).
+ *
+ * T5674: `compact` renders an icon-only trigger (with an accessible label) instead
+ * of the "Report a problem" text. The floating global mount uses it on editor
+ * screens so the trigger tucks into the safe corner as a small square instead of a
+ * 134px pill sprawling across the video's lower-right, where it read as colliding
+ * with the player controls. Presentational only — the modal/report flow is unchanged.
  */
-export function ReportProblemButton({ className = '' }) {
+export function ReportProblemButton({ className = '', compact = false }) {
   const email = useAuthStore((s) => s.email);
   const galleryOpen = useGalleryStore((s) => s.isOpen);
   const [open, setOpen] = useState(false);
@@ -162,10 +168,12 @@ export function ReportProblemButton({ className = '' }) {
       <button
         type="button"
         onClick={handleOpen}
+        aria-label="Report a problem"
+        title={compact ? 'Report a problem' : undefined}
         className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
         style={galleryOpen ? { right: 'auto', left: '1rem' } : undefined}
       >
-        Report a problem
+        {compact ? <MessageSquare size={18} aria-hidden="true" /> : 'Report a problem'}
       </button>
     );
   }

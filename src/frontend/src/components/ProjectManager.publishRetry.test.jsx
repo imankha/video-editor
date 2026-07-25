@@ -95,7 +95,9 @@ describe('ProjectCard publish — durable sync 503 (T4050)', () => {
     );
 
     renderCard();
-    fireEvent.click(screen.getByText(/Move to/i));
+    // T5672: the publish trigger is now the ready-to-publish tile badge
+    // (aria-label "Move to My Reels").
+    fireEvent.click(screen.getByRole('button', { name: /move to/i }));
 
     // Retry affordance appears...
     const retry = await screen.findByRole('button', { name: 'Retry' });
@@ -114,7 +116,9 @@ describe('ProjectCard publish — durable sync 503 (T4050)', () => {
       );
 
     renderCard();
-    fireEvent.click(screen.getByText(/Move to/i));
+    // T5672: the publish trigger is now the ready-to-publish tile badge
+    // (aria-label "Move to My Reels").
+    fireEvent.click(screen.getByRole('button', { name: /move to/i }));
 
     const retry = await screen.findByRole('button', { name: 'Retry' });
     expect(fetchProjectsMock).not.toHaveBeenCalled();

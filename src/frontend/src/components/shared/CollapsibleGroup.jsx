@@ -59,6 +59,7 @@ export function CollapsibleGroup({
     <div className={`mb-2 ${className}`}>
       {/* Group Header */}
       <button
+        data-testid="collapsible-group-header"
         onClick={() => {
           const next = !isExpanded;
           setIsExpanded(next);

@@ -250,7 +250,7 @@ def test_first_get_after_creation_does_not_reencode(db_env):
     recap_key, poster_key = poster_mod.recap_poster_r2_keys(USER_ID, PROFILE_ID, game_id)
     fake_r2.objects[recap_key] = b"fake-recap-bytes"  # recap source exists
 
-    def fake_extract(source, output_path, window=None):
+    def fake_extract(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         fake_r2.extract_calls += 1
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpegbytes")

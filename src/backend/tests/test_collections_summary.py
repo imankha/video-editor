@@ -374,6 +374,83 @@ class TestDownloadsFilters:
 
 
 # ---------------------------------------------------------------------------
+# season_rank badge threshold (T5679): only ACTUALLY-RANKED reels (matched at
+# least once via the Glicko game, match_count > 0) may show a rank badge. A
+# reel with only a SEEDED rating (match_count == 0, e.g. from quality_score)
+# sorts by rating like everyone else but has never been through the ranking
+# game -- it must get season_rank=None even if its rating places it #1.
+# ---------------------------------------------------------------------------
+
+class TestSeasonRankBadge:
+    def _set_rank(self, cur, fv_id, rating, match_count):
+        cur.execute(
+            "UPDATE final_videos SET rating = ?, match_count = ? WHERE id = ?",
+            (rating, match_count, fv_id),
+        )
+
+    def test_unranked_reel_gets_no_badge_even_if_top_by_rating(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        # Unranked reel seeded highest (1900) -- must NOT get a badge despite
+        # sorting #1 by ORDER_BY_RANK (rating DESC).
+        unranked_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0)
+        self._set_rank(cur, unranked_id, rating=1900.0, match_count=0)
+        # Actually-ranked reel, lower rating -- gets badge #1 (the only ranked one).
+        ranked_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0)
+        self._set_rank(cur, ranked_id, rating=1500.0, match_count=3)
+        conn.commit(); conn.close()
+
+        members = {d.id: d for d in _downloads().downloads}
+        assert members[unranked_id].season_rank is None
+        assert members[ranked_id].season_rank == 1
+
+    def test_rank_numbering_skips_unranked_interleaved(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        # Interleave ranked/unranked by descending rating so the unranked rows
+        # sort between ranked ones -- rank numbers must only count match_count>0
+        # rows, in sorted order, without the unranked rows consuming a slot.
+        a_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0)   # rating 1800, ranked
+        b_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0)   # rating 1700, UNRANKED
+        c_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0)   # rating 1600, ranked
+        self._set_rank(cur, a_id, rating=1800.0, match_count=5)
+        self._set_rank(cur, b_id, rating=1700.0, match_count=0)
+        self._set_rank(cur, c_id, rating=1600.0, match_count=1)
+        conn.commit(); conn.close()
+
+        members = {d.id: d for d in _downloads().downloads}
+        assert members[a_id].season_rank == 1
+        assert members[b_id].season_rank is None
+        assert members[c_id].season_rank == 2
+
+    def test_rank_caps_at_20_ranked_reels(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        ids = []
+        for i in range(22):
+            fv_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0)
+            self._set_rank(cur, fv_id, rating=2000.0 - i, match_count=1)
+            ids.append(fv_id)
+        conn.commit(); conn.close()
+
+        members = {d.id: d for d in _downloads().downloads}
+        for i, fv_id in enumerate(ids):
+            expected = (i + 1) if i < 20 else None
+            assert members[fv_id].season_rank == expected
+
+    def test_multiclip_reel_never_ranked_no_badge(self, db):
+        """Multi-clip reels are never in the ranking pool (rating/match_count
+        stay NULL/0 from v009 backfill) -- must never get a badge."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        multi_id, _ = _insert_fv(cur, ratio="9:16", duration=10.0, clip_count=2)
+        conn.commit(); conn.close()
+
+        members = {d.id: d for d in _downloads().downloads}
+        assert members[multi_id].season_rank is None
+
+
+# ---------------------------------------------------------------------------
 # Smart collections (Top Plays / Goals & Assists / Dribbles)
 # ---------------------------------------------------------------------------
 
