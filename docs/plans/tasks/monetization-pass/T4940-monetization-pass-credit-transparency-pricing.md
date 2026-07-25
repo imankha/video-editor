@@ -1,6 +1,6 @@
 # T4940: Monetization pass: credit transparency + ~5c repricing
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-07-12
@@ -58,19 +58,26 @@ User decision 2026-07-12: NOT flat — keep users incentivized to buy bigger pac
 
 **Pricing model (researched 2026-07-12):** quantity-discount power law `unit_price(q) = p0 x (q/q0)^(-k)` with elasticity k in the consumer-typical 0.15-0.25 band; good-better-best structure (middle tier = target/default, top tier = value anchor); savings communicated as "+X% bonus credits" against the starter rate rather than discounting the reference price. Industry norms: 5-25% per-unit discount depth across a consumer ladder; a well-placed ladder shifts 10-30 points of mix toward the target tier. Sources: Chargebee volume-discount glossary, Tremendous tiered-vs-volume guide, Stripe credits-pricing resources, price-anchoring/decoy literature (see task creation conversation).
 
-**RECOMMENDED ladder** (keeps existing $ price points; ~30% cheaper per credit across the board vs today):
+**SHIPPED ladder** (user decision 2026-07-25, supersedes the 60/120/260 recommendation below):
 
 | Pack | Price | Credits | c/credit | vs starter rate | Exported video |
 |---|---|---|---|---|---|
-| Starter | $3.99 | 60 | 6.65c | — (reference) | 1 min |
-| Popular (target) | $6.99 | 120 | 5.83c | **+14% bonus** (105 -> 120) | 2 min |
-| Best Value | $12.99 | 260 | 5.00c | **+33% bonus** (195 -> 260) | 4m20s |
+| Starter | $3.99 | **80** | 4.99c | — (reference, worst-case anchor) | 1m20s |
+| Popular (target) | $6.99 | **160** | 4.37c | **+14% bonus** (140 -> 160) | 2m40s |
+| Best Value | $12.99 | **340** | 3.82c | **+33% bonus** (255 -> 340) | 5m40s |
 
-Fit check: k = ln(6.65/5.00)/ln(260/60) = **0.195** (in band); starter->best discount depth 24.8% (in the 5-25% norm, matches today's 28% shape); Popular = exactly 2x starter credits for 1.75x price — the clean doubling makes the target tier legible at a glance.
+**Why this and not the original 60/120/260:** the user's decision criterion was *a clip should cost
+well under $1*. At 6.65c starter, a typical 13-15s clip cost $0.87-$1.00 and slow-mo pushed it past
+$1 — the ladder failed its own goal at the entry tier. At 4.99c/4.37c/3.82c a 13s clip is 65c/57c/50c
+and even a 20s clip stays <= $1 at every tier. Margin stays ~88-90% (marginal cloud cost ~0.4-0.5c
+per credit), so the reduction is a positioning choice, not a cost-driven one.
 
-**Alternate (steeper top-tier pull), if user prefers:** 60/$3.99 · 120/$6.99 · **280/$12.99** (4.64c, +40% bonus, k=0.23, depth 30%). And noted for later: a 4th "Season" mega-pack is the natural growth lever — don't add it in this task.
+`CREDIT_VALUE = 0.05` = the Starter (worst/highest) per-credit rate, the anchor for the upload
+storage formula; verified still cost-recovering (4GB game -> 3 credits).
 
-Final pack numbers remain a user gate at kickoff (recommended vs alternate). Update `CREDIT_PACKS`, `CREDIT_VALUE` (-> 0.05, the new worst-case), and the single-sourced frontend packs. Update analytics expectations if any dashboards assume pack sizes.
+**Superseded proposals (kept for rationale):** original recommended 60/$3.99 · 120/$6.99 · 260/$12.99
+(6.65c/5.83c/5.00c, k=0.195, depth 24.8%) and the steeper alternate 280/$12.99 (4.64c). A 4th
+"Season" mega-pack remains the natural growth lever — not in this task.
 
 ### Workstream B — "What you get" transparency
 1. **State the rule everywhere credits appear:** "1 credit = 1 second of exported video" on pack cards (with honest per-pack conversion: "80 credits = 80 seconds ≈ 6 clips"), in the buy modal, and in a compact "How credits work" explainer (buy modal link + help surface): what costs credits (export seconds, upload storage/30 days), what's free (spotlight, detection, downloads, sharing), credits never expire.
@@ -133,7 +140,7 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 ### Steps
 1. [ ] **Workstream C FIRST (go-live gate)** — user flips prod to live Stripe keys (backend `.env.prod` sk_live/pk_live/live whsec + frontend `.env.production` pk_live), redeploy backend + frontend, verify test card declined + real charge in live dashboard + pk_live in prod bundle. Move staging workflow pk_test to a GitHub secret. Decide on any cleanup of prior test-mode grants.
 2. [ ] Step 0 — measure overlay render GPU-s/video-s on a representative clip (it's free to users; know what we're absorbing); sanity-check framing cost anchor still ~0.3c/s
-3. [ ] User gate: confirm ladder (recommended 60/120/260 vs alternate 60/120/280) and explainer copy stance
+3. [x] User gate: ladder confirmed 2026-07-25 -> SHIPPED 80/160/340 (see Solution); explainer copy value-forward
 4. [ ] Backend: new `CREDIT_PACKS`, `CREDIT_VALUE`, packs in `/payments/config`
 5. [ ] Frontend: packs from config (kill the duplicate), rule copy + explainer, pre-flight export/upload cost display, transactions view
 6. [ ] Tests: pack math, config endpoint, pre-flight display, transactions rendering

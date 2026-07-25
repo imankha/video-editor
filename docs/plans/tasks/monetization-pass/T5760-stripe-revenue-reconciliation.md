@@ -1,6 +1,6 @@
 # T5760: Stripe revenue reconciliation (Stripe as source of truth for money)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-07-23

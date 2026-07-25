@@ -1,6 +1,6 @@
 # T5780: Framing shows effective (slow-mo-adjusted) clip length
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-24

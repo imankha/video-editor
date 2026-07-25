@@ -1,6 +1,6 @@
 # Monetization Pass (pricing redo + cost transparency + revenue truth)
 
-**Status:** TODO
+**Status:** STAGING (all 4 tasks merged to master 2026-07-25)
 **Impact:** 8
 **Complexity:** 5
 **Priority:** 1.6
@@ -39,10 +39,10 @@ T4940's pre-flight-export-cost item; T5760 is independent and lands last).
 
 | ID | Task | Status |
 |----|------|--------|
-| T5780 | [Framing shows effective (slow-mo-adjusted) clip length](T5780-framing-effective-duration-display.md) | TODO |
-| T5790 | [Show estimated credit cost on the Framing Export button](T5790-export-credit-cost-estimate.md) | TODO |
-| T4940 | [Monetization pass: credit transparency + ~5c repricing](T4940-monetization-pass-credit-transparency-pricing.md) | TODO |
-| T5760 | [Stripe revenue reconciliation](T5760-stripe-revenue-reconciliation.md) | TODO |
+| T5780 | [Framing shows effective (slow-mo-adjusted) clip length](T5780-framing-effective-duration-display.md) | STAGING |
+| T5790 | [Show estimated credit cost on the Framing Export button](T5790-export-credit-cost-estimate.md) | STAGING |
+| T4940 | [Monetization pass: credit transparency + ~5c repricing](T4940-monetization-pass-credit-transparency-pricing.md) | STAGING |
+| T5760 | [Stripe revenue reconciliation](T5760-stripe-revenue-reconciliation.md) | STAGING |
 
 ## Shared design decisions
 
