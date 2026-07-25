@@ -240,13 +240,18 @@ Brief description of current work.
 
 ### Status Values
 
-| Status | Meaning |
-|--------|---------|
-| `TODO` | Not started |
-| `IN_PROGRESS` | Currently being worked on |
-| `BLOCKED` | Waiting on something |
-| `TESTING` | Implementation done, testing |
-| `DONE` | Complete |
+| Status | Meaning | Who sets it |
+|--------|---------|-------------|
+| `TODO` | Not started | - |
+| `WIP` | AI is actively working it (branch exists) | AI |
+| `WAITING ON USER` | Blocked on the user: design approval, an open question, a test verdict, or a finished branch awaiting merge | AI |
+| `STAGING` | Merged to master (auto-deployed to staging), awaiting the user's verdict | AI |
+| `DONE` | Deployed to prod; hidden on the board | User gesture only (Resolve button or `/deploy`) |
+| `ICE` / `OBSOLETE` | Parked / no longer relevant | User |
+
+Lifecycle: `TODO -> WIP <-> WAITING ON USER -> STAGING -> DONE`. Never leave a task at `WIP` while AI is idle — `WAITING ON USER` is what tells the user the ball is in their court. See CLAUDE.md Task Status Rule.
+
+Branch names are never written into PLAN.md — the task board derives each task's branch from git and shows it on hover.
 
 ---
 
@@ -255,7 +260,7 @@ Brief description of current work.
 ```markdown
 # T{ID}: {Title}
 
-**Status:** TODO | IN_PROGRESS | BLOCKED | TESTING | DONE
+**Status:** TODO | WIP | WAITING ON USER | STAGING | DONE
 **Impact:** {1-10}
 **Complexity:** {1-10}
 **Created:** YYYY-MM-DD

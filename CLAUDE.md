@@ -65,14 +65,23 @@ Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostTo
 Task statuses split into two kinds, with different owners:
 
 **Factual statuses (AI auto-updates as part of the workflow).** These are objectively true from what the workflow did, so AI sets them in PLAN.md:
-- `IN PROGRESS` — set when work begins (feature branch created, Stage 1). See [1-task-start.md](.claude/workflows/1-task-start.md).
+- `WIP` — set when work begins (feature branch created, Stage 1) and whenever work resumes. See [1-task-start.md](.claude/workflows/1-task-start.md).
+- `WAITING ON USER` — set the moment the task is blocked on the user and cannot progress without them: a design-approval gate (Stage 2), a manual-test verdict (Stage 6), an open question, or a finished branch awaiting the user's test + merge (Stage 7). Say in the same message what you are waiting for. Set it back to `WIP` when the user unblocks it. A task must never sit at `WIP` while AI is actually idle — that is the distinction the board exists to show.
 - `STAGING` — set when the task branch lands on master (pushing to master auto-deploys staging). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
 
 **DONE — the user's call, expressed by an explicit gesture.** STAGING is the test phase — being on staging *is* testing, so there is no separate TESTING step. `DONE`/`Resolved` is set only by a deliberate user gesture, of which there are exactly two:
 1. The user clicks **Resolve** on the task board (per-task, once satisfied on staging), OR
 2. The user runs **`/deploy`** — a prod deploy auto-promotes every task whose *implementation* shipped in that deploy to DONE (the deploy command is the user's "ship it, it's done" gesture). See [deploy skill](.claude/skills/deploy/SKILL.md) reconciliation. AI never marks DONE outside these two gestures.
 
-Lifecycle: `TODO -> IN PROGRESS (AI) -> STAGING (AI) -> DONE (user gesture: Resolve button or /deploy)`.
+Lifecycle: `TODO -> WIP (AI) <-> WAITING ON USER (AI) -> STAGING (AI) -> DONE (user gesture: Resolve button or /deploy)`.
+
+DONE rows are hidden on the task board by default, so the board only ever shows work that is still somewhere in this pipeline.
+
+**Branch visibility is derived, never recorded.** Do NOT put branch names in PLAN.md. The task board resolves each task's branch from git itself and shows it on hover (the `⑂` glyph on the task row):
+- a branch whose *name* carries the id (`feature/T{id}-slug`), and
+- for branches NOT named after a task (a wave's `integration/*` branch, a `fix/*` branch), any commit subject on that branch mentioning `T{id}` — this is how tasks stay attributed after a wave is collapsed into one integration branch and the per-task branches are deleted.
+
+The board fetches `origin` on startup so branches pushed by container workers resolve. The corollary is a convention that must hold: **every task commit subject starts with the task id** (`T5683: ...`), or the task loses its branch attribution once its own branch is gone.
 
 ### Classification Output (Required)
 

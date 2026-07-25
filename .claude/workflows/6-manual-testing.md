@@ -156,8 +156,12 @@ The Test & Fix Agent can modify code, run tests, and commit fixes -- it has full
 
 ---
 
+## While Awaiting the User's Verdict
+
+Manual testing blocks on the user, so set the task's Status to `WAITING ON USER` in `docs/plans/PLAN.md` when you hand off the testing kickoff. The task board shows the branch on hover, so the user can see exactly which branch to test.
+
 ## After User Approves
 
-When the user says "approved", "that worked", "looks good", or "done":
+Set the Status back to `WIP` for the finish-up work. When the user says "approved", "that worked", "looks good", or "done":
 
 Proceed to [7-task-complete.md](7-task-complete.md) to finalize (may happen in the same or original conversation).
