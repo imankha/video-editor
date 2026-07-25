@@ -1084,13 +1084,26 @@ def sync_database_to_r2_with_version(
                 f"loaded=v{current_version} r2=v{r2_version} machine={FLY_MACHINE_ID} "
                 f"— NOT uploading, re-downloading"
             )
-            # Re-download the newer version so next request uses fresh data
+            # Re-download the newer version so next request uses fresh data.
+            # T4310: only report r2_version to the caller when the re-download is
+            # CONFIRMED to have succeeded. On failure/404/exception, the local file
+            # still holds our stale content — advancing the baseline anyway would let
+            # the NEXT retry compare against v{r2_version} and silently re-upload the
+            # stale copy as a "clean" write (the exact clobber this CAS check exists
+            # to prevent). Returning None here keeps CAS refusing forever instead.
+            redownloaded = False
             try:
-                if download_from_r2(user_id, "profile.sqlite", local_db_path, profile_id=profile_id):
+                redownloaded = download_from_r2(user_id, "profile.sqlite", local_db_path, profile_id=profile_id)
+                if redownloaded:
                     logger.info(f"[SYNC] Re-downloaded v{r2_version} from R2 after conflict")
+                else:
+                    logger.warning(
+                        f"[SYNC] Re-download after conflict returned False (404/failure) for "
+                        f"user={user_id} profile={profile_id} — baseline NOT advanced"
+                    )
             except Exception as e:
                 logger.warning(f"[SYNC] Failed to re-download after conflict: {e}")
-            return False, r2_version  # Return R2 version so caller can update local tracking
+            return (False, r2_version) if redownloaded else (False, None)
 
         # Calculate new version
         new_version = (max(r2_version, current_version or 0)) + 1
@@ -1325,6 +1338,10 @@ def sync_user_db_to_r2_with_version(
                 f"[SYNC_CONFLICT] user={user_id} db=user.sqlite loaded=v{current_version} "
                 f"r2=v{r2_version} machine={FLY_MACHINE_ID} — NOT uploading, re-downloading"
             )
+            # T4310: only report r2_version when the re-download CONFIRMED succeeded
+            # (retry_r2_call raises on failure/404) — see the profile branch above for
+            # why an unconfirmed refresh must not advance the baseline.
+            redownloaded = False
             try:
                 user_key = _user_db_r2_key(user_id)
                 # Re-download by fetching directly
@@ -1333,10 +1350,11 @@ def sync_user_db_to_r2_with_version(
                     client.download_file, R2_BUCKET, user_key, str(local_db_path),
                     operation=f"user_db_conflict_redownload {user_id}", **TIER_1,
                 )
+                redownloaded = True
                 logger.info(f"[SYNC] Re-downloaded user.sqlite v{r2_version} after conflict")
             except Exception as e:
                 logger.warning(f"[SYNC] Failed to re-download user.sqlite after conflict: {e}")
-            return False, r2_version
+            return (False, r2_version) if redownloaded else (False, None)
 
         new_version = (max(r2_version, current_version or 0)) + 1
 
