@@ -54,7 +54,9 @@ test('T5870: failed banner + Retry clears WITHOUT a page refresh (real backend)'
 
   // --- 1) force R2 down, then a REAL write -> re-drain exhausts -> .sync_failed
   await req.post('/api/test/sync-fault', { data: { enabled: true } });
-  const write = await req.put('/api/settings', { data: { theme: 'dark' } });
+  // framing is a persisted section (projectFilters is ignored); a sub-key here
+  // writes user.sqlite -> triggers the background sync that the fault fails.
+  const write = await req.put('/api/settings', { data: { framing: { t5870probe: 'x' } } });
   expect(write.ok(), 'PUT /api/settings (real user.sqlite write)').toBeTruthy();
 
   // --- 2) the alarm banner appears (poll the page so its interceptor sees the
