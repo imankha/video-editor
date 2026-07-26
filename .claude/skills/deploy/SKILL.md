@@ -88,7 +88,7 @@ For each candidate task ID:
 
 | Classification | Meaning | Recommended update |
 |----------------|---------|--------------------|
-| **DONE** | All acceptance criteria met | Promote PLAN/EPIC status TODO→DONE |
+| **DONE** | All acceptance criteria met | Promote PLAN/EPIC status (usually STAGING, sometimes TODO/WIP) → DONE |
 | **DONE (diverged)** | Outcome shipped, but differently than the spec | Promote to DONE **and** rewrite the description/spec to match reality; add a design note |
 | **PARTIAL** | Some phases shipped, others not | Split the unshipped work into a new task; mark the shipped part done |
 | **STATUS-STALE** | Merged earlier but PLAN still says TODO | Promote status only |

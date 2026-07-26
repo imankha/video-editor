@@ -146,6 +146,10 @@ when X happens:
 
 ---
 
+## While Awaiting Approval
+
+The design gate blocks on the user, so set the task's Status to `WAITING ON USER` in `docs/plans/PLAN.md` when you hand over the design doc, and say what you are waiting for.
+
 ## After Approval
 
-Proceed to [3-test-first.md](3-test-first.md) to create failing tests.
+Set the Status back to `WIP`, then proceed to [3-test-first.md](3-test-first.md) to create failing tests.

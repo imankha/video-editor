@@ -11,8 +11,9 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from app.database import USER_DATA_BASE
+from app.database import USER_DATA_BASE, sync_db_to_r2_explicit
 from app.services.auth_db import get_game_storage_ref, insert_game_storage_ref
+from app.services.db_refresh import RefreshFailed, clear_stale_wal_sidecars, wal_sidecars_present
 from app.services.pg import get_pg
 from app.services.sharing_db import mark_game_share_materialized
 from app.utils.encoding import decode_data, encode_data
@@ -40,7 +41,7 @@ def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None
     return conn
 
 
-class ProfileDBRefreshFailed(RuntimeError):
+class ProfileDBRefreshFailed(RefreshFailed):
     """R2 was unreachable, so a profile DB could not be confirmed current.
 
     Only raised for WRITE callers (require_fresh=True). Serving a stale copy to a
@@ -75,9 +76,26 @@ def ensure_profile_db_local(
     token = set_current_profile_id(profile_id)
     try:
         local_version = get_local_db_version(user_id, profile_id)
+        # T4315 round 3 (BLOCKING NEW-B): the WAL-in-use guard must gate the
+        # DOWNLOAD, not the version check -- checking it up front refused
+        # even the overwhelmingly common "local already current, nothing to
+        # download" case (sidecars just mean SOME connection, unrelated to
+        # this restore, has the file open right now for perfectly normal
+        # reasons). before_download is only consulted once R2 is confirmed
+        # newer, so a live connection blocks the actual swap, not every call.
         downloaded, new_version, was_error = sync_database_from_r2_if_newer(
-            user_id, db_path, local_version
+            user_id, db_path, local_version,
+            before_download=lambda: not wal_sidecars_present(db_path),
         )
+        if downloaded:
+            # WAL safety: the download already swapped db_path's content
+            # atomically, but a stale -wal/-shm sidecar from the file it
+            # replaced would still be sitting next to it -- see
+            # db_refresh.clear_stale_wal_sidecars for why that corrupts the
+            # next connection's reads instead of just serving old data. Only
+            # reached when the pre-check above found no sidecars, so this is
+            # defense-in-depth for the narrow window while the download ran.
+            clear_stale_wal_sidecars(db_path)
         if downloaded and new_version is not None:
             # Cache bookkeeping only (db_version table); not owner data.
             set_local_db_version(user_id, profile_id, new_version)
@@ -274,7 +292,16 @@ def clips_overlap(a: dict, b: dict) -> bool:
 
 
 def merge_clips(existing: dict, incoming: dict) -> dict:
-    """Merge two overlapping clips: earliest start, latest end, combined notes."""
+    """Merge two overlapping clips: earliest start, latest end, combined notes.
+
+    T4315 round 5 (note only, not restructured): a post-commit refusal
+    (WAL-checkpoint busy, or a recipient refresh failure) leaves the local
+    recipient DB already holding this materialization's clips/games -- a
+    retry re-runs this against that same local state, so an overlapping
+    clip's notes get "\n".join()-ed a second time (doubled notes). Game and
+    clip rows dedupe correctly by hash/overlap and no duplicate reels are
+    created, so this is cosmetic, not a correctness bug worth a bigger fix.
+    """
     e_start = existing.get("start_time", 0) or 0
     e_end = existing.get("end_time", 0) or 0
     i_start = incoming.get("start_time", 0) or 0
@@ -462,6 +489,17 @@ def materialize_game_share(
 
     Returns dict with keys: game_id, inserted, merged, skipped.
     """
+    # T4315 round 2 (MINOR): confirm the recipient is current BEFORE opening
+    # sharer_conn -- this can do a real R2 HEAD and, for a cold recipient, a
+    # full profile.sqlite download; doing it first means that network round
+    # trip never holds the sharer's connection open for no reason. (Also:
+    # _open_profile_db is a raw, R2-oblivious local read ("only opens
+    # locally-cached DBs -- does NOT download from R2") reused below for a
+    # WRITE (inserts games/clips into recipient_conn, commits) -- require_fresh
+    # is the same guard move_reels uses, so an R2 error aborts loudly instead
+    # of materializing the share on top of a stale/unconfirmed snapshot.)
+    ensure_profile_db_local(recipient_user_id, recipient_profile_id, require_fresh=True)
+
     sharer_conn = _open_profile_db(sharer_user_id, sharer_profile_id)
 
     # T5330: provenance marker for every shared-in row — NEVER NULL for a share, so
@@ -526,7 +564,10 @@ def materialize_game_share(
                 f"[Materialize] Created game {recipient_game_id} in recipient's DB"
             )
         else:
-            recipient_conn.close()
+            # T4315 round 3 (MINOR): no need to close here -- the `finally`
+            # below always closes recipient_conn exactly once regardless of
+            # how this block exits (sqlite3 close() is idempotent, but the
+            # double-call was pure redundancy).
             raise ValueError(
                 "Cannot create game without sharer's DB (pending share with no sharer DB)"
             )
@@ -551,6 +592,68 @@ def materialize_game_share(
                     reel_cursor, clip["id"], clip["name"] or "")
 
         recipient_conn.commit()
+
+        # BLOCKING NEW-A (T4315 round 3): _open_profile_db sets
+        # journal_mode=WAL, so the commit above lands in profile.sqlite-wal,
+        # not the main file. sync_db_to_r2_explicit uploads ONLY the main
+        # file (storage.py: client.upload_file on local_db_path) -- with no
+        # checkpoint first, R2 would receive stale (pre-share) bytes stamped
+        # at a NEWER version than reality. That is worse than not syncing at
+        # all: the next machine's restore-if-newer sees "local >= r2" and
+        # never re-pulls the real data, so the share is permanently invisible
+        # even though Postgres (below) reports it materialized. Checkpoint
+        # BEFORE upload, not after -- recipient_conn stays open (closed once,
+        # normally, in the `finally` below) so this is just a flush.
+        #
+        # BLOCKING-1 (T4315 round 4): PRAGMA wal_checkpoint does NOT raise on
+        # contention -- it returns (busy, log, checkpointed) with busy=1 and
+        # leaves the just-committed frames sitting in profile.sqlite-wal.
+        # Round 3 logged that tuple and discarded it, so a contended
+        # checkpoint (session_init's own later steps -- recover_orphaned_
+        # reservations, backfill_*, archive_completed_projects -- CAN hold
+        # this exact file open concurrently, per the NEW-B writeup, though
+        # those hold their own connections only for short transactions, so
+        # the window is narrow rather than routine) silently fell through to
+        # uploading the STALE main file anyway, stamped at the new version.
+        # A short busy_timeout here (not the connection's 30s default from
+        # _open_profile_db) turns "wait 30s then give up" into "fail fast,"
+        # and checking `busy` turns a silent
+        # stale upload into a loud, retryable refusal via the SAME
+        # ProfileDBRefreshFailed path already used for a failed sync below.
+        recipient_conn.execute("PRAGMA busy_timeout=2000")
+        busy, _log, _ckpt = recipient_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if busy:
+            logger.error(
+                f"[Materialize] WAL checkpoint busy for recipient {recipient_user_id}/"
+                f"{recipient_profile_id} before upload (share_id={share_id}) -- "
+                f"refusing to upload a possibly-stale main file"
+            )
+            raise ProfileDBRefreshFailed(
+                f"could not checkpoint recipient profile {recipient_profile_id} before upload "
+                f"(WAL in use) -- share_id={share_id} stays retryable"
+            )
+
+        # BLOCKING-1 (T4315 round 2): recipient_conn is a raw sqlite3.Connection
+        # from _open_profile_db, NOT a TrackedConnection -- the middleware's
+        # foreign-DB sync (db_sync.py get_request_written_*_dbs) only sees
+        # TrackedConnection owners, so this write is invisible to it and was
+        # NEVER synced by anything, for ANY recipient (pre-existing, not new
+        # to require_fresh -- the download just made the write reachable even
+        # when the recipient wasn't already cached locally). Sync explicitly
+        # and refuse to mark the share materialized in Postgres on failure --
+        # a share that never left local disk must stay retryable, never a
+        # permanent "success" that Postgres will never re-attempt.
+        target_synced = sync_db_to_r2_explicit(recipient_user_id, recipient_profile_id)
+        if not target_synced:
+            logger.error(
+                f"[Materialize] R2 sync FAILED for recipient {recipient_user_id}/"
+                f"{recipient_profile_id} after materializing share_id={share_id} -- "
+                f"NOT marking materialized so it retries instead of being lost"
+            )
+            raise ProfileDBRefreshFailed(
+                f"could not sync recipient profile {recipient_profile_id} to R2 "
+                f"after materializing share_id={share_id}"
+            )
 
         # Create storage refs in Postgres
         if hashes:

@@ -95,3 +95,26 @@ and the remap logic, and must land after both are on prod).
 - [ ] Arshia's moved reels on prod are re-attributed (T5830 executed, verified in his gallery).
 - [ ] Knowledge docs updated (persistence-sync.md cross-profile section + a new note in the
       export-pipeline/collections area touched).
+
+## Feedback re-review (2026-07-25) — design stands
+
+The reporter followed up asking for **playlists with sub-lists** (tournament / league / month, then
+sub-categorized by game) with manual folders as a fallback. Re-examined; **the epic does not change.**
+
+- His stated preference — *"refer or link back to the game it was taken from to auto-populate or
+  auto-categorize clips into their associated game"* — **is this epic** (T5800-T5820). The manual
+  folders were his fallback, offered because he assumed auto was infeasible.
+- Every axis he named is already a column on `games` (`tournament_name`, `game_type`, `game_date`,
+  `opponent_name` — `database.py:840-843`), so tournament/league/month grouping is **derivable with
+  zero filing**. Design Decision 1 (reject manual folders) therefore still holds, and adding a
+  folder tree would be redundant state against data we already have.
+- The hierarchy he describes — **tournament -> game -> clips** — only completes once this epic
+  lands, since this epic is what carries game attribution across profiles. **This epic is the
+  prerequisite for his own idea.**
+- The smart version is filed as [T5880](../T5880-smart-grouping-tournament-month.md) (auto-grouping
+  by tournament/month/opponent, extending the existing smart-collections mechanism), sequenced
+  AFTER T5800-T5820.
+- Idiosyncratic curation ("clips for the recruiter", "highlights for grandma") is a different need
+  already served by Collections + shares; it is not a filing-hierarchy problem.
+
+**What would reopen this:** users asking for groupings that are NOT derivable from game metadata.

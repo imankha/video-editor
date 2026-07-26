@@ -65,14 +65,23 @@ Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostTo
 Task statuses split into two kinds, with different owners:
 
 **Factual statuses (AI auto-updates as part of the workflow).** These are objectively true from what the workflow did, so AI sets them in PLAN.md:
-- `IN PROGRESS` — set when work begins (feature branch created, Stage 1). See [1-task-start.md](.claude/workflows/1-task-start.md).
+- `WIP` — set when work begins (feature branch created, Stage 1) and whenever work resumes. See [1-task-start.md](.claude/workflows/1-task-start.md).
+- `WAITING ON USER` — set the moment the task is blocked on the user and cannot progress without them: a design-approval gate (Stage 2), a manual-test verdict (Stage 6), an open question, or a finished branch awaiting the user's test + merge (Stage 7). Say in the same message what you are waiting for. Set it back to `WIP` when the user unblocks it. A task must never sit at `WIP` while AI is actually idle — that is the distinction the board exists to show.
 - `STAGING` — set when the task branch lands on master (pushing to master auto-deploys staging). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
 
 **DONE — the user's call, expressed by an explicit gesture.** STAGING is the test phase — being on staging *is* testing, so there is no separate TESTING step. `DONE`/`Resolved` is set only by a deliberate user gesture, of which there are exactly two:
 1. The user clicks **Resolve** on the task board (per-task, once satisfied on staging), OR
 2. The user runs **`/deploy`** — a prod deploy auto-promotes every task whose *implementation* shipped in that deploy to DONE (the deploy command is the user's "ship it, it's done" gesture). See [deploy skill](.claude/skills/deploy/SKILL.md) reconciliation. AI never marks DONE outside these two gestures.
 
-Lifecycle: `TODO -> IN PROGRESS (AI) -> STAGING (AI) -> DONE (user gesture: Resolve button or /deploy)`.
+Lifecycle: `TODO -> WIP (AI) <-> WAITING ON USER (AI) -> STAGING (AI) -> DONE (user gesture: Resolve button or /deploy)`.
+
+DONE rows are hidden on the task board by default, so the board only ever shows work that is still somewhere in this pipeline.
+
+**Branch visibility is derived, never recorded.** Do NOT put branch names in PLAN.md. The task board resolves each task's branch from git itself and shows it on hover (the `⑂` glyph on the task row):
+- a branch whose *name* carries the id (`feature/T{id}-slug`), and
+- for branches NOT named after a task (a wave's `integration/*` branch, a `fix/*` branch), any commit subject on that branch mentioning `T{id}` — this is how tasks stay attributed after a wave is collapsed into one integration branch and the per-task branches are deleted.
+
+The board fetches `origin` on startup so branches pushed by container workers resolve. The corollary is a convention that must hold: **every task commit subject starts with the task id** (`T5683: ...`), or the task loses its branch attribution once its own branch is gone.
 
 ### Classification Output (Required)
 
@@ -358,7 +367,10 @@ NEVER (reactive):
 4. **Restore is read-only**: Loading data from DB into hooks must not trigger a write-back
 5. **Single write path per data**: Each piece of persistent data has exactly ONE code path that writes it
 6. **Full-state saves require explicit gesture**: `saveCurrentClipState` only runs on export button click, never reactively
-7. **A write path must prove its copy is current, or fail loudly** (T4310). The gesture rules above govern *what triggers* a write; this governs *whether it's safe to land*. Read-modify-write on a snapshot the writer never confirmed is current is a silent-clobber risk — a stale machine can force-push over newer state with no error. Compare-and-swap (R2 version metadata vs. the loaded-from version) refuses a stale upload instead of overwriting; on conflict: freeze that write (do not upload), log CRITICAL, and surface the existing failed-sync/Retry UX — never auto-merge, never blind-retry an overwrite. See [persistence-sync.md](.claude/knowledge/persistence-sync.md) § CAS / SyncResult.
+7. **A write path must prove its copy is current, or fail loudly** (T4310 upload side + T4315 restore side). The gesture rules above govern *what triggers* a write; this governs *whether it's safe to land*. Read-modify-write on a snapshot the writer never confirmed is current is a silent-clobber risk — a stale machine can force-push over newer state with no error. Two halves, both required — CAS alone still serves stale reads; restore-if-newer alone still races the upload:
+   - **Upload side (CAS):** compare-and-swap (R2 version metadata vs. the loaded-from version) refuses a stale upload instead of overwriting; on conflict: freeze that write (do not upload), log CRITICAL, and surface the existing failed-sync/Retry UX — never auto-merge, never blind-retry an overwrite.
+   - **Restore side:** a writer resolving a DB it does not already hold under the request's own session/profile context (admin grants, payment webhooks, cross-user/cross-profile materialization) must confirm R2 hasn't moved past its loaded-from version BEFORE mutating — restore-if-newer, not restore-if-absent — or refuse (never build on an unconfirmed/possibly-in-use copy). This is structural, not a per-caller flag: the shared connection-opening path itself enforces it for the foreign-user case, so a new call site can't silently skip the guard by forgetting to call it explicitly. Swapping a live WAL-mode file requires care — refuse instead of swapping when another connection may have it open.
+   See [persistence-sync.md](.claude/knowledge/persistence-sync.md) § CAS / SyncResult and § T4315.
 
 **How to check if you're about to violate this:**
 - Am I writing a `useEffect` that calls an API or updates a store? → Probably wrong. Move the persistence call into the gesture handler instead.

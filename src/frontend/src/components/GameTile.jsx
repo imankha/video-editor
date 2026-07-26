@@ -6,6 +6,7 @@ import { useProfileStore } from '../stores';
 import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
 import { Logo } from './Logo';
 import { getDaysUntil } from './ExpirationBadge';
+import { API_BASE } from '../config';
 
 /**
  * GameTile - Landscape (16:9) poster tile for games in the games tab grid (T5681).
@@ -136,7 +137,12 @@ export function GameTile({
     activatePrimary();
   };
 
-  const posterUrl = `/api/games/${game.id}/poster.jpg`;
+  // Must carry API_BASE: on staging/prod the frontend (CF Pages) and API (Fly) are
+  // different hosts, so a bare `/api/...` src resolves against the Pages origin and
+  // returns the SPA shell (200 text/html) instead of the image -> the <img> errors
+  // into the branded fallback and every poster silently breaks (T5890). Locally the
+  // Vite proxy masks it. Mirrors DraftTile/DownloadsPanel/CollectionHeader poster URLs.
+  const posterUrl = `${API_BASE}/api/games/${game.id}/poster.jpg`;
 
   // Action descriptors -- rendered once for the desktop popover and once for the
   // mobile sheet (Delete is separate: it carries the two-tap confirm).

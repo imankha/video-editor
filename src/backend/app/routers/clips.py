@@ -2618,7 +2618,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                     if not share:
                         continue
                     try:
-                        _materialize_or_pend(
+                        await _materialize_or_pend(
                             email=email,
                             share=share,
                             sharer_user_id=user_id,
@@ -2654,7 +2654,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     return {"results": results, "sent_tags": sent_tags, "failed_tags": failed_tags}
 
 
-def _materialize_or_pend(
+async def _materialize_or_pend(
     email: str,
     share: dict,
     sharer_user_id: str,
@@ -2664,7 +2664,16 @@ def _materialize_or_pend(
     conn,
     sharer_email: str | None = None,
 ):
-    """Materialize immediately for single-profile users, or create pending share."""
+    """Materialize immediately for single-profile users, or create pending share.
+
+    T4315 round 2 (MAJOR-2): materialize_game_share now does a real R2 HEAD
+    (require_fresh) and, for a cold recipient, a full profile.sqlite
+    download. It never touches `conn` (the caller's own tracked connection),
+    so only that call is offloaded via asyncio.to_thread -- everything else
+    here keeps running on the event loop against `conn` unchanged.
+    """
+    import asyncio
+
     from app.services.auth_db import get_user_by_email
     from app.services.materialization import (
         _filter_clips_for_tag,
@@ -2696,12 +2705,17 @@ def _materialize_or_pend(
         return
 
     recipient_user_id = recipient_user["user_id"]
-    profiles = get_profiles(recipient_user_id)
+    # T4315 round 3 (MAJOR NEW-D): get_profiles(recipient_user_id) is a
+    # foreign-user get_user_db_connection call -- round 2's structural guard
+    # (MAJOR-4) makes it a possible R2 HEAD, so it needs the same
+    # asyncio.to_thread offload as materialize_game_share below.
+    profiles = await asyncio.to_thread(get_profiles, recipient_user_id)
 
     if len(profiles) == 1:
         share_record = get_share_by_token(share["share_token"])
         if share_record:
-            materialize_game_share(
+            await asyncio.to_thread(
+                materialize_game_share,
                 sharer_user_id=sharer_user_id,
                 sharer_profile_id=sharer_profile_id,
                 recipient_user_id=recipient_user_id,
@@ -2799,7 +2813,11 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
 
             sharer = get_user_by_id(pending["sharer_user_id"])
             pending_sharer_email = sharer["email"] if sharer else None
-            result = materialize_game_share(
+            # T4315 round 2 (MAJOR-2): materialize_game_share does a real R2
+            # HEAD (require_fresh) and possibly a full profile.sqlite
+            # download -- offload so it never blocks this worker's event loop.
+            result = await asyncio.to_thread(
+                materialize_game_share,
                 sharer_user_id=pending["sharer_user_id"],
                 sharer_profile_id=pending["sharer_profile_id"],
                 recipient_user_id=user_id,

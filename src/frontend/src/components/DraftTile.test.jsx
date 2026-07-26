@@ -1,10 +1,32 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// jsdom lacks matchMedia (useIsMobile) — stub desktop.
-vi.mock('../hooks/useIsMobile', () => ({
-  useIsMobile: () => false,
-  useIsLandscape: () => false,
+// jsdom lacks matchMedia. DraftTile's reveal mechanism runs through the REAL
+// useIsCoarsePointer hook (T5910), which reads `(pointer: coarse)` — so we stub
+// matchMedia and let each test flip the pointer type. This exercises the actual
+// width-vs-input-type decision instead of mocking the hook away (a width-only or
+// hook-mocked test cannot catch the narrow-desktop-fine-pointer bug).
+let coarsePointer = false;
+beforeEach(() => {
+  coarsePointer = false;
+  window.matchMedia = (query) => ({
+    matches: query.includes('pointer: coarse') ? coarsePointer : false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  });
+});
+
+// Stub MediaPlayer: the preview tests care about WHERE the modal mounts (portal)
+// and that it unmounts on close — not the player internals (which pull in
+// window.matchMedia via VideoControls, absent in jsdom). The stub echoes its src
+// so we can locate the mounted player.
+vi.mock('./MediaPlayer', () => ({
+  MediaPlayer: ({ src }) => <video data-testid="preview-video" src={src} />,
 }));
 
 // DraftTile reads several stores; stub the minimal surface it touches.
@@ -244,5 +266,91 @@ describe('DraftTile (T5672)', () => {
     fireEvent.click(container.querySelector('[data-testid="project-card"]'));
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelectWithMode).not.toHaveBeenCalled();
+  });
+
+  // T5910 — the reveal MECHANISM is gated on POINTER TYPE, not viewport width.
+  // A narrow desktop window (fine pointer) must reveal actions on HOVER; only a
+  // coarse (touch) pointer takes the long-press branch. The regression was that
+  // useIsMobile (width-OR-touch) sent a narrow desktop into the touch-only
+  // long-press branch, leaving a mouse user with no way to reveal the actions.
+  describe('T5910 reveal mechanism gated on pointer type', () => {
+    const actionsEl = (container) => container.querySelector('[data-testid="tile-actions"]');
+
+    it('FINE pointer (any width): actions use the group-hover reveal, NOT the long-press branch', () => {
+      coarsePointer = false; // a mouse — even at a narrow desktop width
+      const { container } = renderTile();
+      const actions = actionsEl(container);
+      // Hover branch: reveals via group-hover/tile:*, so a mouse hover works.
+      expect(actions.className).toMatch(/group-hover\/tile:opacity-100/);
+      expect(actions.className).toMatch(/group-hover\/tile:pointer-events-auto/);
+    });
+
+    it('COARSE pointer: actions take the long-press branch (hidden until revealed, no group-hover)', () => {
+      coarsePointer = true; // a touch device
+      const { container } = renderTile();
+      const actions = actionsEl(container);
+      // Long-press branch: hidden until actionsRevealed, and NOT hover-driven.
+      expect(actions.className).toMatch(/opacity-0/);
+      expect(actions.className).toMatch(/pointer-events-none/);
+      expect(actions.className).not.toMatch(/group-hover\/tile/);
+    });
+
+    it('COARSE pointer: a ~500ms long-press reveals the actions (opacity-100 pointer-events-auto)', () => {
+      coarsePointer = true;
+      vi.useFakeTimers();
+      try {
+        const { container } = renderTile();
+        const card = container.querySelector('[data-testid="project-card"]');
+        // Long-press: touchstart then the 500ms timer fires -> actionsRevealed.
+        fireEvent.touchStart(card);
+        act(() => { vi.advanceTimersByTime(500); });
+        const actions = actionsEl(container);
+        expect(actions.className).toMatch(/opacity-100/);
+        expect(actions.className).toMatch(/pointer-events-auto/);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // T5900 — preview modal must PORTAL out of the tile subtree. The tile applies a
+  // hover transform/filter, which makes it the containing block for any fixed
+  // descendant; a modal rendered inline would size its video against the tile box
+  // (video overflows the panel, defect A) and leave the purple scrub bar burned on
+  // the tile (defect B). Portaling to document.body is the mechanism that prevents
+  // both — asserted here in a layout-free way (real geometry is the Playwright QA
+  // spec T5900-reel-preview-overflow.qa.spec.js).
+  describe('T5900 preview modal containment', () => {
+    const completed = { has_final_video: true, final_video_id: 99, is_published: false };
+
+    it('renders the preview modal OUTSIDE the tile subtree (portaled to body), not inline', () => {
+      const { container } = renderTile(completed);
+      fireEvent.click(screen.getByTitle('Preview video'));
+      const card = container.querySelector('[data-testid="project-card"]');
+      const player = screen.getByTestId('preview-video');
+      expect(player.getAttribute('src')).toMatch(/\/api\/downloads\/99\/stream$/);
+      // The player is in the document but NOT a descendant of the tile card.
+      expect(document.body.contains(player)).toBe(true);
+      expect(card.contains(player)).toBe(false);
+    });
+
+    it('portals the modal out of the tile for a LANDSCAPE source too (aspect-independent)', () => {
+      const { container } = renderTile({ ...completed, aspect_ratio: '16:9' });
+      fireEvent.click(screen.getByTitle('Preview video'));
+      const card = container.querySelector('[data-testid="project-card"]');
+      expect(card.contains(screen.getByTestId('preview-video'))).toBe(false);
+    });
+
+    it('unmounts the modal (no player, no scrub chrome) after close via the X button', () => {
+      renderTile(completed);
+      fireEvent.click(screen.getByTitle('Preview video'));
+      expect(screen.queryByTestId('preview-video')).toBeTruthy();
+      // Close button is the only iconOnly ghost button inside the portaled modal.
+      const closeBtn = screen.getAllByRole('button').find((b) => b.closest('.fixed'));
+      fireEvent.click(closeBtn);
+      expect(screen.queryByTestId('preview-video')).toBeNull();
+      // No leftover fixed modal chrome anywhere in the document.
+      expect(document.querySelector('.fixed.inset-4')).toBeNull();
+    });
   });
 });

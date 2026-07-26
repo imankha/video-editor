@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // jsdom lacks matchMedia (useIsMobile) — stub it.
 vi.mock('../hooks/useIsMobile', () => ({
   useIsMobile: () => false,
+  useIsCoarsePointer: () => false,
   useIsLandscape: () => false,
 }));
 

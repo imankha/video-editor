@@ -50,9 +50,14 @@ export function CollectionPlayer({
   reRankLoadingId,
 }) {
   const videoRef = useRef(null);
+  const panelRef = useRef(null);
   const pointerStart = useRef(null);
   // Ephemeral view state: which timeline segment the cursor is over (tooltip).
   const [hoverIndex, setHoverIndex] = useState(null);
+  // The video paints a partial "slice" before it knows its dimensions; hold a
+  // skeleton in the reserved aspect box until the element can actually paint
+  // (loadeddata), then reveal the real frame — no fabricated placeholder frame.
+  const [videoReady, setVideoReady] = useState(false);
 
   const handleAllEnded = useCallback(() => onEnded?.(), [onEnded]);
   const handleReelChange = useCallback(
@@ -85,6 +90,48 @@ export function CollectionPlayer({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [next, prev, togglePlay, onClose]);
+
+  // Modal contract: lock background scroll while the player is open so the
+  // page behind can't move under the fixed overlay. Restored on close/unmount.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
+  // Modal contract: focus trap. Move focus into the dialog on open and keep Tab
+  // cycling within it, so background tiles/carousel are out of the tab order for
+  // keyboard users (the pointer-side equivalent is the backdrop below).
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    panel.focus();
+    const onKeyDown = (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = Array.from(
+        panel.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el === panel);
+      if (focusables.length === 0) { e.preventDefault(); panel.focus(); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    panel.addEventListener('keydown', onKeyDown);
+    return () => panel.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Reset the skeleton whenever the source changes so a newly-loaded reel also
+  // waits for its first paintable frame instead of flashing the prior video.
+  useEffect(() => { setVideoReady(false); }, [activeReel?.streamUrl]);
 
   const onPointerDown = (e) => {
     pointerStart.current = { x: e.clientX, t: Date.now() };
@@ -131,7 +178,27 @@ export function CollectionPlayer({
   const isPortrait = activeReel.aspect_ratio === RATIO.PORTRAIT;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black flex flex-col select-none md:inset-12 md:rounded-xl md:overflow-hidden">
+    <>
+      {/* Backdrop (T5860): opaque black beneath the panel so the desktop
+          md:inset-12 gutter never exposes the My Reels tiles/carousel behind
+          it. It SWALLOWS pointer events (no pass-through to tiles) and, per
+          project rule, does NOT close the player on click — a misclick in the
+          gutter must not dismiss. Close is via the X button / Escape only. */}
+      <div
+        data-testid="collection-player-backdrop"
+        className="fixed inset-0 z-[60] bg-black"
+        onClick={(e) => { e.stopPropagation(); }}
+        onPointerDown={(e) => { e.stopPropagation(); }}
+        onPointerUp={(e) => { e.stopPropagation(); }}
+        aria-hidden="true"
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className="fixed inset-0 z-[70] bg-black flex flex-col select-none outline-none md:inset-12 md:rounded-xl md:overflow-hidden">
       {/* Segmented progress bar — each segment is a scrub target: hover shows the
           reel name, click jumps to that reel and seeks to the clicked fraction.
           The visible bar stays 4px; a taller transparent hit region (py-2) makes
@@ -237,12 +304,28 @@ export function CollectionPlayer({
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
+        {/* Skeleton in the reserved aspect box, shown until the video can paint
+            its first frame (loadeddata). Prevents the "slice of video" open —
+            the element painting partially before it knows its dimensions. */}
+        {!videoReady && (
+          <div
+            data-testid="collection-player-skeleton"
+            aria-hidden="true"
+            className={`absolute animate-pulse rounded-lg bg-white/5 ${
+              isPortrait ? 'h-full aspect-[9/16]' : 'w-full aspect-video'
+            }`}
+          />
+        )}
+
         <video
           ref={videoRef}
           src={activeReel.streamUrl}
           playsInline
           autoPlay
-          className={`max-h-full max-w-full object-contain ${isPortrait ? 'h-full' : 'w-full'}`}
+          onLoadedData={() => setVideoReady(true)}
+          className={`max-h-full max-w-full object-contain transition-opacity duration-150 ${
+            isPortrait ? 'h-full' : 'w-full'
+          } ${videoReady ? 'opacity-100' : 'opacity-0'}`}
         />
 
         {/* Per-reel title overlay, fades in on reel change */}
@@ -269,7 +352,8 @@ export function CollectionPlayer({
           animation: collectionPlayerTitleFade 2.4s ease-out forwards;
         }
       `}</style>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -54,9 +54,9 @@ EOF
 
 Do NOT mark the task DONE in this commit. DONE is a user promotion (see CLAUDE.md Task Status Rule).
 
-### 5. Notify User
+### 5. Notify User + Mark WAITING ON USER
 
-
+Set the task's Status to `WAITING ON USER` in `docs/plans/PLAN.md` — the work is finished but the task cannot progress until the user tests and merges. The board shows the branch on hover.
 
 ```
 T{id} complete. Branch `feature/T{id}-*` is ready to merge.
@@ -66,7 +66,9 @@ T{id} complete. Branch `feature/T{id}-*` is ready to merge.
 
 ## Merge -> STAGING
 
-The user reviews and decides when to merge. When the task branch lands on master — whether AI performs the merge (only when the user explicitly asks) or AI confirms the user merged it — set that task's Status to `STAGING` in `docs/plans/PLAN.md`. Pushing to master auto-deploys staging, so STAGING is factually true at that point (AI owns this status; see CLAUDE.md Task Status Rule).
+The user reviews and decides when to merge. When the task branch lands on master — whether AI performs the merge (only when the user explicitly asks) or AI confirms the user merged it — set that task's Status from `WAITING ON USER` to `STAGING` in `docs/plans/PLAN.md`. Pushing to master auto-deploys staging, so STAGING is factually true at that point (AI owns this status; see CLAUDE.md Task Status Rule).
+
+**Waves.** When several task branches are collapsed into one `integration/*` branch so the user can test them in a single pass, every task in the wave stays `WAITING ON USER` until that integration branch lands on master — then they all go `STAGING` together. Do not record the integration branch name anywhere: the board derives it from the `T{id}:` commit subjects it carries, which is why those subjects are mandatory.
 
 After merge the user will (optionally) delete the feature branch, verify on staging, then promote `STAGING -> DONE` via the task board "Resolve" button. Being on staging is the test phase — there is no separate TESTING step.
 

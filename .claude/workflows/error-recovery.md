@@ -195,9 +195,10 @@ cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
 
 4. Determine current stage from status:
    - TODO → Stage 1
-   - IN_PROGRESS → Check progress log for stage
-   - TESTING → Stage 6
-   - DONE → Stage 7 (cleanup)
+   - WIP → Check progress log for stage
+   - WAITING ON USER → find the open gate (design approval / test verdict / merge) and re-ask it
+   - STAGING → merged; nothing to resume (user resolves after verifying)
+   - DONE → deployed; nothing to resume
 
 5. Resume from that stage
 ```

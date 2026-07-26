@@ -35,6 +35,27 @@ cd <project-root> && python scripts/task-manager.py > /dev/null 2>&1 & disown
 
 Then tell the user the board is open at http://localhost:8089. Do NOT use `run_in_background` — the server is fire-and-forget.
 
+## What the Board Shows
+
+**Statuses** (see CLAUDE.md Task Status Rule for who owns each):
+
+| Badge | Meaning |
+|-------|---------|
+| `TODO` | Not started |
+| `WIP` | AI actively working it |
+| `WAITING ON USER` | Blocked on you: design approval, a question, a test verdict, or a branch awaiting merge |
+| `STAGING` | Merged to master and auto-deployed to staging |
+| `DONE` | Deployed to prod — hidden by default ("Hide done" checkbox) |
+
+The **Resolve** button appears on any in-flight row and promotes it straight to DONE.
+
+**Branch on hover.** Rows with a branch show a `⑂` glyph; hovering the task name (or the glyph) lists the branches, each tagged `local only` / `pushed` / `merged`. Nothing is stored in PLAN.md — the server derives it from git on each load:
+
+1. Branch names containing the task id (`feature/T5683-...`).
+2. For branches NOT named after a task — a wave's `integration/*` branch, a `fix/*` branch — any commit subject on that branch (not yet on master) mentioning `T5683`. This is what keeps a task attributed after a wave is collapsed into one integration branch and the per-task branches are deleted. Branches already named for a task are excluded from this pass, otherwise sibling commits inherited from the base branch would be misattributed.
+
+The server runs `git fetch --prune origin` in the background at startup so branches pushed by container workers resolve. The lookup is cached for 30s; `GET /api/branches?fetch=1` forces a re-fetch.
+
 ## Portability
 
 The tool works with any PLAN.md that uses:

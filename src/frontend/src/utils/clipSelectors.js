@@ -6,6 +6,8 @@
  * @see T250: Clip Store Unification
  */
 
+import { API_BASE } from '../config';
+
 // ========== Clip File Status Selectors ==========
 
 export const isExtracted = (clip) => !!clip.filename;
@@ -17,10 +19,15 @@ export const clipDisplayName = (clip) =>
 
 /**
  * Get the URL for a clip's video file.
- * Prefers presigned R2 URL, falls back to local proxy endpoint.
+ * Prefers presigned R2 URL, falls back to the backend proxy endpoint.
+ *
+ * The fallback MUST carry API_BASE: on staging/prod the frontend and API are
+ * different hosts, so a bare `/api/...` src resolves against the Cloudflare Pages
+ * origin and returns the SPA shell instead of the video (T5890). Matches
+ * projectDataStore.getClipFileUrl, which already prefixes API_BASE.
  */
 export const clipFileUrl = (clip, projectId) =>
-  clip.file_url || `/api/clips/projects/${projectId}/clips/${clip.id}/file`;
+  clip.file_url || `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`;
 
 // ========== Data Accessors ==========
 

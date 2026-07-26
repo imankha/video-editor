@@ -21,6 +21,7 @@ import os
 import sys
 import shutil
 import subprocess
+import threading
 import time
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -54,6 +55,118 @@ if not PLAN_PATH or not os.path.isfile(PLAN_PATH):
     print(f"Error: Cannot find PLAN.md. Pass the path as an argument.")
     sys.exit(1)
 PLAN_PATH = os.path.abspath(PLAN_PATH)
+
+# --- Git branch lookup (task id -> branch) ---
+#
+# The branch a task lives on is DERIVED from git, never stored in PLAN.md. Two
+# signals, because a task's work outlives its original branch:
+#   1. Branch NAME contains the id      -> feature/T5683-poster-surface
+#   2. A commit ON that branch (not yet on master) mentions the id in its subject
+#      -> integration/ui-pass-wave1 after a wave is squashed into one test branch
+#         and the per-task branches are deleted.
+# Signal 2 is what keeps the tooltip honest for wave/integration branches.
+
+def _find_repo_root():
+    start = os.path.dirname(PLAN_PATH)
+    try:
+        out = subprocess.run(['git', '-C', start, 'rev-parse', '--show-toplevel'],
+                             capture_output=True, text=True, timeout=10)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except Exception:
+        pass
+    return start
+
+REPO_ROOT = _find_repo_root()
+
+TASK_ID_RE = re.compile(r'\bT(\d{2,6})\b', re.IGNORECASE)
+BRANCH_CACHE = {'ts': 0.0, 'data': {}}
+BRANCH_CACHE_TTL = 30.0
+
+def _git(args, timeout=20):
+    try:
+        out = subprocess.run(['git'] + args, cwd=REPO_ROOT,
+                             capture_output=True, text=True, timeout=timeout)
+    except Exception:
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+def _short_ref(ref):
+    """origin/feature/T10-x -> feature/T10-x; leaves local refs alone."""
+    return ref[len('origin/'):] if ref.startswith('origin/') else ref
+
+def _is_trunk(name):
+    return name in ('master', 'main', 'HEAD') or name.endswith('/HEAD')
+
+def branches_by_task(force=False):
+    """{'T5683': [{'name':..,'local':..,'remote':..,'merged':..,'via':'name|commits'}]}"""
+    now = time.time()
+    if not force and now - BRANCH_CACHE['ts'] < BRANCH_CACHE_TTL:
+        return BRANCH_CACHE['data']
+
+    def refs(extra=None):
+        args = ['for-each-ref', '--format=%(refname:short)'] + (extra or [])
+        args += ['refs/heads', 'refs/remotes/origin']
+        out = _git(args)
+        return [l.strip() for l in out.splitlines() if l.strip()] if out else []
+
+    merged_refs = set()
+    for base in ('master', 'origin/master'):
+        m = refs(['--merged', base])
+        if m:
+            merged_refs = set(m)
+            break
+
+    acc = {}  # task id -> {branch name -> entry}
+
+    def add(task_id, ref, via):
+        name = _short_ref(ref)
+        if _is_trunk(name):
+            return
+        bucket = acc.setdefault(task_id, {})
+        entry = bucket.setdefault(name, {'name': name, 'local': False, 'remote': False,
+                                         'merged': False, 'via': via})
+        if ref.startswith('origin/'):
+            entry['remote'] = True
+        else:
+            entry['local'] = True
+        if ref in merged_refs:
+            entry['merged'] = True
+        if via == 'name':
+            entry['via'] = 'name'
+
+    # Signal 1: task id in the branch name
+    for ref in refs():
+        for m in TASK_ID_RE.findall(_short_ref(ref)):
+            add('T' + m, ref, 'name')
+
+    # Signal 2: task id in a commit subject that is on a branch but not on master.
+    # Only for branches NOT already named after a task — a feature/T#### branch belongs
+    # to its own task, and it routinely carries sibling commits from the base it was cut
+    # from, which would otherwise attribute those tasks to the wrong branch.
+    log = _git(['log', '--source', '--format=%S%x09%s', '--branches', '--remotes',
+                '--not', 'master', '--max-count=4000'])
+    if log:
+        for line in log.splitlines():
+            ref, _, subject = line.partition('\t')
+            ref = ref.strip().replace('refs/heads/', '').replace('refs/remotes/', '')
+            if not ref or _is_trunk(_short_ref(ref)):
+                continue
+            if TASK_ID_RE.search(_short_ref(ref)):
+                continue
+            for m in TASK_ID_RE.findall(subject):
+                add('T' + m, ref, 'commits')
+
+    data = {tid: sorted(b.values(), key=lambda e: (e['via'] != 'name', e['name']))
+            for tid, b in acc.items()}
+    BRANCH_CACHE['ts'] = now
+    BRANCH_CACHE['data'] = data
+    return data
+
+def refresh_remote_refs():
+    """Pull down branches pushed by container workers, then invalidate the cache."""
+    _git(['fetch', '--prune', '--quiet', 'origin'], timeout=90)
+    BRANCH_CACHE['ts'] = 0.0
 
 # --- Bug Tracking Config & Functions ---
 
@@ -734,12 +847,18 @@ HTML = r"""<!DOCTYPE html>
   }
   .badge-todo { background: rgba(88,166,255,0.15); color: var(--blue); }
   .badge-inprogress { background: rgba(56,139,253,0.22); color: var(--blue); }
+  .badge-wip { background: rgba(56,139,253,0.22); color: var(--blue); }
+  .badge-waiting { background: rgba(188,140,255,0.18); color: var(--purple); }
+  .badge-blocked { background: rgba(248,81,73,0.14); color: var(--red); }
   .badge-staging { background: rgba(247,129,102,0.18); color: var(--orange, #f78166); }
   .badge-testing { background: rgba(210,153,34,0.15); color: var(--yellow); }
   .badge-done { background: rgba(63,185,80,0.15); color: var(--green); }
   .badge-ice { background: rgba(72,79,88,0.25); color: var(--gray); }
   .badge-measuring { background: rgba(188,140,255,0.15); color: var(--purple); }
   .badge-obsolete { background: rgba(72,79,88,0.25); color: var(--gray); text-decoration: line-through; }
+
+  .branch-hint { color: var(--text-dim); cursor: help; margin-left: 6px; font-size: 12px; }
+  .branch-hint:hover { color: var(--accent); }
 
   .meta { font-size: 12px; color: var(--text-dim); font-family: monospace; white-space: nowrap; text-align: center; min-width: 28px; }
   .meta-label { font-size: 10px; color: var(--text-dim); display: block; }
@@ -963,6 +1082,7 @@ let data = [];
 let saving = false;
 let pendingSave = false;
 let collapseState = {}; // {msId: bool, epicId: bool} — persists across renders
+let branchMap = {}; // {T5683: [{name, local, remote, merged, via}]} — derived from git, not PLAN.md
 let bugData = null; // {prod: {groups, error}, staging: {groups, error}}
 
 function copyText(text, el) {
@@ -1402,6 +1522,9 @@ function statusClass(s) {
   const l = (s || '').toLowerCase().replace(/\s/g, '');
   if (l === 'done') return 'badge-done';
   if (l === 'staging') return 'badge-staging';
+  if (l === 'wip') return 'badge-wip';
+  if (l.startsWith('waiting')) return 'badge-waiting';
+  if (l === 'blocked') return 'badge-blocked';
   if (l === 'inprogress' || l === 'in_progress') return 'badge-inprogress';
   if (l === 'testing') return 'badge-testing';
   if (l === 'todo') return 'badge-todo';
@@ -1488,15 +1611,28 @@ function buildTaskCard(t, ms) {
 
   const statusLower = (t.status || '').toLowerCase().replace(/\s/g, '');
   let statusBtnHtml = '';
-  if (statusLower === 'staging' || statusLower === 'testing' || statusLower === 'in_progress' || statusLower === 'inprogress') {
-    // STAGING is the test phase; user resolves straight to DONE. (TESTING kept for legacy rows.)
+  if (statusLower === 'staging' || statusLower === 'wip' || statusLower.startsWith('waiting') ||
+      statusLower === 'testing' || statusLower === 'in_progress' || statusLower === 'inprogress') {
+    // STAGING is the test phase; user resolves straight to DONE. (TESTING/IN PROGRESS kept for legacy rows.)
     statusBtnHtml = '<button class="status-btn to-done" title="Resolve (mark Done)">Resolve</button>';
   }
+
+  // Branch(es) this task lives on — derived from git refs + commit subjects, so a
+  // wave's integration/* branch still shows after the per-task branches are deleted.
+  const branches = branchMap[t.id] || [];
+  const branchTip = branches.map(b => {
+    const where = b.remote && b.local ? 'local + pushed' : b.remote ? 'pushed' : 'local only';
+    const how = b.via === 'commits' ? ', by commit' : '';
+    return b.name + ' (' + where + (b.merged ? ', merged' : '') + how + ')';
+  }).join('\n');
+  const branchHint = branches.length
+    ? ' <span class="branch-hint" title="' + esc(branchTip) + '">&#9282;</span>'
+    : '';
 
   card.innerHTML = `
     <span class="drag-handle">&#9776;</span>
     <span class="task-id" title="Click to copy"><span class="copy-hint">Click to copy</span>${esc(t.id)}</span>
-    <span class="task-name">${esc(t.name)}${needsMigr ? ' <span class="migr-badge" title="Requires DB migration">DB</span>' : ''}</span>
+    <span class="task-name"${branchTip ? ' title="' + esc(branchTip) + '"' : ''}>${esc(t.name)}${needsMigr ? ' <span class="migr-badge" title="Requires DB migration">DB</span>' : ''}${branchHint}</span>
     <span class="badge ${statusClass(t.status)}">${esc(t.status || 'TODO')}</span>
     ${statusBtnHtml}
     <span class="meta" title="Priority">${esc(pri)}</span>
@@ -2255,8 +2391,19 @@ async function load() {
   data = await resp.json();
   updateStatus('saved');
   render();
+  loadBranches();
   loadBugs();
   loadConfig();
+}
+
+async function loadBranches() {
+  try {
+    const resp = await fetch('/api/branches');
+    if (resp.ok) {
+      branchMap = await resp.json();
+      render();
+    }
+  } catch(e) {}
 }
 
 async function loadConfig() {
@@ -2408,6 +2555,11 @@ class Handler(BaseHTTPRequestHandler):
                 'staging_url': config.get('staging_url', ''),
             }
             self._json(200, safe)
+        elif self.path.startswith('/api/branches'):
+            params = parse_qs(urlparse(self.path).query)
+            if params.get('fetch', ['0'])[0] == '1':
+                refresh_remote_refs()
+            self._json(200, branches_by_task())
         elif self.path == '/api/tasks':
             with open(PLAN_PATH, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -2591,6 +2743,8 @@ def kill_existing():
 
 if __name__ == '__main__':
     kill_existing()
+    # Pull worker-pushed branches in the background so the branch tooltips are current.
+    threading.Thread(target=refresh_remote_refs, daemon=True).start()
     print(f"Task Manager serving PLAN.md: {PLAN_PATH}")
     print(f"Open http://localhost:{PORT}")
     server = HTTPServer(('127.0.0.1', PORT), Handler)

@@ -7,9 +7,13 @@
 git checkout -b feature/T{id}-{short-description}
 ```
 
-### 1b. Mark Task IN PROGRESS
+### 1b. Mark Task WIP
 
-Set the task's Status column to `IN PROGRESS` in `docs/plans/PLAN.md` (factual status — AI owns this; see CLAUDE.md Task Status Rule). This is the only status field AI edits at task start. Do NOT touch TESTING/DONE — those are user promotions.
+Set the task's Status column to `WIP` in `docs/plans/PLAN.md` (factual status — AI owns this; see CLAUDE.md Task Status Rule). This is the only status field AI edits at task start. Do NOT touch DONE — that is a user promotion.
+
+`WIP` means AI is actively working. The moment the task is blocked on the user (design gate, question, manual test, branch awaiting merge), switch it to `WAITING ON USER`, and back to `WIP` when they unblock it.
+
+Name the branch `feature/T{id}-{slug}` and start every commit subject with `T{id}:` — the task board derives the branch shown on hover from exactly those two things.
 
 ### 2. Read Task File
 - Read `docs/plans/tasks/T{id}-*.md`
