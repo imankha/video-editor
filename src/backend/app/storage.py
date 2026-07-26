@@ -1131,6 +1131,14 @@ def sync_database_to_r2_with_version(
         - (True, new_version) if upload succeeded
         - (False, None) if conflict or error
     """
+    # T4120/T5870: the FORCE_R2_SYNC_FAILURE seam faults the WHOLE process, so it
+    # must also cover primitive-direct callers (retry_pending_sync's re-drain,
+    # sync_db_to_cloud, the shutdown sync) — not only the *_explicit wrappers, or a
+    # forced "R2 is down" test would see those paths quietly succeed against real R2.
+    # Inert on prod/staging (gated by _seams_enabled()).
+    if _force_r2_sync_failure():
+        return False, None
+
     if not R2_ENABLED:
         return False, None
 
@@ -1416,6 +1424,11 @@ def sync_user_db_to_r2_with_version(
     Args:
         skip_version_check: If True, skip the HEAD call and use current_version directly.
     """
+    # T4120/T5870: see sync_database_to_r2_with_version — the force-failure seam
+    # must cover this primitive too (inert on prod/staging).
+    if _force_r2_sync_failure():
+        return False, None
+
     if not R2_ENABLED:
         return False, None
 

@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-07-26 (T5870: split sync state into pending/failed/conflict — a deferred sync is no longer mislabelled "failed"; bounded re-drain heals transient failures in-band; Retry restored + restores-if-newer on conflict; see T5870 section)
 updated: 2026-07-26 (T5920: WAL checkpoint-or-refuse guard in the R2 upload primitive — no under-checkpointed upload at a bumped version; see T5920 section)
 updated: 2026-07-26 (T5840: credits moved OUT of user.sqlite/R2 into Fly Postgres — see backend-services.md "Credits (Postgres, T5840)". No longer part of the R2 sync/CAS story below; purge/reregister interaction now governed by a Postgres idempotency-key collision, not restore-from-R2.)
 updated: 2026-07-25 (T4315: confirm_current_before_write restore-if-newer for write paths, WAL-safe sidecar cleanup; generalizes require_fresh/_refresh_target_user_db)
@@ -261,6 +262,61 @@ path) refuses under contention. Red-without-guard proven: disabling the guard ca
 return `SyncResult.OK` (uploads stale bytes at a bumped version). `test_performance.py::TestR2SyncSkipHead`
 updated to use a real WAL DB (the checkpoint step now opens `local_db_path`, so a dummy byte file is
 refused as "file is not a database").
+
+## T5870 — Pending vs failed vs conflict (stop lying about deferred syncs) + honest Retry
+
+**Root cause (measured, prod bug 38p glitch 1 — "edits aren't saving fires regularly, only refresh
+helps").** `is_sync_failed(user_id)` was literally `return has_sync_pending(user_id)`. `.sync_pending`
+is set BEFORE every attempt (crash-safety) and cleared only on success, so a **0.5s upload-lock DEFER**
+(the fire-and-forget `/actions` path, `_SYNC_LOCK_TIMEOUT`) — a queued-retry state, NOT a failure —
+surfaced as `X-Sync-Status: failed`. Harness (`tests/t5870_measure_sync_outcomes.py`) measured 71% of
+syncs DEFER under a rapid-edit burst; the alarm lands when a burst ENDS on a defer and the user goes
+idle (nothing heals it). "Only refresh helps" had a second cause: the sync banner
+(`SyncStatusIndicator`) had NO Retry button since commit `3b495048` ("no manual button") — auto-retry
+fires only on a network `online` event, and the write-triggered `retry_pending_sync` needs the user to
+keep editing. (Lead-1's "in-flight read as failed" race was probed and NOT reproduced — in-flight IS
+suppressed; the mislabel is DEFER-read-as-failed.)
+
+**Three honest states now.** New `.sync_failed` marker (`database.py`, mirrors `.sync_conflict`) means a
+GENUINE, unrecovered failure. `.sync_pending` stays the crash-safe queued marker. Header decision is the
+pure `db_sync.py: sync_status_header(user_id)` (suppressed while an attempt is in flight):
+`conflict` (`.sync_conflict`) > `failed` (`.sync_failed`) > `pending` (`.sync_pending` only) > none.
+`is_sync_failed` is now `has_sync_failed or has_sync_conflict` (NOT pending). Frontend `syncStore.js`:
+`syncState` enum `ok|pending|failed|conflict` (was a `syncFailed` bool); `SyncStatusIndicator` shows a
+quiet "Cloud backup pending" (no button) for `pending`, and the alarm "Could not save to the cloud" +
+a **restored Retry button** for `failed`/`conflict`.
+
+**Bounded re-drain (`db_sync.py: _redrain_failed_sync`) is what makes "pending" HONEST.** On a
+transient `FAILED` (defer/checkpoint-busy/R2 blip), `_background_sync` retries the SAME write's sync
+`_REDRAIN_MAX_ATTEMPTS=3` times (backoff `0.4·2ⁿ`) while STILL holding `_SYNC_IN_PROGRESS` (so it never
+flashes mid-heal); on success it clears `.sync_pending`+`.sync_failed`, on exhaustion it marks
+`.sync_failed`. **Persistence-rule compliance (a reviewer WILL challenge this):** it is a bounded,
+attempt-scoped CONTINUATION of the originating write gesture (T4900 precedent), NOT reactive — it does
+not watch state, is not a `useEffect`/store watcher, is not a poller that generates writes. Skipped for
+the durable path (its 503 UX owns retry) and never for a CONFLICT (not blind-retryable). Showing a calm
+"pending" for a write that never lands would be *silently-not-saving* — the re-drain is what prevents
+that, not merely quieting the alarm.
+
+**Conflict Retry restores-if-newer (`/api/retry-sync`).** A CAS conflict is not blind-retryable (T4310
+freezes the baseline → a re-push re-refuses forever), and `session_init` is first-access-only so a
+refresh may not heal it → **Retry is the only cure.** The endpoint calls
+`confirm_current_before_write(user_id, None/profile_id)` (T4315 restore-if-newer) off the event loop to
+pull R2's newer copy; on success clears all markers, on `RefreshFailed` returns
+`{success:false, conflict:true, message:"…reload…"}` — honest, never a loop.
+
+**Test-seam faithfulness (storage.py).** `FORCE_R2_SYNC_FAILURE` now also short-circuits the two upload
+PRIMITIVES (`sync_database_to_r2_with_version`/`sync_user_db_to_r2_with_version`), not just the
+`*_explicit` wrappers — so a forced "R2 down" also faults the primitive-direct callers
+(`retry_pending_sync`'s re-drain, `sync_db_to_cloud`, shutdown sync). Without this the re-drain would
+heal a "forced" failure against real R2. Inert on prod/staging (`_seams_enabled()` gated).
+
+**Tests:** `tests/test_t5870_pending_vs_failed.py` (pending≠failed, header priority, re-drain heals /
+exhausts / skips-conflict, no-refresh recovery, conflict-restore + honest-refusal); updated
+`test_background_sync.py`/`test_sync_status.py`/`test_t4310` for the new semantics; FE
+`syncStore.test.js` (three-state) + `SyncStatusIndicator.test.jsx` (quiet-pending vs alarm+Retry);
+real-browser `e2e/T5870-sync-failed-retry-no-refresh.spec.js` (seed fault → real write → alarm banner →
+Retry-while-down stays → clear fault → Retry clears the banner with NO reload). Each regression proven
+red-without-fix.
 
 ## T4320 — Durable clip gestures + user.sqlite shutdown sync + T5310 profile-create fix
 

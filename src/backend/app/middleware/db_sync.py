@@ -1026,6 +1026,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             elif db_status == "failed" or not user_sync_success:
                 sync_status = "failed"
 
+            # T5870: the SESSION user's OWN sync result, captured before the foreign
+            # loops fold their outcome into the aggregate sync_status. The re-drain
+            # below heals the session's own write only — it must never run off (or
+            # mask) a FOREIGN DB failure, which retry_pending_sync(session) cannot fix.
+            own_status = sync_status
+            foreign_unsynced = False
+
             # Upload any database this request touched that is NOT the session
             # user's. Each owner gets its own sync + its own sync-pending marker,
             # so a failure is attributed to the DB that actually failed.
@@ -1040,6 +1047,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     )
                 else:
                     mark_sync_pending(foreign_uid)
+                    foreign_unsynced = True
                     if result == SyncResult.CONFLICT:
                         mark_sync_conflict(foreign_uid)
                         if sync_status == "ok":
@@ -1061,6 +1069,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     )
                 else:
                     mark_sync_pending(foreign_uid)
+                    foreign_unsynced = True
                     if result == SyncResult.CONFLICT:
                         mark_sync_conflict(foreign_uid)
                         if sync_status == "ok":
@@ -1081,9 +1090,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # (it returns 503 and its own gesture UX owns the retry) and the error
             # path (handled by set_sync_failed below), and never for a CAS conflict
             # (not blind-retryable — needs restore-if-newer via /api/retry-sync).
-            if sync_status == "failed" and not durable and not is_error_path:
+            # Gated on own_status (the SESSION user's OWN failure), NOT the aggregate:
+            # retry_pending_sync(session) cannot fix a FOREIGN owner's failed upload,
+            # and healing the session must never mask that — so a still-unsynced
+            # foreign DB keeps the aggregate "failed" even after the session heals.
+            if own_status == "failed" and not durable and not is_error_path:
                 if await self._redrain_failed_sync(user_id, profile_id):
-                    sync_status = "ok"
+                    own_status = "ok"
+                    if sync_status == "failed" and not foreign_unsynced:
+                        sync_status = "ok"
         except Exception as sync_error:
             log_msg = "Sync to R2 raised exception"
             if is_error_path:
