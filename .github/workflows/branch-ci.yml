@@ -55,6 +55,14 @@ jobs:
         # occurrences are a tracked, ratcheting KNOWN_DEBT list in the script.
         working-directory: .
         run: node scripts/check-viewport-units.mjs
+      - name: Media-api-base gate (T5890 — no bare /api/ media URL in the app tree)
+        # Blocks the split-host-invisible poster/media loss that caused T5890: a bare
+        # `/api/...` <img src>/media URL resolves against the Cloudflare Pages origin
+        # on staging/prod and returns the SPA shell instead of the file. The Vite dev
+        # proxy masks it locally, so it must be blocked at the source. Requires
+        # `${API_BASE}/api/...`; test fixtures are exempt (never a real browser src).
+        working-directory: .
+        run: node scripts/check-media-api-base.mjs
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
 
