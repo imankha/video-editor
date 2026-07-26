@@ -11,6 +11,7 @@ Provides:
 Credit packs are defined as constants (not in DB). Prices match T520 analysis.
 """
 
+import asyncio
 import logging
 import os
 import sqlite3
@@ -21,6 +22,7 @@ from pydantic import BaseModel
 
 from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
 from ..database import sync_user_db_to_r2_explicit
+from ..services.db_refresh import RefreshFailed, confirm_current_before_write
 from ..services.user_db import (
     get_stripe_customer_id,
     grant_credits,
@@ -32,6 +34,35 @@ from ..user_context import get_current_user_id
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payments", tags=["payments"])
+
+# T4315 round 2 (MAJOR-1): a credit grant computed off a STALE local
+# user.sqlite force-pushes [stale snapshot + purchase] over R2, silently
+# reverting anything that landed there since (another machine's write, an
+# admin correction). None of these callers have a p50 latency SLO worth
+# protecting the way the hot request path does (webhook: no user waiting on
+# it as a page load; confirm/verify: a one-shot purchase confirmation, not a
+# per-keystroke action) -- unlike admin's routes, none of these already ran
+# via asyncio.to_thread, so this wires the SAME shared guard the same way.
+CREDIT_GRANT_REFRESH_FAILED_RESPONSE = {
+    "code": "sync_failed",
+    "retryable": True,
+    "detail": "Could not verify your account is current. Please try again.",
+}
+
+
+async def _confirm_user_db_fresh_or_503(user_id: str) -> None:
+    """Confirm user.sqlite is current before a credit grant, or raise a
+    retryable 503. Safe to retry: grant_credits is idempotent via the
+    UNIQUE index on (user_id, source, reference_id) -- has_processed_payment
+    already gates every caller here -- so refusing now just defers the grant
+    to Stripe's webhook redelivery or the frontend's next verify/confirm
+    call, never a lost or double payment.
+    """
+    try:
+        await asyncio.to_thread(confirm_current_before_write, user_id)
+    except RefreshFailed as e:
+        logger.error(f"[Payments] could not confirm user.sqlite fresh for {user_id}: {e}")
+        raise HTTPException(status_code=503, detail=CREDIT_GRANT_REFRESH_FAILED_RESPONSE) from None
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -248,6 +279,8 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in payment metadata")
 
+    await _confirm_user_db_fresh_or_503(user_id)
+
     try:
         new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
     except sqlite3.IntegrityError:
@@ -318,6 +351,8 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Duplicate webhook for session {session_id}, skipping")
             return {"status": "already_processed"}
 
+        await _confirm_user_db_fresh_or_503(user_id)
+
         # UNIQUE index on (user_id, source, reference_id) prevents double-grant atomically
         try:
             new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
@@ -333,6 +368,9 @@ async def stripe_webhook(request: Request):
         # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
         # T4310: called synchronously on the request thread (not asyncio.to_thread)
         # -- skip_version_check=True preserves the T1020/T2720 no-HEAD guarantee.
+        # T4315: safe now that _confirm_user_db_fresh_or_503 has already
+        # confirmed (and, if needed, refreshed) the baseline this upload's
+        # CAS check compares against.
         sync_user_db_to_r2_explicit(user_id, skip_version_check=True)
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
@@ -358,6 +396,8 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, skipping")
             return {"status": "already_processed"}
 
+        await _confirm_user_db_fresh_or_503(user_id)
+
         # UNIQUE index on (user_id, source, reference_id) prevents double-grant atomically
         try:
             new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
@@ -373,6 +413,9 @@ async def stripe_webhook(request: Request):
         # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
         # T4310: called synchronously on the request thread (not asyncio.to_thread)
         # -- skip_version_check=True preserves the T1020/T2720 no-HEAD guarantee.
+        # T4315: safe now that _confirm_user_db_fresh_or_503 has already
+        # confirmed (and, if needed, refreshed) the baseline this upload's
+        # CAS check compares against.
         sync_user_db_to_r2_explicit(user_id, skip_version_check=True)
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
@@ -504,6 +547,8 @@ async def verify_session(request: Request):
 
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in session metadata")
+
+    await _confirm_user_db_fresh_or_503(user_id)
 
     try:
         new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)

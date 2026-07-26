@@ -732,6 +732,216 @@ class TestMaterializeGameShare:
         r_conn.close()
         r_conn2.close()
 
+    # -----------------------------------------------------------------
+    # T4315 round 2 (BLOCKING-1): recipient_conn is a raw sqlite3.Connection
+    # from _open_profile_db, invisible to the middleware's TrackedConnection-
+    # based foreign-DB sync -- materialize_game_share must explicitly sync
+    # the recipient's profile.sqlite itself, and refuse to mark the share
+    # materialized in Postgres if that sync fails (a share that never left
+    # local disk must stay retryable, never a permanent "success").
+    # -----------------------------------------------------------------
+
+    @patch("app.services.materialization.sync_db_to_r2_explicit")
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    @patch("app.services.materialization.USER_DATA_BASE")
+    def test_recipient_db_is_explicitly_synced_to_r2(
+        self, mock_base, mock_get_ref, mock_insert_ref, mock_mark, mock_sync, tmp_path
+    ):
+        """BLOCKING-1 fix: the recipient's write is invisible to the request
+        middleware (raw connection, not TrackedConnection) -- without an
+        explicit sync it would commit locally and never reach R2, silently
+        lost on the next machine replacement while Postgres still reports
+        the share as materialized."""
+        type(mock_base).__truediv__ = lambda self, x: tmp_path / x
+        mock_sync.return_value = True
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_sync")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        mock_get_ref.return_value = None
+
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=game_id,
+                tag_name="Jake",
+                share_id=1,
+            )
+
+        mock_sync.assert_called_once_with("recipient-user", "recipient-profile")
+        mock_mark.assert_called_once()
+
+        s_conn.close()
+        r_conn.close()
+
+    # -----------------------------------------------------------------
+    # T4315 round 3 (BLOCKING NEW-A): _open_profile_db opens WAL-mode
+    # connections, so `recipient_conn.commit()` lands new pages in
+    # profile.sqlite-wal, NOT the main file sync_db_to_r2_explicit uploads.
+    # Mocking sync_db_to_r2_explicit (as the test above does) only proves
+    # the CALL happened, not that R2 received real data -- this test runs
+    # the REAL upload against a fake R2 and reads the uploaded bytes back.
+    # -----------------------------------------------------------------
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    def test_recipient_upload_contains_the_materialized_data(
+        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+    ):
+        """Without checkpointing before upload, R2 would receive the STALE
+        pre-share main-file bytes stamped at a NEWER version -- worse than
+        not syncing at all, since the recipient's own next restore-if-newer
+        would see "local >= r2" and never re-pull the real data. Assert the
+        object R2 actually holds, read back independently, contains the
+        shared game and clip."""
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
+        mock_get_ref.return_value = None
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_walcheck")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        s_conn.close()
+        r_conn.close()
+
+        fake = FakeR2()
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+             patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=game_id,
+                tag_name="Jake",
+                share_id=1,
+            )
+
+        key = profile_r2_key("recipient-user", "recipient-profile", "profile.sqlite")
+        assert key in fake._objects, "recipient profile.sqlite was never uploaded"
+
+        uploaded_path = tmp_path / "uploaded_check.sqlite"
+        uploaded_path.write_bytes(fake._objects[key]["data"])
+        check_conn = sqlite3.connect(str(uploaded_path))
+        check_conn.row_factory = sqlite3.Row
+        games = check_conn.execute("SELECT * FROM games").fetchall()
+        clips = check_conn.execute("SELECT * FROM raw_clips").fetchall()
+        check_conn.close()
+
+        assert len(games) == 1, "uploaded R2 object must contain the shared game"
+        assert games[0]["name"] == "League Match"
+        assert len(clips) == 1, "uploaded R2 object must contain the shared clip"
+        assert clips[0]["name"] == "Jake Goal"
+        mock_mark.assert_called_once()
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    def test_contended_checkpoint_refuses_instead_of_uploading_stale_bytes(
+        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+    ):
+        """T4315 round 4 (BLOCKING-1): PRAGMA wal_checkpoint does NOT raise on
+        contention -- it returns (busy, log, checkpointed) with busy=1 and
+        leaves the just-committed frames sitting in profile.sqlite-wal.
+        Round 3's checkpoint call logged that tuple and discarded it, so a
+        CONTENDED checkpoint (the norm, not the exception -- see the WAL-
+        safety section: session_init's own later steps routinely hold this
+        exact file open) silently fell through to uploading the STALE main
+        file anyway, stamped at the new version. Simulate contention with an
+        open read snapshot on the recipient's profile.sqlite held across the
+        materialize call (mirrors the reviewer's own reproduction) and
+        assert it refuses BEFORE uploading, never marks materialized."""
+        from app.services.materialization import ProfileDBRefreshFailed
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
+        mock_get_ref.return_value = None
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_contend")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        s_conn.close()
+        r_conn.close()
+
+        recipient_path = (
+            tmp_path / "recipient-user" / "profiles" / "recipient-profile" / "profile.sqlite"
+        )
+        # An extra connection holding an open read snapshot blocks a FULL
+        # wal_checkpoint(TRUNCATE) from completing -- the exact contention
+        # session_init's concurrent steps produce in production.
+        blocker = sqlite3.connect(str(recipient_path), timeout=1)
+        blocker.execute("PRAGMA journal_mode=WAL")
+        blocker.execute("BEGIN")
+        blocker.execute("SELECT COUNT(*) FROM games").fetchall()
+
+        fake = FakeR2()
+        try:
+            with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+                 patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake), \
+                 pytest.raises(ProfileDBRefreshFailed):
+                materialize_game_share(
+                    sharer_user_id="sharer-user",
+                    sharer_profile_id="sharer-profile",
+                    recipient_user_id="recipient-user",
+                    recipient_profile_id="recipient-profile",
+                    game_id=game_id,
+                    tag_name="Jake",
+                    share_id=1,
+                )
+        finally:
+            blocker.close()
+
+        key = profile_r2_key("recipient-user", "recipient-profile", "profile.sqlite")
+        assert key not in fake._objects, \
+            "a contended checkpoint must refuse BEFORE uploading, never ship stale bytes"
+        mock_mark.assert_not_called()
+
+    @patch("app.services.materialization.sync_db_to_r2_explicit")
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    @patch("app.services.materialization.USER_DATA_BASE")
+    def test_sync_failure_refuses_to_mark_materialized(
+        self, mock_base, mock_get_ref, mock_insert_ref, mock_mark, mock_sync, tmp_path
+    ):
+        """A failed recipient sync must raise -- never a lying Postgres
+        success for a share that only landed on local disk."""
+        from app.services.materialization import ProfileDBRefreshFailed
+
+        type(mock_base).__truediv__ = lambda self, x: tmp_path / x
+        mock_sync.return_value = False  # upload failed
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_syncfail")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        mock_get_ref.return_value = None
+
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+             pytest.raises(ProfileDBRefreshFailed):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=game_id,
+                tag_name="Jake",
+                share_id=1,
+            )
+
+        mock_sync.assert_called_once_with("recipient-user", "recipient-profile")
+        # Must never mark materialized when the sync never left local disk.
+        mock_mark.assert_not_called()
+
+        s_conn.close()
+        r_conn.close()
+
     @patch("app.services.materialization.mark_game_share_materialized")
     @patch("app.services.materialization.insert_game_storage_ref")
     @patch("app.services.materialization.get_game_storage_ref")

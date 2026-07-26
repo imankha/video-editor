@@ -47,6 +47,55 @@ def invalidate_user_cache(user_id: str) -> None:
     _init_cache.pop(user_id, None)
 
 
+def _materialize_pending_shares_for_user(user_id: str, profile_id: str) -> None:
+    """T3230 background body: auto-materialize pending teammate shares for
+    single-profile users. Extracted so user_session_init can run it off its
+    own (often event-loop) calling thread -- see the call site's T4315
+    round-2 (MAJOR-2) comment. Best-effort: every failure is logged, never
+    raised, matching the original inline block's behavior.
+    """
+    try:
+        from .services.auth_db import get_user_by_id
+        from .services.materialization import materialize_game_share
+        from .services.sharing_db import (
+            get_pending_shares_for_email,
+            mark_game_share_materialized,
+            resolve_pending_share,
+        )
+        from .services.user_db import get_profiles
+        from .utils.encoding import decode_data
+
+        user = get_user_by_id(user_id)
+        if user and user["email"]:
+            pending = get_pending_shares_for_email(user["email"])
+            if pending:
+                profiles = get_profiles(user_id)
+                if len(profiles) == 1:
+                    for p in pending:
+                        try:
+                            clip_data = decode_data(p["clip_data"])
+                            sharer = get_user_by_id(p["sharer_user_id"])
+                            sharer_email = sharer["email"] if sharer else None
+                            materialize_game_share(
+                                sharer_user_id=p["sharer_user_id"],
+                                sharer_profile_id=p["sharer_profile_id"],
+                                recipient_user_id=user_id,
+                                recipient_profile_id=profile_id,
+                                game_id=p["game_id"],
+                                tag_name=p["tag_name"],
+                                share_id=p["share_id"],
+                                clip_data=clip_data,
+                                sharer_email=sharer_email,
+                            )
+                            resolve_pending_share(p["id"], profile_id)
+                            mark_game_share_materialized(p["share_id"], profile_id)
+                            logger.info(f"T3230: Auto-materialized pending share {p['id']} for user {user_id}")
+                        except Exception as e:
+                            logger.error(f"T3230: Failed to auto-materialize pending share {p['id']}: {e}")
+    except Exception as e:
+        logger.error(f"T3230: Failed to check pending shares: {e}")
+
+
 def user_session_init(user_id: str, hint_profile_id: str | None = None) -> dict:
     """
     Initialize a user session. Idempotent — safe to call on every request.
@@ -159,47 +208,21 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     if not hint_profile_id or is_new_user:
         ensure_database()
 
-    # T3230: Auto-materialize pending teammate shares for single-profile users
-    try:
-        from .services.auth_db import get_user_by_id
-        from .services.materialization import materialize_game_share
-        from .services.sharing_db import (
-            get_pending_shares_for_email,
-            mark_game_share_materialized,
-            resolve_pending_share,
-        )
-        from .services.user_db import get_profiles
-        from .utils.encoding import decode_data
-
-        user = get_user_by_id(user_id)
-        if user and user["email"]:
-            pending = get_pending_shares_for_email(user["email"])
-            if pending:
-                profiles = get_profiles(user_id)
-                if len(profiles) == 1:
-                    for p in pending:
-                        try:
-                            clip_data = decode_data(p["clip_data"])
-                            sharer = get_user_by_id(p["sharer_user_id"])
-                            sharer_email = sharer["email"] if sharer else None
-                            materialize_game_share(
-                                sharer_user_id=p["sharer_user_id"],
-                                sharer_profile_id=p["sharer_profile_id"],
-                                recipient_user_id=user_id,
-                                recipient_profile_id=profile_id,
-                                game_id=p["game_id"],
-                                tag_name=p["tag_name"],
-                                share_id=p["share_id"],
-                                clip_data=clip_data,
-                                sharer_email=sharer_email,
-                            )
-                            resolve_pending_share(p["id"], profile_id)
-                            mark_game_share_materialized(p["share_id"], profile_id)
-                            logger.info(f"T3230: Auto-materialized pending share {p['id']} for user {user_id}")
-                        except Exception as e:
-                            logger.error(f"T3230: Failed to auto-materialize pending share {p['id']}: {e}")
-    except Exception as e:
-        logger.error(f"T3230: Failed to check pending shares: {e}")
+    # T3230: Auto-materialize pending teammate shares for single-profile users.
+    # T4315 round 2 (MAJOR-2): materialize_game_share can do a real R2 HEAD +
+    # a full profile.sqlite download (require_fresh). user_session_init is
+    # called SYNCHRONOUSLY, directly on the event-loop thread, from the
+    # request middleware whenever a request arrives without an X-Profile-ID
+    # header (db_sync.py) -- the exact T1020/T2720-sensitive path. Run this
+    # block in a background daemon thread so it can never block that caller;
+    # it is already best-effort (per-item try/except, logged not raised).
+    # Tests that need determinism can `.join()` the returned thread handle.
+    pending_share_thread = threading.Thread(
+        target=_materialize_pending_shares_for_user,
+        args=(user_id, profile_id),
+        daemon=True,
+    )
+    pending_share_thread.start()
 
     # 5. T890: Recover orphaned credit reservations
     try:

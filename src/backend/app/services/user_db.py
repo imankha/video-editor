@@ -205,6 +205,71 @@ def ensure_user_database(user_id: str) -> None:
         _initialized_user_dbs.add(user_id)
 
 
+def ensure_user_database_fresh(user_id: str) -> None:
+    """Write-path sibling of ensure_user_database: restore-if-newer, not just
+    restore-if-absent (T4315).
+
+    ensure_user_database only re-checks R2 when `local_version is None`
+    (first access) -- once a machine has materialized this user's file it
+    serves that snapshot for the rest of the process lifetime and never
+    looks at R2 again. That is fine for reads, but a WRITER must not force-
+    push (skip_version_check=True on upload) on top of an R2 copy it never
+    confirmed is still the one it loaded from: an out-of-band R2 edit, or a
+    write that landed elsewhere while this machine was pinned away and back,
+    would otherwise be silently reverted on this machine's next write (the
+    "editing R2 out-of-band is futile" failure mode from the 2026-07-24
+    incident). Raises RefreshFailed instead of proceeding when R2 can't be
+    reached -- never build on an unconfirmed copy.
+
+    Callers resolving a user.sqlite they are about to WRITE (not their own
+    ambient session's lenient read) should call this via
+    services.db_refresh.confirm_current_before_write(user_id) rather than
+    ensure_user_database directly.
+
+    WAL safety (T4315 round 3 correction): a `-wal`/`-shm` sidecar present
+    for this user.sqlite is a strong signal that ANOTHER connection has this
+    exact file open RIGHT NOW (SQLite deletes both when the last connection
+    closes cleanly) -- e.g. the same user actively writing on this machine
+    while a foreign caller (admin grant, teammate-share materialization)
+    concurrently confirms freshness. That connection's committed-but-not-
+    yet-checkpointed frames could hold data never uploaded to R2; "R2 is
+    newer" says nothing about whether those frames matter, so refusing the
+    SWAP is the safe move. round 2 checked this BEFORE the R2 version
+    comparison, which refused even the overwhelmingly common "local already
+    current, nothing to download" case (BLOCKING NEW-B) -- sidecars merely
+    mean some unrelated connection has the file open, not that a download is
+    imminent. Fixed: the check is now `before_download`, consulted by
+    sync_user_db_from_r2_if_newer ONLY once it has already decided R2 is
+    newer and a download is about to happen.
+    """
+    ensure_user_database(user_id)
+
+    from ..database import get_local_user_db_version, set_local_user_db_version
+    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
+    from .db_refresh import RefreshFailed, clear_stale_wal_sidecars, wal_sidecars_present
+
+    if not R2_ENABLED:
+        return
+
+    db_path = _get_user_db_path(user_id)
+
+    local_version = get_local_user_db_version(user_id)
+    downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
+        user_id, db_path, local_version,
+        before_download=lambda: not wal_sidecars_present(db_path),
+    )
+    if was_error:
+        raise RefreshFailed(
+            f"could not confirm user.sqlite for {user_id} is current (R2 error)"
+        )
+    if downloaded:
+        # Defense-in-depth for the narrow window between before_download's
+        # check and this download completing -- see clear_stale_wal_sidecars.
+        clear_stale_wal_sidecars(db_path)
+    if new_version is not None:
+        set_local_user_db_version(user_id, new_version)
+
+
 def forget_user_db(user_id: str) -> None:
     """Drop every in-process cache entry for a user's user.sqlite + profile DBs.
 
@@ -221,12 +286,43 @@ def forget_user_db(user_id: str) -> None:
 
 @contextmanager
 def get_user_db_connection(user_id: str | None = None):
-    """Get connection to user-level database."""
+    """Get connection to user-level database.
+
+    T4315 round 2 (MAJOR-4): "refresh-or-fail" is meant to be the RULE for
+    any writer resolving a foreign (non-ambient-session) user.sqlite, not a
+    guard each caller has to remember to bolt on -- this is the structural
+    enforcement point. When an explicit user_id differs from the request's
+    own session user, this confirms freshness (raising RefreshFailed on an
+    R2 error) even if the caller forgot to call confirm_current_before_write
+    itself. Skips the HEAD when this user was already confirmed moments ago
+    on the SAME call chain (db_refresh.user_db_was_recently_confirmed) so a
+    caller that DID the right thing explicitly (admin.py, payments.py) never
+    pays it twice, and never gets a second blocking HEAD reintroduced onto
+    whatever thread it's running on. Outside a request context (no session
+    to compare against -- background workers) this falls back to the
+    existing lenient ensure_user_database, unchanged.
+    """
     if user_id is None:
         from ..user_context import get_current_user_id
         user_id = get_current_user_id()
+        ensure_user_database(user_id)
+    else:
+        session_user_id = None
+        try:
+            from ..user_context import get_current_user_id
+            session_user_id = get_current_user_id()
+        except RuntimeError:
+            session_user_id = None
 
-    ensure_user_database(user_id)
+        if session_user_id and user_id != session_user_id:
+            from .db_refresh import confirm_current_before_write, user_db_was_recently_confirmed
+            if user_db_was_recently_confirmed(user_id):
+                ensure_user_database(user_id)
+            else:
+                confirm_current_before_write(user_id)
+        else:
+            ensure_user_database(user_id)
+
     db_path = _get_user_db_path(user_id)
 
     from ..database import TrackedConnection

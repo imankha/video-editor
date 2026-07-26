@@ -76,25 +76,18 @@ def _refresh_target_user_db(target_user_id: str) -> None:
     machine's own version, which CAS happily accepts since it isn't a conflict.
     Read the authoritative copy first so this is a real read-modify-write instead
     of a write against a stale snapshot.
-    """
-    from ..database import (
-        USER_DATA_BASE,
-        get_local_user_db_version,
-        set_local_user_db_version,
-    )
-    from ..services.user_db import ensure_user_database
-    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
 
-    if not R2_ENABLED:
-        return
-    ensure_user_database(target_user_id)
-    db_path = USER_DATA_BASE / target_user_id / "user.sqlite"
-    downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
-        target_user_id, db_path, get_local_user_db_version(target_user_id)
-    )
-    if downloaded and new_version is not None:
-        set_local_user_db_version(target_user_id, new_version)
-    elif was_error:
+    T4315: the restore-if-newer + WAL-safe swap logic itself now lives in the
+    shared `confirm_current_before_write` (services/db_refresh.py) so this isn't
+    a bespoke copy of the same guard move_reels already has -- only the
+    "warn and proceed anyway" policy (rather than aborting the grant) is
+    specific to this admin call site.
+    """
+    from ..services.db_refresh import RefreshFailed, confirm_current_before_write
+
+    try:
+        confirm_current_before_write(target_user_id)
+    except RefreshFailed:
         # Visible, not silently swallowed: the grant is about to be applied to a
         # copy we could not confirm is current.
         logger.warning(

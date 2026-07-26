@@ -152,15 +152,38 @@ class TestSyncDatabaseToR2WithVersion:
             assert success is False
             assert version is None
 
-    def test_current_version_none_no_conflict(self, local_db, mock_r2_enabled, mock_client):
-        """current_version=None with R2 having a version → no conflict (condition requires not None)."""
+    def test_current_version_none_refuses_when_r2_has_real_content(
+        self, local_db, mock_r2_enabled, mock_client
+    ):
+        """T4315 round 2 (BLOCKING-2): current_version=None means this writer never
+        confirmed a baseline (e.g. a fresh-machine restore errored and an empty
+        schema'd DB got created anyway). Uploading blindly here force-pushes an
+        empty/stale local DB over the user's real R2 data with zero conflict
+        signal -- the catastrophic variant this task exists to prevent. An
+        unconfirmed baseline against real R2 content (r2_version > 0) must now
+        refuse exactly like a stale-but-known one."""
         with patch(f"{MODULE}.get_db_version_from_r2", return_value=5), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=None
             )
+            assert success is False
+            assert new_version == 5
+
+    def test_current_version_none_still_uploads_when_r2_genuinely_empty(
+        self, local_db, mock_r2_enabled, mock_client
+    ):
+        """No regression for a genuinely brand-new user: current_version=None
+        with R2 NOT_FOUND (no object at all -- treated as version 0) is not an
+        "unconfirmed baseline against real content" situation, so the upload
+        must still proceed normally."""
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND), \
+             patch(f"{RETRY_MODULE}.retry_r2_call"):
+            success, new_version = sync_database_to_r2_with_version(
+                "user1", local_db, current_version=None
+            )
             assert success is True
-            assert new_version == 6
+            assert new_version == 1
 
 
 # ──────────────────────────────────────────────────────
@@ -257,3 +280,33 @@ class TestSyncUserDbToR2WithVersion:
             )
             assert success is False
             assert version is None
+
+    def test_current_version_none_refuses_when_r2_has_real_content(
+        self, local_db, mock_r2_enabled, mock_client
+    ):
+        """T4315 round 2 (BLOCKING-2): an unconfirmed baseline (current_version
+        is None -- e.g. a fresh-machine restore errored and ensure_user_database
+        created an empty schema'd user.sqlite anyway) must refuse to upload over
+        REAL R2 content (credits/profiles/quests), never silently force-push an
+        empty DB over a user's account with zero conflict signal."""
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=5), \
+             patch(f"{RETRY_MODULE}.retry_r2_call"):
+            success, new_version = sync_user_db_to_r2_with_version(
+                "user1", local_db, current_version=None
+            )
+            assert success is False
+            assert new_version == 5
+
+    def test_current_version_none_still_uploads_when_r2_genuinely_empty(
+        self, local_db, mock_r2_enabled, mock_client
+    ):
+        """No regression for a genuinely brand-new user: NOT_FOUND (no R2
+        object at all) is not "unconfirmed against real content", so the
+        upload must still proceed."""
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND), \
+             patch(f"{RETRY_MODULE}.retry_r2_call"):
+            success, new_version = sync_user_db_to_r2_with_version(
+                "user1", local_db, current_version=None
+            )
+            assert success is True
+            assert new_version == 1

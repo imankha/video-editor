@@ -411,7 +411,7 @@ class TestR2FallbackForEvictedDb:
             if os.path.exists(sidecar):
                 os.unlink(sidecar)
 
-        def fake_sync(user_id, local_db_path, local_version):
+        def fake_sync(user_id, local_db_path, local_version, **kwargs):
             shutil.copy(backup, local_db_path)   # "download" from R2
             return True, 5, False
 
