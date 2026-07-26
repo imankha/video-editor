@@ -50,11 +50,12 @@ def _connect(db_path):
 _next_project = [100]
 
 
-def _insert_game(cur, game_id, opponent="Carlsbad", date="2025-12-06"):
+def _insert_game(cur, game_id, opponent="Carlsbad", date="2025-12-06",
+                 game_type="home", tournament=None):
     cur.execute(
-        "INSERT INTO games (id, name, game_date, opponent_name, game_type) "
-        "VALUES (?, ?, ?, ?, 'home')",
-        (game_id, f"Game {game_id}", date, opponent),
+        "INSERT INTO games (id, name, game_date, opponent_name, game_type, "
+        "tournament_name) VALUES (?, ?, ?, ?, ?, ?)",
+        (game_id, f"Game {game_id}", date, opponent, game_type, tournament),
     )
 
 
@@ -676,6 +677,130 @@ class TestUnwatchedCount:
         s = _summary()
         bucket_unwatched = sum(g.unwatched_count for g in s.games) + s.mixes.unwatched_count
         assert bucket_unwatched == 2  # matches the two watched_at IS NULL reels
+
+
+# ---------------------------------------------------------------------------
+# T5880: derived tournament / month groupings (game_groups). Two independent
+# axes over the same games; absent metadata produces NO group (never a
+# fabricated bucket); server-computed, no client eligibility derivation.
+# ---------------------------------------------------------------------------
+
+class TestGameGroups:
+    def _groups(self, s, axis):
+        return {g.key: g for g in s.game_groups if g.axis == axis}
+
+    def test_tournament_group_from_metadata(self, db):
+        """Two games in one tournament collapse to a single tournament group
+        containing both; reel/unwatched counts aggregate across the games."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7, date="2025-12-06", game_type="tournament",
+                     tournament="Winter Cup")
+        _insert_game(cur, 8, date="2025-12-07", game_type="tournament",
+                     tournament="Winter Cup")
+        _insert_fv(cur, game_ids=[7], duration=20.0, watched_at=None)
+        _insert_fv(cur, game_ids=[7], duration=15.0, watched_at="2026-02-01 00:00:00")
+        _insert_fv(cur, game_ids=[8], duration=12.0, watched_at=None)
+        conn.commit(); conn.close()
+
+        s = _summary()
+        tours = self._groups(s, "tournament")
+        assert set(tours) == {"tournament:Winter Cup"}
+        grp = tours["tournament:Winter Cup"]
+        assert grp.label == "Winter Cup"
+        assert sorted(grp.game_ids) == [7, 8]
+        assert grp.reel_count == 3          # 2 (game 7) + 1 (game 8)
+        assert grp.unwatched_count == 2
+
+    def test_no_tournament_produces_no_tournament_group(self, db):
+        """A game with no tournament_name is in NO tournament group -- never a
+        fabricated 'Unknown tournament' bucket (no-silent-fallback standard)."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7, tournament=None)      # league/home game, no tournament
+        _insert_fv(cur, game_ids=[7], duration=20.0)
+        conn.commit(); conn.close()
+
+        s = _summary()
+        assert self._groups(s, "tournament") == {}
+        # ... but it IS grouped by month (it has a date).
+        assert set(self._groups(s, "month")) == {"month:2025-12"}
+
+    def test_month_group_from_game_date(self, db):
+        """Games are grouped by their game_date month; the label is human month
+        + year, the key sorts newest-first."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7, date="2026-07-04")
+        _insert_game(cur, 8, date="2026-07-20")
+        _insert_game(cur, 9, date="2026-06-01")
+        _insert_fv(cur, game_ids=[7], duration=20.0)
+        _insert_fv(cur, game_ids=[8], duration=20.0)
+        _insert_fv(cur, game_ids=[9], duration=20.0)
+        conn.commit(); conn.close()
+
+        s = _summary()
+        months = self._groups(s, "month")
+        assert set(months) == {"month:2026-07", "month:2026-06"}
+        assert months["month:2026-07"].label == "July 2026"
+        assert sorted(months["month:2026-07"].game_ids) == [7, 8]
+        assert months["month:2026-06"].label == "June 2026"
+        # Month groups are ordered newest-first.
+        ordered = [g.key for g in s.game_groups if g.axis == "month"]
+        assert ordered == ["month:2026-07", "month:2026-06"]
+
+    def test_no_game_date_produces_no_month_group(self, db):
+        """A game with no parseable game_date is in NO month group."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7, date=None, tournament="Spring Classic")
+        _insert_fv(cur, game_ids=[7], duration=20.0)
+        conn.commit(); conn.close()
+
+        s = _summary()
+        assert self._groups(s, "month") == {}
+        assert set(self._groups(s, "tournament")) == {"tournament:Spring Classic"}
+
+    def test_game_ids_are_a_subset_of_games(self, db):
+        """Every group's game_ids reference real game collections in `games` --
+        the frontend nests the existing per-game buckets, no duplicated data."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7, date="2026-07-04", game_type="tournament",
+                     tournament="Summer Cup")
+        _insert_fv(cur, game_ids=[7], duration=20.0)
+        conn.commit(); conn.close()
+
+        s = _summary()
+        game_ids = {g.game_id for g in s.games}
+        for grp in s.game_groups:
+            assert set(grp.game_ids) <= game_ids
+
+    def test_two_axes_partition_independently(self, db):
+        """The same game appears in both its tournament group and its month
+        group -- the axes are independent partitions, the client shows one."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7, date="2026-07-04", game_type="tournament",
+                     tournament="Summer Cup")
+        _insert_fv(cur, game_ids=[7], duration=20.0)
+        conn.commit(); conn.close()
+
+        s = _summary()
+        assert self._groups(s, "tournament")["tournament:Summer Cup"].game_ids == [7]
+        assert self._groups(s, "month")["month:2026-07"].game_ids == [7]
+
+    def test_no_games_no_groups(self, db):
+        """A profile with only mixes (no single-game reels) has no groups."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 3); _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[3, 7], duration=40.0)   # multi-game -> mixes
+        conn.commit(); conn.close()
+
+        s = _summary()
+        assert s.games == []
+        assert s.game_groups == []
 
 
 # ---------------------------------------------------------------------------

@@ -158,6 +158,15 @@ class GameCollection(RatioBucketed):
     game_date: str | None
 
 
+class GameGroup(BaseModel):                # T5880: derived tournament/month axis
+    axis: Literal["tournament", "month"]   # which metadata column the group derives from
+    key: str                               # stable key ('tournament:<name>' | 'month:YYYY-MM')
+    label: str                             # display label (tournament name | 'July 2026')
+    game_ids: list[int]                    # member games, most-recent-first (subset of `games`)
+    reel_count: int                        # aggregate over member games
+    unwatched_count: int                   # aggregate over member games
+
+
 class SeasonTotal(BaseModel):              # T3640 consumer (already ratio-scoped)
     season: str
     ratio: str
@@ -186,6 +195,7 @@ class SmartCollection(RatioBucketed):      # T3670: curated (Top Plays / combos)
 class CollectionsSummaryResponse(BaseModel):
     smart_collections: list[SmartCollection]  # curated (Top Plays + combos) then ready per-tag
     games: list[GameCollection]            # sorted latest_published_at DESC
+    game_groups: list[GameGroup]           # T5880: derived tournament/month groupings of `games`
     mixes: RatioBucketed                   # always present, may be reel_count 0
     season_totals: list[SeasonTotal]
     tag_totals: list[TagTotal]
@@ -285,6 +295,67 @@ def _season_key(date_str: str | None, season_fn) -> str | None:
     return f"{season_fn(dt.month)} {dt.year}"
 
 
+def _month_key_label(date_str: str | None) -> tuple[str, str] | None:
+    """('YYYY-MM', '<Month> <Year>') from a 'YYYY-MM-DD[...]' string, or None if
+    unparseable (T5880). The key sorts newest-first lexically; the label is the
+    human-readable heading ('July 2026')."""
+    if not date_str:
+        return None
+    try:
+        normalized = date_str.replace("T", " ").replace("Z", "").strip()
+        dt = datetime.strptime(normalized[:10], "%Y-%m-%d")
+    except (ValueError, AttributeError):
+        return None
+    return f"{dt.year:04d}-{dt.month:02d}", dt.strftime("%B %Y")
+
+
+def _build_game_groups(games: list, games_info: dict) -> list:
+    """Derived tournament/month groupings of the game collections (T5880).
+
+    Two INDEPENDENT axes, each a partition of the same games -- the client picks
+    one to view. Absent metadata produces NO group (never a fabricated bucket,
+    per the no-silent-fallback standard): a game with no `tournament_name` is in
+    no tournament group; a game with no parseable `game_date` is in no month
+    group. Grouping/eligibility stay server-computed, consistent with every
+    other collection (the client never derives them).
+
+    `games` is pre-sorted latest_published_at DESC, so iterating it in order
+    gives most-recent-first member lists; dict insertion order then yields
+    most-recent-first tournament groups. Month groups are sorted by key DESC
+    (newest month first) since a game's date need not track its publish time."""
+    tournaments: dict[str, dict] = {}
+    months: dict[str, dict] = {}
+
+    def _add(acc: dict, key: str, label: str, gc) -> None:
+        grp = acc.get(key)
+        if grp is None:
+            grp = {"label": label, "game_ids": [], "reel_count": 0,
+                   "unwatched_count": 0}
+            acc[key] = grp
+        grp["game_ids"].append(gc.game_id)
+        grp["reel_count"] += gc.reel_count
+        grp["unwatched_count"] += gc.unwatched_count
+
+    for gc in games:
+        info = games_info.get(gc.game_id, {})
+        tname = (info.get("tournament") or "").strip()
+        if tname:
+            _add(tournaments, tname, tname, gc)
+        ml = _month_key_label(info.get("date"))
+        if ml:
+            _add(months, ml[0], ml[1], gc)
+
+    out = [
+        GameGroup(axis="tournament", key=f"tournament:{name}", **grp)
+        for name, grp in tournaments.items()
+    ]
+    out.extend(
+        GameGroup(axis="month", key=f"month:{mkey}", **months[mkey])
+        for mkey in sorted(months, reverse=True)
+    )
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
@@ -373,6 +444,7 @@ async def collections_summary(sport: str | None = None):
                         g["tournament_name"], g["name"] or f"Game {g['id']}",
                     ),
                     "date": g["game_date"] or None,
+                    "tournament": g["tournament_name"] or None,   # T5880 axis
                 }
 
         # Pass 2: build buckets + season/tag totals + smart-collection buckets.
@@ -429,6 +501,9 @@ async def collections_summary(sport: str | None = None):
     ]
     games.sort(key=lambda gc: gc.latest_published_at or "", reverse=True)
 
+    # Derived tournament/month groupings over the now-sorted games (T5880).
+    game_groups = _build_game_groups(games, games_info)
+
     def _totals(acc, label_field):
         out = []
         for (label, ratio), v in acc.items():
@@ -479,6 +554,7 @@ async def collections_summary(sport: str | None = None):
     return CollectionsSummaryResponse(
         smart_collections=smart_collections,
         games=games,
+        game_groups=game_groups,
         mixes=RatioBucketed(**_finalize_bucket(mixes)),
         season_totals=season_totals,
         tag_totals=tag_totals,
