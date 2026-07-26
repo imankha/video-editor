@@ -403,6 +403,52 @@ class TestSharePlaybackEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/games/{id}/share (share_game) tests
+# ---------------------------------------------------------------------------
+
+class TestShareGameEndpoint:
+    def test_get_profiles_r2_blip_falls_back_to_pending_share(self, client, caplog):
+        """T4315 round 6: sibling of the share_playback test above, targeting
+        the share_game endpoint (POST /api/games/{id}/share) -- the primary
+        teammate-share entry point. The round-5 BLOCKING-2 fix was applied to
+        BOTH endpoints: get_profiles' foreign-user lookup and
+        materialize_game_share now sit inside ONE try/except RefreshFailed
+        with the same create_pending_share fallback. An R2 blip on the
+        recipient's get_profiles lookup raises RefreshFailed (the PARENT of
+        ProfileDBRefreshFailed); without the fix it fell straight through to
+        the outer `except Exception` ("Materialization failed") -- no
+        pending-share row, the email already sent, permanently unrecoverable
+        without the sharer re-sharing. Assert a pending-share row IS created,
+        handled by the RefreshFailed "Materialization refused" handler, NOT
+        the outer catch-all's "Materialization failed"."""
+        from app.services.db_refresh import RefreshFailed
+        from app.services.sharing_db import get_pending_shares_for_email
+
+        game_id = _seed_game_with_clips()
+        with patch(
+            "app.services.user_db.get_profiles",
+            side_effect=RefreshFailed("R2 blip resolving recipient profile list"),
+        ), caplog.at_level("WARNING"):
+            resp = client.post(
+                f"/api/games/{game_id}/share",
+                json={"emails": [RECIPIENT_EMAIL]},
+                headers=_auth_headers(SHARER_ID),
+            )
+
+        assert resp.status_code == 200
+        pending = get_pending_shares_for_email(RECIPIENT_EMAIL)
+        assert len(pending) == 1, \
+            "a refused get_profiles must fall back to a pending share, not vanish"
+        assert pending[0]["game_id"] == game_id
+
+        messages = [r.message for r in caplog.records]
+        assert any("[share-game] Materialization refused" in m for m in messages), \
+            "must be handled by the RefreshFailed fallback, not silently"
+        assert not any("Materialization failed" in m for m in messages), \
+            "must NOT fall through to the outer except-Exception catch-all"
+
+
+# ---------------------------------------------------------------------------
 # GET /api/shared/teammate/{token} tests
 # ---------------------------------------------------------------------------
 
