@@ -63,6 +63,19 @@ if (/^src\/frontend\/src\/.+\.(js|jsx|css)$/.test(rel)) {
   }
 }
 
+// T5890: media-api-base gate — ban bare `/api/...` media URLs (img/video src, poster,
+// etc.) in shipped frontend code; they resolve against the CF Pages origin on split-
+// host staging/prod and return the SPA shell instead of the file. Use `${API_BASE}/api/`.
+// Best-effort: node missing => skip. Test fixtures are excluded by the script itself.
+if (/^src\/frontend\/src\/.+\.(js|jsx)$/.test(rel)) {
+  const res = run('node', [path.join(repoRoot, 'scripts', 'check-media-api-base.mjs'), norm], repoRoot);
+  if (res.status && res.status !== 0) {
+    const out = ((res.stdout || '') + '\n' + (res.stderr || '')).trim();
+    process.stderr.write(`[hook:media-api-base] ${rel} has a bare /api/ media URL — use \`\${API_BASE}/api/...\`:\n${out}\n`);
+    process.exit(2);
+  }
+}
+
 if (/^src\/frontend\/.+\.(js|jsx|ts|tsx)$/.test(rel) && !rel.includes('node_modules')) {
   const feDir = path.join(repoRoot, 'src', 'frontend');
   if (!fs.existsSync(path.join(feDir, 'node_modules', '.bin'))) process.exit(0);
