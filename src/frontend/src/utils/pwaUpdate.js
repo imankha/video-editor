@@ -37,6 +37,13 @@ export function setupPwaUpdatePrompt() {
   });
 
   useUpdateGateStore.getState().setUpdateSW(updateSW);
+  // Let runUpdate ask, at click time, whether a bundle is actually waiting --
+  // the same registration?.waiting signal onReturnToApp trusts below. This is
+  // read live (the closure captures the variable, not its value), so it sees a
+  // SW that started waiting AFTER setup. Without it, a gate that fired for a
+  // backend version-mismatch before onNeedRefresh landed would bare-reload and
+  // strand the waiting SW into a second gate (T5930).
+  useUpdateGateStore.getState().setWaitingProbe(() => !!registration?.waiting);
 
   // Returning to the app is the moment to re-check. Shared by visibilitychange
   // (tab switch / wake from sleep) and pageshow (Safari bfcache restore).

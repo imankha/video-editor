@@ -21,6 +21,7 @@ const INITIAL_STATE = {
   phase: 'idle',
   error: null,
   _updateSW: null,
+  _waitingProbe: null,
 };
 
 describe('updateGateStore', () => {
@@ -88,6 +89,14 @@ describe('updateGateStore', () => {
       const fn = vi.fn();
       useUpdateGateStore.getState().setUpdateSW(fn);
       expect(useUpdateGateStore.getState()._updateSW).toBe(fn);
+    });
+  });
+
+  describe('setWaitingProbe', () => {
+    it('stores the waiting-SW probe for runUpdate to consult at click time', () => {
+      const fn = vi.fn();
+      useUpdateGateStore.getState().setWaitingProbe(fn);
+      expect(useUpdateGateStore.getState()._waitingProbe).toBe(fn);
     });
   });
 
@@ -171,6 +180,37 @@ describe('updateGateStore', () => {
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
+    it('T5930 regression: reason version-mismatch BUT a SW is really waiting -> skipWaiting, NOT a bare reload', async () => {
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const updateSW = vi.fn();
+      // The wild race: the backend version-mismatch poll latched the gate BEFORE
+      // onNeedRefresh fired, so `reason` never upgraded to 'sw'. But a new bundle
+      // IS waiting -- the probe (registration?.waiting) reports it. runUpdate must
+      // take skipWaiting; a bare reload here leaves the old SW in control, which
+      // strands the waiting bundle and fires a SECOND gate (the reported bug).
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+      useUpdateGateStore.getState().setUpdateSW(updateSW);
+      useUpdateGateStore.getState().setWaitingProbe(() => true);
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(updateSW).toHaveBeenCalledWith(true);
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('T5930: the flush barrier still runs BEFORE skipWaiting on the raced (version-mismatch + waiting) path', async () => {
+      const callOrder = [];
+      flushDurableStateMock.mockImplementation(async () => { callOrder.push('flush'); });
+      const updateSW = vi.fn(async () => { callOrder.push('updateSW'); });
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+      useUpdateGateStore.getState().setUpdateSW(updateSW);
+      useUpdateGateStore.getState().setWaitingProbe(() => true);
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(callOrder).toEqual(['flush', 'updateSW']);
+    });
+
     it('reloads directly with no waiting SW (the version-mismatch-only case)', async () => {
       flushDurableStateMock.mockResolvedValue(undefined);
       useUpdateGateStore.setState({ reason: 'version-mismatch' });
@@ -229,6 +269,20 @@ describe('updateGateStore', () => {
 
       expect(flushDurableStateMock).not.toHaveBeenCalled();
       expect(updateSW).toHaveBeenCalledWith(true);
+    });
+
+    it('T5930: logged out with a raced version-mismatch gate + waiting SW still skipWaiting (no bare reload)', async () => {
+      useAuthStore.setState({ isAuthenticated: false });
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+      const updateSW = vi.fn();
+      useUpdateGateStore.getState().setUpdateSW(updateSW);
+      useUpdateGateStore.getState().setWaitingProbe(() => true);
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(flushDurableStateMock).not.toHaveBeenCalled();
+      expect(updateSW).toHaveBeenCalledWith(true);
+      expect(reloadSpy).not.toHaveBeenCalled();
     });
   });
 });
