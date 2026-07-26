@@ -292,7 +292,16 @@ def clips_overlap(a: dict, b: dict) -> bool:
 
 
 def merge_clips(existing: dict, incoming: dict) -> dict:
-    """Merge two overlapping clips: earliest start, latest end, combined notes."""
+    """Merge two overlapping clips: earliest start, latest end, combined notes.
+
+    T4315 round 5 (note only, not restructured): a post-commit refusal
+    (WAL-checkpoint busy, or a recipient refresh failure) leaves the local
+    recipient DB already holding this materialization's clips/games -- a
+    retry re-runs this against that same local state, so an overlapping
+    clip's notes get "\n".join()-ed a second time (doubled notes). Game and
+    clip rows dedupe correctly by hash/overlap and no duplicate reels are
+    created, so this is cosmetic, not a correctness bug worth a bigger fix.
+    """
     e_start = existing.get("start_time", 0) or 0
     e_end = existing.get("end_time", 0) or 0
     i_start = incoming.get("start_time", 0) or 0
@@ -601,12 +610,14 @@ def materialize_game_share(
         # leaves the just-committed frames sitting in profile.sqlite-wal.
         # Round 3 logged that tuple and discarded it, so a contended
         # checkpoint (session_init's own later steps -- recover_orphaned_
-        # reservations, backfill_*, archive_completed_projects -- routinely
-        # hold this exact file open concurrently, per the NEW-B writeup)
-        # silently fell through to uploading the STALE main file anyway,
-        # stamped at the new version. A short busy_timeout here (not the
-        # connection's 30s default from _open_profile_db) turns "wait 30s
-        # then give up" into "fail fast," and checking `busy` turns a silent
+        # reservations, backfill_*, archive_completed_projects -- CAN hold
+        # this exact file open concurrently, per the NEW-B writeup, though
+        # those hold their own connections only for short transactions, so
+        # the window is narrow rather than routine) silently fell through to
+        # uploading the STALE main file anyway, stamped at the new version.
+        # A short busy_timeout here (not the connection's 30s default from
+        # _open_profile_db) turns "wait 30s then give up" into "fail fast,"
+        # and checking `busy` turns a silent
         # stale upload into a loud, retryable refusal via the SAME
         # ProfileDBRefreshFailed path already used for a failed sync below.
         recipient_conn.execute("PRAGMA busy_timeout=2000")
