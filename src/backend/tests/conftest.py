@@ -66,6 +66,8 @@ def _mock_pg_startup():
          patch("app.services.pg.get_pg", _stub_get_pg), \
          patch("app.services.auth_db.get_pg", _stub_get_pg), \
          patch("app.services.sharing_db.get_pg", _stub_get_pg), \
+         patch("app.services.credit_ledger.get_pg", _stub_get_pg), \
+         patch("app.services.credit_backfill.get_pg", _stub_get_pg), \
          patch("app.services.cleanup.start_cleanup_loop", new_callable=AsyncMock), \
          patch("app.services.cleanup.stop_cleanup_loop", new_callable=AsyncMock):
         yield
@@ -120,10 +122,26 @@ def pg_conn(monkeypatch):
     cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    # T5840: credits live in Postgres now -- clean the per-test-user ledger too.
+    cur.execute(f"DELETE FROM credit_transactions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM credit_reservations WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM credits WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters")
     cur.execute(_SEED_SQL)
+    # T5840: open the credits_ready gate by default so the general test suite
+    # (which predates the gate) doesn't 503 on every grant/debit. Tests that
+    # specifically exercise the gate-closed path set ready_at back to NULL and
+    # reset credit_ledger's process cache themselves (see test_credit_ledger.py).
+    cur.execute(
+        """INSERT INTO credit_migration_state (id, ready_at, backfilled_users, last_report, last_report_at)
+           VALUES (1, now(), 0, NULL, NULL)
+           ON CONFLICT (id) DO UPDATE SET ready_at = now(), last_report = NULL, last_report_at = NULL"""
+    )
     setup.close()
+
+    from app.services import credit_ledger
+    credit_ledger.reset_ready_cache_for_tests()
 
     @contextmanager
     def mock_get_pg():
@@ -142,8 +160,12 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.sharing_db.get_pg", mock_get_pg)
     monkeypatch.setattr("app.analytics.get_pg", mock_get_pg)
     monkeypatch.setattr("app.routers.admin.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.credit_ledger.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.credit_backfill.get_pg", mock_get_pg)
 
     yield dsn
+
+    credit_ledger.reset_ready_cache_for_tests()
 
     teardown = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     teardown.autocommit = True
@@ -155,6 +177,9 @@ def pg_conn(monkeypatch):
     tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM credit_transactions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM credit_reservations WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM credits WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     teardown.close()
 

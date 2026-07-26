@@ -1885,3 +1885,166 @@ async def get_bug_screenshot(bug_id: int):
         raise HTTPException(status_code=500, detail="Failed to generate screenshot URL")
 
     return RedirectResponse(url=url, status_code=307)
+# ---------------------------------------------------------------------------
+# T5840: Credits -> Postgres backfill + cutover gate.
+#
+# Dry-run report (no writes) vs apply, per design 3b -- this is a tool, not a
+# versioned migration file: money needs a human-reviewed dry run, and a
+# migration's up(conn) has no user context to force-download R2 with.
+# Both idempotent/re-runnable: a second run only inserts ledger rows Postgres
+# is still missing and recomputes balance = SUM(pg ledger).
+# ---------------------------------------------------------------------------
+
+class BackfillRequest(BaseModel):
+    user_ids: list[str] | None = None
+    limit: int | None = None
+    offset: int = 0
+
+
+@router.get("/credits/backfill-report")
+async def credits_backfill_report(
+    user_ids: str | None = Query(None),
+    limit: int | None = Query(None, description="Chunk the full enumeration (M7) -- omit for all users"),
+    offset: int = Query(0),
+):
+    """Dry run -- no writes. `user_ids` is an optional comma-separated list for a
+    targeted preview; omitted means every user (optionally chunked via
+    limit/offset -- each user costs an R2 download + several PG round trips,
+    so an unbounded scan can run minutes past a proxy timeout once the user
+    base is nontrivial). A COMPLETE unchunked run is saved as the stored
+    report POST /credits/open-gate consumes."""
+    _require_admin()
+    from ..services.credit_backfill import reconcile_against_stripe, run_backfill
+
+    ids = [u.strip() for u in user_ids.split(",") if u.strip()] if user_ids else None
+    report = run_backfill(user_ids=ids, apply=False, limit=limit, offset=offset)
+    # Stripe reconciliation is itself a full-population pass (PaymentIntent.list) --
+    # skip it for a chunked page, it isn't scoped to `limit`/`offset` and would be
+    # misleadingly repeated (and costly) on every page.
+    if limit is None:
+        report["stripe_reconciliation"] = reconcile_against_stripe()
+    return report
+
+
+@router.post("/credits/backfill")
+async def credits_backfill_apply(request: BackfillRequest):
+    """Apply -- inserts missing ledger rows and re-derives balances. Safe to
+    re-run (idempotent); `user_ids` targets a re-run for specific accounts;
+    `limit`/`offset` chunk a full-population apply run (M7)."""
+    _require_admin()
+    from ..services.credit_backfill import run_backfill
+
+    return run_backfill(user_ids=request.user_ids, apply=True, limit=request.limit, offset=request.offset)
+
+
+class OpenGateRequest(BaseModel):
+    # Flag NAMES (e.g. "divergent", "ledger_mismatch", "negative_balance") the
+    # admin has manually reviewed and accepts -- a row carrying ONLY
+    # acknowledged flags (and zero delta) no longer blocks the gate.
+    acknowledge_flags: list[str] = []
+    # Raw override: opens the gate regardless of any remaining anomaly.
+    # Logged loudly (WARNING) with the full anomalous user list for audit.
+    force: bool = False
+
+
+def _gate_blocking_rows(rows: list[dict], acknowledged: set[str]) -> list[dict]:
+    """Rows that must block the gate. `no_user_db` is informational ONLY --
+    it is the EXPECTED, permanent state for every purged/guest/never-synced
+    account (BLOCKING-2: with unbounded real-world enumeration this flag is
+    guaranteed on staging/prod, so treating it as blocking means the gate can
+    never open). Any OTHER flag blocks unless explicitly acknowledged; a
+    nonzero delta always blocks (it means backfill has real unapplied work --
+    the fix is POST /credits/backfill, not an acknowledgement)."""
+    blocking = []
+    for r in rows:
+        if r["status"] == "no_user_db":
+            continue
+        if (set(r["flags"]) - acknowledged) or r["delta"] != 0:
+            blocking.append(r)
+    return blocking
+
+
+# M7: open-gate consumes the STORED report from the most recent COMPLETE
+# GET backfill-report call instead of recomputing (a second full unbounded
+# scan -- R2 downloads + Stripe list -- synchronously inside this request).
+# A report older than this is refused (not silently reused) unless force=true.
+GATE_REPORT_MAX_AGE_SECONDS = 1800  # 30 minutes
+
+
+@router.post("/credits/open-gate")
+async def credits_open_gate(request: OpenGateRequest = OpenGateRequest()):
+    """Open the credits_ready cutover gate (design 4a/4b) -- mutations 503 until
+    this runs. Refuses unless the STORED backfill report (from the most recent
+    GET /credits/backfill-report) shows zero drift and no unacknowledged
+    anomalies, so the gate can only open on a verified-clean (or explicitly
+    human-reviewed) state. `no_user_db` never blocks -- it is the expected
+    state for purged/guest accounts, not drift."""
+    _require_admin()
+    from datetime import UTC, datetime
+
+    from ..services.credit_backfill import load_last_report
+    from ..services.credit_ledger import reset_ready_cache_for_tests
+
+    stored = load_last_report()
+    if stored is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "no_report",
+                "message": "No backfill report on file -- run GET /credits/backfill-report (full, unchunked) first.",
+            },
+        )
+
+    age_seconds = (datetime.now(UTC) - stored["generated_at"]).total_seconds()
+    if age_seconds > GATE_REPORT_MAX_AGE_SECONDS and not request.force:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "stale_report",
+                "message": (
+                    f"Stored report is {int(age_seconds)}s old (max {GATE_REPORT_MAX_AGE_SECONDS}s) -- "
+                    "re-run GET /credits/backfill-report, or pass force=true to use it anyway."
+                ),
+                "report_generated_at": stored["generated_at"].isoformat(),
+            },
+        )
+
+    report = stored["report"]
+    acknowledged = set(request.acknowledge_flags)
+    anomalous = _gate_blocking_rows(report["rows"], acknowledged)
+
+    if anomalous and not request.force:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "drift_present",
+                "message": (
+                    "The stored backfill report shows drift or unacknowledged flags -- "
+                    "run POST /credits/backfill, then GET /credits/backfill-report again "
+                    "to refresh the stored report, or pass acknowledge_flags (after manual "
+                    "review) / force=true to open anyway."
+                ),
+                "anomalous_count": len(anomalous),
+                "anomalous_user_ids": [r["user_id"] for r in anomalous][:50],
+                "report_generated_at": stored["generated_at"].isoformat(),
+            },
+        )
+
+    if anomalous and request.force:
+        logger.warning(
+            f"[Admin] credits_ready gate FORCE-opened by {get_current_user_id()} with "
+            f"{len(anomalous)} unresolved anomalous users: "
+            f"{[r['user_id'] for r in anomalous]}"
+        )
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO credit_migration_state (id, ready_at, backfilled_users)
+               VALUES (1, now(), %s)
+               ON CONFLICT (id) DO UPDATE SET ready_at = now(), backfilled_users = %s""",
+            (report["summary"]["total_users"], report["summary"]["total_users"]),
+        )
+    reset_ready_cache_for_tests()
+    logger.info(f"[Admin] credits_ready gate OPENED by {get_current_user_id()}")
+    return {"opened": True, "backfilled_users": report["summary"]["total_users"]}
