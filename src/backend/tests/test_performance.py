@@ -205,8 +205,16 @@ class TestR2SyncSkipHead:
         """When skip_version_check=True, get_db_version_from_r2 is NOT called."""
         from app.storage import sync_database_to_r2_with_version
 
+        # T5920: the upload primitive now checkpoints the WAL before uploading,
+        # so it opens local_db_path as a real SQLite DB -- a dummy byte string
+        # ("file is not a database") would be refused. Use a valid WAL DB; this
+        # test only asserts HEAD skip/call behavior, unaffected by the content.
         db_path = tmp_path / "test.sqlite"
-        db_path.write_bytes(b"test")
+        _c = sqlite3.connect(str(db_path))
+        _c.execute("PRAGMA journal_mode=WAL")
+        _c.execute("CREATE TABLE t (x)")
+        _c.commit()
+        _c.close()
 
         mock_client = MagicMock()
         mock_client.upload_file = MagicMock()
@@ -232,8 +240,16 @@ class TestR2SyncSkipHead:
         """When skip_version_check=False (default), HEAD IS called."""
         from app.storage import sync_database_to_r2_with_version
 
+        # T5920: the upload primitive now checkpoints the WAL before uploading,
+        # so it opens local_db_path as a real SQLite DB -- a dummy byte string
+        # ("file is not a database") would be refused. Use a valid WAL DB; this
+        # test only asserts HEAD skip/call behavior, unaffected by the content.
         db_path = tmp_path / "test.sqlite"
-        db_path.write_bytes(b"test")
+        _c = sqlite3.connect(str(db_path))
+        _c.execute("PRAGMA journal_mode=WAL")
+        _c.execute("CREATE TABLE t (x)")
+        _c.commit()
+        _c.close()
 
         mock_client = MagicMock()
         mock_client.upload_file = MagicMock()

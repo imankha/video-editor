@@ -3,14 +3,15 @@ T950: Version conflict detection tests for sync_database_to_r2_with_version
 and sync_user_db_to_r2_with_version.
 """
 
+import sqlite3
+from unittest.mock import MagicMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from app.storage import (
+    R2VersionResult,
     sync_database_to_r2_with_version,
     sync_user_db_to_r2_with_version,
-    R2VersionResult,
 )
 
 MODULE = "app.storage"
@@ -19,9 +20,16 @@ RETRY_MODULE = "app.utils.retry"
 
 @pytest.fixture
 def local_db(tmp_path):
-    """Create a fake local DB file."""
+    """Create a local DB file. T5920: the upload primitive now checkpoints the
+    WAL before uploading, so it opens this path as a real SQLite DB — a dummy
+    byte string ("file is not a database") would be refused. A valid WAL DB
+    keeps these version-conflict tests exercising CAS, not the checkpoint guard."""
     db = tmp_path / "profile.sqlite"
-    db.write_bytes(b"fake-db-content")
+    conn = sqlite3.connect(str(db))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE t (x)")
+    conn.commit()
+    conn.close()
     return db
 
 
@@ -95,6 +103,7 @@ class TestSyncDatabaseToR2WithVersion:
         with patch(f"{MODULE}.get_db_version_from_r2", return_value=8), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry, \
              patch(f"{MODULE}.download_from_r2") as mock_dl:
+            original_bytes = local_db.read_bytes()
             success, returned_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=5
             )
@@ -103,7 +112,7 @@ class TestSyncDatabaseToR2WithVersion:
             mock_dl.assert_not_called()
             mock_retry.assert_not_called()
             # The local file itself must be untouched -- no WAL-unsafe swap.
-            assert local_db.read_bytes() == b"fake-db-content"
+            assert local_db.read_bytes() == original_bytes
 
     def test_r2_disabled(self, local_db):
         """R2 disabled → returns (False, None)."""
@@ -236,13 +245,14 @@ class TestSyncUserDbToR2WithVersion:
         download_file re-fetch); the local file is left untouched."""
         with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=8), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry:
+            original_bytes = local_db.read_bytes()
             success, returned_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=5
             )
             assert success is False
             assert returned_version == 8
             mock_retry.assert_not_called()
-            assert local_db.read_bytes() == b"fake-db-content"
+            assert local_db.read_bytes() == original_bytes
 
     def test_r2_disabled(self, local_db):
         """R2 disabled → returns (False, None)."""

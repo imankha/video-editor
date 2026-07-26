@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-07-26 (T5920: WAL checkpoint-or-refuse guard in the R2 upload primitive — no under-checkpointed upload at a bumped version; see T5920 section)
 updated: 2026-07-26 (T5840: credits moved OUT of user.sqlite/R2 into Fly Postgres — see backend-services.md "Credits (Postgres, T5840)". No longer part of the R2 sync/CAS story below; purge/reregister interaction now governed by a Postgres idempotency-key collision, not restore-from-R2.)
 updated: 2026-07-25 (T4315: confirm_current_before_write restore-if-newer for write paths, WAL-safe sidecar cleanup; generalizes require_fresh/_refresh_target_user_db)
 updated: 2026-07-25 (T4310: CAS re-enabled on async/worker/shutdown R2 uploads; SyncResult 3-state contract; conflict -> freeze/escalate/Retry)
@@ -186,7 +187,7 @@ In-session PWA update is now a **blocking, non-dismissible gate** (`UpdateGateMo
 
 Round 3's fix (`recipient_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")` before the upload) **shipped the result unchecked** — `PRAGMA wal_checkpoint` does NOT raise on contention, it returns `(busy, log, checkpointed)` with `busy=1` and leaves the just-committed frames sitting in the WAL, so a contended checkpoint fell through to uploading the stale main file anyway (reviewer reproduced end-to-end: uploaded object had 0 games at db-version 1, plus a ~30s stall from the connection's inherited `busy_timeout=30000`). Contention here is real, not hypothetical — it's the same class of interleaving the WAL-safety section below (`session_init.py`'s concurrent steps) documents, though those steps hold their own connections only for short transactions, so in practice the window a checkpoint has to land inside is narrow, not routine. Fixed (round 4): lower `busy_timeout` to 2000ms first (fail fast, don't inherit the 30s default), then check the `busy` flag and `raise ProfileDBRefreshFailed` BEFORE the upload call when set — reusing the exact same "upload failed → do NOT mark materialized, stays retryable" path already in place for a failed `sync_db_to_r2_explicit`.
 
-**Known landmine, NOT fixed here (follow-up task T5920):** this checkpoint-before-upload discipline is currently applied ONLY at the `materialize_game_share` call site. The hazard is systemic — `middleware/db_sync.py`'s end-of-request sync (`_background_sync`) uploads `profile.sqlite` the same way (main file only, no checkpoint), so any other concurrent request/connection holding that same file open produces the identical under-checkpointed-upload-at-a-bumped-version failure mode on the NORMAL request-sync path, not just teammate-share materialization. **T5920** should audit `db_sync.py`'s sync path for the same fix.
+**Known landmine, ~~NOT fixed here (follow-up task T5920)~~ FIXED T5920:** the checkpoint-before-upload discipline was originally applied ONLY at the `materialize_game_share` call site. The hazard was systemic — `middleware/db_sync.py`'s end-of-request sync (`_background_sync`) uploads `profile.sqlite` the same way (main file only, no checkpoint), so any concurrent request/connection holding that same file open produced the identical under-checkpointed-upload-at-a-bumped-version failure on the NORMAL request-sync path, not just teammate-share materialization. **T5920 generalized the guard into the upload PRIMITIVE** — see the T5920 section below.
 
 **BLOCKING-2 (round 2, closed, reconfirmed round 3): `current_version is None` let an empty post-R2-ERROR DB force-push over real data.** `ensure_user_database`/`ensure_database` (UNCHANGED, still lenient/first-access-only by design) create an empty schema'd DB when a fresh machine's R2 restore errors, without recording a version. The CAS guard in `storage.py` (`sync_database_to_r2_with_version` / `sync_user_db_to_r2_with_version`) used to read `r2_version > 0 and current_version is not None and r2_version > current_version` — an unconfirmed (`None`) baseline SKIPPED the conflict check entirely, so that empty DB would upload as `new_version = r2_version + 1`, silently destroying credits/profiles/quests with zero conflict signal. Fixed at the PRIMITIVE (covers every caller, not just T4315's own new call sites): `r2_version > 0 and (current_version is None or r2_version > current_version)` — an unconfirmed baseline against REAL R2 content now refuses exactly like a stale one. A genuinely brand-new user (R2 NOT_FOUND, `r2_version == 0`) is unaffected — still uploads normally. Round-3 reviewer verified this end-to-end against FakeR2 for both DB kinds and confirmed `admin.py` surfaces `synced: false` instead of lying.
 
@@ -203,6 +204,63 @@ Practical effect of the guard: `ensure_user_database`'s own schema-apply connect
 **Tests:** `tests/test_t4315_restore_on_staleness.py` (17 tests) — restore-before-write when R2 is newer (+ version cache assertion on refusal); R2-error refuses loudly with local file AND version cache untouched; machine-swap simulation serves current R2 data; `confirm_current_before_write` dispatch; `materialize_game_share` recipient refresh-or-fail (+ version cache untouched, with the `app.services.materialization.USER_DATA_BASE` patch round 3 found missing — round 2's version of this test was vacuous, NEW-E); `get_user_db_connection`'s structural foreign-user guard (fires for foreign+unconfirmed, skips when recently confirmed, stays lenient for same-session-user and no-session-context); the empty-DB-after-R2-ERROR end-to-end regression (BLOCKING-2); WAL guard refuses with a GENUINELY open connection for BOTH user.sqlite and profile.sqlite (round 3 added the missing profile.sqlite case) and lets an ordinary restore proceed EVEN WITH sidecars present when nothing needs downloading (round 3, proves NEW-B fixed, both DB kinds). `tests/test_materialization.py` gained 3 tests: BLOCKING-1 (recipient sync called; sync failure refuses to mark materialized) plus a FakeR2-backed round-3 test that reads the ACTUAL uploaded object back and asserts it contains the shared game/clips (proves NEW-A fixed — a mocked `sync_db_to_r2_explicit` call, which is all round 2 had, cannot catch stale-bytes-at-a-newer-version). `tests/test_version_conflict.py` gained the BLOCKING-2 primitive tests (refuses when unconfirmed + real content; still uploads when unconfirmed + genuinely empty) for both profile and user DB. `tests/test_auto_materialize.py`'s `_common_patches` stubs `threading.Thread` to run inline (T3230 moved to a background thread in round 2) — round 3 note: this makes the stub run BEFORE session_init's later steps, so it cannot by itself prove NEW-B fixed; the WAL-guard unit tests above are the authoritative regression coverage for that. Full suites re-verified green: `test_t4310_r2_cas_conflict.py`, `test_sync_status.py`, `test_background_sync.py`, `test_t4050_durable_sync.py`, `test_performance.py` (`TestR2SyncSkipHead`), `test_admin_credit_grant_r2_sync.py`, `test_move_reels_stale_target.py`, `test_credits_grant_prod_gate.py`, `test_double_grant.py`, `test_revenue_reconciliation.py`, `test_t4940_pack_pricing.py`, `test_shares.py`, `test_session_init_recovery.py` (excluding the pre-existing, documented `local_disk_timing`-marked flake). Two `test_t4820_expired_source_status.py::TestSweepPhase2ExpiresGameStorage` failures are pre-existing/out of scope (confirmed via `git stash` — fail identically on the base commit); one `test_materialization.py::TestPendingShareCRUD` Postgres-DDL-race error was confirmed flaky/unrelated (passes standalone and on rerun).
 
 **Residual, out of this task's named scope:** `analytics.py: record_milestone`/`update_session` call `get_user_db_connection(user_id)` for a write; whether any caller passes a foreign (non-session) `user_id` wasn't fully audited beyond `shares.py` (fixed above).
+
+## T5920 — WAL checkpoint before every R2 upload (systemic, in the primitive)
+
+**Guarantee:** no R2 upload can ship an under-checkpointed SQLite file. Every per-user DB is uploaded
+main-file-only (`client.upload_file` on `local_db_path`); in WAL mode committed data sits in `<db>-wal`
+until a checkpoint (SQLite auto-checkpoints only on last-connection-close). If any other connection held
+the file open during a sync, the upload shipped pre-commit bytes stamped at a BUMPED version — worse
+than not syncing, because T4315 restore-if-newer (`local >= r2` → never re-pulls), T4310 CAS, and any
+Postgres "materialized" mark then trust that stale-content-newer-version copy and the write is silently,
+permanently lost. Previously only `materialize_game_share` checkpointed (T4315 round 4); T5920 moved the
+guard into the one choke point every caller passes.
+
+**The guard — `storage.py: _checkpoint_wal_or_refuse(local_db_path) -> bool`.** Called inside BOTH
+upload primitives (`sync_database_to_r2_with_version`, `sync_user_db_to_r2_with_version`) AFTER
+`new_version` is computed (so it covers the CAS path AND the two `skip_version_check=True`
+request-thread callers — profiles.py create, payments webhook) and immediately BEFORE `client.upload_file`.
+It opens a FRESH connection, sets **`busy_timeout=2000`** (NOT the 30000ms `_open_profile_db`/
+`get_db_connection` inherit — fail fast, never a 30s/attempt stall), runs `PRAGMA wal_checkpoint(TRUNCATE)`,
+and reads the busy flag. **The landmine: `wal_checkpoint` does NOT raise on contention** — it returns
+`(busy, log, checkpointed)`; `busy=1` means it did nothing and left frames in the WAL. On busy (or ANY
+exception — refuse rather than risk a stale upload, never a bare proceed-anyway fallback) it returns
+False and the primitive `return (False, None)`.
+
+**Refusal maps to `SyncResult.FAILED`, NOT CONFLICT (no 4th state).** `(False, None)` is the existing
+FAILED mapping in `sync_db_to_r2_explicit`/`sync_user_db_to_r2_explicit`; a busy checkpoint is TRANSIENT
+(clears when the other connection closes), so it must retry (`.sync_pending` survives, `X-Sync-Status:
+failed`, the existing "edits aren't saving — Retry" UX / durable 503), not freeze the baseline like a
+CAS CONFLICT. **No version bump** — the `return` precedes both the key derivation and `set_local_db_version`,
+so the baseline stays put and the same write retries cleanly.
+
+**A fresh checkpoint connection can flush OTHER idle connections' committed frames** (WAL is shared), so
+the common case — the request handler's `get_db_connection()` already closed before `_background_sync`
+runs, verified in the audit — yields `busy=0` and a CORRECT upload. Only a concurrent **open read
+snapshot / active transaction** on the same file forces `busy=1` → refuse. An idle post-commit open
+connection does NOT block TRUNCATE (empirically busy=0).
+
+**Call-site audit (T5920 deliverable):** of ~18 sync sites, only two held a connection open across the
+sync — `materialize_game_share` (already guarded, its own `recipient_conn` checkpoint) and
+`downloads.py: move_reels_to_profile`'s TARGET sync (`target_conn`, raw WAL, closed only in `finally`).
+Every other site — including `_background_sync` (highest traffic) — closes its writer (or opens none)
+before syncing, so the guard is inert for them except under genuine concurrent-reader contention.
+**move_reels hardened:** it checkpoints `target_conn` (busy_timeout=2000 + TRUNCATE) before the sync and
+refuses on busy via the existing rollback + retryable-503 path — it checkpoints rather than closes because
+`target_conn` is still needed for the rollback. This is the exact shape of the reels-lost incident
+(final_videos rows lost while the mp4s stayed in R2).
+
+**Shutdown handler keeps its own pre-checkpoints** (`main.py:337,380`): NOT redundant with the primitive —
+they also leave the on-disk file clean for the next boot, which the upload primitive does not do.
+
+**Tests:** `tests/test_t5920_checkpoint_before_upload.py` — busy checkpoint refuses loudly (FAILED, no
+upload, no version bump, `.sync_pending` stays) for profile AND user.sqlite; retry after contention clears
+uploads the change (reads the R2 bytes back, asserts the committed row is present); uncontended path
+unbroken; refusal is fast (≤10s, proves the 2000ms timeout, not 30s); `_background_sync` (highest-traffic
+path) refuses under contention. Red-without-guard proven: disabling the guard call makes the refusal test
+return `SyncResult.OK` (uploads stale bytes at a bumped version). `test_performance.py::TestR2SyncSkipHead`
+updated to use a real WAL DB (the checkpoint step now opens `local_db_path`, so a dummy byte file is
+refused as "file is not a database").
 
 ## T4320 — Durable clip gestures + user.sqlite shutdown sync + T5310 profile-create fix
 

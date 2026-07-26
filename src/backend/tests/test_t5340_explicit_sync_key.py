@@ -192,12 +192,21 @@ def test_primitive_key_source_switches_on_profile_id(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_user_db_key_is_profile_independent(tmp_path):
+    import sqlite3
+
     from app.database import SyncResult, set_local_user_db_version, sync_user_db_to_r2_explicit
     from app.storage import _user_db_r2_key
 
     with _env(tmp_path) as (fake, base):
         (base / USER).mkdir(parents=True, exist_ok=True)
-        (base / USER / "user.sqlite").write_bytes(b"USER_DB")
+        # T5920: the upload primitive now checkpoints the WAL before uploading, so
+        # it opens this path as a real SQLite DB — a dummy byte string would be
+        # refused as "file is not a database". Seed a valid WAL DB.
+        _uc = sqlite3.connect(str(base / USER / "user.sqlite"))
+        _uc.execute("PRAGMA journal_mode=WAL")
+        _uc.execute("CREATE TABLE t (x)")
+        _uc.commit()
+        _uc.close()
         set_local_user_db_version(USER, 0)
         _set_contextvar(PROFILE_A)  # irrelevant to the user.sqlite key
 
