@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Pencil, CheckCircle, Tag, Loader2, Image, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
@@ -458,8 +459,18 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       )}
 
-      {/* Video preview modal */}
-      {isPreviewing && project.final_video_id && (
+      {/* Video preview modal.
+          Portaled to document.body: the tile applies a hover `transform`/`filter`
+          (scale + brightness), which makes it the containing block for any
+          `position: fixed` descendant. Rendered inline, the fixed backdrop/panel
+          (and the video + its purple scrub bar) would resolve against the small,
+          offset tile box instead of the viewport -- video paints outside the panel
+          (T5900 defect A) and the scrub bar is left as a paint artifact on the tile
+          after unmount (defect B). The portal moves the modal out of the tile
+          subtree so `fixed` resolves to the viewport. Same pattern as ReelTile's
+          kebab menu. Note: React events still bubble through the component tree, so
+          the stopPropagation calls below still guard the tile's card onClick. */}
+      {isPreviewing && project.final_video_id && createPortal(
         <>
           <div
             className="fixed inset-0 bg-black/80 z-[60]"
@@ -487,7 +498,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
               />
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
