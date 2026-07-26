@@ -9,7 +9,7 @@ import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useQuestStore } from '../stores/questStore';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsCoarsePointer } from '../hooks/useIsMobile';
 import apiFetch from '../utils/apiFetch';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
@@ -45,7 +45,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const longPressTimer = useRef(null);
   const touchMoved = useRef(false);
   const longPressFired = useRef(false);
-  const isMobile = useIsMobile();
+  // T5910: the reveal MECHANISM is gated on pointer capability, not viewport
+  // width. useIsMobile is width-OR-touch, so a narrow *desktop* window took the
+  // touch-only long-press branch and a mouse user could never reveal the actions.
+  // useIsCoarsePointer is true only for touch/pen primary pointers: fine pointer
+  // (mouse) at ANY width -> hover reveal; coarse pointer -> long-press, unchanged.
+  const isCoarsePointer = useIsCoarsePointer();
   const isOffline = useSyncStore((state) => state.isOffline);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
@@ -201,7 +206,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
 
   const handleCardClick = () => {
     if (isRenaming) return;
-    if (isMobile && actionsRevealed) {
+    if (isCoarsePointer && actionsRevealed) {
       setActionsRevealed(false);
       return;
     }
@@ -281,8 +286,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   else if (project.clips_in_progress > 0) { statusLabel = 'Framing'; statusTint = 'text-blue-300'; }
   else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
 
-  // Desktop reveals actions on hover; mobile reveals them on long-press (actionsRevealed).
-  const actionsVisibility = isMobile
+  // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
+  const actionsVisibility = isCoarsePointer
     ? (actionsRevealed ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')
     : 'opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto';
   const actionBtnClass = 'coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]';
@@ -301,9 +306,9 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       data-testid="project-card"
       onClick={isReadyToPublish ? undefined : handleCardClick}
       onKeyDown={handleCardKeyDown}
-      onTouchStart={isMobile ? handleTouchStart : undefined}
-      onTouchMove={isMobile ? handleTouchMove : undefined}
-      onTouchEnd={isMobile ? handleTouchEnd : undefined}
+      onTouchStart={isCoarsePointer ? handleTouchStart : undefined}
+      onTouchMove={isCoarsePointer ? handleTouchMove : undefined}
+      onTouchEnd={isCoarsePointer ? handleTouchEnd : undefined}
       role="button"
       tabIndex={canOpen ? 0 : -1}
       aria-current={isCurrentProject ? 'true' : undefined}
@@ -427,7 +432,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       </div>
 
       {/* Actions — desktop hover / mobile long-press sheet. Every old card action reachable. */}
-      <div className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
+      <div data-testid="tile-actions" className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
         {isComplete && project.final_video_id && (
           <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }} title="Preview video" className={actionBtnClass} />
         )}
