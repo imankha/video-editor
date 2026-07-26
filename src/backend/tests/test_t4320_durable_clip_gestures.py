@@ -209,12 +209,14 @@ async def test_clip_save_forced_sync_failure_returns_503_not_durable(dur_env):
 @pytest.mark.asyncio
 async def test_user_sqlite_included_in_shutdown_sync(dur_env):
     app, fake, base, game_id = dur_env
-    from app.services.user_db import set_credits  # any user.sqlite write
+    # T5840: credits moved to Postgres -- set_stripe_customer_id is now the
+    # stand-in "any user.sqlite write" (credits are no longer in this file).
+    from app.services.user_db import set_stripe_customer_id
     from app.storage import r2_key
 
     # Mutate user.sqlite locally WITHOUT syncing it to R2 (no request cycle).
     _ctx()
-    set_credits(USER_ID, 7)
+    set_stripe_customer_id(USER_ID, "cus_test_123")
 
     user_key = f"{fake_env()}/users/{USER_ID}/user.sqlite"
     assert not fake.has(user_key), "precondition: user.sqlite not yet in R2"

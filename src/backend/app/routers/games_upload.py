@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 from app.constants import UploadStatus
 from app.database import get_db_connection
 from app.middleware.db_sync import durable_sync
+from app.services.credit_ledger import get_credit_balance
 from app.services.storage_credits import calculate_upload_cost
-from app.services.user_db import get_credit_balance
 from app.storage import (
     R2_ENABLED,
     generate_multipart_urls,

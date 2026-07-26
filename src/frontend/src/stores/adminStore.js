@@ -89,7 +89,11 @@ export const useAdminStore = create((set, get) => ({
     if (currentPage > 1) fetchUsers(currentPage - 1);
   },
 
-  grantCredits: async (userId, amount) => {
+  // T5840: requestId is minted by the CALLER (CreditGrantModal) once per grant
+  // attempt and reused across a retry of that SAME click -- that's what makes
+  // the retry idempotent server-side (admin:{admin}:{requestId} key). A new
+  // click (new attempt) gets a new id.
+  grantCredits: async (userId, amount, requestId) => {
     set(state => ({
       grantState: { ...state.grantState, [userId]: { loading: true, error: null } },
     }));
@@ -97,13 +101,13 @@ export const useAdminStore = create((set, get) => ({
       const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/grant-credits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, request_id: requestId }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      const { balance, synced } = await res.json();
+      const { balance, applied } = await res.json();
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: null } },
         users: state.users.map(u =>
@@ -111,7 +115,7 @@ export const useAdminStore = create((set, get) => ({
         ),
       }));
       useCreditStore.getState().fetchCredits();
-      return { balance, synced };
+      return { balance, applied };
     } catch (err) {
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: err.message } },
@@ -122,13 +126,14 @@ export const useAdminStore = create((set, get) => ({
 
   // T4860: bulk grant credits. Follows grantCredits shape but patches every
   // successfully-granted user's balance from the per-user results array.
-  bulkGrantCredits: async (userIds, amount) => {
+  // T5840: batchId is minted once per bulk attempt (see grantCredits above).
+  bulkGrantCredits: async (userIds, amount, batchId) => {
     set({ bulkActionLoading: true });
     try {
       const res = await apiFetch(`${API_BASE}/api/admin/users/bulk/grant-credits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_ids: userIds, amount }),
+        body: JSON.stringify({ user_ids: userIds, amount, batch_id: batchId }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -292,7 +297,7 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
-  setCredits: async (userId, amount) => {
+  setCredits: async (userId, amount, requestId) => {
     set(state => ({
       grantState: { ...state.grantState, [userId]: { loading: true, error: null } },
     }));
@@ -300,13 +305,13 @@ export const useAdminStore = create((set, get) => ({
       const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/set-credits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, request_id: requestId }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      const { balance, synced } = await res.json();
+      const { balance, applied } = await res.json();
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: null } },
         users: state.users.map(u =>
@@ -314,7 +319,7 @@ export const useAdminStore = create((set, get) => ({
         ),
       }));
       useCreditStore.getState().fetchCredits();
-      return { balance, synced };
+      return { balance, applied };
     } catch (err) {
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: err.message } },

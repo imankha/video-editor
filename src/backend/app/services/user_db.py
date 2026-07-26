@@ -198,8 +198,9 @@ def ensure_user_database(user_id: str) -> None:
 
     conn.close()
 
-    # Initialize credits row for new users
-    _init_credits_row(user_id)
+    # T5840: credits moved to Postgres (credit_ledger.py) -- the legacy `credits`
+    # table stays in _USER_DB_SCHEMA unread AND unwritten (pre-migration record /
+    # rollback substrate only; dropped in a later user_db migration).
 
     with _init_lock:
         _initialized_user_dbs.add(user_id)
@@ -247,187 +248,11 @@ def get_user_db_connection(user_id: str | None = None):
 
 
 # ---------------------------------------------------------------------------
-# Credit operations (moved from auth_db.py)
+# Credit operations -- MOVED to app/services/credit_ledger.py (T5840, Postgres).
+# The legacy `credits`/`credit_transactions` tables stay in _USER_DB_SCHEMA
+# above, unread and unwritten (pre-migration record / rollback substrate; a
+# later user_db migration drops them ~30 days after prod verification).
 # ---------------------------------------------------------------------------
-
-def get_credit_balance(user_id: str) -> dict:
-    """Get credit balance for a user."""
-    with get_user_db_connection(user_id) as conn:
-        row = conn.execute(
-            "SELECT balance FROM credits WHERE user_id = ?",
-            (user_id,)
-        ).fetchone()
-        if not row:
-            return {"balance": 0}
-        return {"balance": row["balance"]}
-
-
-def grant_credits(user_id: str, amount: int, source: str, reference_id: str | None = None) -> int:
-    """Grant credits to a user. Returns new balance."""
-    with get_user_db_connection(user_id) as conn:
-        # Ensure credits row exists
-        conn.execute(
-            "INSERT OR IGNORE INTO credits (user_id, balance) VALUES (?, 0)",
-            (user_id,)
-        )
-        conn.execute(
-            "UPDATE credits SET balance = balance + ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        conn.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
-               VALUES (?, ?, ?, ?)""",
-            (user_id, amount, source, reference_id),
-        )
-        conn.commit()
-        row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        new_balance = row["balance"]
-
-    logger.info(f"[UserDB] Granted {amount} credits to {user_id} (source={source}), balance={new_balance}")
-    return new_balance
-
-
-def deduct_credits(
-    user_id: str,
-    amount: int,
-    source: str,
-    reference_id: str | None = None,
-    video_seconds: float | None = None,
-) -> dict:
-    """
-    Deduct credits atomically. Returns {success, balance, required}.
-
-    Idempotent on (source, reference_id): if a deduction with the same source and
-    reference_id already exists, this is a retry — do NOT deduct again, just report
-    the current balance as success. This guards retried operations (e.g. game
-    activation re-run after a mid-flight failure) from double-charging.
-    """
-    with get_user_db_connection(user_id) as conn:
-        # Idempotency guard: a prior deduction for this (source, reference_id) means
-        # this is a retry. Only applies when reference_id is provided (None is not a key).
-        if reference_id is not None:
-            existing = conn.execute(
-                """SELECT 1 FROM credit_transactions
-                   WHERE user_id = ? AND source = ? AND reference_id = ? AND amount < 0
-                   LIMIT 1""",
-                (user_id, source, reference_id),
-            ).fetchone()
-            if existing:
-                bal_row = conn.execute(
-                    "SELECT balance FROM credits WHERE user_id = ?", (user_id,)
-                ).fetchone()
-                current = bal_row["balance"] if bal_row else 0
-                logger.info(
-                    f"[UserDB] Skipping duplicate deduction for {user_id} "
-                    f"(source={source}, ref={reference_id}), balance={current}"
-                )
-                return {"success": True, "balance": current, "required": amount}
-
-        row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        if not row:
-            return {"success": False, "balance": 0, "required": amount}
-        current = row["balance"]
-        if current < amount:
-            return {"success": False, "balance": current, "required": amount}
-        conn.execute(
-            "UPDATE credits SET balance = balance - ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        conn.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user_id, -amount, source, reference_id, video_seconds),
-        )
-        conn.commit()
-        new_balance = current - amount
-
-    logger.info(f"[UserDB] Deducted {amount} credits from {user_id} (source={source}), balance={new_balance}")
-    return {"success": True, "balance": new_balance, "required": amount}
-
-
-def refund_credits(
-    user_id: str,
-    amount: int,
-    reference_id: str,
-    video_seconds: float | None = None,
-    source: str = "framing_refund",
-) -> int:
-    """Refund credits for a failed operation. Returns new balance."""
-    with get_user_db_connection(user_id) as conn:
-        # Ensure credits row exists
-        conn.execute(
-            "INSERT OR IGNORE INTO credits (user_id, balance) VALUES (?, 0)",
-            (user_id,)
-        )
-        conn.execute(
-            "UPDATE credits SET balance = balance + ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        conn.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user_id, amount, source, reference_id, video_seconds),
-        )
-        conn.commit()
-        row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        new_balance = row["balance"]
-
-    logger.info(f"[UserDB] Refunded {amount} credits to {user_id} (job={reference_id}), balance={new_balance}")
-    return new_balance
-
-
-def set_credits(user_id: str, amount: int) -> int:
-    """Set a user's credit balance to an exact value. Records a transaction."""
-    with get_user_db_connection(user_id) as conn:
-        # Ensure credits row exists
-        conn.execute(
-            "INSERT OR IGNORE INTO credits (user_id, balance) VALUES (?, 0)",
-            (user_id,)
-        )
-        row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        old_balance = row["balance"] if row else 0
-        delta = amount - old_balance
-        conn.execute(
-            "UPDATE credits SET balance = ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        conn.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
-               VALUES (?, ?, 'admin_set', ?)""",
-            (user_id, delta, f"set_to_{amount}"),
-        )
-        conn.commit()
-
-    logger.info(f"[UserDB] Set credits for {user_id} to {amount} (was {old_balance})")
-    return amount
-
-
-def get_credit_transactions(user_id: str, limit: int = 50) -> list:
-    """Get recent credit transactions for a user."""
-    with get_user_db_connection(user_id) as conn:
-        rows = conn.execute(
-            """SELECT id, amount, source, reference_id, video_seconds, created_at
-               FROM credit_transactions
-               WHERE user_id = ?
-               ORDER BY created_at DESC
-               LIMIT ?""",
-            (user_id, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def has_processed_payment(user_id: str, reference_id: str) -> bool:
-    """Check if a payment has already been processed (idempotency guard).
-
-    NOTE: Signature changed from auth_db version — now requires user_id
-    since credit_transactions are per-user DB.
-    """
-    with get_user_db_connection(user_id) as conn:
-        row = conn.execute(
-            "SELECT 1 FROM credit_transactions WHERE user_id = ? AND reference_id = ? AND source = 'stripe_purchase'",
-            (user_id, reference_id),
-        ).fetchone()
-        return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -456,241 +281,8 @@ def set_stripe_customer_id(user_id: str, stripe_customer_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Credit reservations (for T890)
+# Credit reservations + admin credit stats -- MOVED to credit_ledger.py (T5840).
 # ---------------------------------------------------------------------------
-
-def reserve_credits(user_id: str, amount: int, job_id: str, video_seconds: float | None = None) -> dict:
-    """Atomic: INSERT credit_reservations + UPDATE credits -= amount."""
-    with get_user_db_connection(user_id) as conn:
-        row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        if not row or row["balance"] < amount:
-            return {"success": False, "balance": row["balance"] if row else 0, "required": amount}
-        conn.execute(
-            "UPDATE credits SET balance = balance - ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        conn.execute(
-            "INSERT INTO credit_reservations (job_id, amount, video_seconds) VALUES (?, ?, ?)",
-            (job_id, amount, video_seconds),
-        )
-        conn.commit()
-        new_row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        return {"success": True, "balance": new_row["balance"], "required": amount}
-
-
-def confirm_reservation(user_id: str, job_id: str) -> bool:
-    """Atomic: DELETE reservation + INSERT credit_transaction."""
-    with get_user_db_connection(user_id) as conn:
-        row = conn.execute(
-            "SELECT amount, video_seconds FROM credit_reservations WHERE job_id = ?",
-            (job_id,),
-        ).fetchone()
-        if not row:
-            return False
-        conn.execute("DELETE FROM credit_reservations WHERE job_id = ?", (job_id,))
-        conn.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
-               VALUES (?, ?, 'framing_usage', ?, ?)""",
-            (user_id, -row["amount"], job_id, row["video_seconds"]),
-        )
-        conn.commit()
-        from app.analytics import record_milestone
-        record_milestone(user_id, "credits_consumed", {"job_id": job_id})
-        return True
-
-
-def release_reservation(user_id: str, job_id: str) -> bool:
-    """Atomic: DELETE reservation + UPDATE credits += amount."""
-    with get_user_db_connection(user_id) as conn:
-        row = conn.execute(
-            "SELECT amount FROM credit_reservations WHERE job_id = ?",
-            (job_id,),
-        ).fetchone()
-        if not row:
-            return False
-        conn.execute("DELETE FROM credit_reservations WHERE job_id = ?", (job_id,))
-        conn.execute(
-            "UPDATE credits SET balance = balance + ? WHERE user_id = ?",
-            (row["amount"], user_id),
-        )
-        conn.commit()
-        return True
-
-
-def recover_orphaned_reservations(user_id: str) -> int:
-    """Startup: reservations older than 60s with no matching export_job -> release."""
-    count = 0
-    with get_user_db_connection(user_id) as conn:
-        rows = conn.execute(
-            """SELECT job_id, amount FROM credit_reservations
-               WHERE created_at < datetime('now', '-60 seconds')"""
-        ).fetchall()
-        for row in rows:
-            conn.execute("DELETE FROM credit_reservations WHERE job_id = ?", (row["job_id"],))
-            conn.execute(
-                "UPDATE credits SET balance = balance + ? WHERE user_id = ?",
-                (row["amount"], user_id),
-            )
-            count += 1
-        if count > 0:
-            conn.commit()
-            logger.info(f"[UserDB] Recovered {count} orphaned reservations for {user_id}")
-    return count
-
-
-# ---------------------------------------------------------------------------
-# Admin helpers
-# ---------------------------------------------------------------------------
-
-def get_credit_stats_for_admin(user_ids: list[str] | None = None) -> dict:
-    """Read user.sqlite files to aggregate credit stats for admin panel.
-
-    Args:
-        user_ids: If provided, only read these users' SQLite files.
-                  If None, scans all user directories (slow).
-
-    Returns dict keyed by user_id with:
-      credits_spent: total credits consumed (abs of negative non-refund amounts)
-      credits_purchased: total credits from stripe purchases
-      purchase_credit_amounts: list of individual stripe purchase credit amounts
-    """
-    stats: dict = {}
-
-    if not USER_DATA_BASE.exists():
-        return stats
-
-    if user_ids is not None:
-        dirs = [(USER_DATA_BASE / uid) for uid in user_ids]
-    else:
-        dirs = list(USER_DATA_BASE.iterdir())
-
-    for user_dir in dirs:
-        if not user_dir.is_dir():
-            continue
-        user_id = user_dir.name
-        user_db_path = user_dir / "user.sqlite"
-
-        if not user_db_path.exists():
-            if user_ids is not None:
-                # Explicit-ids admin path: attempt R2 restore for missing files.
-                # Use sync_user_db_from_r2_if_newer directly (not ensure_user_database) to avoid
-                # creating a balance-0 stub DB on R2 error. ensure_user_database materialises a
-                # stub when R2 fails, which then poisons subsequent admin loads via the
-                # _initialized_user_dbs cache — the stub looks like a real 0-balance entry.
-                from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
-                if R2_ENABLED:
-                    # File is absent: pass local_version=None so the in-memory version
-                    # cache is ignored. A cached version with no local file is stale by
-                    # definition — if we pass it, sync may return "already current" and
-                    # fall through to sqlite3.connect on a missing path (creating an empty
-                    # stub instead of restoring real data).
-                    _, new_version, was_error = sync_user_db_from_r2_if_newer(
-                        user_id, user_db_path, None
-                    )
-                    if was_error:
-                        logger.warning(
-                            f"[UserDB] Admin stats: R2 unreachable for {user_id},"
-                            f" no local file - reporting null"
-                        )
-                        continue
-                    if new_version is None:
-                        # NOT_FOUND: genuinely new user, no credits to show
-                        continue
-                    # Restored from R2; guard in case sync succeeded but file still absent
-                    if not user_db_path.exists():
-                        logger.warning(
-                            f"[UserDB] Admin stats: file absent after R2 sync for {user_id} - skipping"
-                        )
-                        continue
-                    # Fall through: file now present, read it below
-                else:
-                    logger.warning(
-                        f"[UserDB] Admin stats: no local file for {user_id} (R2 disabled) - skipping"
-                    )
-                    continue
-            else:
-                # scan-all path: log instead of silent skip
-                logger.warning(f"[UserDB] Admin stats: no local file for {user_id} - skipping")
-                continue
-
-        try:
-            conn = sqlite3.connect(str(user_db_path), timeout=5)
-            conn.row_factory = sqlite3.Row
-
-            # Credits spent: sum of negative amounts excluding refunds and admin_set
-            spent_rows = conn.execute(
-                """SELECT SUM(ABS(amount)) as total_spent
-                   FROM credit_transactions
-                   WHERE amount < 0 AND source != 'admin_set'"""
-            ).fetchone()
-
-            # Credits purchased via Stripe
-            purchased_row = conn.execute(
-                """SELECT SUM(amount) as total_purchased
-                   FROM credit_transactions
-                   WHERE source = 'stripe_purchase' AND amount > 0"""
-            ).fetchone()
-
-            # Individual purchase amounts
-            purchase_detail_rows = conn.execute(
-                """SELECT amount
-                   FROM credit_transactions
-                   WHERE source = 'stripe_purchase' AND amount > 0"""
-            ).fetchall()
-
-            # Current balance (source of truth, replaces stale credit_summary in auth.sqlite)
-            balance_row = conn.execute(
-                "SELECT balance FROM credits WHERE user_id = ?",
-                (user_id,)
-            ).fetchone()
-
-            conn.close()
-
-            user_stats = {
-                "credits_spent": spent_rows["total_spent"] or 0 if spent_rows else 0,
-                "credits_purchased": purchased_row["total_purchased"] or 0 if purchased_row else 0,
-                "credits_balance": balance_row["balance"] if balance_row else None,
-                "purchase_credit_amounts": [r["amount"] for r in purchase_detail_rows],
-            }
-            stats[user_id] = user_stats
-
-        except Exception as e:
-            logger.warning(f"[UserDB] Could not read credit stats from {user_db_path}: {e}")
-            continue
-
-    return stats
-
-
-# ---------------------------------------------------------------------------
-# Data migration from auth.sqlite
-# ---------------------------------------------------------------------------
-
-def _init_credits_row(user_id: str) -> bool:
-    """Initialize credits row for a new user if it doesn't exist.
-
-    Idempotent — skips if credits row already exists.
-    """
-    db_path = _get_user_db_path(user_id)
-    if not db_path.exists():
-        return False
-
-    conn = sqlite3.connect(str(db_path), timeout=30)
-    conn.row_factory = sqlite3.Row
-
-    try:
-        row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
-        if row is not None:
-            return False  # Already initialized
-
-        conn.execute(
-            "INSERT INTO credits (user_id, balance) VALUES (?, 0)",
-            (user_id,)
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -716,48 +308,57 @@ def get_completed_quest_ids(user_id: str) -> set[str]:
 
 
 def get_completed_and_claimed_quest_ids(user_id: str) -> tuple[set[str], set[str]]:
-    """Return (completed_quest_ids, claimed_quest_ids) in a single user.sqlite open.
+    """Return (completed_quest_ids, claimed_quest_ids).
 
-    T1536: GET /quests/progress previously opened user.sqlite twice — once for
-    completed_quests and once for the quest_reward credit_transactions. Each open
-    can pay a cold R2 restore (~200ms+), so the two reads are merged onto one
-    connection here.
+    T5840: credits (and their credit_transactions ledger) moved to Postgres, so
+    the claimed set is now a separate PG query -- completed_quests itself stays
+    in user.sqlite (T1536's single-open optimisation applied to a cold R2
+    restore that no longer exists for the ledger; both stores are fast).
 
     - completed: SELECT quest_id FROM completed_quests (was get_completed_quest_ids)
-    - claimed:   SELECT reference_id FROM credit_transactions WHERE source = 'quest_reward'
-                 (was quests._get_claimed_quest_ids)
+    - claimed:   credit_transactions WHERE source = 'quest_reward' (Postgres)
     """
     with get_user_db_connection(user_id) as conn:
         completed = {
             row["quest_id"]
             for row in conn.execute("SELECT quest_id FROM completed_quests").fetchall()
         }
-        claimed = {
-            row["reference_id"]
-            for row in conn.execute(
-                "SELECT reference_id FROM credit_transactions WHERE source = 'quest_reward'"
-            ).fetchall()
-        }
-        return completed, claimed
+    from .pg import get_pg
+    with get_pg() as pg_conn:
+        cur = pg_conn.cursor()
+        cur.execute(
+            "SELECT reference_id FROM credit_transactions WHERE user_id = %s AND source = 'quest_reward'",
+            (user_id,),
+        )
+        claimed = {row["reference_id"] for row in cur.fetchall()}
+    return completed, claimed
 
 
 def backfill_completed_quests(user_id: str) -> int:
-    """Backfill completed_quests from credit_transactions quest_reward rows.
+    """Backfill completed_quests from the Postgres quest_reward ledger.
 
     Idempotent — INSERT OR IGNORE. Called once during session init.
     Returns count of newly backfilled quests.
     """
-    with get_user_db_connection(user_id) as conn:
-        rows = conn.execute(
-            """SELECT reference_id FROM credit_transactions
-               WHERE user_id = ? AND source = 'quest_reward' AND reference_id IS NOT NULL""",
+    from .pg import get_pg
+    with get_pg() as pg_conn:
+        cur = pg_conn.cursor()
+        cur.execute(
+            "SELECT reference_id FROM credit_transactions "
+            "WHERE user_id = %s AND source = 'quest_reward' AND reference_id IS NOT NULL",
             (user_id,),
-        ).fetchall()
-        count = 0
-        for row in rows:
+        )
+        quest_ids = [row["reference_id"] for row in cur.fetchall()]
+
+    if not quest_ids:
+        return 0
+
+    count = 0
+    with get_user_db_connection(user_id) as conn:
+        for quest_id in quest_ids:
             result = conn.execute(
                 "INSERT OR IGNORE INTO completed_quests (quest_id) VALUES (?)",
-                (row["reference_id"],),
+                (quest_id,),
             )
             if result.rowcount > 0:
                 count += 1

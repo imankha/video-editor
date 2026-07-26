@@ -279,17 +279,17 @@ class TestAdminGrantCredits:
     def test_non_admin_gets_403(self, client):
         resp = client.post(
             "/api/admin/users/regular-user/grant-credits",
-            json={"amount": 10},
+            json={"amount": 10, "request_id": "req-1"},
             headers=_auth_headers("regular-user"),
         )
         assert resp.status_code == 403
 
     def test_admin_can_grant_credits(self, client):
-        from app.services.user_db import get_credit_balance
+        from app.services.credit_ledger import get_credit_balance
         balance_before = get_credit_balance("regular-user")["balance"]
         resp = client.post(
             "/api/admin/users/regular-user/grant-credits",
-            json={"amount": 50},
+            json={"amount": 50, "request_id": "req-2"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 200
@@ -298,7 +298,7 @@ class TestAdminGrantCredits:
     def test_zero_amount_rejected(self, client):
         resp = client.post(
             "/api/admin/users/regular-user/grant-credits",
-            json={"amount": 0},
+            json={"amount": 0, "request_id": "req-3"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 400
@@ -312,7 +312,7 @@ class TestAdminBulkGrantCredits:
     def test_non_admin_gets_403(self, client):
         resp = client.post(
             "/api/admin/users/bulk/grant-credits",
-            json={"user_ids": ["regular-user"], "amount": 10},
+            json={"user_ids": ["regular-user"], "amount": 10, "batch_id": "b0"},
             headers=_auth_headers("regular-user"),
         )
         assert resp.status_code == 403
@@ -320,11 +320,11 @@ class TestAdminBulkGrantCredits:
     def test_happy_path_grants_each_user(self, client):
         """Proves the bulk route is reachable (not captured by the
         /users/{user_id}/grant-credits route) and grants each user."""
-        from app.services.user_db import get_credit_balance
+        from app.services.credit_ledger import get_credit_balance
         before = get_credit_balance("regular-user")["balance"]
         resp = client.post(
             "/api/admin/users/bulk/grant-credits",
-            json={"user_ids": ["admin-user", "regular-user"], "amount": 15},
+            json={"user_ids": ["admin-user", "regular-user"], "amount": 15, "batch_id": "b1"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 200
@@ -338,7 +338,7 @@ class TestAdminBulkGrantCredits:
     def test_unknown_id_is_partial_failure(self, client):
         resp = client.post(
             "/api/admin/users/bulk/grant-credits",
-            json={"user_ids": ["regular-user", "nope-nobody"], "amount": 5},
+            json={"user_ids": ["regular-user", "nope-nobody"], "amount": 5, "batch_id": "b2"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 200
@@ -353,7 +353,7 @@ class TestAdminBulkGrantCredits:
     def test_over_cap_rejected(self, client):
         resp = client.post(
             "/api/admin/users/bulk/grant-credits",
-            json={"user_ids": [f"u{i}" for i in range(101)], "amount": 1},
+            json={"user_ids": [f"u{i}" for i in range(101)], "amount": 1, "batch_id": "b3"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 400
@@ -361,7 +361,7 @@ class TestAdminBulkGrantCredits:
     def test_empty_ids_rejected(self, client):
         resp = client.post(
             "/api/admin/users/bulk/grant-credits",
-            json={"user_ids": [], "amount": 1},
+            json={"user_ids": [], "amount": 1, "batch_id": "b4"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 400
@@ -369,10 +369,18 @@ class TestAdminBulkGrantCredits:
     def test_zero_amount_rejected(self, client):
         resp = client.post(
             "/api/admin/users/bulk/grant-credits",
-            json={"user_ids": ["regular-user"], "amount": 0},
+            json={"user_ids": ["regular-user"], "amount": 0, "batch_id": "b5"},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 400
+
+    def test_retry_same_batch_id_does_not_double_grant(self, client):
+        from app.services.credit_ledger import get_credit_balance
+        before = get_credit_balance("regular-user")["balance"]
+        payload = {"user_ids": ["regular-user"], "amount": 15, "batch_id": "b-retry"}
+        client.post("/api/admin/users/bulk/grant-credits", json=payload, headers=_auth_headers("admin-user"))
+        resp = client.post("/api/admin/users/bulk/grant-credits", json=payload, headers=_auth_headers("admin-user"))
+        assert resp.json()["results"][0]["balance"] == before + 15
 
 
 class TestAdminBulkEmail:
