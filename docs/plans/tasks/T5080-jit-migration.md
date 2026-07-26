@@ -88,3 +88,56 @@ Wire `_migrate_user` into the seam per the approved design, preserving T4830 gua
 - [ ] Bulk migration code deleted (`run_all_migrations`, admin migrate endpoint); `_migrate_user` + versioned files retained; CLAUDE.md updated to JIT
 - [ ] No remaining code path assumes users were pre-migrated by a sweep (background jobs migrate-before-touch)
 - [ ] Tests pass
+
+## Field findings from the 2026-07-25 staging+prod migration (feed these into the design)
+
+Real data gathered while migrating both envs by hand. These change the *rationale* for JIT and add
+requirements the current draft does not cover.
+
+### 1. The real argument for JIT is CORRECTNESS, not runtime
+Prod: **10 registry users / 14 profiles.** Staging: **7 users / 11 profiles.** The bulk sweep is
+cheap at this size and finished in seconds. Do NOT justify this task on sweep duration — justify it
+on the two correctness holes below, both observed live.
+
+### 2. Orphan profiles are skipped FOREVER by the bulk sweep
+`run_all_migrations` discovers profiles by LISTING R2, then intersects with the profile registry read
+from the user's own `user.sqlite` (`app.services.user_db.get_profiles`, NOT Postgres —
+`migrations/__init__.py:94,107`). Anything on disk/R2 but not registered is logged
+`Orphan profile <pid> ... not in registry; skipping` and never migrated — so it is frozen at its old
+version permanently. Observed: prod had `imankh@gmail.com/b95eb93b` stuck at **v25 while head was
+v29**; staging had one at v25 and another at v10.
+
+**JIT implication (and a genuine advantage):** JIT keys off *the profile actually being opened*, so
+an orphan that is never opened never needs migrating, and one that IS opened gets migrated at the
+seam — closing the hole by construction. **The design must state explicitly what happens when a
+request opens a profile that is not in the registry**: migrate-then-serve, refuse, or repair the
+registry. Silently serving an unmigrated profile is the failure mode to avoid.
+
+### 3. Stale-profile + new-column is an active hazard
+A profile several versions behind head is exactly what breaks hot-path reads when a migration adds a
+column ([[feedback_new_column_hotpath_migration_window]], T5630's `_has_stage_columns` window
+guard). Today a stale/orphan profile can be served without ever being migrated. JIT must guarantee
+**migrate-before-first-read**, not merely migrate-before-write, or the same class of breakage moves
+from "un-migrated env" to "un-migrated profile".
+
+### 4. Profile ids are NOT globally unique — scope everything by (user_id, profile_id)
+Verified on prod: `b95eb93b` existed under BOTH `imankh@gmail.com` (v25, empty, orphan) and
+`arshia.kalantari@gmail.com` (v29, 53 clips / 32 projects / 6 games). Any JIT bookkeeping —
+migration state, locks, caches, metrics, cleanup — must key on the PAIR. A profile-id-only key would
+collide across users and, for anything destructive, could destroy another user's data.
+
+### 5. Concurrency surface JIT inherits
+The existing sweep is single-threaded and admin-triggered. JIT runs on the request path, so the
+already-listed concurrency criterion is the hard part: two concurrent requests for the same
+(user, profile) must not both migrate or both upload. Reuse the existing per-user upload lock rather
+than inventing one, and note that a migration REWRITES the file — see the WAL hazard T4315 hit
+(swapping/rewriting a SQLite file under a live connection loses committed-but-uncheckpointed frames;
+checkpoint or quiesce first).
+
+### 6. Operational notes for the final batch run (acceptance criterion 5)
+- `init_pg_pool()` must be called before anything touches Postgres in an SSH one-liner.
+- `USER_DATA_BASE` is `/user_data` on Fly (not `/data/user_data`).
+- `Error: The handle is invalid.` after correct output is a Windows pty artifact, not a failure.
+- Cleanup done 2026-07-25: staging and prod are now **0 orphans, all profiles at head (v29)** — so
+  the "one final full batch run clean" criterion starts from a clean baseline. Re-verify before
+  deleting the bulk path, since new orphans can appear from profile-create races (T5310 class).
