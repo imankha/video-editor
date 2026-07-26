@@ -71,9 +71,12 @@ class TestBackfillOneUser:
         assert get_balance(USER) == 130
         assert has_key(USER, credit_key("stripe_purchase", "pi_abc"))
         assert has_key(USER, credit_key("quest_reward", "quest_1"))
-        # NULL reference_id (signup bonus), local-only copy: origin-tagged key
-        # (BLOCKING-1 fix -- bare `legacy:{id}` collided across diverged copies).
-        assert has_key(USER, "legacy:local:2")
+        # NULL reference_id (signup bonus): content-only key (BLOCKING-1 fix --
+        # bare `legacy:{id}` collided across diverged copies; BLOCKING-A fix --
+        # an origin-tagged key re-keys the same row when copy presence changes
+        # across a machine replacement).
+        sig = credit_backfill._content_sig({"source": "new_account_bonus", "amount": 8, "created_at": "2025-12-31 00:00:00"})
+        assert has_key(USER, f"legacy:{sig}:0")
 
     def test_rerun_is_idempotent_no_new_rows(self, pg_conn, tmp_path, no_r2, monkeypatch):
         user_dir = tmp_path / USER
@@ -229,8 +232,8 @@ class TestBackfillOneUser:
         assert row["tx_count"] == 3
 
     def test_rerun_after_divergent_null_ref_backfill_is_idempotent(self, pg_conn, tmp_path, monkeypatch):
-        """Re-running the same divergent-NULL-ref scenario must not insert the
-        diverged rows a second time (their origin-tagged keys are stable)."""
+        """Re-running the same divergent-NULL-ref scenario (SAME copy presence
+        both times) must not insert the diverged rows a second time."""
         local_dir = tmp_path / "local"
         r2_dir = tmp_path / "r2"
         _make_user_sqlite(
@@ -263,6 +266,61 @@ class TestBackfillOneUser:
 
         assert row["tx_count"] == 0, "re-run must insert nothing new"
         assert row["pg_balance_after"] == 8 + 400 + 100
+
+    def test_rerun_after_machine_replacement_removes_local_copy_does_not_double_credit(
+        self, pg_conn, tmp_path, monkeypatch
+    ):
+        """BLOCKING-A regression: a NULL-ref key that depends on which copies
+        are present (the prior origin-tagged `legacy:shared:`/`legacy:r2:`/
+        `legacy:local:` scheme) re-keys the SAME physical row after design
+        4b's D2 cutover deploy wipes the machine's local volume -- a catch-up
+        backfill run (B2 in the runbook) then sees a "new" key for a row it
+        already inserted and doubles the signup bonus / admin grant. Every
+        prior re-run test used the SAME copy presence on both runs, which is
+        exactly why this slipped through review round 2.
+
+        Run 1: local + R2 both present, identical content (a live machine
+        before D2 -- B1). Run 2: local copy genuinely ABSENT (D2 wiped the
+        volume), R2 unchanged -- B2's catch-up pass. The content-only key
+        (multiset-max across copies) must resolve to the SAME key both times,
+        so run 2 inserts nothing new and the balance does not move.
+        """
+        local_dir = tmp_path / "local"
+        r2_dir = tmp_path / "r2"
+        ledger_rows = [
+            (8, "new_account_bonus", None, None, "2026-01-01 00:00:00"),
+            (400, "admin_grant", None, None, "2026-01-02 00:00:00"),
+        ]
+        _make_user_sqlite(local_dir / USER / "user.sqlite", USER, balance=408, ledger_rows=ledger_rows)
+        _make_user_sqlite(r2_dir / "user.sqlite", USER, balance=408, ledger_rows=ledger_rows)
+
+        import app.services.user_db as user_db_mod
+        monkeypatch.setattr(user_db_mod, "USER_DATA_BASE", local_dir)
+
+        def _fake_download(uid, path):
+            import shutil
+            shutil.copy(str(r2_dir / "user.sqlite"), str(path))
+            return True
+
+        monkeypatch.setattr(credit_backfill, "_force_download_user_db", _fake_download)
+
+        first = credit_backfill.run_backfill(user_ids=[USER], apply=True)
+        assert first["rows"][0]["tx_count"] == 2
+        assert first["rows"][0]["pg_balance_after"] == 408
+
+        # D2 cutover deploy: fresh volume, local copy is genuinely gone (not
+        # unreadable -- the file no longer exists).
+        import shutil
+        shutil.rmtree(local_dir / USER)
+
+        second = credit_backfill.run_backfill(user_ids=[USER], apply=True)
+        row = second["rows"][0]
+
+        assert row["tx_count"] == 0, (
+            "copy presence changed between runs (local vanished after D2) -- "
+            "an origin-dependent key would re-key both rows here and double-insert"
+        )
+        assert row["pg_balance_now"] == row["pg_balance_after"] == 408, "balance must not double"
 
     def test_ledger_mismatch_flagged_not_silently_fixed(self, pg_conn, tmp_path, no_r2, monkeypatch):
         user_dir = tmp_path / USER
@@ -504,6 +562,17 @@ class TestChunkingAndStoredReport:
 
     def test_load_last_report_none_when_never_generated(self, pg_conn):
         assert credit_backfill.load_last_report() is None
+
+    def test_targeted_user_ids_with_limit_does_not_raise(self, pg_conn, no_r2):
+        """MAJOR-1 regression: `total_enumerated` was bound only in the
+        full-enumeration (user_ids=None) branch but read whenever `limit` is
+        not None, so POST /api/admin/credits/backfill {"user_ids": [...],
+        "limit": N} raised UnboundLocalError AFTER each targeted user's
+        insert + balance UPDATE had already committed (per-user commit)."""
+        report = credit_backfill.run_backfill(user_ids=["ghost-user"], apply=False, limit=10)
+
+        assert report["summary"]["total_enumerated"] == 1
+        assert report["summary"]["has_more"] is False
 
 
 class TestReconcileAgainstStripe:

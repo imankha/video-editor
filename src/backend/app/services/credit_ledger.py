@@ -513,6 +513,13 @@ def _has_live_export_job(user_id: str, profile_id: str | None, job_id: str) -> b
     return True (treated as "possibly still live, do not release") -- the
     failure mode we're avoiding is releasing an ACTIVE reservation (a free
     export), not leaving a truly-orphaned one stuck a little longer.
+
+    Assumption this relies on: a job absent from a locally-cached
+    profile.sqlite is treated as not-live (row is None -> False). A
+    stale-but-PRESENT local copy (this machine hasn't synced the latest
+    export_jobs write) is indistinguishable here from a genuinely absent job
+    -- both read as "no matching row". We accept that gap because recovery
+    only runs at session-init time against THIS machine's own cache.
     """
     if not profile_id:
         return True

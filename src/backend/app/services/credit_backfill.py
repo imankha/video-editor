@@ -14,9 +14,13 @@ Per-user algorithm (design 3c), one Postgres transaction per user:
   2. Read ledger + balance + reservations from EACH copy present; check the
      historical invariant (balance == Sigma(ledger) - Sigma(reservations)) on each.
   3/4. Key every ledger row with the SAME derivation runtime uses
-     (credit_ledger.credit_key) when it has a reference_id, else `legacy:{row.id}`.
-     Rows from R2 and local naturally coalesce under this key via
-     ON CONFLICT DO NOTHING -- no separate dedup pass needed.
+     (credit_ledger.credit_key) when it has a reference_id, else a
+     content-only key `legacy:{(source, amount, created_at)}:{ordinal}` with
+     ordinal count = multiset-max across the two copies (never origin- or
+     rowid-tagged -- that re-keys the same row across a machine replacement
+     and double-credits on the next catch-up run). Rows from R2 and local
+     naturally coalesce under this key via ON CONFLICT DO NOTHING -- no
+     separate dedup pass needed.
   5. Insert missing rows, then re-derive balance = SUM(pg ledger). Never copy a
      balance from SQLite -- this identity is what makes re-running always safe:
      a second run only inserts rows PG is still missing and recomputes the sum.
@@ -124,7 +128,8 @@ def _content_sig(row: dict) -> tuple:
 
 def _key_rows_for_backfill(r2_ledger: list[dict], local_ledger: list[dict]) -> list[tuple[str, dict]]:
     """Key every ledger row from BOTH copies for insertion. Never drops a row
-    (BLOCKING-1 fix).
+    (BLOCKING-1 fix) and never re-keys the SAME row differently depending on
+    which copies happen to be present at run time (BLOCKING-A fix).
 
     Rows WITH a reference_id key via the SAME derivation the runtime uses
     (`credit_key`) -- critical for Stripe redelivery safety, and it also means
@@ -132,19 +137,19 @@ def _key_rows_for_backfill(r2_ledger: list[dict], local_ledger: list[dict]) -> l
     by the caller's dedup pass / Postgres ON CONFLICT), no special-casing needed.
 
     Rows WITHOUT a reference_id (admin_grant / new_account_bonus / dev
-    selfgrant) have no natural cross-copy identity. Keying them by SQLite rowid
-    alone is wrong -- rowid is per-file, so `legacy:2` from R2 and `legacy:2`
-    from local can refer to two DIFFERENT real grants that collide on the same
-    key, silently dropping one (BLOCKING-1: the exact 400-credit loss this epic
-    exists to fix). Fix: longest-common-PREFIX match between the two copies'
-    NULL-ref rows in write order (both files share a common history up to the
-    point they diverged). A matching leading run is the SAME shared event --
-    keyed once. The first content mismatch is the divergence point; everything
-    from there on, in EITHER copy, is copy-specific and keyed by ORIGIN + rowid
-    so it can never collide with (and be dropped in favor of) the other copy's
-    tail. Both survive -- over-crediting on an ambiguous fork is the accepted
-    tradeoff (design: "the union can over-credit... nothing does that today"),
-    silently dropping a real grant is not.
+    selfgrant) have no natural cross-copy identity, so content
+    (source, amount, created_at) is the key. Content-only keying is DELIBERATE
+    (not origin- or rowid-tagged): a key that depends on which copies were
+    readable at run time re-keys the same physical row across a machine
+    replacement (design 4b's D2 cutover deploy wipes the local volume), and a
+    catch-up backfill run afterward sees a "new" key for a row it already
+    inserted -- double-crediting every signup bonus and admin grant
+    (BLOCKING-A). Multiplicity per signature is the MAX across the two copies
+    (Counter `|`, i.e. multiset union) -- if two copies each show the grant
+    once, count=1 (never re-inserted regardless of which copy is present on a
+    later run); if one copy shows it twice (e.g. a genuine double-grant bug),
+    count=2 so both still survive (BLOCKING-1: over-crediting on an ambiguous
+    fork is the accepted tradeoff, silently dropping a real grant is not).
     """
     keyed: list[tuple[str, dict]] = []
 
@@ -157,15 +162,19 @@ def _key_rows_for_backfill(r2_ledger: list[dict], local_ledger: list[dict]) -> l
 
     r2_null = [r for r in r2_ledger if r["reference_id"] is None]
     local_null = [r for r in local_ledger if r["reference_id"] is None]
-    i = 0
-    n = min(len(r2_null), len(local_null))
-    while i < n and _content_sig(r2_null[i]) == _content_sig(local_null[i]):
-        keyed.append((f"legacy:shared:{_content_sig(r2_null[i])}:{i}", r2_null[i]))
-        i += 1
-    for row in r2_null[i:]:
-        keyed.append((f"legacy:r2:{row['id']}", row))
-    for row in local_null[i:]:
-        keyed.append((f"legacy:local:{row['id']}", row))
+
+    rows_by_sig: dict[tuple, list[dict]] = {}
+    for row in r2_null + local_null:
+        rows_by_sig.setdefault(_content_sig(row), []).append(row)
+
+    r2_counts = Counter(_content_sig(r) for r in r2_null)
+    local_counts = Counter(_content_sig(r) for r in local_null)
+    multiplicity = r2_counts | local_counts  # multiset union == elementwise max
+
+    for sig, count in multiplicity.items():
+        representative = rows_by_sig[sig][0]
+        for ordinal in range(count):
+            keyed.append((f"legacy:{sig}:{ordinal}", representative))
 
     return keyed
 
@@ -413,6 +422,7 @@ def run_backfill(
         for uid in user_ids:
             user = get_user_by_id(uid)
             targets.append({"user_id": uid, "email": user["email"] if user else None})
+        total_enumerated = len(targets)
     else:
         all_users = _enumerate_users()
         total_enumerated = len(all_users)
@@ -422,7 +432,14 @@ def run_backfill(
     rows = [_backfill_one_user(t["user_id"], t["email"], apply) for t in targets]
 
     def _anomaly_rank(r: dict) -> int:
-        return 0 if r["flags"] else 1
+        # A pure `no_user_db` row is an expected, harmless ghost (purged/guest
+        # account) -- ranking it alongside real anomalies buries the ones a
+        # human actually needs to review under a wall of ghosts.
+        if not r["flags"]:
+            return 2
+        if set(r["flags"]) == {"no_user_db"}:
+            return 1
+        return 0
 
     rows.sort(key=_anomaly_rank)
 
