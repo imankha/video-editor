@@ -26,7 +26,7 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsCoarsePointer } from '../hooks/useIsMobile';
 // DraftTile (the restyled ProjectCard) + SegmentedProgressStrip were extracted to their
 // own files (T5672). Re-exported below (DraftTile aliased to ProjectCard) so existing
 // tests importing them from './ProjectManager' keep resolving.
@@ -1453,7 +1453,11 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
   const [actionsRevealed, setActionsRevealed] = useState(false);
   const longPressTimer = useRef(null);
   const touchMoved = useRef(false);
-  const isMobile = useIsMobile();
+  // T5910: gate the reveal MECHANISM on pointer capability, not viewport width.
+  // useIsMobile (width-OR-touch) made a narrow *desktop* window take the touch-only
+  // long-press branch, so a mouse user could never reveal these actions. Fine
+  // pointer at any width -> hover reveal; coarse pointer -> long-press, unchanged.
+  const isCoarsePointer = useIsCoarsePointer();
   const isExpired = game.storage_status === 'expired';
 
   const hasBeenViewed = game.viewed_duration > 0;
@@ -1483,7 +1487,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
   const longPressFired = useRef(false);
 
   const handleClick = (e) => {
-    if (isMobile) {
+    if (isCoarsePointer) {
       if (longPressFired.current) return;
       if (actionsRevealed) {
         const isButton = e.target.closest('button');
@@ -1598,9 +1602,9 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
   return (
     <div
       onClick={handleClick}
-      onTouchStart={isMobile ? handleTouchStart : undefined}
-      onTouchMove={isMobile ? handleTouchMove : undefined}
-      onTouchEnd={isMobile ? handleTouchEnd : undefined}
+      onTouchStart={isCoarsePointer ? handleTouchStart : undefined}
+      onTouchMove={isCoarsePointer ? handleTouchMove : undefined}
+      onTouchEnd={isCoarsePointer ? handleTouchEnd : undefined}
       className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}
     >
       <div className="flex items-center justify-between">
@@ -1624,16 +1628,16 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
           <GameMetaRow game={game} />
         </div>
 
-        {/* Edit + Share + Delete buttons - hover on desktop, long-press on mobile */}
-        {(!isMobile || actionsRevealed) && (
-          <div className={`flex items-center gap-1 transition-opacity ${isMobile ? 'opacity-100' : ''}`}>
+        {/* Edit + Share + Delete buttons - hover on fine pointer, long-press on coarse pointer */}
+        {(!isCoarsePointer || actionsRevealed) && (
+          <div className={`flex items-center gap-1 transition-opacity ${isCoarsePointer ? 'opacity-100' : ''}`}>
             <Button
               variant="ghost"
               size="sm"
               icon={Pencil}
               iconOnly
               onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-              className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
+              className={isCoarsePointer ? '' : 'opacity-0 group-hover:opacity-100'}
               title="Edit game details"
             />
             {!isExpired && (
@@ -1643,7 +1647,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
                 icon={Share2}
                 iconOnly
                 onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-                className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
+                className={isCoarsePointer ? '' : 'opacity-0 group-hover:opacity-100'}
                 title="Share game"
               />
             )}
@@ -1653,7 +1657,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
               icon={Trash2}
               iconOnly
               onClick={handleDelete}
-              className={isMobile ? '' : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
+              className={isCoarsePointer ? '' : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
               title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
             />
           </div>

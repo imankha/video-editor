@@ -1,11 +1,25 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// jsdom lacks matchMedia (useIsMobile) — stub desktop.
-vi.mock('../hooks/useIsMobile', () => ({
-  useIsMobile: () => false,
-  useIsLandscape: () => false,
-}));
+// jsdom lacks matchMedia. DraftTile's reveal mechanism runs through the REAL
+// useIsCoarsePointer hook (T5910), which reads `(pointer: coarse)` — so we stub
+// matchMedia and let each test flip the pointer type. This exercises the actual
+// width-vs-input-type decision instead of mocking the hook away (a width-only or
+// hook-mocked test cannot catch the narrow-desktop-fine-pointer bug).
+let coarsePointer = false;
+beforeEach(() => {
+  coarsePointer = false;
+  window.matchMedia = (query) => ({
+    matches: query.includes('pointer: coarse') ? coarsePointer : false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  });
+});
 
 // Stub MediaPlayer: the preview tests care about WHERE the modal mounts (portal)
 // and that it unmounts on close — not the player internals (which pull in
@@ -252,6 +266,51 @@ describe('DraftTile (T5672)', () => {
     fireEvent.click(container.querySelector('[data-testid="project-card"]'));
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelectWithMode).not.toHaveBeenCalled();
+  });
+
+  // T5910 — the reveal MECHANISM is gated on POINTER TYPE, not viewport width.
+  // A narrow desktop window (fine pointer) must reveal actions on HOVER; only a
+  // coarse (touch) pointer takes the long-press branch. The regression was that
+  // useIsMobile (width-OR-touch) sent a narrow desktop into the touch-only
+  // long-press branch, leaving a mouse user with no way to reveal the actions.
+  describe('T5910 reveal mechanism gated on pointer type', () => {
+    const actionsEl = (container) => container.querySelector('[data-testid="tile-actions"]');
+
+    it('FINE pointer (any width): actions use the group-hover reveal, NOT the long-press branch', () => {
+      coarsePointer = false; // a mouse — even at a narrow desktop width
+      const { container } = renderTile();
+      const actions = actionsEl(container);
+      // Hover branch: reveals via group-hover/tile:*, so a mouse hover works.
+      expect(actions.className).toMatch(/group-hover\/tile:opacity-100/);
+      expect(actions.className).toMatch(/group-hover\/tile:pointer-events-auto/);
+    });
+
+    it('COARSE pointer: actions take the long-press branch (hidden until revealed, no group-hover)', () => {
+      coarsePointer = true; // a touch device
+      const { container } = renderTile();
+      const actions = actionsEl(container);
+      // Long-press branch: hidden until actionsRevealed, and NOT hover-driven.
+      expect(actions.className).toMatch(/opacity-0/);
+      expect(actions.className).toMatch(/pointer-events-none/);
+      expect(actions.className).not.toMatch(/group-hover\/tile/);
+    });
+
+    it('COARSE pointer: a ~500ms long-press reveals the actions (opacity-100 pointer-events-auto)', () => {
+      coarsePointer = true;
+      vi.useFakeTimers();
+      try {
+        const { container } = renderTile();
+        const card = container.querySelector('[data-testid="project-card"]');
+        // Long-press: touchstart then the 500ms timer fires -> actionsRevealed.
+        fireEvent.touchStart(card);
+        act(() => { vi.advanceTimersByTime(500); });
+        const actions = actionsEl(container);
+        expect(actions.className).toMatch(/opacity-100/);
+        expect(actions.className).toMatch(/pointer-events-auto/);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   // T5900 — preview modal must PORTAL out of the tile subtree. The tile applies a
