@@ -1,6 +1,6 @@
 # T5910: Reel-draft tile action buttons don't appear on hover in a narrow desktop window
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-07-25
