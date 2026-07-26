@@ -1293,9 +1293,32 @@ async def move_reels_to_profile(
                 inserted_target_ids.append(tcur.lastrowid)
             target_conn.commit()
 
-            target_synced = await asyncio.to_thread(
-                sync_db_to_r2_explicit, user_id, target_profile_id
-            )
+            # T5920: this path holds target_conn open (raw WAL connection, closed
+            # only in the finally below) ACROSS the sync, which uploads the main
+            # file only — the exact shape of the reels-lost incident (final_videos
+            # rows lost while the mp4s stayed intact in R2). Flush target_conn's
+            # committed frames into the main file BEFORE the upload, on its own
+            # connection so the primitive's later checkpoint is a no-op. wal_
+            # checkpoint does NOT raise on contention (returns busy); on busy,
+            # refuse loudly via the SAME rollback + retryable 503 path used for a
+            # failed sync — never ship an under-checkpointed target at a bumped
+            # version. (target_conn is needed for the rollback, so we checkpoint
+            # it rather than closing it before the sync.)
+            target_conn.execute("PRAGMA busy_timeout=2000")
+            ckpt_busy = target_conn.execute(
+                "PRAGMA wal_checkpoint(TRUNCATE)"
+            ).fetchone()[0]
+            if ckpt_busy:
+                logger.warning(
+                    f"[MoveReels] target WAL checkpoint BUSY for {user_id}/"
+                    f"{target_profile_id} — refusing upload (would ship stale bytes "
+                    f"at a bumped version) req_id={req_id}"
+                )
+                target_synced = False
+            else:
+                target_synced = await asyncio.to_thread(
+                    sync_db_to_r2_explicit, user_id, target_profile_id
+                )
             if not target_synced:
                 # Roll back the exact rows we just inserted AND the copied objects so a
                 # failed move leaves NOTHING behind in the target, then surface the
