@@ -48,11 +48,24 @@ logger = logging.getLogger(__name__)
 
 
 def _force_download_user_db(user_id: str, local_path: Path) -> bool:
-    """Download user.sqlite from R2 to local_path. True if found, False if absent/no client.
+    """Download user.sqlite from R2 to local_path. True if found, False only if
+    the object is GENUINELY ABSENT (404/NoSuchKey) or R2 isn't configured.
+
+    Raises _UnreadableCopy for ANY other failure (throttle/SlowDown, socket
+    timeout, credential error, wrong bucket). MAJOR-3: a bare `except Exception:
+    return False` folded every transient error into "no account", so a download
+    that never happened became `status: no_user_db` -- which `_gate_blocking_rows`
+    skips unconditionally. R2 throttling ~5 of 400 downloads during the final dry
+    run would then hide inside a legitimately large `no_user_db` count (purged/
+    guest ghosts), the gate would open, and those users -- possibly mid-Stripe-
+    pack -- would see balance 0 post-cutover. A transient failure must instead
+    flag `unreadable_copy`, which DOES block the gate.
 
     Mirrors migrations/__init__.py:_download_profile_db but for the per-user (not
     per-profile) user.sqlite object.
     """
+    from botocore.exceptions import ClientError
+
     from ..storage import APP_ENV, R2_BUCKET, get_r2_client
 
     client = get_r2_client()
@@ -63,9 +76,23 @@ def _force_download_user_db(user_id: str, local_path: Path) -> bool:
         local_path.parent.mkdir(parents=True, exist_ok=True)
         client.download_file(R2_BUCKET, key, str(local_path))
         return True
+    except ClientError as e:
+        code = str((e.response.get("Error", {}) or {}).get("Code", ""))
+        status = (e.response.get("ResponseMetadata", {}) or {}).get("HTTPStatusCode")
+        if code in ("404", "NoSuchKey") or status == 404:
+            logger.info(f"[CreditBackfill] no R2 user.sqlite for {user_id} (absent: {code or status})")
+            return False
+        logger.warning(
+            f"[CreditBackfill] R2 download FAILED for {user_id} ({code or status}: {e}) -- "
+            f"flagging unreadable, NOT treating as absent"
+        )
+        raise _UnreadableCopy(str(e)) from e
     except Exception as e:
-        logger.info(f"[CreditBackfill] no R2 user.sqlite for {user_id} ({e})")
-        return False
+        logger.warning(
+            f"[CreditBackfill] R2 download error for {user_id} ({e}) -- "
+            f"flagging unreadable, NOT treating as absent"
+        )
+        raise _UnreadableCopy(str(e)) from e
 
 
 class _UnreadableCopy(Exception):
@@ -208,8 +235,12 @@ def _backfill_one_user(user_id: str, email: str | None, apply: bool) -> dict:
     r2_unreadable = False
     with tempfile.TemporaryDirectory() as tmp:
         r2_path = Path(tmp) / "user.sqlite"
-        downloaded = _force_download_user_db(user_id, r2_path)
+        # MAJOR-3: the download itself now raises _UnreadableCopy on a transient
+        # R2 failure (distinct from a genuine 404, which returns False), so it
+        # must sit INSIDE this guard alongside the read -- a failed download is
+        # every bit as much "a copy we couldn't read" as a corrupt one.
         try:
+            downloaded = _force_download_user_db(user_id, r2_path)
             r2_copy = _read_copy(r2_path, user_id) if downloaded else None
         except _UnreadableCopy:
             r2_copy = None
@@ -423,6 +454,16 @@ def run_backfill(
             user = get_user_by_id(uid)
             targets.append({"user_id": uid, "email": user["email"] if user else None})
         total_enumerated = len(targets)
+        # MAJOR-2: `limit`/`offset` must chunk the targeted branch too. Slicing
+        # lived ONLY in the else branch, so a targeted run processed EVERY id
+        # regardless of `limit` while the summary still advertised
+        # limit/total_enumerated/has_more -- an operator passing 300 ids + a
+        # safety `limit` ran 300 synchronous R2 downloads + PG round trips in one
+        # request (the Fly proxy timeout M7 chunking exists to prevent), got a
+        # 502 with no report while _backfill_one_user had already committed
+        # per-user, then was told has_more to re-run and re-process everything.
+        if limit is not None:
+            targets = targets[offset:offset + limit]
     else:
         all_users = _enumerate_users()
         total_enumerated = len(all_users)

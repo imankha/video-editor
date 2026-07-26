@@ -1,10 +1,8 @@
 """Tests for the migration system infrastructure."""
 
+import os
 import sqlite3
 import tempfile
-import os
-
-import pytest
 
 from app.migrations.base import BaseMigration, MigrationRunner, NoOpMigration
 
@@ -112,7 +110,7 @@ class TestMigrationRunner:
 
 class TestTrackImports:
     def test_user_db_track(self):
-        from app.migrations.user_db import RUNNER, MIGRATIONS
+        from app.migrations.user_db import MIGRATIONS, RUNNER
         # Dynamic invariants like profile_db below (T4940's v007 broke the old
         # `== 6` literals; hardcoded heads rot every time the track grows).
         assert len(MIGRATIONS) >= 7
@@ -120,7 +118,7 @@ class TestTrackImports:
         assert RUNNER.latest_version == MIGRATIONS[-1].version
 
     def test_profile_db_track(self):
-        from app.migrations.profile_db import RUNNER, MIGRATIONS
+        from app.migrations.profile_db import MIGRATIONS, RUNNER
         # Dynamic invariants, not a hardcoded count/head (T5640: v028 -> v029
         # broke the old `== 28` literals; this track's head moves often).
         versions = [m.version for m in MIGRATIONS]
@@ -130,10 +128,10 @@ class TestTrackImports:
         assert RUNNER.latest_version == max(versions)
 
     def test_postgres_track(self):
-        from app.migrations.postgres import RUNNER, MIGRATIONS
-        assert len(MIGRATIONS) == 18
+        from app.migrations.postgres import MIGRATIONS, RUNNER
+        assert len(MIGRATIONS) == 19
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 18
+        assert RUNNER.latest_version == 19
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status

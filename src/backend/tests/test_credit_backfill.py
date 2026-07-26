@@ -429,6 +429,95 @@ class TestBackfillOneUser:
         assert row["pg_balance_after"] == 50, "the readable R2 copy is still migrated"
 
 
+class TestForceDownloadDistinguishesTransientFromAbsent:
+    """MAJOR-3: a bare `except Exception: return False` folded every R2 failure
+    (throttle, timeout, credentials) into "no account". Those users then report
+    `no_user_db`, which the open-gate skips unconditionally -- so R2 throttling a
+    handful of the final dry run's downloads opens the gate on users who still
+    hold real credits, zeroing them post-cutover. Only a genuine 404 may be
+    treated as absent; everything else must flag `unreadable_copy` (blocks gate).
+    """
+
+    def _client_raising(self, error):
+        from unittest.mock import MagicMock
+        client = MagicMock()
+        client.download_file.side_effect = error
+        return client
+
+    def _client_error(self, code, http_status=None):
+        from botocore.exceptions import ClientError
+        resp = {"Error": {"Code": code, "Message": code}}
+        if http_status is not None:
+            resp["ResponseMetadata"] = {"HTTPStatusCode": http_status}
+        return ClientError(resp, "GetObject")
+
+    def test_404_is_treated_as_absent(self, tmp_path, monkeypatch):
+        client = self._client_raising(self._client_error("404", 404))
+        monkeypatch.setattr("app.storage.get_r2_client", lambda: client)
+        result = credit_backfill._force_download_user_db("ghost", tmp_path / "u.sqlite")
+        assert result is False, "a genuine 404 means no account -- safe to fold into no_user_db"
+
+    def test_nosuchkey_is_treated_as_absent(self, tmp_path, monkeypatch):
+        client = self._client_raising(self._client_error("NoSuchKey"))
+        monkeypatch.setattr("app.storage.get_r2_client", lambda: client)
+        assert credit_backfill._force_download_user_db("ghost", tmp_path / "u.sqlite") is False
+
+    def test_throttle_raises_unreadable(self, tmp_path, monkeypatch):
+        client = self._client_raising(self._client_error("SlowDown", 503))
+        monkeypatch.setattr("app.storage.get_r2_client", lambda: client)
+        with pytest.raises(credit_backfill._UnreadableCopy):
+            credit_backfill._force_download_user_db("user-x", tmp_path / "u.sqlite")
+
+    def test_socket_timeout_raises_unreadable(self, tmp_path, monkeypatch):
+        client = self._client_raising(TimeoutError("connection timed out"))
+        monkeypatch.setattr("app.storage.get_r2_client", lambda: client)
+        with pytest.raises(credit_backfill._UnreadableCopy):
+            credit_backfill._force_download_user_db("user-x", tmp_path / "u.sqlite")
+
+    def test_transient_download_flags_not_no_user_db_and_blocks_gate(self, pg_conn, tmp_path, monkeypatch):
+        """End-to-end: a transient R2 failure (no local copy either -- the
+        universal state right after the D2 volume swap) must report
+        `flagged_needs_review`/`unreadable_copy` and BLOCK the gate, never fold
+        into the gate-skipped `no_user_db` bucket."""
+        import app.services.user_db as user_db_mod
+        monkeypatch.setattr(user_db_mod, "USER_DATA_BASE", tmp_path)  # no local copy
+
+        def _raise(uid, path):
+            raise credit_backfill._UnreadableCopy("R2 throttled")
+        monkeypatch.setattr(credit_backfill, "_force_download_user_db", _raise)
+
+        report = credit_backfill.run_backfill(user_ids=[USER], apply=False)
+        row = report["rows"][0]
+
+        assert row["status"] == "flagged_needs_review"
+        assert "unreadable_copy" in row["flags"]
+        assert row["status"] != "no_user_db", (
+            "a download that never happened must not masquerade as 'no account'"
+        )
+
+        from app.routers.admin import _gate_blocking_rows
+        assert _gate_blocking_rows([row], set()) == [row], (
+            "a transient R2 failure must BLOCK the gate -- opening it here zeroes "
+            "any real balance that simply failed to download"
+        )
+
+    def test_genuine_404_with_no_local_is_no_user_db(self, pg_conn, tmp_path, monkeypatch):
+        """The other branch: a REAL absence (404 + no local copy) is the expected
+        purged/guest ghost -- `no_user_db`, which does not block the gate."""
+        import app.services.user_db as user_db_mod
+        monkeypatch.setattr(user_db_mod, "USER_DATA_BASE", tmp_path)
+        monkeypatch.setattr(credit_backfill, "_force_download_user_db", lambda uid, path: False)
+
+        report = credit_backfill.run_backfill(user_ids=["ghost-user"], apply=False)
+        row = report["rows"][0]
+
+        assert row["status"] == "no_user_db"
+        assert "unreadable_copy" not in row["flags"]
+
+        from app.routers.admin import _gate_blocking_rows
+        assert _gate_blocking_rows([row], set()) == [], "a genuine ghost must not block the gate"
+
+
 class TestPostCutoverReDerive:
     """M1/M2: post-cutover, the re-derive must account for OPEN Postgres
     reservations (reserve_credits debits balance without a ledger row) and
@@ -563,15 +652,43 @@ class TestChunkingAndStoredReport:
     def test_load_last_report_none_when_never_generated(self, pg_conn):
         assert credit_backfill.load_last_report() is None
 
-    def test_targeted_user_ids_with_limit_does_not_raise(self, pg_conn, no_r2):
-        """MAJOR-1 regression: `total_enumerated` was bound only in the
-        full-enumeration (user_ids=None) branch but read whenever `limit` is
-        not None, so POST /api/admin/credits/backfill {"user_ids": [...],
-        "limit": N} raised UnboundLocalError AFTER each targeted user's
-        insert + balance UPDATE had already committed (per-user commit)."""
+    def test_targeted_user_ids_with_limit_bound_reports_and_does_not_raise(self, pg_conn, no_r2):
+        """Prior-round regression: `total_enumerated` was bound only in the
+        full-enumeration (user_ids=None) branch but read whenever `limit` is not
+        None, so POST /api/admin/credits/backfill {"user_ids": [...], "limit": N}
+        raised UnboundLocalError AFTER each targeted user's insert + balance
+        UPDATE had already committed (per-user commit). It must be bound here."""
         report = credit_backfill.run_backfill(user_ids=["ghost-user"], apply=False, limit=10)
 
         assert report["summary"]["total_enumerated"] == 1
+        assert report["summary"]["has_more"] is False
+
+    def test_targeted_user_ids_limit_actually_slices_the_page(self, pg_conn, no_r2):
+        """MAJOR-2 regression: slicing lived ONLY in the full-enumeration branch,
+        so a targeted run processed EVERY id regardless of `limit` while still
+        advertising limit/total_enumerated/has_more. With more ids than `limit`,
+        only the first page may be processed -- else the operator's 300-id +
+        limit=50 safety run does 300 synchronous R2 downloads in one request
+        (Fly proxy timeout, no report) then is falsely told to re-run at
+        offset=50 and re-processes everything."""
+        ids = [f"ghost-{i}" for i in range(10)]
+        report = credit_backfill.run_backfill(user_ids=ids, apply=False, limit=3, offset=0)
+
+        assert report["summary"]["total_users"] == 3, "only `limit` users may be processed"
+        assert len(report["rows"]) == 3
+        assert report["summary"]["total_enumerated"] == 10
+        assert report["summary"]["limit"] == 3
+        assert report["summary"]["offset"] == 0
+        assert report["summary"]["has_more"] is True
+
+    def test_targeted_user_ids_offset_reaches_last_page(self, pg_conn, no_r2):
+        """The final page (offset past the last full page) processes the
+        remainder and reports has_more False."""
+        ids = [f"ghost-{i}" for i in range(10)]
+        report = credit_backfill.run_backfill(user_ids=ids, apply=False, limit=3, offset=9)
+
+        assert report["summary"]["total_users"] == 1, "only the single remaining id"
+        assert report["summary"]["total_enumerated"] == 10
         assert report["summary"]["has_more"] is False
 
 
