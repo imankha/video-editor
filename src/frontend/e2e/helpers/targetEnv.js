@@ -193,6 +193,12 @@ export const LOCAL_ONLY_SPECS = [
     reason: 'injects overlay-action failures via dispatchOverlayAction/useOverlayActionStore import()ed in-page; the /src path 404s on a deployed BUILD.',
   },
   {
+    file: 'T5930-update-gate-single-through-login.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/updateGateStore.js'],
+    reason: 'drives the raced version-mismatch + waiting-SW update path by import()ing the updateGateStore in-page; the /src path 404s on a deployed BUILD (skipWaiting wiring also Vitest-covered).',
+  },
+  {
     file: 'T4100-dedup-honest-message.spec.js',
     category: 'vite-module',
     depends: ['/src/stores/uploadStore.js'],
