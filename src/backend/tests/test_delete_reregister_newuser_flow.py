@@ -47,8 +47,12 @@ def _fresh_event_loop():
 
 
 @pytest.fixture
-def hermetic(tmp_path, monkeypatch):
+def hermetic(tmp_path, monkeypatch, pg_conn):
     """Per-user SQLite under tmp; R2 disabled; caches redirected to fresh containers.
+
+    T5840: credits now live in Postgres, so this fixture also depends on
+    `pg_conn` (real dev Postgres via conftest.py) even though the per-user
+    quest/profile data below is still hermetic SQLite under tmp_path.
 
     Does NOT touch app.session_init._init_cache as a whole: it is a process-wide,
     session-lifetime dict that conftest's session-scoped _set_default_profile_context
@@ -107,7 +111,8 @@ def test_progress_and_claim_agree_for_user_scoped_completed_quest(hermetic):
     Pre-fix RED: claim-reward re-derives steps and raises 400
     'Quest not complete: step 'watch_annotate_tutorial' is incomplete'.
     """
-    from app.services.user_db import grant_credits, mark_quest_completed
+    from app.services.credit_ledger import grant_credits
+    from app.services.user_db import mark_quest_completed
     from app.routers.quests import get_progress, claim_reward
 
     uid = _uid("zombie")
@@ -151,17 +156,14 @@ def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     """A returning account is not seeded; after a complete purge, reregister is is_new_user
     with NEW_ACCOUNT_CREDITS and a clean quest slate."""
     from app.session_init import user_session_init, _init_cache
-    from app.services.user_db import (
-        get_credit_balance,
-        set_credits,
-        get_completed_quest_ids,
-    )
+    from app.services.credit_ledger import get_credit_balance, set_balance
+    from app.services.user_db import get_completed_quest_ids
     from app.routers.auth import _purge_user_data
 
     uid = _uid("delreg")
     old_pid = "cccc3333"
     _make_account(uid, old_pid)
-    set_credits(uid, 0)  # spent-down account: 0 credits
+    set_balance(uid, 0, f"test:{uid}:reset")  # spent-down account: 0 credits
 
     # Pre-purge: session init sees a RETURNING user -> not new -> not seeded (bug-33 precondition).
     _init_cache.pop(uid, None)
@@ -179,15 +181,57 @@ def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     assert get_completed_quest_ids(uid) == set()
 
 
+def test_purge_then_reregister_re_grants_signup_bonus_under_same_key(hermetic):
+    """BLOCKING-4 regression (T5840 review round 2): the ORIGINAL bug only
+    manifests when the `signup:{user_id}` idempotency key was already consumed
+    BEFORE the purge -- a purge that never deletes the Postgres ledger leaves
+    that key in place, so the re-grant after reregister is a silent no-op
+    (`applied=False`) and the balance stays 0.
+
+    This drives a REAL first-time new-user signup (consuming the key for
+    real, unlike the sibling test above which starts from a synthetic
+    `set_balance`), then purges and reregisters under the SAME user_id.
+    """
+    from app.session_init import user_session_init, _init_cache
+    from app.services.credit_ledger import get_credit_balance, has_key
+    from app.routers.auth import _purge_user_data
+
+    uid = _uid("resignup")
+
+    # First-ever session init: genuinely new user, real signup-bonus grant,
+    # which really does consume the `signup:{uid}` idempotency key.
+    _init_cache.pop(uid, None)
+    first = user_session_init(uid)
+    assert first["is_new_user"] is True
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS
+    assert has_key(uid, f"signup:{uid}") is True
+
+    _purge_user_data(uid)
+    assert has_key(uid, f"signup:{uid}") is False, (
+        "purge must remove the ledger row, or the key survives and the "
+        "re-grant below silently no-ops"
+    )
+    assert get_credit_balance(uid)["balance"] == 0
+
+    # Reregister under the SAME user_id (DELETE /api/auth/user retains it).
+    _init_cache.pop(uid, None)
+    second = user_session_init(uid)
+    assert second["is_new_user"] is True
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS, (
+        "re-grant under the same signup:{uid} key must actually apply -- "
+        "a stale PG row here means a re-registered user gets NO signup bonus"
+    )
+
+
 def test_returning_user_not_reseeded(hermetic):
     """Regression: a normal returning user (no delete) keeps their balance — never re-seeded."""
     from app.session_init import user_session_init, _init_cache
-    from app.services.user_db import get_credit_balance, set_credits
+    from app.services.credit_ledger import get_credit_balance, set_balance
 
     uid = _uid("returning")
     pid = "dddd4444"
     _make_account(uid, pid)
-    set_credits(uid, NEW_ACCOUNT_CREDITS)  # already seeded once
+    set_balance(uid, NEW_ACCOUNT_CREDITS, f"test:{uid}:reset")  # already seeded once
 
     _init_cache.pop(uid, None)
     result = user_session_init(uid)
@@ -199,11 +243,8 @@ def test_returning_user_keeps_quest_progress(hermetic):
     """Regression: a normal returning user (no delete) keeps their completed/claimed quest
     state across a session re-init — the fix must not reset anyone's progress."""
     from app.session_init import user_session_init, _init_cache
-    from app.services.user_db import (
-        grant_credits,
-        mark_quest_completed,
-        get_completed_and_claimed_quest_ids,
-    )
+    from app.services.credit_ledger import grant_credits
+    from app.services.user_db import mark_quest_completed, get_completed_and_claimed_quest_ids
     from app.routers.quests import get_progress
 
     uid = _uid("progressed")
@@ -231,7 +272,7 @@ def test_reregister_with_different_email_is_an_independent_fresh_account(hermeti
     deleted account's state — _find_or_create_user mints a brand-new user_id for a new
     email, so it never touches the deleted user's (purged) caches/storage at all."""
     from app.session_init import user_session_init, _init_cache
-    from app.services.user_db import get_credit_balance
+    from app.services.credit_ledger import get_credit_balance
 
     old_uid = _uid("olddeleted")
     old_pid = "11112222"

@@ -335,7 +335,8 @@ def main():
     cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
     cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
     cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
-    for table in ("game_storage_refs", "sessions"):
+    # T5840: credits live in Postgres now, not user.sqlite -- clear the ledger too.
+    for table in ("game_storage_refs", "sessions", "credit_transactions", "credit_reservations", "credits"):
         cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
     cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     pg_conn.commit()

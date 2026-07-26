@@ -15,11 +15,8 @@ from fastapi import APIRouter
 
 from ..database import get_db_connection
 from ..queries import exclude_teammate_reels_clause, latest_final_videos_subquery
-from ..services.user_db import (
-    get_credit_balance,
-    get_profiles,
-    get_selected_profile_id,
-)
+from ..services.credit_ledger import get_credit_balance
+from ..services.user_db import get_profiles, get_selected_profile_id
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)

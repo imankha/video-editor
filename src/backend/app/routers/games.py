@@ -33,8 +33,8 @@ from app.services.auth_db import (
     get_grace_deletion_hashes,
     insert_game_storage_ref,
 )
+from app.services.credit_ledger import CreditsUnavailable, deduct_credits
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
-from app.services.user_db import deduct_credits
 from app.storage import (
     download_from_r2,
     file_exists_in_r2,
@@ -743,7 +743,10 @@ async def activate_game(game_id: int):
         # Deduct credits, then flip status — kept ADJACENT so the charge->ready window is
         # as small as today. deduct_credits is idempotent on (source, reference_id), so a
         # retry after a crash between deduct and the status commit won't double-charge.
-        result = deduct_credits(user_id, upload_cost, source="game_upload", reference_id=str(game_id))
+        try:
+            result = deduct_credits(user_id, upload_cost, source="game_upload", reference_id=str(game_id))
+        except CreditsUnavailable:
+            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
         if not result["success"]:
             raise HTTPException(
                 status_code=402,
@@ -1273,7 +1276,10 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         cost = calculate_extension_cost(game_size, request.days)
 
         ext_ref = f"{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        result = deduct_credits(user_id, cost, source="storage_extension", reference_id=ext_ref)
+        try:
+            result = deduct_credits(user_id, cost, source="storage_extension", reference_id=ext_ref)
+        except CreditsUnavailable:
+            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
         if not result["success"]:
             raise HTTPException(
                 status_code=402,

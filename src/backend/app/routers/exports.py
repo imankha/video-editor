@@ -523,19 +523,24 @@ async def start_framing_export(
         raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
 
     # T890: Credit reservation — reserve before job creation, confirm after
+    from ..services.credit_ledger import CreditsUnavailable, confirm_reservation, release_reservation, reserve_credits
     from ..services.ffmpeg_service import get_video_duration
-    from ..services.user_db import confirm_reservation, release_reservation, reserve_credits
 
     user_id = get_current_user_id()
     video_seconds = get_video_duration(str(staged_video_path))
     credits_required = math.ceil(video_seconds)
     credits_deducted = 0
 
-    # Step 1: Reserve credits (atomic in user.sqlite)
+    # Step 1: Reserve credits (atomic in Postgres)
     if credits_required > 0:
-        result = reserve_credits(
-            user_id, credits_required, job_id, video_seconds
-        )
+        try:
+            result = reserve_credits(
+                user_id, credits_required, job_id, video_seconds,
+                profile_id=get_current_profile_id(),
+            )
+        except CreditsUnavailable:
+            staged_video_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
         if not result["success"]:
             staged_video_path.unlink(missing_ok=True)
             raise HTTPException(

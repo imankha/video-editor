@@ -55,23 +55,13 @@ async def export_user_data(request: Request):
             "terms_accepted_at": user_record.get("terms_accepted_at"),
         }
 
-    # 2. User DB data (credits, transactions)
-    user_db_path = USER_DATA_BASE / user_id / "user.sqlite"
-    if user_db_path.exists():
-        try:
-            conn = sqlite3.connect(str(user_db_path))
-            conn.row_factory = sqlite3.Row
-
-            # Credit transactions
-            rows = conn.execute(
-                "SELECT * FROM credit_transactions ORDER BY created_at DESC LIMIT 100"
-            ).fetchall()
-            export["credit_transactions"] = [dict(r) for r in rows]
-
-            conn.close()
-        except Exception as e:
-            logger.warning(f"[Privacy] Failed to read user DB: {e}")
-            export["credit_transactions"] = []
+    # 2. Credit transactions (Postgres, T5840)
+    try:
+        from app.services.credit_ledger import get_credit_transactions
+        export["credit_transactions"] = get_credit_transactions(user_id, limit=100)
+    except Exception as e:
+        logger.warning(f"[Privacy] Failed to read credit transactions: {e}")
+        export["credit_transactions"] = []
 
     # 3. Profile metadata
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
@@ -168,6 +158,9 @@ async def delete_account(request: Request):
             cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+            # T5840: credits/credit_transactions/credit_reservations are purged
+            # by _purge_user_data above (shared with DELETE /api/auth/user) --
+            # do not duplicate the deletes here.
             cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
         logger.info(f"[Privacy] Cleared auth DB records for user={user_id}")
     except Exception as e:

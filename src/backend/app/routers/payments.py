@@ -11,58 +11,47 @@ Provides:
 Credit packs are defined as constants (not in DB). Prices match T520 analysis.
 """
 
-import asyncio
 import logging
 import os
-import sqlite3
 
 import stripe
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
-from ..database import sync_user_db_to_r2_explicit
-from ..services.db_refresh import RefreshFailed, confirm_current_before_write
-from ..services.user_db import (
-    get_stripe_customer_id,
-    grant_credits,
-    has_processed_payment,
-    set_stripe_customer_id,
-)
+from ..services.credit_ledger import CreditsUnavailable, credit_key, grant, has_processed_payment
+from ..services.user_db import get_stripe_customer_id, set_stripe_customer_id
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/payments", tags=["payments"])
 
-# T4315 round 2 (MAJOR-1): a credit grant computed off a STALE local
-# user.sqlite force-pushes [stale snapshot + purchase] over R2, silently
-# reverting anything that landed there since (another machine's write, an
-# admin correction). None of these callers have a p50 latency SLO worth
-# protecting the way the hot request path does (webhook: no user waiting on
-# it as a page load; confirm/verify: a one-shot purchase confirmation, not a
-# per-keystroke action) -- unlike admin's routes, none of these already ran
-# via asyncio.to_thread, so this wires the SAME shared guard the same way.
-CREDIT_GRANT_REFRESH_FAILED_RESPONSE = {
-    "code": "sync_failed",
-    "retryable": True,
-    "detail": "Could not verify your account is current. Please try again.",
-}
+def _grant_or_503(user_id: str, amount: int, source: str, reference_id: str) -> dict:
+    """Grant credits idempotently, returning grant()'s {applied, balance} dict.
 
+    grant() is idempotent (never raises on a retry) -- the only exception left
+    to handle is the credits_ready cutover gate, which maps to a retryable 503
+    (Stripe/the frontend both retry on 5xx, so the window fails loudly, never
+    wrongly -- design 4a).
 
-async def _confirm_user_db_fresh_or_503(user_id: str) -> None:
-    """Confirm user.sqlite is current before a credit grant, or raise a
-    retryable 503. Safe to retry: grant_credits is idempotent via the
-    UNIQUE index on (user_id, source, reference_id) -- has_processed_payment
-    already gates every caller here -- so refusing now just defers the grant
-    to Stripe's webhook redelivery or the frontend's next verify/confirm
-    call, never a lost or double payment.
-    """
+    Callers MUST gate revenue analytics (record_milestone /
+    increment_total_spent) on the returned `applied`. The `has_processed_payment`
+    guard above every call site is a plain UNLOCKED read: two concurrent
+    deliveries of the same Stripe event (redelivery, or webhook racing
+    /confirm-intent) can both pass it. grant() refuses the second credit
+    atomically (applied=False), but the analytics run AFTER the read -- so
+    without this gate they run twice and double-count `total_spent_cents`, which
+    T5760 reconciliation reads as a false `revenue_drift` and "heals" in the
+    wrong direction. Master short-circuited these paths on
+    `sqlite3.IntegrityError` BEFORE recording analytics; this gate restores that
+    property post-cutover."""
+    key = credit_key(source, reference_id)
     try:
-        await asyncio.to_thread(confirm_current_before_write, user_id)
-    except RefreshFailed as e:
-        logger.error(f"[Payments] could not confirm user.sqlite fresh for {user_id}: {e}")
-        raise HTTPException(status_code=503, detail=CREDIT_GRANT_REFRESH_FAILED_RESPONSE) from None
+        return grant(user_id, amount, source, key, reference_id=reference_id)
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
+
+router = APIRouter(prefix="/payments", tags=["payments"])
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -246,7 +235,7 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
 
     # Idempotency: already processed?
     if has_processed_payment(user_id, pi_id):
-        from ..services.user_db import get_credit_balance, get_credit_transactions
+        from ..services.credit_ledger import get_credit_balance, get_credit_transactions
         balance = get_credit_balance(user_id)
         txns = get_credit_transactions(user_id, limit=50)
         granted = 0
@@ -279,22 +268,20 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in payment metadata")
 
-    await _confirm_user_db_fresh_or_503(user_id)
-
-    try:
-        new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
-    except sqlite3.IntegrityError:
-        # Already processed — idempotent success (race between confirm + webhook)
-        logger.info(f"[Payments] Payment {pi_id} already processed (idempotent)")
-        from ..services.user_db import get_credit_balance
-        balance = get_credit_balance(user_id)
-        return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
+    # grant() is idempotent on (user_id, "stripe:{pi_id}") -- a race between
+    # this and the webhook just reports the same balance twice, never double-grants.
+    result = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+    new_balance = result["balance"]
 
     pack_info = CREDIT_PACKS.get(pack)
-    record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
-    record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-    if pack_info:
-        increment_total_spent(user_id, pack_info["price_cents"])
+    # Only record revenue analytics for the delivery that ACTUALLY applied the
+    # grant -- a concurrent duplicate that lost the idempotency race must not
+    # double-count total_spent_cents (see _grant_or_503).
+    if result["applied"]:
+        record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
+        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+        if pack_info:
+            increment_total_spent(user_id, pack_info["price_cents"])
 
     logger.info(
         f"[Payments] Confirmed + granted {credits} credits to {user_id} "
@@ -351,27 +338,18 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Duplicate webhook for session {session_id}, skipping")
             return {"status": "already_processed"}
 
-        await _confirm_user_db_fresh_or_503(user_id)
-
-        # UNIQUE index on (user_id, source, reference_id) prevents double-grant atomically
-        try:
-            new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
-        except sqlite3.IntegrityError:
-            logger.info(f"[Payments] Payment {session_id} already processed (idempotent)")
-            return {"status": "already_processed"}
+        # idempotency_key = stripe:{session_id} -- credit_ledger.grant() itself
+        # refuses a double-credit atomically. `applied` gates the analytics so a
+        # redelivery that passed the unlocked has_processed_payment read above
+        # cannot double-count revenue (see _grant_or_503).
+        result = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+        new_balance = result["balance"]
 
         pack_info = CREDIT_PACKS.get(pack)
-        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-        if pack_info:
-            increment_total_spent(user_id, pack_info["price_cents"])
-        # T4940: webhook runs outside a user session (middleware allowlist), so the
-        # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
-        # T4310: called synchronously on the request thread (not asyncio.to_thread)
-        # -- skip_version_check=True preserves the T1020/T2720 no-HEAD guarantee.
-        # T4315: safe now that _confirm_user_db_fresh_or_503 has already
-        # confirmed (and, if needed, refreshed) the baseline this upload's
-        # CAS check compares against.
-        sync_user_db_to_r2_explicit(user_id, skip_version_check=True)
+        if result["applied"]:
+            record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+            if pack_info:
+                increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -396,27 +374,18 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, skipping")
             return {"status": "already_processed"}
 
-        await _confirm_user_db_fresh_or_503(user_id)
-
-        # UNIQUE index on (user_id, source, reference_id) prevents double-grant atomically
-        try:
-            new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
-        except sqlite3.IntegrityError:
-            logger.info(f"[Payments] Payment {pi_id} already processed (idempotent)")
-            return {"status": "already_processed"}
+        # idempotency_key = stripe:{pi_id} -- credit_ledger.grant() itself
+        # refuses a double-credit atomically. `applied` gates the analytics so a
+        # redelivery that passed the unlocked has_processed_payment read above
+        # cannot double-count revenue (see _grant_or_503).
+        result = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+        new_balance = result["balance"]
 
         pack_info = CREDIT_PACKS.get(pack)
-        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-        if pack_info:
-            increment_total_spent(user_id, pack_info["price_cents"])
-        # T4940: webhook runs outside a user session (middleware allowlist), so the
-        # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
-        # T4310: called synchronously on the request thread (not asyncio.to_thread)
-        # -- skip_version_check=True preserves the T1020/T2720 no-HEAD guarantee.
-        # T4315: safe now that _confirm_user_db_fresh_or_503 has already
-        # confirmed (and, if needed, refreshed) the baseline this upload's
-        # CAS check compares against.
-        sync_user_db_to_r2_explicit(user_id, skip_version_check=True)
+        if result["applied"]:
+            record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+            if pack_info:
+                increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -514,7 +483,7 @@ async def verify_session(request: Request):
 
     # Already processed (by webhook or previous verify call)
     if has_processed_payment(user_id, session_id):
-        from ..services.user_db import get_credit_balance, get_credit_transactions
+        from ..services.credit_ledger import get_credit_balance, get_credit_transactions
         balance = get_credit_balance(user_id)
         # Look up how many credits were granted for this session
         txns = get_credit_transactions(user_id, limit=50)
@@ -548,21 +517,18 @@ async def verify_session(request: Request):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in session metadata")
 
-    await _confirm_user_db_fresh_or_503(user_id)
-
-    try:
-        new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
-    except sqlite3.IntegrityError:
-        # Already processed — idempotent success (race between verify + webhook)
-        logger.info(f"[Payments] Payment {session_id} already processed (idempotent)")
-        from ..services.user_db import get_credit_balance
-        balance = get_credit_balance(user_id)
-        return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
+    # grant() is idempotent on (user_id, "stripe:{session_id}") -- a race
+    # between this and the webhook just reports the same balance twice. `applied`
+    # gates the analytics so the losing delivery cannot double-count revenue
+    # (see _grant_or_503).
+    result = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+    new_balance = result["balance"]
 
     pack_info = CREDIT_PACKS.get(pack)
-    record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-    if pack_info:
-        increment_total_spent(user_id, pack_info["price_cents"])
+    if result["applied"]:
+        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+        if pack_info:
+            increment_total_spent(user_id, pack_info["price_cents"])
 
     logger.info(
         f"[Payments] Verified + granted {credits} credits to {user_id} "

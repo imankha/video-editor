@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 
@@ -11,6 +11,18 @@ import { useAdminStore } from '../../stores/adminStore';
  *
  * Bulk (n>1) only supports grant mode (the `set` toggle is hidden) and hits the
  * bulk endpoint; single-user keeps the original grant/set behavior.
+ *
+ * T5840: credits now commit durably to Postgres within the request itself (no
+ * more async R2 upload step), so there is no more "granted but not saved"
+ * state to surface. M3 (review round 2): the request/batch id is minted FRESH
+ * per submit attempt, keyed on (mode, amount) -- a retry of the SAME amount
+ * (e.g. after a transient error, same form still open) reuses it so the retry
+ * is idempotent server-side; changing the amount or submitting again after a
+ * genuine success is a NEW attempt and gets a new id. Reusing one id for the
+ * whole modal lifetime (the old behavior) meant a later "set 100" after an
+ * earlier successful "set 100" would silently no-op under the stale key while
+ * still showing a green success message -- `applied === false` is now
+ * surfaced explicitly instead.
  */
 export function CreditGrantModal({ users, onClose }) {
   const isBulk = users.length > 1;
@@ -20,14 +32,23 @@ export function CreditGrantModal({ users, onClose }) {
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState(null); // bulk result summary
-  // Credits committed locally but the R2 upload failed -- see admin.py
-  // _persist_target_user_db. Surfaced so the operator can re-run rather than
-  // trusting a green checkmark for a change that will not survive a deploy.
-  const [notDurable, setNotDurable] = useState(false);
+  const [notApplied, setNotApplied] = useState(false); // single-user: applied === false
+  // { key: "mode:amount", id } -- an attempt is only a "retry" (same id) when
+  // both mode and amount match the LAST submit, not just "same modal instance".
+  const lastAttemptRef = useRef(null);
 
   const grantCredits = useAdminStore(state => state.grantCredits);
   const setCredits = useAdminStore(state => state.setCredits);
   const bulkGrantCredits = useAdminStore(state => state.bulkGrantCredits);
+
+  const attemptId = useCallback((key) => {
+    if (lastAttemptRef.current && lastAttemptRef.current.key === key) {
+      return lastAttemptRef.current.id;
+    }
+    const id = crypto.randomUUID();
+    lastAttemptRef.current = { key, id };
+    return id;
+  }, []);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -38,33 +59,41 @@ export function CreditGrantModal({ users, onClose }) {
     }
     setError(null);
     setSubmitting(true);
+    const id = attemptId(`${mode}:${n}`);
     try {
       if (isBulk) {
-        const data = await bulkGrantCredits(users.map(u => u.user_id), n);
+        const data = await bulkGrantCredits(users.map(u => u.user_id), n, id);
         const failedIds = data.results.filter(r => !r.ok);
-        // Granted but not uploaded to R2: real, and lost on the next machine
-        // swap unless re-run. Must not read as a clean success.
-        const notSynced = data.results.filter(r => r.ok && r.synced === false);
-        setSummary({ granted: data.granted, failed: data.failed, failedIds, notSynced });
+        const notAppliedIds = data.results.filter(r => r.ok && r.applied === false);
+        setSummary({ granted: data.granted, failed: data.failed, failedIds, notAppliedIds });
         setSuccess(true);
         setAmount('');
+        // Only retire this attempt's batch_id when EVERY grant landed. A partial
+        // result (e.g. granted: 47, failed: 3) means a re-submit is a legitimate
+        // retry of the SAME batch -- clearing here would mint a fresh batch_id
+        // and re-grant the 47 that already succeeded.
+        if (data.failed === 0) {
+          lastAttemptRef.current = null;
+        }
       } else {
         const userId = users[0].user_id;
         const result = mode === 'set'
-          ? await setCredits(userId, n)
-          : await grantCredits(userId, n);
-        setNotDurable(result?.synced === false);
+          ? await setCredits(userId, n, id)
+          : await grantCredits(userId, n, id);
+        setNotApplied(result?.applied === false);
         setSuccess(true);
         setAmount('');
-        // Keep a failed upload on screen instead of auto-dismissing it.
-        if (result?.synced !== false) setTimeout(() => onClose(), 1200);
+        if (result?.applied !== false) {
+          lastAttemptRef.current = null;
+          setTimeout(() => onClose(), 1200);
+        }
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setSubmitting(false);
     }
-  }, [amount, mode, isBulk, users, grantCredits, setCredits, bulkGrantCredits, onClose]);
+  }, [amount, mode, isBulk, users, grantCredits, setCredits, bulkGrantCredits, onClose, attemptId]);
 
   const title = isBulk
     ? `Grant credits to ${users.length} users`
@@ -130,14 +159,14 @@ export function CreditGrantModal({ users, onClose }) {
                   ))}
                 </ul>
               )}
-              {summary.notSynced?.length > 0 && (
+              {summary.notAppliedIds?.length > 0 && (
                 <div className="mt-2 text-amber-400 text-xs">
                   <p>
-                    {summary.notSynced.length} granted but NOT saved to the cloud
-                    &mdash; these will be lost on the next deploy. Re-run for:
+                    {summary.notAppliedIds.length} already applied (no change --
+                    this batch was already run):
                   </p>
                   <ul className="mt-1 max-h-24 overflow-auto">
-                    {summary.notSynced.map(r => (
+                    {summary.notAppliedIds.map(r => (
                       <li key={r.user_id}>{r.user_id}</li>
                     ))}
                   </ul>
@@ -152,14 +181,24 @@ export function CreditGrantModal({ users, onClose }) {
             </div>
           ) : (
             <div className="text-sm text-center py-2">
-              <p className={notDurable ? 'text-amber-400' : 'text-green-400'}>
-                {mode === 'grant' ? 'Credits granted!' : 'Credits updated!'}
+              <p className={notApplied ? 'text-amber-400' : 'text-green-400'}>
+                {notApplied
+                  ? 'No change -- already applied'
+                  : (mode === 'grant' ? 'Credits granted!' : 'Credits updated!')}
               </p>
-              {notDurable && (
-                <p className="mt-1 text-amber-400 text-xs">
-                  Not saved to the cloud &mdash; this will be lost on the next
-                  deploy. Please run it again.
-                </p>
+              {notApplied && (
+                <>
+                  <p className="mt-1 text-amber-400 text-xs">
+                    This exact request already ran; the balance was not
+                    changed again.
+                  </p>
+                  <button
+                    onClick={onClose}
+                    className="mt-3 w-full bg-purple-600 hover:bg-purple-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </>
               )}
             </div>
           )

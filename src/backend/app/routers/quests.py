@@ -8,19 +8,15 @@ Reward claiming is idempotent — credits are only granted once per quest.
 
 import logging
 import os
-import sqlite3
 import time
 
 from fastapi import APIRouter, HTTPException
 
 from ..database import get_db_connection
 from ..quest_config import QUEST_DEFINITIONS
-from ..services.user_db import (
-    get_completed_and_claimed_quest_ids,
-    get_credit_balance,
-    grant_credits,
-    mark_quest_completed,
-)
+from ..services import credit_ledger
+from ..services.credit_ledger import CreditsUnavailable, get_credit_balance
+from ..services.user_db import get_completed_and_claimed_quest_ids, mark_quest_completed
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -357,21 +353,22 @@ async def claim_reward(quest_id: str):
         if not all_steps.get(sid, False):
             raise HTTPException(status_code=400, detail=f"Quest not complete: step '{sid}' is incomplete")
 
-    # Grant reward — UNIQUE index on (user_id, source, reference_id) prevents double-grant
+    # Grant reward — UNIQUE(user_id, idempotency_key) prevents double-grant atomically;
+    # applied=False means a retry (already claimed), no exception needed (smell 6 fix).
     try:
-        new_balance = grant_credits(user_id, qdef["reward"], "quest_reward", quest_id)
-    except sqlite3.IntegrityError:
-        # UNIQUE constraint violation — already claimed (race condition or retry)
-        # Still mark completed in user.sqlite in case backfill missed it.
-        # Wrap in try/except: if a concurrent request holds the DB lock (race),
-        # the quest is already fully claimed — return success regardless.
-        try:
-            mark_quest_completed(user_id, quest_id)
-            balance = get_credit_balance(user_id)
-            return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
-        except sqlite3.OperationalError:
-            logger.warning(f"[Quests] DB locked during already-claimed handling for {quest_id}, returning success")
-            return {"credits_granted": 0, "new_balance": 0, "already_claimed": True}
+        result = credit_ledger.grant(
+            user_id, qdef["reward"], "quest_reward",
+            credit_ledger.credit_key("quest_reward", quest_id),
+            reference_id=quest_id,
+        )
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
+
+    if not result["applied"]:
+        # Already claimed (race condition or retry) — still mark completed in
+        # user.sqlite in case backfill missed it.
+        mark_quest_completed(user_id, quest_id)
+        return {"credits_granted": 0, "new_balance": result["balance"], "already_claimed": True}
 
     # T970: Mark quest as completed in user.sqlite (user-scoped, survives profile switch)
     mark_quest_completed(user_id, quest_id)
@@ -379,6 +376,7 @@ async def claim_reward(quest_id: str):
     from ..analytics import record_milestone
     record_milestone(user_id, "quest_completed", {"quest_id": quest_id, "quest_name": qdef["title"]})
 
+    new_balance = result["balance"]
     logger.info(f"[Quests] Granted {qdef['reward']} credits for {quest_id} to {user_id}, balance={new_balance}")
 
     return {"credits_granted": qdef["reward"], "new_balance": new_balance, "already_claimed": False}

@@ -198,10 +198,23 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
         logger.info(f"Created new profile {profile_id} for user {user_id}"
                     + (f" (inherited sport={sport})" if inherited_sport else ""))
 
+        from .services.credit_ledger import CreditsUnavailable, grant_credits
         from .services.storage_credits import NEW_ACCOUNT_CREDITS
-        from .services.user_db import grant_credits
-        grant_credits(user_id, NEW_ACCOUNT_CREDITS, source="new_account_bonus")
-        logger.info(f"Seeded {NEW_ACCOUNT_CREDITS} credits for new user {user_id}")
+        # is_new_user is derived from "no profile yet" (above) and set_selected_profile_id
+        # already committed by this point, so a retry after a failure here would NOT
+        # re-enter this block -- the signup bonus would be silently orphaned forever.
+        # Catch (rather than let the gate's 503 propagate) so a brand-new user's whole
+        # login doesn't hard-fail during the short cutover window; log loudly so the
+        # gap is operator-visible instead of silent (CLAUDE.md: fail visibly, not silently).
+        try:
+            grant_credits(user_id, NEW_ACCOUNT_CREDITS, source="new_account_bonus")
+            logger.info(f"Seeded {NEW_ACCOUNT_CREDITS} credits for new user {user_id}")
+        except CreditsUnavailable:
+            logger.error(
+                f"[SessionInit] Signup bonus NOT granted for new user {user_id} -- "
+                f"credits_ready gate is closed. This user needs a manual admin grant "
+                f"once the gate opens (idempotency key signup:{user_id} is safe to retry)."
+            )
 
     set_current_profile_id(profile_id)
 
@@ -226,7 +239,7 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
 
     # 5. T890: Recover orphaned credit reservations
     try:
-        from .services.user_db import recover_orphaned_reservations
+        from .services.credit_ledger import recover_orphaned_reservations
         recovered = recover_orphaned_reservations(user_id)
         if recovered > 0:
             logger.info(f"Recovered {recovered} orphaned credit reservations for user {user_id}")

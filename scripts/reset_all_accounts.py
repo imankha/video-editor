@@ -276,6 +276,8 @@ def main():
                        "impersonation_audit",
                        "game_storage_refs", "r2_grace_deletions",
                        "share_games", "share_videos", "shares",
+                       # T5840: credits live in Postgres now, not user.sqlite
+                       "credit_transactions", "credit_reservations", "credits",
                        "sessions", "otp_codes", "users"):
             try:
                 cur.execute(f"DELETE FROM {table}")

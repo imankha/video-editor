@@ -1808,7 +1808,7 @@ async def _export_clips(
 
     except HTTPException:
         if credits_deducted > 0:
-            from ...services.user_db import refund_credits
+            from ...services.credit_ledger import refund_credits
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits to {user_id}")
         import time
@@ -1823,7 +1823,7 @@ async def _export_clips(
         raise
     except Exception as e:
         if credits_deducted > 0:
-            from ...services.user_db import refund_credits
+            from ...services.credit_ledger import refund_credits
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits to {user_id}")
         import socket
@@ -1971,7 +1971,12 @@ async def export_multi_clip(
 
     # T890: Credit reservation — calculate total duration from clips_data
     from ...highlight_transform import get_output_duration
-    from ...services.user_db import confirm_reservation, release_reservation, reserve_credits
+    from ...services.credit_ledger import (
+        CreditsUnavailable,
+        confirm_reservation,
+        release_reservation,
+        reserve_credits,
+    )
 
     total_video_seconds = 0
     for clip_cfg in clips_data:
@@ -1982,11 +1987,15 @@ async def export_multi_clip(
     credits_required = math.ceil(total_video_seconds) if total_video_seconds > 0 else 0
     credits_deducted = 0
 
-    # T890: Reserve credits (atomic in user.sqlite), confirm after export_jobs created
+    # T890: Reserve credits (atomic in Postgres), confirm after export_jobs created
     if credits_required > 0:
-        credit_result = reserve_credits(
-            captured_user_id, credits_required, export_id, total_video_seconds
-        )
+        try:
+            credit_result = reserve_credits(
+                captured_user_id, credits_required, export_id, total_video_seconds,
+                profile_id=captured_profile_id,
+            )
+        except CreditsUnavailable:
+            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
         if not credit_result["success"]:
             raise HTTPException(
                 status_code=402,
@@ -2291,7 +2300,7 @@ async def _run_multi_clip_background(
         # _export_clips refunds credits itself once entered; only pre-pipeline
         # failures need a refund here.
         if not pipeline_entered and credits_deducted > 0:
-            from ...services.user_db import refund_credits
+            from ...services.credit_ledger import refund_credits
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits (pre-pipeline failure)")
         logger.error(f"[Multi-Clip Export] Background export failed: {e}", exc_info=True)

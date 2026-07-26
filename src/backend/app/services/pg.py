@@ -272,6 +272,64 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     description TEXT NOT NULL,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- T5840: credits move out of the per-user SQLite last-write-wins blob.
+-- No FK to users(user_id) -- X-User-ID/e2e users legitimately have no Postgres
+-- users row and still get the signup bonus (session_init.py).
+CREATE TABLE IF NOT EXISTS credits (
+    user_id     TEXT PRIMARY KEY,
+    balance     INTEGER     NOT NULL DEFAULT 0 CHECK (balance >= 0),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS credit_transactions (
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         TEXT        NOT NULL,
+    amount          INTEGER     NOT NULL CHECK (amount <> 0),
+    source          TEXT        NOT NULL,
+    idempotency_key TEXT        NOT NULL,
+    reference_id    TEXT,
+    video_seconds   REAL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_tx_idem
+    ON credit_transactions(user_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_credit_tx_user_created
+    ON credit_transactions(user_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_credit_tx_source
+    ON credit_transactions(source);
+
+-- T890 reservations, moved verbatim (Phase 1). Unlike the SQLite version this
+-- table is shared by every user, so it needs an explicit user_id column --
+-- the per-user file no longer provides that scoping for free.
+-- profile_id (M6, review round 2): recover_orphaned_reservations needs to know
+-- WHICH profile's export_jobs to check for a still-live job before releasing --
+-- without it, recovery is table-global and can release another machine's
+-- active in-flight reservation (a free export / silent revenue leak).
+CREATE TABLE IF NOT EXISTS credit_reservations (
+    job_id        TEXT PRIMARY KEY,
+    user_id       TEXT        NOT NULL,
+    profile_id    TEXT,
+    amount        INTEGER     NOT NULL,
+    video_seconds REAL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_credit_reservations_user ON credit_reservations(user_id);
+
+-- The cutover gate (T5840 4a). One row (id=1). ready_at IS NULL until an admin
+-- confirms the backfill report shows zero drift; credit_ledger mutations 503
+-- until then. Reads are never gated.
+-- last_report/last_report_at (M7, review round 2): open-gate consumes the
+-- STORED report from the most recent GET backfill-report call instead of
+-- recomputing a full unbounded per-user scan (R2 downloads + Stripe list)
+-- synchronously inside the gate-open request.
+CREATE TABLE IF NOT EXISTS credit_migration_state (
+    id               INTEGER PRIMARY KEY CHECK (id = 1),
+    ready_at         TIMESTAMPTZ,
+    backfilled_users INTEGER NOT NULL DEFAULT 0,
+    last_report      JSONB,
+    last_report_at   TIMESTAMPTZ
+);
 """
 
 _SEED_SQL = """

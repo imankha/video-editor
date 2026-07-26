@@ -7,15 +7,13 @@ export endpoints (exports.py), not here.
 """
 
 import logging
+import uuid
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..services.user_db import (
-    get_credit_balance,
-    get_credit_transactions,
-    grant_credits,
-)
+from ..services import credit_ledger
+from ..services.credit_ledger import CreditsUnavailable, get_credit_balance, get_credit_transactions
 from ..storage import APP_ENV
 from ..user_context import get_current_user_id
 
@@ -28,6 +26,17 @@ class GrantRequest(BaseModel):
     amount: int
     source: str
     reference_id: str | None = None
+
+
+def grant_credits(user_id: str, amount: int, source: str, reference_id: str | None = None) -> int:
+    """Test-only key derivation. `source` is CLIENT-supplied here (unlike every
+    other grant call site) so it is not part of the registered KEY_PREFIX map --
+    this does NOT go through credit_ledger.credit_key(). A reference_id is used
+    verbatim as the key when given (mirrors the old NULL-is-not-a-key SQLite
+    behavior: no reference_id means every call is a distinct grant)."""
+    key = f"selfgrant:{reference_id}" if reference_id else f"selfgrant:{uuid.uuid4().hex}"
+    result = credit_ledger.grant(user_id, amount, source, key, reference_id=reference_id)
+    return result["balance"]
 
 
 @router.get("")
@@ -59,7 +68,10 @@ async def grant(request: GrantRequest):
     user_id = get_current_user_id()
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
-    new_balance = grant_credits(user_id, request.amount, request.source, request.reference_id)
+    try:
+        new_balance = grant_credits(user_id, request.amount, request.source, request.reference_id)
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
     return {"balance": new_balance}
 
 

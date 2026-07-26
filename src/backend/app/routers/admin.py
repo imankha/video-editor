@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from ..database import mark_sync_pending, sync_user_db_to_r2_explicit
+from ..services import credit_ledger
 from ..services.auth_db import (
     IMPERSONATION_TTL_MINUTES,
     create_impersonation_session,
@@ -28,11 +28,8 @@ from ..services.auth_db import (
     log_impersonation,
     validate_session,
 )
+from ..services.credit_ledger import CreditsUnavailable
 from ..services.pg import get_pg
-from ..services.user_db import (
-    get_credit_stats_for_admin,
-    grant_credits,
-)
 from ..storage import APP_ENV
 from ..user_context import get_current_user_id
 from ..utils.cookies import delete_cookie as _delete_cookie_raw
@@ -58,81 +55,12 @@ def _require_admin():
 
 # ---------------------------------------------------------------------------
 # Credit helpers
+#
+# T5840: credits moved to Postgres -- no more per-user user.sqlite R2 sync
+# dance (`_refresh_target_user_db`/`_persist_target_user_db` are gone). Every
+# grant/set now carries a real idempotency key, so a durability failure can
+# 503 instead of the old `synced: false` best-effort report.
 # ---------------------------------------------------------------------------
-
-def _refresh_target_user_db(target_user_id: str) -> None:
-    """Pull the grantee's user.sqlite from R2 BEFORE mutating it.
-
-    `ensure_user_database` only restores from R2 when `local_version is None`, so
-    once a machine has materialized this user's DB it keeps serving that snapshot
-    forever. The admin panel materializes other users' DBs routinely
-    (`get_credit_stats_for_admin`), so the admin's machine is likely holding a
-    stale copy of the grantee.
-
-    That matters independent of CAS: `_persist_target_user_db`'s write-back
-    (`sync_user_db_to_r2_explicit`, CAS ON since T4310) refuses to upload over a
-    NEWER R2 copy, but a STALE local READ still means the credit math is computed
-    from old data -- the resulting (wrong) total then gets written under this
-    machine's own version, which CAS happily accepts since it isn't a conflict.
-    Read the authoritative copy first so this is a real read-modify-write instead
-    of a write against a stale snapshot.
-
-    T4315: the restore-if-newer + WAL-safe swap logic itself now lives in the
-    shared `confirm_current_before_write` (services/db_refresh.py) so this isn't
-    a bespoke copy of the same guard move_reels already has -- only the
-    "warn and proceed anyway" policy (rather than aborting the grant) is
-    specific to this admin call site.
-    """
-    from ..services.db_refresh import RefreshFailed, confirm_current_before_write
-
-    try:
-        confirm_current_before_write(target_user_id)
-    except RefreshFailed:
-        # Visible, not silently swallowed: the grant is about to be applied to a
-        # copy we could not confirm is current.
-        logger.warning(
-            f"[Admin] could not refresh user.sqlite for {target_user_id} from R2 "
-            f"-- granting against a possibly stale local copy"
-        )
-
-
-async def _persist_target_user_db(target_user_id: str) -> bool:
-    """Push a credit change written to ANOTHER user's user.sqlite up to R2.
-
-    The request middleware only syncs the SESSION user's databases -- here the
-    admin's, not the grantee's. Without this an admin credit change lives only on
-    the machine's local disk and is destroyed the next time the machine is
-    replaced, which is exactly how a 400-credit prod grant was lost. Same fix the
-    Stripe webhook got in T4940 (sync_user_db_to_r2_explicit), applied to the
-    admin write paths that target a user other than the caller.
-
-    Deliberately NOT turned into a 5xx: admin_grant carries no idempotency key
-    (reference_id is NULL, and SQLite treats NULLs as distinct in the UNIQUE
-    index), so a retry would double-grant. The caller reports `synced` instead and
-    the admin UI surfaces it, leaving the operator to decide.
-
-    `mark_sync_pending` is a BEST-EFFORT nudge only -- do not rely on it. The
-    marker file lives on the same volume as the un-uploaded DB, so a machine
-    replacement (the scenario this function exists to prevent) destroys both. Even
-    when the volume survives, the middleware's retry is gated on the GRANTEE
-    issuing a write that lands on THIS machine. `synced=False` reaching a human is
-    the real mitigation.
-
-    lock_timeout is left at None (block indefinitely) on purpose: the middleware's
-    0.5s defer is a silent-loss path, unacceptable for a one-shot credit gesture.
-    """
-    synced = await asyncio.to_thread(sync_user_db_to_r2_explicit, target_user_id)
-    if not synced:
-        mark_sync_pending(target_user_id)
-        logger.error(
-            f"[Admin] R2 sync FAILED for target user {target_user_id} -- credit change is "
-            f"NOT durable and will be lost if this machine is replaced; reported as synced=false"
-        )
-    # T4310: sync_user_db_to_r2_explicit now returns a 3-state SyncResult; this
-    # function's contract (and the JSON `synced` field callers return) is a plain
-    # bool, so coerce at the boundary rather than leaking the enum's string value.
-    return bool(synced)
-
 
 def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
     """Map individual Stripe purchase credit amounts to total dollars spent (in cents)."""
@@ -250,7 +178,7 @@ async def list_users(
             key = label.lower().replace(" ", "_")
             funnel_totals[key] = action_totals.get(step, 0)
 
-    credit_stats = get_credit_stats_for_admin(page_user_ids)
+    credit_stats = credit_ledger.stats_for_admin(page_user_ids)
 
     users = []
     for row in rows:
@@ -322,6 +250,8 @@ BULK_BODY_MAX = 10000
 class BulkGrantCreditsRequest(BaseModel):
     user_ids: list[str]
     amount: int
+    batch_id: str  # minted client-side (UUID) once per bulk click; a retry of the
+    # SAME click reuses it (idempotent no-op on double-grant), a new click mints a new one
 
 
 class BulkEmailRequest(BaseModel):
@@ -335,9 +265,11 @@ class BulkEmailRequest(BaseModel):
 async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
     """Grant credits to many users at once. Admin only.
 
-    Loops the existing single-user grant_credits() sequentially (each opens that
-    user's own SQLite under a per-user write lock — asyncio.gather would deadlock
-    on the lock). Unknown ids are skipped and recorded, not fatal.
+    Loops sequentially and grants via credit_ledger.grant() with a per-user key
+    derived from (admin, batch_id, target_user_id) -- a retry of the whole batch
+    (same batch_id) cannot double-grant any user in it. Unknown ids are skipped
+    and recorded, not fatal. Credits now live in Postgres, so there is no
+    per-user R2 sync step and no `synced` field to report anymore.
     """
     _require_admin()
 
@@ -348,6 +280,7 @@ async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
     if len(request.user_ids) > BULK_MAX_IDS:
         raise HTTPException(status_code=400, detail=f"Too many users (max {BULK_MAX_IDS})")
 
+    admin_id = get_current_user_id()
     results: list[dict] = []
     granted = 0
     failed = 0
@@ -357,23 +290,22 @@ async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
             results.append({"user_id": uid, "ok": False, "error": "user not found"})
             failed += 1
             continue
+        key = f"admin:{admin_id}:{request.batch_id}:{uid}"
         try:
-            await asyncio.to_thread(_refresh_target_user_db, uid)
-            balance = grant_credits(uid, request.amount, source="admin_grant")
+            result = credit_ledger.grant(uid, request.amount, "admin_grant", key)
+        except CreditsUnavailable:
+            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
         except Exception as exc:
             logger.exception(f"[Admin] bulk grant-credits failed for {uid}")
             results.append({"user_id": uid, "ok": False, "error": str(exc)})
             failed += 1
             continue
-        # The grant is COMMITTED past this point. A sync problem must never flip
-        # ok to False: the admin would re-run the batch and, with reference_id
-        # NULL, double-grant. Report it as synced=False instead.
-        try:
-            synced = await _persist_target_user_db(uid)
-        except Exception:
-            logger.exception(f"[Admin] bulk grant-credits R2 sync raised for {uid}")
-            synced = False
-        results.append({"user_id": uid, "ok": True, "balance": balance, "synced": synced})
+        # M3: `ok=True` means the request succeeded (no error); `applied`
+        # separately says whether IT was the call that moved the balance --
+        # a batch_id retry re-reports every user's CURRENT balance with
+        # applied=False, never double-granting but never silently reading as
+        # a fresh grant either.
+        results.append({"user_id": uid, "ok": True, "balance": result["balance"], "applied": result["applied"]})
         granted += 1
 
     return {"results": results, "granted": granted, "failed": failed}
@@ -449,11 +381,18 @@ async def admin_bulk_email(request: BulkEmailRequest):
 
 class GrantCreditsRequest(BaseModel):
     amount: int
+    request_id: str  # minted client-side (UUID) per click; a retry of the SAME
+    # click reuses it (idempotent no-op), a new click mints a new one
 
 
 @router.post("/users/{user_id}/grant-credits")
 async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
-    """Grant credits to any user. Admin only."""
+    """Grant credits to any user. Admin only.
+
+    Idempotency key is (admin, request_id) -- a retried request_id changes
+    nothing (structurally impossible to double-grant, T5840 AC), so unlike the
+    old SQLite path this can safely 503 on a durability failure and be retried.
+    """
     _require_admin()
 
     if request.amount <= 0:
@@ -463,14 +402,22 @@ async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await asyncio.to_thread(_refresh_target_user_db, user_id)
-    new_balance = grant_credits(user_id, request.amount, source="admin_grant")
-    synced = await _persist_target_user_db(user_id)
-    return {"balance": new_balance, "synced": synced}
+    admin_id = get_current_user_id()
+    key = f"admin:{admin_id}:{request.request_id}"
+    try:
+        result = credit_ledger.grant(user_id, request.amount, "admin_grant", key)
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
+    # M3: surface `applied` -- False means this request_id already ran (a
+    # retry), so the 200 must not read as "credits granted just now". Without
+    # this a stale-key retry (e.g. a UI bug reusing an old id) shows a green
+    # "Credits granted!" while the balance silently did not move.
+    return {"balance": result["balance"], "applied": result["applied"]}
 
 
 class SetCreditsRequest(BaseModel):
     amount: int
+    request_id: str
 
 
 @router.post("/users/{user_id}/set-credits")
@@ -485,11 +432,16 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    from ..services.user_db import set_credits
-    await asyncio.to_thread(_refresh_target_user_db, user_id)
-    new_balance = set_credits(user_id, request.amount)
-    synced = await _persist_target_user_db(user_id)
-    return {"balance": new_balance, "synced": synced}
+    admin_id = get_current_user_id()
+    key = f"adminset:{admin_id}:{request.request_id}"
+    try:
+        result = credit_ledger.set_balance(user_id, request.amount, key)
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
+    # M3: applied is False both for a same-key retry (delta==0 short circuit
+    # OR a reused key with a different target amount, refused) -- either way
+    # the caller must be told nothing changed just now.
+    return {"balance": result["balance"], "applied": result["applied"]}
 
 
 # ---------------------------------------------------------------------------
@@ -1878,3 +1830,168 @@ async def get_bug_screenshot(bug_id: int):
         raise HTTPException(status_code=500, detail="Failed to generate screenshot URL")
 
     return RedirectResponse(url=url, status_code=307)
+
+
+# ---------------------------------------------------------------------------
+# T5840: Credits -> Postgres backfill + cutover gate.
+#
+# Dry-run report (no writes) vs apply, per design 3b -- this is a tool, not a
+# versioned migration file: money needs a human-reviewed dry run, and a
+# migration's up(conn) has no user context to force-download R2 with.
+# Both idempotent/re-runnable: a second run only inserts ledger rows Postgres
+# is still missing and recomputes balance = SUM(pg ledger).
+# ---------------------------------------------------------------------------
+
+class BackfillRequest(BaseModel):
+    user_ids: list[str] | None = None
+    limit: int | None = None
+    offset: int = 0
+
+
+@router.get("/credits/backfill-report")
+async def credits_backfill_report(
+    user_ids: str | None = Query(None),
+    limit: int | None = Query(None, description="Chunk the full enumeration (M7) -- omit for all users"),
+    offset: int = Query(0),
+):
+    """Dry run -- no writes. `user_ids` is an optional comma-separated list for a
+    targeted preview; omitted means every user (optionally chunked via
+    limit/offset -- each user costs an R2 download + several PG round trips,
+    so an unbounded scan can run minutes past a proxy timeout once the user
+    base is nontrivial). A COMPLETE unchunked run is saved as the stored
+    report POST /credits/open-gate consumes."""
+    _require_admin()
+    from ..services.credit_backfill import reconcile_against_stripe, run_backfill
+
+    ids = [u.strip() for u in user_ids.split(",") if u.strip()] if user_ids else None
+    report = run_backfill(user_ids=ids, apply=False, limit=limit, offset=offset)
+    # Stripe reconciliation is itself a full-population pass (PaymentIntent.list) --
+    # skip it for a chunked page, it isn't scoped to `limit`/`offset` and would be
+    # misleadingly repeated (and costly) on every page.
+    if limit is None:
+        report["stripe_reconciliation"] = reconcile_against_stripe()
+    return report
+
+
+@router.post("/credits/backfill")
+async def credits_backfill_apply(request: BackfillRequest):
+    """Apply -- inserts missing ledger rows and re-derives balances. Safe to
+    re-run (idempotent); `user_ids` targets a re-run for specific accounts;
+    `limit`/`offset` chunk a full-population apply run (M7)."""
+    _require_admin()
+    from ..services.credit_backfill import run_backfill
+
+    return run_backfill(user_ids=request.user_ids, apply=True, limit=request.limit, offset=request.offset)
+
+
+class OpenGateRequest(BaseModel):
+    # Flag NAMES (e.g. "divergent", "ledger_mismatch", "negative_balance") the
+    # admin has manually reviewed and accepts -- a row carrying ONLY
+    # acknowledged flags (and zero delta) no longer blocks the gate.
+    acknowledge_flags: list[str] = []
+    # Raw override: opens the gate regardless of any remaining anomaly.
+    # Logged loudly (WARNING) with the full anomalous user list for audit.
+    force: bool = False
+
+
+def _gate_blocking_rows(rows: list[dict], acknowledged: set[str]) -> list[dict]:
+    """Rows that must block the gate. `no_user_db` is informational ONLY --
+    it is the EXPECTED, permanent state for every purged/guest/never-synced
+    account (BLOCKING-2: with unbounded real-world enumeration this flag is
+    guaranteed on staging/prod, so treating it as blocking means the gate can
+    never open). Any OTHER flag blocks unless explicitly acknowledged; a
+    nonzero delta always blocks (it means backfill has real unapplied work --
+    the fix is POST /credits/backfill, not an acknowledgement)."""
+    blocking = []
+    for r in rows:
+        if r["status"] == "no_user_db":
+            continue
+        if (set(r["flags"]) - acknowledged) or r["delta"] != 0:
+            blocking.append(r)
+    return blocking
+
+
+# M7: open-gate consumes the STORED report from the most recent COMPLETE
+# GET backfill-report call instead of recomputing (a second full unbounded
+# scan -- R2 downloads + Stripe list -- synchronously inside this request).
+# A report older than this is refused (not silently reused) unless force=true.
+GATE_REPORT_MAX_AGE_SECONDS = 1800  # 30 minutes
+
+
+@router.post("/credits/open-gate")
+async def credits_open_gate(request: OpenGateRequest = OpenGateRequest()):
+    """Open the credits_ready cutover gate (design 4a/4b) -- mutations 503 until
+    this runs. Refuses unless the STORED backfill report (from the most recent
+    GET /credits/backfill-report) shows zero drift and no unacknowledged
+    anomalies, so the gate can only open on a verified-clean (or explicitly
+    human-reviewed) state. `no_user_db` never blocks -- it is the expected
+    state for purged/guest accounts, not drift."""
+    _require_admin()
+    from datetime import UTC, datetime
+
+    from ..services.credit_backfill import load_last_report
+    from ..services.credit_ledger import reset_ready_cache_for_tests
+
+    stored = load_last_report()
+    if stored is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "no_report",
+                "message": "No backfill report on file -- run GET /credits/backfill-report (full, unchunked) first.",
+            },
+        )
+
+    age_seconds = (datetime.now(UTC) - stored["generated_at"]).total_seconds()
+    if age_seconds > GATE_REPORT_MAX_AGE_SECONDS and not request.force:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "stale_report",
+                "message": (
+                    f"Stored report is {int(age_seconds)}s old (max {GATE_REPORT_MAX_AGE_SECONDS}s) -- "
+                    "re-run GET /credits/backfill-report, or pass force=true to use it anyway."
+                ),
+                "report_generated_at": stored["generated_at"].isoformat(),
+            },
+        )
+
+    report = stored["report"]
+    acknowledged = set(request.acknowledge_flags)
+    anomalous = _gate_blocking_rows(report["rows"], acknowledged)
+
+    if anomalous and not request.force:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "drift_present",
+                "message": (
+                    "The stored backfill report shows drift or unacknowledged flags -- "
+                    "run POST /credits/backfill, then GET /credits/backfill-report again "
+                    "to refresh the stored report, or pass acknowledge_flags (after manual "
+                    "review) / force=true to open anyway."
+                ),
+                "anomalous_count": len(anomalous),
+                "anomalous_user_ids": [r["user_id"] for r in anomalous][:50],
+                "report_generated_at": stored["generated_at"].isoformat(),
+            },
+        )
+
+    if anomalous and request.force:
+        logger.warning(
+            f"[Admin] credits_ready gate FORCE-opened by {get_current_user_id()} with "
+            f"{len(anomalous)} unresolved anomalous users: "
+            f"{[r['user_id'] for r in anomalous]}"
+        )
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO credit_migration_state (id, ready_at, backfilled_users)
+               VALUES (1, now(), %s)
+               ON CONFLICT (id) DO UPDATE SET ready_at = now(), backfilled_users = %s""",
+            (report["summary"]["total_users"], report["summary"]["total_users"]),
+        )
+    reset_ready_cache_for_tests()
+    logger.info(f"[Admin] credits_ready gate OPENED by {get_current_user_id()}")
+    return {"opened": True, "backfilled_users": report["summary"]["total_users"]}

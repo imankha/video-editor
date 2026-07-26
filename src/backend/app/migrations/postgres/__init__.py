@@ -17,6 +17,7 @@ from .v015_platform_normalize import V015PlatformNormalize
 from .v016_collection_shares import V016CollectionShares
 from .v017_referral_inherited_sport import V017ReferralInheritedSport
 from .v018_share_sharer_sport import V018ShareSharerSport
+from .v019_credits import V019Credits
 
 MIGRATIONS = [
     V001Baseline(),
@@ -37,6 +38,7 @@ MIGRATIONS = [
     V016CollectionShares(),
     V017ReferralInheritedSport(),
     V018ShareSharerSport(),
+    V019Credits(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

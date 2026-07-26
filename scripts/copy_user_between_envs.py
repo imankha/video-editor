@@ -101,7 +101,8 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
             if existing and existing["user_id"] != user_id:
                 old_id = existing["user_id"]
                 log.info(f"Removing existing dev user {old_id} (same email, different user_id)")
-                for table in ("game_storage_refs", "sessions", "user_segments", "user_actions"):
+                for table in ("game_storage_refs", "sessions", "user_segments", "user_actions",
+                              "credit_transactions", "credit_reservations", "credits"):
                     dst_cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (old_id,))
                 dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
                 dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
@@ -177,6 +178,42 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                     [a[c] for c in cols],
                 )
             log.info(f"Copied {len(action_rows)} user_actions rows")
+
+            # T5840: copy the credit ledger + balance -- credits live in Postgres
+            # now (NOT in the copied user.sqlite), so without this a copied
+            # account would arrive with a zero balance. Clear destination first
+            # for a faithful mirror; re-derive balance from the copied ledger
+            # rather than copying the `credits` row verbatim (never trust a
+            # copied balance over the ledger it should equal).
+            # N5: also clear credit_reservations -- reservations are ephemeral
+            # in-flight state (an export job id from the SOURCE env means
+            # nothing on the destination), never copied, but a STALE
+            # destination-side reservation from a prior copy of this same
+            # user_id must not linger and silently offset the re-derived balance.
+            dst_cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (user_id,))
+            dst_cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (user_id,))
+            src_cur.execute(
+                "SELECT amount, source, idempotency_key, reference_id, video_seconds, created_at "
+                "FROM credit_transactions WHERE user_id = %s", (user_id,),
+            )
+            tx_rows = src_cur.fetchall()
+            for tx in tx_rows:
+                tx = dict(tx)
+                cols = ["user_id", *list(tx.keys())]
+                placeholders = ", ".join(["%s"] * len(cols))
+                dst_cur.execute(
+                    f"INSERT INTO credit_transactions ({', '.join(cols)}) VALUES ({placeholders})",
+                    [user_id, *[tx[c] for c in tx]],
+                )
+            dst_cur.execute(
+                """INSERT INTO credits (user_id, balance)
+                   VALUES (%s, (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s))
+                   ON CONFLICT (user_id) DO UPDATE SET
+                       balance = (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s),
+                       updated_at = now()""",
+                (user_id, user_id, user_id),
+            )
+            log.info(f"Copied {len(tx_rows)} credit_transactions rows, re-derived balance")
 
             dst_conn.commit()
 

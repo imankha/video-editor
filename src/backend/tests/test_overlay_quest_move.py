@@ -174,8 +174,12 @@ def test_claimed_quest_4_renders_all_three_steps():
     assert all(q4["steps"].values()), q4["steps"]
 
 
-def test_claim_already_claimed_quest_3_no_double_grant():
-    """Claiming an already-completed quest_3 is idempotent: 0 new credits."""
+def test_claim_already_claimed_quest_3_no_double_grant(pg_conn):
+    """Claiming an already-completed quest_3 is idempotent: 0 new credits.
+
+    T5840: claim_reward's already-claimed branch reads the balance from
+    credit_ledger (Postgres) now, so this needs `pg_conn`.
+    """
     from app.services.user_db import mark_quest_completed
     mark_quest_completed(TEST_USER_ID, "quest_3")
 

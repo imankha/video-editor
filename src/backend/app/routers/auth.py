@@ -76,13 +76,24 @@ def _purge_user_data(user_id: str) -> dict:
 
     Deletes the local user folder, ALL R2 objects under the user prefix (user.sqlite,
     every profile.sqlite, all per-profile media), the in-process init/version caches,
-    and the user's sessions. After this, a login/reregister for the same identity
-    restores nothing -> session_init sees an absent selected profile -> is_new_user is
-    True -> credits are seeded and the quest slate is clean.
+    the user's sessions, and (T5840) the Postgres credit ledger. After this, a
+    login/reregister for the same identity restores nothing -> session_init sees an
+    absent selected profile -> is_new_user is True -> credits are seeded and the
+    quest slate is clean.
 
     This is the invariant behind bugs 33/34/35: an INCOMPLETE deletion (local-only)
     left the R2 copy of user.sqlite to be restored on the next login, resurrecting a
-    zombie account. Raises on R2 error so a partial delete is never reported as complete.
+    zombie account. Raises on R2 (or Postgres) error so a partial delete is never
+    reported as complete.
+
+    BLOCKING-4 (T5840 review round 2): credits used to be purged only by the two
+    CALLERS of this function (`_reset_test_account`, `privacy.delete_account`), not
+    by this shared helper. `DELETE /api/auth/user` (the third caller, test cleanup)
+    called ONLY this function -- so a same-user_id reregister after that endpoint
+    kept the pre-delete Postgres balance AND made the signup-bonus grant a no-op
+    (key `signup:{user_id}` already existed), silently seeding zero credits. Moved
+    here so every caller gets it "for free" -- the two callers below no longer
+    duplicate these deletes themselves.
     """
     summary = {"local_deleted": False, "r2_objects_deleted": 0}
 
@@ -95,6 +106,16 @@ def _purge_user_data(user_id: str) -> dict:
     if R2_ENABLED:
         from app.storage import delete_user_r2_data
         summary["r2_objects_deleted"] = delete_user_r2_data(user_id)
+
+    # T5840: credits live in Postgres now -- purge the ledger so a reregister
+    # under the same user_id starts at a true zero (never silently keeps the
+    # old balance, and never silently no-ops the signup-bonus re-grant).
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM credits WHERE user_id = %s", (user_id,))
 
     # Invalidate in-process caches so a same-process relogin cannot resurrect old data
     # from a stale "already initialized" flag / cached version.
@@ -114,7 +135,7 @@ def _reset_test_account(user_id: str, email: str) -> None:
     """Wipe all data for a test account so next login is a fresh new-user experience."""
     logger.info(f"[Auth] Resetting test account: {email} (user_id={user_id})")
 
-    _purge_user_data(user_id)
+    _purge_user_data(user_id)  # T5840: also purges credits/credit_transactions/credit_reservations
 
     from app.services.pg import get_pg
     with get_pg() as conn:

@@ -519,20 +519,20 @@ class TestRequestThreadStillSkipsHead:
         assert calls == [True], "profile create must pass skip_version_check=True explicitly"
         assert result["name"] == "Test"
 
-    def test_payments_webhook_passes_skip_version_check_true(self, monkeypatch):
-        """The Stripe webhook handler itself (not just a bare call to the sync
-        function) must pass skip_version_check=True -- it also runs
-        synchronously on the request thread, same T2720 constraint as profile
-        create."""
+    def test_payments_webhook_no_longer_syncs_user_sqlite(self, monkeypatch):
+        """T5840: credits moved to Postgres -- the webhook's grant now commits
+        durably inside credit_ledger.grant() itself, so there is no more
+        user.sqlite write for it to sync. `sync_user_db_to_r2_explicit` isn't
+        even imported by payments.py anymore; this pins that it's gone rather
+        than silently reintroduced."""
         import asyncio as _asyncio
 
         from app.routers import payments as payments_mod
 
-        calls = []
-
-        def _fake_sync(user_id, skip_version_check=False, **kw):
-            calls.append(skip_version_check)
-            return True
+        assert not hasattr(payments_mod, "sync_user_db_to_r2_explicit"), (
+            "payments.py must not import the R2 sync helper -- credits commit "
+            "to Postgres directly now"
+        )
 
         event = {
             "type": "checkout.session.completed",
@@ -542,11 +542,13 @@ class TestRequestThreadStillSkipsHead:
             }},
         }
 
-        monkeypatch.setattr(payments_mod, "sync_user_db_to_r2_explicit", _fake_sync)
         monkeypatch.setattr(payments_mod, "STRIPE_WEBHOOK_SECRET", "whsec_test")
         monkeypatch.setattr(payments_mod.stripe.Webhook, "construct_event", lambda *a, **k: event)
         monkeypatch.setattr(payments_mod, "has_processed_payment", lambda *a, **k: False)
-        monkeypatch.setattr(payments_mod, "grant_credits", lambda *a, **k: 440)
+        # MAJOR-1 (Slice B fix3): payments now calls credit_ledger.grant() directly
+        # (returning {applied, balance}) and gates the analytics on `applied`, so
+        # grant_credits is no longer imported here -- stub `grant` instead.
+        monkeypatch.setattr(payments_mod, "grant", lambda *a, **k: {"applied": True, "balance": 440})
         monkeypatch.setattr(payments_mod, "record_milestone", lambda *a, **k: None)
         monkeypatch.setattr(payments_mod, "increment_total_spent", lambda *a, **k: None)
 
@@ -559,7 +561,6 @@ class TestRequestThreadStillSkipsHead:
         result = _asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert result["status"] == "credits_granted"
-        assert calls == [True], "payments webhook must pass skip_version_check=True explicitly"
 
 
 # ---------------------------------------------------------------------------
