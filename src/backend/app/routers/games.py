@@ -1746,6 +1746,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
     from app.services.auth_db import get_user_by_email, get_user_by_id
     from app.services.email import _is_existing_user, _resolve_sender_name, send_game_share_email
     from app.services.materialization import (
+        ProfileDBRefreshFailed,
         materialize_game_share,
         serialize_clip_data,
     )
@@ -1871,18 +1872,40 @@ async def share_game(game_id: int, body: ShareGameRequest):
                     # real R2 HEAD (require_fresh) and possibly a full
                     # profile.sqlite download -- offload so a batch of
                     # teammate emails never blocks this worker's event loop.
-                    await asyncio.to_thread(
-                        materialize_game_share,
-                        sharer_user_id=user_id,
-                        sharer_profile_id=profile_id,
-                        recipient_user_id=recipient_user["user_id"],
-                        recipient_profile_id=profiles[0]["id"],
-                        game_id=game_id,
-                        tag_name=None,
-                        share_id=share_record["id"],
-                        sharer_email=sharer_email,
-                    )
-                    logger.info(f"[share-game] Materialized for {email}")
+                    try:
+                        await asyncio.to_thread(
+                            materialize_game_share,
+                            sharer_user_id=user_id,
+                            sharer_profile_id=profile_id,
+                            recipient_user_id=recipient_user["user_id"],
+                            recipient_profile_id=profiles[0]["id"],
+                            game_id=game_id,
+                            tag_name=None,
+                            share_id=share_record["id"],
+                            sharer_email=sharer_email,
+                        )
+                        logger.info(f"[share-game] Materialized for {email}")
+                    except ProfileDBRefreshFailed:
+                        # T4315 round 4 (MINOR): a refused materialization
+                        # (recipient WAL busy/contended checkpoint, or an R2
+                        # error) must not silently drop the share -- fall
+                        # back to a pending-share row so login auto-
+                        # materialize (T3230) or a manual resolve-pending-
+                        # shares retries it, same as the non-user/multi-
+                        # profile branches below.
+                        create_pending_share(
+                            share_id=share_record["id"],
+                            sharer_user_id=user_id,
+                            sharer_profile_id=profile_id,
+                            recipient_email=email,
+                            game_id=game_id,
+                            tag_name=None,
+                            clip_data_bytes=serialize_clip_data([]),
+                        )
+                        logger.warning(
+                            f"[share-game] Materialization refused for {email} "
+                            f"(target DB unconfirmed) -- created pending share for retry"
+                        )
                 else:
                     create_pending_share(
                         share_id=share_record["id"],
@@ -1912,6 +1935,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     from app.services.auth_db import get_user_by_email, get_user_by_id
     from app.services.email import _is_existing_user, _resolve_sender_name, send_playback_share_email
     from app.services.materialization import (
+        ProfileDBRefreshFailed,
         materialize_game_share,
         serialize_clip_data,
     )
@@ -2078,19 +2102,37 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                 profiles = await asyncio.to_thread(get_profiles, recipient_user["user_id"])
                 if len(profiles) == 1:
                     # T4315 round 2 (MAJOR-2): see share_game above.
-                    await asyncio.to_thread(
-                        materialize_game_share,
-                        sharer_user_id=user_id,
-                        sharer_profile_id=profile_id,
-                        recipient_user_id=recipient_user["user_id"],
-                        recipient_profile_id=profiles[0]["id"],
-                        game_id=game_id,
-                        tag_name="",
-                        share_id=share_record["id"],
-                        clip_data=clips,
-                        sharer_email=sharer_email,
-                    )
-                    logger.info(f"[share-playback] Materialized for {email}")
+                    try:
+                        await asyncio.to_thread(
+                            materialize_game_share,
+                            sharer_user_id=user_id,
+                            sharer_profile_id=profile_id,
+                            recipient_user_id=recipient_user["user_id"],
+                            recipient_profile_id=profiles[0]["id"],
+                            game_id=game_id,
+                            tag_name="",
+                            share_id=share_record["id"],
+                            clip_data=clips,
+                            sharer_email=sharer_email,
+                        )
+                        logger.info(f"[share-playback] Materialized for {email}")
+                    except ProfileDBRefreshFailed:
+                        # T4315 round 4 (MINOR): see share_game above -- a
+                        # refused materialization must not silently drop
+                        # the share.
+                        create_pending_share(
+                            share_id=share_record["id"],
+                            sharer_user_id=user_id,
+                            sharer_profile_id=profile_id,
+                            recipient_email=email,
+                            game_id=game_id,
+                            tag_name="",
+                            clip_data_bytes=clip_data_bytes,
+                        )
+                        logger.warning(
+                            f"[share-playback] Materialization refused for {email} "
+                            f"(target DB unconfirmed) -- created pending share for retry"
+                        )
                 else:
                     create_pending_share(
                         share_id=share_record["id"],

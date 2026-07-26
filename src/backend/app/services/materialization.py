@@ -595,11 +595,32 @@ def materialize_game_share(
         # even though Postgres (below) reports it materialized. Checkpoint
         # BEFORE upload, not after -- recipient_conn stays open (closed once,
         # normally, in the `finally` below) so this is just a flush.
-        checkpoint_result = recipient_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-        logger.debug(
-            f"[Materialize] WAL checkpoint for recipient {recipient_user_id}/"
-            f"{recipient_profile_id} before upload: {checkpoint_result}"
-        )
+        #
+        # BLOCKING-1 (T4315 round 4): PRAGMA wal_checkpoint does NOT raise on
+        # contention -- it returns (busy, log, checkpointed) with busy=1 and
+        # leaves the just-committed frames sitting in profile.sqlite-wal.
+        # Round 3 logged that tuple and discarded it, so a contended
+        # checkpoint (session_init's own later steps -- recover_orphaned_
+        # reservations, backfill_*, archive_completed_projects -- routinely
+        # hold this exact file open concurrently, per the NEW-B writeup)
+        # silently fell through to uploading the STALE main file anyway,
+        # stamped at the new version. A short busy_timeout here (not the
+        # connection's 30s default from _open_profile_db) turns "wait 30s
+        # then give up" into "fail fast," and checking `busy` turns a silent
+        # stale upload into a loud, retryable refusal via the SAME
+        # ProfileDBRefreshFailed path already used for a failed sync below.
+        recipient_conn.execute("PRAGMA busy_timeout=2000")
+        busy, _log, _ckpt = recipient_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if busy:
+            logger.error(
+                f"[Materialize] WAL checkpoint busy for recipient {recipient_user_id}/"
+                f"{recipient_profile_id} before upload (share_id={share_id}) -- "
+                f"refusing to upload a possibly-stale main file"
+            )
+            raise ProfileDBRefreshFailed(
+                f"could not checkpoint recipient profile {recipient_profile_id} before upload "
+                f"(WAL in use) -- share_id={share_id} stays retryable"
+            )
 
         # BLOCKING-1 (T4315 round 2): recipient_conn is a raw sqlite3.Connection
         # from _open_profile_db, NOT a TrackedConnection -- the middleware's

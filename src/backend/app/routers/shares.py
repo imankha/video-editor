@@ -438,7 +438,7 @@ async def get_shared_teammate(share_token: str, request: Request):
 
 
 @shared_router.get("/collection/{share_token}")
-async def get_shared_collection(share_token: str, request: Request):
+async def get_shared_collection(share_token: str, request: Request, background_tasks: BackgroundTasks):
     """Public resolver for a collection share (T3620). Revoked -> 410; private ->
     recipient-email gate (403); otherwise evaluate the stored definition LIVE
     against the sharer's profile DB and return presigned members. Empty / DB
@@ -454,17 +454,23 @@ async def get_shared_collection(share_token: str, request: Request):
         if not email or email.lower() != share["recipient_email"].lower():
             raise HTTPException(403, "Access denied")
 
-    # T4315 round 3 (MAJOR NEW-D): record_milestone(sharer_user_id, ...) is a
+    # T4315 round 4 (MAJOR-1): record_milestone(sharer_user_id, ...) is a
     # foreign-user get_user_db_connection call (the viewer is rarely the
     # sharer) -- round 2's structural guard (MAJOR-4) makes it a possible R2
-    # HEAD/download. This is a PUBLIC, unauthenticated-by-default route (the
-    # viral share-view page), so offload rather than let a slow HEAD block
-    # the response.
-    await asyncio.to_thread(record_milestone, share["sharer_user_id"], "share_viewed", {
-        "share_token": share_token,
-        "sharer_user_id": share["sharer_user_id"],
-        "share_type": "collection",
-    })
+    # HEAD/download. round 3's asyncio.to_thread kept the event loop free for
+    # OTHER requests but this handler still AWAITED it, so the response
+    # itself still waited on the HEAD. Match the sibling route (:488, T4840):
+    # background_tasks.add_task truly gets it off the response path.
+    background_tasks.add_task(
+        record_milestone,
+        share["sharer_user_id"],
+        "share_viewed",
+        {
+            "share_token": share_token,
+            "sharer_user_id": share["sharer_user_id"],
+            "share_type": "collection",
+        },
+    )
 
     from .collections import resolve_collection_share
     return resolve_collection_share(share)
