@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 from ..database import (
     get_database_path,
     get_user_data_path,
+    has_sync_conflict,
     has_sync_pending,
     is_database_initialized,
     sync_db_to_cloud,
 )
 from ..middleware.db_sync import set_sync_failed
 from ..models import HelloResponse
+from ..profile_context import get_current_profile_id
 from ..storage import R2_ENABLED
 from ..user_context import get_current_user_id
 from ..version import APP_VERSION
@@ -189,6 +191,17 @@ async def retry_sync():
 
     user_id = get_current_user_id()
     logger.info(f"[SYNC] Manual retry requested by user {user_id}")
+
+    # T5870: a CAS conflict is NOT blind-retryable — re-uploading a stale local
+    # copy just re-refuses forever (the baseline is frozen by T4310), which is why
+    # a refresh appeared to be "the only cure" (and, since session_init is
+    # first-access-only, a refresh may not even heal it). Retry must instead pull
+    # the newer R2 copy (restore-if-newer, the T4315 guard) so the user's local
+    # copy is current again; the superseded local edit is reported honestly rather
+    # than silently retried. Never loops.
+    if has_sync_conflict(user_id):
+        return await _retry_resolve_conflict(user_id)
+
     status = sync_db_to_cloud()
 
     # T4310 reviewer round 2 (BLOCKING-2): sync_db_to_cloud returns a STRING
@@ -199,8 +212,47 @@ async def retry_sync():
     if status == "ok":
         set_sync_failed(user_id, False)
         return {"success": True}
+    elif status == "conflict":
+        # The resync surfaced a fresh conflict — resolve it the same way.
+        return await _retry_resolve_conflict(user_id)
     else:
         return {"success": False, "message": f"Sync to R2 {status}"}
+
+
+async def _retry_resolve_conflict(user_id: str) -> dict:
+    """T5870: restore-if-newer to heal a CAS conflict, then report honestly.
+
+    Pulls R2's newer copy into the local user.sqlite AND the current profile.sqlite
+    (whichever moved) via the shared confirm_current_before_write guard, off the
+    event loop. On success the local copy is current again and every sync marker is
+    cleared. On a refresh failure we DO NOT loop or force-push — we tell the user a
+    newer version exists and to reload.
+    """
+    import asyncio
+
+    from ..services.db_refresh import RefreshFailed, confirm_current_before_write
+
+    try:
+        profile_id = get_current_profile_id()
+    except Exception:
+        profile_id = None
+
+    try:
+        await asyncio.to_thread(confirm_current_before_write, user_id, None)
+        if profile_id:
+            await asyncio.to_thread(confirm_current_before_write, user_id, profile_id)
+    except RefreshFailed as e:
+        logger.warning(f"[SYNC] Conflict restore failed for user {user_id}: {e}")
+        return {
+            "success": False,
+            "conflict": True,
+            "message": "A newer version of your work exists. Please reload the page to continue.",
+        }
+
+    # Local is now current with R2; the superseded local edit did not win the race.
+    set_sync_failed(user_id, False)
+    logger.info(f"[SYNC] Conflict resolved via restore-if-newer for user {user_id}")
+    return {"success": True, "restored": True}
 
 
 @router.get("/api/export/progress/{export_id}")

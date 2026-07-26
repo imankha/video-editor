@@ -108,6 +108,42 @@ def has_sync_conflict(user_id: str) -> bool:
     return _sync_conflict_path(user_id).exists()
 
 
+# ---------------------------------------------------------------------------
+# T5870: genuine-failure marker. Distinguishes a sync that DEFINITIVELY failed
+# (a transient R2 error / checkpoint-busy that the bounded re-drain could not
+# heal) from a merely PENDING/deferred/in-flight sync. Before T5870 the header
+# read `is_sync_failed := has_sync_pending`, so a 0.5s upload-lock DEFER — a
+# queued-retry state, not a failure — surfaced to the user as "not saving".
+# `.sync_pending` (set BEFORE every attempt, crash-safe) stays what it was; this
+# marker is set ONLY when an attempt terminates in a real, unrecovered failure,
+# so the header can say "pending" (quiet) vs "failed" (alarm) vs "conflict".
+# Mirrors the .sync_conflict idiom above.
+# ---------------------------------------------------------------------------
+
+def _sync_failed_path(user_id: str) -> Path:
+    """Path to marker file indicating the last sync attempt genuinely failed."""
+    return USER_DATA_BASE / user_id / ".sync_failed"
+
+
+def mark_sync_failed(user_id: str) -> None:
+    """Write marker file indicating a sync attempt definitively failed (after
+    the bounded re-drain gave up). Distinct from .sync_pending (queued)."""
+    path = _sync_failed_path(user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(time.time()))
+
+
+def clear_sync_failed(user_id: str) -> None:
+    """Remove the genuine-failure marker after a subsequent sync succeeds."""
+    path = _sync_failed_path(user_id)
+    path.unlink(missing_ok=True)
+
+
+def has_sync_failed(user_id: str) -> bool:
+    """Check if this user's last sync attempt definitively failed."""
+    return _sync_failed_path(user_id).exists()
+
+
 class SyncResult(str, Enum):
     """3-state result of an R2 upload attempt via the *_explicit sync functions.
 

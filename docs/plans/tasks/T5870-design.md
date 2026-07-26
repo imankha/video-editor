@@ -260,6 +260,36 @@ staging/prod logs yield the true distribution (the harness models it; this measu
 
 ---
 
+## 8. Post-approval decisions (full cut) — reasoning preserved
+
+The design was approved for the **full cut** (pending/failed split + restored Retry + bounded
+attempt-scoped re-drain). Two points the approval asked to record permanently:
+
+1. **Why the re-drain is REQUIRED, not optional (approval Q2/Q5).** Showing a calm "pending" for a
+   write that never reaches R2 would be *silently-not-saving* — the exact failure class this epic
+   exists to prevent. Downgrading the alarm without fixing the underlying non-delivery is strictly
+   worse than today's loud-but-wrong behaviour. **The re-drain is what makes "pending" HONEST:** the
+   write really is still being delivered (bounded retries), not quietly dropped. If every re-drain
+   attempt fails, the state escalates to a genuine `failed` (alarm + working Retry) — never silence.
+
+2. **Why the re-drain is gesture-based, not reactive persistence (the rule a reviewer WILL
+   challenge).** It is a **bounded, attempt-scoped continuation of the ORIGINATING write gesture** —
+   the tail of the one `_background_sync` task that a specific user edit produced (T4900's bounded
+   overlay retry is the precedent). To stay on the legal side of "persistence is gesture-based, never
+   reactive" it:
+   - retries the SAME write's R2 sync the gesture already produced, a fixed `_REDRAIN_MAX_ATTEMPTS`
+     times with backoff; then STOPS and surfaces the failure;
+   - does NOT watch/observe state, is NOT a `useEffect`/store watcher, and is NOT a background poller
+     that generates new writes.
+   This boundary is stated in the code at `db_sync.py: _redrain_failed_sync` (docstring) and at the
+   call site. If you cannot name the gesture a write traces to, the write must not exist — here the
+   gesture is the user edit that opened the request.
+
+Conflict Retry performs **restore-if-newer** (approval Q4): since `session_init` is first-access-only,
+a refresh may not heal a CAS conflict, so Retry is the only cure — it pulls R2's newer copy via
+`confirm_current_before_write` and, if that cannot complete, states so honestly ("reload to continue")
+rather than looping.
+
 ## Appendix — evidence pointers
 - `middleware/db_sync.py:250-252` (`is_sync_failed := has_sync_pending`), `:791-792` (header predicate),
   `:677-699` (write-triggered retry only), `:864` (`lock_timeout` defer), `_background_sync` marker logic.

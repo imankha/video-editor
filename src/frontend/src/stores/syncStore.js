@@ -1,23 +1,28 @@
 /**
- * Sync Status Store (T87)
+ * Sync Status Store (T87, T5870)
  *
- * Tracks whether the backend's database sync to R2 has failed.
- * The backend sets X-Sync-Status: failed header on all responses
- * when the user's local DB is out of sync with R2.
+ * Tracks the backend's R2 sync state, surfaced via the `X-Sync-Status` response
+ * header. A global fetch interceptor (installed at import time) checks every
+ * response, so no per-call-site instrumentation is needed.
  *
- * Uses a global fetch interceptor installed at import time so every API
- * response is automatically checked — no per-call-site instrumentation needed.
+ * T5870: THREE honest states, not the old "any pending == failed" boolean:
+ *   'ok'       — nothing to show.
+ *   'pending'  — a write is queued/deferred and the backend is still delivering
+ *                it (bounded re-drain). QUIET "backup pending", NEVER "not saving".
+ *   'failed'   — a real R2 failure the re-drain could not heal. Alarm + Retry.
+ *   'conflict' — a CAS refusal (T4310). Alarm + Retry-that-restores (the backend
+ *                pulls the newer R2 copy; a blind retry would loop forever).
  */
 
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 
 export const useSyncStore = create((set, get) => ({
-  syncFailed: false,
+  syncState: 'ok', // 'ok' | 'pending' | 'failed' | 'conflict'
   isRetrying: false,
   isOffline: !navigator.onLine,
 
-  setSyncFailed: (failed) => set({ syncFailed: failed }),
+  setSyncState: (state) => set({ syncState: state }),
   setOffline: (offline) => set({ isOffline: offline }),
 
   retrySyncToR2: async () => {
@@ -29,7 +34,9 @@ export const useSyncStore = create((set, get) => ({
       });
       const data = await response.json();
       if (data.success) {
-        set({ syncFailed: false });
+        // Cleared on the backend (a plain success or a conflict resolved via
+        // restore-if-newer). The next response's header confirms 'ok' too.
+        set({ syncState: 'ok' });
       }
       return data.success;
     } catch {
@@ -40,8 +47,9 @@ export const useSyncStore = create((set, get) => ({
   },
 }));
 
-// Listen for browser online/offline events.
-// When coming back online with a pending sync failure, auto-retry.
+// Listen for browser online/offline events. Coming back online with a genuine
+// failure (failed/conflict) auto-retries. 'pending' is left to the backend
+// re-drain — it is not a failure and needs no client action.
 window.addEventListener('offline', () => {
   useSyncStore.getState().setOffline(true);
 });
@@ -49,33 +57,28 @@ window.addEventListener('offline', () => {
 window.addEventListener('online', () => {
   const store = useSyncStore.getState();
   store.setOffline(false);
-  if (store.syncFailed) {
+  if (store.syncState === 'failed' || store.syncState === 'conflict') {
     store.retrySyncToR2();
   }
 });
 
 /**
- * Check the X-Sync-Status header on a fetch Response and update the sync store.
- *
- * "failed" (transient) and "conflict" (T4310 CAS refusal) both leave the user
- * out of sync with R2 and need the same Retry affordance, so both flip the banner.
+ * Map the X-Sync-Status header onto the store's syncState.
  *
  * @param {Response} response - The fetch Response object
  */
 export function checkSyncStatus(response) {
   if (!response || !response.headers) return;
 
-  const syncStatus = response.headers.get('X-Sync-Status');
-  const store = useSyncStore.getState();
+  const header = response.headers.get('X-Sync-Status');
+  const next =
+    header === 'pending' || header === 'failed' || header === 'conflict'
+      ? header
+      : 'ok';
 
-  if (syncStatus === 'failed' || syncStatus === 'conflict') {
-    if (!store.syncFailed) {
-      store.setSyncFailed(true);
-    }
-  } else {
-    if (store.syncFailed) {
-      store.setSyncFailed(false);
-    }
+  const store = useSyncStore.getState();
+  if (store.syncState !== next) {
+    store.setSyncState(next);
   }
 }
 

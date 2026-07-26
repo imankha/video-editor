@@ -43,15 +43,18 @@ from ..database import (
     SyncResult,
     clear_request_context,
     clear_sync_conflict,
+    clear_sync_failed,
     clear_sync_pending,
     get_request_has_user_db_writes,
     get_request_has_writes,
     get_request_written_profile_dbs,
     get_request_written_user_dbs,
     has_sync_conflict,
+    has_sync_failed,
     has_sync_pending,
     init_request_context,
     mark_sync_conflict,
+    mark_sync_failed,
     mark_sync_pending,
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
@@ -248,25 +251,71 @@ def _status_for_result(result) -> str:
 
 
 def is_sync_failed(user_id: str) -> bool:
-    """Check if the given user has a pending sync failure."""
-    return has_sync_pending(user_id)
+    """Check if the given user has a GENUINE (unrecovered) sync failure.
+
+    T5870: this used to be `return has_sync_pending(user_id)`, which conflated a
+    merely-queued/deferred/in-flight sync with a real failure — a 0.5s upload-lock
+    DEFER (a retry-later state) surfaced to the user as "your edits aren't saving".
+    Now a user is "failed" only when an attempt DEFINITIVELY failed (.sync_failed,
+    set after the bounded re-drain gave up) or hit a CAS conflict (.sync_conflict).
+    A bare .sync_pending is NOT a failure — it surfaces as the quiet "pending"
+    header instead (see the header emission in _sync_aware_flow).
+    """
+    return has_sync_failed(user_id) or has_sync_conflict(user_id)
 
 
 def set_sync_failed(user_id: str, failed: bool) -> None:
-    """Set or clear the sync failure marker for a user."""
-    was_failed = has_sync_pending(user_id)
+    """Set or clear the GENUINE sync-failure state for a user.
+
+    T5870: operates on the .sync_failed marker (not .sync_pending). Clearing sets
+    the user fully recovered — .sync_pending, .sync_failed AND .sync_conflict all
+    go — so a manual /api/retry-sync success or an error-path recovery returns the
+    user to a clean state with no stale marker mislabeling a later attempt.
+    """
+    was_failed = is_sync_failed(user_id)
     if failed:
-        mark_sync_pending(user_id)
+        mark_sync_failed(user_id)
         if not was_failed:
             logger.warning(f"[SYNC] User {user_id} entered degraded state - R2 sync failed")
     else:
         clear_sync_pending(user_id)
+        clear_sync_failed(user_id)
         # T4310 reviewer round 2 (BLOCKING-2/MINOR): a real sync success clears
-        # BOTH markers. Without this, a stale .sync_conflict marker sticks around
+        # ALL markers. Without this, a stale .sync_conflict marker sticks around
         # and mislabels every later transient failure as "conflict".
         clear_sync_conflict(user_id)
         if was_failed:
             logger.info(f"[SYNC] User {user_id} recovered - R2 sync succeeded")
+
+
+# T5870: bounded, attempt-scoped re-drain of a deferred/failed background sync.
+# _REDRAIN_MAX_ATTEMPTS retries with exponential backoff (base * 2**n) before the
+# write is declared genuinely failed. Chosen so a transient upload-lock DEFER
+# (the dominant frequency driver — 71% of syncs under a rapid-edit burst in the
+# T5870 harness) is healed in-band without ever alarming the user, while a real
+# R2 outage still surfaces within a few seconds.
+_REDRAIN_MAX_ATTEMPTS = 3
+_REDRAIN_BASE_BACKOFF_S = 0.4
+
+
+def sync_status_header(user_id: str) -> str | None:
+    """T5870: the single source of truth for the X-Sync-Status header value.
+
+    Returns "conflict" | "failed" | "pending" | None. Suppressed (None) while an
+    attempt is in flight (incl. the bounded re-drain) so a write mid-sync never
+    flashes a warning. Ordering is a priority: a CAS conflict outranks a generic
+    failure, which outranks a merely-pending write. Extracted as a pure function
+    so it is directly unit-testable (the old inline predicate was not).
+    """
+    if is_sync_attempt_in_progress(user_id):
+        return None
+    if has_sync_conflict(user_id):
+        return "conflict"
+    if has_sync_failed(user_id):
+        return "failed"
+    if has_sync_pending(user_id):
+        return "pending"
+    return None
 
 
 def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
@@ -690,6 +739,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
                     if ok:
                         clear_sync_pending(user_id)
+                        clear_sync_failed(user_id)  # T5870: genuine-failure marker heals too
                         logger.info(f"[SYNC] Retry succeeded for user {user_id}")
                     else:
                         logger.warning(f"[SYNC] Retry still failing for user {user_id}")
@@ -779,17 +829,22 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         )
                     )
 
-            # T950: Surface prior sync failure on response header.
-            # AND-gate: only show a status when the marker is stale and no
-            # sync attempt is running. For write requests, _begin_sync_attempt
-            # was just called above, suppressing the header until the
-            # background sync completes.
-            # T4310: a CAS conflict is a distinct condition from a transient
-            # failure (freeze + escalate, never blind-retry) — surface it as
-            # "conflict" so ops/logs can tell the two apart. The frontend still
-            # treats "conflict" the same as "failed" for the Retry banner.
-            if is_sync_failed(user_id) and not is_sync_attempt_in_progress(user_id):
-                response.headers["X-Sync-Status"] = "conflict" if has_sync_conflict(user_id) else "failed"
+            # Surface sync state on the response header, but ONLY when no attempt
+            # is running (an in-flight sync, incl. the T5870 bounded re-drain,
+            # keeps the user in _SYNC_IN_PROGRESS and is suppressed here so a
+            # write mid-sync never flashes a warning).
+            # T5870: three honest states, not the old two-way "any pending == failed":
+            #   conflict  — CAS refusal (.sync_conflict): needs restore-if-newer,
+            #               NOT blind retry. Alarm + Retry-that-restores.
+            #   failed    — a real R2 failure the re-drain could not heal
+            #               (.sync_failed): alarm + working Retry.
+            #   pending   — a write is queued/deferred/awaiting-retry (.sync_pending
+            #               only): quiet "backup pending", NEVER "not saving". The
+            #               re-drain is what makes this honest — the write IS still
+            #               being delivered, not silently dropped.
+            header_status = sync_status_header(user_id)
+            if header_status is not None:
+                response.headers["X-Sync-Status"] = header_status
 
             # Default Cache-Control for GET JSON responses that don't set their own.
             if (
@@ -1016,6 +1071,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         f"[SYNC] {method} {path} -> FAILED to sync foreign profile.sqlite "
                         f"user={foreign_uid} profile={foreign_pid}; change is local-only"
                     )
+
+            # T5870: bounded, attempt-scoped RE-DRAIN of a transient failure — the
+            # single most important behavioural change. A deferred/failed sync is
+            # retried in-band (still holding _SYNC_IN_PROGRESS, so it never flashes
+            # a warning mid-heal) before the user is ever told anything failed. This
+            # is what makes the quiet "pending" header HONEST: the write is still
+            # being delivered, not silently dropped. Skipped for the durable path
+            # (it returns 503 and its own gesture UX owns the retry) and the error
+            # path (handled by set_sync_failed below), and never for a CAS conflict
+            # (not blind-retryable — needs restore-if-newer via /api/retry-sync).
+            if sync_status == "failed" and not durable and not is_error_path:
+                if await self._redrain_failed_sync(user_id, profile_id):
+                    sync_status = "ok"
         except Exception as sync_error:
             log_msg = "Sync to R2 raised exception"
             if is_error_path:
@@ -1029,16 +1097,63 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         if sync_status == "ok":
             clear_sync_pending(user_id)
+            clear_sync_failed(user_id)  # T5870: heal the genuine-failure marker too
             logger.info(f"[SYNC] {method} {path} -> R2 sync OK ({sync_duration:.2f}s)")
         elif sync_status == "conflict":
             logger.warning(f"[SYNC] {method} {path} -> version conflict ({sync_duration:.2f}s)")
         else:
+            # T5870: a real failure the re-drain could not heal. Mark it genuinely
+            # failed (alarm + working Retry) — but NOT on the durable path (its 503
+            # UX owns it) or the error path (set_sync_failed below). Leaving only
+            # .sync_pending there keeps those contracts unchanged (quiet "pending").
+            if not durable and not is_error_path:
+                mark_sync_failed(user_id)
             logger.warning(f"[SYNC] {method} {path} -> R2 sync FAILED ({sync_duration:.2f}s)")
 
         if is_error_path:
             set_sync_failed(user_id, sync_status != "ok")
 
         return sync_status
+
+    async def _redrain_failed_sync(self, user_id: str, profile_id: str | None) -> bool:
+        """T5870: bounded continuation of the ORIGINATING write gesture.
+
+        This is deliberately NOT reactive persistence — the rule that a reviewer
+        will (correctly) challenge. It is legal because:
+          * it re-attempts the SAME write's R2 sync (the write that produced this
+            _background_sync task), a fixed _REDRAIN_MAX_ATTEMPTS number of times;
+          * it does NOT watch/observe any state, is NOT a useEffect/store watcher,
+            and is NOT a background poller that generates new writes — it is the
+            tail of one write gesture finishing its own delivery;
+          * on exhaustion it STOPS and lets the write surface as genuinely failed.
+        If you cannot name the gesture a write traces back to, the write must not
+        exist — here the gesture is the user edit that opened this request.
+
+        Returns True iff a retry landed the write. Bails immediately on a CAS
+        conflict (retry_pending_sync marks .sync_conflict) — a conflict is not
+        blind-retryable; it needs restore-if-newer via the manual /api/retry-sync.
+        """
+        for attempt in range(_REDRAIN_MAX_ATTEMPTS):
+            await asyncio.sleep(_REDRAIN_BASE_BACKOFF_S * (2 ** attempt))
+            if has_sync_conflict(user_id):
+                return False
+            try:
+                ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
+            except Exception as e:
+                logger.warning(
+                    f"[SYNC_REDRAIN] user={user_id} attempt={attempt + 1} raised: {e}"
+                )
+                continue
+            if ok:
+                logger.info(
+                    f"[SYNC_REDRAIN] user={user_id} healed on attempt {attempt + 1}"
+                )
+                return True
+        logger.warning(
+            f"[SYNC_REDRAIN] user={user_id} exhausted {_REDRAIN_MAX_ATTEMPTS} "
+            f"attempts — marking genuinely failed"
+        )
+        return False
 
 
 # Keep old name for backward compatibility with imports
