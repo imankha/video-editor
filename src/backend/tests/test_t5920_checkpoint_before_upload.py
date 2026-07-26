@@ -33,6 +33,7 @@ import os
 import sqlite3
 import tempfile
 import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -374,3 +375,64 @@ class TestBackgroundSyncCheckpointCoverage:
             assert fake._objects[key]["metadata"]["db-version"] == "0"
             assert get_local_db_version(USER, PROFILE) == 0
             assert has_sync_pending(USER), "the retry marker must survive so the write retries"
+
+
+# ---------------------------------------------------------------------------
+# 4. Design decision (b): an UNOPENABLE local DB refuses loudly, not by raising
+# ---------------------------------------------------------------------------
+
+class TestUnopenableDbRefusesLoudly:
+    """T5920 round 2. If the local DB cannot be OPENED as SQLite (a corrupt/non-DB
+    blob, or a path that exists() but sqlite3.connect() rejects), the guard maps it
+    onto the SAME 3-state contract a busy checkpoint uses -- refuse (retryable
+    FAILED), no upload -- instead of letting sqlite3.OperationalError escape the
+    sync primitive and become a 500 in the request-thread callers. Per CLAUDE.md
+    "No silent fallbacks for internal data" the refusal is LOUD, and it is
+    distinguishable in the logs from a contended (busy) checkpoint."""
+
+    def test_helper_returns_false_and_does_not_raise(self):
+        """_checkpoint_wal_or_refuse never propagates the connect error."""
+        from app.storage import _checkpoint_wal_or_refuse
+
+        # A path whose parent directory does not exist -> sqlite3.connect raises
+        # "unable to open database file". The helper must swallow it into False.
+        bad = Path("/nonexistent-dir-t5920/profile.sqlite")
+        assert _checkpoint_wal_or_refuse(bad, USER) is False
+
+    def test_open_failure_logs_distinctly_from_busy(self, tmp_path, caplog):
+        """The absent/unopenable case logs [SYNC_CHECKPOINT_OPEN_FAILED] with the
+        path + user id, and NOT the [SYNC_CHECKPOINT_BUSY] marker -- an absent DB
+        and a contended checkpoint are different problems."""
+        import logging
+
+        from app.storage import _checkpoint_wal_or_refuse
+
+        bad = tmp_path / "profile.sqlite"  # exists() as a DIRECTORY -> connect fails
+        bad.mkdir()
+
+        with caplog.at_level(logging.ERROR, logger="app.storage"):
+            assert _checkpoint_wal_or_refuse(bad, USER) is False
+
+        text = caplog.text
+        assert "SYNC_CHECKPOINT_OPEN_FAILED" in text
+        assert "SYNC_CHECKPOINT_BUSY" not in text
+        assert USER in text and str(bad) in text
+
+    def test_primitive_refuses_instead_of_raising(self, tmp_path):
+        """End to end: an unopenable local DB returns (False, None) from the upload
+        primitive (SyncResult.FAILED), NOT an escaping exception. Guards the NEW
+        failure mode that would otherwise 500 a request-thread caller."""
+        from app.storage import sync_database_to_r2_with_version
+
+        bad = tmp_path / "profile.sqlite"
+        bad.mkdir()  # exists() True, but sqlite3.connect rejects it
+
+        with patch("app.storage.R2_ENABLED", True), \
+             patch("app.storage.get_r2_sync_client", return_value=object()), \
+             patch("app.storage.r2_key", return_value="u/profile.sqlite"):
+            success, version = sync_database_to_r2_with_version(
+                USER, bad, current_version=1, skip_version_check=True,
+            )
+
+        assert success is False
+        assert version is None

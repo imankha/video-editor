@@ -377,8 +377,8 @@ async def download_from_r2_with_progress(
     local_path: Path,
     export_id: str,
     export_type: str,
-    project_id: int = None,
-    project_name: str = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
     progress_start: int = 5,
     progress_end: int = 15,
     global_path: bool = False,
@@ -1029,12 +1029,13 @@ def sync_database_from_r2_if_newer(
     return False, local_version, True  # Download failed
 
 
-def _checkpoint_wal_or_refuse(local_db_path: Path) -> bool:
+def _checkpoint_wal_or_refuse(local_db_path: Path, user_id: str) -> bool:
     """Flush the -wal sidecar into the main SQLite file before it is uploaded to
     R2. Returns True if the main file is now current (safe to upload), False if
     the WAL could NOT be checkpointed because another connection holds the DB
-    open with an active read snapshot / transaction (busy) — in which case the
-    caller MUST refuse the upload (T5920).
+    open with an active read snapshot / transaction (busy), OR because the local
+    DB could not be opened as SQLite at all — in either case the caller MUST
+    refuse the upload (T5920).
 
     Why this is the whole fix, not a formality: every R2 sync uploads the MAIN
     FILE ONLY (`client.upload_file` on `local_db_path`). In WAL mode a committed
@@ -1055,15 +1056,36 @@ def _checkpoint_wal_or_refuse(local_db_path: Path) -> bool:
     30000ms default of `_open_profile_db`/`get_db_connection` and stall a request
     or worker for 30s per attempt (T4315 measured ~150s for a 5-recipient share).
     Generalized from the `materialize_game_share` reference (T4315).
+
+    T5920 round 2 — design decision (b): if `local_db_path` cannot be OPENED as a
+    SQLite database (absent-but-exists()-races, a corrupt/non-DB blob, a bad
+    path), we do NOT let `sqlite3.OperationalError` propagate out of the sync
+    primitive. Doing so would be a NEW failure mode: request-thread callers
+    (middleware `_background_sync`, the export/reels paths) that previously got a
+    clean `(bool, version)` tuple would instead take an exception and turn a
+    handled failure into a 500. Instead we map it onto the SAME 3-state contract a
+    busy checkpoint uses — refuse (retryable `SyncResult.FAILED`), no new sync
+    state. Per CLAUDE.md "No silent fallbacks for internal data", an unopenable
+    local DB during a sync is an INTERNAL bug, so it is logged LOUDLY (ERROR with
+    path + user id) under a DISTINCT marker from the busy case: an absent/corrupt
+    DB and a contended checkpoint are different problems and must read differently
+    in the logs.
     """
-    conn = sqlite3.connect(str(local_db_path))
+    try:
+        conn = sqlite3.connect(str(local_db_path))
+    except sqlite3.Error as e:
+        logger.error(
+            f"[SYNC_CHECKPOINT_OPEN_FAILED] user={user_id} {local_db_path} — cannot open "
+            f"local DB as SQLite, REFUSING upload (retryable): {e} machine={FLY_MACHINE_ID}"
+        )
+        return False
     try:
         # Fail fast: refuse after ≤2s of contention, not the inherited 30s.
         conn.execute("PRAGMA busy_timeout=2000")
         busy, _log, _ckpt = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
         if busy:
             logger.critical(
-                f"[SYNC_CHECKPOINT_BUSY] {local_db_path} — WAL in use, REFUSING upload "
+                f"[SYNC_CHECKPOINT_BUSY] user={user_id} {local_db_path} — WAL in use, REFUSING upload "
                 f"(would ship under-checkpointed bytes at a bumped version) "
                 f"machine={FLY_MACHINE_ID}"
             )
@@ -1072,7 +1094,7 @@ def _checkpoint_wal_or_refuse(local_db_path: Path) -> bool:
     except Exception as e:
         # Unknown checkpoint state -> refuse (retryable) rather than risk a stale
         # upload. Never a bare fallback that proceeds to upload anyway.
-        logger.error(f"[SYNC_CHECKPOINT] error checkpointing {local_db_path}: {e}")
+        logger.error(f"[SYNC_CHECKPOINT] user={user_id} error checkpointing {local_db_path}: {e}")
         return False
     finally:
         conn.close()
@@ -1184,7 +1206,7 @@ def sync_database_to_r2_with_version(
     # before the upload) and the .sync_pending marker survives, so the next write
     # retries via the existing failed-sync/Retry UX. Placed after new_version so
     # it also covers the skip_version_check=True request-thread callers.
-    if not _checkpoint_wal_or_refuse(local_db_path):
+    if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return False, None
 
     # T5340: explicit profile_id → key off the arg; else fall back to the ContextVar
@@ -1445,7 +1467,7 @@ def sync_user_db_to_r2_with_version(
     # T5920: checkpoint the WAL into the main file BEFORE uploading — see
     # sync_database_to_r2_with_version above. A busy checkpoint refuses loudly
     # (retryable FAILED, no upload, no version bump).
-    if not _checkpoint_wal_or_refuse(local_db_path):
+    if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return False, None
 
     key = _user_db_r2_key(user_id)

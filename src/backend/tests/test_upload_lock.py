@@ -8,12 +8,27 @@ Covers:
 - tryLock optimization in retry_pending_sync skips when upload in progress
 """
 
+import sqlite3
 import threading
 import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
+
+def _seed_wal_db(path):
+    """Create a real WAL-mode SQLite DB at `path`.
+
+    T5920: the upload primitives now checkpoint the WAL into the main file before
+    uploading, so they open `local_db_path` as a real SQLite DB. A MagicMock/fake
+    path (the old fixture) is refused by _checkpoint_wal_or_refuse as
+    "cannot open local DB as SQLite" and the upload never runs — which would defeat
+    the lock-held/lock-released assertions below. Seed a genuine DB so the
+    checkpoint succeeds and the real upload code path (where the lock is held) runs.
+    """
+    conn = sqlite3.connect(str(path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE t (x)")
+    conn.commit()
+    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -138,9 +153,9 @@ class TestSyncDatabaseAcquiresLock:
     @patch("app.storage.PROFILING_ENABLED", False)
     @patch("app.storage.get_r2_sync_client")
     @patch("app.storage.r2_key", return_value="dev/users/u1/profiles/p1/profile.sqlite")
-    def test_lock_held_during_upload(self, mock_r2_key, mock_get_client):
+    def test_lock_held_during_upload(self, mock_r2_key, mock_get_client, tmp_path):
         """The upload lock is held while retry_r2_call runs."""
-        from app.storage import sync_database_to_r2_with_version, get_upload_lock
+        from app.storage import get_upload_lock, sync_database_to_r2_with_version
 
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
@@ -156,11 +171,10 @@ class TestSyncDatabaseAcquiresLock:
                 lock.release()
 
         with patch("app.utils.retry.retry_r2_call", fake_retry_r2_call):
-            fake_path = MagicMock(spec=Path)
-            fake_path.exists.return_value = True
-            fake_path.__str__ = lambda self: "/fake/profile.sqlite"
+            db_path = tmp_path / "profile.sqlite"
+            _seed_wal_db(db_path)
 
-            sync_database_to_r2_with_version("u1", fake_path, 5, skip_version_check=True)
+            sync_database_to_r2_with_version("u1", db_path, 5, skip_version_check=True)
 
         assert lock_was_held.is_set(), "Upload lock was not held during PutObject"
 
@@ -168,9 +182,9 @@ class TestSyncDatabaseAcquiresLock:
     @patch("app.storage.PROFILING_ENABLED", False)
     @patch("app.storage.get_r2_sync_client")
     @patch("app.storage.r2_key", return_value="dev/users/u1/profiles/p1/profile.sqlite")
-    def test_lock_released_after_upload_failure(self, mock_r2_key, mock_get_client):
+    def test_lock_released_after_upload_failure(self, mock_r2_key, mock_get_client, tmp_path):
         """The upload lock is released even if the upload raises an exception."""
-        from app.storage import sync_database_to_r2_with_version, get_upload_lock
+        from app.storage import get_upload_lock, sync_database_to_r2_with_version
 
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
@@ -181,11 +195,10 @@ class TestSyncDatabaseAcquiresLock:
             raise Exception("network error")
 
         with patch("app.utils.retry.retry_r2_call", fake_retry_r2_call):
-            fake_path = MagicMock(spec=Path)
-            fake_path.exists.return_value = True
-            fake_path.__str__ = lambda self: "/fake/profile.sqlite"
+            db_path = tmp_path / "profile.sqlite"
+            _seed_wal_db(db_path)
 
-            success, version = sync_database_to_r2_with_version("u1", fake_path, 5, skip_version_check=True)
+            success, _version = sync_database_to_r2_with_version("u1", db_path, 5, skip_version_check=True)
 
         assert success is False
         # Lock must be released — acquiring it should succeed
@@ -208,9 +221,9 @@ class TestSyncUserDbAcquiresLock:
     @patch("app.storage.PROFILING_ENABLED", False)
     @patch("app.storage.get_r2_sync_client")
     @patch("app.storage._user_db_r2_key", return_value="dev/users/u1/user.sqlite")
-    def test_lock_held_during_upload(self, mock_r2_key, mock_get_client):
+    def test_lock_held_during_upload(self, mock_r2_key, mock_get_client, tmp_path):
         """The 'user' upload lock is held while uploading user.sqlite."""
-        from app.storage import sync_user_db_to_r2_with_version, get_upload_lock
+        from app.storage import get_upload_lock, sync_user_db_to_r2_with_version
 
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
@@ -225,11 +238,10 @@ class TestSyncUserDbAcquiresLock:
                 lock.release()
 
         with patch("app.utils.retry.retry_r2_call", fake_retry_r2_call):
-            fake_path = MagicMock(spec=Path)
-            fake_path.exists.return_value = True
-            fake_path.__str__ = lambda self: "/fake/user.sqlite"
+            db_path = tmp_path / "user.sqlite"
+            _seed_wal_db(db_path)
 
-            sync_user_db_to_r2_with_version("u1", fake_path, 2, skip_version_check=True)
+            sync_user_db_to_r2_with_version("u1", db_path, 2, skip_version_check=True)
 
         assert lock_was_held.is_set(), "Upload lock was not held during user.sqlite PutObject"
 
@@ -249,6 +261,7 @@ class TestRetryPendingSyncTryLock:
     def test_skips_retry_when_upload_lock_held(self, mock_has_pending):
         """When the upload lock is already held, retry_pending_sync is skipped."""
         import asyncio
+
         from app.storage import get_upload_lock
 
         # Pre-acquire the upload lock (simulating export worker uploading)
@@ -281,7 +294,6 @@ class TestRetryPendingSyncTryLock:
                 async def fake_call_next(req):
                     return MagicMock(headers={})
 
-                middleware = MagicMock()
                 from app.middleware.db_sync import RequestContextMiddleware
                 inst = RequestContextMiddleware.__new__(RequestContextMiddleware)
                 meta = {"sync_duration": 0.0, "handler_duration": 0.0,
