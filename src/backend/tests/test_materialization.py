@@ -732,6 +732,92 @@ class TestMaterializeGameShare:
         r_conn.close()
         r_conn2.close()
 
+    # -----------------------------------------------------------------
+    # T4315 round 2 (BLOCKING-1): recipient_conn is a raw sqlite3.Connection
+    # from _open_profile_db, invisible to the middleware's TrackedConnection-
+    # based foreign-DB sync -- materialize_game_share must explicitly sync
+    # the recipient's profile.sqlite itself, and refuse to mark the share
+    # materialized in Postgres if that sync fails (a share that never left
+    # local disk must stay retryable, never a permanent "success").
+    # -----------------------------------------------------------------
+
+    @patch("app.services.materialization.sync_db_to_r2_explicit")
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    @patch("app.services.materialization.USER_DATA_BASE")
+    def test_recipient_db_is_explicitly_synced_to_r2(
+        self, mock_base, mock_get_ref, mock_insert_ref, mock_mark, mock_sync, tmp_path
+    ):
+        """BLOCKING-1 fix: the recipient's write is invisible to the request
+        middleware (raw connection, not TrackedConnection) -- without an
+        explicit sync it would commit locally and never reach R2, silently
+        lost on the next machine replacement while Postgres still reports
+        the share as materialized."""
+        type(mock_base).__truediv__ = lambda self, x: tmp_path / x
+        mock_sync.return_value = True
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_sync")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        mock_get_ref.return_value = None
+
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=game_id,
+                tag_name="Jake",
+                share_id=1,
+            )
+
+        mock_sync.assert_called_once_with("recipient-user", "recipient-profile")
+        mock_mark.assert_called_once()
+
+        s_conn.close()
+        r_conn.close()
+
+    @patch("app.services.materialization.sync_db_to_r2_explicit")
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    @patch("app.services.materialization.USER_DATA_BASE")
+    def test_sync_failure_refuses_to_mark_materialized(
+        self, mock_base, mock_get_ref, mock_insert_ref, mock_mark, mock_sync, tmp_path
+    ):
+        """A failed recipient sync must raise -- never a lying Postgres
+        success for a share that only landed on local disk."""
+        from app.services.materialization import ProfileDBRefreshFailed
+
+        type(mock_base).__truediv__ = lambda self, x: tmp_path / x
+        mock_sync.return_value = False  # upload failed
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_syncfail")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        mock_get_ref.return_value = None
+
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+             pytest.raises(ProfileDBRefreshFailed):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=game_id,
+                tag_name="Jake",
+                share_id=1,
+            )
+
+        mock_sync.assert_called_once_with("recipient-user", "recipient-profile")
+        # Must never mark materialized when the sync never left local disk.
+        mock_mark.assert_not_called()
+
+        s_conn.close()
+        r_conn.close()
+
     @patch("app.services.materialization.mark_game_share_materialized")
     @patch("app.services.materialization.insert_game_storage_ref")
     @patch("app.services.materialization.get_game_storage_ref")

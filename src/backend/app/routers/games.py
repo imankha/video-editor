@@ -1862,7 +1862,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
 
                 profiles = get_profiles(recipient_user["user_id"])
                 if len(profiles) == 1:
-                    materialize_game_share(
+                    # T4315 round 2 (MAJOR-2): materialize_game_share does a
+                    # real R2 HEAD (require_fresh) and possibly a full
+                    # profile.sqlite download -- offload so a batch of
+                    # teammate emails never blocks this worker's event loop.
+                    await asyncio.to_thread(
+                        materialize_game_share,
                         sharer_user_id=user_id,
                         sharer_profile_id=profile_id,
                         recipient_user_id=recipient_user["user_id"],
@@ -2062,7 +2067,9 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
 
                 profiles = get_profiles(recipient_user["user_id"])
                 if len(profiles) == 1:
-                    materialize_game_share(
+                    # T4315 round 2 (MAJOR-2): see share_game above.
+                    await asyncio.to_thread(
+                        materialize_game_share,
                         sharer_user_id=user_id,
                         sharer_profile_id=profile_id,
                         recipient_user_id=recipient_user["user_id"],

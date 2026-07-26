@@ -1092,7 +1092,15 @@ def sync_database_to_r2_with_version(
         # until a real restore path (T4315) heals the local copy under the
         # write lock. r2_version is still returned so callers can mark the
         # conflict distinctly, but it must NEVER be used to advance the baseline.
-        if r2_version > 0 and current_version is not None and r2_version > current_version:
+        # T4315 (round 2, BLOCKING-2): current_version is None means this writer
+        # never confirmed a baseline (e.g. a fresh-machine restore errored and
+        # ensure_database still created an empty schema'd DB) -- if R2 already
+        # holds real content (r2_version > 0), that is NOT "no conflict", it is
+        # "unconfirmed": uploading here would be an empty/stale local DB force-
+        # pushed over the user's real data with zero conflict signal (the
+        # catastrophic variant CAS exists to prevent). Treat an unconfirmed
+        # baseline against real R2 content the same as a stale one: refuse.
+        if r2_version > 0 and (current_version is None or r2_version > current_version):
             logger.critical(
                 f"[SYNC_CONFLICT] user={user_id} profile={profile_id} "
                 f"loaded=v{current_version} r2=v{r2_version} machine={FLY_MACHINE_ID} "
@@ -1331,7 +1339,13 @@ def sync_user_db_to_r2_with_version(
         # (MAJOR-2): no re-download — see the profile branch above for why the
         # swap is WAL-unsafe now that this path is live outside the write lock.
         # Refusing alone is safe: the baseline stays frozen at current_version.
-        if r2_version > 0 and current_version is not None and r2_version > current_version:
+        # T4315 (round 2, BLOCKING-2): see the profile branch above -- an
+        # unconfirmed baseline (current_version is None) against real R2
+        # content is treated the same as a stale one, or a first-access R2
+        # ERROR (empty schema'd user.sqlite created, no version learned) would
+        # force-push over the user's real credits/profiles/quests with zero
+        # conflict signal.
+        if r2_version > 0 and (current_version is None or r2_version > current_version):
             logger.critical(
                 f"[SYNC_CONFLICT] user={user_id} db=user.sqlite loaded=v{current_version} "
                 f"r2=v{r2_version} machine={FLY_MACHINE_ID} "

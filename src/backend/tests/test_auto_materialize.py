@@ -206,6 +206,25 @@ def _seed_postgres_share(pg_conn_str, game_id, tag_name, clip_data_list):
     return share_id, pending_id
 
 
+class _ImmediateThread:
+    """T4315 round 2 (MAJOR-2): user_session_init now runs T3230 auto-
+    materialization on a background daemon thread (materialize_game_share
+    can do a real R2 HEAD/download) so it never blocks the caller. These
+    tests assert on its side effects synchronously, so stand in for
+    threading.Thread with something that runs `target` inline on .start()."""
+
+    def __init__(self, target=None, args=(), kwargs=None, daemon=None):
+        self._target = target
+        self._args = args
+        self._kwargs = kwargs or {}
+
+    def start(self):
+        self._target(*self._args, **self._kwargs)
+
+    def join(self, timeout=None):
+        pass
+
+
 def _common_patches(tmp_path):
     """Return a stack of patches common to all tests."""
     from contextlib import ExitStack
@@ -220,6 +239,7 @@ def _common_patches(tmp_path):
     stack.enter_context(patch("app.services.project_archive.archive_completed_projects", return_value=0))
     stack.enter_context(patch("app.services.project_archive.cleanup_database_bloat"))
     stack.enter_context(patch("app.session_init._schedule_startup_recovery"))
+    stack.enter_context(patch("app.session_init.threading.Thread", _ImmediateThread))
     return stack
 
 

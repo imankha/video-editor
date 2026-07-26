@@ -11,9 +11,9 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from app.database import USER_DATA_BASE
+from app.database import USER_DATA_BASE, sync_db_to_r2_explicit
 from app.services.auth_db import get_game_storage_ref, insert_game_storage_ref
-from app.services.db_refresh import RefreshFailed, clear_stale_wal_sidecars
+from app.services.db_refresh import RefreshFailed, clear_stale_wal_sidecars, wal_sidecars_present
 from app.services.pg import get_pg
 from app.services.sharing_db import mark_game_share_materialized
 from app.utils.encoding import decode_data, encode_data
@@ -76,15 +76,27 @@ def ensure_profile_db_local(
     token = set_current_profile_id(profile_id)
     try:
         local_version = get_local_db_version(user_id, profile_id)
-        downloaded, new_version, was_error = sync_database_from_r2_if_newer(
-            user_id, db_path, local_version
-        )
+        if wal_sidecars_present(db_path):
+            # T4315 round 2 (MAJOR-3): -wal/-shm present means another
+            # connection likely has this exact file open right now (SQLite
+            # deletes both on the last clean close). Swapping the main file
+            # under it would orphan that connection's committed-but-not-yet-
+            # uploaded frames. Treat this exactly like an R2 error -- do NOT
+            # attempt the download; a require_fresh caller refuses below, a
+            # lenient reader just keeps serving its existing local copy.
+            downloaded, new_version, was_error = False, local_version, True
+        else:
+            downloaded, new_version, was_error = sync_database_from_r2_if_newer(
+                user_id, db_path, local_version
+            )
         if downloaded:
-            # T4315/WAL safety: the download already swapped db_path's content
+            # WAL safety: the download already swapped db_path's content
             # atomically, but a stale -wal/-shm sidecar from the file it
             # replaced would still be sitting next to it -- see
             # db_refresh.clear_stale_wal_sidecars for why that corrupts the
-            # next connection's reads instead of just serving old data.
+            # next connection's reads instead of just serving old data. Only
+            # reached when the pre-check above found no sidecars, so this is
+            # defense-in-depth for the narrow window while the download ran.
             clear_stale_wal_sidecars(db_path)
         if downloaded and new_version is not None:
             # Cache bookkeeping only (db_version table); not owner data.
@@ -470,6 +482,17 @@ def materialize_game_share(
 
     Returns dict with keys: game_id, inserted, merged, skipped.
     """
+    # T4315 round 2 (MINOR): confirm the recipient is current BEFORE opening
+    # sharer_conn -- this can do a real R2 HEAD and, for a cold recipient, a
+    # full profile.sqlite download; doing it first means that network round
+    # trip never holds the sharer's connection open for no reason. (Also:
+    # _open_profile_db is a raw, R2-oblivious local read ("only opens
+    # locally-cached DBs -- does NOT download from R2") reused below for a
+    # WRITE (inserts games/clips into recipient_conn, commits) -- require_fresh
+    # is the same guard move_reels uses, so an R2 error aborts loudly instead
+    # of materializing the share on top of a stale/unconfirmed snapshot.)
+    ensure_profile_db_local(recipient_user_id, recipient_profile_id, require_fresh=True)
+
     sharer_conn = _open_profile_db(sharer_user_id, sharer_profile_id)
 
     # T5330: provenance marker for every shared-in row — NEVER NULL for a share, so
@@ -508,20 +531,6 @@ def materialize_game_share(
         hashes = _collect_video_hashes(sharer_conn, game_id)
     else:
         hashes = []
-
-    # T4315: _open_profile_db is a raw, R2-oblivious local read ("only opens
-    # locally-cached DBs -- does NOT download from R2") -- but this call site
-    # WRITES into recipient_conn below (inserts games/clips) and commits.
-    # Resolving it via ensure_profile_db_local(require_fresh=True) first
-    # (the same guard move_reels uses) means an R2 error aborts loudly
-    # instead of materializing the share on top of a stale/unconfirmed
-    # recipient snapshot.
-    try:
-        ensure_profile_db_local(recipient_user_id, recipient_profile_id, require_fresh=True)
-    except ProfileDBRefreshFailed:
-        if sharer_conn:
-            sharer_conn.close()
-        raise
 
     recipient_conn = _open_profile_db(recipient_user_id, recipient_profile_id)
     if recipient_conn is None:
@@ -573,6 +582,28 @@ def materialize_game_share(
                     reel_cursor, clip["id"], clip["name"] or "")
 
         recipient_conn.commit()
+
+        # BLOCKING-1 (T4315 round 2): recipient_conn is a raw sqlite3.Connection
+        # from _open_profile_db, NOT a TrackedConnection -- the middleware's
+        # foreign-DB sync (db_sync.py get_request_written_*_dbs) only sees
+        # TrackedConnection owners, so this write is invisible to it and was
+        # NEVER synced by anything, for ANY recipient (pre-existing, not new
+        # to require_fresh -- the download just made the write reachable even
+        # when the recipient wasn't already cached locally). Sync explicitly
+        # and refuse to mark the share materialized in Postgres on failure --
+        # a share that never left local disk must stay retryable, never a
+        # permanent "success" that Postgres will never re-attempt.
+        target_synced = sync_db_to_r2_explicit(recipient_user_id, recipient_profile_id)
+        if not target_synced:
+            logger.error(
+                f"[Materialize] R2 sync FAILED for recipient {recipient_user_id}/"
+                f"{recipient_profile_id} after materializing share_id={share_id} -- "
+                f"NOT marking materialized so it retries instead of being lost"
+            )
+            raise ProfileDBRefreshFailed(
+                f"could not sync recipient profile {recipient_profile_id} to R2 "
+                f"after materializing share_id={share_id}"
+            )
 
         # Create storage refs in Postgres
         if hashes:

@@ -127,6 +127,12 @@ def refresh_env(monkeypatch, tmp_path):
 
     calls = {"ensured": [], "set_version": []}
     monkeypatch.setattr(db, "USER_DATA_BASE", tmp_path)
+    # T4315 round 2 (test gap e): user_db.py has its OWN USER_DATA_BASE
+    # constant, separate from database.py's -- ensure_user_database_fresh's
+    # _get_user_db_path (and clear_stale_wal_sidecars) resolve through THIS
+    # one. Without patching it too, a "downloaded" scenario would reach the
+    # real repo user_data/ directory instead of tmp_path.
+    monkeypatch.setattr(user_db, "USER_DATA_BASE", tmp_path)
     monkeypatch.setattr(user_db, "ensure_user_database", lambda uid: calls["ensured"].append(uid))
     monkeypatch.setattr(db, "get_local_user_db_version", lambda uid: 3)
     monkeypatch.setattr(db, "set_local_user_db_version",

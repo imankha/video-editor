@@ -225,17 +225,36 @@ def ensure_user_database_fresh(user_id: str) -> None:
     ambient session's lenient read) should call this via
     services.db_refresh.confirm_current_before_write(user_id) rather than
     ensure_user_database directly.
+
+    WAL safety (T4315 round 2, MAJOR-3): before attempting the restore, this
+    refuses if `-wal`/`-shm` sidecars are present for this user.sqlite --
+    SQLite deletes both when the last connection closes cleanly, so sidecars
+    present here are a strong signal that another connection has this exact
+    file open RIGHT NOW (e.g. the same user actively writing on this machine
+    while a foreign caller -- admin grant, teammate-share materialization --
+    concurrently confirms freshness). That connection's committed-but-not-
+    yet-checkpointed frames could hold data never uploaded to R2; "R2 is
+    newer" says nothing about whether those frames matter, so refusing the
+    swap (raise RefreshFailed, retryable) is the safe move -- never silently
+    discard them by swapping the main file out from under an open connection.
     """
     ensure_user_database(user_id)
 
     from ..database import get_local_user_db_version, set_local_user_db_version
     from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
-    from .db_refresh import RefreshFailed, clear_stale_wal_sidecars
+    from .db_refresh import RefreshFailed, clear_stale_wal_sidecars, wal_sidecars_present
 
     if not R2_ENABLED:
         return
 
     db_path = _get_user_db_path(user_id)
+
+    if wal_sidecars_present(db_path):
+        raise RefreshFailed(
+            f"user.sqlite for {user_id} appears to be in active use "
+            f"(WAL sidecars present) -- refusing to restore-swap right now"
+        )
+
     local_version = get_local_user_db_version(user_id)
     downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
         user_id, db_path, local_version
@@ -245,9 +264,8 @@ def ensure_user_database_fresh(user_id: str) -> None:
             f"could not confirm user.sqlite for {user_id} is current (R2 error)"
         )
     if downloaded:
-        # WAL safety: see db_refresh.clear_stale_wal_sidecars -- the download
-        # just swapped db_path's content; a stale -wal/-shm from the file it
-        # replaced must not survive to be misapplied to the new content.
+        # Defense-in-depth for the narrow window between the pre-check above
+        # and this download completing -- see clear_stale_wal_sidecars.
         clear_stale_wal_sidecars(db_path)
     if new_version is not None:
         set_local_user_db_version(user_id, new_version)
@@ -269,12 +287,43 @@ def forget_user_db(user_id: str) -> None:
 
 @contextmanager
 def get_user_db_connection(user_id: str | None = None):
-    """Get connection to user-level database."""
+    """Get connection to user-level database.
+
+    T4315 round 2 (MAJOR-4): "refresh-or-fail" is meant to be the RULE for
+    any writer resolving a foreign (non-ambient-session) user.sqlite, not a
+    guard each caller has to remember to bolt on -- this is the structural
+    enforcement point. When an explicit user_id differs from the request's
+    own session user, this confirms freshness (raising RefreshFailed on an
+    R2 error) even if the caller forgot to call confirm_current_before_write
+    itself. Skips the HEAD when this user was already confirmed moments ago
+    on the SAME call chain (db_refresh.user_db_was_recently_confirmed) so a
+    caller that DID the right thing explicitly (admin.py, payments.py) never
+    pays it twice, and never gets a second blocking HEAD reintroduced onto
+    whatever thread it's running on. Outside a request context (no session
+    to compare against -- background workers) this falls back to the
+    existing lenient ensure_user_database, unchanged.
+    """
     if user_id is None:
         from ..user_context import get_current_user_id
         user_id = get_current_user_id()
+        ensure_user_database(user_id)
+    else:
+        session_user_id = None
+        try:
+            from ..user_context import get_current_user_id
+            session_user_id = get_current_user_id()
+        except RuntimeError:
+            session_user_id = None
 
-    ensure_user_database(user_id)
+        if session_user_id and user_id != session_user_id:
+            from .db_refresh import confirm_current_before_write, user_db_was_recently_confirmed
+            if user_db_was_recently_confirmed(user_id):
+                ensure_user_database(user_id)
+            else:
+                confirm_current_before_write(user_id)
+        else:
+            ensure_user_database(user_id)
+
     db_path = _get_user_db_path(user_id)
 
     from ..database import TrackedConnection
