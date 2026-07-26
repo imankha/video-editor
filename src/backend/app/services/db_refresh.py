@@ -21,15 +21,20 @@ logger = logging.getLogger(__name__)
 
 # T4315 round 2 (MAJOR-4): lets get_user_db_connection's structural foreign-
 # user guard (user_db.py) skip a REDUNDANT HEAD when this exact user was
-# just confirmed moments ago on the SAME call chain (e.g. admin.py/
-# payments.py already called confirm_current_before_write explicitly right
-# before opening the connection). Without this, the structural guard would
-# double the HEAD for every already-correct caller and, worse, could put a
-# second blocking HEAD directly on the event loop thread even when the
-# first one was already safely off-thread -- defeating the exact T2720
-# precaution those callers took. A short window is enough: this is a safety
-# net for callers that never called confirm_current_before_write at all,
-# not a cache for its own sake.
+# just confirmed moments ago (e.g. admin.py/payments.py already called
+# confirm_current_before_write explicitly right before opening the
+# connection). Without this, the structural guard would double the HEAD for
+# every already-correct caller and, worse, could put a second blocking HEAD
+# directly on the event loop thread even when the first one was already
+# safely off-thread -- defeating the exact T2720 precaution those callers
+# took. A short window is enough: this is a safety net for callers that
+# never called confirm_current_before_write at all, not a cache for its own
+# sake. NOTE (round 3 MINOR): this marker is process-global, keyed only by
+# user_id -- NOT scoped to "the same call chain" despite how that reads;
+# any two confirms for the same user within the window share it, request or
+# background thread. Entries self-evict lazily (checked/dropped on read),
+# so the dict never grows past the number of DISTINCT users confirmed in
+# the last _CONFIRM_FRESHNESS_WINDOW_SECONDS.
 _CONFIRMED_RECENTLY: dict[str, float] = {}
 _CONFIRMED_LOCK = threading.Lock()
 _CONFIRM_FRESHNESS_WINDOW_SECONDS = 5.0
@@ -45,7 +50,14 @@ def user_db_was_recently_confirmed(user_id: str) -> bool:
     succeeded within the last few seconds -- see the module note above."""
     with _CONFIRMED_LOCK:
         ts = _CONFIRMED_RECENTLY.get(user_id)
-    return ts is not None and (time.monotonic() - ts) < _CONFIRM_FRESHNESS_WINDOW_SECONDS
+        if ts is None:
+            return False
+        if (time.monotonic() - ts) >= _CONFIRM_FRESHNESS_WINDOW_SECONDS:
+            # Lazy eviction: expired entries are dropped on the next read
+            # for that user rather than accumulating forever.
+            del _CONFIRMED_RECENTLY[user_id]
+            return False
+        return True
 
 
 class RefreshFailed(RuntimeError):

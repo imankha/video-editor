@@ -2705,7 +2705,11 @@ async def _materialize_or_pend(
         return
 
     recipient_user_id = recipient_user["user_id"]
-    profiles = get_profiles(recipient_user_id)
+    # T4315 round 3 (MAJOR NEW-D): get_profiles(recipient_user_id) is a
+    # foreign-user get_user_db_connection call -- round 2's structural guard
+    # (MAJOR-4) makes it a possible R2 HEAD, so it needs the same
+    # asyncio.to_thread offload as materialize_game_share below.
+    profiles = await asyncio.to_thread(get_profiles, recipient_user_id)
 
     if len(profiles) == 1:
         share_record = get_share_by_token(share["share_token"])

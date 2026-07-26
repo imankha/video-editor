@@ -226,17 +226,21 @@ def ensure_user_database_fresh(user_id: str) -> None:
     services.db_refresh.confirm_current_before_write(user_id) rather than
     ensure_user_database directly.
 
-    WAL safety (T4315 round 2, MAJOR-3): before attempting the restore, this
-    refuses if `-wal`/`-shm` sidecars are present for this user.sqlite --
-    SQLite deletes both when the last connection closes cleanly, so sidecars
-    present here are a strong signal that another connection has this exact
-    file open RIGHT NOW (e.g. the same user actively writing on this machine
-    while a foreign caller -- admin grant, teammate-share materialization --
-    concurrently confirms freshness). That connection's committed-but-not-
+    WAL safety (T4315 round 3 correction): a `-wal`/`-shm` sidecar present
+    for this user.sqlite is a strong signal that ANOTHER connection has this
+    exact file open RIGHT NOW (SQLite deletes both when the last connection
+    closes cleanly) -- e.g. the same user actively writing on this machine
+    while a foreign caller (admin grant, teammate-share materialization)
+    concurrently confirms freshness. That connection's committed-but-not-
     yet-checkpointed frames could hold data never uploaded to R2; "R2 is
     newer" says nothing about whether those frames matter, so refusing the
-    swap (raise RefreshFailed, retryable) is the safe move -- never silently
-    discard them by swapping the main file out from under an open connection.
+    SWAP is the safe move. round 2 checked this BEFORE the R2 version
+    comparison, which refused even the overwhelmingly common "local already
+    current, nothing to download" case (BLOCKING NEW-B) -- sidecars merely
+    mean some unrelated connection has the file open, not that a download is
+    imminent. Fixed: the check is now `before_download`, consulted by
+    sync_user_db_from_r2_if_newer ONLY once it has already decided R2 is
+    newer and a download is about to happen.
     """
     ensure_user_database(user_id)
 
@@ -249,23 +253,18 @@ def ensure_user_database_fresh(user_id: str) -> None:
 
     db_path = _get_user_db_path(user_id)
 
-    if wal_sidecars_present(db_path):
-        raise RefreshFailed(
-            f"user.sqlite for {user_id} appears to be in active use "
-            f"(WAL sidecars present) -- refusing to restore-swap right now"
-        )
-
     local_version = get_local_user_db_version(user_id)
     downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
-        user_id, db_path, local_version
+        user_id, db_path, local_version,
+        before_download=lambda: not wal_sidecars_present(db_path),
     )
     if was_error:
         raise RefreshFailed(
             f"could not confirm user.sqlite for {user_id} is current (R2 error)"
         )
     if downloaded:
-        # Defense-in-depth for the narrow window between the pre-check above
-        # and this download completing -- see clear_stale_wal_sidecars.
+        # Defense-in-depth for the narrow window between before_download's
+        # check and this download completing -- see clear_stale_wal_sidecars.
         clear_stale_wal_sidecars(db_path)
     if new_version is not None:
         set_local_user_db_version(user_id, new_version)

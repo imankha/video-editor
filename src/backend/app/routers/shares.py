@@ -454,7 +454,13 @@ async def get_shared_collection(share_token: str, request: Request):
         if not email or email.lower() != share["recipient_email"].lower():
             raise HTTPException(403, "Access denied")
 
-    record_milestone(share["sharer_user_id"], "share_viewed", {
+    # T4315 round 3 (MAJOR NEW-D): record_milestone(sharer_user_id, ...) is a
+    # foreign-user get_user_db_connection call (the viewer is rarely the
+    # sharer) -- round 2's structural guard (MAJOR-4) makes it a possible R2
+    # HEAD/download. This is a PUBLIC, unauthenticated-by-default route (the
+    # viral share-view page), so offload rather than let a slow HEAD block
+    # the response.
+    await asyncio.to_thread(record_milestone, share["sharer_user_id"], "share_viewed", {
         "share_token": share_token,
         "sharer_user_id": share["sharer_user_id"],
         "share_type": "collection",

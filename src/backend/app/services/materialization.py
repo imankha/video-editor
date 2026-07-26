@@ -76,19 +76,17 @@ def ensure_profile_db_local(
     token = set_current_profile_id(profile_id)
     try:
         local_version = get_local_db_version(user_id, profile_id)
-        if wal_sidecars_present(db_path):
-            # T4315 round 2 (MAJOR-3): -wal/-shm present means another
-            # connection likely has this exact file open right now (SQLite
-            # deletes both on the last clean close). Swapping the main file
-            # under it would orphan that connection's committed-but-not-yet-
-            # uploaded frames. Treat this exactly like an R2 error -- do NOT
-            # attempt the download; a require_fresh caller refuses below, a
-            # lenient reader just keeps serving its existing local copy.
-            downloaded, new_version, was_error = False, local_version, True
-        else:
-            downloaded, new_version, was_error = sync_database_from_r2_if_newer(
-                user_id, db_path, local_version
-            )
+        # T4315 round 3 (BLOCKING NEW-B): the WAL-in-use guard must gate the
+        # DOWNLOAD, not the version check -- checking it up front refused
+        # even the overwhelmingly common "local already current, nothing to
+        # download" case (sidecars just mean SOME connection, unrelated to
+        # this restore, has the file open right now for perfectly normal
+        # reasons). before_download is only consulted once R2 is confirmed
+        # newer, so a live connection blocks the actual swap, not every call.
+        downloaded, new_version, was_error = sync_database_from_r2_if_newer(
+            user_id, db_path, local_version,
+            before_download=lambda: not wal_sidecars_present(db_path),
+        )
         if downloaded:
             # WAL safety: the download already swapped db_path's content
             # atomically, but a stale -wal/-shm sidecar from the file it
@@ -557,7 +555,10 @@ def materialize_game_share(
                 f"[Materialize] Created game {recipient_game_id} in recipient's DB"
             )
         else:
-            recipient_conn.close()
+            # T4315 round 3 (MINOR): no need to close here -- the `finally`
+            # below always closes recipient_conn exactly once regardless of
+            # how this block exits (sqlite3 close() is idempotent, but the
+            # double-call was pure redundancy).
             raise ValueError(
                 "Cannot create game without sharer's DB (pending share with no sharer DB)"
             )
@@ -582,6 +583,23 @@ def materialize_game_share(
                     reel_cursor, clip["id"], clip["name"] or "")
 
         recipient_conn.commit()
+
+        # BLOCKING NEW-A (T4315 round 3): _open_profile_db sets
+        # journal_mode=WAL, so the commit above lands in profile.sqlite-wal,
+        # not the main file. sync_db_to_r2_explicit uploads ONLY the main
+        # file (storage.py: client.upload_file on local_db_path) -- with no
+        # checkpoint first, R2 would receive stale (pre-share) bytes stamped
+        # at a NEWER version than reality. That is worse than not syncing at
+        # all: the next machine's restore-if-newer sees "local >= r2" and
+        # never re-pulls the real data, so the share is permanently invisible
+        # even though Postgres (below) reports it materialized. Checkpoint
+        # BEFORE upload, not after -- recipient_conn stays open (closed once,
+        # normally, in the `finally` below) so this is just a flush.
+        checkpoint_result = recipient_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        logger.debug(
+            f"[Materialize] WAL checkpoint for recipient {recipient_user_id}/"
+            f"{recipient_profile_id} before upload: {checkpoint_result}"
+        )
 
         # BLOCKING-1 (T4315 round 2): recipient_conn is a raw sqlite3.Connection
         # from _open_profile_db, NOT a TrackedConnection -- the middleware's

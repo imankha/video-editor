@@ -1860,7 +1860,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
                     logger.info(f"[share-game] Created pending share for non-user {email}")
                     continue
 
-                profiles = get_profiles(recipient_user["user_id"])
+                # T4315 round 3 (MAJOR NEW-D): get_profiles(recipient_user_id)
+                # is a foreign-user get_user_db_connection call -- round 2's
+                # structural guard (MAJOR-4) makes it a possible R2 HEAD, so
+                # it needs the same asyncio.to_thread offload as
+                # materialize_game_share below, not just that call alone.
+                profiles = await asyncio.to_thread(get_profiles, recipient_user["user_id"])
                 if len(profiles) == 1:
                     # T4315 round 2 (MAJOR-2): materialize_game_share does a
                     # real R2 HEAD (require_fresh) and possibly a full
@@ -2065,7 +2070,12 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                     logger.info(f"[share-playback] Created pending share for non-user {email}")
                     continue
 
-                profiles = get_profiles(recipient_user["user_id"])
+                # T4315 round 3 (MAJOR NEW-D): get_profiles(recipient_user_id)
+                # is a foreign-user get_user_db_connection call -- round 2's
+                # structural guard (MAJOR-4) makes it a possible R2 HEAD, so
+                # it needs the same asyncio.to_thread offload as
+                # materialize_game_share below, not just that call alone.
+                profiles = await asyncio.to_thread(get_profiles, recipient_user["user_id"])
                 if len(profiles) == 1:
                     # T4315 round 2 (MAJOR-2): see share_game above.
                     await asyncio.to_thread(

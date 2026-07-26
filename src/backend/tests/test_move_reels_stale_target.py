@@ -53,7 +53,7 @@ class TestRequireFresh:
         # (downloaded=False, new_version=None, was_error=True)
         monkeypatch.setattr(
             "app.storage.sync_database_from_r2_if_newer",
-            lambda u, path, v: (False, None, True),
+            lambda u, path, v, **kw: (False, None, True),
         )
 
         with pytest.raises(m.ProfileDBRefreshFailed):
@@ -67,7 +67,7 @@ class TestRequireFresh:
         monkeypatch.setattr(m, "get_local_db_version", lambda u, p: 3, raising=False)
         monkeypatch.setattr(
             "app.storage.sync_database_from_r2_if_newer",
-            lambda u, p_, v: (False, None, True),
+            lambda u, p_, v, **kw: (False, None, True),
         )
 
         assert m.ensure_profile_db_local("u1", "target1") == path
@@ -80,7 +80,7 @@ class TestRequireFresh:
         monkeypatch.setattr(m, "set_local_db_version", lambda u, p, v: None, raising=False)
         monkeypatch.setattr(
             "app.storage.sync_database_from_r2_if_newer",
-            lambda u, p_, v: (True, 4, False),
+            lambda u, p_, v, **kw: (True, 4, False),
         )
 
         assert m.ensure_profile_db_local("u1", "target1", require_fresh=True) == path
@@ -92,7 +92,7 @@ class TestRequireFresh:
         monkeypatch.setattr(m, "get_local_db_version", lambda u, p: None, raising=False)
         monkeypatch.setattr(
             "app.storage.sync_database_from_r2_if_newer",
-            lambda u, p_, v: (False, None, False),
+            lambda u, p_, v, **kw: (False, None, False),
         )
 
         assert m.ensure_profile_db_local("u1", "fresh-target", require_fresh=True) is None

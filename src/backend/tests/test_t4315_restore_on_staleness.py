@@ -73,12 +73,17 @@ def _isolate_caches(monkeypatch):
     """Clean in-process caches per test -- these module-level dicts persist
     across tests otherwise (same pattern as test_r2_restore_retry.py)."""
     import app.database as db_module
+    import app.services.db_refresh as db_refresh_module
     import app.services.user_db as user_db_module
 
     monkeypatch.setattr(user_db_module, "_initialized_user_dbs", set())
     monkeypatch.setattr(user_db_module, "_r2_user_restore_cooldowns", {})
     monkeypatch.setattr(db_module, "_user_sqlite_versions", {})
     monkeypatch.setattr(db_module, "_user_db_versions", {})
+    # T4315 round 3 (MINOR): db_refresh's "recently confirmed" marker is
+    # process-global keyed by user_id -- reset it too, or a USER const
+    # confirmed by one test leaks a false "recently confirmed" into another.
+    monkeypatch.setattr(db_refresh_module, "_CONFIRMED_RECENTLY", {})
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +223,14 @@ class TestMaterializeGameShareRequiresFresh:
         from app.database import get_local_db_version
         from app.services.materialization import ProfileDBRefreshFailed, materialize_game_share
 
+        # T4315 round 3 (MAJOR NEW-E): materialization.py does a MODULE-LEVEL
+        # `from app.database import USER_DATA_BASE` -- patching
+        # app.database.USER_DATA_BASE alone does not rebind that already-
+        # imported name, so _open_profile_db/ensure_profile_db_local would
+        # silently resolve against the REAL repo user_data/ dir and this
+        # test's assertions would be vacuous. Patch both.
         with patch("app.database.USER_DATA_BASE", tmp_path), \
+             patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
              patch("app.storage.sync_database_from_r2_if_newer", return_value=(False, None, True)):
             _make_profile_db(tmp_path, USER, PROFILE, marker="sharer")
             recipient_profile = "ffff0000"
@@ -352,6 +364,113 @@ class TestWalSafetyOnRestore:
         from app.services.db_refresh import clear_stale_wal_sidecars
 
         clear_stale_wal_sidecars(tmp_path / "does_not_exist.sqlite")
+
+    def test_sidecars_present_but_no_download_needed_still_succeeds(self, tmp_path):
+        """BLOCKING NEW-B regression: a connection genuinely open on
+        user.sqlite must NOT cause a refusal when R2 has nothing newer to
+        pull (the overwhelmingly common case -- some unrelated concurrent
+        request touching this user's OWN data must not break a completely
+        unrelated confirm-before-write for the SAME user with nothing to
+        restore). The WAL guard must gate the swap, not the version check."""
+        from app.database import get_local_user_db_version, set_local_user_db_version
+        from app.services.user_db import ensure_user_database_fresh
+        from app.storage import _user_db_r2_key
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
+             patch("app.services.user_db.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            local_path = _make_user_db(tmp_path, marker="already_current")
+
+            # A genuinely open connection -- but R2 has NOTHING newer, so no
+            # download/swap should ever be attempted regardless.
+            live_conn = sqlite3.connect(str(local_path), timeout=30)
+            live_conn.execute("PRAGMA journal_mode=WAL")
+            live_conn.execute("INSERT INTO marker (who) VALUES ('still_being_written')")
+            live_conn.commit()
+
+            key = _user_db_r2_key(USER)
+            fake._objects[key] = {"data": b"irrelevant, same version", "metadata": {"db-version": "5"}}
+            set_local_user_db_version(USER, 5)  # already matches R2 -- nothing to pull
+
+            try:
+                ensure_user_database_fresh(USER)  # must NOT raise
+
+                assert not fake.download_calls, "nothing needed downloading -- must not even attempt it"
+                assert get_local_user_db_version(USER) == 5
+                assert _read_marker(local_path) == "already_current"
+            finally:
+                live_conn.close()
+
+    def test_refuses_swap_when_a_connection_is_genuinely_open_profile_db(self, tmp_path):
+        """NEW-E: the live-connection WAL test existed only for user.sqlite --
+        profile.sqlite (ensure_profile_db_local, the public collection-share
+        resolution path) needs the identical guarantee: refuse the swap
+        rather than discard a genuinely open connection's uncommitted-to-R2
+        work."""
+        from app.database import get_local_db_version, set_local_db_version
+        from app.services.materialization import ensure_profile_db_local
+        from app.storage import profile_r2_key
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
+             patch("app.services.materialization.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            local_path = _make_profile_db(tmp_path, USER, PROFILE, marker="old_content")
+
+            live_conn = sqlite3.connect(str(local_path), timeout=30)
+            live_conn.execute("PRAGMA journal_mode=WAL")
+            live_conn.execute("INSERT INTO marker (who) VALUES ('committed_by_other_writer')")
+            live_conn.commit()
+
+            newer_path = tmp_path / "newer_profile.sqlite"
+            conn = sqlite3.connect(str(newer_path))
+            conn.execute("CREATE TABLE marker (who TEXT)")
+            conn.execute("INSERT INTO marker (who) VALUES ('r2_newer')")
+            conn.commit()
+            conn.close()
+            key = profile_r2_key(USER, PROFILE, "profile.sqlite")
+            fake._objects[key] = {"data": newer_path.read_bytes(), "metadata": {"db-version": "3"}}
+
+            set_local_db_version(USER, PROFILE, 1)
+
+            try:
+                result_path = ensure_profile_db_local(USER, PROFILE, require_fresh=False)
+
+                assert not fake.download_calls, \
+                    "must not download/swap while a connection is open on this file"
+                # Lenient (require_fresh=False): serves the existing local
+                # copy rather than raising -- but must NOT have swapped it.
+                assert result_path is not None
+                assert get_local_db_version(USER, PROFILE) == 1
+            finally:
+                live_conn.close()
+
+    def test_sidecars_present_but_no_download_needed_still_succeeds_profile_db(self, tmp_path):
+        """Profile-DB twin of the user.sqlite NEW-B regression test above."""
+        from app.database import get_local_db_version, set_local_db_version
+        from app.services.materialization import ensure_profile_db_local
+        from app.storage import profile_r2_key
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
+             patch("app.services.materialization.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            local_path = _make_profile_db(tmp_path, USER, PROFILE, marker="already_current")
+
+            live_conn = sqlite3.connect(str(local_path), timeout=30)
+            live_conn.execute("PRAGMA journal_mode=WAL")
+            live_conn.execute("INSERT INTO marker (who) VALUES ('still_being_written')")
+            live_conn.commit()
+
+            key = profile_r2_key(USER, PROFILE, "profile.sqlite")
+            fake._objects[key] = {"data": b"irrelevant, same version", "metadata": {"db-version": "5"}}
+            set_local_db_version(USER, PROFILE, 5)
+
+            try:
+                ensure_profile_db_local(USER, PROFILE, require_fresh=True)  # must NOT raise
+
+                assert not fake.download_calls
+                assert get_local_db_version(USER, PROFILE) == 5
+            finally:
+                live_conn.close()
 
 
 # ---------------------------------------------------------------------------

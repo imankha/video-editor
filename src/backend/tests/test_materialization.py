@@ -779,6 +779,68 @@ class TestMaterializeGameShare:
         s_conn.close()
         r_conn.close()
 
+    # -----------------------------------------------------------------
+    # T4315 round 3 (BLOCKING NEW-A): _open_profile_db opens WAL-mode
+    # connections, so `recipient_conn.commit()` lands new pages in
+    # profile.sqlite-wal, NOT the main file sync_db_to_r2_explicit uploads.
+    # Mocking sync_db_to_r2_explicit (as the test above does) only proves
+    # the CALL happened, not that R2 received real data -- this test runs
+    # the REAL upload against a fake R2 and reads the uploaded bytes back.
+    # -----------------------------------------------------------------
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    def test_recipient_upload_contains_the_materialized_data(
+        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+    ):
+        """Without checkpointing before upload, R2 would receive the STALE
+        pre-share main-file bytes stamped at a NEWER version -- worse than
+        not syncing at all, since the recipient's own next restore-if-newer
+        would see "local >= r2" and never re-pull the real data. Assert the
+        object R2 actually holds, read back independently, contains the
+        shared game and clip."""
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
+        mock_get_ref.return_value = None
+
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_walcheck")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        s_conn.close()
+        r_conn.close()
+
+        fake = FakeR2()
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+             patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=game_id,
+                tag_name="Jake",
+                share_id=1,
+            )
+
+        key = profile_r2_key("recipient-user", "recipient-profile", "profile.sqlite")
+        assert key in fake._objects, "recipient profile.sqlite was never uploaded"
+
+        uploaded_path = tmp_path / "uploaded_check.sqlite"
+        uploaded_path.write_bytes(fake._objects[key]["data"])
+        check_conn = sqlite3.connect(str(uploaded_path))
+        check_conn.row_factory = sqlite3.Row
+        games = check_conn.execute("SELECT * FROM games").fetchall()
+        clips = check_conn.execute("SELECT * FROM raw_clips").fetchall()
+        check_conn.close()
+
+        assert len(games) == 1, "uploaded R2 object must contain the shared game"
+        assert games[0]["name"] == "League Match"
+        assert len(clips) == 1, "uploaded R2 object must contain the shared clip"
+        assert clips[0]["name"] == "Jake Goal"
+        mock_mark.assert_called_once()
+
     @patch("app.services.materialization.sync_db_to_r2_explicit")
     @patch("app.services.materialization.mark_game_share_materialized")
     @patch("app.services.materialization.insert_game_storage_ref")

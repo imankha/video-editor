@@ -148,7 +148,7 @@ class TestRefreshTargetUserDb:
         grant that follows is a real read-modify-write, not a stale overwrite."""
         monkeypatch, storage, calls = refresh_env
         monkeypatch.setattr(storage, "sync_user_db_from_r2_if_newer",
-                            lambda uid, path, v: (True, 7, False))
+                            lambda uid, path, v, **kw: (True, 7, False))
         from app.routers import admin
         admin._refresh_target_user_db(GRANTEE)
         assert calls["ensured"] == [GRANTEE]
@@ -159,7 +159,7 @@ class TestRefreshTargetUserDb:
         applies), never raise, never record a version we did not download."""
         monkeypatch, storage, calls = refresh_env
         monkeypatch.setattr(storage, "sync_user_db_from_r2_if_newer",
-                            lambda uid, path, v: (False, None, True))
+                            lambda uid, path, v, **kw: (False, None, True))
         from app.routers import admin
         admin._refresh_target_user_db(GRANTEE)  # must not raise
         assert calls["set_version"] == []
@@ -175,7 +175,7 @@ class TestRefreshTargetUserDb:
         test_r2_error_does_not_raise_and_does_not_bump_version below."""
         monkeypatch, storage, calls = refresh_env
         monkeypatch.setattr(storage, "sync_user_db_from_r2_if_newer",
-                            lambda uid, path, v: (False, 3, False))
+                            lambda uid, path, v, **kw: (False, 3, False))
         from app.routers import admin
         admin._refresh_target_user_db(GRANTEE)
         assert calls["set_version"] == [(GRANTEE, 3)]
