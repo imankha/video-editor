@@ -1,6 +1,6 @@
 # T5900: Playing a reel breaks the layout — video renders outside the player panel, artifacts left behind
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-07-25

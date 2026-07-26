@@ -1,6 +1,6 @@
 # T5890: Poster URLs use bare `/api/...` paths — no poster imagery on staging/prod (split-host)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-07-25
