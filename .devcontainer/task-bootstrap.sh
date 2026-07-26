@@ -19,11 +19,18 @@ if [ ! -f "$HOME/.claude/settings.json" ]; then
 JSON
 fi
 
-# Seed the host CLI login (host ~/.claude is mounted read-only at /host-claude)
-# ONLY if the shared volume has none yet -- never clobber an in-container login.
-if [ ! -f "$HOME/.claude/.credentials.json" ] && [ -f /host-claude/.credentials.json ]; then
-  cp -f /host-claude/.credentials.json "$HOME/.claude/.credentials.json"
-  chmod 600 "$HOME/.claude/.credentials.json" || true
+# Seed/refresh the host CLI login (host ~/.claude is mounted read-only at
+# /host-claude). `cp -u` takes whichever copy is NEWER, which is the only rule
+# that satisfies both requirements: an in-container `/login` still wins (it
+# writes a newer file), but a container copy can no longer rot.
+#
+# Seeding only-when-absent was the old rule, and it silently killed long-running
+# workers: the host CLI refreshes its token on its own schedule, so a container
+# copy left from days ago eventually fails with "Not logged in - please run
+# /login", mid-task, after the worker has already made uncommitted edits.
+if [ -f /host-claude/.credentials.json ]; then
+  cp -u /host-claude/.credentials.json "$HOME/.claude/.credentials.json" 2>/dev/null || true
+  chmod 600 "$HOME/.claude/.credentials.json" 2>/dev/null || true
 fi
 
 # Migrate a loose ~/.claude.json onto the persisted config dir once.
