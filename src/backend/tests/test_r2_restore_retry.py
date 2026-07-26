@@ -16,9 +16,7 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from botocore.exceptions import ClientError as BotoClientError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,7 +54,7 @@ class TestGetDbVersionFromR2:
 
     @patch("app.storage.get_r2_client")
     def test_404_returns_not_found(self, mock_get_client):
-        from app.storage import get_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_db_version_from_r2
 
         client = _make_r2_client_mock()
         mock_get_client.return_value = client
@@ -69,7 +67,7 @@ class TestGetDbVersionFromR2:
 
     @patch("app.storage.get_r2_client")
     def test_500_returns_error(self, mock_get_client):
-        from app.storage import get_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_db_version_from_r2
 
         client = _make_r2_client_mock()
         mock_get_client.return_value = client
@@ -82,7 +80,7 @@ class TestGetDbVersionFromR2:
 
     @patch("app.storage.get_r2_client")
     def test_generic_exception_returns_error(self, mock_get_client):
-        from app.storage import get_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_db_version_from_r2
 
         client = _make_r2_client_mock()
         mock_get_client.return_value = client
@@ -119,7 +117,7 @@ class TestGetDbVersionFromR2:
         assert result == 0
 
     def test_no_client_returns_error(self):
-        from app.storage import get_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_db_version_from_r2
 
         with patch("app.storage.get_r2_client", return_value=None):
             result = get_db_version_from_r2("user123")
@@ -137,7 +135,7 @@ class TestSyncDatabaseFromR2IfNewer:
     @patch("app.storage.R2_ENABLED", True)
     @patch("app.storage.get_db_version_from_r2")
     def test_not_found_returns_false_none_no_error(self, mock_get_version):
-        from app.storage import sync_database_from_r2_if_newer, R2VersionResult
+        from app.storage import R2VersionResult, sync_database_from_r2_if_newer
 
         mock_get_version.return_value = R2VersionResult.NOT_FOUND
         was_synced, new_version, was_error = sync_database_from_r2_if_newer(
@@ -151,7 +149,7 @@ class TestSyncDatabaseFromR2IfNewer:
     @patch("app.storage.R2_ENABLED", True)
     @patch("app.storage.get_db_version_from_r2")
     def test_error_returns_false_none_with_error(self, mock_get_version):
-        from app.storage import sync_database_from_r2_if_newer, R2VersionResult
+        from app.storage import R2VersionResult, sync_database_from_r2_if_newer
 
         mock_get_version.return_value = R2VersionResult.ERROR
         was_synced, new_version, was_error = sync_database_from_r2_if_newer(
@@ -172,7 +170,7 @@ class TestGetUserDbVersionFromR2:
 
     @patch("app.storage.get_r2_client")
     def test_404_returns_not_found(self, mock_get_client):
-        from app.storage import get_user_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_user_db_version_from_r2
 
         client = _make_r2_client_mock()
         mock_get_client.return_value = client
@@ -185,7 +183,7 @@ class TestGetUserDbVersionFromR2:
 
     @patch("app.storage.get_r2_client")
     def test_500_returns_error(self, mock_get_client):
-        from app.storage import get_user_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_user_db_version_from_r2
 
         client = _make_r2_client_mock()
         mock_get_client.return_value = client
@@ -210,7 +208,7 @@ class TestGetUserDbVersionFromR2:
         assert result == 7
 
     def test_no_client_returns_error(self):
-        from app.storage import get_user_db_version_from_r2, R2VersionResult
+        from app.storage import R2VersionResult, get_user_db_version_from_r2
 
         with patch("app.storage.get_r2_client", return_value=None):
             result = get_user_db_version_from_r2("user123")
@@ -224,7 +222,7 @@ class TestSyncUserDbFromR2IfNewer:
     @patch("app.storage.R2_ENABLED", True)
     @patch("app.storage.get_user_db_version_from_r2")
     def test_not_found_returns_false_none_no_error(self, mock_get_version):
-        from app.storage import sync_user_db_from_r2_if_newer, R2VersionResult
+        from app.storage import R2VersionResult, sync_user_db_from_r2_if_newer
 
         mock_get_version.return_value = R2VersionResult.NOT_FOUND
         was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(
@@ -238,7 +236,7 @@ class TestSyncUserDbFromR2IfNewer:
     @patch("app.storage.R2_ENABLED", True)
     @patch("app.storage.get_user_db_version_from_r2")
     def test_error_returns_false_none_with_error(self, mock_get_version):
-        from app.storage import sync_user_db_from_r2_if_newer, R2VersionResult
+        from app.storage import R2VersionResult, sync_user_db_from_r2_if_newer
 
         mock_get_version.return_value = R2VersionResult.ERROR
         was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(
@@ -319,7 +317,7 @@ class TestEnsureDatabaseRestore:
             mock_conn = MagicMock()
             mock_connect.return_value = mock_conn
 
-            from app.database import ensure_database, _r2_restore_cooldowns
+            from app.database import _r2_restore_cooldowns, ensure_database
             ensure_database()
 
         # Version should NOT be set
@@ -431,9 +429,8 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._init_credits_row")
     def test_not_found_locks_version_to_zero(
-        self, mock_migrate, mock_set_version, mock_sync, mock_get_version
+        self, mock_set_version, mock_sync, mock_get_version
     ):
         """When R2 returns NOT_FOUND for user.sqlite, version is locked to 0."""
         # NOT_FOUND: was_synced=False, new_version=None, was_error=False
@@ -452,9 +449,8 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._init_credits_row")
     def test_error_does_not_lock_version(
-        self, mock_migrate, mock_set_version, mock_sync, mock_get_version
+        self, mock_set_version, mock_sync, mock_get_version
     ):
         """When R2 returns ERROR for user.sqlite, version is NOT locked."""
         mock_sync.return_value = (False, None, True)
@@ -464,8 +460,8 @@ class TestEnsureUserDatabaseRestore:
             mock_connect.return_value = mock_conn
 
             from app.services.user_db import (
-                ensure_user_database,
                 _r2_user_restore_cooldowns,
+                ensure_user_database,
             )
             ensure_user_database("user-flaky")
 
@@ -476,9 +472,8 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._init_credits_row")
     def test_user_db_cooldown_prevents_retry(
-        self, mock_migrate, mock_set_version, mock_sync, mock_get_version
+        self, mock_set_version, mock_sync, mock_get_version
     ):
         """After an ERROR on user.sqlite, cooldown prevents immediate retry."""
         mock_sync.return_value = (False, None, True)  # ERROR
@@ -487,7 +482,7 @@ class TestEnsureUserDatabaseRestore:
             mock_conn = MagicMock()
             mock_connect.return_value = mock_conn
 
-            from app.services.user_db import ensure_user_database, _initialized_user_dbs
+            from app.services.user_db import _initialized_user_dbs, ensure_user_database
             ensure_user_database("user-retry")
             assert mock_sync.call_count == 1
 
@@ -502,14 +497,13 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._init_credits_row")
     def test_user_db_cooldown_expires(
-        self, mock_migrate, mock_set_version, mock_sync, mock_get_version
+        self, mock_set_version, mock_sync, mock_get_version
     ):
         """After 30s, user.sqlite cooldown expires and R2 is retried."""
         from app.services.user_db import (
-            _r2_user_restore_cooldowns,
             _initialized_user_dbs,
+            _r2_user_restore_cooldowns,
         )
         mock_sync.return_value = (False, None, True)  # ERROR
 

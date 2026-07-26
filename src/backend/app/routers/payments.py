@@ -19,20 +19,35 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
-from ..services.credit_ledger import CreditsUnavailable, grant_credits, has_processed_payment
+from ..services.credit_ledger import CreditsUnavailable, credit_key, grant, has_processed_payment
 from ..services.user_db import get_stripe_customer_id, set_stripe_customer_id
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 
-def _grant_or_503(user_id: str, amount: int, source: str, reference_id: str) -> int:
-    """grant_credits() is idempotent (never raises on a retry) -- the only
-    exception left to handle is the credits_ready cutover gate, which maps to a
-    retryable 503 (Stripe/the frontend both retry on 5xx, so the window fails
-    loudly, never wrongly -- design 4a)."""
+def _grant_or_503(user_id: str, amount: int, source: str, reference_id: str) -> dict:
+    """Grant credits idempotently, returning grant()'s {applied, balance} dict.
+
+    grant() is idempotent (never raises on a retry) -- the only exception left
+    to handle is the credits_ready cutover gate, which maps to a retryable 503
+    (Stripe/the frontend both retry on 5xx, so the window fails loudly, never
+    wrongly -- design 4a).
+
+    Callers MUST gate revenue analytics (record_milestone /
+    increment_total_spent) on the returned `applied`. The `has_processed_payment`
+    guard above every call site is a plain UNLOCKED read: two concurrent
+    deliveries of the same Stripe event (redelivery, or webhook racing
+    /confirm-intent) can both pass it. grant() refuses the second credit
+    atomically (applied=False), but the analytics run AFTER the read -- so
+    without this gate they run twice and double-count `total_spent_cents`, which
+    T5760 reconciliation reads as a false `revenue_drift` and "heals" in the
+    wrong direction. Master short-circuited these paths on
+    `sqlite3.IntegrityError` BEFORE recording analytics; this gate restores that
+    property post-cutover."""
+    key = credit_key(source, reference_id)
     try:
-        return grant_credits(user_id, amount, source, reference_id)
+        return grant(user_id, amount, source, key, reference_id=reference_id)
     except CreditsUnavailable:
         raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
 
@@ -253,15 +268,20 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in payment metadata")
 
-    # grant_credits is idempotent on (user_id, "stripe:{pi_id}") -- a race between
+    # grant() is idempotent on (user_id, "stripe:{pi_id}") -- a race between
     # this and the webhook just reports the same balance twice, never double-grants.
-    new_balance = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+    result = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+    new_balance = result["balance"]
 
     pack_info = CREDIT_PACKS.get(pack)
-    record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
-    record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-    if pack_info:
-        increment_total_spent(user_id, pack_info["price_cents"])
+    # Only record revenue analytics for the delivery that ACTUALLY applied the
+    # grant -- a concurrent duplicate that lost the idempotency race must not
+    # double-count total_spent_cents (see _grant_or_503).
+    if result["applied"]:
+        record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
+        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+        if pack_info:
+            increment_total_spent(user_id, pack_info["price_cents"])
 
     logger.info(
         f"[Payments] Confirmed + granted {credits} credits to {user_id} "
@@ -319,13 +339,17 @@ async def stripe_webhook(request: Request):
             return {"status": "already_processed"}
 
         # idempotency_key = stripe:{session_id} -- credit_ledger.grant() itself
-        # refuses a double-credit atomically, no exception handling needed.
-        new_balance = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+        # refuses a double-credit atomically. `applied` gates the analytics so a
+        # redelivery that passed the unlocked has_processed_payment read above
+        # cannot double-count revenue (see _grant_or_503).
+        result = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+        new_balance = result["balance"]
 
         pack_info = CREDIT_PACKS.get(pack)
-        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-        if pack_info:
-            increment_total_spent(user_id, pack_info["price_cents"])
+        if result["applied"]:
+            record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+            if pack_info:
+                increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -351,13 +375,17 @@ async def stripe_webhook(request: Request):
             return {"status": "already_processed"}
 
         # idempotency_key = stripe:{pi_id} -- credit_ledger.grant() itself
-        # refuses a double-credit atomically, no exception handling needed.
-        new_balance = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+        # refuses a double-credit atomically. `applied` gates the analytics so a
+        # redelivery that passed the unlocked has_processed_payment read above
+        # cannot double-count revenue (see _grant_or_503).
+        result = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+        new_balance = result["balance"]
 
         pack_info = CREDIT_PACKS.get(pack)
-        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-        if pack_info:
-            increment_total_spent(user_id, pack_info["price_cents"])
+        if result["applied"]:
+            record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+            if pack_info:
+                increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -489,14 +517,18 @@ async def verify_session(request: Request):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in session metadata")
 
-    # grant_credits is idempotent on (user_id, "stripe:{session_id}") -- a race
-    # between this and the webhook just reports the same balance twice.
-    new_balance = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+    # grant() is idempotent on (user_id, "stripe:{session_id}") -- a race
+    # between this and the webhook just reports the same balance twice. `applied`
+    # gates the analytics so the losing delivery cannot double-count revenue
+    # (see _grant_or_503).
+    result = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+    new_balance = result["balance"]
 
     pack_info = CREDIT_PACKS.get(pack)
-    record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-    if pack_info:
-        increment_total_spent(user_id, pack_info["price_cents"])
+    if result["applied"]:
+        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+        if pack_info:
+            increment_total_spent(user_id, pack_info["price_cents"])
 
     logger.info(
         f"[Payments] Verified + granted {credits} credits to {user_id} "

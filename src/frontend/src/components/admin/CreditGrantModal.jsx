@@ -68,7 +68,13 @@ export function CreditGrantModal({ users, onClose }) {
         setSummary({ granted: data.granted, failed: data.failed, failedIds, notAppliedIds });
         setSuccess(true);
         setAmount('');
-        lastAttemptRef.current = null;
+        // Only retire this attempt's batch_id when EVERY grant landed. A partial
+        // result (e.g. granted: 47, failed: 3) means a re-submit is a legitimate
+        // retry of the SAME batch -- clearing here would mint a fresh batch_id
+        // and re-grant the 47 that already succeeded.
+        if (data.failed === 0) {
+          lastAttemptRef.current = null;
+        }
       } else {
         const userId = users[0].user_id;
         const result = mode === 'set'

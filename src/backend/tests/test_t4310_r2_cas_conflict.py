@@ -545,7 +545,10 @@ class TestRequestThreadStillSkipsHead:
         monkeypatch.setattr(payments_mod, "STRIPE_WEBHOOK_SECRET", "whsec_test")
         monkeypatch.setattr(payments_mod.stripe.Webhook, "construct_event", lambda *a, **k: event)
         monkeypatch.setattr(payments_mod, "has_processed_payment", lambda *a, **k: False)
-        monkeypatch.setattr(payments_mod, "grant_credits", lambda *a, **k: 440)
+        # MAJOR-1 (Slice B fix3): payments now calls credit_ledger.grant() directly
+        # (returning {applied, balance}) and gates the analytics on `applied`, so
+        # grant_credits is no longer imported here -- stub `grant` instead.
+        monkeypatch.setattr(payments_mod, "grant", lambda *a, **k: {"applied": True, "balance": 440})
         monkeypatch.setattr(payments_mod, "record_milestone", lambda *a, **k: None)
         monkeypatch.setattr(payments_mod, "increment_total_spent", lambda *a, **k: None)
 
