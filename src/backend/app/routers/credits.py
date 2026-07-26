@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..services import credit_ledger
-from ..services.credit_ledger import get_credit_balance, get_credit_transactions
+from ..services.credit_ledger import CreditsUnavailable, get_credit_balance, get_credit_transactions
 from ..storage import APP_ENV
 from ..user_context import get_current_user_id
 
@@ -68,7 +68,10 @@ async def grant(request: GrantRequest):
     user_id = get_current_user_id()
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
-    new_balance = grant_credits(user_id, request.amount, request.source, request.reference_id)
+    try:
+        new_balance = grant_credits(user_id, request.amount, request.source, request.reference_id)
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
     return {"balance": new_balance}
 
 
