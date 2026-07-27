@@ -39,6 +39,27 @@ Staging, user `imankh@gmail.com` (`3ed03fb5-…`), profile `9fa7378c`:
   including the v024/v025 additions. **A migration cannot create a missing R2 object** — this is not
   a migration-window symptom.
 
+## DECISIVE EVIDENCE added 2026-07-27 (after the user reported re-downloading from prod)
+
+The user re-downloaded `imankh@gmail.com` and arshia's accounts **from prod to staging** shortly
+before the report. Follow-up measurements change the picture substantially:
+
+- **Prod does NOT contain this reel at all.** Prod `final_videos` for profile `9fa7378c` = **40
+  rows**, and a query for `project_id=31 OR name LIKE '%Brilliant Control%'` returns **[]**.
+- **Staging has 41 rows**, including `Brilliant Control` (created 2026-07-22, staging-native).
+- Staging `PRAGMA user_version` = **29** (head) *after* the re-download.
+- Staging's project 31 working video (`working_31_f874d743.mp4`) is **also 404**.
+
+So the profile **DB half of the copy did not land** — staging's SQLite is still staging's own — while
+the **R2 half did** (all 47 mp4s rewritten in a 39-second window). The DB therefore references a
+reel that the newly-copied object store was never going to contain.
+
+This matches the known hazard in memory `project_copy_to_live_env_clobber`: copying a profile DB
+into a **LIVE** backend is rejected/reverted by the local-ahead guard unless the machine is
+restarted first. **Cause (2) is now unlikely** — prod never had this object, so no export ever
+failed to durably land it. Confirm that reasoning rather than inheriting it, but do not spend the
+task hunting an export-durability bug that the row counts already argue against.
+
 ## What to determine
 
 1. **Which cause?** Check `scripts/copy_user_between_envs.py`: does it copy `final_videos` /
