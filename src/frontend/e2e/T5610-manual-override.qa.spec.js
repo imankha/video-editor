@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { existsSync, unlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+import { routeSeekableVideo, waitForVideoReady } from './helpers/videoRoute.js';
 
 /**
  * T5610 — REAL BROWSER (chromium) proof for "tap the spotlight to edit" + the override
@@ -35,7 +37,13 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SAMPLE = path.resolve(__dirname, '..', 'public', 'overlaydiag-sample.mp4');
+// Generated to a temp dir (NOT public/) and served via a Range-aware page.route: vite v5
+// dev caches its publicDir listing at startup, so a file ffmpeg-writes in beforeAll 404s
+// and vite serves the SPA index.html for the <video> src — the media never loads, play()
+// rejects, and the tap-nav "video plays" wait times out (THE T6060 flake). Same 640x360x3s
+// testsrc as before (shared-by-shape with T5450/T5643); only the location + transport
+// changed. See helpers/videoRoute.js.
+const SAMPLE = path.join(os.tmpdir(), 'overlaydiag-sample.mp4');
 const HARNESS = '/overlaydiag-t5610.html';
 
 const BODY = '[data-testid="highlight-body"]';
@@ -59,6 +67,18 @@ test.beforeAll(() => {
 test.afterAll(() => {
   if (existsSync(SAMPLE)) unlinkSync(SAMPLE);
 });
+
+/**
+ * Load the harness with the <video> served deterministically (Range-aware) from disk, then
+ * wait on a REAL readiness signal (readyState >= HAVE_FUTURE_DATA + seekable) before any
+ * interaction — so a tap that drives tap-nav actually plays, never a fixed sleep. Every
+ * test enters through here so the media is loaded regardless of when vite indexed publicDir.
+ */
+async function gotoReady(page) {
+  await routeSeekableVideo(page, /overlaydiag-sample\.mp4(\?.*)?$/, SAMPLE);
+  await page.goto(HARNESS);
+  await waitForVideoReady(page);
+}
 
 async function centerOf(locator) {
   const b = await locator.boundingBox();
@@ -100,7 +120,7 @@ function suite(label, contextOpts) {
 
     // AC1
     test('1) tap inside the circle enters edit; tap again dismisses; tracking stays on', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await expect(page.locator(BODY)).toBeVisible();
       // Tracking ON, display-only: enter target present, no edit controls yet.
       await expect(page.locator(ENTER_HIT)).toHaveCount(1);
@@ -124,7 +144,7 @@ function suite(label, contextOpts) {
 
     // AC2 — the T5570 drag-guard: a move drag while editing must not scrub/toggle the video.
     test('2) no drag is stolen while editing (circle moves, video does not seek/play)', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await tapCircle(page); // enter edit
       await expect(page.locator(CORNER_SE)).toBeVisible();
 
@@ -148,7 +168,7 @@ function suite(label, contextOpts) {
     // AC2 — hit-priority: a tap OUTSIDE the circle is NOT captured by the circle; it drives
     // tap-nav (and exits edit). Proves inside-wins / outside-passes.
     test('3) tap outside the circle does not enter edit; drives tap-nav', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       // Display-only. Tap a far corner of the video (outside the circle).
       const cbox = await page.locator(CONTAINER).boundingBox();
       await tapAt(page, cbox.x + 12, cbox.y + 12);
@@ -161,7 +181,7 @@ function suite(label, contextOpts) {
 
     // AC3 — toggle-OFF free-edit path is unchanged (editable without a tap, no enter target).
     test('4) toggle tracking OFF = free edit, no tap-to-enter target', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await page.locator(TOGGLE).click(); // tracking OFF
       await expect(page.locator(TOGGLE)).toHaveText('Tracking: OFF');
       await expect(page.locator(CORNER_SE)).toBeVisible(); // editable immediately
@@ -171,7 +191,7 @@ function suite(label, contextOpts) {
 
     // AC5 — >=44px touch targets on coarse; compact on fine.
     test('5) corner handles are >=44px on coarse pointers', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await tapCircle(page);
       await expect(page.locator(CORNER_SE)).toBeVisible();
       const box = await page.locator(CORNER_SE).boundingBox();
@@ -189,7 +209,7 @@ function suite(label, contextOpts) {
     // touch spec proves the resize MATH in jsdom, but jsdom cannot prove the real corner
     // hit-testing that actually grows the ellipse (the T5390/T5570 lesson).
     test('6) dragging a corner resizes the circle (widens the ellipse)', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await tapCircle(page); // enter edit -> corner handles appear
       await expect(page.locator(CORNER_SE)).toBeVisible();
 
@@ -213,7 +233,7 @@ function suite(label, contextOpts) {
     // only a real browser proves the 44px lever above the box hit-tests and drags for real.
     test('7) the coarse move-lever drags the circle (touch only)', async ({ page }) => {
       test.skip(label !== 'coarse (touch)', 'move lever renders only on a coarse pointer');
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await tapCircle(page); // enter edit -> lever appears above the box
       await expect(page.locator(LEVER)).toBeVisible();
 
@@ -240,7 +260,7 @@ function suite(label, contextOpts) {
     // the corner handle had onPointerDown but no onClick swallow (unlike the body/enter-hit).
     // Real touch does not synthesize this click, so this is proven with the mouse driver.
     test('8) a corner-resize drag keeps circle-edit open (does not exit edit)', async ({ page }) => {
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await tapCircle(page); // enter edit -> corner handles appear
       await expect(page.locator(CORNER_SE)).toBeVisible();
       expect(await page.evaluate(() => document.querySelector('[data-testid="status"]').textContent))
@@ -261,7 +281,7 @@ function suite(label, contextOpts) {
     // coarse pointer). A lever drag that ends with a compatibility click must not exit edit.
     test('9) a move-lever drag keeps circle-edit open (touch only)', async ({ page }) => {
       test.skip(label !== 'coarse (touch)', 'move lever renders only on a coarse pointer');
-      await page.goto(HARNESS);
+      await gotoReady(page);
       await tapCircle(page); // enter edit -> lever appears above the box
       await expect(page.locator(LEVER)).toBeVisible();
 
@@ -285,7 +305,7 @@ test.describe('T5610 override hint', () => {
   skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5610.html harness page, which does not exist in a production BUILD');
 
   test('6) hint names both paths, shows until first override, then fades and stays gone', async ({ page }) => {
-    await page.goto(HARNESS);
+    await gotoReady(page);
     // Shows on load (tracking ON, region visible, not yet overridden), naming BOTH paths.
     await expect(page.locator(HINT)).toBeVisible();
     await expect(page.locator(HINT)).toContainText('Tap the spotlight');
@@ -305,7 +325,7 @@ test.describe('T5610 override hint', () => {
 
   // AC5 — desktop + mobile parity, no horizontal overflow on the changed surface.
   test('7) responsive: no horizontal overflow at 375px and desktop', async ({ page }) => {
-    await page.goto(HARNESS);
+    await gotoReady(page);
     await expect(page.locator(BODY)).toBeVisible();
     await responsiveSweep(page);
   });

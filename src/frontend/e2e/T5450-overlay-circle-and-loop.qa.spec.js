@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { existsSync, unlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+import { routeSeekableVideo, waitForVideoReady } from './helpers/videoRoute.js';
 
 /**
  * T5450 — REAL BROWSER (chromium) proof for the overlay LOOP BUTTON, driven through a
@@ -32,7 +34,14 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SAMPLE = path.resolve(__dirname, '..', 'public', 'overlaydiag-sample.mp4');
+// Generated to a temp dir (NOT public/) because vite v5 dev caches the publicDir
+// listing at startup — a file created after the dev server is up 404s and vite serves
+// the SPA index.html for the <video> src instead, so play() rejects and the video never
+// plays (THE T6060 flake). We fulfil the <video> request via page.route from disk, which
+// is timing-independent (mirrors the T5676 aspectdiag fix). The ffmpeg command is
+// byte-identical to the pre-T6060 one so the seek/keyframe layout is unchanged; the
+// sample is still SHARED-by-shape with T5610/T5643 (same 640x360x3s testsrc).
+const SAMPLE = path.join(os.tmpdir(), 'overlaydiag-sample.mp4');
 const HARNESS = '/overlaydiag.html';
 
 const PLAY = '[data-testid="play-spotlight"]';
@@ -51,6 +60,19 @@ test.afterAll(() => {
 });
 
 /**
+ * Load the harness with the <video> src served deterministically (with Range support) from
+ * disk, then WAIT ON A REAL READINESS SIGNAL (readyState >= HAVE_FUTURE_DATA + seekable)
+ * before returning — never a fixed sleep and never element visibility. Only once the media
+ * can seek + play does the caller drive playback, so the seek lands and play() cannot reject
+ * on an unloaded source. See helpers/videoRoute.js for why both halves are required.
+ */
+async function gotoHarnessReady(page) {
+  await routeSeekableVideo(page, /overlaydiag-sample\.mp4(\?.*)?$/, SAMPLE);
+  await page.goto(HARNESS);
+  await waitForVideoReady(page);
+}
+
+/**
  * 4) Loop button = TRUE play/pause toggle (the core bug fix). Runs once (fine context is
  * enough — the handler is device-agnostic). Also proves the loop wraps at span end.
  */
@@ -61,7 +83,7 @@ test.describe('T5450 loop button play/pause toggle', () => {
   skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag.html harness page, which does not exist in a production BUILD');
 
   test('press plays (seek to span start), press again pauses; loop wraps at span end', async ({ page }) => {
-    await page.goto(HARNESS);
+    await gotoHarnessReady(page);
     // Paused, currentTime 0 (outside span [0.4,1.2]). Press primary -> loop + seek + play.
     await page.locator(PLAY).click();
     await page.waitForFunction(() => !document.querySelector('video').paused, null, { timeout: 4000 });
