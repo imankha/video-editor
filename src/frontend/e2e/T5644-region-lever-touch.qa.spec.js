@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { saveEvidence } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5644 — REAL BROWSER (chromium) proof that the overlay timeline region begin/end
@@ -22,7 +23,7 @@ import { saveEvidence } from './helpers/qa.js';
  * Run: cd src/frontend && npx playwright test e2e/T5644-region-lever-touch.qa.spec.js
  */
 
-const HARNESS = 'http://localhost:5173/regiondiag.html';
+const HARNESS = '/regiondiag.html';
 const STATUS = '[data-testid="status"]';
 const START_LEVER = '[data-testid="region-lever-start-0"]';
 const END_LEVER = '[data-testid="region-lever-end-0"]';
@@ -81,6 +82,11 @@ async function waitForRegion(page) {
 test.describe('T5644 region levers — coarse (touch)', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 412, height: 915 } });
 
+  // /regiondiag.html is a Vite-dev-only harness page: not an input to the production
+  // build, so on a deployed target this RELATIVE path resolves against the Pages origin
+  // and the SPA catch-all serves index.html instead — the harness never mounts.
+  skipOnDeployedTarget(test, 'drives the dev-only /regiondiag.html harness page, which does not exist in a production BUILD');
+
   test('a REAL touch drag moves the START boundary right (region shrinks from left)', async ({ page }) => {
     await page.goto(HARNESS);
     await waitForRegion(page);
@@ -118,6 +124,10 @@ test.describe('T5644 region levers — coarse (touch)', () => {
 test.describe('T5644 region levers — evidence artifacts (coarse mobile)', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 412, height: 915 } });
 
+  // /regiondiag.html is a Vite-dev-only harness page (see note above) — it does not exist
+  // in a production BUILD, so this group cannot run against a deployed target.
+  skipOnDeployedTarget(test, 'drives the dev-only /regiondiag.html harness page, which does not exist in a production BUILD');
+
   test('capture before/after touch-drag screenshots for each acceptance criterion', async ({ page }) => {
     await page.goto(HARNESS);
     await waitForRegion(page);
@@ -142,6 +152,10 @@ test.describe('T5644 region levers — evidence artifacts (coarse mobile)', () =
 });
 
 test.describe('T5644 region levers — fine (mouse) — no desktop regression', () => {
+  // /regiondiag.html is a Vite-dev-only harness page (see note above) — it does not exist
+  // in a production BUILD, so this group cannot run against a deployed target.
+  skipOnDeployedTarget(test, 'drives the dev-only /regiondiag.html harness page, which does not exist in a production BUILD');
+
   test('a real mouse drag still moves the START boundary right', async ({ page }) => {
     await page.goto(HARNESS);
     await waitForRegion(page);

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5380b — REAL BROWSER (chromium) regression proof for the CropOverlay first-drag
@@ -22,7 +23,7 @@ import { test, expect } from '@playwright/test';
  * cropdiag.html before an imported app module pushState-redirects to /framing).
  */
 
-const HARNESS = 'http://localhost:5173/cropdiag.html';
+const HARNESS = '/cropdiag.html';
 const BOX = '.cursor-move';
 
 async function boxBox(page) {
@@ -46,6 +47,11 @@ async function dragBox(page, dx, dy) {
 }
 
 test.describe('T5380b crop overlay first-drag (real chromium)', () => {
+  // /cropdiag.html is a Vite-dev-only harness page: not an input to the production
+  // build, so on a deployed target this RELATIVE path resolves against the Pages
+  // origin and the SPA catch-all serves index.html instead — the harness never mounts.
+  skipOnDeployedTarget(test, 'drives the dev-only /cropdiag.html harness page, which does not exist in a production BUILD');
+
   // THE regression: video still buffering (VideoLoadingOverlay up) is the exact staging
   // condition. Pre-fix, the z-40 overlay eats the first mousedown -> first drag = 0,0.
   test('first drag moves the crop box even while the video-loading overlay is up', async ({ page }) => {

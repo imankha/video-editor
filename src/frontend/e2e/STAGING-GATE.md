@@ -21,8 +21,9 @@ deployed-target run):
 
 The set deliberately **excludes**:
 
-- `LOCAL_ONLY_SPECS` (the `/api/test/*` seam specs + the Vite-dev-module unit specs) — they
-  can't run on a deployed build. See `helpers/targetEnv.js`.
+- `LOCAL_ONLY_SPECS` (the `/api/test/*` seam specs, the Vite-dev-module unit specs, and the
+  `*diag.html` **dev-harness** specs) — they can't run on a deployed build. See
+  `helpers/targetEnv.js`.
 - `screen-usability.spec.js` — the viewport-emulation audit. Neither Chromium nor WebKit
   reproduces **iOS Safari's dynamic-toolbar `100vh` chrome**, so this is a documented
   **emulation blind spot**, NOT a staging signal. It is documented in
