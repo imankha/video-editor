@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-07-27 (T5960: the sticky `.sync_conflict` alarm is GATED on write-attempt in the frontend — a read-only session that inherits another session's refusal stays silent; backend marker semantics UNCHANGED; see T5960 section)
 updated: 2026-07-26 (T5870: split sync state into pending/failed/conflict — a deferred sync is no longer mislabelled "failed"; bounded re-drain heals transient failures in-band; Retry restored + restores-if-newer on conflict; see T5870 section)
 updated: 2026-07-26 (T5920: WAL checkpoint-or-refuse guard in the R2 upload primitive — no under-checkpointed upload at a bumped version; see T5920 section)
 updated: 2026-07-26 (T5840: credits moved OUT of user.sqlite/R2 into Fly Postgres — see backend-services.md "Credits (Postgres, T5840)". No longer part of the R2 sync/CAS story below; purge/reregister interaction now governed by a Postgres idempotency-key collision, not restore-from-R2.)
@@ -348,6 +349,72 @@ exhausts / skips-conflict, no-refresh recovery, conflict-restore + honest-refusa
 real-browser `e2e/T5870-sync-failed-retry-no-refresh.spec.js` (seed fault → real write → alarm banner →
 Retry-while-down stays → clear fault → Retry clears the banner with NO reload). Each regression proven
 red-without-fix.
+
+## T5960 — Conflict alarm gated on write-attempt (frontend surfacing only)
+
+**Root cause (staging 2026-07-26):** a plain read-only load of `/home/games` (zero editing
+gestures) showed the red alarm "Could not save to the cloud". The `.sync_conflict` marker is
+**sticky** (survives until a later sync succeeds — see T4310 "freeze the baseline") so it outlives the
+session whose write was refused and, because `X-Sync-Status` is set on EVERY response (incl. GETs,
+`db_sync.py:857`), attaches to whatever session loads next — including a read-only one. The refusal
+itself is working as designed; the defect was WHO gets shown the alarm.
+
+**Fix (frontend ONLY — backend marker write/clear/CAS semantics UNCHANGED, do not touch them):**
+the `conflict` state is still HELD in `syncStore`, but its ALARM is not rendered until THIS session
+has attempted a **write**. `syncStore.js`:
+- New ephemeral store field `hasAttemptedWrite` (per-session; NEVER persisted — no
+  localStorage/SQLite/R2, no new write path) + `markWriteAttempted()`.
+- The existing global `window.fetch` interceptor is the single seam: `isMutatingApiRequest(input,
+  init)` (exported, unit-tested) arms the flag on a POST/PUT/PATCH/DELETE to our own API. Method can
+  be lowercase, absent (→GET, never arms), or on a `Request` in `args[0]`; URL is matched by
+  origin+`/api/` (foreign-origin R2 presigned PUTs do NOT arm).
+- **Critical exclusion — `NON_GESTURE_API_PREFIXES = ['/api/auth/', '/api/client-errors/']`.** The
+  naive "any mutating request" rule is DEFEATED because `POST /api/auth/init` fires on EVERY app load
+  (`sessionInit.js:259`), plus heartbeat / session-close / accept-terms / video-error beacons — all
+  non-gesture lifecycle writes that would arm the gate on a passive load and never actually suppress
+  the alarm. Proven by the e2e passive-load case (armed → banner visible) before the exclusion was
+  added. Genuine user-data writes (`/api/settings`, `/api/clips/...`, `/api/.../actions`, …) still arm.
+- `SyncStatusIndicator.jsx`: `isConflictHeldSilent = syncState==='conflict' && !hasAttemptedWrite`;
+  `isAlarm = failed || (conflict && hasAttemptedWrite)`; `shouldShow` excludes the held-silent case.
+  Only **conflict** is gated — `failed`, `pending`, and `offline` are untouched (a genuine failure
+  still alarms immediately regardless of write-attempt).
+- **Follow-up (supervisor audit, closed): export-recovery mount-time reconciliation also has to be
+  excluded, and can't share the auth/telemetry PREFIX exclusion.** `useExportRecovery.js` fires
+  `POST /api/exports/acknowledge` and `POST /api/exports/{job_id}/resume-progress` on MOUNT for
+  anyone with a finished/still-running export from a prior session — zero user intent, common enough
+  to re-break the silent-passive-load guarantee. A blanket `/api/exports/` PREFIX would also swallow
+  the real export-start gesture `POST /api/exports/framing`, so these two are excluded individually:
+  `NON_GESTURE_API_EXACT = ['/api/exports/acknowledge']` (exact path) and
+  `NON_GESTURE_API_PATTERNS = [/^\/api\/exports\/[^/]+\/resume-progress$/]` (job-id-parameterized
+  path). `isNonGesturePath(pathname)` checks prefixes + exact + patterns.
+- **Known residual — a URL-based denylist CANNOT distinguish two calls to the identical path.**
+  `PATCH /api/projects/{id}/state` is hit both by `useProjectLoader.js` on project OPEN (load-time
+  bookkeeping: `?update_last_opened=true&current_mode=...`) and by `App.jsx`'s real mode-switch
+  GESTURE (`?current_mode=...`, no `update_last_opened`). Pathname is identical, so the pathname-only
+  matcher here can't tell them apart — the query string differs (`update_last_opened=true` only on
+  the load-time call) but this module deliberately does not parse query strings, and coupling the
+  frontend gate to a specific backend query-param name would be a fragile, easy-to-silently-break
+  distinction. Left as-is (project-open incorrectly arms the gate too) — reported, not fixed; revisit
+  only if a passive-load false-positive is actually observed from this site specifically.
+- **`POST /api/clips/resolve-pending-shares`** (`SharedAnnotationView.jsx`, fires on mount of the
+  shared-clip-link route) is classified as a GESTURE, not lifecycle, and is intentionally NOT
+  excluded: unlike auth/export-recovery it does not fire on every app load, only when the user
+  deliberately opened a share link, and it performs a real data materialization write to the
+  recipient's own profile.sqlite (the exact kind of write that can genuinely conflict).
+
+**`failed` finding (task step 3, reported, NOT actioned):** `.sync_failed` is the same sticky-marker
+idiom and has the identical staleness property IN THEORY — a stale `.sync_failed` could surface to a
+reader too. It was left OUT of scope per the decision (primary scope = `conflict`); no evidence of a
+read-only `failed` false-alarm was observed, and widening was deferred to the user / a follow-up.
+
+**Tests:** `syncStore.test.js` (hasAttemptedWrite default/setter; `isMutatingApiRequest` method/URL/
+Request-object/lifecycle-exclusion matrix; interceptor arms on a real mutating fetch only);
+`SyncStatusIndicator.test.jsx` (conflict+zero-writes → nothing rendered; conflict+after-write →
+alarm+Retry; mid-session write flips held-silent → alarm; failed NOT gated). Real-browser
+`e2e/T5960-conflict-alarm-gated-on-write.spec.js` drives the 5-criterion matrix, INJECTING
+`X-Sync-Status: conflict` via `page.route` (a real cross-machine CAS conflict needs two boxes — not
+reproducible on a single-box container, see commit 9468a960); asserts on the rendered banner, never
+the API response (the bug was the API being right and the UI lying).
 
 ## T4320 — Durable clip gestures + user.sqlite shutdown sync + T5310 profile-create fix
 

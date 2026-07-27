@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useSyncStore, checkSyncStatus, surfaceRestoredNoticeIfPending } from './syncStore';
+import {
+  useSyncStore,
+  checkSyncStatus,
+  surfaceRestoredNoticeIfPending,
+  isMutatingApiRequest,
+} from './syncStore';
 import { useToastStore } from '../components/shared/Toast';
 
 const RESTORED_KEY = 't5870_restored_notice';
@@ -71,6 +76,114 @@ describe('checkSyncStatus (T5870 three-state)', () => {
     checkSyncStatus({ headers: new Headers({ 'X-Sync-Status': 'failed' }) });
     expect(setSpy).not.toHaveBeenCalled();
     setSpy.mockRestore();
+  });
+});
+
+// T5960: "has THIS session attempted a write?" is armed by the fetch
+// interceptor on a mutating request to our own API. Only that arms the conflict
+// alarm; a passive (read-only) session stays silent.
+describe('write-attempt arming (T5960)', () => {
+  beforeEach(() => {
+    useSyncStore.setState({ hasAttemptedWrite: false });
+  });
+
+  it('starts with hasAttemptedWrite false', () => {
+    expect(useSyncStore.getState().hasAttemptedWrite).toBe(false);
+  });
+
+  it('markWriteAttempted flips it true', () => {
+    useSyncStore.getState().markWriteAttempted();
+    expect(useSyncStore.getState().hasAttemptedWrite).toBe(true);
+  });
+
+  describe('isMutatingApiRequest', () => {
+    it('arms on POST/PUT/PATCH/DELETE to our own API', () => {
+      for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+        expect(isMutatingApiRequest('/api/clips/raw/save', { method })).toBe(true);
+      }
+    });
+
+    it('does NOT arm on a GET (default method)', () => {
+      expect(isMutatingApiRequest('/api/games', {})).toBe(false);
+      expect(isMutatingApiRequest('/api/games', undefined)).toBe(false);
+    });
+
+    it('handles a lowercase method', () => {
+      expect(isMutatingApiRequest('/api/clips/raw/save', { method: 'post' })).toBe(true);
+    });
+
+    it('reads the method + url from a Request object in args[0]', () => {
+      // Same-origin absolute URL, matching how the app issues API calls.
+      const base = window.location.origin;
+      const req = new Request(`${base}/api/clips/raw/save`, { method: 'POST' });
+      expect(isMutatingApiRequest(req, undefined)).toBe(true);
+      const getReq = new Request(`${base}/api/games`, { method: 'GET' });
+      expect(isMutatingApiRequest(getReq, undefined)).toBe(false);
+    });
+
+    it('does NOT arm on a mutating request to a foreign origin (R2 presigned PUT)', () => {
+      expect(
+        isMutatingApiRequest('https://bucket.r2.cloudflarestorage.com/x?sig=1', {
+          method: 'PUT',
+        })
+      ).toBe(false);
+    });
+
+    it('does NOT arm on a non-/api same-origin request', () => {
+      expect(isMutatingApiRequest('/storage/warmup', { method: 'POST' })).toBe(false);
+    });
+
+    it('does NOT arm on session/telemetry lifecycle writes (T5960)', () => {
+      // POST /api/auth/init fires on EVERY app load — the real defeat of the
+      // naive "any write" rule. These are not user edits and must stay silent.
+      expect(isMutatingApiRequest('/api/auth/init', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/heartbeat', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/session-close', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/accept-terms', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/client-errors/video', { method: 'POST' })).toBe(false);
+    });
+
+    it('does NOT arm on export-recovery mount-time reconciliation (T5960 follow-up)', () => {
+      // useExportRecovery.js fires these on MOUNT whenever a prior export finished
+      // or is still running while the user was away — zero user intent, common
+      // for any user who recently exported. Both would re-break acceptance
+      // criterion 1 (silent passive load) if left unexcluded.
+      expect(isMutatingApiRequest('/api/exports/acknowledge', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/123/resume-progress', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST' })).toBe(false);
+    });
+
+    it('DOES arm on a real export-start gesture (does not over-exclude /api/exports/)', () => {
+      // A blanket '/api/exports/' prefix would ALSO swallow these real gesture
+      // writes (the export button) -- must stay armed.
+      expect(isMutatingApiRequest('/api/exports', { method: 'POST' })).toBe(true);
+      expect(isMutatingApiRequest('/api/exports/framing', { method: 'POST' })).toBe(true);
+    });
+
+    it('DOES arm on genuine user-data write gestures', () => {
+      expect(isMutatingApiRequest('/api/settings', { method: 'PUT' })).toBe(true);
+      expect(isMutatingApiRequest('/api/clips/raw/save', { method: 'POST' })).toBe(true);
+      expect(isMutatingApiRequest('/api/projects/1/actions', { method: 'POST' })).toBe(true);
+    });
+  });
+
+  it('the fetch interceptor arms the store on a mutating API request only', async () => {
+    vi.resetModules();
+    const stub = vi.fn(async () => ({ headers: new Headers() }));
+    vi.stubGlobal('fetch', stub);
+    // Fresh import so the interceptor wraps the stubbed fetch.
+    const store = await import('./syncStore');
+    store.useSyncStore.setState({ hasAttemptedWrite: false });
+
+    // A GET must NOT arm it.
+    await window.fetch('/api/games');
+    expect(store.useSyncStore.getState().hasAttemptedWrite).toBe(false);
+
+    // A POST to our API arms it.
+    await window.fetch('/api/clips/raw/save', { method: 'POST' });
+    expect(store.useSyncStore.getState().hasAttemptedWrite).toBe(true);
+
+    vi.unstubAllGlobals();
   });
 });
 
