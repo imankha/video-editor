@@ -142,13 +142,6 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-g
 
 test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({ context, page }) => {
   test.setTimeout(120_000);
-  // copyReelLink awaits navigator.clipboard.writeText and, on ANY throw, falls back to
-  // opening the ShareModal instead of toasting. Chromium denies clipboard-write to an
-  // ungranted context, so the write threw, the toast never fired, and this read as
-  // "0 visible toasts" even though the share POST had already gone out (and deduped
-  // correctly). Grant it so the assertion measures the dedup behaviour under test
-  // rather than the harness's own missing permission.
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await loginAsRealUser(context, EMAIL, PROFILE);
 
   // Discover the game group to expand (its header text is the game name) — no
@@ -193,15 +186,24 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({
   await reelCard.waitFor({ state: 'visible', timeout: 15000 });
   const copyBtn = reelCard.getByTitle('Copy link').first();
   await copyBtn.waitFor({ state: 'attached', timeout: 30000 });
-  // The card action row is hover-revealed; hover the card then force the
-  // rapid clicks (we are testing handler-level dedup, not hover ergonomics).
-  await copyBtn.hover({ force: true }).catch(() => {});
+  // Hover the CARD, not the button: ReelTile's action row is
+  // `pointer-events-none ... group-hover/tile:pointer-events-auto`, so the button
+  // cannot take a hover until its TILE ancestor is hovered.
+  await reelCard.hover().catch(() => {});
   for (let i = 0; i < 5; i++) {
     await copyBtn.click({ force: true, delay: 10 });
   }
-  await page.waitForTimeout(2500);
 
+  // WAIT for the toast rather than sleeping a fixed 2.5s. copyReelLink only toasts
+  // AFTER createShareUrl's POST /api/gallery/{id}/share resolves, and that call takes
+  // ~4s on staging (the app logs several 4-5s SLOW FETCH warnings on this box), so the
+  // old fixed 2500ms sleep sampled BEFORE the toast existed and read 0 -- a pure
+  // latency artifact, not a dedup failure. Waiting for the first toast keeps the real
+  // assertion (exactly ONE, not five) meaningful and latency-independent.
   const toasts = page.getByText('Link copied to clipboard');
+  await toasts.first().waitFor({ state: 'visible', timeout: 30000 });
+  // Let any late duplicate land before counting, so "exactly one" is a real claim.
+  await page.waitForTimeout(2000);
   const toastCount = await toasts.count();
   console.log(`[derisk] share POSTs: ${sharePosts.length}, visible toasts: ${toastCount}`);
   await page.screenshot({ path: `${EVID}/copylink-toasts.png` });
