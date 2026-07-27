@@ -62,16 +62,24 @@ hold (27 published reels via `/api/downloads`, 5 non-empty game collections via
   target), so the group's reel count must match `ratio_counts[ratio]`.
 
 - **`derisk-staging-export.qa.spec.js`** needs a draft that can reach **overlay-export**.
-  **KNOWN GAP (T5420):** a *pre-framed single-clip* draft opened directly into Overlay on
-  staging streams its `working_video` but does **not** hydrate `framingVideoUrl`, so the
-  Overlay export panel (and the Export button) **never mounts** — neither the Export button
-  nor the "Export required" message appears (verified: waited 90s). The spec therefore waits
-  a bounded 60s for the overlay Export button and **skips loudly** when it never mounts. To
-  make this spec **run green**, the seed must guarantee a draft that reaches overlay-export
-  (e.g. a multi-clip / edited draft that hydrates `framingVideoUrl`, or a draft already
-  exported to a final video). If a *pre-framed single-clip* draft genuinely should reach
-  overlay-export, that overlay-export-mount gap is a **product bug to file** — the derisk
-  spec is not the place to work around it.
+  **T6120 correction of the earlier T5420 diagnosis:** the overlay Export button is gated on
+  OverlayScreen's `effectiveOverlayVideoUrl = workingVideo?.url` for a pre-framed draft, so
+  the panel mounts iff the working video actually **loads**. The earlier claim that a
+  pre-framed single-clip draft "does not hydrate `framingVideoUrl`" was a **misdiagnosis**:
+  `framingVideoUrl` is a pass-through source used only for un-framed / multi-clip / edited
+  drafts and is irrelevant when a working video exists. The REAL cause of the observed
+  mount failures on staging is a **missing working-video R2 object** — the DB reports
+  `has_working_video=true` (row + `working_video_url` present) but the `working_videos/…mp4`
+  object returns **NoSuchKey/404** (a dangling ref, e.g. after a staging wipe that dropped
+  `working_videos/` objects while keeping the profile SQLite and `final_videos/` objects).
+  `workingVideo` never hydrates → `effectiveOverlayVideoUrl` stays null → panel never mounts.
+  A draft whose working-video R2 object is **intact DOES mount the panel** (verified T6120 on
+  staging drafts 37/54). So this is a **staging-data (dangling-ref) issue, not a mount-logic
+  product bug.** The spec now (a) probes candidates and prefers a draft whose working video
+  actually loads, and (b) on a mount failure logs the ACTUAL cause (missing R2 object vs.
+  un-framed) before skipping loudly. To make this spec **run green**, re-seed imankh
+  (`copy_user_between_envs.py`) so at least one framed draft has a present working-video R2
+  object, or leave an un-finalized un-framed draft so Phase 1 renders a fresh one.
 
 ### Framed-project position note (T5320)
 

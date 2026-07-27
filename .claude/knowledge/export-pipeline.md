@@ -127,6 +127,47 @@ graph LR
 - WARNING (memory): backend tests TRUNCATE the real dev Postgres — warn the user before running; the guard blocks staging/prod only.
 - T4370 will add `tests/export_golden/`-style DB-delta snapshots for all 6 triggers; until it lands there is NO broad characterization net — prefer surgical diffs. **The multi-clip finalizer IS now pinned** by `tests/test_t5630_characterization.py` (local in-band, Modal in-band, recovery == in-band) + `test_t5630_finalize_unit.py` (upsert/finalize idempotency, fallback) — reuse the T5600/T4200 mocked-pipeline harness (mock Modal AI call, R2, detection, sync; real profile SQLite via a `_init_cache` test user) for any further finalize change.
 
+## Staging export timeline + overlay-export-mount gap (T6120, 2026-07-27)
+- **The overlay->final pipeline is HEALTHY and FAST on staging** (`modal_enabled=true`). Measured on the
+  imankh fixture (`9fa7378c`) via read-only `GET /api/exports/project/{id}`: framing renders complete in
+  **64-114s** (proj 37: 64s, proj 51: 114s); a real overlay export completed in **~16s** (proj 31,
+  2026-07-22, `final_31_eda94512.mp4`). None of these is anywhere near the derisk spec's 480s budget.
+- **The `derisk-staging-export.qa.spec.js` 480s failure / T5420 SKIP were the SAME root cause, and it is
+  NOT a render stall — the overlay export never STARTED.** For a pre-framed single-clip draft the overlay
+  Export button is gated on `OverlayScreen.effectiveOverlayVideoUrl = workingVideo?.url` (screen-scope,
+  `OverlayScreen.jsx:204`, passed to `OverlayModeView` at `:1124` — NOT the container-scope
+  `OverlayContainer.effectiveOverlayVideoUrl`; `framingVideoUrl` is a pass-through used only for
+  un-framed / multi-clip / edited drafts). The panel mounts iff `workingVideo` hydrates, which needs the
+  working-video presigned R2 URL to actually LOAD.
+- **The earlier T5420 diagnosis ("pre-framed single-clip draft does not hydrate framingVideoUrl") was WRONG.**
+  Real cause: a **dangling working_video ref** — DB reports `has_working_video=true` (row + `working_video_url`
+  present, `working_video/playback-url` returns 200) but the `working_videos/{file}.mp4` R2 object returns
+  **NoSuchKey/404**. `playback-url` signs the URL WITHOUT HEAD-verifying the object exists, so the frontend
+  can't classify it as `VideoAssetMissing` (that path only triggers on a playback-url 404, i.e. DB ref gone);
+  instead `extractVideoMetadataFromUrl` fails, `workingVideo` stays null, `shouldWaitForWorkingVideo` stays
+  true (working_video_url is truthy) -> `effectiveOverlayVideoUrl` stays null -> **panel never mounts**, and
+  the "Export required" message also never shows (single un-edited clip => `hasFramingEdits`/`hasMultipleClips`
+  both false). A draft whose working-video R2 object is INTACT mounts fine (verified: proj 37/54).
+- **Why the objects were missing = the 2026-07-27 staging wipe / `copy_user_between_envs` dropped `working_videos/`
+  R2 objects while keeping the profile SQLite rows AND the `final_videos/` objects** (all 8 sampled published
+  finals returned 200; only working videos 404'd — 3/5 pre-framed drafts: 31, 33, 51 missing; 37, 54 intact,
+  37's being the freshest, post-wipe framing). This is a **staging-DATA (dangling-ref) artifact, not a
+  mount-logic product defect and not a prod defect.**
+- **Data-loss STOP shape (has_final_video-false-while-final-MP4-exists, T4010/T4020) is CONCLUSIVELY ABSENT
+  here:** per-project job history shows NO overlay/final export ever ran for any `has_final_video=false` draft
+  (32-39, 51, 52), so no orphan final MP4 can exist for them; the only recorded overlay job (proj 31) succeeded
+  and its draft correctly reads `has_final_video=true`.
+- **Robustness follow-up (NOT fixed in T6120, may overlap T6100):** `working_video/playback-url` could
+  HEAD-probe the object and 404 on a dangling ref (like `clips.py get_clip_playback_url` does), so the
+  overlay screen surfaces the clean "video no longer available - re-export" state instead of a generic
+  retry-that-can't-succeed + no panel. Per CLAUDE.md "no defensive fixes for internal bugs", the primary fix
+  is at the source (why the object is missing); on staging the source is the wipe.
+- **Spec change (T6120):** `derisk-staging-export.qa.spec.js` now (a) discovery prefers a draft whose
+  working-video R2 object actually loads (`probeWorkingVideo`), and (b) on a mount failure probes the ACTUAL
+  cause and SPLITS it: working video loads but panel still absent -> **FAIL** (real mount-logic regression);
+  working video does not load (dangling ref / un-framed) -> **SKIP loudly** (staging fixture issue). More
+  diagnostic AND less tolerant than the old blanket skip. `FIXTURE-CONTRACT.md` T5420 gap note corrected.
+
 ## Perf attribution (T4770, 2026-07-09)
 - **`working_video/stream` is a same-origin Range pass-through proxy (NOT byte-windowed).** It forwards
   the client's Range to R2 and returns R2's status/Content-Range/Content-Length unchanged — working_videos
