@@ -12,22 +12,25 @@ Verifies:
 
 import asyncio
 import time
-
-import pytest
 from unittest.mock import patch
 
+import pytest
+
+import app.database as db_module
+from app.database import (
+    clear_sync_pending,
+    has_sync_failed,
+    has_sync_pending,
+    mark_sync_failed,
+    mark_sync_pending,
+)
 from app.middleware import db_sync
 from app.middleware.db_sync import (
+    RequestContextMiddleware,
     _begin_sync_attempt,
     _end_sync_attempt,
     is_sync_attempt_in_progress,
-    RequestContextMiddleware,
-)
-import app.database as db_module
-from app.database import (
-    mark_sync_pending,
-    clear_sync_pending,
-    has_sync_pending,
+    sync_status_header,
 )
 
 
@@ -35,7 +38,7 @@ from app.database import (
 def isolate_locks(monkeypatch):
     """Each test gets fresh locks and sync-in-progress state."""
     monkeypatch.setattr(db_sync, "_USER_WRITE_LOCKS", {})
-    monkeypatch.setattr(db_sync, "_SYNC_IN_PROGRESS", set())
+    monkeypatch.setattr(db_sync, "_SYNC_IN_PROGRESS", {})
     yield
 
 
@@ -113,7 +116,11 @@ class TestBackgroundSyncFailure:
         middleware = RequestContextMiddleware(app=None)
 
         async def runner():
-            with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=False):
+            # T5870: the bounded re-drain now retries a failed sync; patch it to
+            # keep failing so this pins the EXHAUSTED-failure path (marker stays).
+            with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=False), \
+                 patch("app.middleware.db_sync.retry_pending_sync", return_value=False), \
+                 patch("app.middleware.db_sync._REDRAIN_BASE_BACKOFF_S", 0.001):
                 await middleware._background_sync(
                     user_id, "prof1", "rid1", "POST", "/api/test",
                     had_writes=True, had_user_db_writes=False,
@@ -122,6 +129,7 @@ class TestBackgroundSyncFailure:
 
         asyncio.run(runner())
         assert has_sync_pending(user_id), "marker must stay on failure for crash recovery"
+        assert has_sync_failed(user_id), "T5870: an unrecovered failure marks .sync_failed"
         assert not is_sync_attempt_in_progress(user_id), "_end_sync_attempt must still be called"
 
     def test_leaves_marker_on_exception(self):
@@ -184,8 +192,12 @@ class TestBackgroundSyncFailure:
         middleware = RequestContextMiddleware(app=None)
 
         async def runner():
+            # T5870: patch the re-drain to keep failing so a partial failure that
+            # cannot be healed still keeps the marker (exhausted path).
             with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=True), \
-                 patch("app.middleware.db_sync.sync_user_db_to_r2_explicit", return_value=False):
+                 patch("app.middleware.db_sync.sync_user_db_to_r2_explicit", return_value=False), \
+                 patch("app.middleware.db_sync.retry_pending_sync", return_value=False), \
+                 patch("app.middleware.db_sync._REDRAIN_BASE_BACKOFF_S", 0.001):
                 await middleware._background_sync(
                     user_id, "prof1", "rid1", "POST", "/api/test",
                     had_writes=True, had_user_db_writes=True,
@@ -319,23 +331,28 @@ class TestSyncPendingBeforeResponse:
         _end_sync_attempt(user_id)
         clear_sync_pending(user_id)
 
-    def test_begin_attempt_suppresses_failed_header(self):
-        """When _begin_sync_attempt is called, is_sync_failed AND-gated with
-        is_sync_attempt_in_progress prevents false 'failed' header."""
+    def test_begin_attempt_suppresses_header(self):
+        """T5870: an in-flight sync suppresses ANY X-Sync-Status header via
+        sync_status_header's in-progress gate — a genuine .sync_failed included."""
         user_id = "test-header-suppression"
 
-        mark_sync_pending(user_id)
-        assert db_sync.is_sync_failed(user_id) is True
+        mark_sync_failed(user_id)
+        assert sync_status_header(user_id) == "failed"
 
         _begin_sync_attempt(user_id)
-        failed = db_sync.is_sync_failed(user_id)
-        in_progress = is_sync_attempt_in_progress(user_id)
-        should_show_header = failed and not in_progress
-        assert should_show_header is False, (
-            "X-Sync-Status: failed must be suppressed during in-flight sync"
+        assert sync_status_header(user_id) is None, (
+            "any X-Sync-Status must be suppressed during an in-flight sync"
         )
 
         _end_sync_attempt(user_id)
+        assert sync_status_header(user_id) == "failed"
+
+    def test_pending_only_is_quiet_not_failed(self):
+        """T5870: a merely-pending write is 'pending' (quiet), never 'failed'."""
+        user_id = "test-pending-quiet"
+        mark_sync_pending(user_id)
+        assert db_sync.is_sync_failed(user_id) is False
+        assert sync_status_header(user_id) == "pending"
 
 
 class TestBackgroundSyncErrorPathLockTimeout:

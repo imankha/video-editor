@@ -11,15 +11,21 @@ Run with: pytest src/backend/tests/test_sync_status.py -v
 """
 
 import importlib
-import pytest
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import database as db_module
-from app.database import has_sync_pending, mark_sync_conflict, mark_sync_pending
+from app.database import (
+    has_sync_conflict,
+    has_sync_pending,
+    mark_sync_conflict,
+    mark_sync_failed,
+)
 from app.middleware.db_sync import is_sync_failed, set_sync_failed
 
 # Test user ID used for all client-based tests (sent via X-User-ID header)
@@ -71,10 +77,11 @@ class TestSyncFailedTracking:
         """T1152: marker-backed sync-failed survives a backend restart.
 
         Simulates restart by reloading the middleware module; any in-memory
-        per-user state would be lost, but the .sync_pending marker on disk
-        still reflects the degraded state.
+        per-user state would be lost, but the .sync_failed marker on disk
+        still reflects the degraded state. (T5870: is_sync_failed is now the
+        GENUINE-failure marker, not the pending marker.)
         """
-        mark_sync_pending("restart_user")
+        mark_sync_failed("restart_user")
 
         from app.middleware import db_sync
         importlib.reload(db_sync)
@@ -88,6 +95,7 @@ class TestRetrySyncEndpoint:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from app.main import app
         return TestClient(app, headers={"X-User-ID": TEST_USER_ID})
 
@@ -131,21 +139,33 @@ class TestRetrySyncEndpoint:
 
     @patch("app.routers.health.sync_db_to_cloud", return_value="conflict")
     @patch("app.routers.health.R2_ENABLED", True)
-    def test_retry_sync_conflict_reports_failure_not_success(self, mock_sync, client):
-        """T4310 reviewer round 2 (BLOCKING-2): a CAS conflict ("conflict") is
-        a non-empty string and was truthy under the old `if success:` check,
-        so a REFUSED sync reported {"success": true} and cleared
-        .sync_pending -- masking a stale local DB as durably saved. Must
-        report success=False and leave the failure marker in place."""
+    def test_retry_sync_conflict_that_cannot_restore_reports_failure_not_success(
+        self, mock_sync, client, monkeypatch
+    ):
+        """T4310 BLOCKING-2 intent, preserved under T5870's redesign: a CAS
+        conflict must NEVER be reported as a durable success while it is
+        unresolved. T5870 routes a conflict to restore-if-newer instead of a
+        blind re-push; when that restore CANNOT complete (R2 unreachable here),
+        the endpoint must still report success=False and keep the conflict
+        marker — no lie, no silent clear, no loop. (confirm_current_before_write
+        raises RefreshFailed, so the honest-failure branch fires.)"""
+        from app.services.db_refresh import RefreshFailed
+
+        def _boom(user_id, profile_id=None):
+            raise RefreshFailed("R2 unreachable")
+
+        monkeypatch.setattr(
+            "app.services.db_refresh.confirm_current_before_write", _boom
+        )
         set_sync_failed(TEST_USER_ID, True)
+        mark_sync_conflict(TEST_USER_ID)
 
         response = client.post("/api/retry-sync")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
-        assert is_sync_failed(TEST_USER_ID) is True, \
-            "a refused (conflict) sync must not clear .sync_pending"
-        mock_sync.assert_called_once()
+        assert has_sync_conflict(TEST_USER_ID) is True, \
+            "an unresolved conflict must not clear its marker"
 
 
 class TestSyncStatusHeader:
@@ -154,6 +174,7 @@ class TestSyncStatusHeader:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from app.main import app
         return TestClient(app, headers={"X-User-ID": TEST_USER_ID})
 

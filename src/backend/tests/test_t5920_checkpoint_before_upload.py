@@ -323,7 +323,7 @@ class TestBackgroundSyncCheckpointCoverage:
         from app.middleware import db_sync as m
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
-        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", set())
+        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", {})
 
     def test_background_sync_refuses_under_contention(self, tmp_path):
         """The end-of-request sync path (`_background_sync` -> sync_db_to_r2_explicit

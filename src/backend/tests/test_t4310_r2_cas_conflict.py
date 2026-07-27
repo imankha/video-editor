@@ -218,7 +218,7 @@ class TestBackgroundSyncConflictRouting:
         from app.middleware import db_sync as m
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
-        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", set())
+        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", {})
 
     def test_profile_conflict_sets_conflict_status_and_marker(self):
         from app.database import has_sync_pending, mark_sync_pending
@@ -347,7 +347,7 @@ class TestParallelSyncMarkerRaceFixed:
         from app.middleware import db_sync as m
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
-        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", set())
+        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", {})
 
     def test_profile_ok_user_conflict_marks_conflict_even_if_profile_clears_first(self):
         """Simulates the race: profile sync succeeds (would clear_sync_conflict)
@@ -613,24 +613,37 @@ class TestRetrySyncEndpointConflictMapping:
     reporting {"success": true} and clearing .sync_pending after a sync that
     was actually refused."""
 
-    def test_conflict_status_reports_failure_and_does_not_clear_pending(self, tmp_path, monkeypatch):
+    def test_conflict_that_cannot_restore_reports_failure_and_keeps_marker(self, tmp_path, monkeypatch):
+        """T5870: a conflict now routes to restore-if-newer, not a blind re-push.
+        When that restore cannot complete, the endpoint must STILL never lie about
+        durability — success=False and the conflict marker is retained (preserving
+        the round-2 BLOCKING-2 intent: a refused/unresolved sync is never reported
+        as saved)."""
         import app.database as db_module
-        from app.database import has_sync_pending, mark_sync_pending
-        from app.middleware.db_sync import is_sync_failed
+        from app.database import has_sync_conflict, mark_sync_conflict, mark_sync_pending
         from app.routers import health as health_mod
+        from app.services.db_refresh import RefreshFailed
         from app.user_context import set_current_user_id
 
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         user_id = "test-t4310-retry-conflict"
         monkeypatch.setattr(health_mod, "R2_ENABLED", True)
         monkeypatch.setattr(health_mod, "sync_db_to_cloud", lambda: "conflict")
+
+        def _boom(uid, profile_id=None):
+            raise RefreshFailed("R2 unreachable")
+
+        monkeypatch.setattr(
+            "app.services.db_refresh.confirm_current_before_write", _boom
+        )
         set_current_user_id(user_id)
         mark_sync_pending(user_id)
+        mark_sync_conflict(user_id)
 
         import asyncio as _asyncio
         result = _asyncio.run(health_mod.retry_sync())
 
         assert result["success"] is False
-        assert has_sync_pending(user_id), \
-            "a refused (conflict) sync must not clear .sync_pending"
-        assert is_sync_failed(user_id)
+        assert result.get("conflict") is True
+        assert has_sync_conflict(user_id), \
+            "an unresolved conflict must not clear its marker"
