@@ -23,9 +23,12 @@ All three involve driving actual `<video>` playback in Chromium against the ffmp
 that touches this spec family rediscovers them, re-triages them, and has to prove they are
 pre-existing. That has now happened at least three times.
 
-## What to do — diagnose first, document second
+## What to do — diagnose and FIX
 
-The baseline file's own rule is that entries are debt to be burned down, not a parking lot. So:
+**Updated 2026-07-27 (user direction): "even flakes need to be solved."** Parking these in
+`known-failures.md` is NOT an acceptable outcome. A spec that fails intermittently is either
+testing something that intermittently breaks (a product defect) or is badly written (a test
+defect) — both get fixed. The baseline file is for debt awaiting a task; this IS the task.
 
 1. **Try to make them deterministic.** Likely causes, in rough order — confirm, don't assume:
    - autoplay policy / `play()` returning a rejected promise that the test never awaits
@@ -34,13 +37,16 @@ The baseline file's own rule is that entries are debt to be burned down, not a p
    - the shared fixture's duration/keyframe layout making a seek land unpredictably
    Prefer waiting on real media events over `waitForTimeout`. A fixed sleep racing a slow
    operation is exactly the bug pattern that produced the copy-link toast failure on 2026-07-26.
-2. **If a test is genuinely non-deterministic in a way you cannot fix**, add it to
-   `docs/testing/known-failures.md` with evidence it fails on clean master (the file's rule 1),
-   the root cause, and the handling — and keep `branch-ci.yml`'s `--deselect` list in sync (rule 3).
-   Note the deselect list was just emptied on 2026-07-27; do not re-add anything you have not
-   proven.
-3. Either outcome is a success. What is NOT acceptable is leaving them undocumented so the next
-   worker re-triages them a fourth time.
+2. **Each of the three must end deterministic.** If a fix requires changing the fixture, the
+   readiness signal, or the assertion, do that. If the flake turns out to be the APP being
+   non-deterministic (a real playback bug), stop and report it — that is a product defect and a
+   separate, higher-impact task, not something to absorb into the test.
+3. Adding rows to `known-failures.md` and re-populating `branch-ci.yml`'s `--deselect` list is
+   explicitly NOT the deliverable. That list was emptied on 2026-07-27; leave it empty.
+4. **Prior art from the same day, reuse it:** T6110 covers three staging specs that act on a
+   visible-but-not-ready placeholder, and the general "assert on a real ready-signal, never on
+   element visibility or a fixed sleep" lesson applies here too. Check whether these three share
+   that root cause before writing anything new.
 
 ## Watch out for
 
