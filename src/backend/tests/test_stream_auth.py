@@ -19,7 +19,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 STREAM_PATH = "/api/clips/projects/999999/clips/999999/stream"
 WORKING_VIDEO_STREAM_PATH = "/api/projects/999999/working_video/stream"
 WORKING_VIDEO_PLAYBACK_URL_PATH = "/api/projects/999999/working_video/playback-url"
@@ -136,6 +135,10 @@ def test_working_video_playback_url_returns_url_with_auth(monkeypatch):
         "_generate_working_video_presigned_url",
         lambda filename: f"https://r2.example.com/working_videos/{filename}?sig=abc",
     )
+    # T6130: the endpoint now verifies the R2 object exists before handing back a
+    # URL. This test covers the healthy path, so stub the existence check True
+    # (the dangling-ref 404 path is covered by test_t6130_dangling_working_video).
+    monkeypatch.setattr(projects_router, "file_exists_in_r2", lambda *a, **k: True)
 
     client = TestClient(app)
     r = client.get(WORKING_VIDEO_PLAYBACK_URL_PATH, headers={"X-User-ID": "testdefault"})
