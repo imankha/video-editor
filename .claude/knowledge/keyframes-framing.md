@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-27 (T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-07-27 (T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the removeBoundaryDuplicates self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -133,6 +133,33 @@ gesture lands — no save/export.
   `INITIALIZE` seeds ZERO keyframes (keyframeController.js:186-197); `ensurePermanentKeyframes` is
   now just a sort — endFrame arg ignored (L138-148); `REMOVE_KEYFRAME` protects nothing (L272-287);
   `SET_END_FRAME` is a no-op (L377-382). Any keyframe deletable, including the last one.
+- **Standing integrity guard: `e2e/keyframe-integrity.spec.js` (re-pinned by T6050).** Runs the
+  real Vite-served controller+utils in-browser (self-skips on a deployed target — a "pass" on
+  staging means it SKIPPED; run locally with the dev stack). It pins the flat-list invariants:
+  (INV-1) RESTORE round-trips exactly — no manufactured frame-0 boundary, crop data + count
+  preserved; (INV-2) origins normalized to `user`/`trim` on restore (`permanent` is legacy
+  residue); (INV-3) `removeBoundaryDuplicates` collapses ONLY a keyframe spatially identical to
+  the adjacent boundary — a DISTINCT near-edge keyframe survives (dedup is identity-based, never
+  proximity-based); (INV-4) empty list is legal (INITIALIZE seeds zero, empty RESTORE is a no-op);
+  (INV-5) any keyframe deletable incl. the first + the last remaining; (INV-6) min-spacing +
+  snap-to-update; (INV-7) `resolveTargetFrame` is the identity SSOT and the reducer agrees (a near
+  edit snaps, no near-duplicate — the v014 divergence class); (INV-8) a full lifecycle keeps
+  `validateInvariants` clean and trim cleanup drops only `trim`-origin keyframes. The old T340
+  permanent-boundary assertions (`g1a_frame0===0`, `origin==='permanent'`, reconstitution) are
+  RETIRED with that model; the disposition is documented inline at the top of the spec.
+- **LANDMINE — `removeBoundaryDuplicates` self-drops a non-boundary first keyframe (found T6050,
+  NOT yet fixed).** The cosmetic edge-dedup (keyframeController.js:158-170) compares each keyframe
+  against `keyframes[0]`/`keyframes[length-1]` — but the loop INCLUDES those boundary keyframes
+  themselves, and `hasSameSpatialData(kf, kf)` is trivially true. So the gate for `keyframes[0]`
+  reduces to `frame ∈ (0, MIN_KEYFRAME_SPACING*3=30)`: a restored FIRST keyframe at frame 1..29
+  with no other duplicate is SILENTLY DROPPED on restore (interpolation then clamps to the next
+  keyframe → the crop for the opening frames changes = real data loss, the same class this spec
+  guards). Reachable: `savedKeyframes` from persisted crop data have no frame-0 guarantee
+  (useCrop.js:194-207 restores them verbatim). This is why the stale spec's `[10,50,90]` input
+  returned `[50,90]` (frame-10 dropped) — NOT the "missing frame 0" the T340 comment claimed. The
+  spec works around it (INV-1 uses first frame 35 > 30; INV-3 pins the safe boundary), so it stays
+  green, but the fix (exclude the boundary keyframes from their own comparison, or compare to the
+  NEIGHBOR) belongs in a follow-up task.
 - **Empty list → default centered crop**: frontend `useCrop.js:293-307` (`?? defaultCropData`);
   backend export applies `default_crop_keyframes` when crop_data empty (`export/framing.py:565-573`,
   `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in useCrop.js:17-20 ≡
