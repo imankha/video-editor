@@ -27,6 +27,50 @@ def get_migration_status() -> dict:
     }
 
 
+def get_migration_status_for_user(user_id: str) -> dict:
+    """READ-ONLY: report code head versions PLUS the ACTUAL R2 PRAGMA user_version of
+    each of one user's registered profiles, WITHOUT running any migration.
+
+    Closes the "no way to ask what has been run" gap (T5970 / memory
+    project_migration_tracking_gap): before this, the only way to learn a DB's real
+    schema version was to RUN run_all_migrations (mutating, walks every user's R2 DB).
+    This probes a SINGLE user and is side-effect-free — each profile.sqlite is
+    downloaded to a temp file to read its version and immediately deleted (see
+    _read_r2_profile_user_version); nothing is written back to R2.
+    """
+    from ..services.user_db import ensure_user_database, get_profiles
+
+    head = PROFILE_DB_RUNNER.latest_version
+    status: dict = {
+        **get_migration_status(),
+        "user_id": user_id,
+        "profiles": [],
+        "all_profiles_at_head": True,
+    }
+    try:
+        ensure_user_database(user_id)  # first-access restore only (read-only, no upload)
+        profiles = get_profiles(user_id)
+    except Exception as e:
+        status["error"] = f"profile_registry_read_failed: {e}"
+        status["all_profiles_at_head"] = None
+        return status
+
+    for p in profiles:
+        pid = p["id"]
+        r2_version = _read_r2_profile_user_version(user_id, pid)
+        # None => R2 copy missing/unreadable; report as unknown, never "at head".
+        at_head = None if r2_version is None else (r2_version == head)
+        if at_head is not True:
+            status["all_profiles_at_head"] = False
+        status["profiles"].append({
+            "profile_id": pid,
+            "r2_user_version": r2_version,
+            "profile_db_head": head,
+            "at_head": at_head,
+        })
+    return status
+
+
 def run_all_migrations() -> dict:
     from ..services.auth_db import get_all_users_for_admin
 

@@ -704,6 +704,21 @@ def _run_all_migrations() -> dict:
     return run_all_migrations()
 
 
+@router.get("/migration-status")
+async def migration_status(user_id: str | None = Query(default=None)):
+    """READ-ONLY migration status (T5970). No user_id -> code head versions only
+    (zero cost). With user_id -> also the ACTUAL R2 schema version of each of that
+    user's registered profiles, so an operator can ask "is this env at head?" without
+    running the mutating full-R2-walk migrate. Side-effect-free (temp download + read
+    + delete; no R2 write)."""
+    _require_admin()
+    from ..migrations import get_migration_status, get_migration_status_for_user
+
+    if user_id is None:
+        return get_migration_status()
+    return await asyncio.to_thread(get_migration_status_for_user, user_id)
+
+
 # ---------------------------------------------------------------------------
 # Recap backfill (T4140)
 # ---------------------------------------------------------------------------
