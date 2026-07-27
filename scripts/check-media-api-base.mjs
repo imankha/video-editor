@@ -1,6 +1,12 @@
-#!/usr/bin/env node
 /**
  * check-media-api-base.mjs — the "no bare /api/ media URL" gate (T5890).
+ *
+ * NO SHEBANG on purpose: `scanText` below is imported by a Vitest spec
+ * (src/frontend/src/utils/checkMediaApiBase.test.js), and vite-node evaluates an
+ * imported module's source in a VM where a leading `#!` is an invalid token — the
+ * shebang made that spec fail to collect (so the gate's own regression test never
+ * ran). Both real call sites invoke this via `node scripts/...` (branch-ci.yml and
+ * .claude/hooks/lint-changed.cjs), never as a bare executable, so nothing needs it.
  *
  * WHY: T5890 was invisible-on-staging poster loss. `GameTile` built its poster
  * `<img src>` as a BARE relative path (`/api/games/{id}/poster.jpg`). Locally the
