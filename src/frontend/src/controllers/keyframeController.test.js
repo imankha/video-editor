@@ -802,6 +802,42 @@ describe('keyframeController', () => {
       expect(newState.keyframes.map(kf => kf.frame)).toEqual([0, 90]);
     });
 
+    it('does NOT drop the first keyframe when it sits at frames 1..29 (self-comparison guard)', () => {
+      const state = createInitialState();
+      // T6140: the first keyframe is at frame 5 — inside the edge-dedupe window
+      // (< threshold = MIN_KEYFRAME_SPACING * 3 = 30). Its spatial data is UNIQUE:
+      // it matches NO neighbour, only itself. The start branch must exclude
+      // kf === startKf exactly as the end branch already does. Before the fix the
+      // filter self-compared frame 5 against itself and silently deleted the user's
+      // first crop keyframe on restore.
+      const saved = [
+        { frame: 5, origin: 'user', x: 100, y: 0, width: 640, height: 360 },
+        { frame: 60, origin: 'user', x: 300, y: 40, width: 640, height: 360 },
+        { frame: 120, origin: 'user', x: 500, y: 80, width: 640, height: 360 }
+      ];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
+
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([5, 60, 120]);
+    });
+
+    it('round-trips a short clip where every keyframe sits inside the edge window', () => {
+      const state = createInitialState();
+      // Short 3-keyframe clip: all frames < threshold and distinct spatial data.
+      // The last keyframe is naturally safe (kf.frame < endKf.frame is false for
+      // it — the property the start-branch fix mirrors); the first must no longer
+      // self-drop. Together they prove the whole list survives.
+      const saved = [
+        { frame: 5, origin: 'user', x: 100, y: 0, width: 640, height: 360 },
+        { frame: 15, origin: 'user', x: 300, y: 40, width: 640, height: 360 },
+        { frame: 25, origin: 'user', x: 500, y: 80, width: 640, height: 360 }
+      ];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
+
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([5, 15, 25]);
+    });
+
     it('returns the SAME state for an empty/invalid keyframes array', () => {
       const state = createInitialState();
       expect(keyframeReducer(state, actions.restoreKeyframes([]))).toBe(state);
