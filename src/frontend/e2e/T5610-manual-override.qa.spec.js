@@ -230,6 +230,48 @@ function suite(label, contextOpts) {
       expect(t1, 'lever drag does not scrub the video').toBeCloseTo(t0, 3);
       await saveEvidence(page, 'criterion-lever-move-coarse');
     });
+
+    // T6080 — a corner-resize drag must NOT exit circle-edit. The mobileFs tap-nav wrapper
+    // (handleVideoAreaTap, mirrored here on the video-container onClick) drops out of
+    // circle-edit on a plain tap OUTSIDE the circle. A pointer drag that ends with a
+    // compatibility `click` (desktop mobile-fullscreen layout, device emulation, mouse-
+    // synthesizing input stacks — exactly what page.mouse drives) leaked that click out of
+    // the corner handle, so finishing a resize immediately dismissed edit. RED on master:
+    // the corner handle had onPointerDown but no onClick swallow (unlike the body/enter-hit).
+    // Real touch does not synthesize this click, so this is proven with the mouse driver.
+    test('8) a corner-resize drag keeps circle-edit open (does not exit edit)', async ({ page }) => {
+      await page.goto(HARNESS);
+      await tapCircle(page); // enter edit -> corner handles appear
+      await expect(page.locator(CORNER_SE)).toBeVisible();
+      expect(await page.evaluate(() => document.querySelector('[data-testid="status"]').textContent))
+        .toContain('circleEdit=true');
+
+      await dragFrom(page, page.locator(CORNER_SE), 50, 50); // resize; ends with a click
+
+      // Edit mode must survive the resize: the corner handles are still present and the
+      // mirrored circleEditActive flag is still true (the trailing click was swallowed).
+      expect(await page.locator(CORNER_SE).isVisible(), 'still editing after a corner resize').toBe(true);
+      expect(await page.evaluate(() => document.querySelector('[data-testid="status"]').textContent))
+        .toContain('circleEdit=true');
+      await saveEvidence(page, `criterion-corner-keeps-edit-${label}`);
+    });
+
+    // T6080 — the move LEVER shares the same trailing-click leak the corner handle had:
+    // onPointerDown only, no onClick swallow. Coarse-only (the lever renders only on a
+    // coarse pointer). A lever drag that ends with a compatibility click must not exit edit.
+    test('9) a move-lever drag keeps circle-edit open (touch only)', async ({ page }) => {
+      test.skip(label !== 'coarse (touch)', 'move lever renders only on a coarse pointer');
+      await page.goto(HARNESS);
+      await tapCircle(page); // enter edit -> lever appears above the box
+      await expect(page.locator(LEVER)).toBeVisible();
+
+      await dragFrom(page, page.locator(LEVER), 60, 40); // move; ends with a click
+
+      expect(await page.locator(LEVER).isVisible(), 'still editing after a lever move').toBe(true);
+      expect(await page.evaluate(() => document.querySelector('[data-testid="status"]').textContent))
+        .toContain('circleEdit=true');
+      await saveEvidence(page, 'criterion-lever-keeps-edit-coarse');
+    });
   });
 }
 

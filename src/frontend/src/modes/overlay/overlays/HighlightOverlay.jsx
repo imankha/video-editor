@@ -203,6 +203,15 @@ export default function HighlightOverlay({
   // click event, so this is required to keep "tap the circle" from also seeking/playing.
   const stopClick = (e) => e.stopPropagation();
 
+  // Every editable child that STARTS a drag (body, corner handles, move lever) must also
+  // swallow the synthetic click that trails a moved-pointer gesture. In mobile fullscreen
+  // that click otherwise bubbles to OverlayModeView's video tap-nav wrapper
+  // (`handleVideoAreaTap`), which drops out of circle-edit — so finishing a resize/move
+  // would immediately exit edit (T6080). Gated on `tapToToggle` to match the body: only the
+  // tracking-ON regime has `circleEditActive` for the wrapper to clear; with tracking OFF
+  // the wrapper is a no-op on an editable circle, so swallowing there would be dead code.
+  const swallowDragClick = tapToToggle ? stopClick : undefined;
+
   /**
    * Pointer down on the ellipse body or the center move grip. Only wired when the
    * circle is editable, so reaching here always starts a body drag (move). Handles
@@ -336,7 +345,7 @@ export default function HighlightOverlay({
         style: { pointerEvents: 'all', touchAction: 'none' },
         onPointerDown: handleEllipsePointerDown,
         // Tap (no drag) toggles edit OFF; swallow the click so tap-nav never also fires.
-        onClick: tapToToggle ? stopClick : undefined,
+        onClick: swallowDragClick,
       }
     : { className: 'pointer-events-none' };
 
@@ -586,6 +595,8 @@ export default function HighlightOverlay({
                     style={{ touchAction: 'none', cursor: c.cursor }}
                     data-testid={`highlight-corner-${c.id}`}
                     onPointerDown={(e) => handleResizePointerDown(e, c.id)}
+                    // Swallow the trailing click so finishing a resize can't exit edit (T6080).
+                    onClick={swallowDragClick}
                   />
                 </g>
               ))}
@@ -614,6 +625,8 @@ export default function HighlightOverlay({
             touchAction: 'none',
           }}
           onPointerDown={handleEllipsePointerDown}
+          // Swallow the trailing click so finishing a lever move can't exit edit (T6080).
+          onClick={swallowDragClick}
         >
           <Move size={22} color={outlineColor} strokeWidth={2.5} />
         </div>

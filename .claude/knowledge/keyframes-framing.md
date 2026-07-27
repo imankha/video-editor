@@ -599,10 +599,30 @@ keyframed** — camera tilt is constant for a recording.
   covers ONLY the loop play/pause toggle (its 8 move/resize tests asserted the removed T5450 DOM
   contract and were removed on 2026-07-26 `17e40530`; T5610 re-proves them under the current
   model). jsdom is insufficient for the pointer hit-testing (T5390's first attempt passed jsdom,
-  failed on real touch) — hence the real-browser proofs. **NOTE:** corner resize handles have NO
-  `onClick` swallow (only the body does via `stopClick`), so in mobileFs a moved-mouse synthetic
-  click after a corner drag can bubble to `handleVideoAreaTap` and drop out of circle-edit; real
-  touch drags don't synthesize that click. Not exercised as a guarantee by any test.
+  failed on real touch) — hence the real-browser proofs. **Trailing-click swallow (T6080, FIXED
+  2026-07-27 — supersedes T6000's observation):** in mobileFs a moved-POINTER gesture synthesizes a
+  trailing compatibility `click` (desktop mobile-fullscreen layout, device emulation, mouse-
+  synthesizing input stacks — NOT real touch, which synthesizes none). That click bubbles to
+  `OverlayModeView.handleVideoAreaTap`, which drops out of circle-edit when `circleEditActive`. So
+  EVERY editable child that starts a drag must swallow its own click. A single
+  `swallowDragClick = tapToToggle ? stopClick : undefined` (matching the body's shape) is now wired
+  on the body, all four corner handles, AND the move lever — T6000 recorded that the corners lacked
+  it; T6080 also found the LEVER lacked it (the original trace named only the corners). Per-element
+  click-swallow contract (all `onClick`, click event only — never touches pointer capture):
+  | element | swallow | why |
+  |---|---|---|
+  | `highlight-body` (drag=move) | `swallowDragClick` | move drag's trailing click would exit edit |
+  | `highlight-corner-{nw,ne,sw,se}` (drag=resize) | `swallowDragClick` | resize drag's trailing click would exit edit (T6080) |
+  | `highlight-move-lever` (drag=move, coarse only) | `swallowDragClick` | lever drag's trailing click would exit edit (T6080) |
+  | `highlight-enter-hit` (tap=enter) | raw `stopClick` (unconditional) | renders ONLY under `tapToToggle && !editable`, so it's ALWAYS in the swallow regime; a tap-enter, not a drag, so the `swallowDragClick` name would mislead |
+  Gate rationale: with tracking OFF, `handleVideoAreaTap` is a no-op on an editable circle (no
+  `circleEditActive` to clear, `!editable` is false), so swallowing there is dead code — hence
+  `tapToToggle ?`. **Residual (known, matches the body's identical pre-existing behavior, out of
+  T6080 scope):** if `constrainHighlight` clamps the drag at the video boundary so the handle
+  separates from the cursor, the trailing click's target becomes the common ancestor (the video
+  wrapper) rather than the handle, so the handle's `onClick` never runs and edit can still exit.
+  Closing it needs a moved-flag guard on the wrapper, not a per-handle swallow. Proven real-browser
+  by `e2e/T5610-manual-override.qa.spec.js` tests 8 (corner, fine+coarse) & 9 (lever, coarse).
 - **Manual override now has TWO entry paths + a discoverability hint (T5610, 2026-07-20,
   EVOLVES T5450 — additive, not a revert of T5390)**: the spotlight is editable when
   `editable = !showPlayerBoxes || circleEditActive`. Path 1 (T5570 power user): hide the
