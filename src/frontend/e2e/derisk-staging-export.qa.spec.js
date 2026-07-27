@@ -55,6 +55,49 @@ async function projectState(context, projectId) {
   return (await listProjects(context)).find((p) => p.id === projectId);
 }
 
+/**
+ * Probe whether a draft's working video will actually LOAD in the browser (T6120).
+ *
+ * The overlay export panel is gated on OverlayScreen's
+ * `effectiveOverlayVideoUrl = workingVideo?.url` -- which only hydrates once the
+ * working video's presigned R2 URL actually loads. A draft can report
+ * `has_working_video=true` in the DB yet have a MISSING working-video R2 object
+ * (a dangling ref -> NoSuchKey/404, e.g. after a staging wipe that dropped
+ * `working_videos/` objects while keeping the profile SQLite rows + `final_videos/`
+ * objects). When that happens `workingVideo` never hydrates, `effectiveOverlayVideoUrl`
+ * stays null, and the panel never mounts.
+ *
+ * This -- NOT "framingVideoUrl not hydrated" -- is the real overlay-export-mount cause.
+ * `framingVideoUrl` is irrelevant for a pre-framed single-clip draft: `workingVideo.url`
+ * wins the `effectiveOverlayVideoUrl` fallback whenever the working video loads (verified
+ * on staging: drafts with an intact working-video R2 object DO mount the panel).
+ *
+ * Returns { loads, reason } so callers can pick a loadable target and skip diagnostically.
+ */
+async function probeWorkingVideo(context, projectId) {
+  const detail = await apiGet(context, `/projects/${projectId}`);
+  const wvId = detail?.working_video_id ?? 'null';
+  if (!detail?.working_video_url) {
+    return { loads: false, reason: `no working_video_url (working_video_id=${wvId}) -> un-framed` };
+  }
+  const presign = await apiGet(context, `/projects/${projectId}/working_video/playback-url`);
+  if (presign?.__status) {
+    return { loads: false, reason: `playback-url returned ${presign.__status} (working_video_id=${wvId})` };
+  }
+  const r2Url = presign?.url;
+  if (!r2Url) return { loads: false, reason: `playback-url 200 but no url: ${JSON.stringify(presign).slice(0, 120)}` };
+  // GET the first bytes of the actual R2 object the <video> element would load.
+  const r2 = await context.request.get(r2Url, { headers: { Range: 'bytes=0-63' } });
+  if (r2.ok()) return { loads: true, reason: `working-video R2 object loads (HTTP ${r2.status()})` };
+  const key = r2Url.split('?')[0].split('/').pop();
+  return {
+    loads: false,
+    reason: `working-video R2 object MISSING (HTTP ${r2.status()} for ${key}) -> dangling ` +
+      `working_video ref: DB says has_working_video=true but the R2 object is gone. The overlay ` +
+      `export panel cannot mount over a video that will not load (this is NOT a framingVideoUrl issue).`,
+  };
+}
+
 /** Open the Reel Drafts tab, then open a draft card by its (discovered) name. */
 async function openDraftCard(page, name) {
   await page.goto('/');
@@ -78,7 +121,20 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate', asy
   //     -> publish. Fall back to any non-finalized draft with clips.
   const projects = await listProjects(context);
   const candidates = projects.filter((p) => !p.has_final_video && !p.is_published && p.clip_count > 0);
-  const target = candidates.find((p) => p.has_working_video) || candidates[0];
+  // Prefer a framed draft whose working video ACTUALLY LOADS (its R2 object exists) so we
+  // exercise overlay -> final -> publish. T6120: a draft can report has_working_video=true
+  // yet have a MISSING working-video R2 object (dangling ref, e.g. after a staging wipe) --
+  // opening that one strands the overlay screen with no export panel. Probe and skip those
+  // (logged), so a green run drives a draft that can genuinely reach overlay-export instead
+  // of dying on a dangling ref. Fall back to any non-finalized draft with clips (Phase 1
+  // then frames it, producing a fresh, loadable working video).
+  let target = null;
+  for (const c of candidates.filter((p) => p.has_working_video)) {
+    const probe = await probeWorkingVideo(context, c.id);
+    if (probe.loads) { target = c; break; }
+    console.log(`[T6120] skipping draft id=${c.id} (${JSON.stringify(c.name)}) as overlay target: ${probe.reason}`);
+  }
+  target = target || candidates[0];
   if (!target) {
     console.log('[T5400][SKIP] fixture has no un-finalized reel draft ' +
       '(need clip_count>0 && !has_final_video); seed imankh per FIXTURE-CONTRACT');
@@ -142,27 +198,36 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate', asy
   let proj = await projectState(context, targetId);
   if (!proj?.has_final_video) {
     await openDraftCard(page, target.name);
-    // The overlay Export button only mounts once Overlay mode has an EFFECTIVE video
-    // (a rendered overlay URL, or a pass-through framing URL for a single un-edited
-    // clip — OverlayContainer.effectiveOverlayVideoUrl). On staging, a pre-framed
-    // single-clip draft opened straight into Overlay streams its working_video but
-    // does NOT hydrate framingVideoUrl, so the export panel never mounts (verified
-    // T5420: waited 90s, neither the Export button nor the "Export required" message
-    // ever appeared). Wait a bounded time for the button; if it never mounts, SKIP
-    // LOUDLY (never a silent green pass) rather than hard-timeout — the fixture lacks
-    // a draft that can reach overlay-export. See e2e/FIXTURE-CONTRACT.md.
+    // The overlay Export button only mounts once Overlay mode has an EFFECTIVE video:
+    // OverlayScreen's `effectiveOverlayVideoUrl = workingVideo?.url` for a pre-framed
+    // draft (the framingVideoUrl pass-through is only for un-framed / multi-clip / edited
+    // drafts). So the panel mounts iff the working video actually LOADS. T6120: when it
+    // does not mount for a has_working_video draft the cause is almost always a MISSING
+    // working-video R2 object (dangling ref -> NoSuchKey/404), NOT "framingVideoUrl not
+    // hydrated" (that earlier T5420 diagnosis was wrong -- a draft with an intact
+    // working-video R2 object DOES mount). Discovery above already prefers a loadable
+    // draft; if none was loadable we still reach here. Wait a bounded time for the button;
+    // if it never mounts, probe the ACTUAL cause and SKIP LOUDLY (never a silent green
+    // pass) rather than hard-timeout. See e2e/FIXTURE-CONTRACT.md.
     const overlayExport = page.getByRole('button', { name: EXPORT_BTN }).first();
     const reachedOverlayExport = await overlayExport
       .waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
     if (!reachedOverlayExport) {
-      console.log(`[T5420][SKIP] draft id=${targetId} (${JSON.stringify(target.name)}) did not ` +
-        `surface the overlay Export button on staging within 60s. The Overlay export ` +
-        `panel did not mount (framingVideoUrl not hydrated for a pre-framed single-clip ` +
-        `draft opened directly into Overlay). Seed a draft that reaches overlay-export, ` +
-        `or file the overlay-export-mount gap. See e2e/FIXTURE-CONTRACT.md.`);
+      const diag = await probeWorkingVideo(context, targetId);
+      console.log(`[T6120] draft id=${targetId} (${JSON.stringify(target.name)}) did not surface the ` +
+        `overlay Export button on staging within 60s. Diagnosis: ${diag.reason}`);
+      // More diagnostic, NOT more tolerant (T6120): split the two causes.
+      //  - working video LOADS but the panel still never mounted -> a genuine mount-logic
+      //    regression -> FAIL (do not skip green).
+      //  - working video does NOT load (dangling ref / un-framed) -> a staging-data / fixture
+      //    issue, nothing the product can do -> SKIP loudly (re-seed imankh per FIXTURE-CONTRACT).
+      expect(diag.loads,
+        'overlay export panel never mounted even though the working video loads -- mount-logic regression')
+        .toBe(false);
+      test.skip(true,
+        '[T6120] discovered draft cannot reach overlay-export on staging: working video did not load ' +
+        '(staging dangling-ref/fixture issue, not a mount bug) -- see diagnosis in log');
     }
-    test.skip(!reachedOverlayExport,
-      '[T5420] discovered draft cannot reach overlay-export on staging (Overlay export panel did not mount)');
     await page.screenshot({ path: `${EVID}/04b-overlay-loaded.png` });
     await overlayExport.click();
     console.log('[derisk] overlay Export clicked');
