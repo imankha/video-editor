@@ -136,6 +136,7 @@ export function useExportRecovery() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(jobIdsToAcknowledge),
+                rbNonDataWrite: true, // T6020: mount-time reconciliation, not a user gesture
               });
               console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
             } catch (ackErr) {
@@ -213,7 +214,10 @@ export function useExportRecovery() {
 
           // Start progress simulation on backend
           try {
-            await apiFetch(`${API_BASE}/api/exports/${exp.job_id}/resume-progress`, { method: 'POST' });
+            await apiFetch(`${API_BASE}/api/exports/${exp.job_id}/resume-progress`, {
+              method: 'POST',
+              rbNonDataWrite: true, // T6020: mount-time reconciliation, not a user gesture
+            });
             console.log(`[ExportRecovery] Started progress loop for ${exp.job_id}`);
           } catch (err) {
             console.warn(`[ExportRecovery] Failed to start progress loop for ${exp.job_id}:`, err);

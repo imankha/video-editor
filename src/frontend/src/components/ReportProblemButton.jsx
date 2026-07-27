@@ -141,6 +141,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
           ...payload,
           screenshot: screenshotRef.current,
         }),
+        rbNonDataWrite: true, // T6020 follow-up: support-ticket write, not user-data
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

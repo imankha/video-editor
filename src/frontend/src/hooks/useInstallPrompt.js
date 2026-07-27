@@ -38,7 +38,14 @@ export function useInstallPrompt() {
     const onAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
-      fetch('/api/auth/pwa-installed', { method: 'POST', credentials: 'include' }).catch(() => {});
+      // T6020: fires on the browser's own 'appinstalled' event, not a fetch
+      // gesture the user directly initiated -- lifecycle, marked so it doesn't
+      // arm the sync write-attempt gate.
+      fetch('/api/auth/pwa-installed', {
+        method: 'POST',
+        credentials: 'include',
+        rbNonDataWrite: true,
+      }).catch(() => {});
     };
 
     window.addEventListener('beforeinstallprompt', onBeforeInstall);

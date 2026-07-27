@@ -124,6 +124,7 @@ export function OtpAuthForm({ resetKey = null }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: target }),
+        rbNonDataWrite: true, // T6020 follow-up: auth table write, not user-data
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -165,6 +166,10 @@ export function OtpAuthForm({ resetKey = null }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(verifyBody),
+        // T6020 follow-up: login writes Postgres auth tables, never the
+        // profile SQLite -- cannot produce a sync conflict, even though
+        // logging in IS a user gesture. See rbNonDataWrite in syncStore.js.
+        rbNonDataWrite: true,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
