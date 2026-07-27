@@ -249,7 +249,7 @@ describe('conflict-restore notice (T5870 round 2 BLOCKING)', () => {
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
-  it('retrySyncToR2 on {restored:true} reloads + stashes notice, never flips to ok', async () => {
+  it('retrySyncToR2 on {restored:true} reloads + stashes notice, never flips to ok (writer)', async () => {
     vi.resetModules();
     sessionStorage.clear();
     const reload = vi.fn();
@@ -263,7 +263,8 @@ describe('conflict-restore notice (T5870 round 2 BLOCKING)', () => {
     })));
     // Fresh import so the module's captured _originalFetch is the mock.
     const store = await import('./syncStore');
-    store.useSyncStore.setState({ syncState: 'conflict', isRetrying: false });
+    // This session attempted a write -- the writer flow (T5870 round 2 BLOCKING).
+    store.useSyncStore.setState({ syncState: 'conflict', isRetrying: false, hasAttemptedWrite: true });
 
     const ok = await store.useSyncStore.getState().retrySyncToR2();
 
@@ -276,5 +277,44 @@ describe('conflict-restore notice (T5870 round 2 BLOCKING)', () => {
     Object.defineProperty(window, 'location', {
       configurable: true, writable: true, value: originalLocation,
     });
+  });
+
+  // T6040: a READER's Reload reuses the same endpoint/branch, but
+  // `_retry_resolve_conflict`'s "your local changes were replaced" message is
+  // wrong for them -- they never had unsynced work. The flag distinguishes it.
+  it('retrySyncToR2 on {restored:true} for a reader (no write this session) stashes the non-writer flag', async () => {
+    vi.resetModules();
+    sessionStorage.clear();
+    const reload = vi.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true, writable: true,
+      value: { ...originalLocation, reload },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      json: async () => ({ success: true, restored: true }),
+    })));
+    const store = await import('./syncStore');
+    store.useSyncStore.setState({ syncState: 'conflict', isRetrying: false, hasAttemptedWrite: false });
+
+    const ok = await store.useSyncStore.getState().retrySyncToR2();
+
+    expect(ok).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem(RESTORED_KEY)).toBe('0');
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'location', {
+      configurable: true, writable: true, value: originalLocation,
+    });
+  });
+
+  it('surfaceRestoredNoticeIfPending consumes a reader ("0") flag WITHOUT showing the loss-of-work toast', () => {
+    sessionStorage.setItem(RESTORED_KEY, '0');
+    const shown = surfaceRestoredNoticeIfPending();
+    // The reader never had unsynced work -- must NOT be told "your local
+    // changes were replaced" (the exact bug class T5960 fixed one layer up).
+    expect(shown).toBe(false);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+    expect(sessionStorage.getItem(RESTORED_KEY)).toBeNull(); // still consumed
   });
 });

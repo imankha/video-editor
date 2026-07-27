@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-07-27 (T6040: reader-vs-writer split on `conflict` — a no-write session now gets a quiet "newer version available" + Reload notice instead of total silence; `failed` stays silent for readers because the `conflict`/`failed` asymmetry (R2-ahead vs local-ahead) means only `conflict` readers are looking at stale data; frontend-only, backend untouched; see T5960/T6010/T6020/T6040 section)
 updated: 2026-07-27 (T6020 follow-up: renamed the write-attempt gate's call-site marker `rbLifecycleWrite` -> `rbNonDataWrite` and marked 5 auth-gesture sites the original table missed (google/verify-otp/send-otp/logout/report-problem) — the old name misled at the auth boundary since login IS a gesture but still can't touch the profile SQLite; supervisor-audit-caught regression vs the T5960 baseline; see T5960/T6010/T6020 section)
 updated: 2026-07-27 (T6020: the write-attempt gate's classification moved from a URL denylist to an explicit per-call-site marker — fixes `PATCH /api/projects/{id}/state` being both project-open bookkeeping and a mode-switch gesture at the identical pathname; see T5960/T6010/T6020 section)
 updated: 2026-07-27 (T6010: the `failed` alarm is ALSO gated on write-attempt now, symmetric with `conflict` — generalized `ALARM_SYNC_STATES`; `pending` stays ungated; see T5960/T6010/T6020 section)
@@ -459,6 +460,68 @@ rendered banner, never the API response (the bug was the API being right and the
 auth-writes e2e case drives the real interceptor with the real request SHAPE each marked call site
 issues rather than a real login flow — a real OTP/Google login needs a live email round-trip /
 Google credential exchange this container cannot drive; no test seam auto-approves an OTP code.
+
+## T6040 — Reader-vs-writer split on `conflict` (frontend-only, sibling of T5960/T6010/T6020)
+
+**Problem T5960/T6010 left open:** gating the `conflict`/`failed` ALARM on write-attempt correctly
+stopped telling a passive reader "Could not save to the cloud" for work they never did — but it also
+made the banner the reader's ONLY signal of staleness, so a no-write session on a `conflict` machine
+now saw nothing at all and had no way to recover.
+
+**The `conflict`-is-behind / `failed`-is-ahead asymmetry (the non-obvious fact this task
+establishes — do not flatten it in a future refactor):**
+- **`conflict`** = CAS refused an upload because `r2_version > current_version`. R2 is **ahead**,
+  local is **behind**. A reader on this machine is looking at genuinely **stale** data.
+- **`failed`** = an upload didn't land for some other reason (transient R2 error, exhausted re-drain).
+  Local is **ahead** — it holds the unsynced write. A reader on this machine is looking at the
+  **newest** data available; there is nothing for them to do.
+
+So only `conflict` gets a reader-facing notice. `failed` stays exactly as silent as T6010 shipped it
+for a no-write session — generalizing the reader notice to `failed` would tell a reader to reload
+into a copy that is actually OLDER than what they already have.
+
+**Presentation (`SyncStatusIndicator.jsx`):** `isReaderConflictNotice = syncState === 'conflict' &&
+!hasAttemptedWrite` — styled like the quiet `pending` banner (no `AlertTriangle`, no red border,
+"A newer version of your work is available"), button labeled **Reload** (not Retry). `isHeldSilent`
+narrowed from `ALARM_SYNC_STATES.has(syncState)` to `syncState === 'failed'` only — `conflict` is no
+longer held fully silent, it just renders a different, non-alarm variant. The writer path
+(`hasAttemptedWrite === true`) is completely unchanged: same red alarm, same "Could not save to the
+cloud", same Retry button, same message text.
+
+**Reuses `retrySyncToR2`/`POST /api/retry-sync` as-is — no backend change.** The endpoint's restore
+branch (`_retry_resolve_conflict`, `health.py`) returns the same `{success, restored: true, message:
+"Your local changes were replaced..."}` for both a writer's Retry and a reader's Reload; that message
+is wrong for a reader (they have no local edit to lose — the same bug class T5960 fixed one layer up).
+Fixed frontend-only in `syncStore.js`: `retrySyncToR2` captures `hasAttemptedWrite` BEFORE the request
+(`wasWriter`) and passes it to `stashRestoredNotice(wasWriter)`, which now stores `'1'`/`'0'` in the
+sessionStorage flag instead of always `'1'`. `surfaceRestoredNoticeIfPending` (runs once at next
+module load, i.e. post-reload) only shows the "your local changes were replaced" toast when the flag
+is `'1'` — a reader's `'0'` is consumed (never leaks a stale key) but shown nothing.
+
+**`POST /api/retry-sync`-before-restore question (verified, does NOT need a fix):** the task doc
+assumed the endpoint calls `sync_db_to_cloud()` (an unmodified-DB upload) before reaching the restore
+branch for a reader. Traced and found narrower than assumed: `retry_sync()` (`health.py:182`) checks
+`if has_sync_conflict(user_id): return await _retry_resolve_conflict(user_id)` FIRST — for the exact
+scenario this task is about (a pre-existing sticky `.sync_conflict` marker), `sync_db_to_cloud()` is
+**never called at all**; the handler branches straight to the restore path. `sync_db_to_cloud()` only
+runs when `has_sync_conflict` is false and a NEW conflict is discovered mid-retry — a different,
+rarer path than "reader inherits a sticky marker," and even there CAS would just refuse an
+unmodified-version upload harmlessly (no re-mark needed since the version hasn't changed). No
+backend change made or needed.
+
+**Tests:** `syncStore.test.js` (writer vs reader restore-notice flag, `surfaceRestoredNoticeIfPending`
+consumes `'0'` without toasting); `SyncStatusIndicator.test.jsx` (reader notice text/Reload button/
+gray styling, RED-pinned before the fix); `e2e/T6040-reader-sees-stale-data-silently.spec.js` (full
+matrix: reader-conflict-notice, writer-conflict-alarm-unchanged, failed-reader-still-silent,
+pending-unchanged, Reload-reaches-restore-and-no-replaced-notice, 375px responsive). **Existing
+regression-pin spec `e2e/T5960-conflict-alarm-gated-on-write.spec.js` needed a 1-line narrowing**:
+its `CONFLICT_SUB` matcher was `/newer version of your work/i`, meant to catch the ALARM's own
+sub-line — it collided with the new reader notice's legitimately similar wording (both describe a
+conflict). Narrowed to `/newer version of your work exists/i` (the alarm-only phrasing) so it no
+longer false-positives against the deliberate new reader UI; the actual regression pin (banner text +
+Retry button hidden for a no-write session) is untouched and still enforced. Backend suites unchanged
+and reconfirmed green (`test_t5870_pending_vs_failed.py`, `test_sync_status.py`,
+`test_background_sync.py`) since no backend code was touched.
 
 ## T4320 — Durable clip gestures + user.sqlite shutdown sync + T5310 profile-create fix
 
