@@ -473,13 +473,23 @@ def _read_storage_expiry(db_path, blake3_hash):
 
 
 class TestSweepPhase2ExpiresGameStorage:
-    """After Phase 2 deletes an R2 object, any lingering game_storage rows
-    (e.g. future-expiry refs that Phase 1 didn't touch) must be expired.
+    """After Phase 2 deletes an R2 object, any lingering game_storage rows must be
+    expired (and the mutation synced).
 
     Phase 2 game-video deletion is a PRODUCTION-only operation (game videos are a
     shared, env-prefix-free R2 resource; non-prod sweeps skip deletion — see
     sweep_scheduler._game_deletion_allowed). These tests exercise that reclamation
     path, so they run as production.
+
+    IMPORTANT (invariant change): the lingering row these tests seed must be an
+    ALREADY-DEAD (past-expiry) ref, NOT a future-expiry one. A future-expiry row is
+    a LIVE ref, and since `fix(sweep): never delete a game video while a live
+    storage ref exists` Phase 2 AUTHORITATIVELY recounts refs and ABORTS the delete
+    when any live ref exists (that blind delete is what lost imankh games 2/3/5).
+    So a live ref never reaches reclamation at all — see
+    TestSweepPhase2AbortsOnLiveRef below, which pins that abort. What still reaches
+    reclamation is a DEAD row Phase 1 failed to remove (Phase 1 walks the
+    Postgres-side expired-ref list, which can disagree with the profile-side row).
     """
 
     @pytest.fixture(autouse=True)
@@ -499,20 +509,25 @@ class TestSweepPhase2ExpiresGameStorage:
         sweep_profile_db,
     ):
         """When Phase 2 deletes the R2 object, any remaining game_storage row
-        for that hash in the profile must have storage_expires_at set to the past.
+        for that hash in the profile must be stamped with the past sentinel.
         """
         from app.services.sweep_scheduler import do_sweep
 
-        # Set a FUTURE expiry (the bug scenario: Phase 1 didn't touch this ref
-        # because it wasn't expired yet, but Phase 2 is now deleting the object).
-        _insert_storage(sweep_profile_db, "hash_deleted", _future())
+        # A DEAD (past-expiry) ref that Phase 1 left behind: not a live ref, so the
+        # authoritative recount permits the delete, and reclamation must then stamp
+        # the row. Seeded expiry is recent-past so the assertion below is NOT
+        # tautological -- it only holds if reclamation actually rewrote the row to
+        # expire_game_storage's 2000-01-01 sentinel.
+        seeded = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        _insert_storage(sweep_profile_db, "hash_deleted", seeded)
 
         do_sweep()
 
         expiry = _read_storage_expiry(sweep_profile_db, "hash_deleted")
         assert expiry is not None
-        assert datetime.fromisoformat(expiry) < datetime.now(timezone.utc), (
-            f"Expected past expiry after R2 delete, got {expiry}"
+        assert datetime.fromisoformat(expiry) < datetime.fromisoformat(seeded), (
+            f"Expected the past sentinel after R2 delete, got {expiry} "
+            f"(unchanged from the seeded {seeded} => reclamation did not run)"
         )
 
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_active"])
@@ -583,7 +598,9 @@ class TestSweepPhase2ExpiresGameStorage:
         """
         from app.services.sweep_scheduler import do_sweep
 
-        _insert_storage(sweep_profile_db, "hash_synced", _future())
+        # Past-expiry (DEAD) ref: see the class docstring -- a future-expiry row is a
+        # LIVE ref and would ABORT the delete, so nothing would be expired to sync.
+        _insert_storage(sweep_profile_db, "hash_synced", _past())
 
         do_sweep()
 
@@ -612,6 +629,60 @@ class TestSweepPhase2ExpiresGameStorage:
         do_sweep()
 
         mock_sync.assert_not_called()
+
+
+class TestSweepPhase2AbortsOnLiveRef:
+    """Phase 2 must NEVER delete a game video while a LIVE storage ref exists.
+
+    This pins `fix(sweep): never delete a game video while a live storage ref
+    exists`. The grace deletion is queued off game_ref_counts.ref_count, a
+    hand-maintained Postgres counter that DRIFTS (one prod game sat at -1). When it
+    under-counts, the pre-guard sweep permanently deleted a video a profile still
+    held a future-expiry ref to, leaving a "ready" game with a 404 video — this is
+    how imankh games 2/3/5 were lost. So before the irreversible delete, Phase 2
+    authoritatively recounts refs across profiles; a live ref must cancel the grace
+    deletion and heal the counter to the truth it just computed.
+
+    Same production gate as TestSweepPhase2ExpiresGameStorage (deletion is prod-only).
+    """
+
+    @pytest.fixture(autouse=True)
+    def _production_env(self, monkeypatch):
+        monkeypatch.setattr("app.storage.APP_ENV", "production")
+
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_wanted"])
+    @patch(f"{M}.r2_delete_object_global", return_value=True)
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.heal_ref_count")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin",
+           return_value=[{"user_id": USER_ID}])
+    def test_live_ref_aborts_delete_and_heals_counter(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_heal,
+        mock_del_grace, mock_r2_delete, mock_grace_expired,
+        sweep_profile_db,
+    ):
+        """A future-expiry (LIVE) ref must abort the R2 delete, cancel the grace
+        deletion, heal the counter to the recounted total, and leave the ref alone.
+        """
+        from app.services.sweep_scheduler import do_sweep
+
+        seeded = _future()
+        _insert_storage(sweep_profile_db, "hash_wanted", seeded)
+
+        do_sweep()
+
+        # The irreversible delete must NOT have happened.
+        mock_r2_delete.assert_not_called()
+        # The bogus grace deletion is cancelled, and the drift-prone counter healed
+        # to the authoritative recount (1 profile holding 1 ref).
+        mock_del_grace.assert_called_once_with("hash_wanted")
+        mock_heal.assert_called_once_with("hash_wanted", 1)
+        # The user's live ref must survive completely untouched.
+        assert _read_storage_expiry(sweep_profile_db, "hash_wanted") == seeded, (
+            "A live ref must not be expired by an aborted delete"
+        )
 
 
 # ---------------------------------------------------------------------------

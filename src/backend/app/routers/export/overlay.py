@@ -35,6 +35,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 
 from ...constants import DEFAULT_HIGHLIGHT_EFFECT, ExportStatus, normalize_effect_type
 from ...database import (
+    column_exists,
     get_db_connection,
     get_raw_clips_path,
     get_uploads_path,
@@ -1625,10 +1626,18 @@ async def get_overlay_data(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
+        # T5600's detections_data may be absent during the deploy->v027 window
+        # (versioned migrations do not auto-run). Naming it unconditionally made this
+        # hot read 500 ("no such column: detections_data") on every below-head profile
+        # DB, i.e. EVERY user until an admin triggered the migrate -- the exact bug
+        # class column_exists()/_has_stage_columns exist to prevent. NULL is the right
+        # value during the window (it is the column's own default), and the reader
+        # below already falls back to hoisting detections from the regions.
+        _has_detections = column_exists(cursor, "working_videos", "detections_data")
+        cursor.execute(f"""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
                    highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
-                   detections_data
+                   {'detections_data' if _has_detections else 'NULL AS detections_data'}
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
