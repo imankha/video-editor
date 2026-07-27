@@ -166,6 +166,22 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // naive "any mutating request" rule — proven by the e2e passive-load case).
 const NON_GESTURE_API_PREFIXES = ['/api/auth/', '/api/client-errors/'];
 
+// Individual non-gesture write ENDPOINTS that don't share a clean prefix with any
+// gesture write, so they can't be folded into NON_GESTURE_API_PREFIXES above: a
+// blanket '/api/exports/' prefix would ALSO swallow the real export-start gesture
+// POST /api/exports/framing. Both fire on mount (useExportRecovery.js) reconciling
+// exports left running/finished while the user was away — zero user intent.
+const NON_GESTURE_API_EXACT = ['/api/exports/acknowledge'];
+const NON_GESTURE_API_PATTERNS = [/^\/api\/exports\/[^/]+\/resume-progress$/];
+
+function isNonGesturePath(pathname) {
+  return (
+    NON_GESTURE_API_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
+    NON_GESTURE_API_EXACT.includes(pathname) ||
+    NON_GESTURE_API_PATTERNS.some((re) => re.test(pathname))
+  );
+}
+
 // Returns the pathname if `rawUrl` targets our own API, else null.
 function ownApiPathname(rawUrl) {
   try {
@@ -185,9 +201,9 @@ function ownApiPathname(rawUrl) {
  * represents a USER edit — i.e. one that could produce a sync conflict?
  *
  * `method` may be lowercase, absent (defaults to GET), or carried on a `Request`
- * object passed as the first fetch arg instead of in the init object. Session and
- * telemetry lifecycle requests (NON_GESTURE_API_PREFIXES) are excluded — they
- * fire without a user gesture and must not arm the conflict alarm.
+ * object passed as the first fetch arg instead of in the init object. Session,
+ * telemetry, and export-recovery lifecycle requests (isNonGesturePath) are
+ * excluded — they fire without a user gesture and must not arm the conflict alarm.
  *
  * @param {RequestInfo|URL} input - fetch's first arg (URL string, URL, or Request)
  * @param {RequestInit} [init] - fetch's second arg
@@ -203,7 +219,7 @@ export function isMutatingApiRequest(input, init) {
   const rawUrl = input instanceof Request ? input.url : String(input ?? '');
   const pathname = ownApiPathname(rawUrl);
   if (pathname === null) return false;
-  return !NON_GESTURE_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return !isNonGesturePath(pathname);
 }
 
 // --- Global fetch interceptor ---

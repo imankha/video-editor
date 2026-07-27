@@ -378,6 +378,29 @@ has attempted a **write**. `syncStore.js`:
   `isAlarm = failed || (conflict && hasAttemptedWrite)`; `shouldShow` excludes the held-silent case.
   Only **conflict** is gated — `failed`, `pending`, and `offline` are untouched (a genuine failure
   still alarms immediately regardless of write-attempt).
+- **Follow-up (supervisor audit, closed): export-recovery mount-time reconciliation also has to be
+  excluded, and can't share the auth/telemetry PREFIX exclusion.** `useExportRecovery.js` fires
+  `POST /api/exports/acknowledge` and `POST /api/exports/{job_id}/resume-progress` on MOUNT for
+  anyone with a finished/still-running export from a prior session — zero user intent, common enough
+  to re-break the silent-passive-load guarantee. A blanket `/api/exports/` PREFIX would also swallow
+  the real export-start gesture `POST /api/exports/framing`, so these two are excluded individually:
+  `NON_GESTURE_API_EXACT = ['/api/exports/acknowledge']` (exact path) and
+  `NON_GESTURE_API_PATTERNS = [/^\/api\/exports\/[^/]+\/resume-progress$/]` (job-id-parameterized
+  path). `isNonGesturePath(pathname)` checks prefixes + exact + patterns.
+- **Known residual — a URL-based denylist CANNOT distinguish two calls to the identical path.**
+  `PATCH /api/projects/{id}/state` is hit both by `useProjectLoader.js` on project OPEN (load-time
+  bookkeeping: `?update_last_opened=true&current_mode=...`) and by `App.jsx`'s real mode-switch
+  GESTURE (`?current_mode=...`, no `update_last_opened`). Pathname is identical, so the pathname-only
+  matcher here can't tell them apart — the query string differs (`update_last_opened=true` only on
+  the load-time call) but this module deliberately does not parse query strings, and coupling the
+  frontend gate to a specific backend query-param name would be a fragile, easy-to-silently-break
+  distinction. Left as-is (project-open incorrectly arms the gate too) — reported, not fixed; revisit
+  only if a passive-load false-positive is actually observed from this site specifically.
+- **`POST /api/clips/resolve-pending-shares`** (`SharedAnnotationView.jsx`, fires on mount of the
+  shared-clip-link route) is classified as a GESTURE, not lifecycle, and is intentionally NOT
+  excluded: unlike auth/export-recovery it does not fire on every app load, only when the user
+  deliberately opened a share link, and it performs a real data materialization write to the
+  recipient's own profile.sqlite (the exact kind of write that can genuinely conflict).
 
 **`failed` finding (task step 3, reported, NOT actioned):** `.sync_failed` is the same sticky-marker
 idiom and has the identical staleness property IN THEORY — a stale `.sync_failed` could surface to a

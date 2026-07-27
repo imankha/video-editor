@@ -143,6 +143,23 @@ describe('write-attempt arming (T5960)', () => {
       expect(isMutatingApiRequest('/api/client-errors/video', { method: 'POST' })).toBe(false);
     });
 
+    it('does NOT arm on export-recovery mount-time reconciliation (T5960 follow-up)', () => {
+      // useExportRecovery.js fires these on MOUNT whenever a prior export finished
+      // or is still running while the user was away — zero user intent, common
+      // for any user who recently exported. Both would re-break acceptance
+      // criterion 1 (silent passive load) if left unexcluded.
+      expect(isMutatingApiRequest('/api/exports/acknowledge', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/123/resume-progress', { method: 'POST' })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST' })).toBe(false);
+    });
+
+    it('DOES arm on a real export-start gesture (does not over-exclude /api/exports/)', () => {
+      // A blanket '/api/exports/' prefix would ALSO swallow these real gesture
+      // writes (the export button) -- must stay armed.
+      expect(isMutatingApiRequest('/api/exports', { method: 'POST' })).toBe(true);
+      expect(isMutatingApiRequest('/api/exports/framing', { method: 'POST' })).toBe(true);
+    });
+
     it('DOES arm on genuine user-data write gestures', () => {
       expect(isMutatingApiRequest('/api/settings', { method: 'PUT' })).toBe(true);
       expect(isMutatingApiRequest('/api/clips/raw/save', { method: 'POST' })).toBe(true);
