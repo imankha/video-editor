@@ -26,6 +26,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -39,7 +40,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // <video> requests via page.route from disk, which is timing-independent.
 const SAMPLE_9x16 = path.join('/tmp', 'aspectdiag-9x16.mp4');
 const SAMPLE_16x9 = path.join('/tmp', 'aspectdiag-16x9.mp4');
-const HARNESS = 'http://localhost:5173/aspectdiag.html';
+const HARNESS = '/aspectdiag.html';
 
 /** Fulfill the harness <video> requests from the ffmpeg-generated files on disk. */
 async function routeSamples(page) {
@@ -350,6 +351,12 @@ test.describe('T5676 aspect-aware video stage @staging-gate', () => {
  * pillarbox), (b) the spotlight ellipse sits inside the video rect after resize.
  */
 test.describe('T5676 aspect stage — dev harness (both aspects) @staging-gate', () => {
+  // /aspectdiag.html is a Vite-dev-only harness page: not an input to the production
+  // build, so on a deployed target this RELATIVE path resolves against the Pages origin
+  // and the SPA catch-all serves index.html instead — the harness never mounts. Only
+  // THIS describe is gated; the real-account describe above genuinely runs on staging.
+  skipOnDeployedTarget(test, 'drives the dev-only /aspectdiag.html harness page, which does not exist in a production BUILD');
+
   test.beforeAll(() => {
     // 1080p-class resolutions (matching real export output, e.g. the real-account
     // draft measured 808x1440) — NOT 720p. A lower-resolution sample can render

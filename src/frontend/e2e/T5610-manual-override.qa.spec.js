@@ -4,6 +4,7 @@ import { existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5610 — REAL BROWSER (chromium) proof for "tap the spotlight to edit" + the override
@@ -29,7 +30,7 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SAMPLE = path.resolve(__dirname, '..', 'public', 'overlaydiag-sample.mp4');
-const HARNESS = 'http://localhost:5173/overlaydiag-t5610.html';
+const HARNESS = '/overlaydiag-t5610.html';
 
 const BODY = '[data-testid="highlight-body"]';
 const ENTER_HIT = '[data-testid="highlight-enter-hit"]';
@@ -84,6 +85,11 @@ async function tapCircle(page) {
 function suite(label, contextOpts) {
   test.describe(`T5610 manual override — ${label}`, () => {
     test.use(contextOpts);
+
+    // /overlaydiag-t5610.html is a Vite-dev-only harness page: not an input to the
+    // production build, so on a deployed target this RELATIVE path resolves against the
+    // Pages origin and the SPA catch-all serves index.html instead — the harness never mounts.
+    skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5610.html harness page, which does not exist in a production BUILD');
 
     // AC1
     test('1) tap inside the circle enters edit; tap again dismisses; tracking stays on', async ({ page }) => {
@@ -177,6 +183,10 @@ suite('coarse (touch)', { hasTouch: true, isMobile: true, viewport: { width: 412
 
 // AC4 — the discoverability hint. Device-agnostic, runs once (fine).
 test.describe('T5610 override hint', () => {
+  // /overlaydiag-t5610.html is a Vite-dev-only harness page (see note above) — it does
+  // not exist in a production BUILD, so this group cannot run against a deployed target.
+  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5610.html harness page, which does not exist in a production BUILD');
+
   test('6) hint names both paths, shows until first override, then fades and stays gone', async ({ page }) => {
     await page.goto(HARNESS);
     // Shows on load (tracking ON, region visible, not yet overridden), naming BOTH paths.

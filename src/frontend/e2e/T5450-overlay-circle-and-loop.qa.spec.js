@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5450 — REAL BROWSER (chromium) proof for the overlay LOOP BUTTON, driven through a
@@ -32,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SAMPLE = path.resolve(__dirname, '..', 'public', 'overlaydiag-sample.mp4');
-const HARNESS = 'http://localhost:5173/overlaydiag.html';
+const HARNESS = '/overlaydiag.html';
 
 const PLAY = '[data-testid="play-spotlight"]';
 
@@ -54,6 +55,11 @@ test.afterAll(() => {
  * enough — the handler is device-agnostic). Also proves the loop wraps at span end.
  */
 test.describe('T5450 loop button play/pause toggle', () => {
+  // /overlaydiag.html is a Vite-dev-only harness page: not an input to the production
+  // build, so on a deployed target this RELATIVE path resolves against the Pages origin
+  // and the SPA catch-all serves index.html instead — the harness never mounts.
+  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag.html harness page, which does not exist in a production BUILD');
+
   test('press plays (seek to span start), press again pauses; loop wraps at span end', async ({ page }) => {
     await page.goto(HARNESS);
     // Paused, currentTime 0 (outside span [0.4,1.2]). Press primary -> loop + seek + play.

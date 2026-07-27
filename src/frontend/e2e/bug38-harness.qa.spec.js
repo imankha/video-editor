@@ -24,9 +24,10 @@ import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const SAMPLE = '/tmp/bug38diag-sample.mp4';
-const HARNESS = 'http://localhost:5173/bug38diag.html';
+const HARNESS = '/bug38diag.html';
 
 // From src/bug38diag/main.jsx.
 const FRAME_CENTER = { x: 320, y: 180 };
@@ -74,6 +75,11 @@ async function routeSample(page) {
 }
 
 test.describe('bug38 harness @staging-gate', () => {
+  // /bug38diag.html is a Vite-dev-only harness page: not an input to the production
+  // build, so on a deployed target this RELATIVE path resolves against the Pages origin
+  // and the SPA catch-all serves index.html instead — the harness never mounts.
+  skipOnDeployedTarget(test, 'drives the dev-only /bug38diag.html harness page, which does not exist in a production BUILD');
+
   test('glitch 2: auto spotlight lands on the main centered player, not frame center', async ({ page }) => {
     test.setTimeout(60_000);
     await routeSample(page);

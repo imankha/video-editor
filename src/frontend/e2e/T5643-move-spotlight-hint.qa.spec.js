@@ -4,6 +4,7 @@ import { existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5643 — REAL BROWSER (chromium) proof that the "Tap the spotlight" hint (T5610) now:
@@ -37,7 +38,7 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SAMPLE = path.resolve(__dirname, '..', 'public', 'overlaydiag-sample.mp4');
-const HARNESS = 'http://localhost:5173/overlaydiag-t5643.html';
+const HARNESS = '/overlaydiag-t5643.html';
 
 const HINT = '[data-testid="override-hint"]';
 const BADGE_TEXT = 'players detected';
@@ -61,6 +62,10 @@ test.afterAll(() => {
 
 // AC1 — placement directly under the "N players detected" badge.
 test('1) hint renders directly below the "N players detected" badge', async ({ page }) => {
+  // /overlaydiag-t5643.html is a Vite-dev-only harness page: not an input to the
+  // production build, so on a deployed target this RELATIVE path resolves against the
+  // Pages origin and the SPA catch-all serves index.html instead — the harness never mounts.
+  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5643.html harness page, which does not exist in a production BUILD');
   await page.goto(HARNESS);
   const badge = page.getByText(BADGE_TEXT);
   await expect(badge).toBeVisible();
@@ -81,6 +86,7 @@ test('1) hint renders directly below the "N players detected" badge', async ({ p
 
 // AC2 + AC3 — visible with no frame selected; hides on select; reappears on deselect.
 test('2) hint hides when a tracking frame is selected, reappears on deselect', async ({ page }) => {
+  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5643.html harness page, which does not exist in a production BUILD');
   await page.goto(HARNESS);
   await expect(page.locator(HINT)).toBeVisible();
   await saveEvidence(page, 'criterion-2-hint-visible-no-frame-selected');
@@ -98,6 +104,7 @@ test('2) hint hides when a tracking frame is selected, reappears on deselect', a
 
 // AC4 — no regression to T5610 gating (tracking off, or already-used override).
 test('3) no regression to T5610 gating (tracking off / override already used)', async ({ page }) => {
+  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5643.html harness page, which does not exist in a production BUILD');
   await page.goto(HARNESS);
   await expect(page.locator(HINT)).toBeVisible();
 
@@ -116,6 +123,7 @@ test('3) no regression to T5610 gating (tracking off / override already used)', 
 
 // Responsive check on the changed surface.
 test('4) responsive: no horizontal overflow at 375px and desktop', async ({ page }) => {
+  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5643.html harness page, which does not exist in a production BUILD');
   await page.goto(HARNESS);
   await expect(page.locator(CONTAINER)).toBeVisible();
   await responsiveSweep(page);

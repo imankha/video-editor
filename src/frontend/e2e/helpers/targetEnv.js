@@ -92,10 +92,10 @@ export function assertSeamAvailable(res, seamName) {
  *    path. Those pages are not inputs to the production build, so on a deployed target
  *    the path resolves against the Pages origin and the SPA catch-all serves index.html
  *    instead; the harness never mounts and the spec waits out its timeout. (Distinct from
- *    `vite-module`, which is about an in-page `import()` of a `/src/...` module. Note the
- *    other harness specs — T5450/T5610/T5644/T5860/bug38/T5380b — dodge this by hardcoding
- *    an ABSOLUTE `http://localhost:5173/...`, so they always drive the LOCAL dev server
- *    even during a staging run. That inconsistency is pre-existing and worth unifying.)
+ *    `vite-module`, which is about an in-page `import()` of a `/src/...` module.) All of
+ *    these use a RELATIVE harness path + `skipOnDeployedTarget` so a deployed run skips
+ *    them loudly instead of silently driving whatever dev server is up on localhost:5173
+ *    (the state T5980 unified across the harness specs).
  *  - `capture` (T5420) — a developer screen-RECORDING script that records to a host-local
  *    directory (QUEST_DIR) to produce tutorial footage; not a functional test and cannot
  *    run without the host recording assets.
@@ -357,5 +357,56 @@ export const LOCAL_ONLY_SPECS = [
     category: 'dev-harness',
     depends: ['/timelinediag.html'],
     reason: 'drives the dev-only timelinediag harness page by a RELATIVE path, so on a deployed target the Pages SPA catch-all answers instead and the harness never mounts. The autoscroll math is unit-covered (TimelineBase.autoscroll.test.jsx).',
+  },
+  // --- T5980: the remaining *diag.html harness specs (were hardcoding an ABSOLUTE ----
+  // http://localhost:5173/... URL, so a staging run silently drove the LOCAL dev server;
+  // now RELATIVE + skipOnDeployedTarget like T5647 above).
+  {
+    file: 'T5380b-cropoverlay-first-drag.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/cropdiag.html'],
+    reason: 'drives the dev-only cropdiag harness (REAL VideoPlayer + CropOverlay + useCrop) by a RELATIVE path; on a deployed target the Pages SPA catch-all answers and the harness never mounts. The first-drag-through-loading-overlay behaviour needs a real browser buffering state jsdom cannot give.',
+  },
+  {
+    file: 'T5450-overlay-circle-and-loop.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/overlaydiag.html'],
+    reason: 'drives the dev-only overlaydiag harness (REAL HighlightOverlay + OverlayContainer against a REAL <video>) by a RELATIVE path; on a deployed target the harness never mounts. The loop-button play/pause wrap needs real playback jsdom cannot give.',
+  },
+  {
+    file: 'T5610-manual-override.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/overlaydiag-t5610.html'],
+    reason: 'drives the dev-only overlaydiag-t5610 harness (REAL HighlightOverlay + OverrideHint against a REAL <video>) by a RELATIVE path; on a deployed target the harness never mounts. tap-to-edit/override needs real pointer input jsdom cannot give.',
+  },
+  {
+    file: 'T5643-move-spotlight-hint.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/overlaydiag-t5643.html'],
+    reason: 'drives the dev-only overlaydiag-t5643 harness (REAL PlayerDetectionOverlay + OverrideHint nested like OverlayModeView) by a RELATIVE path; on a deployed target the harness never mounts. The hint placement/geometry needs real layout jsdom cannot give.',
+  },
+  {
+    file: 'T5644-region-lever-touch.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/regiondiag.html'],
+    reason: 'drives the dev-only regiondiag harness (REAL RegionLayer + useHighlightRegions) by a RELATIVE path; on a deployed target the harness never mounts. The touch-drag lever proof needs real chromium touch events jsdom cannot give.',
+  },
+  {
+    file: 'T5676-aspect-stage-alignment.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/aspectdiag.html'],
+    reason: 'PARTIAL: only the "dev harness (both aspects)" describe is gated -- it drives the dev-only aspectdiag harness by a RELATIVE path (never mounts on a deployed target). The real-account describe (loginAsRealUser + Open in Overlay) still runs on staging.',
+  },
+  {
+    file: 'T5860-collectionplayer-modal-backdrop.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/collectionplayerdiag.html'],
+    reason: 'drives the dev-only collectionplayerdiag harness (REAL CollectionPlayer over interactive tiles) by a RELATIVE path; on a deployed target the harness never mounts. The gutter/backdrop hit-testing needs real elementFromPoint layout jsdom cannot give.',
+  },
+  {
+    file: 'bug38-harness.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/bug38diag.html'],
+    reason: 'drives the dev-only bug38diag harness (REAL auto-select + frame-step modules) by a RELATIVE path; on a deployed target the harness never mounts. The auto-spotlight landing + frame-step proofs need real playback/decoding jsdom cannot give.',
   },
 ];

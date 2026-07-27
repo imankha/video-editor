@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5860 — REAL BROWSER (chromium, desktop) proof that CollectionPlayer is modal.
@@ -26,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SAMPLE = path.resolve(__dirname, '..', 'public', 'collectionplayerdiag-sample.mp4');
-const HARNESS = 'http://localhost:5173/collectionplayerdiag.html';
+const HARNESS = '/collectionplayerdiag.html';
 
 const DIALOG = '[role="dialog"]';
 const STATUS = '[data-testid="status"]';
@@ -57,6 +58,10 @@ async function openPlayer(page) {
 }
 
 test('desktop gutter point resolves to the backdrop, not a tile', async ({ page }) => {
+  // /collectionplayerdiag.html is a Vite-dev-only harness page: not an input to the
+  // production build, so on a deployed target this RELATIVE path resolves against the
+  // Pages origin and the SPA catch-all serves index.html instead — the harness never mounts.
+  skipOnDeployedTarget(test, 'drives the dev-only /collectionplayerdiag.html harness page, which does not exist in a production BUILD');
   await openPlayer(page);
 
   const hit = await page.evaluate(() => {
@@ -74,6 +79,7 @@ test('desktop gutter point resolves to the backdrop, not a tile', async ({ page 
 });
 
 test('hovering the gutter triggers no tile hover/reveal', async ({ page }) => {
+  skipOnDeployedTarget(test, 'drives the dev-only /collectionplayerdiag.html harness page, which does not exist in a production BUILD');
   await openPlayer(page);
 
   await page.mouse.move(8, 400);
@@ -85,6 +91,7 @@ test('hovering the gutter triggers no tile hover/reveal', async ({ page }) => {
 });
 
 test('clicking the gutter fires no tile click and does not close the player', async ({ page }) => {
+  skipOnDeployedTarget(test, 'drives the dev-only /collectionplayerdiag.html harness page, which does not exist in a production BUILD');
   await openPlayer(page);
 
   await page.mouse.click(8, 400);
@@ -98,6 +105,7 @@ test('clicking the gutter fires no tile click and does not close the player', as
 });
 
 test('completes the modal contract: role/aria, scroll lock, focus trap, aspect skeleton', async ({ page }, testInfo) => {
+  skipOnDeployedTarget(test, 'drives the dev-only /collectionplayerdiag.html harness page, which does not exist in a production BUILD');
   await openPlayer(page);
 
   const contract = await page.evaluate(() => {
