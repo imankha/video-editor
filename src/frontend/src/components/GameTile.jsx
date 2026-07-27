@@ -23,7 +23,8 @@ import { API_BASE } from '../config';
  * - Tile tap stays the primary action: open (annotate) live games, Extend/Recap
  *   expired ones.
  *
- * All GameCard actions remain reachable per the reachability matrix.
+ * Every game action (open, watch recap, share, edit, extend, delete) stays
+ * reachable via the tile tap + kebab menu.
  */
 export function GameTile({
   game,

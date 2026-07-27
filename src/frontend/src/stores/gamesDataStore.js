@@ -374,7 +374,7 @@ export const useGamesDataStore = create((set, get) => ({
       }
 
       const result = await response.json();
-      // Refresh games list so GameCard shows updated view progress
+      // Refresh games list so the games tab shows updated view progress
       if (viewedDuration > 0) {
         get().fetchGames();
       }

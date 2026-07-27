@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Share2, Target, Zap, Calendar } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, FileVideo, Loader2, Share2 } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -9,7 +9,6 @@ import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
 import { compareGameTime } from '../utils/timeFormat';
-import { RATING_ADJECTIVES, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS } from './shared/clipConstants';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
@@ -17,7 +16,7 @@ import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES } from '../config/displayNames';
 import { GAME, REEL } from '../config/themeColors';
-import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
+import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
@@ -26,7 +25,6 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
-import { useIsCoarsePointer } from '../hooks/useIsMobile';
 // DraftTile (the restyled ProjectCard) + SegmentedProgressStrip were extracted to their
 // own files (T5672). Re-exported below (DraftTile aliased to ProjectCard) so existing
 // tests importing them from './ProjectManager' keep resolving.
@@ -35,12 +33,6 @@ import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
 import { splitByAspect } from '../constants/aspectRatios';
-
-const SCORING_TAGS = new Set([
-  'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
-  'Scoring', 'Dunk', 'Try',
-]);
-const PLAYMAKING_TAGS = new Set(['Assist', 'Chance Creation', 'Shot']);
 
 // Group games by month (YYYY-MM) in chronological order (newest first)
 function groupGamesByMonth(games) {
@@ -70,30 +62,6 @@ function tabFromPath(pathname) {
   if (pathname === '/home/games') return 'games';
   if (pathname === '/home/reels') return 'projects';
   return null;
-}
-
-function TagBadges({ tagBadges }) {
-  if (!tagBadges || Object.keys(tagBadges).length === 0) return null;
-  const pills = [];
-  for (const [tag, count] of Object.entries(tagBadges)) {
-    const isScoring = SCORING_TAGS.has(tag);
-    const isPlaymaking = PLAYMAKING_TAGS.has(tag);
-    if (!isScoring && !isPlaymaking) continue;
-    const Icon = isScoring ? Target : Zap;
-    const colors = isScoring
-      ? 'text-amber-400 bg-amber-400/15 border-amber-400/30'
-      : 'text-cyan-400 bg-cyan-400/15 border-cyan-400/30';
-    const label = count > 1 && tag === 'Try' ? 'Tries'
-      : count > 1 ? `${tag}s`
-      : tag;
-    pills.push(
-      <span key={tag} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-semibold ${colors}`}>
-        <Icon size={10} />{count > 1 && count} {label}
-      </span>
-    );
-  }
-  if (pills.length === 0) return null;
-  return <>{pills}</>;
 }
 
 /**
@@ -1354,10 +1322,10 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 
 /**
  * GamesListSkeleton - placeholder shown while the games list loads (T4771).
- * Mirrors the loaded layout: "Your Games" heading + a stack of GameCard-shaped
- * cards, so the screen never blank-then-pops or shows bare "Loading..." text.
- * Pure render; matches GameCard's shell (p-3 sm:p-4 bg-gray-800 rounded-lg
- * border border-gray-700) and its icon + title + metadata rows.
+ * Mirrors the loaded layout: "Your Games" heading + a stack of shell cards, so
+ * the screen never blank-then-pops or shows bare "Loading..." text. Pure render;
+ * each card is a p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 shell
+ * with icon + title + metadata rows.
  */
 export function GamesListSkeleton({ count = 4 }) {
   return (
@@ -1384,317 +1352,6 @@ export function GamesListSkeleton({ count = 4 }) {
     </div>
   );
 }
-
-
-/**
- * GameMetaRow - Metadata line under a game's title (date, clip count, rating
- * counts, quality score, tag badges). Shared by the expired and normal GameCard
- * variants so the two never drift.
- */
-function RatingChip({ count, rating }) {
-  // Labeled rating pill (TagBadges recipe). The adjective is the human-readable
-  // label; the chess-notation constants (RATING_NOTATION) never surface in the UI.
-  const adjective = RATING_ADJECTIVES[rating];
-  const label = `${count} ${adjective.toLowerCase()} clip${count !== 1 ? 's' : ''}`;
-  return (
-    <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-semibold"
-      style={{
-        color: RATING_BADGE_COLORS[rating],
-        backgroundColor: RATING_BACKGROUND_COLORS[rating],
-        borderColor: `${RATING_BADGE_COLORS[rating]}4D`, // ~30% alpha to match TagBadges
-      }}
-      title={label}
-      aria-label={label}
-    >
-      <Star size={10} />
-      {count} {adjective}
-    </span>
-  );
-}
-
-function GameMetaRow({ game }) {
-  const uploadedLabel = `Uploaded ${new Date(game.created_at).toLocaleDateString()}`;
-  const qualityScore = (game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2;
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-sm text-gray-400">
-      <span className="inline-flex items-center gap-1" aria-label={uploadedLabel}>
-        <Calendar size={12} className="text-gray-500" />
-        Uploaded {new Date(game.created_at).toLocaleDateString()}
-      </span>
-      <span>•</span>
-      <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
-      {game.clip_count > 0 && (
-        <>
-          {game.brilliant_count > 0 && (
-            <RatingChip count={game.brilliant_count} rating={5} />
-          )}
-          {game.good_count > 0 && (
-            <RatingChip count={game.good_count} rating={4} />
-          )}
-          <span
-            className="hidden sm:inline"
-            title="Footage quality score (0-100), higher is better"
-          >
-            Footage quality {qualityScore}/100
-          </span>
-          <TagBadges tagBadges={game.tag_badges} />
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
- * GameCard - Individual game in the list
- */
-export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [actionsRevealed, setActionsRevealed] = useState(false);
-  const longPressTimer = useRef(null);
-  const touchMoved = useRef(false);
-  // T5910: gate the reveal MECHANISM on pointer capability, not viewport width.
-  // useIsMobile (width-OR-touch) made a narrow *desktop* window take the touch-only
-  // long-press branch, so a mouse user could never reveal these actions. Fine
-  // pointer at any width -> hover reveal; coarse pointer -> long-press, unchanged.
-  const isCoarsePointer = useIsCoarsePointer();
-  const isExpired = game.storage_status === 'expired';
-
-  const hasBeenViewed = game.viewed_duration > 0;
-  const rawPercent = game.video_duration > 0
-    ? (game.viewed_duration / game.video_duration) * 100
-    : 0;
-  const viewedPercent = hasBeenViewed ? Math.max(1, Math.min(100, Math.round(rawPercent))) : 0;
-  const isFullyReviewed = viewedPercent >= 95;
-  const isPartiallyReviewed = hasBeenViewed && !isFullyReviewed;
-  const isNew = !hasBeenViewed;
-
-  const handleDelete = (e) => {
-    e.stopPropagation();
-    if (showDeleteConfirm) {
-      onDelete();
-    } else {
-      setShowDeleteConfirm(true);
-      setTimeout(() => setShowDeleteConfirm(false), 3000);
-    }
-  };
-
-  const hasRecap = Boolean(game.recap_video_url);
-  const canExtend = game.can_extend !== false;
-  const daysLeft = getDaysUntil(game.storage_expires_at);
-  const isNearExpiry = !isExpired && daysLeft !== null && daysLeft < 14;
-
-  const longPressFired = useRef(false);
-
-  const handleClick = (e) => {
-    if (isCoarsePointer) {
-      if (longPressFired.current) return;
-      if (actionsRevealed) {
-        const isButton = e.target.closest('button');
-        if (isButton) return;
-        setActionsRevealed(false);
-        setShowDeleteConfirm(false);
-        return;
-      }
-    }
-    if (isExpired) {
-      if (canExtend) {
-        onExtend?.();
-      } else if (hasRecap) {
-        onPlayRecap?.();
-      }
-    } else {
-      onLoad();
-    }
-  };
-
-  const handleTouchStart = () => {
-    touchMoved.current = false;
-    longPressFired.current = false;
-    longPressTimer.current = setTimeout(() => {
-      longPressTimer.current = null;
-      longPressFired.current = true;
-      setActionsRevealed(true);
-    }, 500);
-  };
-
-  const handleTouchMove = () => {
-    touchMoved.current = true;
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handleTouchEnd = (e) => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-    if (longPressFired.current) {
-      e.preventDefault();
-    }
-  };
-
-  const hasAnnotations = game.clip_count > 0;
-
-  if (isExpired) {
-    return (
-      <div
-        className="group relative p-3 sm:p-4 bg-yellow-950/20 rounded-lg border border-yellow-800/40 transition-all hover:bg-yellow-950/30"
-      >
-        {/* Single row: identity left, action cluster right (wraps below on very narrow
-            screens instead of reserving a dedicated button row). Hierarchy: Recap
-            (primary, only bordered/colored) > Extend (ghost) > Remove (icon-only ghost,
-            expands to a red Confirm on first click). */}
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <Gamepad2 size={18} className="text-yellow-500 flex-shrink-0" />
-              <h3 className="text-white font-medium truncate">{game.name}</h3>
-              <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-400 flex-shrink-0">
-                <Clock size={10} />
-                Expired
-              </span>
-            </div>
-            <GameMetaRow game={game} />
-          </div>
-
-          <div className="flex-shrink-0 flex items-center gap-1.5">
-            {hasAnnotations && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
-                className={`flex items-center justify-center gap-1.5 px-3 py-2 coarse-pointer:min-h-[44px] rounded-lg text-sm font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
-                title="Watch the recap (annotations and highlights)"
-              >
-                <Play size={16} />
-                Recap
-              </button>
-            )}
-            {canExtend && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={RefreshCw}
-                onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
-                title="Extend storage"
-              >
-                Extend
-              </Button>
-            )}
-            <Button
-              variant={showDeleteConfirm ? 'danger' : 'ghost'}
-              size="sm"
-              icon={Trash2}
-              iconOnly={!showDeleteConfirm}
-              onClick={handleDelete}
-              title={showDeleteConfirm ? 'Click again to confirm' : 'Remove from list'}
-              aria-label={showDeleteConfirm ? 'Click again to confirm removal' : 'Remove from list'}
-            >
-              {showDeleteConfirm ? 'Confirm' : undefined}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      onClick={handleClick}
-      onTouchStart={isCoarsePointer ? handleTouchStart : undefined}
-      onTouchMove={isCoarsePointer ? handleTouchMove : undefined}
-      onTouchEnd={isCoarsePointer ? handleTouchEnd : undefined}
-      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Gamepad2 size={18} className={`${GAME.accent} flex-shrink-0`} />
-            <h3 className="text-white font-medium truncate">{game.name}</h3>
-            {isFullyReviewed && (
-              <CheckCircle size={14} className={GAME.accent} title="Fully reviewed" />
-            )}
-            {isPartiallyReviewed && (
-              <span className="text-xs text-gray-400 flex items-center gap-1" title={`${viewedPercent}% reviewed`}>
-                <Eye size={12} className="text-gray-500" />
-                {viewedPercent}%
-              </span>
-            )}
-            {isNew && game.video_duration > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
-            )}
-          </div>
-          <GameMetaRow game={game} />
-        </div>
-
-        {/* Edit + Share + Delete buttons - hover on fine pointer, long-press on coarse pointer */}
-        {(!isCoarsePointer || actionsRevealed) && (
-          <div className={`flex items-center gap-1 transition-opacity ${isCoarsePointer ? 'opacity-100' : ''}`}>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Pencil}
-              iconOnly
-              onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-              className={isCoarsePointer ? '' : 'opacity-0 group-hover:opacity-100'}
-              title="Edit game details"
-            />
-            {!isExpired && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={Share2}
-                iconOnly
-                onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-                className={isCoarsePointer ? '' : 'opacity-0 group-hover:opacity-100'}
-                title="Share game"
-              />
-            )}
-            <Button
-              variant={showDeleteConfirm ? 'danger' : 'ghost'}
-              size="sm"
-              icon={Trash2}
-              iconOnly
-              onClick={handleDelete}
-              className={isCoarsePointer ? '' : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
-              title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
-            />
-          </div>
-        )}
-      </div>
-
-      {isNearExpiry && (
-        <div className="mt-2 flex items-center justify-between border-t border-gray-700 pt-2">
-          <span className="flex items-center gap-1.5 text-sm text-yellow-400">
-            <Clock size={14} />
-            Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
-          </span>
-          {canExtend && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={RefreshCw}
-              onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
-            >
-              Extend Storage
-            </Button>
-          )}
-        </div>
-      )}
-
-      {hasBeenViewed && game.video_duration > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-700 rounded-b-lg overflow-hidden">
-          <div
-            className="h-full bg-green-500"
-            style={{ width: `${viewedPercent}%` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 // Back-compat re-exports (T5672 extraction): tests and callers import these from here.
 export { DraftTile as ProjectCard, SegmentedProgressStrip };
