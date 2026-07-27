@@ -12,7 +12,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from ..database import get_db_connection
+from ..database import column_exists, get_db_connection
 from ..quest_config import QUEST_DEFINITIONS
 from ..services import credit_ledger
 from ..services.credit_ledger import CreditsUnavailable, get_credit_balance
@@ -175,9 +175,21 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # T5330: exclude games materialized from a share (games.shared_by set at
     # materialization). Own games have shared_by NULL, so a genuine upload still
     # completes this step.
-    steps["upload_game"] = cursor.execute(
-        "SELECT 1 FROM games WHERE shared_by IS NULL LIMIT 1"
-    ).fetchone() is not None
+    # T5970: games.shared_by arrives with v026, which runs manually (not on
+    # deploy/startup). _check_all_steps runs on the bootstrap (app-load) path, so a
+    # below-v026 profile DB would 500 every user's load with "no such column:
+    # shared_by". Probe the column and, during the window, fall back to "any game
+    # exists" — the column's own default is NULL (own upload), and nothing could
+    # have set it to non-NULL yet since materialization is what adds/sets it, so a
+    # bare `SELECT 1 FROM games` is the correct shared_by-IS-NULL result.
+    if column_exists(cursor, "games", "shared_by"):
+        steps["upload_game"] = cursor.execute(
+            "SELECT 1 FROM games WHERE shared_by IS NULL LIMIT 1"
+        ).fetchone() is not None
+    else:
+        steps["upload_game"] = cursor.execute(
+            "SELECT 1 FROM games LIMIT 1"
+        ).fetchone() is not None
     # add_clip: completed when the user opens the Add Clip form (achievement). Backfilled
     # by "any clip exists" so it auto-completes on save and for users who clipped before
     # this step existed (you can't have a clip without having opened the form).
