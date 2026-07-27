@@ -10,6 +10,12 @@ import { useSyncStore } from '../stores/syncStore';
 // up, ~3s later anyway).
 const SHOW_DELAY_MS = 3000;
 
+// syncState values whose ALARM (banner + Retry) is gated on this session
+// having attempted a write. Both are sticky backend markers that can outlive
+// the session whose write they describe. 'pending' is not alarm-shaped (no
+// Retry button) and stays ungated.
+const ALARM_SYNC_STATES = new Set(['failed', 'conflict']);
+
 /**
  * SyncStatusIndicator - Shows connection/sync status to the user.
  *
@@ -19,11 +25,12 @@ const SHOW_DELAY_MS = 3000;
  *   - 'conflict' -> alarm + Retry (backend restores the newer copy; never loops).
  * Auto-hides when sync recovers. Offline auto-retries on reconnect (see syncStore).
  *
- * T5960: the 'conflict' state is HELD but its alarm is gated on write-attempt —
- * the `.sync_conflict` marker is sticky on the backend and a read-only session
- * can inherit another session's refusal. Until THIS session has issued a write,
- * a conflict stays silent (no alarm, no Retry). 'failed'/'pending'/offline are
- * NOT gated — a genuine failure still surfaces immediately.
+ * T5960/T6010: 'conflict' and 'failed' are both HELD but their alarm is gated
+ * on write-attempt — both `.sync_conflict` and `.sync_failed` are sticky
+ * markers on the backend and a read-only session can inherit another
+ * session's refusal. Until THIS session has issued a write, neither alarms
+ * (no banner, no Retry). 'pending'/offline are NOT gated — 'pending' is a
+ * quiet, non-alarm banner regardless of write-attempt.
  */
 export function SyncStatusIndicator() {
   const syncState = useSyncStore(state => state.syncState);
@@ -34,11 +41,14 @@ export function SyncStatusIndicator() {
 
   const [visible, setVisible] = useState(false);
 
-  // A conflict is held silent until this session has attempted a write.
-  const isConflictHeldSilent = syncState === 'conflict' && !hasAttemptedWrite;
-  const isAlarm =
-    syncState === 'failed' || (syncState === 'conflict' && hasAttemptedWrite);
-  const shouldShow = isOffline || (syncState !== 'ok' && !isConflictHeldSilent);
+  // Both alarm-shaped states (a genuine failure and a CAS conflict) are backed
+  // by the same sticky-marker idiom on the backend and so share the same
+  // write-attempt gate. 'pending' is deliberately excluded from this set — its
+  // quiet banner must render regardless of write-attempt (T6010 acceptance
+  // criterion pinning this against an accidental over-generalization).
+  const isHeldSilent = ALARM_SYNC_STATES.has(syncState) && !hasAttemptedWrite;
+  const isAlarm = ALARM_SYNC_STATES.has(syncState) && hasAttemptedWrite;
+  const shouldShow = isOffline || (syncState !== 'ok' && !isHeldSilent);
 
   useEffect(() => {
     if (!shouldShow) {
