@@ -190,30 +190,44 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
             # nothing on the destination), never copied, but a STALE
             # destination-side reservation from a prior copy of this same
             # user_id must not linger and silently offset the re-derived balance.
-            dst_cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (user_id,))
-            dst_cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (user_id,))
-            src_cur.execute(
-                "SELECT amount, source, idempotency_key, reference_id, video_seconds, created_at "
-                "FROM credit_transactions WHERE user_id = %s", (user_id,),
-            )
-            tx_rows = src_cur.fetchall()
-            for tx in tx_rows:
-                tx = dict(tx)
-                cols = ["user_id", *list(tx.keys())]
-                placeholders = ", ".join(["%s"] * len(cols))
-                dst_cur.execute(
-                    f"INSERT INTO credit_transactions ({', '.join(cols)}) VALUES ({placeholders})",
-                    [user_id, *[tx[c] for c in tx]],
+            # A SOURCE env that has not yet run postgres v019 has no credit ledger
+            # at all -- credits still live in the copied user.sqlite, and v019 is
+            # exactly what moves them into Postgres. That is an environment-version
+            # difference between two real deployments, not missing internal data,
+            # so skip the ledger copy loudly instead of crashing the whole copy.
+            # The destination's own migrate is what will populate the ledger.
+            src_cur.execute("SELECT to_regclass('public.credit_transactions') IS NOT NULL AS ok")
+            if not src_cur.fetchone()["ok"]:
+                log.warning(
+                    "SOURCE has no credit_transactions table (pre-v019) -- skipping ledger "
+                    "copy. Credits ride along inside user.sqlite; run the destination "
+                    "migrate to move them into Postgres."
                 )
-            dst_cur.execute(
-                """INSERT INTO credits (user_id, balance)
-                   VALUES (%s, (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s))
-                   ON CONFLICT (user_id) DO UPDATE SET
-                       balance = (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s),
-                       updated_at = now()""",
-                (user_id, user_id, user_id),
-            )
-            log.info(f"Copied {len(tx_rows)} credit_transactions rows, re-derived balance")
+            else:
+                dst_cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (user_id,))
+                dst_cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (user_id,))
+                src_cur.execute(
+                    "SELECT amount, source, idempotency_key, reference_id, video_seconds, created_at "
+                    "FROM credit_transactions WHERE user_id = %s", (user_id,),
+                )
+                tx_rows = src_cur.fetchall()
+                for tx in tx_rows:
+                    tx = dict(tx)
+                    cols = ["user_id", *list(tx.keys())]
+                    placeholders = ", ".join(["%s"] * len(cols))
+                    dst_cur.execute(
+                        f"INSERT INTO credit_transactions ({', '.join(cols)}) VALUES ({placeholders})",
+                        [user_id, *[tx[c] for c in tx]],
+                    )
+                dst_cur.execute(
+                    """INSERT INTO credits (user_id, balance)
+                       VALUES (%s, (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s))
+                       ON CONFLICT (user_id) DO UPDATE SET
+                           balance = (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s),
+                           updated_at = now()""",
+                    (user_id, user_id, user_id),
+                )
+                log.info(f"Copied {len(tx_rows)} credit_transactions rows, re-derived balance")
 
             dst_conn.commit()
 
