@@ -572,28 +572,37 @@ keyframed** — camera tilt is constant for a recording.
   `dragStartRef`/`highlightStartRef`) so the first move after pointerdown has zero re-render lag.
   The delta/scale drag math is UNCHANGED (still hand-rolled, not `screenToVideo`) so desktop
   mouse is byte-identical. **Interaction model is now a single `editable` prop (= `!showPlayerBoxes`),
-  consistent on mobile + desktop — NO tap-to-select, NO deselect backdrop.** When `editable`
-  (player-tracking layer OFF) the circle shows its levers: rim resize handles PLUS a **center
-  4-arrow move grip** (lucide `Move` in an HTML `<div>` over the circle center, `data-testid=
-  "highlight-move-grip"`; it starts a body drag via the shared `beginDrag`, and its captured
-  pointer events bubble to the root div's move/up handlers). The ellipse body also drags to move
-  while editable. When NOT editable the circle is DISPLAY-ONLY: body renders with
-  `pointer-events-none`, no handles, no grip — so the video's tap-nav passes through. On a COARSE
-  pointer (`useIsCoarsePointer` -> `(pointer: coarse)`) the handle hit circles are >=44px (r=22)
-  and the grip is 44px (desktop grip 32px, handle 7px). `editable` is threaded from
+  consistent on mobile + desktop — NO tap-to-select, NO deselect backdrop.** **CURRENT edit UI
+  (T5570c `2567e90e`, SUPERSEDES the original T5450 rim-handle + center-grip model): four
+  bounding-box CORNER handles `data-testid="highlight-corner-{nw,ne,sw,se}"` (drag a corner to
+  grow/shrink BOTH radii about a fixed center; sign follows the corner — e=+x, w=-x, s=+y, n=-y)
+  PLUS move by DRAGGING THE CIRCLE BODY on desktop, or a touch-ONLY `data-testid=
+  "highlight-move-lever"` (a 44px `Move` `<div>` above the box, gated `editable && isCoarse`) on
+  coarse pointers.** The removed `highlight-move-grip` / rim `highlight-handle-horizontal|vertical`
+  ids no longer exist. When NOT editable the circle is DISPLAY-ONLY: body renders with
+  `pointer-events-none`, no handles, no lever — so the video's tap-nav passes through. On a COARSE
+  pointer (`useIsCoarsePointer` -> `(pointer: coarse)`) the corner hit circles are >=44px
+  (`cornerHitR` r=26; visible r=13) and the lever is 44px; fine pointer keeps them compact
+  (`cornerHitR` r=12, visible r=8, no lever). `editable` is threaded from
   `OverlayContainer` (`showPlayerBoxes` state, the "Hide/Show player boxes" toggle) through
   `OverlayScreen`/`OverlayModeView`. The mobileFs tap-nav wrapper YIELDS while editable:
   `onClick={togglePlay}` + the long-press `onTouch*` handlers are gated on `!editable` (pointer
-  `stopPropagation` can NOT cancel those TOUCH handlers — gating is required). Test IDs:
-  `highlight-body`/`highlight-handle-horizontal`/`-vertical`/`highlight-move-grip`. **Sibling
-  still mouse-only**: `PlayerDetectionOverlay` uses `onClick`/`onMouseEnter` — same touch gap,
-  untouched here. Coverage: Vitest `HighlightOverlay.touch.test.jsx` (editable model, 10 cases);
-  REAL-browser `e2e/T5450-overlay-circle-and-loop.qa.spec.js` (coarse + fine chromium) driving a
-  dev-only harness (`overlaydiag.html` + `src/overlaydiag/main.jsx`, NOT a vite build input) that
-  mounts the REAL `HighlightOverlay` + REAL `OverlayContainer` hook against a real ffmpeg-generated
-  `<video>` — proves lever gating, grip-move, handle-resize, tap-nav yield, >=44px, and the loop
-  play/pause toggle. jsdom is insufficient here (T5390's first attempt passed jsdom, failed on
-  real touch).
+  `stopPropagation` can NOT cancel those TOUCH handlers — gating is required). Test IDs (current):
+  `highlight-body` / `highlight-corner-{nw,ne,sw,se}` / `highlight-move-lever` (coarse only) /
+  `highlight-enter-hit` (tap-to-edit, T5610). **Sibling still mouse-only**: `PlayerDetectionOverlay`
+  uses `onClick`/`onMouseEnter` — same touch gap, untouched here. Coverage: Vitest
+  `HighlightOverlay.touch.test.jsx` (editable corner+lever model, incl. jsdom resize + lever-move
+  math) + `HighlightOverlay.override.test.jsx`; REAL-browser `e2e/T5610-manual-override.qa.spec.js`
+  (coarse + fine chromium, dev-only `overlaydiag-t5610.html`) proves tap-to-edit, body-drag move +
+  no-scrub, corner-drag RESIZE widens the ellipse (T6000 test 6), the coarse move-LEVER moves the
+  circle (T6000 test 7), and >=44px sizing. `e2e/T5450-overlay-circle-and-loop.qa.spec.js` now
+  covers ONLY the loop play/pause toggle (its 8 move/resize tests asserted the removed T5450 DOM
+  contract and were removed on 2026-07-26 `17e40530`; T5610 re-proves them under the current
+  model). jsdom is insufficient for the pointer hit-testing (T5390's first attempt passed jsdom,
+  failed on real touch) — hence the real-browser proofs. **NOTE:** corner resize handles have NO
+  `onClick` swallow (only the body does via `stopClick`), so in mobileFs a moved-mouse synthetic
+  click after a corner drag can bubble to `handleVideoAreaTap` and drop out of circle-edit; real
+  touch drags don't synthesize that click. Not exercised as a guarantee by any test.
 - **Manual override now has TWO entry paths + a discoverability hint (T5610, 2026-07-20,
   EVOLVES T5450 — additive, not a revert of T5390)**: the spotlight is editable when
   `editable = !showPlayerBoxes || circleEditActive`. Path 1 (T5570 power user): hide the
