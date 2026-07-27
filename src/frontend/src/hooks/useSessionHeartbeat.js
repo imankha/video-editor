@@ -31,7 +31,7 @@ export function useSessionHeartbeat() {
       if (document.visibilityState !== 'visible') return;
       apiFetch(`${API_BASE}/api/auth/heartbeat`, {
         method: 'POST',
-        rbLifecycleWrite: true, // T6020: periodic timer, not a user gesture
+        rbNonDataWrite: true, // T6020: periodic timer, not a user gesture
       }).catch(() => {});
     };
 
@@ -41,12 +41,12 @@ export function useSessionHeartbeat() {
         // sendBeacon carries the rb_session cookie (SameSite=None;Secure in
         // cross-origin envs) and survives unload without blocking navigation.
         // Does NOT route through window.fetch, so it never reaches the sync
-        // interceptor at all -- no rbLifecycleWrite marker needed here (T6020).
+        // interceptor at all -- no rbNonDataWrite marker needed here (T6020).
         navigator.sendBeacon(url);
       } else {
         // Fallback path for browsers without sendBeacon -- same tab-close
         // lifecycle event as the branch above, just via fetch.
-        apiFetch(url, { method: 'POST', keepalive: true, rbLifecycleWrite: true }).catch(() => {});
+        apiFetch(url, { method: 'POST', keepalive: true, rbNonDataWrite: true }).catch(() => {});
       }
     };
 

@@ -260,7 +260,7 @@ export async function initSession() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: initBody,
-      rbLifecycleWrite: true, // T6020: fires on every app load, not a user gesture
+      rbNonDataWrite: true, // T6020: fires on every app load, not a user gesture
     }).then(async (initResponse) => {
       if (!initResponse.ok) {
         throw new Error(`Session init failed: ${initResponse.status}`);
@@ -280,7 +280,7 @@ export async function initSession() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ terms_version: '2026-05-07' }),
-          rbLifecycleWrite: true, // T6020: session-init reconciliation, not a user gesture
+          rbNonDataWrite: true, // T6020: session-init reconciliation, not a user gesture
         }).then(() => {
           useAuthStore.setState({ needsTermsAcceptance: false });
         }).catch(() => {});

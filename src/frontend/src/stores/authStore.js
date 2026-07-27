@@ -142,6 +142,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       await apiFetch(`${API_BASE}/api/auth/logout`, {
         method: 'POST',
+        rbNonDataWrite: true, // T6020 follow-up: auth table write, not user-data
       });
     } catch {
       // Best-effort — clear local state regardless

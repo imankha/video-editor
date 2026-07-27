@@ -133,15 +133,15 @@ describe('write-attempt arming (T5960)', () => {
       expect(isMutatingApiRequest('/storage/warmup', { method: 'POST' })).toBe(false);
     });
 
-    it('does NOT arm on session/telemetry lifecycle writes marked rbLifecycleWrite (T6020)', () => {
+    it('does NOT arm on session/telemetry lifecycle writes marked rbNonDataWrite (T6020)', () => {
       // POST /api/auth/init fires on EVERY app load — the real defeat of the
       // naive "any write" rule. These are not user edits and must stay silent.
       // T6020: classification is now by the call-site marker, not the URL.
-      expect(isMutatingApiRequest('/api/auth/init', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
-      expect(isMutatingApiRequest('/api/auth/heartbeat', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
-      expect(isMutatingApiRequest('/api/auth/session-close', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
-      expect(isMutatingApiRequest('/api/auth/accept-terms', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
-      expect(isMutatingApiRequest('/api/client-errors/video', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/init', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/heartbeat', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/session-close', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/accept-terms', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/client-errors/video', { method: 'POST', rbNonDataWrite: true })).toBe(false);
     });
 
     it('does NOT arm on export-recovery mount-time reconciliation, marked (T6020)', () => {
@@ -149,9 +149,9 @@ describe('write-attempt arming (T5960)', () => {
       // or is still running while the user was away — zero user intent, common
       // for any user who recently exported. Both would re-break acceptance
       // criterion 1 (silent passive load) if left unmarked.
-      expect(isMutatingApiRequest('/api/exports/acknowledge', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
-      expect(isMutatingApiRequest('/api/exports/123/resume-progress', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
-      expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/acknowledge', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/123/resume-progress', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST', rbNonDataWrite: true })).toBe(false);
     });
 
     it('DOES arm on a real export-start gesture (unmarked -- does not over-exclude /api/exports/)', () => {
@@ -166,6 +166,23 @@ describe('write-attempt arming (T5960)', () => {
       expect(isMutatingApiRequest('/api/projects/1/actions', { method: 'POST' })).toBe(true);
     });
 
+    // T6020 follow-up (supervisor audit): the old denylist's `/api/auth/`
+    // PREFIX excluded EVERY auth-table write, including ones that ARE user
+    // gestures -- logging in/out, sending/verifying an OTP, reporting a
+    // problem. These write Postgres auth tables, never the user's profile
+    // SQLite, so they cannot produce a sync conflict even though clicking
+    // "Log in" is unambiguously a gesture. RED without the fix: these five
+    // were unmarked after T6020 deleted the prefix denylist, so a real login
+    // armed the gate -- exactly the population most likely to be carrying a
+    // stale marker from a prior session.
+    it('does NOT arm on auth-table writes marked rbNonDataWrite, even though they ARE user gestures', () => {
+      expect(isMutatingApiRequest('/api/auth/google', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/verify-otp', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/send-otp', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/logout', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/report-problem', { method: 'POST', rbNonDataWrite: true })).toBe(false);
+    });
+
     // T6020: PATCH /api/projects/{id}/state is hit both by project-OPEN
     // bookkeeping (useProjectLoader.js, marked lifecycle) and by a real
     // mode-switch GESTURE (App.jsx, unmarked) at the IDENTICAL pathname. A
@@ -178,7 +195,7 @@ describe('write-attempt arming (T5960)', () => {
       expect(
         isMutatingApiRequest(`${pathname}?update_last_opened=true&current_mode=framing`, {
           method: 'PATCH',
-          rbLifecycleWrite: true,
+          rbNonDataWrite: true,
         })
       ).toBe(false);
       expect(

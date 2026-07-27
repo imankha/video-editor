@@ -41,7 +41,7 @@ export function reportVideoError(payload) {
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
       }),
       keepalive: true,
-      rbLifecycleWrite: true, // T6020: telemetry beacon, not a user gesture
+      rbNonDataWrite: true, // T6020: telemetry beacon, not a user gesture
     }).catch(() => { /* fire-and-forget */ });
   } catch { /* never let telemetry break playback error handling */ }
 }

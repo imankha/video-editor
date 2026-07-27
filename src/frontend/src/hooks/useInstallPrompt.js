@@ -44,7 +44,7 @@ export function useInstallPrompt() {
       fetch('/api/auth/pwa-installed', {
         method: 'POST',
         credentials: 'include',
-        rbLifecycleWrite: true,
+        rbNonDataWrite: true,
       }).catch(() => {});
     };
 

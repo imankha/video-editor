@@ -1,6 +1,7 @@
 ---
 domain: persistence-sync
-updated: 2026-07-27 (T6020: the write-attempt gate's classification moved from a URL denylist to an explicit per-call-site `rbLifecycleWrite` marker — fixes `PATCH /api/projects/{id}/state` being both project-open bookkeeping and a mode-switch gesture at the identical pathname; see T5960/T6010/T6020 section)
+updated: 2026-07-27 (T6020 follow-up: renamed the write-attempt gate's call-site marker `rbLifecycleWrite` -> `rbNonDataWrite` and marked 5 auth-gesture sites the original table missed (google/verify-otp/send-otp/logout/report-problem) — the old name misled at the auth boundary since login IS a gesture but still can't touch the profile SQLite; supervisor-audit-caught regression vs the T5960 baseline; see T5960/T6010/T6020 section)
+updated: 2026-07-27 (T6020: the write-attempt gate's classification moved from a URL denylist to an explicit per-call-site marker — fixes `PATCH /api/projects/{id}/state` being both project-open bookkeeping and a mode-switch gesture at the identical pathname; see T5960/T6010/T6020 section)
 updated: 2026-07-27 (T6010: the `failed` alarm is ALSO gated on write-attempt now, symmetric with `conflict` — generalized `ALARM_SYNC_STATES`; `pending` stays ungated; see T5960/T6010/T6020 section)
 updated: 2026-07-27 (T5960: the sticky `.sync_conflict` alarm is GATED on write-attempt in the frontend — a read-only session that inherits another session's refusal stays silent; backend marker semantics UNCHANGED; see T5960/T6010/T6020 section)
 updated: 2026-07-26 (T5870: split sync state into pending/failed/conflict — a deferred sync is no longer mislabelled "failed"; bounded re-drain heals transient failures in-band; Retry restored + restores-if-newer on conflict; see T5870 section)
@@ -376,23 +377,40 @@ until THIS session has attempted a **write**. `syncStore.js`:
   !hasAttemptedWrite`; `isAlarm = ALARM_SYNC_STATES.has(syncState) && hasAttemptedWrite`; `shouldShow`
   excludes the held-silent case. `pending` is deliberately NOT in `ALARM_SYNC_STATES` — its quiet
   banner renders regardless of write-attempt (pinned by a test; `offline` is likewise ungated).
-- **T6020: classification of "is this a genuine user gesture" moved from a URL denylist to an
-  explicit per-call-site marker.** The denylist (`NON_GESTURE_API_PREFIXES` / `_EXACT` / `_PATTERNS`)
-  is DELETED. Reason: `PATCH /api/projects/{id}/state` is hit BOTH by `useProjectLoader.js` on project
-  OPEN (load-time bookkeeping) AND by `App.jsx`'s real mode-switch GESTURE, at the IDENTICAL pathname
-  — a pathname-only matcher structurally cannot tell them apart (the query string differs, but
-  coupling the frontend gate to a specific backend query-param name was considered and rejected as
-  fragile/easy-to-silently-break). The inverted mechanism: each lifecycle call site sets
-  `rbLifecycleWrite: true` in its own fetch options — `utils/apiFetch.js` is
+- **T6020: classification of "could this write ever touch the user's profile SQLite" moved from a
+  URL denylist to an explicit per-call-site marker.** The denylist (`NON_GESTURE_API_PREFIXES` /
+  `_EXACT` / `_PATTERNS`) is DELETED. Reason: `PATCH /api/projects/{id}/state` is hit BOTH by
+  `useProjectLoader.js` on project OPEN (load-time bookkeeping) AND by `App.jsx`'s real mode-switch
+  GESTURE, at the IDENTICAL pathname — a pathname-only matcher structurally cannot tell them apart
+  (the query string differs, but coupling the frontend gate to a specific backend query-param name
+  was considered and rejected as fragile/easy-to-silently-break). The inverted mechanism: each
+  non-data call site sets `rbNonDataWrite: true` in its own fetch options — `utils/apiFetch.js` is
   `fetch(url, {credentials:'include', ...options})`, so unknown `RequestInit` keys pass straight
-  through with zero plumbing. `isMutatingApiRequest` just checks `init?.rbLifecycleWrite`.
-  `grep rbLifecycleWrite` finds every lifecycle write (CLAUDE.md Refactoring Rules #6:
-  greppability over registry indirection). **Direction is deliberate and asymmetric**: forgetting to
-  mark a NEW lifecycle write arms the gate spuriously (stale alarm on a passive load — annoying,
-  recoverable, the pre-T5960 status quo); forgetting to allowlist a gesture write would silently
-  suppress a real conflict (data-loss-shaped) — so this is NOT an allowlist-of-gestures design, it's
-  a denylist-of-lifecycle-writes design, just keyed by call site instead of by URL.
-- **Marked call sites (9, `grep rbLifecycleWrite` is authoritative):** `sessionInit.js` (`POST
+  through with zero plumbing. `isMutatingApiRequest` just checks `init?.rbNonDataWrite`.
+  `grep rbNonDataWrite` finds every marked call site (CLAUDE.md Refactoring Rules #6: greppability
+  over registry indirection). **Direction is deliberate and asymmetric**: forgetting to mark a NEW
+  non-data write arms the gate spuriously (stale alarm on a passive load — annoying, recoverable,
+  the pre-T5960 status quo); forgetting to allowlist a user-data write would silently suppress a real
+  conflict (data-loss-shaped) — so this is NOT an allowlist-of-gestures design, it's a
+  denylist-of-non-data-writes design, just keyed by call site instead of by URL.
+- **Key naming (T6020 follow-up, supervisor-audit-caught regression): `rbNonDataWrite`, NOT
+  `rbLifecycleWrite`.** The first cut of T6020 named the key `rbLifecycleWrite` and reasoned about
+  "fires without a user gesture" — but the OLD denylist's `NON_GESTURE_API_PREFIXES = ['/api/auth/',
+  ...]` excluded the entire `/api/auth/` prefix, including endpoints that ARE user gestures: `POST
+  /api/auth/google`, `/verify-otp`, `/send-otp` (login), `/logout`, `/report-problem`. These write
+  Postgres auth tables, never the profile SQLite, so they structurally CANNOT set
+  `.sync_conflict`/`.sync_failed` — but "logging in" is unambiguously a gesture, so a
+  "lifecycle"-named key actively misled at exactly this boundary. The task's original call-site table
+  only listed the non-gesture auth writes (init/heartbeat/accept-terms/etc.), so these five stayed
+  UNMARKED after the denylist was deleted — a real regression vs the T5960 baseline: any user who
+  actually logged in (rather than being restored from an existing cookie) armed the gate at session
+  start, which re-broke acceptance criterion 1 for exactly the population most likely to be carrying
+  a stale marker (someone returning after being away). Caught by supervisor audit, not by the
+  e2e suite — the passive-load e2e authenticates via `dev-login`/`test-login`, neither of which
+  routes through the real login POSTs. Renamed to `rbNonDataWrite` so the key states the true
+  semantic ("this write cannot touch user data") instead of a gesture/non-gesture distinction that
+  doesn't hold at the auth boundary.
+- **Marked call sites (14, `grep rbNonDataWrite` is authoritative):** `sessionInit.js` (`POST
   /api/auth/init`, `POST /api/auth/accept-terms`), `useSessionHeartbeat.js` (`POST
   /api/auth/heartbeat`, and the non-`sendBeacon` `POST /api/auth/session-close` FALLBACK —
   `navigator.sendBeacon` itself does NOT route through `window.fetch` and never reaches the
@@ -401,26 +419,46 @@ until THIS session has attempted a **write**. `syncStore.js`:
   `useExportRecovery.js` (`POST /api/exports/acknowledge`, `POST
   /api/exports/{job_id}/resume-progress` — mount-time reconciliation for a finished/still-running
   export from a prior session, zero user intent), `useProjectLoader.js` (`PATCH
-  /api/projects/{id}/state?update_last_opened=true&...` — the pathname URLs cannot express).
-  `App.jsx`'s two mode-switch PATCHes to the SAME pathname stay deliberately UNMARKED — that is the
-  whole point of the mechanism.
+  /api/projects/{id}/state?update_last_opened=true&...` — the pathname URLs cannot express), PLUS
+  the five auth-gesture sites from the follow-up: `utils/googleAuth.js` (`POST /api/auth/google`),
+  `components/auth/OtpAuthForm.jsx` (`POST /api/auth/send-otp`, `POST /api/auth/verify-otp`),
+  `stores/authStore.js` (`POST /api/auth/logout`), `components/ReportProblemButton.jsx` (`POST
+  /api/auth/report-problem`). `App.jsx`'s two mode-switch PATCHes to the SAME pathname stay
+  deliberately UNMARKED — that is the whole point of the mechanism.
 - **`POST /api/clips/resolve-pending-shares`** (`SharedAnnotationView.jsx`, fires on mount of the
-  shared-clip-link route) stays classified as a GESTURE (unmarked): unlike auth/export-recovery it
-  does not fire on every app load, only when the user deliberately opened a share link, and it
-  performs a real data materialization write to the recipient's own profile.sqlite (the exact kind of
-  write that can genuinely conflict).
+  shared-clip-link route) stays classified as a real user-data write (unmarked): unlike auth/
+  export-recovery it does not fire on every app load, only when the user deliberately opened a
+  share link, and it performs a real data materialization write to the recipient's own
+  profile.sqlite (the exact kind of write that can genuinely conflict).
+- **`/api/admin/impersonate/{id}` and `/api/admin/impersonate/stop`** (`authStore.js`) stay
+  UNMARKED — not `/api/auth/`-prefixed so the old denylist never covered them either (not a
+  regression), and both call sites hard-reload the page immediately after, so any gate state they
+  set is moot before it could ever be observed.
+
+**Old-vs-new exclusion coverage (T6020 follow-up systematic check):** every request the OLD
+denylist excluded is still excluded under the new marker set. Blanket prefix `/api/auth/` →
+every mutating (non-GET) `/api/auth/*` call site enumerated and confirmed marked (see the 14
+above; `GET /api/auth/me` never arms regardless, method-gated). Blanket prefix
+`/api/client-errors/` → exactly one call site in the whole frontend (`videoErrorBeacon.js`),
+confirmed marked. Exact path `/api/exports/acknowledge` and the `resume-progress` regex → both
+in `useExportRecovery.js`, confirmed marked. No other previously-excluded request was found
+unmarked.
 
 **Tests:** `syncStore.test.js` (hasAttemptedWrite default/setter; `isMutatingApiRequest` method/URL/
-Request-object/`rbLifecycleWrite`-marker matrix, INCLUDING the project-open-marked vs
-mode-switch-unmarked pair at the identical pathname; interceptor arms on a real mutating fetch only);
-`SyncStatusIndicator.test.jsx` (conflict/failed + zero-writes → nothing rendered; conflict/failed +
-after-write → alarm+Retry; mid-session write flips held-silent → alarm; pending never gated).
-Real-browser `e2e/T5960-conflict-alarm-gated-on-write.spec.js` (conflict, 5 criteria) and
+Request-object/`rbNonDataWrite`-marker matrix, INCLUDING the project-open-marked vs
+mode-switch-unmarked pair at the identical pathname, AND the five auth-gesture-but-non-data sites
+from the follow-up; interceptor arms on a real mutating fetch only); `SyncStatusIndicator.test.jsx`
+(conflict/failed + zero-writes → nothing rendered; conflict/failed + after-write → alarm+Retry;
+mid-session write flips held-silent → alarm; pending never gated). Real-browser
+`e2e/T5960-conflict-alarm-gated-on-write.spec.js` (conflict, 5 criteria) and
 `e2e/T6010-T6020-failed-alarm-and-lifecycle-marker.spec.js` (failed matrix + conflict regression pin
-+ project-open-vs-mode-switch + export-start-still-arms), both INJECTING `X-Sync-Status` via
-`page.route` (a real cross-machine CAS conflict / backend failure needs two boxes — not reproducible
-on a single-box container, see commit 9468a960) and asserting on the rendered banner, never the API
-response (the bug was the API being right and the UI lying).
++ project-open-vs-mode-switch + export-start-still-arms + auth-writes-do-not-arm), both INJECTING
+`X-Sync-Status` via `page.route` (a real cross-machine CAS conflict / backend failure needs two
+boxes — not reproducible on a single-box container, see commit 9468a960) and asserting on the
+rendered banner, never the API response (the bug was the API being right and the UI lying). The
+auth-writes e2e case drives the real interceptor with the real request SHAPE each marked call site
+issues rather than a real login flow — a real OTP/Google login needs a live email round-trip /
+Google credential exchange this container cannot drive; no test seam auto-approves an OTP code.
 
 ## T4320 — Durable clip gestures + user.sqlite shutdown sync + T5310 profile-create fix
 

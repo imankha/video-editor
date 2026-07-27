@@ -70,6 +70,10 @@ async function handleCredential(response) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(authBody),
+      // T6020 follow-up: writes Postgres auth tables, never the profile
+      // SQLite -- cannot produce a sync conflict, even though logging in IS
+      // a user gesture. See rbNonDataWrite in syncStore.js.
+      rbNonDataWrite: true,
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

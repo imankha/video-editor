@@ -136,7 +136,7 @@ export function useExportRecovery() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(jobIdsToAcknowledge),
-                rbLifecycleWrite: true, // T6020: mount-time reconciliation, not a user gesture
+                rbNonDataWrite: true, // T6020: mount-time reconciliation, not a user gesture
               });
               console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
             } catch (ackErr) {
@@ -216,7 +216,7 @@ export function useExportRecovery() {
           try {
             await apiFetch(`${API_BASE}/api/exports/${exp.job_id}/resume-progress`, {
               method: 'POST',
-              rbLifecycleWrite: true, // T6020: mount-time reconciliation, not a user gesture
+              rbNonDataWrite: true, // T6020: mount-time reconciliation, not a user gesture
             });
             console.log(`[ExportRecovery] Started progress loop for ${exp.job_id}`);
           } catch (err) {

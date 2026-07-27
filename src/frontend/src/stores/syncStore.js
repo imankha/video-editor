@@ -157,28 +157,44 @@ export function checkSyncStatus(response) {
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// T6020: session/telemetry LIFECYCLE writes (auth/init, heartbeat, session-close,
-// accept-terms, video-error beacons, export-recovery mount-time reconciliation,
-// project-open bookkeeping) fire without any user gesture and must NOT arm the
-// write-attempt gate — counting them would arm it on every passive load and the
-// conflict/failed alarm would never actually be suppressed (T5960: this was the
-// real defeat of the naive "any mutating request" rule).
+// T6020 (+ follow-up): a mutating request only arms the write-attempt gate if it
+// COULD produce a user-data sync conflict. The exclusion's real semantic is NOT
+// "non-gesture" or "lifecycle" — it's narrower and easy to misjudge:
+//
+//   this request cannot touch the user's profile SQLite (the thing
+//   .sync_conflict / .sync_failed describe), so it can never be the write a
+//   stale marker is actually about.
+//
+// The first cut of this key was named `rbLifecycleWrite` and reasoned about
+// "fires without a user gesture". That name actively misled at the auth
+// call sites: `POST /api/auth/google` / `verify-otp` / `send-otp` / `logout` /
+// `report-problem` ARE user gestures (clicking "Log in", clicking "Log out") but
+// still qualify, because they write Postgres auth tables, never the profile
+// SQLite — they structurally cannot set `.sync_conflict`/`.sync_failed`. A
+// gap in the task's original call-site table left these five unmarked, which
+// re-armed the gate on every real login (a supervisor-audit-caught regression
+// vs the T5960 baseline, since a login is exactly when a user is most likely
+// to be carrying a stale marker from a prior session). Renamed to
+// `rbNonDataWrite` so the key states the true semantic instead of a
+// gesture/non-gesture distinction that doesn't hold at the auth boundary.
 //
 // Classification used to be a URL denylist here, but `PATCH
-// /api/projects/{id}/state` is BOTH a lifecycle write (project-open bookkeeping,
-// useProjectLoader.js) AND a real gesture (mode-switch, App.jsx) at the identical
-// pathname — a pathname-only matcher structurally cannot tell them apart. Fixed by
-// inverting the mechanism: each lifecycle write marks itself `rbLifecycleWrite:
-// true` in its own fetch options at the call site (utils/apiFetch.js passes
-// options straight through to `fetch`, which ignores unknown RequestInit keys, so
-// this needs no plumbing). `grep rbLifecycleWrite` finds every lifecycle write —
-// see CLAUDE.md Refactoring Rules #6 (greppability over registry indirection).
+// /api/projects/{id}/state` is BOTH a non-data write (project-open bookkeeping,
+// useProjectLoader.js) AND a real user-data gesture (mode-switch, App.jsx) at the
+// identical pathname — a pathname-only matcher structurally cannot tell them
+// apart. Fixed by inverting the mechanism: each non-data write marks itself
+// `rbNonDataWrite: true` in its own fetch options at the call site
+// (utils/apiFetch.js passes options straight through to `fetch`, which ignores
+// unknown RequestInit keys, so this needs no plumbing). `grep rbNonDataWrite`
+// finds every marked call site — see CLAUDE.md Refactoring Rules #6
+// (greppability over registry indirection).
 //
-// The mechanism deliberately fails toward "forgot to mark a lifecycle write" (gate
-// arms spuriously -> stale alarm on a passive load, annoying but recoverable) and
-// NOT toward "forgot to allowlist a gesture write" (a real writer's conflict is
-// silently suppressed — data-loss-shaped). Do not invert this into an allowlist.
-const LIFECYCLE_WRITE_KEY = 'rbLifecycleWrite';
+// The mechanism deliberately fails toward "forgot to mark a non-data write"
+// (gate arms spuriously -> stale alarm on a passive load, annoying but
+// recoverable) and NOT toward "forgot to allowlist a user-data write" (a real
+// writer's conflict is silently suppressed — data-loss-shaped). Do not invert
+// this into an allowlist.
+const NON_DATA_WRITE_KEY = 'rbNonDataWrite';
 
 // Returns the pathname if `rawUrl` targets our own API, else null.
 function ownApiPathname(rawUrl) {
@@ -196,13 +212,16 @@ function ownApiPathname(rawUrl) {
 
 /**
  * Is this a mutating (POST/PUT/PATCH/DELETE) request to our own API that
- * represents a USER edit — i.e. one that could produce a sync conflict?
+ * touches USER DATA — i.e. one that could produce a sync conflict?
  *
  * `method` may be lowercase, absent (defaults to GET), or carried on a `Request`
  * object passed as the first fetch arg instead of in the init object. A call
- * site marks itself `init.rbLifecycleWrite = true` to opt OUT as a non-gesture
- * lifecycle write (see LIFECYCLE_WRITE_KEY above) — everything else mutating to
- * our own API counts as a gesture that could produce a sync conflict.
+ * site marks itself `init.rbNonDataWrite = true` to declare "this write cannot
+ * touch the user's profile SQLite" (see NON_DATA_WRITE_KEY above) — this is
+ * NOT the same as "not a user gesture": logging in/out IS a gesture but is
+ * still marked, because it writes Postgres auth tables, never the data a sync
+ * conflict describes. Everything else mutating to our own API counts as a
+ * potential user-data write.
  *
  * @param {RequestInfo|URL} input - fetch's first arg (URL string, URL, or Request)
  * @param {RequestInit} [init] - fetch's second arg
@@ -218,7 +237,7 @@ export function isMutatingApiRequest(input, init) {
   const rawUrl = input instanceof Request ? input.url : String(input ?? '');
   const pathname = ownApiPathname(rawUrl);
   if (pathname === null) return false;
-  return !init?.[LIFECYCLE_WRITE_KEY];
+  return !init?.[NON_DATA_WRITE_KEY];
 }
 
 // --- Global fetch interceptor ---

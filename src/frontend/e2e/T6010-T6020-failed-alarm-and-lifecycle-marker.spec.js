@@ -232,4 +232,53 @@ test.describe('T6020 — lifecycle writes marked at the call site', () => {
     }).toPass({ timeout: 30000 });
     await saveEvidence(page, 't6020-export-start-arms');
   });
+
+  // T6020 follow-up (supervisor audit): a REAL login flow needs a real Resend
+  // email round-trip for /api/auth/send-otp + verify-otp, which this container
+  // cannot drive (no test seam auto-approves an OTP code / short-circuits
+  // Google's credential exchange) -- reported per the follow-up's instruction
+  // to say so rather than fake it. This test instead drives the real
+  // `window.fetch` interceptor with the EXACT request shape each marked
+  // call site issues (same technique as the project-open-vs-mode-switch case
+  // above: real fetch, real interceptor, real rendered banner assertion; only
+  // the UI click that would normally trigger it is not driven).
+  test('auth writes (verify-otp/logout shape) do NOT arm the gate even though logging in/out is a gesture', async ({ context, page }) => {
+    test.setTimeout(90000);
+    await installStatusShim(page, 'conflict');
+    await authAndLoad(context, page);
+
+    for (let i = 0; i < 3; i++) { await pagePing(page); await page.waitForTimeout(1000); }
+    await expect(page.getByText(BANNER)).toBeHidden();
+
+    // Matches OtpAuthForm.jsx's real verify-otp call shape (marked).
+    await page.evaluate(async () => {
+      try {
+        await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'nobody@example.com', code: '000000' }),
+          rbNonDataWrite: true,
+        });
+      } catch { /* ignore -- 400 (bad code) is expected; the request SHAPE is under test */ }
+    });
+    await pagePing(page);
+    await page.waitForTimeout(3500);
+    await expect(page.getByText(BANNER)).toBeHidden();
+
+    // Matches authStore.js's real logout call shape (marked).
+    await page.evaluate(async () => {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          rbNonDataWrite: true,
+        });
+      } catch { /* ignore */ }
+    });
+    await pagePing(page);
+    await page.waitForTimeout(3500);
+    await expect(page.getByText(BANNER)).toBeHidden();
+    await saveEvidence(page, 't6020-followup-auth-writes-do-not-arm');
+  });
 });

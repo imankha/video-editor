@@ -123,7 +123,7 @@ export function useProjectLoader() {
       // mode-switch PATCH to the identical pathname, which stays unmarked.
       apiFetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true&current_mode=${encodeURIComponent(targetMode)}`, {
         method: 'PATCH',
-        rbLifecycleWrite: true,
+        rbNonDataWrite: true,
       }).catch(e => console.error('[useProjectLoader] Failed to update project state:', e));
 
       // Set aspect ratio from project
