@@ -142,6 +142,13 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-g
 
 test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({ context, page }) => {
   test.setTimeout(120_000);
+  // copyReelLink awaits navigator.clipboard.writeText and, on ANY throw, falls back to
+  // opening the ShareModal instead of toasting. Chromium denies clipboard-write to an
+  // ungranted context, so the write threw, the toast never fired, and this read as
+  // "0 visible toasts" even though the share POST had already gone out (and deduped
+  // correctly). Grant it so the assertion measures the dedup behaviour under test
+  // rather than the harness's own missing permission.
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await loginAsRealUser(context, EMAIL, PROFILE);
 
   // Discover the game group to expand (its header text is the game name) — no

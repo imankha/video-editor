@@ -88,6 +88,14 @@ export function assertSeamAvailable(res, seamName) {
  *    bundled/hashed, so the import 404s ("Failed to fetch dynamically imported module").
  *    This is a test-vs-deployed-bundle mismatch, NOT a staging bug and NOT a data gap —
  *    the module logic is also covered by Vitest, so these run locally only.
+ *  - `dev-harness` — drives one of the dev-only `*diag.html` harness PAGES by a RELATIVE
+ *    path. Those pages are not inputs to the production build, so on a deployed target
+ *    the path resolves against the Pages origin and the SPA catch-all serves index.html
+ *    instead; the harness never mounts and the spec waits out its timeout. (Distinct from
+ *    `vite-module`, which is about an in-page `import()` of a `/src/...` module. Note the
+ *    other harness specs — T5450/T5610/T5644/T5860/bug38/T5380b — dodge this by hardcoding
+ *    an ABSOLUTE `http://localhost:5173/...`, so they always drive the LOCAL dev server
+ *    even during a staging run. That inconsistency is pre-existing and worth unifying.)
  *  - `capture` (T5420) — a developer screen-RECORDING script that records to a host-local
  *    directory (QUEST_DIR) to produce tutorial footage; not a functional test and cannot
  *    run without the host recording assets.
@@ -343,5 +351,11 @@ export const LOCAL_ONLY_SPECS = [
     category: 'vite-module',
     depends: ['/src/stores/creditStore.js'],
     reason: 'PARTIAL: only the live-estimate test is gated -- it forces a zero-balance amber state by import()ing the creditStore in-page (the /src path 404s on a deployed BUILD). The responsive/overflow test still runs on staging.',
+  },
+  {
+    file: 'T5647-timeline-autoscroll.qa.spec.js',
+    category: 'dev-harness',
+    depends: ['/timelinediag.html'],
+    reason: 'drives the dev-only timelinediag harness page by a RELATIVE path, so on a deployed target the Pages SPA catch-all answers instead and the harness never mounts. The autoscroll math is unit-covered (TimelineBase.autoscroll.test.jsx).',
   },
 ];

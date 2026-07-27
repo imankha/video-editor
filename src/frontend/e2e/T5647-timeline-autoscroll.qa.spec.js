@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { saveEvidence } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5647 - REAL BROWSER (chromium, mobile viewport + touch) proof that the
@@ -51,6 +52,14 @@ async function isPlayheadWithinContainer(page) {
 
 test.describe('T5647 timeline follow-playhead auto-scroll (zoom > 100%, mobile)', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 412, height: 915 } });
+
+  // /timelinediag.html is a Vite-dev-only harness page: it is not an input to the
+  // production build, so on a deployed target this RELATIVE path resolves against the
+  // Pages origin and the SPA catch-all serves index.html instead. The harness then
+  // never mounts -- which showed up as two 60s timeouts waiting for [data-testid=
+  // "status"] and a `getBoundingClientRect of null` on the absent playhead. The
+  // autoscroll math itself is unit-covered (TimelineBase.autoscroll.test.jsx).
+  skipOnDeployedTarget(test, 'drives the dev-only /timelinediag.html harness page, which does not exist in a production BUILD');
 
   test('playhead stays within the visible scroll bounds across playback at 193% zoom', async ({ page }) => {
     await page.goto(HARNESS);

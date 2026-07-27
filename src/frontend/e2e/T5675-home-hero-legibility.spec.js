@@ -94,28 +94,30 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
   expect(bodyText, 'no chess "!!" notation on screen').not.toMatch(/\d!!/);
   expect(bodyText, 'no bare "Quality:" token').not.toMatch(/Quality:/);
 
-  // Labeled tokens present.
-  await expect(page.getByText(/Uploaded/).first(), 'date is labeled "Uploaded"').toBeVisible();
-
-  // Rating chip legibility — data-dependent (assert only if a game has rated clips).
-  const rated = games.find((g) => (g.brilliant_count || 0) > 0);
-  if (rated) {
-    const label = new RegExp(`${rated.brilliant_count} brilliant clips?`, 'i');
-    await expect(
-      page.getByLabel(label).first(),
-      'brilliant rating chip carries an aria-label',
-    ).toBeVisible({ timeout: 15000 });
-  } else {
-    console.log('[T5675] no game with brilliant clips in this account — rating-chip assertion skipped (data-dependent)');
-  }
-
-  const withClips = games.find((g) => (g.clip_count || 0) > 0);
-  if (withClips) {
-    await expect(
-      page.getByText(/Footage quality \d+\/100/).first(),
-      'quality score is labeled "Footage quality N/100"',
-    ).toBeVisible({ timeout: 15000 });
-  }
+  // SURFACE CHANGED: the Games home used to list ProjectManager's GameCard, whose
+  // GameMetaRow renders "Uploaded <date>", "Footage quality N/100" and the rating
+  // chips. T5681's poster grid replaced that list with GameTile -- a compact tile
+  // (as short as ~90px at the 2-up 390px breakpoint) whose scrim deliberately carries
+  // only name / short date / clip count. Asserting the old tokens here failed on a
+  // surface that no longer renders them; GameCard itself is unchanged and still
+  // covered by Vitest (ProjectManager.metaLegibility.test.jsx), so no coverage is
+  // lost. What legibility means on THIS surface is asserted instead:
+  const firstTile = page.locator('[data-game-id]').first();
+  await expect(firstTile, 'a game tile renders').toBeVisible({ timeout: 15000 });
+  const scrim = await firstTile.evaluate((el) => {
+    const h3 = el.querySelector('h3');
+    const spans = [...el.querySelectorAll('div > span')].map((s) => (s.textContent || '').trim());
+    return { name: (h3?.textContent || '').trim(), spans };
+  });
+  expect(scrim.name, 'tile names the game').toBeTruthy();
+  expect(
+    scrim.spans.some((t) => /\d+\s+clips?$/.test(t)),
+    `clip count is labeled with its unit (got ${JSON.stringify(scrim.spans)})`,
+  ).toBe(true);
+  expect(
+    scrim.spans.some((t) => /[A-Za-z]{3}\s+\d{1,2}/.test(t)),
+    `date renders as a readable month+day, not a raw timestamp (got ${JSON.stringify(scrim.spans)})`,
+  ).toBe(true);
 
   await saveEvidence(page, 'criterion-3-gamecard-legibility');
 

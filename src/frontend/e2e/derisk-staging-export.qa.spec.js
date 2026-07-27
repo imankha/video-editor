@@ -33,6 +33,12 @@ const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 const EVID = 'test-results/derisk-evidence';
 
+// Lifetime guard for the exports/active durability probe below (see its comment).
+// afterEach clears it so the probe can never outlive the test that started it --
+// including when the test fails or skips partway through.
+let probeRunning = false;
+test.afterEach(() => { probeRunning = false; });
+
 async function apiGet(context, path) {
   const res = await context.request.get(`${API_BASE}${path}`, {
     headers: { 'X-Test-Mode': 'true' },
@@ -84,9 +90,22 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate', asy
 
   const transitions = [];
   // Durability probe: log every /api/exports/active transition during the run.
+  //
+  // MUST be cancellable. This was a bare fire-and-forget IIFE polling 180 x 3s = up
+  // to 9 MINUTES with nothing to stop it, so it outlived its own test: once the test
+  // ended, its next apiGet rejected with "apiRequestContext.get: Test ended." and
+  // Playwright attributed that stray rejection to whatever test happened to be
+  // running -- which is how game-loading.spec.js "failed" with a stack pointing into
+  // THIS file. The flag + try/catch keep the probe's lifetime inside the test.
+  probeRunning = true;
   (async () => {
-    for (let i = 0; i < 180; i++) {
-      const active = await apiGet(context, '/exports/active');
+    for (let i = 0; i < 180 && probeRunning; i++) {
+      let active;
+      try {
+        active = await apiGet(context, '/exports/active');
+      } catch {
+        break; // context torn down (or the test ended) -- stop, never leak a rejection
+      }
       const list = Array.isArray(active) ? active : active.exports || [];
       const sig = JSON.stringify(list.map((e) => `${e.project_id ?? e.export_id}:${e.status}`));
       if (transitions[transitions.length - 1] !== sig) {

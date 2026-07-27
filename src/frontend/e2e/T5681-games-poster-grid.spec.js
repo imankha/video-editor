@@ -156,11 +156,20 @@ test.describe('T5681 games tab poster grid', () => {
     const page = await context.newPage();
     await openGamesTab(page);
 
+    // aeb803ae ("kebab portal menu replaces the overflowing icon stack") changed what
+    // hover reveals: ONE kebab, not a per-action icon stack. So hover reveals the
+    // kebab, and the actions live in the menu it opens. The menu is rendered in a
+    // PORTAL (fixed-position, outside the tile), so it must be located from `page`,
+    // never scoped to `firstTile`.
     const firstTile = page.locator('[data-game-id]').first();
     await firstTile.hover();
-    const editBtn = firstTile.getByTitle('Edit game');
-    await expect(editBtn, 'edit action reachable on hover').toBeVisible({ timeout: 5000 });
+    const kebab = firstTile.locator('[data-game-kebab]');
+    await expect(kebab, 'hover reveals the actions kebab').toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-7-desktop-hover-actions');
+
+    await kebab.click();
+    const editBtn = page.getByRole('button', { name: 'Edit game', exact: true });
+    await expect(editBtn, 'edit action reachable from the kebab menu').toBeVisible({ timeout: 5000 });
 
     // Edit opens the EXISTING details modal -- rich metadata lives there, not
     // in a new hover meta card (approved-design constraint). EditGameModal has
@@ -173,7 +182,7 @@ test.describe('T5681 games tab poster grid', () => {
     await context.close();
   });
 
-  test('mobile long-press reveals the action sheet', async ({ browser }) => {
+  test('mobile: kebab is visible without hover and opens the action sheet', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: MOBILE, hasTouch: true, isMobile: true });
     await loginAsRealUser(context, EMAIL);
@@ -183,32 +192,22 @@ test.describe('T5681 games tab poster grid', () => {
     const firstTile = page.locator('[data-game-id]').first();
     await expect(firstTile).toBeVisible();
 
-    // page.touchscreen.tap() only sends a quick down+up (a real tap), which
-    // GameTile's handleTouchStart/handleTouchMove/handleTouchEnd logic reads
-    // as a normal tap (clears the 500ms longPressTimer before it fires) --
-    // it does NOT exercise the long-press path. locator.dispatchEvent('touchstart',
-    // ...) ALSO doesn't work: Playwright constructs a generic Event for
-    // unrecognized types, not a real TouchEvent, so React's touch listeners
-    // never fire. Use the CDP Input domain directly (Input.dispatchTouchEvent)
-    // to send a genuine touchStart, hold past the 500ms threshold, then
-    // touchEnd -- this is what actually reaches React's onTouchStart handler.
-    const box = await firstTile.boundingBox();
-    expect(box, 'first tile has a bounding box').toBeTruthy();
-    const cx = box.x + box.width / 2;
-    const cy = box.y + box.height / 2;
-    const cdp = await context.newCDPSession(page);
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ x: cx, y: cy }],
-    });
-    await page.waitForTimeout(650); // > GameTile's 500ms long-press threshold
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchEnd',
-      touchPoints: [],
-    });
+    // AFFORDANCE CHANGED: aeb803ae ("kebab portal menu replaces the overflowing icon
+    // stack") removed GameTile's long-press handlers outright -- there is no
+    // handleTouchStart/longPressTimer any more. On a COARSE pointer the kebab is
+    // simply always visible (`isMobile ? 'opacity-100' : 'opacity-0 group-hover:...'`),
+    // because a touch device has no hover to reveal it with. That always-visible kebab
+    // IS the mobile guarantee this criterion exists to protect ("game actions are
+    // reachable without a hover"), so assert it directly instead of driving a
+    // long-press that no longer has a listener on the other end.
+    const kebab = firstTile.locator('[data-game-kebab]');
+    await expect(kebab, 'kebab is visible on a coarse pointer with NO hover').toBeVisible({ timeout: 10000 });
+    await kebab.click();
 
-    const editBtn = firstTile.getByTitle('Edit game');
-    await expect(editBtn, 'long-press reveals the edit action').toBeVisible({ timeout: 5000 });
+    // Tapping it opens the bottom action SHEET, rendered in a portal -> locate its
+    // items from `page`, not from within the tile.
+    const sheetEdit = page.getByRole('button', { name: 'Edit game', exact: true });
+    await expect(sheetEdit, 'mobile sheet exposes the edit action').toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-9-mobile-longpress-actions');
 
     await context.close();

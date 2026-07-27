@@ -79,8 +79,11 @@ test.describe('T5673 + T5678 — My Reels visual tiles (real account)', () => {
     // Posters are lazy (loading="lazy") — scroll the carousel so off-screen tiles
     // request, then let the network settle before tallying so the count is truthful.
     for (let i = 0; i < count; i++) await tiles.nth(i).scrollIntoViewIfNeeded().catch(() => {});
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await page.waitForTimeout(1500);
+    // A `networkidle` settle used to sit here. It is banned (helpers/appReady.js): it
+    // never fires against a CDN, so even wrapped in .catch() it burned the whole
+    // navigation timeout and ate this test's 60s budget on a deployed target. The
+    // fixed settle below is what the lazy posters actually need.
+    await page.waitForTimeout(2500);
 
     // Each tile is a poster surface: either a loaded <img> or the branded fallback
     // (Film icon + name) — NEVER a broken image. Tally coverage for Q6.
