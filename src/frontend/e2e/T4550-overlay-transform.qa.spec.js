@@ -20,6 +20,8 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence } from './helpers/qa.js';
+import { waitForRealVideoReady } from './helpers/videoRoute.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -66,11 +68,19 @@ test.describe('T4550 unified overlay transform @staging-gate', () => {
     const cropBox = page.locator('div.cursor-move.border-2').first();
     await expect(cropBox).toBeVisible();
 
-    // T5380 regression proof: NO warm-up prime. CropOverlay now attaches its window
-    // move/up listeners synchronously in the pointer-down handler (refs, not an
-    // isDragging-gated effect), so the very FIRST down->move after mount is captured.
-    // The measured drag below IS the first gesture — if the first-drag race regressed,
-    // box2 would equal box1 (measured 0,0 move) and the tolerance assertion would fail.
+    // Gate on the REAL ready-signal before measuring (T6110). The crop box is VISIBLE
+    // off `videoMetadata` while the <video> is still buffering — T6100 measured the crop
+    // placeholder rendering at ~6.4s but the display rect only settling at ~7.37s, over a
+    // stage still reading "Loading... / Connecting to server...". A drag in that window
+    // maps through `videoToScreen` against a DEGENERATE rect and measures ~0. So wait
+    // until the video can actually seek+play (readyState>=3 + seekable) => the display
+    // rect is established. This is the fix for "acted on a placeholder"; it is NOT a
+    // longer timeout (a ready video reaches this in a couple seconds), and if the video
+    // never hydrates we SKIP LOUDLY naming hydration rather than assert a bogus drag.
+    const framingReady = await waitForRealVideoReady(page, { minReadyState: 3 });
+    test.skip(!framingReady.ready,
+      `Framing video never hydrated, so the crop cannot be measured against a real display ` +
+      `rect — this is a hydration gap, NOT a drag-accuracy failure: ${framingReady.reason}`);
 
     // First-paint fix: box geometry is finite and positive on load (no null flash,
     // no NaN from an unmeasured rect).
@@ -89,8 +99,15 @@ test.describe('T4550 unified overlay transform @staging-gate', () => {
     // (the scale factors cancel) — this is the round-trip accuracy check.
     const cx = box1.x + box1.width / 2;
     const cy = box1.y + box1.height / 2;
-    const dx = -40;
-    const dy = -30;
+    // Drag TOWARD the video center so the move always has headroom. A blind fixed
+    // direction (the old hard-coded -40,-30) lands on `constrainCrop`'s clamp when the
+    // fixture crop sits near an edge — the box can't move past the frame, so the axis
+    // measures 0 and reads as a false "moved 0" failure (FIXTURE-CONTRACT T5320: the
+    // seed does NOT promise a centered crop). Sign each axis inward from the box center.
+    const videoBox = await page.locator('.video-container video').boundingBox();
+    const vCenter = { x: videoBox.x + videoBox.width / 2, y: videoBox.y + videoBox.height / 2 };
+    const dx = (cx > vCenter.x ? -1 : 1) * 40;
+    const dy = (cy > vCenter.y ? -1 : 1) * 30;
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx + dx / 2, cy + dy / 2, { steps: 4 });
@@ -100,6 +117,22 @@ test.describe('T4550 unified overlay transform @staging-gate', () => {
     const box2 = await cropBox.boundingBox();
     const movedX = box2.x - box1.x;
     const movedY = box2.y - box1.y;
+
+    // T5380 first-drag guard, made HONEST (T6110). We only reach here AFTER the ready-gate
+    // above, which rules out the "acted on a not-yet-hydrated placeholder" cause of a 0,0
+    // measurement — that is what actually regressed on staging (2026-07-27) and sent triage
+    // chasing a T5380 ghost, because the OLD comment claimed a 0,0 move meant the T5380
+    // first-drag race had regressed. It had not: `attachDragListeners` is still called
+    // synchronously from pointer-down on master. So a 0,0 first drag NOW, with a ready video,
+    // is the genuine T5380 regression (window move/up listeners not attached synchronously on
+    // pointer-down, dropping the very first down->move). Distinguish the two causes explicitly
+    // so the failure message can never again point at the wrong one:
+    const firstDragDropped = Math.abs(movedX) < 1 && Math.abs(movedY) < 1;
+    expect(firstDragDropped,
+      'first crop drag moved 0,0 despite a READY video (readyState>=3, seekable) — this is the ' +
+      'T5380 first-drag regression (attachDragListeners not called synchronously from pointer-down), ' +
+      'NOT a not-yet-hydrated stage (the ready-gate above already ruled that out)').toBe(false);
+
     // Tolerance: a few px for rounding (round3 in video space) + sub-pixel layout.
     expect(Math.abs(movedX - dx), `crop moved dx (got ${movedX}, want ${dx})`).toBeLessThanOrEqual(6);
     expect(Math.abs(movedY - dy), `crop moved dy (got ${movedY}, want ${dy})`).toBeLessThanOrEqual(6);
@@ -116,25 +149,23 @@ test.describe('T4550 unified overlay transform @staging-gate', () => {
     const page = await context.newPage();
     const console_ = captureConsole(page);
 
-    await openFramingDraft(page);
+    // Open a draft that has reached Overlay AND whose working video actually STREAMS,
+    // then gate on the real overlay ready-signal (T6110). The old path (open the framing
+    // draft, switch to the overlay tab, click "Add Spotlight") had two defects on staging:
+    // it could land on a draft whose working_video ref is dangling (playback-url 200 but the
+    // R2 GET 404s, per T6100), so the stage never hydrated; and "Add Spotlight" is the overlay
+    // EXPORT button (fires a real, costly render on the real account) — never click it. The
+    // helper probes for a streamable draft and opens it deterministically, or hands back a
+    // loud hydration reason so we skip (never assert geometry on a placeholder).
+    const opened = await openLoadableOverlayDraft(page, { minReadyState: 3 });
+    test.skip(!opened.ok, opened.reason);
 
-    // Overlay mode is gated on an exported reel. Detect reachability the same way
-    // T4880 does; skip honestly (not silently pass) if this env's draft isn't
-    // exported — the overlay layout is also covered by Vitest.
-    const overlayTab = page.getByTestId('mode-overlay');
-    const reachable = (await overlayTab.count()) > 0 && (await overlayTab.isEnabled());
-    test.skip(!reachable, 'Overlay needs an exported reel in this env; covered by Vitest OverlayModeView tests');
-    await overlayTab.click();
-
-    // Create a spotlight if none exists yet, so HighlightOverlay renders.
-    const addSpotlight = page.getByRole('button', { name: /Add Spotlight/ });
-    if (await addSpotlight.count()) {
-      await addSpotlight.first().click().catch(() => {});
-    }
-
-    // HighlightOverlay: the movable ellipse (cursor-move). Assert finite, sane geometry.
-    const ellipse = page.locator('svg ellipse.cursor-move').first();
-    await ellipse.waitFor({ timeout: 30000 });
+    // HighlightOverlay geometry. On a real tracking-ON draft `editable` is false, so the
+    // draggable body ellipse carries NO `.cursor-move` class — selecting on it hangs (the
+    // T5676 lesson). The spotlight MASK ellipse (`svg defs mask ellipse`) is always rendered
+    // from restored highlight-region data, so use it for the alignment/finite-geometry check.
+    const ellipse = page.locator('svg defs mask ellipse').first();
+    await ellipse.waitFor({ state: 'attached', timeout: 30000 });
     const geom = await ellipse.evaluate((el) => ({
       cx: +el.getAttribute('cx'),
       cy: +el.getAttribute('cy'),
