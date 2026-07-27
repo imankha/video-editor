@@ -179,16 +179,29 @@ def _finalize_overlay_export(
         # T3920: unified two-half in-match start (file-relative + prior-half durations)
         clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
 
-        cursor.execute("""
+        # T6030: slowmo_section_start/end arrive with profile_db v025, which runs
+        # manually (not on deploy/startup). During the deploy->migrate window a
+        # below-v025 final_videos table has neither column; naming them here 500s
+        # ("no such column"), and this INSERT is on EVERY export's finalize path, so
+        # the window blocks all exports from completing. Omit both columns from the
+        # column list AND the positional VALUES tuple when absent -- never insert into
+        # a nonexistent column. NULL is the v025 default and the backfill is what
+        # populates them, so a window-era row is simply left unfrozen until the migrate
+        # runs (poster capture then reconstructs the section from live clips at publish).
+        _has_slowmo = column_exists(cursor, "final_videos", "slowmo_section_start")
+        slowmo_cols = ", slowmo_section_start, slowmo_section_end" if _has_slowmo else ""
+        slowmo_placeholders = ", ?, ?" if _has_slowmo else ""
+        slowmo_values = (slowmo_start, slowmo_end) if _has_slowmo else ()
+        cursor.execute(f"""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
                 rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename, slowmo_section_start, slowmo_section_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+                poster_filename{slowmo_cols})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?{slowmo_placeholders})
         """, (project_id, output_filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
               rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
-              slowmo_start, slowmo_end))
+              *slowmo_values))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
