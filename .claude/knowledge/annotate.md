@@ -200,6 +200,18 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   box`. Desktop/portrait unchanged (natural height, nothing to scroll). NOTE: this env's dev DB
   data may not reproduce the height overflow (sparse clip) even though prod does — verify by
   selecting a clip to mount the tall editor at 844×390.
+- **The Games-tab surface is `GameTile` (poster grid), NOT a list (T5681 → T5990).** The home Games
+  tab renders a chronological landscape-tile grid of `<GameTile>` (ProjectManager.jsx:~881,
+  `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`). The older `GameCard`/`GameMetaRow`/`RatingChip`
+  list component was fully removed (T5990) — it had been dead since T5681 but its Vitest specs still
+  rendered it directly and passed green, which masked real drift: `T5675-home-hero-legibility.spec.js`
+  asserted `Uploaded`, `Footage quality N/100` and the rating chips that live only in `GameMetaRow`,
+  so the E2E broke while the unit tests stayed green. Lesson: a component only reachable from its own
+  tests is dead, not covered. The tile's verbose meta row is GONE by design — the scrim shows only
+  name + short date + clip count; all game actions live behind the tile's kebab menu. NOTE the tile
+  gates the recap entry on `recap_video_url` (hasRecap), NOT on clip_count, and shows no recap entry
+  for an expired game with no recap video — a deliberate divergence from the old GameCard.
+  Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
 
 ## Perf attribution (T4770, 2026-07-09)
 - **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and
@@ -216,7 +228,7 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   median** (co-timed `/health` ~8ms). Single endpoint, single response shape, read-only. See
   backend-services.md § Landmines for the contextvars-into-thread detail.
 - **T4771 games skeleton (perceived-perf).** `gamesDataStore.isLoading` defaults **true**; the Games tab
-  renders `<GamesListSkeleton>` (ProjectManager.jsx, GameCard-shaped `animate-pulse` cards) instead of
+  renders `<GamesListSkeleton>` (ProjectManager.jsx, shell-shaped `animate-pulse` cards) instead of
   bare "Loading games..." text until the first bootstrap/fetch lands. NOTE: the opaque index.html
   preloader (App.jsx `dismissPreloader`, fires AFTER bootstrap) covers the true first paint, so the
   skeleton is seen on non-preloader games-loading transitions (profile switch, empty refetch, fallback),

@@ -132,6 +132,24 @@ describe('GameTile — kebab menu (item 4)', () => {
     expect(screen.queryByText('Share game')).toBeNull();
     expect(screen.getByText('Extend storage')).toBeTruthy();
   });
+
+  // Re-homed from the retired ProjectManager.gameCard.test.jsx ("offers the Recap
+  // entry even when the game is still extendable", T5990): an expired game that
+  // still has a recap video AND is extendable must expose BOTH the recap entry and
+  // Extend -- the tile menu gates recap on recap_video_url (hasRecap), independent
+  // of Extend. NOTE (surfaced by T5990): unlike the old GameCard, the tile does NOT
+  // offer a recap entry for an expired game with no recap_video_url, and it gates
+  // recap on the recap video rather than clip_count.
+  it('offers both Watch recap and Extend on an expired, extendable game with a recap', () => {
+    const hs = handlers();
+    const expired = { ...baseGame, storage_status: 'expired', can_extend: true, recap_video_url: 'recaps/42.mp4' };
+    render(<GameTile game={expired} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    expect(screen.getByText('Watch recap')).toBeTruthy();
+    expect(screen.getByText('Extend storage')).toBeTruthy();
+    fireEvent.click(screen.getByText('Watch recap'));
+    expect(hs.onPlayRecap).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
