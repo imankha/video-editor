@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-25 (T5790 export-button credit-cost estimate: effectiveDuration -> getRequiredCredits, Framing-only, fail-closed hide)
+updated: 2026-07-27 (T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -707,6 +707,33 @@ keyframed** — camera tilt is constant for a recording.
   while looping never paused. Zero regions -> plain play/pause (unchanged). Real-browser proof
   in `e2e/T5450-overlay-circle-and-loop.qa.spec.js` (loop wraps at span end; press-while-playing
   pauses).
+- **Driving real `<video>` playback in the overlay dev-harness specs — the READINESS
+  CONTRACT (T6060, 2026-07-27).** The three `overlaydiag*` specs (T5450 loop, T5610 tap-nav,
+  T5643) point a real `<video>` at a relative `/overlaydiag-sample.mp4` that ffmpeg writes in
+  `beforeAll`. Two independent test-infra races (NOT app bugs) made the playback-driving tests
+  flake — both are now solved in `e2e/helpers/videoRoute.js`, use it for any new harness that
+  plays a `<video>`:
+  1. **Vite v5 dev caches its publicDir listing AT STARTUP.** A file created in `beforeAll`
+     (after the dev server is up) 404s, and vite serves the SPA `index.html` for the `<video>`
+     src → media never loads → `play()` rejects (swallowed by the harness's `.catch(()=>{})`)
+     → every "video plays" wait times out. Fix: generate the sample to `os.tmpdir()` (NOT
+     `public/`) and serve it via `page.route` from disk — timing-independent (same landmine the
+     T5676 aspectdiag spec hit). `curl`ing the src returned `Content-Type: text/html` len 6382
+     (index.html) even with the mp4 present on disk — that is the tell.
+  2. **A plain `route.fulfill({body})` answers one 200 with NO `Accept-Ranges`**, so Chromium
+     marks the element **non-seekable** (`video.seekable == [0,0]`). `handlePlaySpotlight`'s
+     `seek(spotlightSpan.start)` is then silently dropped and playback runs from 0 → T5450's
+     `currentTime >= 0.35` assertion fails at ~0.27. Fix: the route responds to `Range` with a
+     206 + `Content-Range`/`Accept-Ranges` (`routeSeekableVideo`), which restores
+     `seekable == [0,dur]` and the seek lands (~0.435). The app's seek-then-play is CORRECT on a
+     seekable source (prod R2 serves Range) — this was a fixture-transport defect, not a product
+     bug.
+  - **Ready-signal, never a sleep or visibility.** `waitForVideoReady` gates on
+    `readyState >= 3` (HAVE_FUTURE_DATA) `&& Number.isFinite(duration) && seekable.length > 0`
+    before ANY interaction — the real "can seek + play" signal. Proven deterministic by
+    `--repeat-each=5` green across all three specs (115 runs, 0 flakes). T5450/T5610 now route
+    the sample from `/tmp`; T5643 still writes `public/` (it does not drive playback, so it is
+    unaffected) — the sample is shared-by-SHAPE (identical 640x360x3s `testsrc`), no longer by path.
 - **Spline fork (live bug → T4250)**: `interpolateCropSpline` (splineInterpolation.js:116-154,
   fields x/y/width/height) and `interpolateHighlightSpline` (L163-206) are near-identical copies;
   `interpolateGenericSpline` (L217-255) was built to replace both but is UNUSED. The highlight copy
