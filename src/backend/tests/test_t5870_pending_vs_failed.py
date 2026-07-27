@@ -36,7 +36,7 @@ from app.middleware.db_sync import (
 def isolate(tmp_path, monkeypatch):
     """Fresh markers + in-progress state + fast re-drain backoff per test."""
     monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
-    monkeypatch.setattr(db_sync, "_SYNC_IN_PROGRESS", set())
+    monkeypatch.setattr(db_sync, "_SYNC_IN_PROGRESS", {})
     monkeypatch.setattr(db_sync, "_REDRAIN_BASE_BACKOFF_S", 0.001)
     yield
 
@@ -239,3 +239,113 @@ class TestConflictRetryRestores:
         assert result.get("conflict") is True
         assert "reload" in result["message"].lower(), "honest, non-looping message"
         assert has_sync_conflict(u), "still conflicted; not silently cleared"
+
+
+# ==========================================================================
+# Round 2 review fixes
+# ==========================================================================
+
+class TestForeignFailureDoesNotAlarmSession:  # MAJOR-1
+    def test_foreign_profile_failure_alarms_owner_not_session(self):
+        """A foreign profile.sqlite upload fails while the SESSION's own sync is
+        clean. The session (whose data reached R2) must NOT get the red alarm; the
+        FOREIGN owner (whose write did not land) must.
+
+        RED without fix: gate `mark_sync_failed(user_id)` on the aggregate instead
+        of own_status -> the session gets .sync_failed ('failed' header) for work
+        that actually saved (the escalated false-positive the reviewer found).
+        """
+        session = "t5870-m1-session"
+        fuid, fpid = "t5870-m1-foreign", "beadfeed"
+        mw = RequestContextMiddleware(app=None)
+        _begin_sync_attempt(session)
+
+        def _sync(uid, pid, lock_timeout=None, skip_version_check=False):
+            return SyncResult.OK if uid == session else SyncResult.FAILED
+
+        with patch("app.middleware.db_sync.sync_db_to_r2_explicit", side_effect=_sync):
+            _run(mw._background_sync(
+                session, "sprof", "rid", "POST", "/api/admin/x",
+                had_writes=True, had_user_db_writes=False,
+                do_profile=False, force_profile=False,
+                foreign_profile_dbs={(fuid, fpid)},
+            ))
+
+        assert has_sync_failed(fuid), "the FOREIGN owner's failed write must alarm THEM"
+        assert not has_sync_failed(session), "session's own data reached R2 -> no alarm"
+        assert sync_status_header(session) is None, "session stays quiet, not a red banner"
+
+
+class TestReDrainNoStampede:  # MAJOR-2
+    def test_redrain_skips_while_upload_in_progress(self):
+        """While a per-user upload is already in flight, the re-drain must NOT
+        block-acquire and stampede byte-identical uploads (T1537 429s).
+
+        RED without fix: remove the non-blocking probe -> retry_pending_sync is
+        called even though an upload holds the lock.
+        """
+        from app.storage import get_upload_lock
+
+        u = "t5870-m2-stampede"
+        lock = get_upload_lock(u, "profile")
+        assert lock.acquire(blocking=False), "lock must start free for this test"
+        try:
+            mw = RequestContextMiddleware(app=None)
+            with patch("app.middleware.db_sync.retry_pending_sync", return_value=True) as retry_fn, \
+                 patch("app.middleware.db_sync._REDRAIN_BASE_BACKOFF_S", 0.001):
+                healed = _run(mw._redrain_failed_sync(u, "prof1"))
+            assert healed is False, "every attempt skips while the lock is held"
+            retry_fn.assert_not_called()
+        finally:
+            lock.release()
+
+
+class TestInProgressRefcount:  # MAJOR-3
+    def test_overlapping_attempts_keep_cover_until_last_ends(self):
+        """Two overlapping attempts for one user: the FIRST to end must NOT drop
+        in-flight cover while the second still runs.
+
+        RED without fix: a set (discard on end) -> after the first end the header
+        surfaces 'failed' though a sync is still running (the flashing false alarm).
+        """
+        u = "t5870-m3-refcount"
+        mark_sync_failed(u)
+        _begin_sync_attempt(u)   # attempt A
+        _begin_sync_attempt(u)   # attempt B (overlap)
+        _end_sync_attempt(u)     # A ends; B still running
+        assert sync_status_header(u) is None, "B in flight -> still suppressed"
+        _end_sync_attempt(u)     # B ends
+        assert sync_status_header(u) == "failed"
+
+
+class TestConflictRetryRequiresProfile:  # MAJOR-4
+    def test_retry_without_profile_context_refuses_and_keeps_markers(self, monkeypatch):
+        """A conflict Retry with no profile context cannot restore the conflicted
+        profile.sqlite, so it must refuse honestly — never clear markers / claim
+        success (No silent fallbacks for internal data).
+
+        RED without fix: swallow the RuntimeError and set profile_id=None -> only
+        user.sqlite is confirmed, yet .sync_conflict is cleared and success=True.
+        """
+        from app import user_context
+        from app.routers import health
+
+        u = "t5870-m4-noprofile"
+        mark_sync_conflict(u)
+        mark_sync_pending(u)
+        monkeypatch.setattr("app.routers.health.R2_ENABLED", True)
+        user_context.set_current_user_id(u)
+
+        def _no_profile():
+            raise RuntimeError("no profile context")
+
+        # confirm succeeds if reached — proves refusal happens BEFORE any restore.
+        monkeypatch.setattr("app.routers.health.get_current_profile_id", _no_profile)
+        monkeypatch.setattr(
+            "app.services.db_refresh.confirm_current_before_write",
+            lambda user_id, profile_id=None: None,
+        )
+        result = _run(health.retry_sync())
+        assert result["success"] is False
+        assert result.get("conflict") is True
+        assert has_sync_conflict(u), "markers must NOT be cleared without a confirmed restore"

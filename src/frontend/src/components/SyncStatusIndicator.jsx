@@ -35,9 +35,15 @@ export function SyncStatusIndicator() {
       setVisible(false);
       return;
     }
+    // Re-arm the grace on every phase change — including a pending -> alarm
+    // escalation (isAlarm in the deps). Hiding first means an escalation waits out
+    // the delay instead of flashing red under an already-visible quiet banner
+    // (round 2 MAJOR-3 defense-in-depth; the backend _SYNC_IN_PROGRESS refcount
+    // removes the spurious escalation at its source).
+    setVisible(false);
     const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [shouldShow]);
+  }, [shouldShow, isAlarm]);
 
   if (!visible) return null;
 

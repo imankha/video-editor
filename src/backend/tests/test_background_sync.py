@@ -38,7 +38,7 @@ from app.middleware.db_sync import (
 def isolate_locks(monkeypatch):
     """Each test gets fresh locks and sync-in-progress state."""
     monkeypatch.setattr(db_sync, "_USER_WRITE_LOCKS", {})
-    monkeypatch.setattr(db_sync, "_SYNC_IN_PROGRESS", set())
+    monkeypatch.setattr(db_sync, "_SYNC_IN_PROGRESS", {})
     yield
 
 

@@ -108,7 +108,7 @@ def install(fake):
 
 def fresh_user(tmp, name):
     db.USER_DATA_BASE = Path(tmp)
-    db_sync._SYNC_IN_PROGRESS = set()
+    db_sync._SYNC_IN_PROGRESS = {}
     (Path(tmp) / name).mkdir(parents=True, exist_ok=True)
     db.clear_sync_pending(name)
     db.clear_sync_conflict(name)
@@ -131,15 +131,19 @@ async def fire_write(u, pid, fake):
 # --------------------------------------------------------------------------
 async def scenario_uncontended(tmp):
     """Baseline: writes spaced > upload latency apart, clean R2."""
-    fake = FakeR2(); install(fake)
-    u = fresh_user(tmp, "u_uncontended"); pid = "aaaaaaaa"
-    banner_reads = 0; total_reads = 0
+    fake = FakeR2()
+    install(fake)
+    u = fresh_user(tmp, "u_uncontended")
+    pid = "aaaaaaaa"
+    banner_reads = 0
+    total_reads = 0
     for _ in range(5):
         t = await fire_write(u, pid, fake)
         await t                      # let it finish before next (uncontended)
         for _ in range(4):
             total_reads += 1
-            if header_value(u): banner_reads += 1
+            if header_value(u):
+                banner_reads += 1
     return ("uncontended (writes spaced apart)", fake, banner_reads, total_reads, 0)
 
 
@@ -147,12 +151,16 @@ async def scenario_rapid(tmp, gap):
     """Rapid writes: contend on the profile upload lock -> some defer at 0.5s.
     Reads interleave; classify each banner-read as STALE (data already in R2)
     vs GENUINE (latest write not yet in R2)."""
-    fake = FakeR2(); install(fake)
-    u = fresh_user(tmp, "u_rapid"); pid = "bbbbbbbb"
+    fake = FakeR2()
+    install(fake)
+    u = fresh_user(tmp, "u_rapid")
+    pid = "bbbbbbbb"
     tasks = []
-    banner_reads = 0; total_reads = 0; stale_banner = 0
+    banner_reads = 0
+    total_reads = 0
+    stale_banner = 0
     writes = 8
-    for i in range(writes):
+    for _ in range(writes):
         t = await fire_write(u, pid, fake)
         tasks.append(t)
         # a couple of interleaved reads while syncs are in flight
@@ -180,8 +188,10 @@ async def scenario_refcount_fp(tmp):
     (not a refcount) while the slow one is still uploading -> a concurrent read
     sees marker-set + not-in-progress and emits 'failed' though the write is
     merely IN FLIGHT (data will land)."""
-    fake = FakeR2(); install(fake)
-    u = fresh_user(tmp, "u_refcount"); pid = "cccccccc"
+    fake = FakeR2()
+    install(fake)
+    u = fresh_user(tmp, "u_refcount")
+    pid = "cccccccc"
     # make the SECOND sync fast and the FIRST slow by giving them different keys?
     # Both are profile syncs (same lock) -> they serialise, not overlap. To get a
     # genuine overlap of two _background_sync tasks we rely on profile+user running
@@ -208,8 +218,10 @@ async def scenario_refcount_fp(tmp):
 
 
 async def scenario_conflict(tmp):
-    fake = FakeR2(); install(fake)
-    u = fresh_user(tmp, "u_conflict"); pid = "dddddddd"
+    fake = FakeR2()
+    install(fake)
+    u = fresh_user(tmp, "u_conflict")
+    pid = "dddddddd"
     fake.plan = {0: "conflict", 1: "conflict"}  # profile+user both conflict
     t = await fire_write(u, pid, fake)
     await t
@@ -219,13 +231,17 @@ async def scenario_conflict(tmp):
 
 
 async def scenario_checkpoint_then_heal(tmp):
-    fake = FakeR2(); install(fake)
-    u = fresh_user(tmp, "u_ckpt"); pid = "eeeeeeee"
+    fake = FakeR2()
+    install(fake)
+    u = fresh_user(tmp, "u_ckpt")
+    pid = "eeeeeeee"
     fake.plan = {0: "ckpt_busy", 1: "ckpt_busy"}  # first write: checkpoint refuses
-    t = await fire_write(u, pid, fake); await t
+    t = await fire_write(u, pid, fake)
+    await t
     stuck = header_value(u)
     # user edits again -> next write's bg sync succeeds (contention cleared)
-    t2 = await fire_write(u, pid, fake); await t2
+    t2 = await fire_write(u, pid, fake)
+    await t2
     healed = header_value(u)
     return (f"checkpoint-busy then next write (stuck={stuck!r} -> healed={healed!r})",
             fake, 1 if stuck else 0, 1, 1 if healed else 0)
@@ -233,10 +249,13 @@ async def scenario_checkpoint_then_heal(tmp):
 
 async def scenario_idle_after_failure(tmp):
     """User's LAST edit fails/defers, then they stop editing (reads only)."""
-    fake = FakeR2(); install(fake)
-    u = fresh_user(tmp, "u_idle"); pid = "ffffffff"
+    fake = FakeR2()
+    install(fake)
+    u = fresh_user(tmp, "u_idle")
+    pid = "ffffffff"
     fake.plan = {0: "r2_error", 1: "r2_error"}
-    t = await fire_write(u, pid, fake); await t
+    t = await fire_write(u, pid, fake)
+    await t
     # now idle: only reads, no writes -> nothing triggers retry_pending_sync
     banner_reads = sum(1 for _ in range(20) if header_value(u))
     return ("idle after failed last write (reads only, no heal)",
@@ -258,9 +277,9 @@ async def main():
     print(f"MODELLED-INPUT: R2 upload latency={int(UPLOAD_LATENCY*1000)}ms, "
           f"defer timeout={LOCK_TIMEOUT}s (real _SYNC_LOCK_TIMEOUT)\n")
     hdr = f"{'scenario':<46}{'uploads':>8}{'defers':>7}{'banner_reads':>13}{'final':>7}"
-    print(hdr); print("-" * len(hdr))
+    print(hdr)
+    print("-" * len(hdr))
     for name, fake, banner, total, final in scenarios:
-        oc = fake.outcomes
         print(f"{name:<46}{fake.uploaded:>8}{fake.deferred:>7}"
               f"{f'{banner}/{total}':>13}{('ON' if final else 'off'):>7}")
     print("\nper-scenario SyncResult tallies (MEASURED from real enum returns):")

@@ -16,6 +16,26 @@
 
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import { toast } from '../components/shared/Toast';
+
+// A conflict Retry that RESTORES R2's newer copy has replaced the user's local
+// edit on disk. We must tell them and reload (so the in-memory UI matches the
+// restored DB) — but the reload wipes any live toast, so the notice is stashed
+// here and surfaced on the next load (surfaceRestoredNoticeIfPending, below).
+const RESTORED_NOTICE_KEY = 't5870_restored_notice';
+
+function stashRestoredNotice() {
+  try {
+    sessionStorage.setItem(RESTORED_NOTICE_KEY, '1');
+  } catch {
+    /* sessionStorage unavailable — the toast still fires if we reach it live */
+  }
+}
+
+// Indirected so tests can assert the reload without navigating jsdom.
+export function reloadPage() {
+  window.location.reload();
+}
 
 export const useSyncStore = create((set, get) => ({
   syncState: 'ok', // 'ok' | 'pending' | 'failed' | 'conflict'
@@ -33,9 +53,18 @@ export const useSyncStore = create((set, get) => ({
         method: 'POST',
       });
       const data = await response.json();
+      if (data.restored) {
+        // BLOCKING (round 2): the conflict was resolved by REPLACING the local
+        // edit with a newer copy from R2 — the user's unsynced change is gone from
+        // disk. NEVER silently flip to 'ok' (the browser still renders the discarded
+        // edit, and the next gesture would write into a DB that no longer has it).
+        // Tell the user and reload so in-memory state matches the restored DB.
+        stashRestoredNotice();
+        reloadPage();
+        return true;
+      }
       if (data.success) {
-        // Cleared on the backend (a plain success or a conflict resolved via
-        // restore-if-newer). The next response's header confirms 'ok' too.
+        // A plain transient recovery. The next response's header confirms 'ok' too.
         set({ syncState: 'ok' });
       }
       return data.success;
@@ -47,9 +76,37 @@ export const useSyncStore = create((set, get) => ({
   },
 }));
 
+/**
+ * Surface the "your local changes were replaced" notice if a conflict-restore
+ * reload just happened. Called once at module load (post-reload). Persistent
+ * (duration 0) so the user cannot miss that work was superseded.
+ */
+export function surfaceRestoredNoticeIfPending() {
+  try {
+    if (typeof sessionStorage === 'undefined') return false;
+    if (!sessionStorage.getItem(RESTORED_NOTICE_KEY)) return false;
+    sessionStorage.removeItem(RESTORED_NOTICE_KEY);
+  } catch {
+    return false;
+  }
+  toast.error('Your local changes were replaced', {
+    message:
+      'A newer version of your work, saved on another device, replaced your unsynced edits.',
+    duration: 0,
+    dedupKey: 'sync-conflict-restored',
+  });
+  return true;
+}
+
+surfaceRestoredNoticeIfPending();
+
 // Listen for browser online/offline events. Coming back online with a genuine
 // failure (failed/conflict) auto-retries. 'pending' is left to the backend
 // re-drain — it is not a failure and needs no client action.
+// round 2 MINOR-2 (intended): a DURABLE-path failure surfaces via its own 503
+// gesture UX (overlay/clip/publish toasts with their own Retry) and leaves only
+// .sync_pending on surface A (quiet 'pending'), so it is deliberately NOT part of
+// this reconnect auto-retry — the owning gesture is the single retry trigger.
 window.addEventListener('offline', () => {
   useSyncStore.getState().setOffline(true);
 });

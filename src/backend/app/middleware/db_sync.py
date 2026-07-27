@@ -158,25 +158,37 @@ _INFLIGHT_LOCK = threading.Lock()
 # crash-recovery and stays set until the attempt succeeds. During a
 # normal in-flight sync, concurrent readers would otherwise read that
 # marker and emit X-Sync-Status: failed, flashing the frontend warning
-# button. The header check AND-gates the marker with this set so only a
+# button. The header check AND-gates the marker with this counter so only a
 # persistent failure (marker present, no sync in flight) surfaces.
-_SYNC_IN_PROGRESS: set[str] = set()
+#
+# T5870 round 2 (MAJOR-3): a REFCOUNT (dict[user -> count]), not a set. With a
+# set, two overlapping syncs for one user share one entry, so the FIRST to
+# finish `discard`s it and drops in-flight cover while the SECOND is still
+# running — a concurrent read then emits X-Sync-Status. T5870 made that worse:
+# a re-drained attempt now lasts seconds (not ~300ms) and the exposed state is a
+# red alarm, not master's gray pending. A refcount keeps cover until the LAST
+# concurrent attempt for that user ends.
+_SYNC_IN_PROGRESS: dict[str, int] = {}
 _SYNC_IN_PROGRESS_LOCK = threading.Lock()
 
 
 def _begin_sync_attempt(user_id: str) -> None:
     with _SYNC_IN_PROGRESS_LOCK:
-        _SYNC_IN_PROGRESS.add(user_id)
+        _SYNC_IN_PROGRESS[user_id] = _SYNC_IN_PROGRESS.get(user_id, 0) + 1
 
 
 def _end_sync_attempt(user_id: str) -> None:
     with _SYNC_IN_PROGRESS_LOCK:
-        _SYNC_IN_PROGRESS.discard(user_id)
+        remaining = _SYNC_IN_PROGRESS.get(user_id, 0) - 1
+        if remaining > 0:
+            _SYNC_IN_PROGRESS[user_id] = remaining
+        else:
+            _SYNC_IN_PROGRESS.pop(user_id, None)
 
 
 def is_sync_attempt_in_progress(user_id: str) -> bool:
     with _SYNC_IN_PROGRESS_LOCK:
-        return user_id in _SYNC_IN_PROGRESS
+        return _SYNC_IN_PROGRESS.get(user_id, 0) > 0
 
 def _inflight_enter(user_id: str) -> int:
     with _INFLIGHT_LOCK:
@@ -919,6 +931,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         lock_timeout = None if (is_error_path or durable) else _SYNC_LOCK_TIMEOUT
         sync_start = time.perf_counter()
         sync_status = "ok"
+        # round 2 MAJOR-1: the SESSION user's OWN sync result, initialised before
+        # the try so an early exception (before it is computed) still leaves it
+        # defined for the finalisation gate. Overwritten with the real value once
+        # the session's own sync completes; forced to "failed" in the except.
+        own_status = "ok"
         try:
             if had_writes and had_user_db_writes:
                 _user_id = user_id
@@ -1053,6 +1070,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         if sync_status == "ok":
                             sync_status = "conflict"
                     else:
+                        # round 2 MAJOR-1: the FOREIGN owner's write genuinely did
+                        # not land — give THEM the alarm + Retry (.sync_failed), not
+                        # just quiet .sync_pending. (The session's alarm is gated on
+                        # its OWN status below.)
+                        mark_sync_failed(foreign_uid)
                         sync_status = "failed"
                     logger.error(
                         f"[SYNC] {method} {path} -> FAILED to sync foreign user.sqlite "
@@ -1075,6 +1097,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         if sync_status == "ok":
                             sync_status = "conflict"
                     else:
+                        # round 2 MAJOR-1: alarm the FOREIGN owner (see loop above).
+                        mark_sync_failed(foreign_uid)
                         sync_status = "failed"
                     logger.error(
                         f"[SYNC] {method} {path} -> FAILED to sync foreign profile.sqlite "
@@ -1094,17 +1118,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # retry_pending_sync(session) cannot fix a FOREIGN owner's failed upload,
             # and healing the session must never mask that — so a still-unsynced
             # foreign DB keeps the aggregate "failed" even after the session heals.
-            if own_status == "failed" and not durable and not is_error_path:
-                if await self._redrain_failed_sync(user_id, profile_id):
-                    own_status = "ok"
-                    if sync_status == "failed" and not foreign_unsynced:
-                        sync_status = "ok"
+            if (own_status == "failed" and not durable and not is_error_path
+                    and await self._redrain_failed_sync(user_id, profile_id)):
+                own_status = "ok"
+                if sync_status == "failed" and not foreign_unsynced:
+                    sync_status = "ok"
         except Exception as sync_error:
             log_msg = "Sync to R2 raised exception"
             if is_error_path:
                 log_msg += " after request error"
             logger.error(f"{log_msg}: {sync_error}")
             sync_status = "failed"
+            own_status = "failed"  # session's own sync errored (conservative)
         finally:
             _end_sync_attempt(user_id)
 
@@ -1121,7 +1146,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # failed (alarm + working Retry) — but NOT on the durable path (its 503
             # UX owns it) or the error path (set_sync_failed below). Leaving only
             # .sync_pending there keeps those contracts unchanged (quiet "pending").
-            if not durable and not is_error_path:
+            # round 2 MAJOR-1: gate on own_status, NOT the aggregate. A foreign-only
+            # failure (own_status == "ok") must not raise the SESSION's alarm — the
+            # session's own data reached R2; the foreign owner already got its own
+            # .sync_failed in the loops above.
+            if own_status == "failed" and not durable and not is_error_path:
                 mark_sync_failed(user_id)
             logger.warning(f"[SYNC] {method} {path} -> R2 sync FAILED ({sync_duration:.2f}s)")
 
@@ -1147,11 +1176,33 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         Returns True iff a retry landed the write. Bails immediately on a CAS
         conflict (retry_pending_sync marks .sync_conflict) — a conflict is not
         blind-retryable; it needs restore-if-newer via the manual /api/retry-sync.
+
+        round 2 MAJOR-2: each attempt NON-BLOCKING-probes the per-user upload lock
+        BEFORE re-uploading (mirrors the T1539 write-triggered retry). Fire-and-
+        forget _background_sync tasks are not serialised per user, so a burst can
+        spawn several concurrent re-drains for one user; without the probe each
+        would block-acquire the same lock and stampede byte-identical uploads of
+        the same R2 object (T1537: concurrent same-key PUTs -> 429s, user stuck
+        degraded). The probe collapses the burst — only the re-drain that finds the
+        lock free proceeds; the rest skip that attempt and heal on a later one (or
+        are healed by the in-flight upload). It also means the blocking acquire
+        inside retry_pending_sync is only reached when the lock looked free, so no
+        thread parks for a multi-second export-worker hold.
         """
+        from ..storage import get_upload_lock
+
         for attempt in range(_REDRAIN_MAX_ATTEMPTS):
             await asyncio.sleep(_REDRAIN_BASE_BACKOFF_S * (2 ** attempt))
             if has_sync_conflict(user_id):
                 return False
+            probe = get_upload_lock(user_id, "profile")
+            if not probe.acquire(blocking=False):
+                logger.info(
+                    f"[SYNC_REDRAIN] user={user_id} attempt={attempt + 1} skipped "
+                    f"— upload already in progress (no stampede)"
+                )
+                continue
+            probe.release()
             try:
                 ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
             except Exception as e:

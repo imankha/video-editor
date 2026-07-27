@@ -1460,6 +1460,9 @@ def sync_db_to_r2_explicit(
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
         clear_sync_conflict(user_id)
+        clear_sync_failed(user_id)  # T5870 round 2 MINOR-1: an out-of-band success
+        # (export worker etc.) heals a stale .sync_failed so an idle user's red
+        # alarm clears instead of sticking indefinitely.
         logger.debug(f"[ExportWorker] Database synced to R2: user={user_id}, profile={profile_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:
@@ -1523,6 +1526,7 @@ def sync_user_db_to_r2_explicit(
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
         clear_sync_conflict(user_id)
+        clear_sync_failed(user_id)  # T5870 round 2 MINOR-1: see profile sync above.
         logger.debug(f"[ExportWorker] user.sqlite synced to R2: user={user_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:

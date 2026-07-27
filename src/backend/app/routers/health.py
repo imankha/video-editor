@@ -4,6 +4,7 @@ Health and status endpoints for the Video Editor API.
 This router handles health checks, status endpoints, and the hello world endpoint.
 """
 
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -228,31 +229,45 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
     cleared. On a refresh failure we DO NOT loop or force-push — we tell the user a
     newer version exists and to reload.
     """
-    import asyncio
-
     from ..services.db_refresh import RefreshFailed, confirm_current_before_write
 
+    honest_refusal = {
+        "success": False,
+        "conflict": True,
+        "message": "A newer version of your work exists. Please reload the page to continue.",
+    }
+
+    # round 2 MAJOR-4: get_current_profile_id() raises RuntimeError when unset BY
+    # DESIGN ("fails loudly"). Do NOT swallow it — without a profile we cannot
+    # restore the conflicted profile.sqlite, so clearing .sync_conflict/.sync_pending
+    # and reporting success would be a silent fallback over unresolved internal
+    # state (CLAUDE.md). Refuse honestly instead; the markers stay set.
     try:
         profile_id = get_current_profile_id()
-    except Exception:
-        profile_id = None
+    except RuntimeError:
+        logger.warning(
+            f"[SYNC] Conflict retry for user {user_id} has no profile context — refusing"
+        )
+        return honest_refusal
 
     try:
         await asyncio.to_thread(confirm_current_before_write, user_id, None)
-        if profile_id:
-            await asyncio.to_thread(confirm_current_before_write, user_id, profile_id)
+        await asyncio.to_thread(confirm_current_before_write, user_id, profile_id)
     except RefreshFailed as e:
         logger.warning(f"[SYNC] Conflict restore failed for user {user_id}: {e}")
-        return {
-            "success": False,
-            "conflict": True,
-            "message": "A newer version of your work exists. Please reload the page to continue.",
-        }
+        return honest_refusal
 
-    # Local is now current with R2; the superseded local edit did not win the race.
+    # Local is now current with R2 — BUT the user's refused local edit was replaced
+    # by the newer copy from R2. The frontend MUST tell the user and reload so the
+    # in-memory UI matches the restored DB (see syncStore.retrySyncToR2); it must
+    # never silently flip to a clean state (round 2 BLOCKING).
     set_sync_failed(user_id, False)
-    logger.info(f"[SYNC] Conflict resolved via restore-if-newer for user {user_id}")
-    return {"success": True, "restored": True}
+    logger.info(f"[SYNC] Conflict resolved via restore-if-newer for user {user_id} (local edit superseded)")
+    return {
+        "success": True,
+        "restored": True,
+        "message": "Your local changes were replaced by a newer version saved elsewhere.",
+    }
 
 
 @router.get("/api/export/progress/{export_id}")

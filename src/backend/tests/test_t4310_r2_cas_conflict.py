@@ -218,7 +218,7 @@ class TestBackgroundSyncConflictRouting:
         from app.middleware import db_sync as m
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
-        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", set())
+        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", {})
 
     def test_profile_conflict_sets_conflict_status_and_marker(self):
         from app.database import has_sync_pending, mark_sync_pending
@@ -347,7 +347,7 @@ class TestParallelSyncMarkerRaceFixed:
         from app.middleware import db_sync as m
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
-        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", set())
+        monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", {})
 
     def test_profile_ok_user_conflict_marks_conflict_even_if_profile_clears_first(self):
         """Simulates the race: profile sync succeeds (would clear_sync_conflict)
