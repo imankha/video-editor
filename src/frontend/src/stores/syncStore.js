@@ -42,8 +42,17 @@ export const useSyncStore = create((set, get) => ({
   isRetrying: false,
   isOffline: !navigator.onLine,
 
+  // T5960: has THIS session attempted a write? The `.sync_conflict` marker is
+  // sticky on the backend — it outlives the session whose write was refused and
+  // attaches to whatever session loads next, including a read-only one. We hold
+  // the 'conflict' state either way but gate its ALARM on a real write-attempt,
+  // so a passive reader never gets told their (never-made) work couldn't save.
+  // Ephemeral per-session fact, NOT persisted (no localStorage/SQLite/R2).
+  hasAttemptedWrite: false,
+
   setSyncState: (state) => set({ syncState: state }),
   setOffline: (offline) => set({ isOffline: offline }),
+  markWriteAttempted: () => set({ hasAttemptedWrite: true }),
 
   retrySyncToR2: async () => {
     if (get().isRetrying) return false;
@@ -139,6 +148,64 @@ export function checkSyncStatus(response) {
   }
 }
 
+// --- Write-attempt detection (T5960) ---
+// The interceptor already receives the request args, so this is the single seam
+// for "has this session issued a mutating request to our own API" — no flag
+// threaded through every call site. Only OUR API can produce a sync conflict; a
+// mutating request to a foreign origin (e.g. an R2 presigned upload) must NOT
+// arm it, and a GET must never arm it.
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// Mutating requests the app fires as session/telemetry LIFECYCLE, not as a user
+// edit. These must NOT arm the write-attempt gate: `POST /api/auth/init` fires on
+// EVERY app load (session-init), and heartbeat/session-close/accept-terms/video
+// beacons fire without any user gesture — none can produce a user's sync conflict.
+// Counting them would arm the gate on every passive load and the conflict alarm
+// would never actually be suppressed (T5960: this was the real defeat of the
+// naive "any mutating request" rule — proven by the e2e passive-load case).
+const NON_GESTURE_API_PREFIXES = ['/api/auth/', '/api/client-errors/'];
+
+// Returns the pathname if `rawUrl` targets our own API, else null.
+function ownApiPathname(rawUrl) {
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+    if (!url.pathname.startsWith('/api/')) return null;
+    if (url.origin === window.location.origin) return url.pathname;
+    if (Boolean(API_BASE) && url.origin === new URL(API_BASE).origin) return url.pathname;
+    return null;
+  } catch {
+    // Unparseable input — fail safe (do not arm on something we can't classify).
+    return null;
+  }
+}
+
+/**
+ * Is this a mutating (POST/PUT/PATCH/DELETE) request to our own API that
+ * represents a USER edit — i.e. one that could produce a sync conflict?
+ *
+ * `method` may be lowercase, absent (defaults to GET), or carried on a `Request`
+ * object passed as the first fetch arg instead of in the init object. Session and
+ * telemetry lifecycle requests (NON_GESTURE_API_PREFIXES) are excluded — they
+ * fire without a user gesture and must not arm the conflict alarm.
+ *
+ * @param {RequestInfo|URL} input - fetch's first arg (URL string, URL, or Request)
+ * @param {RequestInit} [init] - fetch's second arg
+ */
+export function isMutatingApiRequest(input, init) {
+  const method = (
+    init?.method ??
+    (input instanceof Request ? input.method : undefined) ??
+    'GET'
+  ).toUpperCase();
+  if (!MUTATING_METHODS.has(method)) return false;
+
+  const rawUrl = input instanceof Request ? input.url : String(input ?? '');
+  const pathname = ownApiPathname(rawUrl);
+  if (pathname === null) return false;
+  return !NON_GESTURE_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 // --- Global fetch interceptor ---
 // Wraps window.fetch so every response is automatically checked for the
 // X-Sync-Status header. This is infrastructure-level: no individual API
@@ -147,6 +214,12 @@ export function checkSyncStatus(response) {
 const _originalFetch = window.fetch.bind(window);
 
 window.fetch = async function (...args) {
+  // Arm the write-attempt gate BEFORE awaiting: issuing the request IS the
+  // attempt, even if it ultimately fails. Idempotent — set once per session.
+  if (isMutatingApiRequest(args[0], args[1])) {
+    const store = useSyncStore.getState();
+    if (!store.hasAttemptedWrite) store.markWriteAttempted();
+  }
   const response = await _originalFetch(...args);
   checkSyncStatus(response);
   return response;

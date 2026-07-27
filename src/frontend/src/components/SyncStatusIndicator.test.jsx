@@ -42,9 +42,66 @@ describe('SyncStatusIndicator (T5870)', () => {
   });
 
   it('conflict -> alarm copy mentioning a newer version, WITH Retry', () => {
-    useSyncStore.setState({ syncState: 'conflict' });
+    useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: true });
     paint();
     expect(screen.getByText(/newer version of your work/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
+  });
+});
+
+// T5960: a sticky .sync_conflict marker outlives the session whose write was
+// refused and attaches to whatever session loads next -- including a read-only
+// one. The alarm must stay SILENT until THIS session has attempted a write.
+describe('SyncStatusIndicator (T5960 conflict gated on write-attempt)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useSyncStore.setState({
+      syncState: 'ok',
+      isRetrying: false,
+      isOffline: false,
+      hasAttemptedWrite: false,
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('conflict header seen, ZERO writes this session -> renders nothing', () => {
+    useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: false });
+    paint();
+    // RED without fix: the indicator painted the alarm on any conflict header,
+    // so a passive reader inherited someone else's refusal.
+    expect(screen.queryByText(/could not save to the cloud/i)).toBeNull();
+    expect(screen.queryByText(/newer version of your work/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+  });
+
+  it('conflict header seen, AFTER a write this session -> alarm + Retry', () => {
+    useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: true });
+    paint();
+    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
+    expect(screen.getByText(/newer version of your work/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
+  });
+
+  it('a write mid-session flips a held-silent conflict into the alarm', () => {
+    useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: false });
+    render(<SyncStatusIndicator />);
+    act(() => vi.advanceTimersByTime(3100));
+    expect(screen.queryByText(/could not save to the cloud/i)).toBeNull();
+
+    // The session now issues its first write.
+    act(() => useSyncStore.getState().markWriteAttempted());
+    act(() => vi.advanceTimersByTime(3100));
+    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
+  });
+
+  it('failed is NOT gated on write-attempt (scope discipline)', () => {
+    // Only `conflict` is gated. A genuine `failed` still alarms regardless.
+    useSyncStore.setState({ syncState: 'failed', hasAttemptedWrite: false });
+    paint();
+    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
   });
 });

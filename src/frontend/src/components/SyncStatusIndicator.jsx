@@ -18,17 +18,27 @@ const SHOW_DELAY_MS = 3000;
  *   - 'failed'   -> alarm + Retry (a real failure the re-drain could not heal).
  *   - 'conflict' -> alarm + Retry (backend restores the newer copy; never loops).
  * Auto-hides when sync recovers. Offline auto-retries on reconnect (see syncStore).
+ *
+ * T5960: the 'conflict' state is HELD but its alarm is gated on write-attempt —
+ * the `.sync_conflict` marker is sticky on the backend and a read-only session
+ * can inherit another session's refusal. Until THIS session has issued a write,
+ * a conflict stays silent (no alarm, no Retry). 'failed'/'pending'/offline are
+ * NOT gated — a genuine failure still surfaces immediately.
  */
 export function SyncStatusIndicator() {
   const syncState = useSyncStore(state => state.syncState);
   const isRetrying = useSyncStore(state => state.isRetrying);
   const isOffline = useSyncStore(state => state.isOffline);
   const retrySyncToR2 = useSyncStore(state => state.retrySyncToR2);
+  const hasAttemptedWrite = useSyncStore(state => state.hasAttemptedWrite);
 
   const [visible, setVisible] = useState(false);
 
-  const isAlarm = syncState === 'failed' || syncState === 'conflict';
-  const shouldShow = isOffline || syncState !== 'ok';
+  // A conflict is held silent until this session has attempted a write.
+  const isConflictHeldSilent = syncState === 'conflict' && !hasAttemptedWrite;
+  const isAlarm =
+    syncState === 'failed' || (syncState === 'conflict' && hasAttemptedWrite);
+  const shouldShow = isOffline || (syncState !== 'ok' && !isConflictHeldSilent);
 
   useEffect(() => {
     if (!shouldShow) {
