@@ -1,4 +1,4 @@
-# T6040: A corner-resize drag can exit circle-edit in mobile fullscreen
+# T6080: A corner-resize drag can exit circle-edit in mobile fullscreen
 
 **Status:** TODO
 **Impact:** 5
