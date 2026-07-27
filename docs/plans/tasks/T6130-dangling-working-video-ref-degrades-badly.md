@@ -28,10 +28,24 @@ dangling-ref path just never reaches it.
 
 ## Measured blast radius (do not re-derive — verified 2026-07-27)
 
-- **Prod:** across all 14 profiles there is exactly **ONE** `working_videos` row, and it is dangling
-  (`imankh@gmail.com`, project 54, `working_54_ff66933d.mp4`). Every other profile has zero rows.
-  So today this affects one draft on one account.
+> **CORRECTION 2026-07-27 (supervisor).** An earlier version of this section claimed prod held one
+> dangling `working_videos` ref. **That was wrong.** The audit constructed R2 keys as
+> `users/{uid}/profiles/{pid}/...`, omitting the mandatory environment prefix — the real scheme is
+> `{APP_ENV}/users/{uid}/profiles/{pid}/...` (`storage.py:279`, and `APP_ENV` is `production` on
+> prod, `staging` on staging). Every HEAD therefore 404'd, and with exactly one row present it
+> reported "1 of 1 dangling". Re-audited with the correct prefix:
+> **prod = 87 media rows (final_videos + working_videos) across all profiles, 0 dangling.**
+> Prod is clean. Any prod-impact argument built on the old number is void.
+
+- **Prod:** **0 dangling** out of 87 media rows. Not affected.
 - **Staging:** 3 of 5 pre-framed drafts (31, 33, 51) dangle; the freshest (37, 54) are intact.
+- **Staging, final_videos too (found 2026-07-27 by a real user report):** `imankh` profile
+  `9fa7378c` has 41 `final_videos` rows and **1 dangling** — fv_id 41, project 31,
+  *"Brilliant Control"*, `final_31_eda94512.mp4` → 404 while the other 94 objects under
+  `staging/users/.../final_videos/` are present. So the dangling class is not confined to
+  intermediate working videos; it reaches **published reels**, where the user-visible symptom is a
+  black player with `MEDIA_ELEMENT_ERROR: Format error` / `NotSupportedError: no supported sources`.
+  Note project 31 is dangling on BOTH its working video and its final video.
 - **No code path deletes `working_videos/*.mp4`** — checked across `clips.py`, `overlay.py`,
   `project_archive.py` and the sweep. The dangling refs are env-copy/wipe provenance, not something
   the app does.
