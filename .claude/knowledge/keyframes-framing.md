@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-27 (T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js)
+updated: 2026-07-27 (T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -820,6 +820,60 @@ account's higher-resolution export.
 
 **Unchanged**: `useVideoDisplayRect`, fullscreen mode CSS (`:fullscreen` rules force 100vw/100vh
 before any fitToAspect logic), no changes to zoom/pan or mobileFs enter/exit.
+
+## Video-stage hydration on staging — MEASURED, NOT a product defect (T6100, 2026-07-27)
+
+The staging E2E failures T4550 (Framing crop drag lands `0`) and T5676 (`overlay-video-stage`
+never gets its `aspect-ratio` style → 240s timeout) both blamed "the video stage never
+hydrates". **Root-caused by measurement against staging (real account imankh/9fa7378c) — it is
+NOT a product bug, NOT slow-infra-when-warm, and does NOT gate a prod deploy.** Do not re-derive;
+the numbers below are the answer.
+
+- **Infra is FAST when warm** (rules out the "R2/CDN slow" theory, consistent with memory
+  `project_t3760_overfetch_harmless`): `working_video/playback-url` 240ms; clip `playback-url`
+  240ms; R2 presigned GET of a present working video (2.65MB faststart) 206 in 120–360ms. The
+  ONLY real slowness is (a) Fly **cold-start**: the first request after the machine auto-stops
+  can take ~30s (measured a 30s `GET /api/projects` timeout on a cold machine, fast on retry) —
+  a lone first-hit cost, not the "hangs forever" symptom; and (b) the **poster-warming request
+  storm** on home/list mount (`GET /api/games/{id}/poster.jpg` ×N measured 4–6s concurrently,
+  the T5683 warmer + `warmAllUserVideos` contention villain), which delays the `clips`/list
+  request ~1.6s but does NOT touch the video path.
+- **T5676 (Overlay) — dangling working-video R2 refs (STAGING DATA artifact).** For 3 of 5
+  "In Overlay" drafts the DB row says `has_working_video=True` and `playback-url` happily signs
+  a URL (it does NOT verify the object exists), but the R2 GET returns **404 in ~120ms**. The
+  frontend then correctly shows the T5440 "video unavailable — re-export to rebuild" state and
+  `useAspectStage` correctly never flips (there is no video to size). This is a FAST deterministic
+  404, not a hang. **No app code path deletes `working_videos/{filename}.mp4` R2 objects**
+  (verified: `clips.py` deletes `raw_clips/`, `overlay.py` deletes the prior `final_videos/`,
+  `project_archive.py` deletes only DB rows, sweep deletes `games/{hash}.mp4`) — so on prod a
+  working-video object persists once written; the staging absence is an env-copy/wipe/E2E-export
+  provenance artifact (DB rows referencing objects not mirrored into the staging R2 prefix).
+  T5676's `openOverlay` picks `.first()` In-Overlay draft without checking it is loadable, so it
+  waits 30s+ for an `aspect-ratio` that can never come for a 404'd asset → the 240s hang. Healthy
+  drafts DO hydrate in-browser: `T5642-...qa.spec.js` passed on staging (project 54, presigned
+  `<video>` 206 + plays).
+- **T4550 (Framing) — test drags before the display rect exists (TEST timing race).** Measured
+  timeline, click→ready: clips 5.4s (behind the poster storm), clip `playback-url` 6.07s, R2 game
+  reads 206 in 0.14–0.24s, `<video>` HAVE_METADATA 6.74s, **display rect established 7.37s**. The
+  crop box renders off clip metadata as a PLACEHOLDER at ~6.4s (evidence `qa/T4550-crop-overlay-placed.png`
+  shows the box over a "Loading… / Connecting to server…" stage); T4550 drags the instant the box
+  is visible — ~1s BEFORE the `<video>` display rect that `videoToScreen`/`useVideoDisplayRect`
+  needs is established → the drag maps against a degenerate rect and lands exactly `0` (the same
+  signature as, but NOT, the T5380 first-drag race — `attachDragListeners` is intact). The video
+  DOES load; it is a race, not a hang. Framing clips are the full **3GB non-faststart** game video
+  (`games/{hash}.mp4`, moov ~700KB before EOF) so Chrome does a front+tail range read for metadata
+  — still fast (~0.3s) but slower to paint than Overlay's small faststart working video, which is
+  why the placeholder window is wider in Framing.
+- **Fixes belong to T6110** (spec hardening: wait for the real video-ready signal, not the
+  placeholder; skip/990 drafts whose working video 404s). **Do NOT raise timeouts.** See
+  [export-pipeline.md] for the media-URL / R2-ref side.
+- **Prod-impact answer (the gating question):** No new prod defect. The Framing race is a test
+  artifact real users never hit (nobody drags a crop box in the sub-second before first paint, and
+  the box re-maps correctly once the video paints). The Overlay dangling ref is staging-only data;
+  even the worst case on prod is the graceful T5440 "re-export" prompt (no hang, no data loss).
+  Residual (un-checkable here — no prod creds): whether prod holds any `working_videos` DB row whose
+  R2 object HEADs 404. Recommend a READ-ONLY prod audit as a cheap follow-up; it does not block the
+  deploy because the failure mode is graceful.
 
 ## Active/upcoming work
 - **T4220**: `remove_segment_split` wipes ALL segment speeds (clips.py ~483-497, literal "for now
