@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5672 visual verification: clip-count chip on multi-clip drafts, no chip on
@@ -13,13 +14,15 @@ import { loginAsRealUser } from './helpers/realAuth';
  * entry.
  */
 test('T5672 clip-count badge visual verification (both states)', async ({ context, page }) => {
+  skipOnDeployedTarget(test, 'injects a synthetic draft via an in-page import of /src/stores/projectsStore.js; that Vite-dev path 404s on a deployed BUILD');
   await loginAsRealUser(context, 'imankh@gmail.com');
   await page.setViewportSize({ width: 1315, height: 800 });
   await page.goto('/');
+  // The rendered project-card IS the proof fetchProjects() resolved (the cards come
+  // FROM it), so it already satisfies the "let the initial fetch settle" intent. A
+  // `networkidle` settle used to follow and is banned -- it never fires against a CDN
+  // (helpers/appReady.js), which hung this test to the 60s deployed-target timeout.
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
-  // Let any in-flight initial fetchProjects() settle before injecting, so our
-  // synthetic entry isn't immediately overwritten by that resolving promise.
-  await page.waitForLoadState('networkidle');
 
   await page.evaluate(async () => {
     const { useProjectsStore } = await import('/src/stores/projectsStore.js');

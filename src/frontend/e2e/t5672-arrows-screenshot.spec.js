@@ -10,8 +10,11 @@ async function verifyArrows(context, page, width) {
   await loginAsRealUser(context, 'imankh@gmail.com');
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/');
+  // The rendered project-card above IS the ready signal. A `networkidle` settle used
+  // to follow it and hung both tests to the 60s timeout on a deployed target: against
+  // a live CDN the network never goes quiet for 500ms, so it never fires. It is banned
+  // for exactly this reason -- see helpers/appReady.js and e2e/STAGING-GATE.md.
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
-  await page.waitForLoadState('networkidle');
 
   const rightArrow = page.locator('button[aria-label="Scroll right"]').first();
   await expect(rightArrow).toBeVisible({ timeout: 5000 });

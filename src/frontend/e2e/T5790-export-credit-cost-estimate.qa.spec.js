@@ -24,6 +24,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const CHIP = '[data-testid="output-length-chip"]';
 const ESTIMATE = '[data-testid="export-credit-estimate"]';
@@ -83,6 +84,7 @@ async function openFirstFramingDraft(page) {
 }
 
 test('T5790: credit estimate is live, equals ceil(output), and matches the modal', async ({ context, page }) => {
+  skipOnDeployedTarget(test, 'forces a zero-balance amber state by import()ing /src/stores/creditStore.js in-page; that Vite-dev path 404s on a deployed BUILD');
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
 

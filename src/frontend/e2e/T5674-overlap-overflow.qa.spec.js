@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5674 — REAL-BROWSER QA for the three overlap/overflow fixes:
@@ -68,6 +69,7 @@ async function selectProjectMode(page, projectId, mode) {
 }
 
 test('AC1 — report pill never overlaps controls across screens/viewports', async ({ context, page }) => {
+  skipOnDeployedTarget(test, 'drives project/mode selection via in-page imports of /src/stores/projectsStore.js + editorStore.js, and reads /api/projects with a RELATIVE in-page fetch; both break on a deployed split-host BUILD');
   test.setTimeout(300000);
   await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
   await page.goto('/');
@@ -115,6 +117,7 @@ test('AC1 — report pill never overlaps controls across screens/viewports', asy
 });
 
 test('AC2 — no stray horizontal scrollbar in Annotate left panel', async ({ context, page }) => {
+  skipOnDeployedTarget(test, 'drives project/mode selection via in-page imports of /src/stores/projectsStore.js + editorStore.js, and reads /api/projects with a RELATIVE in-page fetch; both break on a deployed split-host BUILD');
   test.setTimeout(180000);
   await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
   await page.setViewportSize({ width: 1315, height: 748 });
@@ -147,6 +150,7 @@ test('AC2 — no stray horizontal scrollbar in Annotate left panel', async ({ co
 });
 
 test('AC3 — Framing crop-size label legible at the top edge', async ({ context, page }) => {
+  skipOnDeployedTarget(test, 'drives project/mode selection via in-page imports of /src/stores/projectsStore.js + editorStore.js, and reads /api/projects with a RELATIVE in-page fetch; both break on a deployed split-host BUILD');
   test.setTimeout(180000);
   await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
   await page.setViewportSize({ width: 1315, height: 900 });

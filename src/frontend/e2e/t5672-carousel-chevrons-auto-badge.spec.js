@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+
+// T5420 convention: API calls go to the TARGET's API, never a hardcoded localhost.
+// These two tests used to GET a hardcoded localhost:8000 /api/projects. On a staging
+// run the session cookie loginAsRealUser minted belongs to the staging API host, so
+// localhost answered 401 with a {detail} object -- and `projects.forEach` blew up with
+// "is not a function" instead of naming the real problem.
+const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8000/api';
 
 test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => {
   test.beforeEach(async ({ context, page }) => {
@@ -20,7 +28,7 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
 
     // Capture API response to check per-game draft counts
     const draftsResponse = await context.request.get(
-      'http://localhost:8000/api/projects',
+      `${API_BASE}/projects`,
       { headers: { 'X-Test-Mode': 'true' } }
     );
     const draftsData = await draftsResponse.json();
@@ -131,13 +139,15 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
   test('A game with both 9:16 and 16:9 drafts renders one row per aspect, portrait first', async ({
     page,
   }) => {
+    skipOnDeployedTarget(test, 'splices a synthetic 16:9 draft via an in-page import of /src/stores/projectsStore.js; that Vite-dev path 404s on a deployed BUILD');
     // Set desktop viewport
     await page.setViewportSize({ width: 1315, height: 800 });
     await page.goto('/');
+    // The rendered project-card IS the proof fetchProjects() resolved (the cards come
+    // FROM it), so it already satisfies the "let the initial fetch settle" intent. A
+    // `networkidle` settle used to follow and is banned -- it never fires against a CDN
+    // (helpers/appReady.js), which hung this test to the 60s deployed-target timeout.
     await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
-    // Let the initial fetchProjects() settle before injecting, so the
-    // synthetic entry isn't overwritten by that resolving promise.
-    await page.waitForLoadState('networkidle');
 
     // The real account's "at Legends Mar 28" group is all-portrait today, so
     // splice in one synthetic 16:9 draft under the SAME group_key to exercise
@@ -192,7 +202,7 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     page,
   }) => {
     // Get projects from API
-    const response = await context.request.get('http://localhost:8000/api/projects', {
+    const response = await context.request.get(`${API_BASE}/projects`, {
       headers: { 'X-Test-Mode': 'true' },
     });
     const projects = await response.json();

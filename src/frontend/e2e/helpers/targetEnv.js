@@ -314,4 +314,34 @@ export const LOCAL_ONLY_SPECS = [
     depends: ['/src/stores/authStore.js', 'local draft fixtures'],
     reason: 'authenticates via an in-page authStore import and SEEDS local draft fixtures; the /src path 404s on a deployed BUILD and the seeding is a local-dev construct.',
   },
+  {
+    file: 't5672-screenshot-verify.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/projectsStore.js'],
+    reason: 'the real account has no multi-clip draft, so it INJECTS a synthetic one by import()ing the projectsStore in-page to render both badge states; the /src path 404s on a deployed BUILD.',
+  },
+  {
+    file: 't5672-carousel-chevrons-auto-badge.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/projectsStore.js'],
+    reason: 'PARTIAL: only the "both 9:16 and 16:9 drafts" test is gated -- it splices a synthetic 16:9 draft in via an in-page projectsStore import (the /src path 404s on a deployed BUILD). The arrow/chip tests still run on staging.',
+  },
+  {
+    file: 'T5673-drawer-polish.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/galleryStore.js'],
+    reason: 'reads server-truth season ranks by import()ing the galleryStore in-page; the /src path 404s on a deployed BUILD. (Its /api/downloads read was also RELATIVE, so the Pages SPA catch-all returned 200 text/html and .json() threw.)',
+  },
+  {
+    file: 'T5674-overlap-overflow.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/projectsStore.js', '/src/stores/editorStore.js', 'relative in-page fetch(/api/projects)'],
+    reason: 'drives project selection + editor mode via in-page /src store imports (404 on a deployed BUILD) and picks its project with a RELATIVE in-page fetch that hits the Pages SPA catch-all on split-host staging.',
+  },
+  {
+    file: 'T5790-export-credit-cost-estimate.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/creditStore.js'],
+    reason: 'PARTIAL: only the live-estimate test is gated -- it forces a zero-balance amber state by import()ing the creditStore in-page (the /src path 404s on a deployed BUILD). The responsive/overflow test still runs on staging.',
+  },
 ];

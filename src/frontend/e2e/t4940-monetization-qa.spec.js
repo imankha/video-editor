@@ -9,10 +9,17 @@
  * Captures screenshot evidence at desktop (1280) and mobile (375).
  */
 import { test, expect } from '@playwright/test';
+import path from 'path';
 import { loginAsRealUser } from './helpers/realAuth';
+import { QA_DIR } from './helpers/qa.js';
 import fs from 'fs';
 
-const EVID = '/workspace/qa-evidence/T4940';
+// Evidence goes to the repo-root qa/ dir (helpers/qa.js QA_DIR) like every other
+// QA spec. This used to be a hardcoded '/workspace/qa-evidence/T4940' -- a
+// /dotask CONTAINER path, so beforeAll's mkdirSync blew up on a host run and
+// failed all 4 tests in ~180ms before touching the app. QA_DIR resolves from the
+// checkout, so it works on the host AND in a container (bind-mounted).
+const EVID = path.join(QA_DIR, 'T4940');
 const EMAIL = 'imankh@gmail.com';
 
 test.beforeAll(() => fs.mkdirSync(EVID, { recursive: true }));

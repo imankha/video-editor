@@ -25,6 +25,7 @@
 import { test, expect, devices } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -71,6 +72,12 @@ async function fetchSeasonRanks(request) {
 }
 
 test.describe('T5673 drawer polish QA', () => {
+  // Reads server-truth ranks by import()ing the galleryStore in-page; that Vite-dev
+  // /src path 404s on a deployed BUILD, and its `request.get('/api/downloads')` was
+  // RELATIVE, so on split-host staging it resolved against the Pages origin and the
+  // SPA catch-all answered 200 text/html -> `Unexpected token '<' ... is not valid JSON`.
+  skipOnDeployedTarget(test, 'reads ranks via an in-page import of /src/stores/galleryStore.js; that Vite-dev path 404s on a deployed BUILD');
+
   test('desktop 1280: kebab menu top+bottom flip, full labels, leading posters, rank badges', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
