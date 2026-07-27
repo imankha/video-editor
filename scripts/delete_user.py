@@ -75,6 +75,50 @@ def get_pg_conn(config):
     return psycopg2.connect(config["DATABASE_URL"], cursor_factory=RealDictCursor)
 
 
+# T5840: the credit ledger (T6090). All three ship together in postgres v019 --
+# checking one is checking all, matching the pattern already used in
+# copy_user_between_envs.py.
+CREDIT_TABLES = ("credit_transactions", "credit_reservations", "credits")
+
+
+def credit_tables_present(pg_conn) -> bool:
+    """False on a pre-v019 destination (prod today) where the ledger tables
+    don't exist yet -- deleting a user there must not crash."""
+    cur = pg_conn.cursor()
+    cur.execute("SELECT to_regclass('public.credits') IS NOT NULL AS ok")
+    return cur.fetchone()["ok"]
+
+
+def sweep_orphans(pg_conn, dry_run: bool) -> int:
+    """Remove credit-ledger rows whose user_id has no matching `users` row.
+
+    Orphans are created by pre-fix delete_user.py runs (T6090): the credit
+    tables were never cleared, so a deleted user's rows survive with no
+    owning users row. Scoped strictly to NOT-IN-users so a live user's rows
+    can never be touched.
+    """
+    cur = pg_conn.cursor()
+    if not credit_tables_present(pg_conn):
+        print("  credit ledger tables do not exist (pre-v019) -- nothing to sweep")
+        return 0
+
+    total = 0
+    for table in CREDIT_TABLES:
+        cur.execute(
+            f"SELECT COUNT(*) as cnt FROM {table} WHERE user_id NOT IN (SELECT user_id FROM users)"
+        )
+        cnt = cur.fetchone()["cnt"]
+        if dry_run:
+            print(f"  would delete {cnt} orphaned rows from {table}")
+        else:
+            cur.execute(
+                f"DELETE FROM {table} WHERE user_id NOT IN (SELECT user_id FROM users)"
+            )
+            print(f"  deleted {cnt} orphaned rows from {table}")
+        total += cnt
+    return total
+
+
 def purge_r2_prefix(s3, bucket: str, prefix: str, dry_run: bool) -> int:
     paginator = s3.get_paginator("list_objects_v2")
     total = 0
@@ -144,7 +188,12 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
     else:
         cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
         cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
-    for table in ("game_storage_refs", "sessions"):
+    tables = ["game_storage_refs", "sessions"]
+    if credit_tables_present(pg_conn):
+        tables.extend(CREDIT_TABLES)
+    else:
+        print("    credit ledger tables do not exist (pre-v019) -- skipping")
+    for table in tables:
         if dry_run:
             cur.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE user_id = %s", (user_id,))
             cnt = cur.fetchone()["cnt"]
@@ -178,6 +227,8 @@ def main():
     grp.add_argument("--email", help="Delete a single user by email")
     grp.add_argument("--all", action="store_true", help="Delete ALL users in this env")
     grp.add_argument("--all-except", help="Delete all users EXCEPT this email")
+    grp.add_argument("--sweep-orphans", action="store_true",
+                      help="Remove credit-ledger rows with no matching users row (T6090 backfill)")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-restart", action="store_true")
     p.add_argument("--yes", action="store_true", help="Skip confirmation")
@@ -187,6 +238,21 @@ def main():
     app_env = config["APP_ENV"]
     bucket = config["R2_BUCKET"]
     print(f"Environment: {args.env} (APP_ENV={app_env}, bucket={bucket}) dry_run={args.dry_run}")
+
+    if args.sweep_orphans:
+        pg_conn = get_pg_conn(config)
+        print(f"\n=== Sweeping orphaned credit-ledger rows in {args.env} ===")
+        if not args.yes and not args.dry_run:
+            reply = input(f"\nSweep orphaned credit rows from {args.env}? Type 'yes' to confirm: ")
+            if reply.strip() != "yes":
+                print("Aborted."); return
+        total = sweep_orphans(pg_conn, args.dry_run)
+        if not args.dry_run:
+            pg_conn.commit()
+        pg_conn.close()
+        verb = "Would remove" if args.dry_run else "Removed"
+        print(f"\n=== Done. {verb} {total} orphaned row(s) from {args.env}. ===")
+        return
 
     s3 = get_r2_client(config)
     pg_conn = get_pg_conn(config)
