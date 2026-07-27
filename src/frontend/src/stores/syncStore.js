@@ -22,11 +22,18 @@ import { toast } from '../components/shared/Toast';
 // edit on disk. We must tell them and reload (so the in-memory UI matches the
 // restored DB) — but the reload wipes any live toast, so the notice is stashed
 // here and surfaced on the next load (surfaceRestoredNoticeIfPending, below).
+//
+// T6040: a READER's Reload also lands here (retrySyncToR2 is shared), but a
+// reader has no local edit to lose — `_retry_resolve_conflict`'s "your local
+// changes were replaced" message is simply wrong for them (the exact bug class
+// T5960 fixed one layer up). The flag value distinguishes the two: '1' = this
+// session had attempted a write (show the loss notice), '0' = reader (stay
+// silent — nothing was lost).
 const RESTORED_NOTICE_KEY = 't5870_restored_notice';
 
-function stashRestoredNotice() {
+function stashRestoredNotice(wasWriter) {
   try {
-    sessionStorage.setItem(RESTORED_NOTICE_KEY, '1');
+    sessionStorage.setItem(RESTORED_NOTICE_KEY, wasWriter ? '1' : '0');
   } catch {
     /* sessionStorage unavailable — the toast still fires if we reach it live */
   }
@@ -56,6 +63,9 @@ export const useSyncStore = create((set, get) => ({
 
   retrySyncToR2: async () => {
     if (get().isRetrying) return false;
+    // Captured BEFORE the request: this is "did THIS session attempt a write",
+    // which is what determines whether a restore actually discarded anything.
+    const wasWriter = get().hasAttemptedWrite;
     set({ isRetrying: true });
     try {
       const response = await _originalFetch(`${API_BASE}/api/retry-sync`, {
@@ -68,7 +78,7 @@ export const useSyncStore = create((set, get) => ({
         // disk. NEVER silently flip to 'ok' (the browser still renders the discarded
         // edit, and the next gesture would write into a DB that no longer has it).
         // Tell the user and reload so in-memory state matches the restored DB.
-        stashRestoredNotice();
+        stashRestoredNotice(wasWriter);
         reloadPage();
         return true;
       }
@@ -89,15 +99,23 @@ export const useSyncStore = create((set, get) => ({
  * Surface the "your local changes were replaced" notice if a conflict-restore
  * reload just happened. Called once at module load (post-reload). Persistent
  * (duration 0) so the user cannot miss that work was superseded.
+ *
+ * T6040: a reader's Reload also stashes a flag ('0') so this function still
+ * consumes it (never leaves a stale key around) but does NOT show the
+ * loss-of-work toast — the reader never had unsynced work to lose.
  */
 export function surfaceRestoredNoticeIfPending() {
+  let wasWriter;
   try {
     if (typeof sessionStorage === 'undefined') return false;
-    if (!sessionStorage.getItem(RESTORED_NOTICE_KEY)) return false;
+    const flag = sessionStorage.getItem(RESTORED_NOTICE_KEY);
+    if (flag === null) return false;
     sessionStorage.removeItem(RESTORED_NOTICE_KEY);
+    wasWriter = flag === '1';
   } catch {
     return false;
   }
+  if (!wasWriter) return false;
   toast.error('Your local changes were replaced', {
     message:
       'A newer version of your work, saved on another device, replaced your unsynced edits.',

@@ -27,7 +27,11 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 
 const H = { 'X-User-ID': 'manual-test-user', 'X-Test-Mode': 'true' };
 const BANNER = /could not save to the cloud/i;
-const CONFLICT_SUB = /newer version of your work/i;
+// T6040 note: narrowed to "...exists" (the ALARM's own sub-line) so this no
+// longer collides with the legitimate quiet reader notice T6040 introduces for
+// a no-write conflict ("A newer version of your work is available" + Reload) --
+// that notice is a deliberate, non-alarm addition, not a regression.
+const CONFLICT_SUB = /newer version of your work exists/i;
 
 /**
  * Install a network shim that (a) stamps `X-Sync-Status: conflict` onto our own

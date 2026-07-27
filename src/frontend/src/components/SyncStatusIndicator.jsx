@@ -31,6 +31,14 @@ const ALARM_SYNC_STATES = new Set(['failed', 'conflict']);
  * session's refusal. Until THIS session has issued a write, neither alarms
  * (no banner, no Retry). 'pending'/offline are NOT gated — 'pending' is a
  * quiet, non-alarm banner regardless of write-attempt.
+ *
+ * T6040: 'conflict' and 'failed' are NOT symmetric for a no-write session.
+ * `conflict` means R2 is AHEAD of local — a reader on this machine really is
+ * looking at stale data, so it gets a quiet "newer version available" notice
+ * with a Reload action instead of staying fully silent. `failed` means local
+ * is AHEAD (an unsynced write exists) — a reader is looking at the NEWEST
+ * data and there is nothing to tell them, so it stays silent exactly as
+ * T6010 shipped it. Do not generalize the reader notice to `failed`.
  */
 export function SyncStatusIndicator() {
   const syncState = useSyncStore(state => state.syncState);
@@ -46,8 +54,12 @@ export function SyncStatusIndicator() {
   // write-attempt gate. 'pending' is deliberately excluded from this set — its
   // quiet banner must render regardless of write-attempt (T6010 acceptance
   // criterion pinning this against an accidental over-generalization).
-  const isHeldSilent = ALARM_SYNC_STATES.has(syncState) && !hasAttemptedWrite;
   const isAlarm = ALARM_SYNC_STATES.has(syncState) && hasAttemptedWrite;
+  // T6040: only `failed` stays fully silent for a no-write session — a reader
+  // is on the NEWEST data there, so there is nothing to say. `conflict` gets
+  // its own quiet reader notice below instead of being held silent.
+  const isHeldSilent = syncState === 'failed' && !hasAttemptedWrite;
+  const isReaderConflictNotice = syncState === 'conflict' && !hasAttemptedWrite;
   const shouldShow = isOffline || (syncState !== 'ok' && !isHeldSilent);
 
   useEffect(() => {
@@ -94,6 +106,26 @@ export function SyncStatusIndicator() {
           className="ml-1 px-3 py-1 text-xs font-medium rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white flex-shrink-0"
         >
           {isRetrying ? 'Retrying...' : 'Retry'}
+        </button>
+      </div>
+    );
+  }
+
+  // T6040: a no-write session on a `conflict` machine — R2 is ahead, this
+  // reader is genuinely stale. Quiet like `pending` (no AlertTriangle, no red
+  // border, no "could not save" copy — this reader hasn't failed at anything),
+  // but with a Reload action since there IS something for them to do.
+  if (isReaderConflictNotice) {
+    return (
+      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg shadow-lg border border-gray-700">
+        <CloudOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
+        <span>A newer version of your work is available</span>
+        <button
+          onClick={retrySyncToR2}
+          disabled={isRetrying}
+          className="ml-1 px-3 py-1 text-xs font-medium rounded-md bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-200 flex-shrink-0"
+        >
+          {isRetrying ? 'Reloading...' : 'Reload'}
         </button>
       </div>
     );
