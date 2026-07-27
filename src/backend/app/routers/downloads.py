@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.constants import SourceType
-from app.database import get_db_connection, get_final_videos_path, sync_db_to_r2_explicit
+from app.database import column_exists, get_db_connection, get_final_videos_path, sync_db_to_r2_explicit
 from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
@@ -1434,8 +1434,18 @@ async def publish_to_my_reels(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT id, filename, slowmo_section_start, slowmo_section_end
+        # T6030: slowmo_section_start/end arrive with profile_db v025, which runs
+        # manually (not on deploy/startup). Publishing a reel that predates v025 on a
+        # below-v025 profile DB would 500 ("no such column") because this SELECT names
+        # both columns. Project NULL when absent (the v025 default) so the row still
+        # loads and poster capture below reconstructs the slow-mo section from the live
+        # working clips -- exactly the "columns are unfrozen (pre-v025)" case the poster
+        # comment already anticipates.
+        _has_slowmo = column_exists(cursor, "final_videos", "slowmo_section_start")
+        cursor.execute(f"""
+            SELECT id, filename,
+                   {'slowmo_section_start' if _has_slowmo else 'NULL AS slowmo_section_start'},
+                   {'slowmo_section_end' if _has_slowmo else 'NULL AS slowmo_section_end'}
             FROM final_videos
             WHERE project_id = ?
             ORDER BY version DESC
