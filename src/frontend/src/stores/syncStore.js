@@ -148,7 +148,7 @@ export function checkSyncStatus(response) {
   }
 }
 
-// --- Write-attempt detection (T5960) ---
+// --- Write-attempt detection (T5960 / T6020) ---
 // The interceptor already receives the request args, so this is the single seam
 // for "has this session issued a mutating request to our own API" — no flag
 // threaded through every call site. Only OUR API can produce a sync conflict; a
@@ -157,30 +157,28 @@ export function checkSyncStatus(response) {
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// Mutating requests the app fires as session/telemetry LIFECYCLE, not as a user
-// edit. These must NOT arm the write-attempt gate: `POST /api/auth/init` fires on
-// EVERY app load (session-init), and heartbeat/session-close/accept-terms/video
-// beacons fire without any user gesture — none can produce a user's sync conflict.
-// Counting them would arm the gate on every passive load and the conflict alarm
-// would never actually be suppressed (T5960: this was the real defeat of the
-// naive "any mutating request" rule — proven by the e2e passive-load case).
-const NON_GESTURE_API_PREFIXES = ['/api/auth/', '/api/client-errors/'];
-
-// Individual non-gesture write ENDPOINTS that don't share a clean prefix with any
-// gesture write, so they can't be folded into NON_GESTURE_API_PREFIXES above: a
-// blanket '/api/exports/' prefix would ALSO swallow the real export-start gesture
-// POST /api/exports/framing. Both fire on mount (useExportRecovery.js) reconciling
-// exports left running/finished while the user was away — zero user intent.
-const NON_GESTURE_API_EXACT = ['/api/exports/acknowledge'];
-const NON_GESTURE_API_PATTERNS = [/^\/api\/exports\/[^/]+\/resume-progress$/];
-
-function isNonGesturePath(pathname) {
-  return (
-    NON_GESTURE_API_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
-    NON_GESTURE_API_EXACT.includes(pathname) ||
-    NON_GESTURE_API_PATTERNS.some((re) => re.test(pathname))
-  );
-}
+// T6020: session/telemetry LIFECYCLE writes (auth/init, heartbeat, session-close,
+// accept-terms, video-error beacons, export-recovery mount-time reconciliation,
+// project-open bookkeeping) fire without any user gesture and must NOT arm the
+// write-attempt gate — counting them would arm it on every passive load and the
+// conflict/failed alarm would never actually be suppressed (T5960: this was the
+// real defeat of the naive "any mutating request" rule).
+//
+// Classification used to be a URL denylist here, but `PATCH
+// /api/projects/{id}/state` is BOTH a lifecycle write (project-open bookkeeping,
+// useProjectLoader.js) AND a real gesture (mode-switch, App.jsx) at the identical
+// pathname — a pathname-only matcher structurally cannot tell them apart. Fixed by
+// inverting the mechanism: each lifecycle write marks itself `rbLifecycleWrite:
+// true` in its own fetch options at the call site (utils/apiFetch.js passes
+// options straight through to `fetch`, which ignores unknown RequestInit keys, so
+// this needs no plumbing). `grep rbLifecycleWrite` finds every lifecycle write —
+// see CLAUDE.md Refactoring Rules #6 (greppability over registry indirection).
+//
+// The mechanism deliberately fails toward "forgot to mark a lifecycle write" (gate
+// arms spuriously -> stale alarm on a passive load, annoying but recoverable) and
+// NOT toward "forgot to allowlist a gesture write" (a real writer's conflict is
+// silently suppressed — data-loss-shaped). Do not invert this into an allowlist.
+const LIFECYCLE_WRITE_KEY = 'rbLifecycleWrite';
 
 // Returns the pathname if `rawUrl` targets our own API, else null.
 function ownApiPathname(rawUrl) {
@@ -201,9 +199,10 @@ function ownApiPathname(rawUrl) {
  * represents a USER edit — i.e. one that could produce a sync conflict?
  *
  * `method` may be lowercase, absent (defaults to GET), or carried on a `Request`
- * object passed as the first fetch arg instead of in the init object. Session,
- * telemetry, and export-recovery lifecycle requests (isNonGesturePath) are
- * excluded — they fire without a user gesture and must not arm the conflict alarm.
+ * object passed as the first fetch arg instead of in the init object. A call
+ * site marks itself `init.rbLifecycleWrite = true` to opt OUT as a non-gesture
+ * lifecycle write (see LIFECYCLE_WRITE_KEY above) — everything else mutating to
+ * our own API counts as a gesture that could produce a sync conflict.
  *
  * @param {RequestInfo|URL} input - fetch's first arg (URL string, URL, or Request)
  * @param {RequestInit} [init] - fetch's second arg
@@ -219,7 +218,7 @@ export function isMutatingApiRequest(input, init) {
   const rawUrl = input instanceof Request ? input.url : String(input ?? '');
   const pathname = ownApiPathname(rawUrl);
   if (pathname === null) return false;
-  return !isNonGesturePath(pathname);
+  return !init?.[LIFECYCLE_WRITE_KEY];
 }
 
 // --- Global fetch interceptor ---

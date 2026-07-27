@@ -118,9 +118,12 @@ export function useProjectLoader() {
       const needsOverlay = project.working_video_id && (!project.has_final_video || framingNewerThanFinal);
       const targetMode = mode || (needsOverlay ? 'overlay' : 'framing');
 
-      // Update last_opened_at and persist current_mode (non-blocking)
+      // Update last_opened_at and persist current_mode (non-blocking). T6020: this
+      // is project-OPEN bookkeeping, not a user gesture -- unlike App.jsx's
+      // mode-switch PATCH to the identical pathname, which stays unmarked.
       apiFetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true&current_mode=${encodeURIComponent(targetMode)}`, {
-        method: 'PATCH'
+        method: 'PATCH',
+        rbLifecycleWrite: true,
       }).catch(e => console.error('[useProjectLoader] Failed to update project state:', e));
 
       // Set aspect ratio from project

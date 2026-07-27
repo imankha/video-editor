@@ -133,29 +133,29 @@ describe('write-attempt arming (T5960)', () => {
       expect(isMutatingApiRequest('/storage/warmup', { method: 'POST' })).toBe(false);
     });
 
-    it('does NOT arm on session/telemetry lifecycle writes (T5960)', () => {
+    it('does NOT arm on session/telemetry lifecycle writes marked rbLifecycleWrite (T6020)', () => {
       // POST /api/auth/init fires on EVERY app load — the real defeat of the
       // naive "any write" rule. These are not user edits and must stay silent.
-      expect(isMutatingApiRequest('/api/auth/init', { method: 'POST' })).toBe(false);
-      expect(isMutatingApiRequest('/api/auth/heartbeat', { method: 'POST' })).toBe(false);
-      expect(isMutatingApiRequest('/api/auth/session-close', { method: 'POST' })).toBe(false);
-      expect(isMutatingApiRequest('/api/auth/accept-terms', { method: 'POST' })).toBe(false);
-      expect(isMutatingApiRequest('/api/client-errors/video', { method: 'POST' })).toBe(false);
+      // T6020: classification is now by the call-site marker, not the URL.
+      expect(isMutatingApiRequest('/api/auth/init', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/heartbeat', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/session-close', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/auth/accept-terms', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/client-errors/video', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
     });
 
-    it('does NOT arm on export-recovery mount-time reconciliation (T5960 follow-up)', () => {
+    it('does NOT arm on export-recovery mount-time reconciliation, marked (T6020)', () => {
       // useExportRecovery.js fires these on MOUNT whenever a prior export finished
       // or is still running while the user was away — zero user intent, common
       // for any user who recently exported. Both would re-break acceptance
-      // criterion 1 (silent passive load) if left unexcluded.
-      expect(isMutatingApiRequest('/api/exports/acknowledge', { method: 'POST' })).toBe(false);
-      expect(isMutatingApiRequest('/api/exports/123/resume-progress', { method: 'POST' })).toBe(false);
-      expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST' })).toBe(false);
+      // criterion 1 (silent passive load) if left unmarked.
+      expect(isMutatingApiRequest('/api/exports/acknowledge', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/123/resume-progress', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
+      expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST', rbLifecycleWrite: true })).toBe(false);
     });
 
-    it('DOES arm on a real export-start gesture (does not over-exclude /api/exports/)', () => {
-      // A blanket '/api/exports/' prefix would ALSO swallow these real gesture
-      // writes (the export button) -- must stay armed.
+    it('DOES arm on a real export-start gesture (unmarked -- does not over-exclude /api/exports/)', () => {
+      // These are real gesture writes (the export button) -- unmarked, must arm.
       expect(isMutatingApiRequest('/api/exports', { method: 'POST' })).toBe(true);
       expect(isMutatingApiRequest('/api/exports/framing', { method: 'POST' })).toBe(true);
     });
@@ -164,6 +164,26 @@ describe('write-attempt arming (T5960)', () => {
       expect(isMutatingApiRequest('/api/settings', { method: 'PUT' })).toBe(true);
       expect(isMutatingApiRequest('/api/clips/raw/save', { method: 'POST' })).toBe(true);
       expect(isMutatingApiRequest('/api/projects/1/actions', { method: 'POST' })).toBe(true);
+    });
+
+    // T6020: PATCH /api/projects/{id}/state is hit both by project-OPEN
+    // bookkeeping (useProjectLoader.js, marked lifecycle) and by a real
+    // mode-switch GESTURE (App.jsx, unmarked) at the IDENTICAL pathname. A
+    // URL-only matcher structurally cannot tell these apart -- this is the
+    // exact case the call-site marker mechanism exists to solve.
+    it('project-open PATCH (marked) does NOT arm; mode-switch PATCH (unmarked) to the SAME pathname DOES', () => {
+      const pathname = '/api/projects/42/state';
+      // RED without the T6020 fix: the old URL denylist could not distinguish
+      // these two calls to the identical path, so project-open incorrectly armed.
+      expect(
+        isMutatingApiRequest(`${pathname}?update_last_opened=true&current_mode=framing`, {
+          method: 'PATCH',
+          rbLifecycleWrite: true,
+        })
+      ).toBe(false);
+      expect(
+        isMutatingApiRequest(`${pathname}?current_mode=overlay`, { method: 'PATCH' })
+      ).toBe(true);
     });
   });
 
