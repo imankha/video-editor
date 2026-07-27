@@ -310,6 +310,37 @@ PRIMITIVES (`sync_database_to_r2_with_version`/`sync_user_db_to_r2_with_version`
 (`retry_pending_sync`'s re-drain, `sync_db_to_cloud`, shutdown sync). Without this the re-drain would
 heal a "forced" failure against real R2. Inert on prod/staging (`_seams_enabled()` gated).
 
+**Round 2 review fixes (1 BLOCKING + 5 MAJOR + 3 MINOR) — the architecture held; these are defects inside it:**
+- **BLOCKING — conflict Retry no longer discards silently.** `confirm_current_before_write` REPLACES the
+  local profile/user.sqlite with R2's newer copy — the refused local edit is gone from disk. The backend
+  returns `{success, restored:true, message}`; the frontend (`syncStore.retrySyncToR2`) must NOT flip to
+  `'ok'` — it stashes a persistent notice (`surfaceRestoredNoticeIfPending`, sessionStorage key, surfaced
+  on next load) and `window.location.reload()`s so in-memory state matches the restored DB. Never a silent
+  "resolved" over discarded work.
+- **MAJOR-1 — the SESSION user's alarm is gated on its OWN sync (`own_status`), not the aggregate.** A
+  FOREIGN DB failure (admin grant / share materialization / webhook) must alarm the FOREIGN owner
+  (`mark_sync_failed(foreign_uid)` in the loops), NOT the session whose own data reached R2 — otherwise
+  T5870 *escalated* master's quiet gray "pending" into a red alarm for the session (the exact false-positive
+  class it was sent to kill). `own_status` is initialised before the try (early-exception safety) and forced
+  "failed" in the except.
+- **MAJOR-2 — the re-drain NON-BLOCKING-probes the per-user upload lock** (`get_upload_lock(user,"profile")`,
+  mirrors the T1539 write-triggered retry) before re-uploading. Fire-and-forget `_background_sync` tasks
+  aren't serialised per user, so a burst spawns several concurrent re-drains; without the probe each
+  block-acquires and stampedes byte-identical uploads of the same object → T1537 R2 429s. The probe collapses
+  the burst to ~1 and keeps the blocking acquire inside `retry_pending_sync` off a multi-second export hold.
+- **MAJOR-3 — `_SYNC_IN_PROGRESS` is a `dict[str,int]` REFCOUNT, not a set.** With a set the first of two
+  overlapping syncs to finish `discard`ed the shared entry and dropped in-flight cover while the second still
+  ran → a concurrent read flashed the (now red) alarm. Refcount keeps cover until the LAST attempt ends.
+  `_begin`=+1, `_end`=−1-and-pop. (Frontend `SyncStatusIndicator` also re-arms its 3s grace on a
+  pending→alarm escalation as defense-in-depth.)
+- **MAJOR-4 — conflict Retry no longer swallows `get_current_profile_id()`'s loud RuntimeError.** Without a
+  profile it cannot restore the conflicted profile.sqlite, so it refuses honestly (markers kept) instead of
+  clearing `.sync_conflict`/`.sync_pending` and reporting success (No silent fallbacks).
+- **MINORs:** `sync_db_to_r2_explicit`/`sync_user_db_to_r2_explicit` clear `.sync_failed` on success (an
+  out-of-band export-worker success heals an idle user's red alarm); durable-path failure deliberately stays
+  quiet `pending` on surface A (its 503 gesture UX owns retry — not the reconnect auto-retry); `import asyncio`
+  hoisted to health.py top.
+
 **Tests:** `tests/test_t5870_pending_vs_failed.py` (pending≠failed, header priority, re-drain heals /
 exhausts / skips-conflict, no-refresh recovery, conflict-restore + honest-refusal); updated
 `test_background_sync.py`/`test_sync_status.py`/`test_t4310` for the new semantics; FE
