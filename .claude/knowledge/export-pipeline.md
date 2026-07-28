@@ -157,11 +157,40 @@ graph LR
   here:** per-project job history shows NO overlay/final export ever ran for any `has_final_video=false` draft
   (32-39, 51, 52), so no orphan final MP4 can exist for them; the only recorded overlay job (proj 31) succeeded
   and its draft correctly reads `has_final_video=true`.
-- **Robustness follow-up (NOT fixed in T6120, may overlap T6100):** `working_video/playback-url` could
-  HEAD-probe the object and 404 on a dangling ref (like `clips.py get_clip_playback_url` does), so the
-  overlay screen surfaces the clean "video no longer available - re-export" state instead of a generic
-  retry-that-can't-succeed + no panel. Per CLAUDE.md "no defensive fixes for internal bugs", the primary fix
-  is at the source (why the object is missing); on staging the source is the wipe.
+- **Robustness follow-up — DONE (T6130, 2026-07-27):** `working_video/playback-url` (`projects.py`)
+  now verifies the R2 object exists (`file_exists_in_r2`, gated on `R2_ENABLED`) and returns a typed
+  **404 "Working video asset missing"** on a dangling ref, plus a WARNING log. **Zero frontend change:**
+  `OverlayScreen.attemptLoad` already maps a playback-url 404 -> `VideoAssetMissingError` -> the T5440
+  "re-export to rebuild" terminal state (shipped T5642/T5440); T6130 just gives that existing path a
+  reliable new trigger. **Why the frontend alone can't fix it:** the browser only meets the miss when it
+  fetches the *cross-origin* R2 URL, and R2's 404 does not reliably carry CORS headers -> opaque
+  `TypeError` -> the transient-retry branch -> generic "Video failed to load" + a Retry that can't
+  succeed. CORS hides the status, so only the *backend* can read gone-vs-flaky; the API's own 404
+  carries proper CORS/credentials.
+  - **DECISION (invariant-vs-external, recorded so it isn't re-litigated):** a dangling working-video ref
+    is an **EXTERNAL condition to degrade on, NOT an internal invariant to make LOUD.** R2 is external;
+    **no in-env code path deletes `working_videos/*.mp4`** (the dangling refs are env-copy/wipe
+    provenance), so the miss is not producible by our runtime logic. Verifying at the R2-object boundary
+    and returning a typed "gone" is correct **external-failure classification** — the same shape as
+    T4990 `SOURCE_UNAVAILABLE` — NOT the CLAUDE.md-banned "defensive fix for an internal bug": we surface
+    the 404, we NEVER mutate the row to hide it (silently NULL-ing `working_video_id` would be the banned
+    masking move). Log at **WARNING, not CRITICAL** — the state is routine on env-copied staging (3/5
+    drafts), so CRITICAL would cry wolf; WARNING stays greppable if a ref ever dangles where no ops
+    action explains it (which WOULD signal an upstream producer bug).
+  - **Twin `clips.py:get_clip_playback_url` (`:1904`) — deliberately LEFT for a follow-up.** Same
+    presign-without-verify shape, but points at `games/{blake3}.mp4` (GLOBAL namespace) where object loss
+    is *legitimate reclaim* — already classified upstream as `SOURCE_UNAVAILABLE` (T4990) with recap
+    re-export recovery (T4140). It is on the **Framing** open path, which has NO measured bad-degradation
+    evidence like T6120's for Overlay, and the kickoff forbids adding a HEAD to a hot path without
+    measuring it. Same treatment is plausible but needs its own measurement + task, not a silent copy.
+  - **Latency:** the added check is ONE body-free HEAD via the `@lru_cache`-pooled `get_r2_client`
+    (`max_pool_connections=25`, keepalive — NOT the T4773 fresh-TLS anti-pattern), once per
+    working_video_id load, happy-path single round-trip. Against the ~2136ms overlay clicked->videoReady
+    budget (T4773) that is a warm-pool ~1-3% (repo-measured pooled-R2 HEAD ~24ms, T5682) up to ~12% on a
+    cold pool (~200-250ms, T4773). Live confirmation belongs on **staging** (real R2 + dangling fixtures
+    31/33/51); the sandbox has no R2 endpoint and prod is off-limits. Tests:
+    `test_t6130_dangling_working_video.py` (endpoint 404s on miss, 200 on present, right key, R2-off
+    skips) + updated `test_stream_auth.py` healthy-path stub.
 - **Spec change (T6120):** `derisk-staging-export.qa.spec.js` now (a) discovery prefers a draft whose
   working-video R2 object actually loads (`probeWorkingVideo`), and (b) on a mount failure probes the ACTUAL
   cause and SPLITS it: working video loads but panel still absent -> **FAIL** (real mount-logic regression);

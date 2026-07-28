@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from app.database import get_db_connection
 from app.queries import derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
-from app.storage import R2_ENABLED, generate_presigned_url
+from app.storage import R2_ENABLED, file_exists_in_r2, generate_presigned_url
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
 
@@ -502,11 +502,12 @@ async def list_projects():
         # T5683: Warm draft posters for visible projects (non-blocking background).
         # Collect project IDs with missing posters and warm them with bounded concurrency.
         import asyncio
-        from app.services.poster_warmer import get_poster_warmer
-        from app.user_context import get_current_user_id
+
         from app.profile_context import get_current_profile_id
-        from app.storage import file_exists_in_r2
         from app.services.poster import draft_poster_rel_path
+        from app.services.poster_warmer import get_poster_warmer
+        from app.storage import file_exists_in_r2
+        from app.user_context import get_current_user_id
 
         async def warm_visible_drafts():
             """Warm draft posters for visible projects (max 3-4 in flight)."""
@@ -1199,6 +1200,33 @@ async def get_working_video_playback_url(project_id: int):
 
     if not row or not row['filename']:
         raise HTTPException(status_code=404, detail="Working video not found")
+
+    # T6130: verify the R2 object actually exists before handing back a URL.
+    # A dangling ref (row present, working_videos/*.mp4 gone — env-copy/wipe
+    # provenance; NO in-env code path deletes these objects) otherwise returned
+    # a cheerful 200 + a URL that 404s cross-origin. R2's 404 does not reliably
+    # carry CORS headers, so the browser sees an opaque failure and shows a
+    # futile "Retry" instead of the terminal T5440 "re-export to rebuild" state.
+    #
+    # This is EXTERNAL-failure classification at the R2-object boundary (R2 is
+    # external; the miss is not producible by our runtime logic), the same shape
+    # as T4990's SOURCE_UNAVAILABLE — NOT a defensive patch masking an internal
+    # bug: we surface the 404, we never mutate the row to hide it. Returning a
+    # real 404 lets the already-wired frontend (VideoAssetMissingError -> T5440)
+    # fire reliably, because the API's own 404 carries proper CORS/credentials.
+    #
+    # Gated on R2_ENABLED (can't verify what isn't there) and using
+    # file_exists_in_r2, which retries transient blips internally — so a False
+    # is a SUSTAINED miss, not a flaky network moment.
+    key = f"working_videos/{row['filename']}"
+    if R2_ENABLED and not file_exists_in_r2(get_current_user_id(), key):
+        logger.warning(
+            "[working-video-playback-url] dangling ref: R2 object missing "
+            f"project_id={project_id} key={key} user_id={get_current_user_id()} "
+            "-> 404 (re-export to rebuild). If no env-copy/wipe explains this, "
+            "an upstream producer left a ref without its object."
+        )
+        raise HTTPException(status_code=404, detail="Working video asset missing")
 
     presigned_url = _generate_working_video_presigned_url(row['filename'])
     if not presigned_url:
