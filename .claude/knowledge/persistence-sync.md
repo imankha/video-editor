@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-07-28 (T6160: a CAS conflict now SELF-HEALS — restore is first-access-only, so a running machine never noticed R2 moving ahead and every write refused forever (Retry futile until restart). On conflict the loaded-from version is now invalidated (profile: memory + persisted db_version file row + cooldown; user.sqlite: memory version + `_initialized_user_dbs` init flag + cooldown) so the NEXT request's first-access restore re-pulls R2's newer copy. CAS refusal UNCHANGED (baseline never advanced; a None baseline still refuses via BLOCKING-2). The refused in-flight edit is DISCARDED by the re-pull (decision 2, never merged/force-pushed). ensure_database/ensure_user_database first-access restore gained the T4315 WAL guard (before_download + clear_stale_wal_sidecars) since the re-pull can now fire on a running machine. See T6160 section.)
 updated: 2026-07-27 (T6040: reader-vs-writer split on `conflict` — a no-write session now gets a quiet "newer version available" + Reload notice instead of total silence; `failed` stays silent for readers because the `conflict`/`failed` asymmetry (R2-ahead vs local-ahead) means only `conflict` readers are looking at stale data; frontend-only, backend untouched; see T5960/T6010/T6020/T6040 section)
 updated: 2026-07-27 (T6020 follow-up: renamed the write-attempt gate's call-site marker `rbLifecycleWrite` -> `rbNonDataWrite` and marked 5 auth-gesture sites the original table missed (google/verify-otp/send-otp/logout/report-problem) — the old name misled at the auth boundary since login IS a gesture but still can't touch the profile SQLite; supervisor-audit-caught regression vs the T5960 baseline; see T5960/T6010/T6020 section)
 updated: 2026-07-27 (T6020: the write-attempt gate's classification moved from a URL denylist to an explicit per-call-site marker — fixes `PATCH /api/projects/{id}/state` being both project-open bookkeeping and a mode-switch gesture at the identical pathname; see T5960/T6010/T6020 section)
@@ -37,7 +38,7 @@ Request lifecycle (`db_sync.py:443 _dispatch_impl`):
    - **Durable (T4050)**: routes with `Depends(durable_sync)` (db_sync.py:84) AWAIT the sync inside the write lock; failure → 503 `sync_failed` retryable payload, never a lying 200. Now on: publish/restore-project/overlay-export (T4050/T4110), framing/multi-clip export (T4200), AND the clip-creating/mutating gestures + profile-create (T4320): `POST /clips/raw/save`, `PUT /clips/raw/{id}`, `DELETE /clips/raw/{id}`, `POST /api/games/finalize-upload`, `POST /api/profiles`. Still fire-and-forget by design: working-clip `/actions` (framing_action) — high-frequency; making each keyframe drag block on an R2 upload would re-introduce the T2720 blocking-sync regression, so they stay async and are backstopped by T4310 (CAS) + T4330 (action client).
 7. Failed syncs leave the marker; next WRITE request retries (`retry_pending_sync`, db_sync.py:255); `X-Sync-Status: failed` header surfaces persistent failure to the frontend (AND-gated with in-flight-sync set, db_sync.py:156).
 
-Restore path: `ensure_database()` downloads from R2 **only on first access** of the process for that user+profile (local version cache `None`); no per-request HEAD (database.py:498-553). R2-not-found → fresh DB, version locked to 0. Transient R2 error → 30s cooldown, retry later.
+Restore path: `ensure_database()` downloads from R2 **only on first access** of the process for that user+profile (local version cache `None`); no per-request HEAD (database.py:498-553). R2-not-found → fresh DB, version locked to 0. Transient R2 error → 30s cooldown, retry later. **T6160: a CAS conflict now re-arms this first-access path** — `schedule_profile_db_reheal`/`schedule_user_db_reheal` invalidate the loaded-from version on conflict so the next request re-pulls R2's newer copy (one HEAD only when a conflict happened, NOT per-request). The first-access download is now WAL-guarded (`before_download=not wal_sidecars_present` + `clear_stale_wal_sidecars`) because it can fire on a running machine — see T6160 section.
 
 Version model — two INDEPENDENT version systems, never conflate:
 - **Sync version**: integer in R2 object metadata `db-version` (`x-amz-meta-db-version`, storage.py:735/931) mirrored in a local `db_version` table (id=1 row, database.py:353-366) + in-memory cache. Incremented on every successful upload.
@@ -460,6 +461,90 @@ rendered banner, never the API response (the bug was the API being right and the
 auth-writes e2e case drives the real interceptor with the real request SHAPE each marked call site
 issues rather than a real login flow — a real OTP/Google login needs a live email round-trip /
 Google credential exchange this container cannot drive; no test seam auto-approves an OTP code.
+
+## T6160 — A CAS conflict now self-heals (restore is first-access-only, so Retry used to be futile forever)
+
+**Root cause (staging 2026-07-27, hit live by the user — "nothing saves, everything breaks").**
+`ensure_database()` (database.py) and `ensure_user_database()` (user_db.py) restore from R2 **on
+first access only** — profile gates on `local_version is None`; user.sqlite ALSO early-returns on
+`_initialized_user_dbs` membership BEFORE the version check. The code comment rejects a per-request
+HEAD (20s+ cold). Consequence: once a running machine has a version cached, it **never notices R2
+moving ahead out-of-band** (env copy, admin restore, second machine). Every write then hits the
+T4310 upload-side CAS guard, is correctly refused (503 `sync_failed` durable, or `.sync_conflict` +
+banner fire-and-forget), and the offered **Retry re-runs the same stale write forever**. Only a
+process restart escaped (ephemeral disk gone → file absent → first-access restore). The CAS refusal
+was CORRECT; the defect was the **absence of recovery**.
+
+**Two traps that made the naive one-liner insufficient (verified, pinned by tests):**
+1. `set_local_db_version(user_id, profile_id, None)` pops ONLY the in-memory cache. The `db_version`
+   row persisted in the profile.sqlite file survives, and `get_local_db_version` reads it back
+   (database.py fallback branch) → the stale version is resurrected → no first-access restore. So the
+   invalidation must ALSO delete the file row (`_clear_persisted_db_version`). The "simulate machine
+   cycle" test seam (test_seams.py) confirms this — it deletes the local files, not just the cache.
+2. user.sqlite: `ensure_user_database` early-returns on `_initialized_user_dbs` BEFORE the version
+   check, so clearing the (memory-only) version does nothing — the init flag must be dropped too.
+
+**The fix — invalidate on conflict, re-pull on the next request (one HEAD only when a conflict
+happened, NOT per-request):**
+- `database.py: schedule_profile_db_reheal(user_id, profile_id)` — pops in-memory version +
+  `_clear_persisted_db_version` (DELETE the db_version row) + clears the restore cooldown (a conflict
+  means R2 was reachable, so any prior transient cooldown is stale). Next `ensure_database` reads
+  `local_version=None` → first-access re-pull. Note `already_initialized` (database.py) gates only
+  table-creation, NOT the R2 restore block, so the re-pull fires even with the user still in
+  `_initialized_users`.
+- `services/user_db.py: schedule_user_db_reheal(user_id)` — pops memory version + discards
+  `_initialized_user_dbs` + clears cooldown. No persisted file row for user.sqlite
+  (`set_local_user_db_version` is memory-only), so nothing on disk to clear.
+- **Call sites (every `mark_sync_conflict` that could dead-end):** `sync_db_to_r2_explicit` /
+  `sync_user_db_to_r2_explicit` conflict branches (covers `_background_sync` session AND foreign-user
+  syncs, which route through the `_explicit` wrappers); `retry_pending_sync` profile + user branches
+  (they call the lower-level primitive directly, so they invoke the reheal explicitly).
+  `sync_db_to_cloud` (the `/api/retry-sync` wrapper) is deliberately NOT rehealed — its caller routes
+  a conflict into `_retry_resolve_conflict` (T5870), which heals via `confirm_current_before_write`
+  (restore-if-newer) directly.
+
+**CAS refusal UNCHANGED — the baseline is never ADVANCED.** Invalidation sets the loaded-from version
+to `None`, NOT to R2's version. A `None` baseline against real R2 content still refuses at the
+storage.py primitive (`r2_version > 0 and (current_version is None or r2_version > current_version)` —
+BLOCKING-2, T4315), so during the window between conflict and re-pull, writes keep refusing (no
+force-push). This is why the T4310 tests changed from asserting "baseline frozen at v3" to "invalidated
+to None": both prove the same guarantee — the stale copy never lands on R2. Self-limiting, no loop
+(each successful re-pull sets a real version; genuine multi-writer contention just refuses+re-pulls
+until local == R2).
+
+**Decision 2 (the refused in-flight write): DISCARDED.** The write committed to the LOCAL profile.sqlite
+(only the R2 upload was refused). The self-heal re-pull overwrites the local file → the stale-based
+edit is gone. Re-applying it would be exactly the clobber CAS exists to prevent (never auto-merge,
+never blind-retry — CLAUDE.md rule 7). Discard is legitimate ONLY because it stays user-visible via the
+EXISTING conflict UX (fire-and-forget: `.sync_conflict` → write-attempt-gated alarm (T5960/T6010) →
+Retry → `_retry_resolve_conflict` restore + "your local changes were replaced" notice + reload, T5870;
+durable: 503 keeps the card in place). No frontend change and no change to the write-attempt gating.
+
+**Decision 3 (Retry affordance) is fixed BY decision 1, no frontend change.** The durable-503 Retry
+re-runs the write; the retried request re-pulls R2 first (self-heal) so the handler runs on the CURRENT
+base and the write lands (the first attempt's local commit was discarded by the re-pull, so no
+double-apply). The banner Retry already restored-if-newer (T5870). Both are now honest instead of
+looping forever.
+
+**WAL safety (required — the re-pull can now fire on a RUNNING machine).** `ensure_database`/
+`ensure_user_database`'s first-access restore had NO WAL guard (safe only because "first access == no
+connections yet"). T6160 makes them reachable while a live connection may hold the file open
+(`-wal`/`-shm` present), where a blind main-file swap lets the next connection replay the old WAL onto
+the new file (cross-DB page mixing — the exact hazard T4310 removed its post-conflict re-download for).
+Both now pass `before_download=lambda: not wal_sidecars_present(db_path)` and call
+`clear_stale_wal_sidecars` after a download that proceeded — the same T4315 pattern
+`ensure_profile_db_local`/`ensure_user_database_fresh` use. A live connection blocks only the swap
+(refused → transient → retried next request), never corrupts. Also hardens genuine first access against
+crash-leftover sidecars.
+
+**Tests:** `tests/test_t6160_conflict_self_heal.py` — the resurrection trap (set-None-alone reads back
+the file row); profile conflict → invalidate (memory + file row) → next `ensure_database` re-pulls R2's
+newer copy → a subsequent write lands (recovery), R2 advanced to the next version; the stale edit
+discarded on re-pull; `retry_pending_sync` conflict invalidates; user.sqlite conflict → invalidate
+version + drop init flag → `ensure_user_database` re-pulls (both `USER_DATA_BASE`s must be patched —
+user_db.py keeps its own). `tests/test_t4310_r2_cas_conflict.py` updated: conflict now invalidates to
+None (not frozen-at-v3), safety assertions (no upload, stale never lands, second attempt still refuses)
+unchanged. Reviewer (fresh context): 0 blocking / 0 major.
 
 ## T6040 — Reader-vs-writer split on `conflict` (frontend-only, sibling of T5960/T6010/T6020)
 
