@@ -53,4 +53,20 @@ describe('clampRotation', () => {
     expect(clampRotation(7.3)).toBe(7.3);
     expect(clampRotation(-12)).toBe(-12);
   });
+
+  /**
+   * T6170 — snap FP residue to exactly 0 at the write chokepoint so a denormal
+   * never reaches persistence (0.1+0.1+0.1-0.1-0.1-0.1 === 2.7755575615628914e-17).
+   */
+  it('snaps a denormal dial residue to exactly 0', () => {
+    const residue = 0.1 + 0.1 + 0.1 - 0.1 - 0.1 - 0.1; // 2.7755575615628914e-17
+    expect(residue).not.toBe(0);
+    expect(clampRotation(residue)).toBe(0);
+    expect(clampRotation(-residue)).toBe(0);
+  });
+
+  it('preserves a real, intentional 0.1-degree nudge (does not over-snap)', () => {
+    expect(clampRotation(0.1)).toBe(0.1);
+    expect(clampRotation(-0.1)).toBe(-0.1);
+  });
 });

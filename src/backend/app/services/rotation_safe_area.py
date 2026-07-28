@@ -18,6 +18,18 @@ import math
 # Hard rotation cap in degrees (mirrors MAX_ROT in the JS util).
 MAX_ROT = 20
 
+# Rotation dead-zone in degrees (T6170) — mirrors ROTATION_EPSILON in the JS util.
+# Any |theta| below this is FP residue from trig / repeated 0.1-degree dial
+# additions (0.1+0.1+0.1-0.1-0.1-0.1 == 2.7755575615628914e-17), NOT a real angle,
+# and must be treated as theta=0. 1e-6 is 100,000x below the finest 0.1-degree
+# user step and >=5 orders of magnitude above any accumulation residue. This mirror
+# is not currently in any render path (export trusts the stored clamped crop and
+# never re-clamps — grep: only caller is the T5640 characterization test), so the
+# change is behaviorally inert for production render; it exists to keep the JS/Py
+# pair honest per the "keep the two implementations in sync" contract above, so a
+# future wiring of this module can't silently reintroduce the denormal bug.
+ROTATION_EPSILON = 1e-6
+
 
 def max_axis_aligned_in_rotated(w: float, h: float, theta_deg: float) -> tuple[float, float]:
     """Largest axis-aligned rectangle (any aspect), centered, inside a W*H frame
@@ -66,9 +78,11 @@ def safe_area_for_aspect(w: float, h: float, theta_deg: float, r: float) -> dict
 
 def clamp_crop_to_safe_area(crop: dict, w: float, h: float, theta_deg: float, r: float) -> dict:
     """Clamp a crop {x, y, width, height} to the inscribed safe area for
-    (w, h, theta), preserving aspect r exactly. theta==0 is an identity fast
-    path. Returns {x, y, width, height}."""
-    if not theta_deg:
+    (w, h, theta), preserving aspect r exactly. |theta| < ROTATION_EPSILON is an
+    identity fast path (T6170: a denormal must not engage the clamp). `not theta_deg`
+    is kept as the leading term so None/0 passthrough is unchanged. Returns
+    {x, y, width, height}."""
+    if not theta_deg or abs(theta_deg) < ROTATION_EPSILON:
         return {"x": crop["x"], "y": crop["y"], "width": crop["width"], "height": crop["height"]}
 
     s = safe_area_for_aspect(w, h, theta_deg, r)

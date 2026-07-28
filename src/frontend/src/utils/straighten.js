@@ -7,7 +7,7 @@
  * content counter-clockwise — see rotationSafeArea.js for the full convention).
  */
 
-import { MAX_ROT } from './rotationSafeArea';
+import { MAX_ROT, ROTATION_EPSILON } from './rotationSafeArea';
 
 /**
  * The correction angle (degrees) that levels the dragged reference line.
@@ -29,7 +29,18 @@ export function correctionAngle(p0, p1) {
   return -tilt;
 }
 
-/** Clamp a rotation (degrees) to the hard cap. */
+/**
+ * Clamp a rotation (degrees) to the hard cap, and snap FP residue to exactly 0.
+ *
+ * This is the single chokepoint every committed rotation passes through
+ * (`useCrop.setRotation` -> `clampRotation(deg)` -> surgical `set_rotation`), so
+ * snapping any |deg| < ROTATION_EPSILON to 0 here keeps trig/accumulation noise
+ * (T6170: `0.1+0.1+0.1-0.1-0.1-0.1 === 2.7755575615628914e-17`) out of the DB —
+ * garbage never reaches persistence. It also normalizes the live preview value so
+ * a nudged-to-zero dial reads exactly 0. The epsilon is 100,000x below the finest
+ * 0.1-degree user step, so a real adjustment is never snapped away.
+ */
 export function clampRotation(deg) {
+  if (Math.abs(deg) < ROTATION_EPSILON) return 0;
   return Math.max(-MAX_ROT, Math.min(MAX_ROT, deg));
 }
