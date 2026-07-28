@@ -10,7 +10,7 @@
 import axios from 'axios';
 import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
-import { checkAppVersion } from './appVersion';
+import { checkServerVersion } from './appVersion';
 import { PROFILING_ENABLED } from './profiling';
 
 let _profileId = null;
@@ -97,9 +97,10 @@ function installFetchInterceptor() {
       const promise = originalFetch.call(window, input, init);
       promise.then(
         (response) => {
-          // T5070: passive version-mismatch check — every API response already
-          // in flight doubles as a version probe, zero extra requests.
-          checkAppVersion(response.headers.get('X-App-Version'));
+          // Tbug40p: passive truth check — every API response already in flight
+          // doubles as a build-number probe (zero extra requests). Gate iff the
+          // server's build is strictly newer than this client's baked build.
+          checkServerVersion(response.headers.get('X-App-Build'));
 
           const ttfb = Math.round(performance.now() - t0);
           // Clone + read body to measure body transfer time

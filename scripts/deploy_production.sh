@@ -105,7 +105,12 @@ fi
 if $deploy_backend; then
   echo "[backend]  Deploying to Fly.io (reel-ballers-api)..."
   cd "$REPO_ROOT/src/backend"
-  fly deploy --config fly.production.toml --build-arg COMMIT_SHA="$local_sha"
+  # Tbug40p: monotonic build number = commit count on master (matches the number
+  # vite.config.js bakes into the frontend for the same commit).
+  app_build=$(git -C "$REPO_ROOT" rev-list --count HEAD)
+  fly deploy --config fly.production.toml \
+    --build-arg COMMIT_SHA="$local_sha" \
+    --build-arg APP_BUILD="$app_build"
   echo "[backend]  Deploy complete, verifying health..."
   verify_url "$BACKEND_HEALTH_URL" "backend"
   cd "$REPO_ROOT"

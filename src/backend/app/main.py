@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.version import APP_VERSION
+from app.version import APP_BUILD, APP_VERSION
 
 _project_root = Path(__file__).parent.parent.parent.parent
 _env_file = _project_root / ".env"
@@ -188,20 +188,22 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Sync-Status", "X-App-Version"],
+    expose_headers=["X-Sync-Status", "X-App-Version", "X-App-Build"],
     max_age=86400,
 )
 
 
-# T5070: stamps X-App-Version on EVERY response (success, 4xx/5xx, preflight) so the
-# frontend update-gate handshake (sessionInit.js fetch interceptor + pwaUpdate.js
-# visibilitychange poll) can detect a backend-only deploy that produced no new
-# service worker. Added even after CORSMiddleware (outermost per the T4900 CORS
-# lesson above) so this header survives auth 401s and fly-replay Responses too.
+# T5070/Tbug40p: stamps X-App-Version (commit sha) and X-App-Build (monotonic build
+# number) on EVERY response (success, 4xx/5xx, preflight) so the frontend update gate
+# (sessionInit.js fetch interceptor + pwaUpdate.js resume poll) can compare the running
+# client's baked build number against the deployed server's. Added even after
+# CORSMiddleware (outermost per the T4900 CORS lesson above) so these headers survive
+# auth 401s and fly-replay Responses too.
 class AppVersionHeaderMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
         response.headers["X-App-Version"] = APP_VERSION
+        response.headers["X-App-Build"] = str(APP_BUILD)
         return response
 
 

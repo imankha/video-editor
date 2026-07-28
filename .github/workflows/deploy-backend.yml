@@ -12,11 +12,20 @@ jobs:
     name: Deploy Backend to Fly.io
     runs-on: ubuntu-latest
     steps:
+      # Tbug40p: fetch-depth 0 so `git rev-list --count HEAD` returns the true
+      # monotonic build number (a shallow clone would count only 1 commit).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - run: flyctl deploy --config fly.staging.toml --build-arg COMMIT_SHA=${{ github.sha }}
+      - name: Deploy with commit sha + monotonic build number
         working-directory: src/backend
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP_BUILD=$(git rev-list --count HEAD)
+          flyctl deploy --config fly.staging.toml \
+            --build-arg COMMIT_SHA=${{ github.sha }} \
+            --build-arg APP_BUILD="$APP_BUILD"

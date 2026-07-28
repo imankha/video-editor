@@ -98,6 +98,64 @@ def test_app_version_falls_back_to_dev_without_commit_sha(monkeypatch):
 
 
 # ===========================================================================
+# Tbug40p — X-App-Build (monotonic build number) header + /api/version `build`
+# ===========================================================================
+
+def test_app_build_header_present_on_success_response():
+    from app.main import app
+    resp = _request(app, "GET", VERSION_URL)
+    assert resp.status_code == 200
+    assert resp.headers.get("x-app-build") is not None, "X-App-Build missing from a normal 200"
+    # Header is a stringified integer the client parses with Number().
+    assert resp.headers["x-app-build"].lstrip("-").isdigit()
+
+
+def test_app_build_header_survives_auth_rejection():
+    """The orderable build number, like the sha, must ride error responses so a
+    stale client hitting a protected route while logged out still detects it is
+    behind (mirrors the X-App-Version guarantee)."""
+    from app.main import app
+    resp = _request(app, "GET", "/api/export/projects/999999/overlay-data")
+    assert resp.status_code in (401, 403), resp.text
+    assert resp.headers.get("x-app-build") is not None, "X-App-Build must survive auth rejections"
+
+
+def test_get_version_includes_build_number():
+    from app.main import app
+    resp = _request(app, "GET", VERSION_URL)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "build" in body, "GET /api/version must advertise the orderable build number"
+    assert isinstance(body["build"], int)
+
+
+def test_app_build_reads_env_at_import(monkeypatch):
+    monkeypatch.setenv("APP_BUILD", "3210")
+    import importlib
+
+    from app import version as version_module
+    importlib.reload(version_module)
+    try:
+        assert version_module.APP_BUILD == 3210
+        assert isinstance(version_module.APP_BUILD, int)
+    finally:
+        monkeypatch.delenv("APP_BUILD", raising=False)
+        importlib.reload(version_module)
+
+
+def test_app_build_falls_back_to_zero_without_env(monkeypatch):
+    """A local/uvicorn run (or a deploy that forgot the build-arg) advertises 0.
+    Since 0 is never > a real client's baked build number, it can never produce
+    a false gate — the correct inert failure mode."""
+    monkeypatch.delenv("APP_BUILD", raising=False)
+    import importlib
+
+    from app import version as version_module
+    importlib.reload(version_module)
+    assert version_module.APP_BUILD == 0
+
+
+# ===========================================================================
 # POST /api/sync/flush-verify — the update-gate step-3 barrier
 # ===========================================================================
 

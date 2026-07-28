@@ -10,8 +10,9 @@ import { useUpdateGateStore } from '../stores/updateGateStore';
  * refreshes onto the latest version. Mounted ABOVE AuthGateModal in
  * main.jsx (z-[60] > z-50) so it blocks the login surface too.
  *
- * Fires via useUpdateGateStore.requireUpdate(), called from pwaUpdate.js on
- * onNeedRefresh (waiting SW) and on a detected backend-version mismatch.
+ * Fires via useUpdateGateStore.requireUpdate(), raised solely by the Tbug40p
+ * truth check (appVersion.checkServerVersion) when the deployed server's build
+ * number is strictly newer than this running client's baked __APP_BUILD__.
  */
 export function UpdateGateModal() {
   const isUpdateRequired = useUpdateGateStore((s) => s.isUpdateRequired);

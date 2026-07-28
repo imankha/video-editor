@@ -15,6 +15,19 @@ const API_PORT = process.env.VITE_API_PORT || '8000';
 // https://vitejs.dev/config/
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
 
+// Tbug40p: monotonic, orderable build number baked into the bundle. `git rev-list
+// --count HEAD` is identical for the frontend and the backend built from the same
+// commit, so the update gate can compare this client's own build against the
+// server's X-App-Build and gate ONLY when strictly behind. CI checks out full
+// history (fetch-depth: 0) so the count is correct; a failure (e.g. no .git) falls
+// back to 0, which never gates (0 is treated as "unknown/behind-nothing").
+let buildNumber = 0;
+try {
+  buildNumber = Number(execSync('git rev-list --count HEAD').toString().trim()) || 0;
+} catch {
+  buildNumber = 0;
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -68,6 +81,7 @@ export default defineConfig({
   ],
   define: {
     __COMMIT_HASH__: JSON.stringify(commitHash),
+    __APP_BUILD__: JSON.stringify(buildNumber),
   },
   build: {
     rollupOptions: {

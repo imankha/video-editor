@@ -26,7 +26,7 @@ from ..models import HelloResponse
 from ..profile_context import get_current_profile_id
 from ..storage import R2_ENABLED
 from ..user_context import get_current_user_id
-from ..version import APP_VERSION
+from ..version import APP_BUILD, APP_VERSION
 from ..websocket import export_progress
 
 router = APIRouter(tags=["health"])
@@ -34,12 +34,13 @@ router = APIRouter(tags=["health"])
 
 @router.get("/api/version")
 async def get_version(response: Response):
-    """T5070: unauthenticated version handshake — lets the client (pre- or
-    post-login) detect a backend-only deploy (no new service worker, so the
-    normal PWA update prompt never fires) and raise the update gate.
+    """T5070/Tbug40p: unauthenticated version handshake — lets the client (pre-
+    or post-login, incl. an idle PWA that made no other API call) read the
+    deployed server's monotonic build number and gate only if it is strictly
+    behind. `build` is the orderable truth; `version` (sha) is for correlation.
     """
     response.headers["Cache-Control"] = "no-store"
-    return {"version": APP_VERSION}
+    return {"version": APP_VERSION, "build": APP_BUILD}
 
 
 @router.post("/api/sync/flush-verify")
