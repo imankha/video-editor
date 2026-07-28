@@ -482,9 +482,10 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {/* Bottom scrim: name, game-time, one tag (>=sm). In the ready state the
           persistent action bar owns the base of the tile, so the name lifts clear
           of it (T6180); otherwise the compact pb-3 is unchanged. */}
-      <div className={`absolute inset-x-0 bottom-0 z-10 px-2 pt-8 bg-gradient-to-t from-black/85 via-black/45 to-transparent ${
-        isReadyToPublish && !isRenaming ? 'pb-[96px] sm:pb-[92px]' : 'pb-3'
-      }`}>
+      <div
+        className="absolute inset-x-0 bottom-0 z-10 px-2 pt-8 pb-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent"
+        hidden={isReadyToPublish && !isRenaming}
+      >
         {isRenaming ? (
           <input
             ref={renameInputRef}
@@ -585,8 +586,32 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isReadyToPublish && !isRenaming && (
         <div
           data-testid="ready-actions"
-          className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-1 p-1.5 pt-10 bg-gradient-to-t from-black via-black/85 to-transparent"
+          className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-1 px-1.5 pb-1.5 pt-10 bg-gradient-to-t from-black via-black/85 to-transparent"
         >
+          {/* Metadata lives INSIDE this block, in normal flow directly above the
+              CTAs. Previously the scrim was a second absolutely-positioned layer
+              clearing the bar with a hardcoded pb-[96px] — a magic number guessing
+              the bar's height, which is why the name/clock floated at an unrelated
+              offset and the two gradients double-darkened where they overlapped. */}
+          <div className="px-0.5 pb-0.5">
+            <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
+              {getProjectDisplayName(project)}
+            </h3>
+            {(gameClock || firstTag) && (
+              <div className="mt-1 flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                {gameClock && (
+                  <span className="shrink-0 text-[11px] leading-none text-gray-300" title="Game time">{gameClock}</span>
+                )}
+                {firstTag && (
+                  <span className="hidden sm:inline-flex shrink-0 items-center gap-0.5 px-1 py-0.5 text-[10px] leading-none rounded bg-white/10 text-cyan-200">
+                    <Tag size={9} />
+                    <span className="truncate max-w-[80px]">{firstTag}</span>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Primary — names the verb, carries the accent + lift. AA contrast: gray-950 on cyan-500. */}
           <button
             type="button"
