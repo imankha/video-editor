@@ -77,9 +77,10 @@ test('T5672 drafts render as per-game poster-tile carousels', async ({ context, 
     await saveEvidence(page, 'criterion-6-ready-badge');
   }
 
-  // (6) primary tap opens a draft. A ready-to-publish tile intentionally disables its
-  // body tap (you publish via the badge / open via the strip or hover actions), so open
-  // an editable tile — one without the Move-to-My-Reels badge.
+  // (6) primary tap opens a draft. Since T6180 a ready-to-publish tile's body tap
+  // PREVIEWS (it publishes via the primary "Move to My Reels" button and edits via the
+  // kebab), so it does not navigate to the editor — pick an editable tile (one without
+  // the Move-to-My-Reels action) to exercise the open-into-editor navigation.
   const openable = tiles.filter({ hasNot: page.getByRole('button', { name: /move to/i }) });
   const openTarget = (await openable.count()) ? openable.first() : tiles.first();
   await openTarget.click();

@@ -213,6 +213,33 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   for an expired game with no recap video — a deliberate divergence from the old GameCard.
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
 
+- **Ready Draft tile contract (T6180) — do not undo when restyling `DraftTile.jsx`.** For a
+  ready draft (`isReadyToPublish = has_final_video && !is_published`) the tile is a
+  discoverable action surface, NOT the old 10px corner badge (which was a `<button>` labelled
+  with the *status* word "Ready" whose verb hid in `aria-label`, on a tile whose body was inert —
+  the user could not find how to publish). The contract:
+  - **"Ready" is a non-interactive `<span>` status badge** (top-left) — never a control.
+  - **Primary = an emphasized `<button>` "Move to My Reels"** in a PERSISTENT bottom action bar
+    (never hover-gated — that persistence is the whole point). Icon is `FolderInput` (a one-way
+    move; deliberately NOT `Send`/paper-plane, which reads as "share" in an app with real sharing).
+    Contrast is `text-gray-950` on `bg-cyan-500` (AA). It calls `publishProject` → the
+    `moved_to_my_reels` quest fires exactly once on the 200 path.
+  - **Preview is a visible secondary**; the **tile body click PREVIEWS** (was inert). Rename /
+    Framing / Overlay / Hide / Delete collapse into a **kebab** (`data-testid="draft-kebab-menu"`,
+    ReelTile's portaled-popover-on-fine / bottom-sheet-on-coarse pattern). Hide keeps its
+    `isComplete && !isReadyToPublish` guard, so it never shows on a ready tile (only published ones).
+  - **Two-click delete lives in the kebab and MUST keep the menu open on the first click** (arms
+    `showDeleteConfirm`; a menu that closed would swallow the confirm). The **T4050 publish-retry
+    UI stays on the tile at `z-40`, never in the kebab** (a durable sync failure is when it's needed).
+  - Scoped to the ready branch only: the `:379` status chip ("Done") and the `SegmentedProgressStrip`
+    are suppressed; every other tile state is byte-for-byte unchanged. Multi-clip chip shifts to the
+    top-right (freed by the suppressed status chip). Covered by `DraftTile.test.jsx` (re-pinned) +
+    `e2e/T6180-ready-tile-primary-action.qa.spec.js`.
+  - **QA gotcha (not domain, but bit this task):** the `npm run dev` vite server can serve a STALE
+    per-URL transform of an edited source file across `dev-verify.sh` reuse — a fix looks broken for
+    runs on end. If a real-browser result contradicts the code, kill 5173, `rm -rf
+    src/frontend/node_modules/.vite`, and restart before trusting the run.
+
 ## Perf attribution (T4770, 2026-07-09)
 - **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and
   `GET /api/games/{id}/video` (302→presigned R2) both re-time ~90–150ms in isolation (co-timed
