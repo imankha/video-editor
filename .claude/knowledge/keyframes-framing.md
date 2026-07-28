@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-27 (T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-07-27 (T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -777,6 +777,54 @@ keyframed** — camera tilt is constant for a recording.
     `--repeat-each=5` green across all three specs (115 runs, 0 flakes). T5450/T5610 now route
     the sample from `/tmp`; T5643 still writes `public/` (it does not drive playback, so it is
     unaffected) — the sample is shared-by-SHAPE (identical 640x360x3s `testsrc`), no longer by path.
+  - **REAL-ACCOUNT staging surface — the SAME contract, but a VERDICT not a throw (T6110,
+    2026-07-27).** The routed-fixture helpers above cover dev-harness `<video>`s that are
+    guaranteed loadable. The three real-account overlay/framing specs (`T4550`, `T5676`,
+    `bug38-autoselect-and-frame-step`) point a real `<video>` at the account's working video on
+    R2, where T6100 measured a SECOND failure mode a routed fixture can never hit: staging carries
+    **DANGLING `working_videos` refs** — `working_video/playback-url` returns 200 with a presigned
+    URL, but the R2 GET for that object is a fast deterministic **404 (~120ms)** (intact objects
+    return **206 in 120-360ms**). The `<video>` then fires `error` and the ready-signal (readyState
+    / the overlay stage's inline `aspect-ratio`) can NEVER arrive — the original 240s hang. Two
+    fixes, BOTH required (a readiness wait ALONE does not fix T5676): **(1)** gate on the real
+    ready-signal, and **(2)** CHOOSE A LOADABLE DRAFT — a readiness wait on a draft that can't load
+    is the same bug, slower.
+    - `waitForVideoReady`'s sibling **`waitForRealVideoReady(page, {minReadyState, requireAspectRatio,
+      timeout})`** (same `videoRoute.js`) RETURNS a verdict instead of throwing: `{ready:true}` once
+      the `.video-container video` can seek+play (+ overlay stage `aspect-ratio`, when asked), or
+      `{ready:false, reason}` when the element ERRORED (names the `MediaError` code → dangling ref)
+      or NEVER hydrated within `timeout` (no ready, no error — e.g. playback-url 404 so VideoPlayer
+      never even mounts). The caller then advances to another draft or **skips LOUDLY naming
+      hydration** — never asserts a domain fact against a placeholder. A `false` verdict is a
+      hydration verdict, NOT a raised timeout masking a regression. `minReadyState` 3 for
+      seek/step/drag specs, 2 for a pure geometry read (T5676).
+    - **`e2e/helpers/overlayDraft.js` `openLoadableOverlayDraft(page, {minReadyState})`** does fix #2:
+      it PROBES every In-Overlay draft the way T6100 did (`page.request` shares the dev-login cookie:
+      playback-url → `Range: bytes=0-1` GET on the presigned R2 URL, 206 = streams) and opens the
+      first streamable one DETERMINISTICALLY — the `DraftTile` carries the project id in its poster
+      `src`, so target `[data-testid="project-card"]` with `img[src*="/projects/{id}/poster"]` and
+      click ITS `Open in Overlay` button (no `.first()` gamble). If NONE stream it returns a loud
+      reason naming the dangling refs → the spec skips honestly. On imankh's staging copy: 5 In-Overlay
+      drafts, **2 stream (54, 37), 3 dangling (31, 33, 51)** — so these specs run green by opening 54/37.
+    - **Real-account overlay landmines these specs encode:** (a) tracking is ON by default so
+      `editable` is false → the draggable body ellipse has NO `.cursor-move` class; select the
+      always-rendered **`svg defs mask ellipse`** for geometry (the `.cursor-move` selector hangs).
+      (b) "Add Spotlight" IS the overlay EXPORT button — NEVER click it on the real account (fires a
+      costly render); a streamable In-Overlay draft already carries restored regions, so the spotlight
+      renders from existing data. (c) the working video is a cross-origin R2 URL with no CORS, so a
+      `<canvas>` `drawImage`+`toDataURL` pixel read TAINTS — guard BOTH calls and honest-skip (bug38
+      glitch3). (d) auto-select-on-centered-player uses `pickPrimaryDetectionBox` (center **AND
+      prominence**), so on real footage it legitimately picks a prominent near-center player, not the
+      geometrically-most-centered box — assert the spotlight anchors INSIDE some detection box (the
+      geometric frame center provably lies inside none), not "the box nearest frame center"; the exact
+      ranking is Vitest-pinned (`useHighlightRegions.autoselect.test.js`).
+    - **Framing (T4550) is NOT dangling-prone** — it plays the raw clip and DOES load (T6100: crop
+      placeholder at ~6.4s, display rect settled at ~7.37s); its only fix is the ready-gate before the
+      drag, plus dragging TOWARD the video center (a blind fixed direction hits `constrainCrop`'s clamp
+      when the fixture crop sits near an edge → false "moved 0", per FIXTURE-CONTRACT T5320). The old
+      T5380 comment claimed a 0,0 measurement meant the first-drag race regressed; it had not — the
+      ready-gate now rules out "acted on a placeholder", so a 0,0 AFTER it is the genuine T5380
+      regression (that misleading comment sent triage down the wrong path on 2026-07-27).
 - **Spline fork (live bug → T4250)**: `interpolateCropSpline` (splineInterpolation.js:116-154,
   fields x/y/width/height) and `interpolateHighlightSpline` (L163-206) are near-identical copies;
   `interpolateGenericSpline` (L217-255) was built to replace both but is UNUSED. The highlight copy

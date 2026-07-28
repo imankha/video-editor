@@ -27,6 +27,7 @@ import { fileURLToPath } from 'url';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow, responsiveSweep } from './helpers/qa.js';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -51,48 +52,28 @@ async function routeSamples(page) {
 }
 
 /**
- * Open a reel draft that is ALREADY in the overlay stage, directly via its
- * "Open in Overlay" button. The "Reel Drafts" list defaults to showing only
- * Framing-incomplete ("Not Started") drafts — reels that have reached Overlay
- * are a SEPARATE "In Overlay (N)" status filter and are NOT reachable via the
- * generic `(click to open)` chip title (that chip only appears on Not-Started
- * drafts and opens Framing). Discovered via manual DOM inspection during T5676
- * QA: `button[title="Open in Overlay"]` exists per-draft once a working_video
- * exists (`projects.working_video_id IS NOT NULL`).
+ * Open a reel draft that is ALREADY in the overlay stage AND whose working video
+ * actually STREAMS, then wait for the real overlay ready-signal. Delegates to the
+ * shared `openLoadableOverlayDraft` helper (T6110) so all three real-account overlay
+ * specs share ONE contract for "pick a loadable draft + gate on hydration".
+ *
+ * TWO fixes fold into that helper (T6100 measured why the old `.first()` open hung
+ * 240s here): (1) the "Reel Drafts" default view shows only Framing-incomplete
+ * drafts, so an Overlay draft is reached via the "In Overlay (N)" status filter and
+ * its per-tile "Open in Overlay" button; (2) crucially, several of imankh's In-Overlay
+ * drafts carry DANGLING working_video refs (playback-url 200 but the R2 GET 404s), so
+ * opening `.first()` blindly could pick one whose stage can NEVER hydrate. The helper
+ * probes for a streamable draft (playback-url -> Range GET on the R2 URL) and opens
+ * THAT one, or returns a loud reason to skip on. The ready-signal itself is unchanged:
+ * the stage box only gets its inline `aspect-ratio` once `useAspectStage` flips (the
+ * app's own metadata probe completed) — a real "ready", never element visibility.
+ * minReadyState 2 (a decoded current frame) suffices here — this spec measures geometry
+ * and drags the ellipse; it never seeks the video.
+ *
+ * @returns {Promise<{ok: boolean, reason?: string}>}
  */
-async function openOverlay(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
-  await page.waitForTimeout(500);
-
-  const overlayFilter = page.getByText(/^In Overlay \(\d+\)$/);
-  if ((await overlayFilter.count()) === 0) return false; // no draft has reached Overlay in this env
-  await overlayFilter.click();
-  await page.waitForTimeout(500);
-
-  const openInOverlayBtn = page.getByRole('button', { name: 'Open in Overlay' }).first();
-  if ((await openInOverlayBtn.count()) === 0) return false;
-  await openInOverlayBtn.click();
-
-  // The stage box carries a data-testid once Overlay renders.
-  const stage = page.getByTestId('overlay-video-stage').first();
-  await stage.waitFor({ timeout: 60000 });
-  // Wait for the APP's OWN metadata state (effectiveOverlayMetadata, which drives
-  // `useAspectStage`/`fitToAspect`) to be ready — NOT just the raw <video> element's
-  // videoWidth. These are two separate signals: the native element can report
-  // decoded dimensions while the app's own width/height probe (a separate
-  // fetch-based moov-atom read, observed 300ms-5s+ in this env) is still in
-  // flight. Racing on videoWidth alone caught the stage mid-transition (still on
-  // the pre-fitToAspect `h-[60vh]` fallback), a test bug not a product bug. The
-  // stage box only gets an inline `aspect-ratio` style once useAspectStage flips
-  // true, so THAT is the correct ready-signal.
-  await page.waitForFunction(() => {
-    const el = document.querySelector('[data-testid="overlay-video-stage"]');
-    const video = el?.querySelector('.video-container video');
-    return el?.style?.aspectRatio && video && video.videoWidth > 0;
-  }, { timeout: 30000 });
-  return true;
+function openOverlay(page) {
+  return openLoadableOverlayDraft(page, { minReadyState: 2 });
 }
 
 /** Measure the `.video-container` box, its rendered `<video>` box, and the reel aspect. */
@@ -125,8 +106,10 @@ test.describe('T5676 aspect-aware video stage @staging-gate', () => {
     await loginAsRealUser(context, EMAIL, PROFILE);
     const page = await context.newPage();
 
-    const reachable = await openOverlay(page);
-    test.skip(!reachable, 'No draft in this account has reached the Overlay stage (In Overlay filter empty); aspect sizing covered by the dev-harness describe block below (both 9:16 and 16:9)');
+    const opened = await openOverlay(page);
+    test.skip(!opened.ok,
+      `No streamable In-Overlay draft to align against in this env (aspect sizing is also ` +
+      `covered by the dev-harness describe block below for both 9:16 and 16:9). ${opened.reason}`);
 
     // NOTE: "Add Spotlight" is the OVERLAY EXPORT button (renders + burns in the
     // final video), NOT a "create region" control — confirmed via
