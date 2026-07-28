@@ -552,54 +552,67 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       )}
 
+      {/* READY-STATE overflow kebab — corner-anchored, NOT welded to a CTA.
+          Matches GameTile's kebab exactly (top-right, circular, black/60 +
+          backdrop-blur, hover-reveal on fine pointers, always-on for touch) so the
+          two tile families share one "more actions" convention. Overflow is chrome;
+          it is not a peer of the call to action, which is why it does not live in
+          the action bar. */}
+      {isReadyToPublish && !isRenaming && (
+        <button
+          ref={kebabBtnRef}
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+          title="More actions"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className={`absolute top-1.5 right-1.5 z-40 inline-flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] transition-opacity ${
+            isCoarsePointer
+              ? 'opacity-100'
+              : 'opacity-0 group-hover/tile:opacity-100 focus:opacity-100'
+          } ${menuOpen ? 'opacity-100' : ''}`}
+        >
+          <MoreVertical size={16} />
+        </button>
+      )}
+
       {/* READY-STATE action bar (T6180): a PERSISTENT bar — the whole point is that
-          the primary action is always visible, never hover-gated. Primary = the named
-          publish gesture; secondary row = Preview + the kebab overflow. Hidden while
-          renaming so the name input (in the scrim above) is reachable. */}
+          the primary action is always visible, never hover-gated. Two full-width
+          buttons of identical shape read as one deliberate CTA pair rather than
+          controls scattered on a gradient. Hidden while renaming so the name input
+          (in the scrim above) is reachable. */}
       {isReadyToPublish && !isRenaming && (
         <div
           data-testid="ready-actions"
-          className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-1.5 p-1.5 pt-8 bg-gradient-to-t from-black/95 via-black/80 to-transparent"
+          className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-1 p-1.5 pt-10 bg-gradient-to-t from-black via-black/85 to-transparent"
         >
-          {/* Primary — names the verb, emphasized. AA contrast: gray-950 on cyan-500. */}
+          {/* Primary — names the verb, carries the accent + lift. AA contrast: gray-950 on cyan-500. */}
           <button
             type="button"
             onClick={handlePublishToMyReels}
             disabled={isPublishing}
             aria-label={`Move to ${SECTION_NAMES.LIBRARY}`}
             title={`Move to ${SECTION_NAMES.LIBRARY}`}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold bg-cyan-500 text-gray-950 shadow hover:bg-cyan-400 disabled:opacity-60 transition-colors coarse-pointer:min-h-[44px]"
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold tracking-tight bg-cyan-500 text-gray-950 shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 active:scale-[0.98] disabled:opacity-60 transition-all coarse-pointer:min-h-[44px]"
           >
             {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <FolderInput size={14} />}
             Move to {SECTION_NAMES.LIBRARY}
           </button>
-          {/* Secondary row: Preview + kebab overflow */}
-          <div className="flex items-center gap-1.5">
-            {project.final_video_id && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
-                title="Preview video"
-                aria-label="Preview video"
-                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors coarse-pointer:min-h-[44px]"
-              >
-                <Play size={14} />
-                Preview
-              </button>
-            )}
+          {/* Secondary — same footprint as the primary so they pair; outlined rather
+              than a translucent slab, so it reads as a button and not as scrim. */}
+          {project.final_video_id && (
             <button
-              ref={kebabBtnRef}
               type="button"
-              onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
-              title="More actions"
-              aria-label="More actions"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="inline-flex items-center justify-center rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+              onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
+              title="Preview video"
+              aria-label="Preview video"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium bg-white/10 ring-1 ring-inset ring-white/25 backdrop-blur-sm text-white hover:bg-white/20 hover:ring-white/40 active:scale-[0.98] transition-all coarse-pointer:min-h-[44px]"
             >
-              <MoreVertical size={16} />
+              <Play size={14} />
+              Preview
             </button>
-          </div>
+          )}
         </div>
       )}
 
