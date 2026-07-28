@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MAX_ROT,
+  ROTATION_EPSILON,
   maxAxisAlignedInRotated,
   safeAreaForAspect,
   clampCropToSafeArea,
@@ -101,5 +102,52 @@ describe('clampCropToSafeArea', () => {
 
   it('exposes MAX_ROT = 20', () => {
     expect(MAX_ROT).toBe(20);
+  });
+
+  /**
+   * T6170 — a denormal rotation must NOT engage the clamp.
+   *
+   * `working_clips.rotation` for a real staging clip (project 31) carried
+   * `2.7755575615628914e-17` — FP residue from the dial nudge's repeated
+   * 0.1-degree additions (0.1+0.1+0.1-0.1-0.1-0.1 === 2.7755575615628914e-17).
+   * A denormal is truthy, so the old `if (!thetaDeg)` guard let the clamp run and
+   * force the crop's x from 660 to 656.25 — every drag past 656.25 snapped back.
+   * The clamp must treat any sub-epsilon angle as theta=0 (identity passthrough).
+   */
+  describe('T6170 denormal rotation', () => {
+    const DENORMAL = 2.7755575615628914e-17;
+    const crop = { x: 660, y: 0, width: 607.5, height: 1080 };
+    const W = 1920;
+    const H = 1080;
+    const r = 9 / 16;
+
+    it('reproduces the measured value from repeated 0.1-degree dial nudges', () => {
+      // The exact arithmetic the nudge performs (CropOverlay stepRotation).
+      expect(0.1 + 0.1 + 0.1 - 0.1 - 0.1 - 0.1).toBe(DENORMAL);
+    });
+
+    it('exposes ROTATION_EPSILON larger than the residue, smaller than a real nudge', () => {
+      expect(ROTATION_EPSILON).toBeGreaterThan(DENORMAL);
+      expect(ROTATION_EPSILON).toBeLessThan(0.1); // finest intentional dial step
+    });
+
+    it('is an identity passthrough for the denormal (does NOT pin the crop)', () => {
+      // Pre-fix: x was forced to 656.25. Post-fix: x stays 660.
+      expect(clampCropToSafeArea(crop, W, H, DENORMAL, r)).toEqual(crop);
+    });
+
+    it('gives the denormal the SAME result as exact zero', () => {
+      const atZero = clampCropToSafeArea(crop, W, H, 0, r);
+      const atDenormal = clampCropToSafeArea(crop, W, H, DENORMAL, r);
+      expect(atDenormal).toEqual(atZero);
+    });
+
+    it('still clamps a real, intentional small rotation (epsilon does not disable the feature)', () => {
+      // 0.1 degrees is the finest step a user can actually dial; it is well above
+      // the epsilon and MUST still engage the clamp and pull the oversize x in.
+      const clamped = clampCropToSafeArea(crop, W, H, 0.1, r);
+      expect(clamped.x).toBeLessThan(crop.x);
+      expect(clamped).not.toEqual(crop);
+    });
   });
 });

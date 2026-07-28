@@ -26,6 +26,32 @@
 export const MAX_ROT = 20;
 
 /**
+ * Rotation dead-zone in degrees (T6170). Any |theta| below this is treated as
+ * "no rotation" — an identity passthrough for the safe-area clamp and a snap to
+ * exactly 0 at the write side (see `clampRotation` in straighten.js).
+ *
+ * WHY an epsilon and not `!theta`: `rotation` is produced by trig (`atan2` in the
+ * straighten tool) and by repeated 0.1-degree float additions in the dial nudge
+ * (`0.1+0.1+0.1-0.1-0.1-0.1 === 2.7755575615628914e-17`). Those residues are
+ * TRUTHY, so `!theta` let a denormal ~1e-17 engage the clamp and pin the crop box
+ * (staging project 31: crop.x 660 forced to 656.25). A plain zero-check cannot
+ * distinguish FP noise from a real angle; a magnitude band can.
+ *
+ * WHY 1e-6 specifically — it sits in the empty gap between two well-separated scales:
+ *   - Ceiling: the finest angle a user can dial is 0.1 degrees (nudge delta +
+ *     slider step). 1e-6 is 100,000x smaller, so it can NEVER swallow a real
+ *     adjustment. In pixels, a 1e-6-degree rotation of a 1920px frame displaces a
+ *     corner by ~3e-5 px (sub-micro-pixel); the smallest real 0.1-degree step
+ *     displaces ~3.3 px.
+ *   - Floor: FP residue from summing 0.1-degree steps stays far below 1e-11 even
+ *     for a pathological multi-thousand-tick hold. 1e-6 clears that by >=5 orders
+ *     of magnitude.
+ * So 1e-6 kills all trig/accumulation noise while being orders of magnitude below
+ * anything a human could intend. Mirrored as ROTATION_EPSILON in the Python twin.
+ */
+export const ROTATION_EPSILON = 1e-6;
+
+/**
  * Largest axis-aligned rectangle (unconstrained aspect) that fits, centered,
  * inside a W*H frame rotated by theta degrees. Classic rotatedRectWithMaxArea.
  * Returns { width, height } in frame pixels.
@@ -91,11 +117,15 @@ export function safeAreaForAspect(W, H, thetaDeg, r) {
  * allowed region. Deterministic — the guarantee that the export has no black
  * corners. Returns { x, y, width, height }.
  *
- * theta === 0 is an explicit identity fast path (no clamp) so the theta=0
- * behavior is byte-identical to today.
+ * |theta| < ROTATION_EPSILON is an explicit identity fast path (no clamp) so the
+ * theta=0 behavior is byte-identical to today AND an FP-residue denormal (T6170)
+ * does not falsely engage the clamp and pin the crop box. `!thetaDeg` is kept as
+ * the leading term so null/undefined/NaN passthrough behavior is unchanged.
  */
 export function clampCropToSafeArea(crop, W, H, thetaDeg, r) {
-  if (!thetaDeg) return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
+  if (!thetaDeg || Math.abs(thetaDeg) < ROTATION_EPSILON) {
+    return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
+  }
 
   const S = safeAreaForAspect(W, H, thetaDeg, r);
 

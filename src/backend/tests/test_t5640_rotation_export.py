@@ -22,6 +22,7 @@ import numpy as np
 
 from app.modal_functions.video_processing import rotate_then_crop
 from app.services.rotation_safe_area import (
+    ROTATION_EPSILON,
     clamp_crop_to_safe_area,
     max_axis_aligned_in_rotated,
     safe_area_for_aspect,
@@ -125,6 +126,30 @@ def test_safe_area_shrinks_and_preserves_aspect():
     # Centered.
     assert math.isclose(S["x0"], (W - S["w_safe"]) / 2, rel_tol=1e-9)
     assert math.isclose(S["y0"], (H - S["h_safe"]) / 2, rel_tol=1e-9)
+
+
+def test_denormal_theta_is_identity_passthrough():
+    """T6170 — parity with the JS twin: a denormal rotation (FP residue from the
+    dial nudge, e.g. 0.1+0.1+0.1-0.1-0.1-0.1) must NOT engage the clamp. The exact
+    staging value 2.7755575615628914e-17 pinned the crop x from 660 to 656.25 in
+    the JS SSOT before the epsilon guard; this mirror must agree."""
+    denormal = 0.1 + 0.1 + 0.1 - 0.1 - 0.1 - 0.1
+    assert denormal != 0
+    assert denormal < ROTATION_EPSILON
+    crop = {"x": 660, "y": 0, "width": 607.5, "height": 1080}
+    out = clamp_crop_to_safe_area(crop, 1920, 1080, denormal, 9 / 16)
+    assert out == crop  # identity, same as theta=0
+    assert out == clamp_crop_to_safe_area(crop, 1920, 1080, 0, 9 / 16)
+
+
+def test_real_small_rotation_still_clamps():
+    """The epsilon must not disable the feature: 0.1 degrees (the finest real dial
+    step) is above ROTATION_EPSILON and MUST still pull an oversize crop in."""
+    assert 0.1 > ROTATION_EPSILON
+    crop = {"x": 660, "y": 0, "width": 607.5, "height": 1080}
+    out = clamp_crop_to_safe_area(crop, 1920, 1080, 0.1, 9 / 16)
+    assert out["x"] < crop["x"]
+    assert out != crop
 
 
 def test_clamp_recenters_and_locks_aspect():

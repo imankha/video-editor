@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-27 (T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-07-28 (T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -427,6 +427,35 @@ keyframed** — camera tilt is constant for a recording.
   `utils/rotationSafeArea.js` (`clampCropToSafeArea`, `rotatedFrameCorners`,
   `MAX_ROT=20`). Clamp runs on set-rotation (ALL keyframes) and on crop-drag while
   θ≠0 (`useCrop.clampCropForCurrentRotation`, θ=0 passthrough).
+- **Rotation dead-zone `ROTATION_EPSILON=1e-6` (T6170, 2026-07-28) — the θ≈0 test is
+  a MAGNITUDE band, never `!theta`.** `rotation` is trig/float-arithmetic output, so
+  a "zero" angle can be a denormal: the dial nudge sums 0.1° steps and
+  `0.1+0.1+0.1-0.1-0.1-0.1 === 2.7755575615628914e-17`. A denormal is TRUTHY, so the
+  old `if (!thetaDeg)` fast path in `clampCropToSafeArea` let the clamp RUN and pin the
+  crop box (staging proj 31: `crop.x` 660 forced to 656.25, so every drag past 656.25
+  snapped back — only that clip, because 37/54 stored exact `0.0`). **BOTH halves shipped:**
+  (1) READ guard — `clampCropToSafeArea` (JS + Python twin) passes through when
+  `!thetaDeg || |thetaDeg| < ROTATION_EPSILON`; `!thetaDeg` kept as leading term so
+  null/undefined/NaN passthrough is unchanged (`Math.abs(NaN)<eps` is false / Python
+  `abs(None)` would raise, so the short-circuit is load-bearing). (2) WRITE side —
+  `clampRotation` (`utils/straighten.js`, the SINGLE chokepoint every committed
+  rotation flows through: `useCrop.setRotation`→`clampRotation`→surgical `set_rotation`,
+  plus the `useCrop.js:75/85` load-time seed) snaps `|deg|<ROTATION_EPSILON` to exactly
+  `0`, so garbage never reaches the DB and a nudged-back dial reads a true `0` (fixes
+  `CropOverlay.jsx:408` `rotation!==0` reset + reset-button `disabled`). **Epsilon
+  justification:** finest intentional step is 0.1° (nudge/slider) → 1e-6 is 100,000×
+  smaller (can't swallow a real adjustment; ~3e-5 px corner shift on 1920px vs ~3.3 px
+  for 0.1°), and FP accumulation residue stays <1e-11 even for pathological holds → 1e-6
+  clears it by ≥5 orders. **Backend twin `rotation_safe_area.py` MIRRORED** (same guard +
+  const): grep-proven it has NO render/export caller (only `test_t5640_rotation_export.py`),
+  so the change is behaviorally inert for render — done to honor the documented
+  keep-in-sync contract so a future wiring can't reintroduce the denormal. **Existing DB
+  rows still carry residue** (load-time snap is read-only, no write-back; export trusts
+  stored crop so render is unaffected) — a one-off heal audit is warranted but NOT authored
+  here (no migration; supervisor runs any audit). Coverage: `rotationSafeArea.test.js` +
+  `straighten.test.js` (denormal passthrough/snap with the measured value, + real-0.1°
+  still clamps) and `test_t5640_rotation_export.py` (Py parity, +2). Do NOT change the crop
+  drag math — the drag was correct; the clamp's zero-test was the bug.
 - **Preview:** `CropOverlay` CSS-rotates the **`<video>` element** imperatively via
   `videoRef.current.style.transform` (NOT a `VideoPlayer` prop — VideoPlayer is
   mode-agnostic/shared; zoom/pan is a `transform` on the WRAPPER div, so rotating
