@@ -2,26 +2,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useUpdateGateStore } from './updateGateStore';
 import { useAuthStore } from './authStore';
 
-const { flushDurableStateMock, acknowledgeAppVersionMock } = vi.hoisted(() => ({
+const { flushDurableStateMock } = vi.hoisted(() => ({
   flushDurableStateMock: vi.fn(),
-  acknowledgeAppVersionMock: vi.fn(),
 }));
 
 vi.mock('../utils/updateFlush', () => ({
   flushDurableState: flushDurableStateMock,
 }));
 
-vi.mock('../utils/appVersion', () => ({
-  acknowledgeAppVersion: acknowledgeAppVersionMock,
-}));
-
 const INITIAL_STATE = {
   isUpdateRequired: false,
-  reason: null,
+  needsMigration: false,
   phase: 'idle',
   error: null,
-  _updateSW: null,
-  _waitingProbe: null,
+  _swReloader: null,
 };
 
 describe('updateGateStore', () => {
@@ -31,7 +25,6 @@ describe('updateGateStore', () => {
 
   beforeEach(() => {
     flushDurableStateMock.mockReset();
-    acknowledgeAppVersionMock.mockReset();
     useUpdateGateStore.setState(INITIAL_STATE);
     useAuthStore.setState({ isAuthenticated: true });
     // jsdom's window.location.reload is non-configurable, so vi.spyOn can't
@@ -52,73 +45,50 @@ describe('updateGateStore', () => {
   });
 
   describe('requireUpdate', () => {
-    it('raises the gate with the given reason', () => {
-      useUpdateGateStore.getState().requireUpdate('sw');
+    it('raises the gate (app-code reload by default, no migration)', () => {
+      useUpdateGateStore.getState().requireUpdate();
       const state = useUpdateGateStore.getState();
       expect(state.isUpdateRequired).toBe(true);
-      expect(state.reason).toBe('sw');
+      expect(state.needsMigration).toBe(false);
     });
 
-    it('is idempotent — a second call does not overwrite the reason', () => {
-      useUpdateGateStore.getState().requireUpdate('sw');
-      useUpdateGateStore.getState().requireUpdate('version-mismatch');
-      expect(useUpdateGateStore.getState().reason).toBe('sw');
+    it('is idempotent — a second call does not re-fire or clear state', () => {
+      useUpdateGateStore.getState().requireUpdate();
+      useUpdateGateStore.getState().requireUpdate();
+      expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
     });
 
-    it('bug39 symptom 2: a waiting SW ("sw") UPGRADES an existing version-mismatch gate', () => {
-      // The aggressive version-mismatch check wins the race and latches first...
-      useUpdateGateStore.getState().requireUpdate('version-mismatch');
-      expect(useUpdateGateStore.getState().reason).toBe('version-mismatch');
-
-      // ...then the freshly-installed SW's onNeedRefresh fires. It must promote
-      // the reason so runUpdate takes the skipWaiting path (single-reload fix).
-      useUpdateGateStore.getState().requireUpdate('sw');
-      expect(useUpdateGateStore.getState().reason).toBe('sw');
+    it('escalates an app-code gate to a migration gate if a later signal demands it', () => {
+      useUpdateGateStore.getState().requireUpdate({ needsMigration: false });
+      useUpdateGateStore.getState().requireUpdate({ needsMigration: true });
+      expect(useUpdateGateStore.getState().needsMigration).toBe(true);
     });
 
-    it('does NOT downgrade an sw gate back to version-mismatch', () => {
-      useUpdateGateStore.getState().requireUpdate('sw');
-      useUpdateGateStore.getState().requireUpdate('version-mismatch');
-      useUpdateGateStore.getState().requireUpdate('version-mismatch');
-      expect(useUpdateGateStore.getState().reason).toBe('sw');
+    it('does not downgrade a migration gate back to app-code-only', () => {
+      useUpdateGateStore.getState().requireUpdate({ needsMigration: true });
+      useUpdateGateStore.getState().requireUpdate({ needsMigration: false });
+      expect(useUpdateGateStore.getState().needsMigration).toBe(true);
     });
   });
 
-  describe('setUpdateSW', () => {
-    it('stores the updateSW function for runUpdate to call later', () => {
+  describe('setSwReloader', () => {
+    it('stores the SW reloader for runUpdate to await after the flush', () => {
       const fn = vi.fn();
-      useUpdateGateStore.getState().setUpdateSW(fn);
-      expect(useUpdateGateStore.getState()._updateSW).toBe(fn);
-    });
-  });
-
-  describe('setWaitingProbe', () => {
-    it('stores the waiting-SW probe for runUpdate to consult at click time', () => {
-      const fn = vi.fn();
-      useUpdateGateStore.getState().setWaitingProbe(fn);
-      expect(useUpdateGateStore.getState()._waitingProbe).toBe(fn);
+      useUpdateGateStore.getState().setSwReloader(fn);
+      expect(useUpdateGateStore.getState()._swReloader).toBe(fn);
     });
   });
 
   describe('runUpdate — authenticated', () => {
-    it('flushes durable state BEFORE calling updateSW/reload (barrier ordering, reason: sw)', async () => {
+    it('flushes durable state BEFORE invoking the SW reloader (barrier ordering)', async () => {
       const callOrder = [];
-      flushDurableStateMock.mockImplementation(async () => {
-        callOrder.push('flush');
-      });
-      const updateSW = vi.fn(async () => {
-        callOrder.push('updateSW');
-      });
-      useUpdateGateStore.setState({ reason: 'sw' });
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
-      reloadSpy.mockImplementation(() => callOrder.push('reload'));
+      flushDurableStateMock.mockImplementation(async () => { callOrder.push('flush'); });
+      const reloader = vi.fn(async () => { callOrder.push('reload'); });
+      useUpdateGateStore.getState().setSwReloader(reloader);
 
       await useUpdateGateStore.getState().runUpdate();
 
-      expect(callOrder).toEqual(['flush', 'updateSW']);
-      // A real waiting SW's own 'controlling' listener reloads — runUpdate
-      // must not ALSO force one (would race a double reload).
-      expect(reloadSpy).not.toHaveBeenCalled();
+      expect(callOrder).toEqual(['flush', 'reload']);
     });
 
     it('sets phase to flushing while the barrier is in flight', () => {
@@ -132,90 +102,35 @@ describe('updateGateStore', () => {
       return pending;
     });
 
-    it('on flush failure: sets phase=error with a message, and NEVER calls updateSW or reloads', async () => {
+    it('(e) on flush failure: phase=error with a message, and NEVER invokes the reloader or reloads', async () => {
       flushDurableStateMock.mockRejectedValue(new Error('Could not confirm your latest changes were saved.'));
-      const updateSW = vi.fn();
-      useUpdateGateStore.setState({ reason: 'sw' });
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
+      const reloader = vi.fn();
+      useUpdateGateStore.getState().setSwReloader(reloader);
 
       await useUpdateGateStore.getState().runUpdate();
 
       const state = useUpdateGateStore.getState();
       expect(state.phase).toBe('error');
       expect(state.error).toBe('Could not confirm your latest changes were saved.');
-      expect(updateSW).not.toHaveBeenCalled();
+      expect(reloader).not.toHaveBeenCalled();
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
-    it('bug39: acknowledges the target build (persist acknowledged id) as part of the update gesture', async () => {
+    it('delegates the reload to the SW reloader (which owns skipWaiting vs bust+reload)', async () => {
       flushDurableStateMock.mockResolvedValue(undefined);
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
 
       await useUpdateGateStore.getState().runUpdate();
 
-      expect(acknowledgeAppVersionMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('does NOT acknowledge when the flush barrier fails (no reload, no accepted build)', async () => {
-      flushDurableStateMock.mockRejectedValue(new Error('flush failed'));
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
-
-      await useUpdateGateStore.getState().runUpdate();
-
-      expect(acknowledgeAppVersionMock).not.toHaveBeenCalled();
+      expect(reloader).toHaveBeenCalledTimes(1);
+      // The store never forces its own reload — the reloader lands the bundle.
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
-    it('bug39 symptom 2: an upgraded (version-mismatch -> sw) gate activates the waiting SW, not a plain reload', async () => {
+    it('falls back to a plain reload when no SW reloader is wired', async () => {
       flushDurableStateMock.mockResolvedValue(undefined);
-      const updateSW = vi.fn();
-      // Gate raised by version-mismatch first, then upgraded to sw by the SW.
-      useUpdateGateStore.getState().requireUpdate('version-mismatch');
-      useUpdateGateStore.getState().requireUpdate('sw');
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
-
-      await useUpdateGateStore.getState().runUpdate();
-
-      expect(updateSW).toHaveBeenCalledWith(true);
-      expect(reloadSpy).not.toHaveBeenCalled();
-    });
-
-    it('T5930 regression: reason version-mismatch BUT a SW is really waiting -> skipWaiting, NOT a bare reload', async () => {
-      flushDurableStateMock.mockResolvedValue(undefined);
-      const updateSW = vi.fn();
-      // The wild race: the backend version-mismatch poll latched the gate BEFORE
-      // onNeedRefresh fired, so `reason` never upgraded to 'sw'. But a new bundle
-      // IS waiting -- the probe (registration?.waiting) reports it. runUpdate must
-      // take skipWaiting; a bare reload here leaves the old SW in control, which
-      // strands the waiting bundle and fires a SECOND gate (the reported bug).
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
-      useUpdateGateStore.getState().setWaitingProbe(() => true);
-
-      await useUpdateGateStore.getState().runUpdate();
-
-      expect(updateSW).toHaveBeenCalledWith(true);
-      expect(reloadSpy).not.toHaveBeenCalled();
-    });
-
-    it('T5930: the flush barrier still runs BEFORE skipWaiting on the raced (version-mismatch + waiting) path', async () => {
-      const callOrder = [];
-      flushDurableStateMock.mockImplementation(async () => { callOrder.push('flush'); });
-      const updateSW = vi.fn(async () => { callOrder.push('updateSW'); });
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
-      useUpdateGateStore.getState().setWaitingProbe(() => true);
-
-      await useUpdateGateStore.getState().runUpdate();
-
-      expect(callOrder).toEqual(['flush', 'updateSW']);
-    });
-
-    it('reloads directly with no waiting SW (the version-mismatch-only case)', async () => {
-      flushDurableStateMock.mockResolvedValue(undefined);
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
-      // No setUpdateSW call — _updateSW stays null, as it would for a pure
-      // backend-only deploy with no waiting service worker.
+      // _swReloader stays null (setup never ran).
 
       await useUpdateGateStore.getState().runUpdate();
 
@@ -247,42 +162,17 @@ describe('updateGateStore', () => {
     });
   });
 
-  describe('runUpdate — unauthenticated (G1: no lockout on the login screen)', () => {
-    it('skips the flush barrier entirely and proceeds straight to reload', async () => {
+  describe('runUpdate — unauthenticated (no lockout on the login screen)', () => {
+    it('skips the flush barrier entirely and proceeds straight to the reloader', async () => {
       useAuthStore.setState({ isAuthenticated: false });
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
 
       await useUpdateGateStore.getState().runUpdate();
 
       expect(flushDurableStateMock).not.toHaveBeenCalled();
-      expect(reloadSpy).toHaveBeenCalledTimes(1);
+      expect(reloader).toHaveBeenCalledTimes(1);
       expect(useUpdateGateStore.getState().phase).not.toBe('error');
-    });
-
-    it('proceeds to updateSW(true) when a waiting SW exists, even logged out', async () => {
-      useAuthStore.setState({ isAuthenticated: false });
-      useUpdateGateStore.setState({ reason: 'sw' });
-      const updateSW = vi.fn();
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
-
-      await useUpdateGateStore.getState().runUpdate();
-
-      expect(flushDurableStateMock).not.toHaveBeenCalled();
-      expect(updateSW).toHaveBeenCalledWith(true);
-    });
-
-    it('T5930: logged out with a raced version-mismatch gate + waiting SW still skipWaiting (no bare reload)', async () => {
-      useAuthStore.setState({ isAuthenticated: false });
-      useUpdateGateStore.setState({ reason: 'version-mismatch' });
-      const updateSW = vi.fn();
-      useUpdateGateStore.getState().setUpdateSW(updateSW);
-      useUpdateGateStore.getState().setWaitingProbe(() => true);
-
-      await useUpdateGateStore.getState().runUpdate();
-
-      expect(flushDurableStateMock).not.toHaveBeenCalled();
-      expect(updateSW).toHaveBeenCalledWith(true);
-      expect(reloadSpy).not.toHaveBeenCalled();
     });
   });
 });

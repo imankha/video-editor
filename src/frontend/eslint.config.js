@@ -29,6 +29,7 @@ export default [
         ...globals.es2021,
         // Vite build-time defines (statically replaced in the client bundle):
         __COMMIT_HASH__: "readonly", // vite.config.js `define`
+        __APP_BUILD__: "readonly", // vite.config.js `define` (Tbug40p build number)
         process: "readonly", // process.env.NODE_ENV is replaced by Vite/esbuild at build
       },
       parserOptions: {

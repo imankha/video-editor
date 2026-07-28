@@ -12,7 +12,12 @@ jobs:
     name: Deploy Frontend to Cloudflare Pages
     runs-on: ubuntu-latest
     steps:
+      # Tbug40p: fetch-depth 0 so vite.config.js's `git rev-list --count HEAD`
+      # (the __APP_BUILD__ define) returns the true monotonic build number — a
+      # shallow clone would bake in 1 and never match the backend's number.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

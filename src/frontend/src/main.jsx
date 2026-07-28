@@ -18,7 +18,7 @@ import { setupPwaUpdatePrompt } from './utils/pwaUpdate.js'
 installClientLogger();
 setupActionTracking();
 
-console.info(`[Build] ${__COMMIT_HASH__}`);
+console.info(`[Build] ${__COMMIT_HASH__} (#${__APP_BUILD__})`);
 installResponsivenessMonitor();
 setupPwaUpdatePrompt();
 
