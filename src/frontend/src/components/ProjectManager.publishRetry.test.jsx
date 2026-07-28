@@ -96,9 +96,10 @@ describe('ProjectCard publish — durable sync 503 (T4050)', () => {
     );
 
     renderCard();
-    // T5672: the publish trigger is now the ready-to-publish tile badge
-    // (aria-label "Move to My Reels").
-    fireEvent.click(screen.getByRole('button', { name: /move to/i }));
+    // T6180: the publish trigger is the emphasized primary button in the ready-tile
+    // action bar (accessible name "Move to My Reels"). Exact name, since the tile
+    // wrapper (role=button) now carries that text in its own computed name too.
+    fireEvent.click(screen.getByRole('button', { name: 'Move to My Reels' }));
 
     // Retry affordance appears...
     const retry = await screen.findByRole('button', { name: 'Retry' });
@@ -117,9 +118,9 @@ describe('ProjectCard publish — durable sync 503 (T4050)', () => {
       );
 
     renderCard();
-    // T5672: the publish trigger is now the ready-to-publish tile badge
-    // (aria-label "Move to My Reels").
-    fireEvent.click(screen.getByRole('button', { name: /move to/i }));
+    // T6180: the publish trigger is the emphasized primary button in the ready-tile
+    // action bar (accessible name "Move to My Reels").
+    fireEvent.click(screen.getByRole('button', { name: 'Move to My Reels' }));
 
     const retry = await screen.findByRole('button', { name: 'Retry' });
     expect(fetchProjectsMock).not.toHaveBeenCalled();

@@ -151,14 +151,87 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByText('Done')).toBeTruthy();
   });
 
-  it('renders the ready-to-publish badge (Move to My Reels) only when complete and unpublished', () => {
+  // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
+  // corner <button> labelled "Ready" that published. New contract: "Ready" is a
+  // NON-interactive status badge, and a DISTINCT emphasized primary button names the
+  // verb ("Move to My Reels") and publishes on click.
+  it('makes "Ready" a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
-    expect(screen.getByRole('button', { name: /move to/i })).toBeTruthy();
+    // "Ready" is a status, not a control — no button carries that accessible name.
+    expect(screen.queryByRole('button', { name: /^ready$/i })).toBeNull();
+    expect(screen.getByText('Ready')).toBeTruthy();
+    // The primary action reads as an action and names the destination verb.
+    const primary = screen.getByRole('button', { name: 'Move to My Reels' });
+    expect(primary).toBeTruthy();
+    expect(primary.textContent).toMatch(/move to my reels/i);
   });
 
-  it('has no ready-to-publish badge once the reel is published', () => {
+  it('publishes via the primary button click (records the moved_to_my_reels quest step)', async () => {
+    const apiFetch = (await import('../utils/apiFetch')).default;
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ archived: true, final_video_id: 99 }),
+    });
+    const { useQuestStore } = await import('../stores/questStore');
+    renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Move to My Reels' }));
+    });
+    expect(apiFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/downloads\/publish\/7$/),
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('moved_to_my_reels');
+  });
+
+  it('has no primary "Move to My Reels" action once the reel is published', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: true });
-    expect(screen.queryByRole('button', { name: /move to/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /move to my reels/i })).toBeNull();
+  });
+
+  // T6180 — the five secondary actions collapse behind a kebab in the ready state,
+  // and two-click delete must survive inside it (a menu that closed on the first
+  // click would swallow the confirm).
+  it('exposes the secondary actions behind a kebab; two-click delete keeps the menu open (T6180)', () => {
+    const onDelete = vi.fn();
+    render(
+      <DraftTile
+        project={{ ...baseProject, has_final_video: true, final_video_id: 99, is_published: false }}
+        onSelect={vi.fn()}
+        onSelectWithMode={vi.fn()}
+        onDelete={onDelete}
+      />
+    );
+    // Open the kebab (fine pointer -> portaled popover).
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    // Secondary actions are reachable inside it.
+    expect(screen.getByRole('button', { name: /rename/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /open in framing/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /open in overlay/i })).toBeTruthy();
+    // First delete click ARMS the confirm without deleting or closing the menu.
+    const del = screen.getByRole('button', { name: /delete reel/i });
+    fireEvent.click(del);
+    expect(onDelete).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('button', { name: /click again to confirm/i });
+    expect(confirm).toBeTruthy();
+    // Second click deletes.
+    fireEvent.click(confirm);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('previews on body tap in the ready state (the tile is no longer inert) (T6180)', () => {
+    const { container } = renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
+    fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+    expect(screen.getByTestId('preview-video')).toBeTruthy();
+  });
+
+  it('drops the progress strip and the "Done" status chip in the ready state (Q1/Q2)', () => {
+    renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
+    // Q1: no "Done" status chip competing with the "Ready" badge.
+    expect(screen.queryByText('Done')).toBeNull();
+    // Q2: the bottom band is the action bar, not the segmented progress strip.
+    expect(screen.getByTestId('ready-actions')).toBeTruthy();
   });
 
   it('renders the game-time overlay when the draft carries a game start time', () => {

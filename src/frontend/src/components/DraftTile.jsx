@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, CheckCircle, Tag, Loader2, Image, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
@@ -27,7 +27,11 @@ import { RATIO } from '../constants/aspectRatios';
  * Click behavior:
  * - Primary tap on the tile: open with smart mode (auto-detect next action)
  * - Click a progress-strip segment: open in framing (that clip) / overlay
- * - Ready-to-publish corner badge: Move to My Reels (also in the hover/long-press actions)
+ * - Ready-to-publish tile (T6180): the body tap PREVIEWS (was inert before). The
+ *   publish gesture is a dedicated primary "Move to My Reels" button in the
+ *   persistent bottom action bar; "Ready" is a non-interactive status badge; the
+ *   remaining actions (Rename/Framing/Overlay/Hide/Delete) live in a kebab menu.
+ *   The progress strip and the "Done" status chip are suppressed in this one state.
  */
 export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -39,6 +43,13 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const [publishRetry, setPublishRetry] = useState(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [actionsRevealed, setActionsRevealed] = useState(false);
+  // T6180 kebab (ready state only): the five secondary actions collapse behind a
+  // menu. Mirrors ReelTile's pattern — a portaled, button-anchored popover on fine
+  // pointers, a bottom action sheet on coarse pointers, both closed on outside tap.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null); // {top, left} for the portaled popover
+  const menuRef = useRef(null);
+  const kebabBtnRef = useRef(null);
   // Poster load lifecycle (T5672): 'loading' -> skeleton shimmer; 'loaded' -> poster;
   // 'error' -> branded fallback (the T5671 endpoint 404s when no poster exists).
   const [posterState, setPosterState] = useState('loading');
@@ -60,6 +71,41 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // persistent accent ring so the user can spot "the one I'm working on" in the row.
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
   const isCurrentProject = selectedProjectId != null && selectedProjectId === project.id;
+
+  // Position the kebab popover against the button rect and close it on outside tap
+  // (fine-pointer popover only; the coarse-pointer sheet is a full-screen overlay
+  // that closes on its own backdrop). Flips upward when it would overflow the
+  // viewport bottom. Same mechanism as ReelTile.jsx.
+  useEffect(() => {
+    if (!menuOpen || !kebabBtnRef.current) {
+      setMenuPos(null);
+      return;
+    }
+    const updatePosition = () => {
+      const rect = kebabBtnRef.current.getBoundingClientRect();
+      const menuHeight = 260; // approximate; enough to decide the flip
+      const flipped = rect.bottom + menuHeight > window.innerHeight;
+      setMenuPos({
+        top: flipped ? rect.top - menuHeight : rect.bottom + 4,
+        left: rect.right - 192, // w-48 = 192px, right-aligned to the button
+      });
+    };
+    updatePosition();
+    const onResize = () => updatePosition();
+    window.addEventListener('resize', onResize);
+    const onOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target) && !kebabBtnRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('touchstart', onOutside);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('touchstart', onOutside);
+    };
+  }, [menuOpen]);
 
   const publishProject = async ({ openGallery }) => {
     setIsPublishing(true);
@@ -206,6 +252,14 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
 
   const handleCardClick = () => {
     if (isRenaming) return;
+    // T6180 — a ready tile's body PREVIEWS (it used to be inert, which is exactly
+    // why the user could not act on a finished reel). Publishing has its own primary
+    // button; the low-risk body gesture is Preview. Guard on final_video_id: a ready
+    // tile without a playable video simply does nothing on body tap.
+    if (isReadyToPublish) {
+      if (project.final_video_id) setIsPreviewing(true);
+      return;
+    }
     if (isCoarsePointer && actionsRevealed) {
       setActionsRevealed(false);
       return;
@@ -215,8 +269,6 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     //   overlay started (a working video exists) -> Overlay
     //   else framing started (any clip framed/exported) -> Framing (first clip)
     //   else the earliest applicable stage -> default open (Framing, clip 0)
-    // Ready-to-publish drafts don't reach here: their tile click is the publish
-    // badge, not this handler (see the wrapper's onClick guard).
     if (project.has_working_video) {
       onSelectWithMode({ mode: 'overlay' });
     } else if (project.clips_in_progress > 0 || project.clips_exported > 0) {
@@ -227,13 +279,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   };
 
   // Keyboard activation (item 3): the tile is a real button-like target, so Enter
-  // and Space open it (unless it's the Ready-to-publish state, which owns its own
-  // badge button). Matches the wrapper onClick guard below.
+  // and Space activate it. handleCardClick owns the ready-state branch (Preview),
+  // so keyboard and pointer stay in lockstep.
   const handleCardKeyDown = (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (isRenaming) return;
     e.preventDefault();
-    if (isReadyToPublish) return;
     handleCardClick();
   };
 
@@ -301,14 +352,52 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     ? 'w-[72vw] max-w-[300px] sm:w-[260px] aspect-video'
     : 'w-[40vw] max-w-[200px] sm:w-[168px] aspect-[9/16]';
 
+  // Kebab overflow items (ready state). ONE renderer feeds both the coarse-pointer
+  // sheet and the fine-pointer popover so they can never diverge. Conditions match
+  // the old hover rail exactly — presentation moved, behaviour unchanged (T6180).
+  const menuItemClass = 'w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-md transition-colors disabled:opacity-50';
+  const renderKebabItems = () => (
+    <>
+      <button onClick={(e) => { handleStartRename(e); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
+        <Pencil size={18} className="text-gray-300 flex-shrink-0" />
+        <span className="text-gray-200">Rename</span>
+      </button>
+      {isComplete && (
+        <button onClick={(e) => { e.stopPropagation(); handleClipClick(0); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
+          <Crop size={18} className="text-gray-300 flex-shrink-0" />
+          <span className="text-gray-200">Open in Framing</span>
+        </button>
+      )}
+      {isComplete && (
+        <button onClick={(e) => { e.stopPropagation(); handleOverlayClick(); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
+          <Layers size={18} className="text-gray-300 flex-shrink-0" />
+          <span className="text-gray-200">Open in Overlay</span>
+        </button>
+      )}
+      {isComplete && !isReadyToPublish && (
+        <button onClick={(e) => { handleHideFromDrafts(e); setMenuOpen(false); }} disabled={isPublishing} className={`${menuItemClass} hover:bg-gray-600`}>
+          <EyeOff size={18} className="text-gray-300 flex-shrink-0" />
+          <span className="text-gray-200">Hide from Drafts</span>
+        </button>
+      )}
+      <div className="my-1 border-t border-gray-600" />
+      {/* Two-click delete: first click arms the confirm and KEEPS the menu open; the
+          second calls onDelete and the tile unmounts. Never closes on the first tap. */}
+      <button onClick={(e) => { e.stopPropagation(); handleDelete(e); }} className={`${menuItemClass} hover:bg-red-900/40`}>
+        <Trash2 size={18} className="text-red-400 flex-shrink-0" />
+        <span className="text-red-400">{showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}</span>
+      </button>
+    </>
+  );
+
   return (
     <div
       data-testid="project-card"
-      onClick={isReadyToPublish ? undefined : handleCardClick}
+      onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      onTouchStart={isCoarsePointer ? handleTouchStart : undefined}
-      onTouchMove={isCoarsePointer ? handleTouchMove : undefined}
-      onTouchEnd={isCoarsePointer ? handleTouchEnd : undefined}
+      onTouchStart={isCoarsePointer && !isReadyToPublish ? handleTouchStart : undefined}
+      onTouchMove={isCoarsePointer && !isReadyToPublish ? handleTouchMove : undefined}
+      onTouchEnd={isCoarsePointer && !isReadyToPublish ? handleTouchEnd : undefined}
       role="button"
       tabIndex={canOpen ? 0 : -1}
       aria-current={isCurrentProject ? 'true' : undefined}
@@ -348,10 +437,14 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       )}
 
-      {/* Multi-clip marker — only shown when the draft has more than 1 clip */}
+      {/* Multi-clip marker — only shown when the draft has more than 1 clip. On a
+          ready tile the top-left hosts the "Ready" badge, so the count shifts to the
+          top-right corner freed by the suppressed status chip (T6180). */}
       {project.clip_count > 1 && (
         <span
-          className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm"
+          className={`absolute top-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm ${
+            isReadyToPublish ? 'right-1.5' : 'left-1.5'
+          }`}
           title={`Contains ${project.clip_count} clips`}
           aria-label={`Contains ${project.clip_count} clips`}
         >
@@ -360,25 +453,24 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </span>
       )}
 
-      {/* Ready-to-publish badge (Q3) — persistent affordance; tap publishes (also on mobile) */}
+      {/* "Ready" is a STATUS, not a control (T6180): a non-interactive badge. The
+          publish gesture is the primary button in the bottom action bar. */}
       {isReadyToPublish && (
-        <button
-          type="button"
-          onClick={handlePublishToMyReels}
-          disabled={isPublishing}
-          aria-label={`Move to ${SECTION_NAMES.LIBRARY}`}
-          title={`Move to ${SECTION_NAMES.LIBRARY}`}
-          className="absolute top-1.5 left-1.5 z-30 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-cyan-500/90 text-white shadow hover:bg-cyan-400 disabled:opacity-60 coarse-pointer:min-h-[44px] coarse-pointer:px-3"
+        <span
+          className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm text-cyan-300 shadow"
         >
-          {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <Image size={12} />}
+          <CheckCircle size={11} />
           Ready
-        </button>
+        </span>
       )}
 
-      {/* Status chip (Q7) */}
-      <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
-        {statusLabel}
-      </span>
+      {/* Status chip (Q7) — suppressed in the ready state (Q1): a ready tile shows
+          only the top-left "Ready" badge. Every other state is byte-for-byte unchanged. */}
+      {!isReadyToPublish && (
+        <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
+          {statusLabel}
+        </span>
+      )}
 
       {/* In-My-Reels marker for published-complete reels */}
       {isComplete && project.is_published && (
@@ -387,8 +479,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </span>
       )}
 
-      {/* Bottom scrim: name, game-time, one tag (>=sm) */}
-      <div className="absolute inset-x-0 bottom-0 z-10 px-2 pt-8 pb-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent">
+      {/* Bottom scrim: name, game-time, one tag (>=sm). In the ready state the
+          persistent action bar owns the base of the tile, so the name lifts clear
+          of it (T6180); otherwise the compact pb-3 is unchanged. */}
+      <div className={`absolute inset-x-0 bottom-0 z-10 px-2 pt-8 bg-gradient-to-t from-black/85 via-black/45 to-transparent ${
+        isReadyToPublish && !isRenaming ? 'pb-[96px] sm:pb-[92px]' : 'pb-3'
+      }`}>
         {isRenaming ? (
           <input
             ref={renameInputRef}
@@ -418,36 +514,125 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       </div>
 
-      {/* Slim progress strip pinned to the base (Q7 deep-link stays clickable) */}
-      <div className="absolute inset-x-0 bottom-0 z-20 px-0.5 pb-0.5">
-        <SegmentedProgressStrip
-          project={project}
-          onClipClick={handleClipClick}
-          onOverlayClick={handleOverlayClick}
-          isExporting={isExporting}
-          isOffline={isOffline}
-          failedExportType={failedExportType}
-          variant="slim"
-        />
-      </div>
+      {/* Slim progress strip pinned to the base (Q7 deep-link stays clickable).
+          Dropped in the ready state (Q2): that band becomes the action bar below. */}
+      {!isReadyToPublish && (
+        <div className="absolute inset-x-0 bottom-0 z-20 px-0.5 pb-0.5">
+          <SegmentedProgressStrip
+            project={project}
+            onClipClick={handleClipClick}
+            onOverlayClick={handleOverlayClick}
+            isExporting={isExporting}
+            isOffline={isOffline}
+            failedExportType={failedExportType}
+            variant="slim"
+          />
+        </div>
+      )}
 
-      {/* Actions — desktop hover / mobile long-press sheet. Every old card action reachable. */}
-      <div data-testid="tile-actions" className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
-        {isComplete && project.final_video_id && (
-          <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }} title="Preview video" className={actionBtnClass} />
-        )}
-        <Button variant="secondary" size="sm" icon={Pencil} iconOnly onClick={handleStartRename} title="Rename reel" className={actionBtnClass} />
-        {isComplete && (
-          <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in Framing" className={actionBtnClass} />
-        )}
-        {isComplete && (
-          <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Overlay" className={actionBtnClass} />
-        )}
-        {isComplete && !isReadyToPublish && (
-          <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`} className={actionBtnClass} />
-        )}
-        <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'} className={actionBtnClass} />
-      </div>
+      {/* Non-ready actions — desktop hover / mobile long-press sheet. Every old card
+          action reachable. The ready state has its own persistent bar + kebab below,
+          so this hover rail is suppressed there (T6180). */}
+      {!isReadyToPublish && (
+        <div data-testid="tile-actions" className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
+          {isComplete && project.final_video_id && (
+            <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }} title="Preview video" className={actionBtnClass} />
+          )}
+          <Button variant="secondary" size="sm" icon={Pencil} iconOnly onClick={handleStartRename} title="Rename reel" className={actionBtnClass} />
+          {isComplete && (
+            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in Framing" className={actionBtnClass} />
+          )}
+          {isComplete && (
+            <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Overlay" className={actionBtnClass} />
+          )}
+          {isComplete && !isReadyToPublish && (
+            <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`} className={actionBtnClass} />
+          )}
+          <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'} className={actionBtnClass} />
+        </div>
+      )}
+
+      {/* READY-STATE action bar (T6180): a PERSISTENT bar — the whole point is that
+          the primary action is always visible, never hover-gated. Primary = the named
+          publish gesture; secondary row = Preview + the kebab overflow. Hidden while
+          renaming so the name input (in the scrim above) is reachable. */}
+      {isReadyToPublish && !isRenaming && (
+        <div
+          data-testid="ready-actions"
+          className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-1.5 p-1.5 pt-8 bg-gradient-to-t from-black/95 via-black/80 to-transparent"
+        >
+          {/* Primary — names the verb, emphasized. AA contrast: gray-950 on cyan-500. */}
+          <button
+            type="button"
+            onClick={handlePublishToMyReels}
+            disabled={isPublishing}
+            aria-label={`Move to ${SECTION_NAMES.LIBRARY}`}
+            title={`Move to ${SECTION_NAMES.LIBRARY}`}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold bg-cyan-500 text-gray-950 shadow hover:bg-cyan-400 disabled:opacity-60 transition-colors coarse-pointer:min-h-[44px]"
+          >
+            {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <FolderInput size={14} />}
+            Move to {SECTION_NAMES.LIBRARY}
+          </button>
+          {/* Secondary row: Preview + kebab overflow */}
+          <div className="flex items-center gap-1.5">
+            {project.final_video_id && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
+                title="Preview video"
+                aria-label="Preview video"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors coarse-pointer:min-h-[44px]"
+              >
+                <Play size={14} />
+                Preview
+              </button>
+            )}
+            <button
+              ref={kebabBtnRef}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+              title="More actions"
+              aria-label="More actions"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="inline-flex items-center justify-center rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+            >
+              <MoreVertical size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Kebab menu (ready state) — coarse-pointer bottom sheet OR fine-pointer
+          portaled popover. renderKebabItems() is the single source for both so the
+          two shells never drift. Delete is two-click and deliberately keeps the menu
+          OPEN on the first click (a menu that closed would swallow the confirm). */}
+      {menuOpen && (isCoarsePointer ? (
+        <div ref={menuRef} className="fixed inset-0 z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="flex-1 bg-black/40" onClick={() => setMenuOpen(false)} />
+          <div data-testid="draft-kebab-menu" className="bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-center pt-2 pb-1">
+              <div className="h-1 w-10 bg-gray-600 rounded-full" />
+            </div>
+            <div className="px-2 py-2">
+              {renderKebabItems()}
+            </div>
+          </div>
+        </div>
+      ) : menuPos ? (
+        createPortal(
+          <div
+            ref={menuRef}
+            data-testid="draft-kebab-menu"
+            className="fixed bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 w-48 py-1"
+            style={{ top: `${menuPos.top}px`, left: `${Math.max(8, menuPos.left)}px` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {renderKebabItems()}
+          </div>,
+          document.body
+        )
+      ) : null)}
 
       {/* Durable publish failure — keep the tile and let the user retry (T4050) */}
       {publishRetry && (
