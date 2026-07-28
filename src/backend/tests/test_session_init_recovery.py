@@ -8,7 +8,6 @@ boot-time loop that needed user context it didn't have.
 
 import asyncio
 import sys
-import time
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
@@ -132,16 +131,18 @@ class TestRunningLoopPath:
       3. Not block the caller on the recovery's duration.
     """
 
-    @pytest.mark.local_disk_timing
     @pytest.mark.asyncio
     async def test_create_task_branch_propagates_context_and_does_not_block(self):
-        # The `elapsed < 0.1` assert below guards a real fire-and-forget
-        # contract, but it measures wall-clock around a sqlite-backed
-        # user_session_init. On the /workspace Windows bind mount that sqlite
-        # runs ~19ms vs ~4ms on container-local disk, so the timing budget
-        # cannot hold there (passes 3/3 from a /tmp worktree or on CI's native
-        # disk). Runs on /workspace deselect this via `-m "not local_disk_timing"`;
-        # do NOT delete the assert.
+        # Fire-and-forget contract: with a loop already running, the recovery is
+        # scheduled via create_task, so user_session_init returns BEFORE the
+        # coroutine body runs. The spy sleeps 0.2s and only sets `gate` at its
+        # end, so `gate` being unset immediately after user_session_init returns
+        # proves the caller did not await the recovery. This is a state-based
+        # assertion (T6070) -- it holds regardless of how slow the surrounding
+        # real work is, and fails exactly when fire-and-forget regresses.
+        # (Superseded a wall-clock `elapsed < 0.1` assert that flaked on the
+        # /workspace bind mount where user_session_init's own sqlite work
+        # legitimately exceeded 100ms.)
         from app.session_init import (
             _init_cache, user_session_init, _run_startup_recovery as _real,
         )
@@ -168,16 +169,21 @@ class TestRunningLoopPath:
             gate.set()
 
         with patch("app.session_init._run_startup_recovery", _spy):
-            started = time.perf_counter()
             user_session_init(uid)
-            elapsed = time.perf_counter() - started
 
-        # create_task must return immediately — user_session_init returning
-        # cannot have waited 200ms for the background task.
-        assert elapsed < 0.1, (
-            f"user_session_init blocked for {elapsed:.3f}s — create_task "
-            f"should be fire-and-forget"
-        )
+            # Fire-and-forget: the spy sleeps before setting `gate`, so if
+            # user_session_init had awaited the recovery the gate would already
+            # be set here. Its being unset proves the caller returned without
+            # waiting on the background task. Belt-and-suspenders: the spy also
+            # records its argument only after the sleep, so it must not have run.
+            assert not gate.is_set(), (
+                "user_session_init awaited the background recovery — "
+                "create_task should be fire-and-forget"
+            )
+            assert "user_id_arg" not in observed, (
+                "recovery ran before user_session_init returned — "
+                "create_task should be fire-and-forget"
+            )
 
         # Now drain the scheduled task.
         await asyncio.wait_for(gate.wait(), timeout=2.0)
