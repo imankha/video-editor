@@ -163,7 +163,12 @@ function removeBoundaryDuplicates(keyframes) {
   const threshold = MIN_KEYFRAME_SPACING * 3;
 
   return keyframes.filter(kf => {
-    if (kf.frame > 0 && kf.frame < threshold && hasSameSpatialData(kf, startKf)) return false;
+    // Exclude self on BOTH branches. The end branch is naturally self-excluding
+    // (kf.frame < endKf.frame is false for endKf); the start branch must guard
+    // with kf.frame > startKf.frame — NOT kf.frame > 0 — or a first keyframe at
+    // frames 1..29 self-compares (hasSameSpatialData(kf, kf) is trivially true)
+    // and silently deletes the user's first crop keyframe on restore (T6140).
+    if (kf.frame > startKf.frame && kf.frame < threshold && hasSameSpatialData(kf, startKf)) return false;
     if (kf.frame < endKf.frame && endKf.frame - kf.frame < threshold && hasSameSpatialData(kf, endKf)) return false;
     return true;
   });

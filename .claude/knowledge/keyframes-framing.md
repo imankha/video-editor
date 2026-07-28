@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-27 (T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the removeBoundaryDuplicates self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-07-27 (T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -137,7 +137,8 @@ gesture lands — no save/export.
   real Vite-served controller+utils in-browser (self-skips on a deployed target — a "pass" on
   staging means it SKIPPED; run locally with the dev stack). It pins the flat-list invariants:
   (INV-1) RESTORE round-trips exactly — no manufactured frame-0 boundary, crop data + count
-  preserved; (INV-2) origins normalized to `user`/`trim` on restore (`permanent` is legacy
+  preserved; (INV-1b, T6140) a distinct first keyframe at frame 1..29 round-trips (does NOT
+  self-drop); (INV-2) origins normalized to `user`/`trim` on restore (`permanent` is legacy
   residue); (INV-3) `removeBoundaryDuplicates` collapses ONLY a keyframe spatially identical to
   the adjacent boundary — a DISTINCT near-edge keyframe survives (dedup is identity-based, never
   proximity-based); (INV-4) empty list is legal (INITIALIZE seeds zero, empty RESTORE is a no-op);
@@ -147,19 +148,34 @@ gesture lands — no save/export.
   `validateInvariants` clean and trim cleanup drops only `trim`-origin keyframes. The old T340
   permanent-boundary assertions (`g1a_frame0===0`, `origin==='permanent'`, reconstitution) are
   RETIRED with that model; the disposition is documented inline at the top of the spec.
-- **LANDMINE — `removeBoundaryDuplicates` self-drops a non-boundary first keyframe (found T6050,
-  NOT yet fixed).** The cosmetic edge-dedup (keyframeController.js:158-170) compares each keyframe
-  against `keyframes[0]`/`keyframes[length-1]` — but the loop INCLUDES those boundary keyframes
-  themselves, and `hasSameSpatialData(kf, kf)` is trivially true. So the gate for `keyframes[0]`
-  reduces to `frame ∈ (0, MIN_KEYFRAME_SPACING*3=30)`: a restored FIRST keyframe at frame 1..29
-  with no other duplicate is SILENTLY DROPPED on restore (interpolation then clamps to the next
-  keyframe → the crop for the opening frames changes = real data loss, the same class this spec
-  guards). Reachable: `savedKeyframes` from persisted crop data have no frame-0 guarantee
-  (useCrop.js:194-207 restores them verbatim). This is why the stale spec's `[10,50,90]` input
-  returned `[50,90]` (frame-10 dropped) — NOT the "missing frame 0" the T340 comment claimed. The
-  spec works around it (INV-1 uses first frame 35 > 30; INV-3 pins the safe boundary), so it stays
-  green, but the fix (exclude the boundary keyframes from their own comparison, or compare to the
-  NEIGHBOR) belongs in a follow-up task.
+- **`removeBoundaryDuplicates` self-drop — FIXED (T6140, 2026-07-27).** The cosmetic edge-dedup
+  (keyframeController.js:158-171) was asymmetric: the END branch is naturally self-excluding
+  (`kf.frame < endKf.frame` is false for `endKf`), but the START branch guarded only with
+  `kf.frame > 0`. So when `keyframes[0].frame ∈ 1..29`, the first keyframe compared against ITSELF
+  (`hasSameSpatialData(kf, kf)` trivially true) and SILENTLY DROPPED ITSELF on restore — real crop
+  data loss, since persisted crop keyframes have no frame-0 guarantee (useCrop.js:194-207 restores
+  verbatim; flat-list first keyframe is wherever the user first moved the box). **Fix:** the start
+  branch now guards `kf.frame > startKf.frame` (symmetric with the end branch) — a first keyframe at
+  1..29 with no other duplicate round-trips; a GENUINE neighbour duplicate (a distinct keyframe next
+  to the boundary with identical spatial data) still collapses cosmetically. `hasSameSpatialData` has
+  no other call site, so this was the only self-comparison. Guarded by controller unit tests
+  (keyframeController.test.js RESTORE_KEYFRAMES: "self-comparison guard" first + last cases) and
+  `keyframe-integrity.spec.js` **INV-1b** (T6140 widened it into the now-safe range — a distinct
+  first keyframe at frame 5 round-trips). INV-1 still uses first-frame 35 for the no-frame-0 proof.
+- **PERSISTENCE HAZARD — the cosmetic dedupe CAN reach the DB (reported by T6140, NOT fixed).**
+  `removeBoundaryDuplicates` is a display-level runtime fixup that runs on RESTORE
+  (keyframeController.js:218) and mutates the restored list stored in controller `state.keyframes`.
+  That is exactly the list `getKeyframesForExport`/`saveCurrentClipState` read: on an export click,
+  `FramingContainer.saveCurrentClipState` (FramingContainer.jsx:318,324) sends `keyframes` (the
+  post-dedupe list) as `cropKeyframes` in the full-state PUT `/clips/{id}` → the collapsed keyframe
+  is written back permanently. This VIOLATES CLAUDE.md § *Runtime fixups are memory-only*: a cosmetic
+  correction reaches persistence. It is gesture-triggered (export click), not the reactive-useEffect
+  loop of T350, so it does not compound on every load — but it IS the same FAMILY: a memory-only
+  fixup becoming saved data, and because dedupe re-runs on every restore, each load→export cycle can
+  drop another genuine edge duplicate. The T6140 fix removes the SELF-drop, so no unique data is lost
+  anymore; the remaining hazard is the (intended) neighbour-duplicate collapse becoming permanent.
+  Left for a follow-up: either keep the dedupe display-only (don't apply it to `state.keyframes` on
+  restore) or exclude the restore fixup from the export read path.
 - **Empty list → default centered crop**: frontend `useCrop.js:293-307` (`?? defaultCropData`);
   backend export applies `default_crop_keyframes` when crop_data empty (`export/framing.py:565-573`,
   `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in useCrop.js:17-20 ≡

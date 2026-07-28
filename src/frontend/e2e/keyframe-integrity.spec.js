@@ -51,12 +51,13 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *   INV-4 empty list is a legal state (INITIALIZE seeds zero; empty restore is a no-op).
  *   INV-5 any keyframe is deletable, including the first and the last remaining one.
  *
- * KNOWN LATENT BUG surfaced while re-deriving (reported by T6050, NOT fixed here — spec-only
- * task): removeBoundaryDuplicates compares keyframes[0] against ITSELF, so a restored FIRST
- * keyframe at frame 1..29 with no other duplicate is silently dropped (data loss on restore).
- * INV-1 deliberately uses a first keyframe at frame 35 (> the 30-frame edge window) so it
- * round-trips honestly; INV-3's distinct-near-edge case pins the safe boundary of the dedup.
- * See .claude/knowledge/keyframes-framing.md for the follow-up.
+ * FIXED (T6140, 2026-07-27): removeBoundaryDuplicates used to compare keyframes[0] against
+ * ITSELF, so a restored FIRST keyframe at frame 1..29 with no other duplicate was silently
+ * dropped (data loss on restore). The start branch now guards with `kf.frame > startKf.frame`
+ * (symmetric with the end branch's natural self-exclusion). INV-1 still uses a first keyframe
+ * at frame 35 to prove no frame-0 reconstitution; INV-1b (added by T6140) widens coverage into
+ * the now-safe range — a DISTINCT first keyframe at frame 5 round-trips instead of self-dropping.
+ * See .claude/knowledge/keyframes-framing.md for the persistence follow-up.
  *
  * Run: npx playwright test keyframe-integrity --headed
  */
@@ -110,6 +111,16 @@ test.describe('Keyframe integrity — flat-list model', () => {
       // redundant duplicate.
       const inv1 = keyframeReducer(s, actions.restoreKeyframes([
         { frame: 35, origin: 'user', ...crop, x: 120 },
+        { frame: 60, origin: 'user', ...crop, x: 160 },
+        { frame: 90, origin: 'user', ...crop, x: 200 },
+      ]));
+
+      // ===== INV-1b: a DISTINCT first keyframe at frame 1..29 round-trips (T6140 regression) =====
+      // Before T6140 the start branch self-compared keyframes[0], so a first keyframe inside the
+      // 30-frame edge window with no other duplicate silently deleted ITSELF on restore. This is
+      // the previously-unsafe range INV-1 avoided (frame 35). Now it must round-trip exactly.
+      const inv1b = keyframeReducer(s, actions.restoreKeyframes([
+        { frame: 5, origin: 'user', ...crop, x: 120 },
         { frame: 60, origin: 'user', ...crop, x: 160 },
         { frame: 90, origin: 'user', ...crop, x: 200 },
       ]));
@@ -191,6 +202,10 @@ test.describe('Keyframe integrity — flat-list model', () => {
         inv1_hasFrame0: inv1.keyframes.some((kf) => kf.frame === 0),
         inv1_v: validateInvariants(inv1),
 
+        // INV-1b (T6140 regression: first keyframe at frame 5 in the edge window survives)
+        inv1b_frames: framesOf(inv1b),
+        inv1b_xs: inv1b.keyframes.map((kf) => kf.x),
+
         // INV-2
         inv2_frames: framesOf(inv2),
         inv2_origins: originsOf(inv2),
@@ -242,6 +257,11 @@ test.describe('Keyframe integrity — flat-list model', () => {
     expect(result.inv1_origins, 'No keyframe is manufactured as permanent').toEqual(['user', 'user', 'user']);
     expect(result.inv1_v, 'Restored list satisfies validateInvariants').toEqual([]);
     console.log('[keyframe-integrity] INV-1 PASSED: restore round-trips exactly, no manufactured entries');
+
+    // ===== INV-1b: a distinct first keyframe at frame 1..29 round-trips (T6140 regression) =====
+    expect(result.inv1b_frames, 'A distinct first keyframe at frame 5 must NOT self-drop on restore (T6140)').toEqual([5, 60, 90]);
+    expect(result.inv1b_xs, 'The surviving first keyframe keeps its own crop data').toEqual([120, 160, 200]);
+    console.log('[keyframe-integrity] INV-1b PASSED: first keyframe in the edge window round-trips (T6140 fix)');
 
     // ===== INV-2: origin normalization =====
     // 'permanent' is legacy residue — restore normalizes it to 'user'; 'trim' is preserved.
