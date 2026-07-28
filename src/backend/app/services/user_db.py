@@ -154,10 +154,20 @@ def ensure_user_database(user_id: str) -> None:
                 req_id = get_current_req_id()
                 req_suffix = f" req_id={req_id}" if req_id else ""
                 logger.info(f"[Restore] First access for user.sqlite user={user_id}, checking R2...{req_suffix}")
+                # T6160: WAL safety — a conflict can re-trigger this first-access
+                # restore on a RUNNING machine (schedule_user_db_reheal), where a
+                # live connection may hold user.sqlite open. Gate the DOWNLOAD (not
+                # the version check) so a live connection blocks only the swap, as
+                # ensure_user_database_fresh already does.
+                from .db_refresh import clear_stale_wal_sidecars, wal_sidecars_present
                 restore_start = time.perf_counter()
-                was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(user_id, db_path, local_version)
+                was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(
+                    user_id, db_path, local_version,
+                    before_download=lambda: not wal_sidecars_present(db_path),
+                )
                 restore_elapsed = time.perf_counter() - restore_start
                 if was_synced:
+                    clear_stale_wal_sidecars(db_path)
                     logger.info(
                         f"[Restore] Downloaded user.sqlite from R2 for user={user_id}: "
                         f"version={new_version}, took {restore_elapsed:.2f}s{req_suffix}"
@@ -204,6 +214,25 @@ def ensure_user_database(user_id: str) -> None:
 
     with _init_lock:
         _initialized_user_dbs.add(user_id)
+
+
+def schedule_user_db_reheal(user_id: str) -> None:
+    """T6160 (decision 4): after a user.sqlite CAS conflict, make the next
+    ensure_user_database re-pull R2's newer copy.
+
+    Sibling of database.schedule_profile_db_reheal, but user.sqlite is stickier:
+    ensure_user_database early-returns on _initialized_user_dbs membership BEFORE
+    it ever checks the version, so clearing the version alone does nothing — the
+    init flag must be dropped too. The version cache is memory-only (no persisted
+    file row), so there is nothing on disk to clear. The restore cooldown is
+    cleared because a conflict means R2 was just reachable. The baseline is NOT
+    advanced (that would disarm CAS); the refused edit is discarded on re-pull.
+    """
+    from ..database import set_local_user_db_version
+    set_local_user_db_version(user_id, None)
+    with _init_lock:
+        _initialized_user_dbs.discard(user_id)
+    _r2_user_restore_cooldowns.pop(user_id, None)
 
 
 def ensure_user_database_fresh(user_id: str) -> None:

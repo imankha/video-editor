@@ -339,11 +339,12 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
 
     T4310: CAS is ON (skip_version_check=False) — this always runs via
     asyncio.to_thread (see the one caller in _dispatch_impl), so the HEAD adds
-    no request-thread latency. On a conflict, storage.py already refused the
-    upload and re-downloaded the newer copy; the local version baseline is
-    updated so the retry isn't stuck comparing against a stale version forever,
-    and the conflict marker is set (mark_sync_conflict) instead of a blind
-    "still failing" — a conflicted retry re-download/reconciles, never overwrites.
+    no request-thread latency. On a conflict, storage.py refuses the upload and
+    does NOT re-download (WAL-unsafe swap outside the write lock); the baseline is
+    NOT advanced (that would disarm CAS). The conflict marker is set
+    (mark_sync_conflict), and T6160 additionally invalidates the loaded-from
+    version (schedule_*_db_reheal) so the NEXT request re-pulls R2's newer copy —
+    a refusal here is never a blind overwrite and no longer a permanent dead-end.
 
     Returns True iff both profile.sqlite and user.sqlite synced successfully
     (False for either a conflict or a genuine failure).
@@ -372,6 +373,10 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
             # would let the NEXT retry compare stale local data against
             # "confirmed" R2 data and silently force-push it.
             mark_sync_conflict(user_id)
+            # T6160: retry_pending_sync uses the lower-level primitive directly,
+            # so the self-heal invalidation must be requested explicitly here (it
+            # is NOT routed through sync_db_to_r2_explicit). Baseline stays frozen.
+            db_module.schedule_profile_db_reheal(user_id, profile_id)
             profile_ok = False
         else:
             profile_ok = False
@@ -391,6 +396,9 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
             # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see the
             # profile branch above.
             mark_sync_conflict(user_id)
+            # T6160: same self-heal for user.sqlite (decision 4).
+            from app.services.user_db import schedule_user_db_reheal
+            schedule_user_db_reheal(user_id)
             user_ok = False
         else:
             user_ok = False

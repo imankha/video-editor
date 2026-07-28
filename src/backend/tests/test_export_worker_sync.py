@@ -79,17 +79,30 @@ class TestSyncDbToR2Explicit:
     @patch("app.database.sync_database_to_r2_with_version")
     @patch("app.database.get_local_db_version", return_value=3)
     @patch("app.database.check_database_size")
-    def test_conflict_returns_conflict_and_freezes_version(
+    def test_conflict_returns_conflict_and_invalidates_baseline(
         self, mock_check, mock_get_ver, mock_sync, tmp_path,
     ):
-        """T4310 round 2 (BLOCKING-1/MAJOR-2): CAS refusal returns
-        SyncResult.CONFLICT and the local baseline stays FROZEN at
-        current_version -- storage.py no longer re-downloads R2's newer copy
-        (that swap was WAL-unsafe outside the write lock), so advancing the
-        baseline here without a confirmed refresh would let the NEXT attempt
-        compare stale local data against "confirmed" R2 data and silently
-        force-push it. The same conflict is refused again on every retry until
-        the T4315 restore path heals the local copy."""
+        """T6160: CAS refusal returns SyncResult.CONFLICT and INVALIDATES the
+        loaded-from baseline (set to None) so the NEXT request performs a
+        first-access re-pull of R2's newer copy (self-heal) instead of
+        conflicting forever on a running machine (staging 2026-07-27).
+
+        SAFETY (unchanged from the old frozen-baseline contract): the stale
+        upload is still REFUSED and the stale copy NEVER lands on R2 -- proven
+        two ways here:
+          * mock_sync returns (False, 9): storage.py refused the upload; the
+            result is CONFLICT (not OK), so nothing this call did made the write
+            succeed.
+          * the baseline is set to None, NOT advanced to R2's v9. None does NOT
+            disarm CAS: the T4315 BLOCKING-2 unconfirmed-baseline branch in
+            storage.sync_database_to_r2_with_version refuses whenever
+            `r2_version > 0 and current_version is None`, exactly as it refuses a
+            stale version. So if the next-access re-pull has not yet healed the
+            local copy, a second upload attempt is refused identically -- a
+            None baseline can never force a stale copy over newer R2 content.
+        The one thing that changes vs. the old contract is that recovery is now
+        possible (re-pull on next access) instead of impossible (frozen until
+        process restart)."""
         from app.database import sync_db_to_r2_explicit
 
         mock_sync.return_value = (False, 9)  # conflict: refused, R2 is at v9
@@ -105,7 +118,12 @@ class TestSyncDbToR2Explicit:
         assert result is SyncResult.CONFLICT
         assert result == "conflict"  # str-Enum: comparable to the raw status string
         assert not result  # falsy, same as a plain failure for legacy bool callers
-        mock_set_ver.assert_not_called()
+        # New contract: baseline is INVALIDATED to None (self-heal on next access),
+        # and critically NOT advanced to R2's v9 -- advancing to v9 would let the
+        # next write compare stale local data against a "confirmed" v9 and silently
+        # force-push it. None re-arms first-access restore AND still trips the
+        # unconfirmed-baseline CAS refusal until the local copy is healed.
+        mock_set_ver.assert_called_once_with("u1", "p1", None)
 
     @patch("app.database.R2_ENABLED", True)
     @patch("app.database.sync_database_to_r2_with_version")
@@ -183,11 +201,20 @@ class TestSyncUserDbToR2Explicit:
         mock_set_ver.assert_called_once_with("u1", 3)
 
     @patch("app.database.get_local_user_db_version", return_value=2)
-    def test_conflict_returns_conflict_and_freezes_version(self, mock_get_ver, tmp_path):
-        """T4310 round 2 (BLOCKING-1/MAJOR-2): CAS refusal returns
-        SyncResult.CONFLICT and the local baseline stays FROZEN -- see the
-        profile-DB twin above for the WAL-corruption rationale for why
-        storage.py no longer re-downloads and adopts R2's version here."""
+    def test_conflict_returns_conflict_and_invalidates_baseline(self, mock_get_ver, tmp_path):
+        """T6160: user.sqlite twin of the profile-DB test above. CAS refusal
+        returns SyncResult.CONFLICT and INVALIDATES the loaded-from baseline
+        (set to None) so the next ensure_user_database re-pulls R2's newer copy
+        (self-heal via schedule_user_db_reheal, which also drops the
+        _initialized_user_dbs init flag).
+
+        SAFETY (unchanged): the stale upload is REFUSED (mock returns (False, 9))
+        and the stale copy NEVER lands on R2. The baseline is set to None, NOT
+        advanced to R2's v9 -- and None still refuses: the T4315 BLOCKING-2
+        unconfirmed-baseline branch in storage.sync_user_db_to_r2_with_version
+        refuses whenever `r2_version > 0 and current_version is None`, so a second
+        attempt before the re-pull heals is refused identically. None enables
+        recovery; it never enables a stale force-push."""
         from app.database import sync_user_db_to_r2_explicit
 
         db_path = tmp_path / "u1" / "user.sqlite"
@@ -201,7 +228,8 @@ class TestSyncUserDbToR2Explicit:
 
         assert result is SyncResult.CONFLICT
         assert not result
-        mock_set_ver.assert_not_called()
+        # New contract: baseline INVALIDATED to None (self-heal), NOT advanced to v9.
+        mock_set_ver.assert_called_once_with("u1", None)
 
     @patch("app.database.get_local_user_db_version", return_value=2)
     def test_returns_false_on_failure_no_version_update(self, mock_get_ver):

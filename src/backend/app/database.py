@@ -498,6 +498,47 @@ def set_local_db_version(user_id: str, profile_id: str, version: int | None) -> 
                 logger.warning(f"Could not persist db_version to {db_path}: {e}")
 
 
+def _clear_persisted_db_version(db_path: Path) -> None:
+    """Delete the db_version row persisted in a profile.sqlite file.
+
+    set_local_db_version(..., None) only pops the in-memory cache; the file's
+    db_version row survives and get_local_db_version reads it back (see its
+    fallback branch). So invalidating for a re-pull MUST also clear the row, or
+    the stale version is resurrected and the first-access restore never runs.
+    """
+    if not db_path.exists():
+        return
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn.execute("DELETE FROM db_version WHERE id = 1")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not clear persisted db_version from {db_path}: {e}")
+
+
+def schedule_profile_db_reheal(user_id: str, profile_id: str) -> None:
+    """T6160: after a CAS conflict, make the NEXT request re-pull R2's newer copy.
+
+    ensure_database restores from R2 on first access only (local_version is None),
+    so a running machine that has a version cached never notices R2 moving ahead
+    and every write conflicts forever (staging 2026-07-27). We do NOT add a
+    per-request HEAD (20s+ cold, rejected in ensure_database's comment). Instead,
+    the conflict itself invalidates the loaded-from version — memory cache AND the
+    persisted db_version row — plus the restore cooldown (a conflict means R2 was
+    reachable, so any prior transient-error cooldown is stale). The next
+    ensure_database then reads local_version=None and performs a WAL-safe
+    first-access restore. Costs one HEAD only when a conflict actually happened.
+
+    The refused in-flight edit is DISCARDED by that re-pull, never merged/force-
+    pushed — the CAS refusal stays intact (see T6160-design.md decision 2).
+    """
+    set_local_db_version(user_id, profile_id, None)
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    _clear_persisted_db_version(db_path)
+    _r2_restore_cooldowns.pop(f"{user_id}:{profile_id}", None)
+
+
 def init_request_context() -> None:
     """Initialize request context for write tracking. Call at start of request.
 
@@ -672,11 +713,28 @@ def ensure_database():
                     f"[Restore] First access for user={user_id} profile={profile_id}, "
                     f"local_db={'exists' if local_exists else 'missing'} ({local_size} bytes), checking R2..."
                 )
+                # T6160: WAL safety. "First access" used to mean "no connections
+                # yet," so a blind download-and-swap was safe. Now that a conflict
+                # can re-trigger this path on a RUNNING machine (schedule_profile_
+                # db_reheal cleared the version), a live connection may hold the
+                # file open (-wal/-shm present) and a blind swap would let the next
+                # connection replay the old WAL onto the new file (cross-DB page
+                # mixing). Gate the actual DOWNLOAD (not the version check) exactly
+                # as ensure_profile_db_local does — a live connection blocks only
+                # the swap, retried on a later request, never corrupts.
                 import time as _time
+
+                from .services.db_refresh import clear_stale_wal_sidecars, wal_sidecars_present
                 restore_start = _time.perf_counter()
-                was_synced, new_version, was_error = sync_database_from_r2_if_newer(user_id, db_path, local_version)
+                was_synced, new_version, was_error = sync_database_from_r2_if_newer(
+                    user_id, db_path, local_version,
+                    before_download=lambda: not wal_sidecars_present(db_path),
+                )
                 restore_elapsed = _time.perf_counter() - restore_start
                 if was_synced:
+                    # Defense-in-depth for the window between before_download's
+                    # check and the download completing (see clear_stale_wal_sidecars).
+                    clear_stale_wal_sidecars(db_path)
                     new_size = db_path.stat().st_size if db_path.exists() else 0
                     logger.info(
                         f"[Restore] Downloaded database from R2 for user={user_id} profile={profile_id}: "
@@ -1475,9 +1533,14 @@ def sync_db_to_r2_explicit(
         # baseline means this conflict is detected and refused again on every
         # retry (safe) until T4315's restore path heals the local copy.
         mark_sync_conflict(user_id)
+        # T6160: invalidate the loaded-from version so the NEXT request re-pulls
+        # R2's newer copy (self-heal) — the baseline is NOT advanced here (that
+        # would disarm CAS); the frozen-baseline guarantee above is unchanged.
+        schedule_profile_db_reheal(user_id, profile_id)
         logger.warning(
             f"[ExportWorker] R2 version conflict for user={user_id}, profile={profile_id} "
-            f"— refused (R2 at v{new_version}), baseline frozen at v{current_version}"
+            f"— refused (R2 at v{new_version}), baseline frozen at v{current_version}; "
+            f"scheduled re-pull on next access (T6160)"
         )
         return SyncResult.CONFLICT
     else:
@@ -1533,9 +1596,15 @@ def sync_user_db_to_r2_explicit(
         # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see
         # sync_db_to_r2_explicit for the rationale.
         mark_sync_conflict(user_id)
+        # T6160: invalidate so the next ensure_user_database re-pulls (decision 4).
+        # Lives in user_db.py because it must also drop the _initialized_user_dbs
+        # flag ensure_user_database early-returns on. Baseline NOT advanced.
+        from .services.user_db import schedule_user_db_reheal
+        schedule_user_db_reheal(user_id)
         logger.warning(
             f"[ExportWorker] user.sqlite R2 version conflict for user={user_id} "
-            f"— refused (R2 at v{new_version}), baseline frozen at v{local_version}"
+            f"— refused (R2 at v{new_version}), baseline frozen at v{local_version}; "
+            f"scheduled re-pull on next access (T6160)"
         )
         return SyncResult.CONFLICT
     else:

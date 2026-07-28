@@ -80,11 +80,12 @@ class TestProfileDbCasConflict:
         version (v3) is behind R2's (v9) must be REFUSED, not overwrite R2.
 
         Reviewer round 2 (MAJOR-2): storage.py no longer re-downloads on
-        conflict (WAL-unsafe swap outside the write lock), so the baseline
-        stays frozen at v3 -- never advanced without a confirmed refresh. A
-        second attempt with the same stale baseline must refuse AGAIN (never
-        silently upload the stale copy once the local "loaded" version happens
-        to no longer look newer than the last conflict)."""
+        conflict (WAL-unsafe swap outside the write lock). The baseline must
+        never ADVANCE to R2's version without a confirmed refresh (that would
+        disarm CAS). T6160: on conflict it is instead INVALIDATED to None so the
+        next request re-pulls — None is not an advance, the storage-side CAS still
+        refuses a None baseline against real R2 content (BLOCKING-2), so a second
+        attempt refuses AGAIN and the stale copy still never lands on R2."""
         from app.database import (
             get_local_db_version,
             set_local_db_version,
@@ -107,18 +108,21 @@ class TestProfileDbCasConflict:
             assert fake._objects[key]["data"] == b"NEWER_R2_COPY"
             assert not any(c[1] == key for c in fake.upload_calls), \
                 "CAS must refuse the upload entirely, not upload-then-detect"
-            # No re-download either -- the local file is untouched and the
-            # baseline stays frozen at the ORIGINAL stale version.
+            # No re-download either -- the conflict handler itself never swaps the
+            # local file (WAL-unsafe outside the write lock); the re-pull is
+            # deferred to the next request's ensure_database.
             assert not fake.download_calls, "conflict must not trigger a re-download (WAL-unsafe)"
-            assert get_local_db_version(USER, PROFILE) == 3
+            # T6160: invalidated to None (self-heal), NOT advanced to R2's v9.
+            assert get_local_db_version(USER, PROFILE) is None
 
-            # Retry with the still-stale baseline: CAS must refuse AGAIN.
+            # Retry with the (now None) baseline: CAS must refuse AGAIN — a None
+            # baseline against real R2 content still refuses (BLOCKING-2).
             result2 = sync_db_to_r2_explicit(USER, PROFILE)
 
             assert result2 is SyncResult.CONFLICT
             assert fake._objects[key]["data"] == b"NEWER_R2_COPY", \
                 "the stale local copy must never land on R2"
-            assert get_local_db_version(USER, PROFILE) == 3
+            assert get_local_db_version(USER, PROFILE) is None
 
     def test_matching_version_uploads_and_bumps(self, tmp_path):
         """No false positives: a writer whose loaded version matches R2 (or R2
@@ -159,7 +163,9 @@ class TestProfileDbCasConflict:
 class TestUserDbCasConflict:
 
     def test_stale_writer_refused_and_baseline_frozen(self, tmp_path):
-        """Reviewer round 2 (MAJOR-2): no re-download -- baseline stays frozen."""
+        """Reviewer round 2 (MAJOR-2): no re-download, baseline never ADVANCED.
+        T6160: invalidated to None on conflict (self-heal, decision 4) — still
+        never a force-push of the stale copy."""
         from app.database import (
             get_local_user_db_version,
             set_local_user_db_version,
@@ -180,13 +186,14 @@ class TestUserDbCasConflict:
             assert not result
             assert fake._objects[key]["data"] == b"NEWER_R2_USER"
             assert not fake.download_calls, "conflict must not trigger a re-download (WAL-unsafe)"
-            assert get_local_user_db_version(USER) == 2
+            # T6160: invalidated to None (self-heal), NOT advanced to R2's v5.
+            assert get_local_user_db_version(USER) is None
 
             result2 = sync_user_db_to_r2_explicit(USER)
 
             assert result2 is SyncResult.CONFLICT
             assert fake._objects[key]["data"] == b"NEWER_R2_USER"
-            assert get_local_user_db_version(USER) == 2
+            assert get_local_user_db_version(USER) is None
 
     def test_matching_version_uploads_and_bumps(self, tmp_path):
         from app.database import (
@@ -423,9 +430,10 @@ class TestRetryPendingSyncConflict:
 
     def test_conflict_freezes_baseline_and_reports_not_ok(self, tmp_path):
         """Reviewer round 2 (MAJOR-2): storage.py no longer re-downloads on
-        conflict, so retry_pending_sync must NOT advance the baseline either --
-        it stays frozen until T4315's restore path heals it. Only the conflict
-        marker gets set."""
+        conflict, so retry_pending_sync must NOT ADVANCE the baseline to R2's
+        version. T6160: it instead INVALIDATES it (schedule_profile_db_reheal ->
+        set_local_db_version(..., None)) so the next request re-pulls — never a
+        force-push of the stale copy. Only the conflict marker gets set."""
         from app.middleware.db_sync import retry_pending_sync
 
         profile_dir = tmp_path / USER / "profiles" / PROFILE
@@ -445,8 +453,8 @@ class TestRetryPendingSyncConflict:
         assert result is False, "a conflict is not a successful retry"
         # CAS is on (skip_version_check=False) for this always-off-thread path.
         assert mock_sync.call_args.kwargs["skip_version_check"] is False
-        # Baseline must NOT move -- no confirmed refresh happened.
-        mock_set_ver.assert_not_called()
+        # T6160: the baseline is INVALIDATED (None), never ADVANCED to R2's v9.
+        mock_set_ver.assert_called_once_with(USER, PROFILE, None)
         mock_mark_conflict.assert_called_once_with(USER)
 
 
