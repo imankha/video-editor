@@ -1,6 +1,10 @@
 # T6210 (Tbug41s): Update gate loops forever when the server is ahead but no newer bundle exists
 
-**Status:** STAGING — fixed in `65841559`, deployed to staging 2026-07-30.
+**Status:** DONE — fixed in `65841559`, deployed to prod 2026-07-30 (build #3171,
+`f309731d`; backend and bundle both verified at 3171).
+
+Follow-ups filed: **T6220** (lockstep deploys so the build numbers stay accurate) and
+**T6230** (real-browser ServiceWorker test for the probe — the residual risk below).
 
 ## Symptom
 
