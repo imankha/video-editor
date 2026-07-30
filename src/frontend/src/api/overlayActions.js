@@ -39,12 +39,17 @@ async function sendAction(projectId, action, target = null, data = null, expecte
 
     if (!response.ok) {
       console.error('[overlayActions] Action failed:', result.error);
-      return { success: false, version: result.version || 0, error: result.error };
+      // `status` lets the caller distinguish a TRANSIENT failure (offline, 5xx,
+      // 429) from a DETERMINISTIC rejection (4xx: the server evaluated this
+      // exact request and refused it). Re-sending the latter byte-for-byte can
+      // only fail again -- see overlayActionStore's retryability rule.
+      return { success: false, version: result.version || 0, error: result.error, status: response.status };
     }
 
     return result;
   } catch (err) {
     console.error('[overlayActions] Network error:', err);
+    // No status: the request never reached the server, so it IS retryable.
     return { success: false, version: 0, error: err.message };
   }
 }
@@ -55,11 +60,17 @@ async function sendAction(projectId, action, target = null, data = null, expecte
  * @param {number} startTime - Region start time in seconds
  * @param {number} endTime - Region end time in seconds
  * @param {string} regionId - Client-generated region ID (for optimistic updates)
+ * @param {Array} keyframes - Seed keyframes ({time, x, y, radiusX, radiusY,
+ *   strokeOpacity, fillOpacity, color}) the editor materialized for the new
+ *   region. Sending them keeps the stored region equal to the one on screen --
+ *   omitting them stores a keyframe-less region, which exports with no
+ *   spotlight and makes the first boundary drag delete a keyframe the DB never had.
  * @returns {Promise<{success: boolean, version: number, region_id?: string}>}
  */
-export async function createRegion(projectId, startTime, endTime, regionId = null) {
+export async function createRegion(projectId, startTime, endTime, regionId = null, keyframes = null) {
   const data = { start_time: startTime, end_time: endTime };
   if (regionId) data.region_id = regionId;
+  if (keyframes && keyframes.length > 0) data.keyframes = keyframes;
   return sendAction(projectId, 'create_region', null, data);
 }
 

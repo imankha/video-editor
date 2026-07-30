@@ -12,6 +12,11 @@ import { toast, useToastStore } from '../components/shared/Toast';
  * indication their work wasn't saving, then fired an export that rendered stale
  * DB state (the T4900 "Add Spotlight ignored my keyframes" report).
  *
+ * Failures split by whether re-sending can plausibly help (`isRetryableFailure`):
+ * a dropped request or a 5xx is worth retrying; a 4xx is the server's verdict on
+ * this exact request and will repeat forever, so it is reported once instead of
+ * being queued behind a Retry button that cannot work.
+ *
  * This store makes those failures VISIBLE and RECOVERABLE:
  *   - `dispatchOverlayAction` runs each action with a bounded retry (still the
  *     same user gesture — NOT a reactive background loop), and on final failure
@@ -34,14 +39,39 @@ export const RETRY_BASE_MS = 400;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Is this failure worth sending again?
+ *
+ * A 4xx means the server READ this exact request and refused it, so re-sending
+ * it byte-for-byte against unchanged state can only produce the same 4xx. That
+ * is what stranded a user behind an unclearable "Your edits aren't saving —
+ * Retry" toast: a deterministic 400 was queued as if it were a dropped packet,
+ * and every Retry click re-failed identically until they refreshed the page.
+ *
+ * Transient (retryable): no response at all (offline / aborted), 5xx, plus the
+ * two 4xx codes that explicitly mean "try again" — 408 and 429.
+ *
+ * @param {?{status?: number}} result
+ * @returns {boolean}
+ */
+export function isRetryableFailure(result) {
+  const status = result?.status;
+  if (typeof status !== 'number') return true; // never reached the server
+  if (status === 408 || status === 429) return true;
+  return status < 400 || status >= 500;
+}
+
+/**
  * Run an overlay-action thunk with bounded exponential backoff.
- * `run` resolves to the overlayActions result ({ success, error }); the client
- * catches network errors internally and returns { success: false } rather than
- * throwing, but we also treat a thrown error as a failed attempt.
+ * `run` resolves to the overlayActions result ({ success, error, status }); the
+ * client catches network errors internally and returns { success: false }
+ * rather than throwing, but we also treat a thrown error as a failed attempt.
+ *
+ * Stops early on a non-retryable failure — the remaining attempts and their
+ * backoff sleeps are pure waste, and the caller needs the verdict promptly.
  *
  * @param {() => Promise<{success: boolean}>} run
  * @param {number} retries
- * @returns {Promise<{success: boolean, result?: object}>}
+ * @returns {Promise<{success: boolean, result?: object, retryable?: boolean}>}
  */
 export async function runWithRetry(run, retries = MAX_RETRIES) {
   let lastResult = null;
@@ -50,12 +80,13 @@ export async function runWithRetry(run, retries = MAX_RETRIES) {
       const result = await run();
       lastResult = result;
       if (result && result.success) return { success: true, result };
+      if (!isRetryableFailure(result)) return { success: false, result, retryable: false };
     } catch (err) {
       lastResult = { success: false, error: err?.message };
     }
     if (attempt < retries) await sleep(RETRY_BASE_MS * Math.pow(2, attempt));
   }
-  return { success: false, result: lastResult };
+  return { success: false, result: lastResult, retryable: true };
 }
 
 export const useOverlayActionStore = create((set, get) => ({
@@ -71,8 +102,15 @@ export const useOverlayActionStore = create((set, get) => ({
    * Returns the overlayActions result so awaited callers keep working.
    */
   dispatch: async (label, run) => {
-    const { success, result } = await runWithRetry(run);
+    const { success, result, retryable } = await runWithRetry(run);
     if (!success) {
+      if (retryable === false) {
+        // The server rejected this specific action (4xx). Queuing it would
+        // offer a Retry that is guaranteed to fail and would jam the export
+        // gate on work that can never be sent, so report it and move on.
+        get()._surfaceRejectionToast(label, result);
+        return result;
+      }
       const entry = { key: `${label}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`, label, run };
       set((s) => ({ failedActions: [...s.failedActions, entry] }));
       get()._surfaceFailureToast();
@@ -96,8 +134,16 @@ export const useOverlayActionStore = create((set, get) => ({
 
     const stillFailed = [];
     for (const entry of queued) {
-      const { success } = await runWithRetry(entry.run);
-      if (!success) stillFailed.push(entry);
+      const { success, result, retryable } = await runWithRetry(entry.run);
+      if (success) continue;
+      if (retryable === false) {
+        // Turned deterministic since it was queued (e.g. the target no longer
+        // exists). Keeping it would make every future Retry fail forever, so
+        // drop it from the queue and say so instead.
+        get()._surfaceRejectionToast(entry.label, result);
+        continue;
+      }
+      stillFailed.push(entry);
     }
 
     set({ failedActions: stillFailed, isRetrying: false });
@@ -131,6 +177,20 @@ export const useOverlayActionStore = create((set, get) => ({
       },
     });
     set({ _toastId: id });
+  },
+
+  /**
+   * Surface a DETERMINISTIC rejection (4xx). Deliberately different from the
+   * retryable toast: no Retry button (there is nothing to retry) and it
+   * auto-dismisses, so the user isn't left with a permanent banner they can
+   * only clear by reloading. Logged loudly — a 4xx here is a bug on our side,
+   * not a user error, and it must stay findable in the console.
+   */
+  _surfaceRejectionToast: (label, result) => {
+    console.error(`[overlayActionStore] Action "${label}" rejected by server (not retryable):`, result?.error);
+    toast.error("That highlight change didn't save", {
+      message: 'The change is still on screen but was not stored. Undo it and try again.',
+    });
   },
 
   _dismissFailureToast: () => {

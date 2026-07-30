@@ -4,6 +4,7 @@ import {
   useOverlayActionStore,
   runWithRetry,
   dispatchOverlayAction,
+  isRetryableFailure,
 } from './overlayActionStore';
 import { useToastStore } from '../components/shared/Toast';
 
@@ -176,5 +177,113 @@ describe('overlayActionStore', () => {
 
     expect(useOverlayActionStore.getState().failedActions).toHaveLength(0);
     expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+});
+
+/**
+ * Prod report 2026-07-29: a deterministic 400 ("Keyframe at 2.0s not found")
+ * was queued as if it were a dropped packet. Every Retry click re-sent the same
+ * rejected request and failed identically, so the "Your edits aren't saving"
+ * toast could only be cleared by refreshing the page.
+ *
+ * A 4xx is the server's verdict on THIS request; re-sending it unchanged cannot
+ * change the answer. Only failures that plausibly benefit from another attempt
+ * (no response, 5xx, 408, 429) are retried and queued.
+ */
+describe('overlayActionStore — retryability of deterministic failures', () => {
+  beforeEach(() => {
+    useOverlayActionStore.setState({ failedActions: [], isRetrying: false, _toastId: null });
+    useToastStore.setState({ toasts: [] });
+    vi.useRealTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['no response at all (offline)', undefined, true],
+    ['500 server error', 500, true],
+    ['503 unavailable', 503, true],
+    ['408 request timeout', 408, true],
+    ['429 too many requests', 429, true],
+    ['400 validation error', 400, false],
+    ['404 not found', 404, false],
+    ['409 conflict', 409, false],
+  ])('isRetryableFailure: %s', (_label, status, expected) => {
+    expect(isRetryableFailure({ success: false, status })).toBe(expected);
+  });
+
+  it('isRetryableFailure treats a thrown/absent result as retryable', () => {
+    expect(isRetryableFailure(null)).toBe(true);
+    expect(isRetryableFailure(undefined)).toBe(true);
+  });
+
+  it('runWithRetry stops after ONE attempt on a 4xx (no futile re-sends)', async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValue({ success: false, status: 400, error: 'Keyframe at 2.0s not found' });
+
+    const res = await runWithRetry(run);
+
+    expect(run).toHaveBeenCalledTimes(1); // NOT 3
+    expect(res.success).toBe(false);
+    expect(res.retryable).toBe(false);
+  });
+
+  it('a 4xx is NOT queued and shows a dismissible toast with no Retry button', async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValue({ success: false, status: 400, error: 'Keyframe at 2.0s not found' });
+
+    await dispatchOverlayAction('deleteKeyframe', run);
+
+    // Not queued: queuing would jam the export gate on work that can never be sent.
+    expect(useOverlayActionStore.getState().failedActions).toHaveLength(0);
+
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].type).toBe('error');
+    expect(toasts[0].action).toBeUndefined(); // no Retry — there is nothing to retry
+    expect(toasts[0].duration).toBeGreaterThan(0); // auto-dismisses, not a permanent banner
+  });
+
+  it('a 4xx still logs loudly (it is our bug, not the user\'s)', async () => {
+    const run = vi.fn().mockResolvedValue({ success: false, status: 400, error: 'boom' });
+
+    await dispatchOverlayAction('deleteKeyframe', run);
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('deleteKeyframe'),
+      'boom',
+    );
+  });
+
+  it('a queued action that turns deterministic is dropped, not retried forever', async () => {
+    vi.useFakeTimers();
+    // Queued while transient (network), then the server starts rejecting it.
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({ success: false })
+      .mockResolvedValueOnce({ success: false })
+      .mockResolvedValueOnce({ success: false })
+      .mockResolvedValue({ success: false, status: 400, error: 'Keyframe at 2.0s not found' });
+
+    const p = dispatchOverlayAction('deleteKeyframe', run);
+    await vi.runAllTimersAsync();
+    await p;
+    expect(useOverlayActionStore.getState().failedActions).toHaveLength(1);
+
+    const rp = useOverlayActionStore.getState().retryFailedOverlayActions();
+    await vi.runAllTimersAsync();
+    const ok = await rp;
+
+    // Queue drains: the user is told once and is no longer stuck behind a
+    // Retry button that can never succeed.
+    expect(ok).toBe(true);
+    expect(useOverlayActionStore.getState().failedActions).toHaveLength(0);
+    expect(useToastStore.getState().toasts.some((t) => t.action?.label === 'Retry')).toBe(false);
   });
 });

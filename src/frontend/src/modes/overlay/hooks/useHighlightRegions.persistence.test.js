@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import useHighlightRegions from './useHighlightRegions';
+import { frameToTime } from '../../../utils/videoUtils';
 
 /**
  * T5644 — re-added region must persist via a surgical create_region gesture.
@@ -63,7 +64,11 @@ describe('useHighlightRegions - re-add persistence gesture (T5644)', () => {
     const addGesture = (clickTime) => {
       const newRegion = result.current.addRegion(clickTime);
       if (newRegion) {
-        createRegion(PROJECT_ID, newRegion.startTime, newRegion.endTime, newRegion.id);
+        const seedKeyframes = (newRegion.keyframes || []).map(({ frame, ...rest }) => ({
+          time: frameToTime(frame, videoMetadata.fps),
+          ...rest,
+        }));
+        createRegion(PROJECT_ID, newRegion.startTime, newRegion.endTime, newRegion.id, seedKeyframes);
       }
       return newRegion;
     };
@@ -71,7 +76,9 @@ describe('useHighlightRegions - re-add persistence gesture (T5644)', () => {
     // Initial add persists.
     let first;
     act(() => { first = addGesture(3); });
-    expect(createRegion).toHaveBeenLastCalledWith(PROJECT_ID, first.startTime, first.endTime, first.id);
+    expect(createRegion).toHaveBeenLastCalledWith(
+      PROJECT_ID, first.startTime, first.endTime, first.id, expect.any(Array),
+    );
 
     // Delete gesture (the reported flow).
     act(() => result.current.deleteRegion(first.id));
@@ -91,11 +98,34 @@ describe('useHighlightRegions - re-add persistence gesture (T5644)', () => {
       expect.any(Number),
       expect.any(Number),
       readded.id,
+      expect.any(Array),
     );
-    const [, startArg, endArg] = createRegion.mock.calls.at(-1);
+    const [, startArg, endArg, , keyframesArg] = createRegion.mock.calls.at(-1);
     expect(startArg).toBe(readded.startTime);
     expect(endArg).toBe(readded.endTime);
     expect(endArg).toBeGreaterThan(startArg);
+
+    // Prod report 2026-07-29: the create used to send bounds ONLY, so the stored
+    // region had `keyframes: []` while the editor was already showing these two
+    // boundary keyframes. That divergence made an untouched region export with no
+    // spotlight, and made the first drag near a boundary delete a keyframe the DB
+    // never had ("Keyframe at 2.0s not found").
+    expect(keyframesArg).toHaveLength(2);
+    expect(keyframesArg.map(kf => kf.time)).toEqual([readded.startTime, readded.endTime]);
+    for (const kf of keyframesArg) {
+      // The backend's OverlayKeyframePayload requires all of these.
+      expect(kf).toEqual(expect.objectContaining({
+        time: expect.any(Number),
+        x: expect.any(Number),
+        y: expect.any(Number),
+        radiusX: expect.any(Number),
+        radiusY: expect.any(Number),
+        strokeOpacity: expect.any(Number),
+        fillOpacity: expect.any(Number),
+        color: expect.any(String),
+      }));
+      expect(kf).not.toHaveProperty('frame'); // keyed by time on the wire
+    }
   });
 });
 

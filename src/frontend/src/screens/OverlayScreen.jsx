@@ -686,12 +686,24 @@ export function OverlayScreen({
     // persisted (T5644: delete -> re-add -> reload showed 0 regions).
     const newRegion = addHighlightRegion(clickTime);
     if (newRegion && canSyncActions) {
+      // Send the region's SEED keyframes with the create. addRegion materializes
+      // two boundary keyframes so the spotlight is visible immediately; if we
+      // persist only the bounds, the stored region diverges from the one on
+      // screen -- an untouched region exports with no spotlight (the render
+      // endpoint skips keyframe-less regions), and the first drag near a
+      // boundary mirrors a snap-move as a delete of a keyframe the DB never had
+      // ("Keyframe at 2.0s not found"). Overlay keys the backend by time.
+      const seedKeyframes = (newRegion.keyframes || []).map(({ frame, ...rest }) => ({
+        time: frameToTime(frame, highlightRegionsFramerate),
+        ...rest,
+      }));
       dispatchOverlayAction('createRegion', () =>
-        overlayActions.createRegion(projectId, newRegion.startTime, newRegion.endTime, newRegion.id));
+        overlayActions.createRegion(
+          projectId, newRegion.startTime, newRegion.endTime, newRegion.id, seedKeyframes));
     }
     setOverlayChangedSinceExport(true);
     return newRegion?.id ?? null;
-  }, [addHighlightRegion, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [addHighlightRegion, projectId, canSyncActions, highlightRegionsFramerate, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Delete highlight region
   const wrappedDeleteHighlightRegion = useCallback((regionIndex) => {

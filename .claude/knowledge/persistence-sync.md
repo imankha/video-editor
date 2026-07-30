@@ -137,6 +137,57 @@ Retry affordance is gesture-initiated, NOT a background reactive loop. Do NOT ad
 retry logic (`useEffect` watching failure state to re-send). The only allowed persistence-
 retry trigger is an explicit user gesture (Retry button or export button auto-retry).
 
+## Overlay region seed keyframes + retryability (prod report 2026-07-29)
+
+**Symptom:** adding a spotlight then dragging the circle near the region boundary looped
+`[overlayActions] Action failed: Keyframe at 2.0s not found` and pinned an unclearable
+"Your edits aren't saving — Retry" toast (Retry re-failed identically; only a refresh cleared it).
+
+**Root cause — memory/DB divergence at region creation.** `useHighlightRegions.addRegion`
+materializes TWO boundary keyframes (`startFrame`/`endFrame`, from `defaultHighlightForRegion`)
+so the new region shows a spotlight instantly, but `create_region` stored `keyframes: []`.
+Two consequences, both live in prod:
+1. **Export dropped the spotlight.** The render endpoint's `has_keyframes` check
+   (`overlay.py`) skips GPU processing entirely when every region is keyframe-less, so a
+   region the user added but never dragged exported with no highlight at all. A region only
+   got persisted keyframes as a side effect of the user's first drag.
+2. **The first boundary drag 400'd.** `addOrUpdateKeyframe` MOVES a keyframe within
+   `MIN_KEYFRAME_DISTANCE_FRAMES` (5) onto the current frame and reports `movedFromFrame`;
+   `persistKeyframeEdit` mirrors a move as delete(old)+add(new). The delete targeted a
+   keyframe that only ever existed in memory. `2.0s` in the report = `DEFAULT_REGION_DURATION`.
+
+**Fixes (`fix/overlay-seeded-keyframes-not-persisted`):**
+- `createRegion(projectId, start, end, regionId, keyframes)` sends the seed keyframes;
+  `OverlayScreen.wrappedAddHighlightRegion` converts `frame`→`time` with the SAME framerate
+  the hook snapped with (exact equality, so `_keyframes_within_bounds` keeps them).
+  Backend `OverlayKeyframePayload` types them and `create_region` stores them time-sorted.
+- `delete_keyframe` on an absent keyframe is a **no-op success**, not a 400 — the gesture's
+  postcondition already holds, and it is half of a snap-MOVE. A missing REGION is still a
+  400 (genuine mismatch stays visible).
+- **Retryability split (`isRetryableFailure` in overlayActionStore):** `sendAction` now
+  returns the HTTP `status`. 4xx (except 408/429) = the server's verdict on this exact
+  request → `runWithRetry` stops after ONE attempt, the action is NOT queued (queuing jams
+  the export gate on work that can never be sent), and a dismissible no-Retry toast plus a
+  `console.error` reports it. No status (never reached the server) / 5xx / 408 / 429 keep the
+  old queue+Retry behavior. `retryFailedOverlayActions` also drops a queued action that has
+  turned deterministic, so the queue can always drain.
+
+**Legacy data:** regions stored pre-fix keep `keyframes: []`. No migration — the client-side
+seed depends on `pickPrimaryDetectionBox` over per-region detections, and a backend
+re-derivation would write a DIFFERENT (frame-centered) spotlight than the editor shows for
+regions that have detections. They self-heal on the user's next keyframe edit (now that
+delete is idempotent); until then the render endpoint logs a WARNING naming the enabled
+region that will draw nothing.
+
+**Tests:** `src/backend/tests/test_overlay_seeded_keyframes.py` (seed keyframes stored +
+sorted, bare create still works, idempotent delete, real delete still deletes, missing region
+still 400s, full snap-move round trip); `src/frontend/src/api/overlayActions.test.js`
+(payload shape, status surfacing); `overlayActionStore.test.js` retryability block.
+
+**Landmine:** `restoreRegions` ALSO materializes boundary keyframes when stored keyframes are
+empty. That fixup is memory-only and must stay that way (persisting it would be reactive
+persistence). The seed is persisted at the CREATE gesture, which is where it belongs.
+
 ## T5070 — Blocking update gate + version handshake + ordered state-sync flow
 
 In-session PWA update is a **blocking, non-dismissible gate** (`UpdateGateModal` + `updateGateStore`), replacing the old dismissible toast (T4150). Paints above the login surface (z-[60] > AuthGateModal z-50) so an un-updated client can't log in or interact. **Tbug40p — the gate is raised SOLELY by a truth comparison; NOT by a waiting SW.** A waiting service worker no longer, by itself, blocks the user (that was bug40: a perpetually-`waiting` SW on Safari re-nagged on every wake because `onReturnToApp` gated on `registration.waiting`). The SW is now purely the swap *mechanism*.

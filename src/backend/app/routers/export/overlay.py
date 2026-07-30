@@ -260,6 +260,22 @@ class OverlayActionTarget(BaseModel):
     keyframe_time: float | None = None  # Time in seconds
 
 
+class OverlayKeyframePayload(BaseModel):
+    """One keyframe sent with ``create_region``.
+
+    Mirrors the keyframe shape the editor holds in memory, keyed by ``time``
+    (the overlay's backend key) rather than the frontend's ``frame``.
+    """
+    time: float
+    x: float
+    y: float
+    radiusX: float
+    radiusY: float
+    strokeOpacity: float
+    fillOpacity: float
+    color: str
+
+
 class OverlayActionData(BaseModel):
     """Data payload for overlay actions. Fields used depend on action type."""
     # Region fields
@@ -267,6 +283,12 @@ class OverlayActionData(BaseModel):
     start_time: float | None = None
     end_time: float | None = None
     enabled: bool | None = None
+    # Seed keyframes for create_region. The editor materializes two boundary
+    # keyframes the moment a region is added (useHighlightRegions.addRegion), so
+    # the region ALREADY shows a spotlight before any drag. Persisting them here
+    # is what keeps the stored region equal to what the user sees -- see the
+    # create_region branch for why an empty list is a correctness bug.
+    keyframes: list[OverlayKeyframePayload] | None = None
 
     # Keyframe fields
     time: float | None = None
@@ -516,12 +538,30 @@ async def overlay_action(project_id: int, action: OverlayAction):
 
                 # Use client-provided ID for optimistic updates, or generate one
                 region_id = action.data.region_id or f"region-{uuid.uuid4().hex[:12]}"
+                # Persist the editor's seed keyframes. This used to write `[]`
+                # unconditionally, which diverged the stored region from the one
+                # on screen and caused two bugs:
+                #   1. Export: `has_keyframes` (render endpoint) is False for a
+                #      keyframe-less region, so a spotlight the user added but
+                #      never dragged skipped GPU rendering entirely -- the
+                #      exported video had no spotlight at all.
+                #   2. Editing: dragging the circle near a region boundary makes
+                #      the editor MOVE the seeded boundary keyframe, and the move
+                #      is mirrored to the backend as delete(old)+add(new). The
+                #      delete targeted a keyframe that only ever existed in
+                #      memory -> 400 "Keyframe at Ns not found".
+                # Sorted by time so the stored array holds the same invariant
+                # add_keyframe maintains.
+                seed_keyframes = sorted(
+                    (kf.model_dump() for kf in (action.data.keyframes or [])),
+                    key=lambda k: k['time'],
+                )
                 new_region = {
                     "id": region_id,
                     "startTime": action.data.start_time,
                     "endTime": action.data.end_time or (action.data.start_time + 2.0),
                     "enabled": True,
-                    "keyframes": [],
+                    "keyframes": seed_keyframes,
                     "detections": [],
                 }
                 highlights.append(new_region)
@@ -673,10 +713,19 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 keyframes = region.get('keyframes', [])
                 kf_idx = _find_keyframe_index(keyframes, action.target.keyframe_time)
                 if kf_idx == -1:
-                    raise ValueError(f"Keyframe at {action.target.keyframe_time}s not found")
-
-                del keyframes[kf_idx]
-                logger.info(f"[Overlay Action] Deleted keyframe at {action.target.keyframe_time}s")
+                    # Idempotent: the gesture's postcondition ("no keyframe at
+                    # this time") already holds, so this is success, not a 400.
+                    # Delete is also the half of a snap-MOVE that the editor
+                    # mirrors as delete(old)+add(new); failing it aborts nothing
+                    # and merely strands the user behind an unretryable error
+                    # toast. Logged at INFO so a genuine mismatch stays visible.
+                    logger.info(
+                        f"[Overlay Action] delete_keyframe at {action.target.keyframe_time}s: "
+                        f"already absent from region {action.target.region_id} (no-op)"
+                    )
+                else:
+                    del keyframes[kf_idx]
+                    logger.info(f"[Overlay Action] Deleted keyframe at {action.target.keyframe_time}s")
 
             elif action.action == "set_effect_type":
                 # Change effect type
@@ -2066,6 +2115,18 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         region.get('keyframes') and len(region.get('keyframes', [])) > 0
         for region in highlight_regions
     )
+
+    # A region the user ENABLED but that carries no keyframes renders nothing,
+    # so the export silently drops a spotlight the editor was showing. Regions
+    # created before create_region persisted its seed keyframes are stored that
+    # way; they heal on the user's next keyframe edit, but until then this is
+    # the only place the discrepancy is observable. Surface it.
+    for region in highlight_regions:
+        if region.get('enabled', True) and not region.get('keyframes'):
+            logger.warning(
+                f"[Overlay Render] Enabled region {region.get('id')} has NO keyframes - "
+                f"nothing will be drawn for it (pre-fix create_region data)"
+            )
 
     if not has_keyframes:
         # No overlays to render - just copy working video to final video
