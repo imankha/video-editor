@@ -17,6 +17,7 @@ from app.services.collection_metadata import compute_unified_clip_start
 from app.storage import R2_ENABLED, file_exists_in_r2, generate_presigned_url
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
+from app.utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -277,11 +278,12 @@ class ProjectDetailResponse(BaseModel):
     is_auto_created: bool = False  # True if auto-created from 5-star clips
 
 
-@router.get("", response_model=list[ProjectListItem])
-async def list_projects():
-    """List all projects with progress information.
-
-    Optimized to use a single query with JOINs instead of N+1 queries.
+def _read_projects_list():
+    """T6200: all blocking sqlite reads + response build for the projects list on
+    ONE worker thread (was on the event loop, serializing concurrent requests).
+    Returns the built list of ProjectListItem; no sqlite cursor escapes the thread
+    (connections are thread-affine). Reads request contextvars via
+    get_db_connection, so it MUST be invoked via run_in_context.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -499,42 +501,57 @@ async def list_projects():
                 clip_game_start_time=clip_game_start_time
             ))
 
-        # T5683: Warm draft posters for visible projects (non-blocking background).
-        # Collect project IDs with missing posters and warm them with bounded concurrency.
-        import asyncio
-
-        from app.profile_context import get_current_profile_id
-        from app.services.poster import draft_poster_rel_path
-        from app.services.poster_warmer import get_poster_warmer
-        from app.storage import file_exists_in_r2
-        from app.user_context import get_current_user_id
-
-        async def warm_visible_drafts():
-            """Warm draft posters for visible projects (max 3-4 in flight)."""
-            warmer = get_poster_warmer()
-            user_id = get_current_user_id()
-            profile_id = get_current_profile_id()
-            tasks = []
-            for project in result:
-                # Skip if poster already exists (cache hit).
-                if file_exists_in_r2(user_id, draft_poster_rel_path(project.id)):
-                    continue
-                # Queue warming with bounded semaphore.
-                coro = warmer.warm_draft_poster_async(user_id, profile_id, project.id)
-                tasks.append(warmer.warm_with_semaphore(coro))
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
-                logger.info(f"[ListWarm] warmed {len(tasks)} draft posters for {len(result)} visible projects")
-
-        # Fire-and-forget warming (never fails the list endpoint).
-        if result:
-            try:
-                from app.services.poster_warmer import fire_and_forget
-                fire_and_forget(warm_visible_drafts())
-            except Exception as e:
-                logger.info(f"[ListWarm] draft warming task creation failed: {e}")
-
         return result
+
+
+@router.get("", response_model=list[ProjectListItem])
+async def list_projects():
+    """List all projects with progress information.
+
+    Optimized to use a single query with JOINs instead of N+1 queries. T6200: the
+    blocking sqlite reads + response build run on a worker thread via
+    run_in_context so concurrent requests no longer serialize on the event loop;
+    the poster-warm fire-and-forget stays on the loop (it schedules async tasks
+    and needs the running loop).
+    """
+    result = await run_in_context(_read_projects_list)
+
+    # T5683: Warm draft posters for visible projects (non-blocking background).
+    # Collect project IDs with missing posters and warm them with bounded concurrency.
+    import asyncio
+
+    from app.profile_context import get_current_profile_id
+    from app.services.poster import draft_poster_rel_path
+    from app.services.poster_warmer import get_poster_warmer
+    from app.storage import file_exists_in_r2
+    from app.user_context import get_current_user_id
+
+    async def warm_visible_drafts():
+        """Warm draft posters for visible projects (max 3-4 in flight)."""
+        warmer = get_poster_warmer()
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+        tasks = []
+        for project in result:
+            # Skip if poster already exists (cache hit).
+            if file_exists_in_r2(user_id, draft_poster_rel_path(project.id)):
+                continue
+            # Queue warming with bounded semaphore.
+            coro = warmer.warm_draft_poster_async(user_id, profile_id, project.id)
+            tasks.append(warmer.warm_with_semaphore(coro))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(f"[ListWarm] warmed {len(tasks)} draft posters for {len(result)} visible projects")
+
+    # Fire-and-forget warming (never fails the list endpoint).
+    if result:
+        try:
+            from app.services.poster_warmer import fire_and_forget
+            fire_and_forget(warm_visible_drafts())
+        except Exception as e:
+            logger.info(f"[ListWarm] draft warming task creation failed: {e}")
+
+    return result
 
 
 @router.post("", response_model=ProjectResponse)
