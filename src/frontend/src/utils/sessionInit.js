@@ -100,7 +100,11 @@ function installFetchInterceptor() {
           // Tbug40p: passive truth check — every API response already in flight
           // doubles as a build-number probe (zero extra requests). Gate iff the
           // server's build is strictly newer than this client's baked build.
-          checkServerVersion(response.headers.get('X-App-Build'));
+          // Tbug41s made this async (it may consult the ServiceWorker for a waiting
+          // bundle); deliberately not awaited — the response path must not wait on a
+          // gate decision. Trailing catch keeps a probe failure off the console as an
+          // unhandled rejection.
+          checkServerVersion(response.headers.get('X-App-Build')).catch(() => {});
 
           const ttfb = Math.round(performance.now() - t0);
           // Clone + read body to measure body transfer time

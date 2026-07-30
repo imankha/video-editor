@@ -1,5 +1,6 @@
 import { registerSW } from 'virtual:pwa-register';
 import { API_BASE } from '../config';
+import { setBundleProbe } from './appVersion';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 // Long-lived installed PWAs never hit a "next load", and browsers throttle or
@@ -13,13 +14,26 @@ const UPDATE_CHECK_MIN_GAP_MS = 5 * 60 * 1000;
 // the user still lands on the new bundle instead of stranding on a spinner.
 const SW_ACTIVATE_TIMEOUT_MS = 3500;
 
+// Tbug41s: an update() that finds new bytes leaves an `installing` worker that only
+// becomes `waiting` once its precache finishes downloading. Bound the wait so a
+// slow install answers "no bundle yet" (retried after the probe cooldown) instead of
+// hanging the gate decision forever.
+const SW_INSTALL_TIMEOUT_MS = 10 * 1000;
+
 /**
- * Tbug40p: the update gate is now driven SOLELY by the truth comparison
- * (appVersion.checkServerVersion: serverBuild > clientBuild). This module no
- * longer raises the gate off `registration.waiting` — a waiting service worker,
- * by itself, never blocks the user (that was 40p: a perpetually-waiting SW on
- * Safari re-nagged on every resume). The SW stays purely the MECHANISM that swaps
- * the bundle when the truth gate does fire and the user clicks "Update now".
+ * Tbug40p: the update gate is driven by the truth comparison
+ * (appVersion.checkServerVersion: serverBuild > clientBuild). This module does not
+ * raise the gate off `registration.waiting` — a waiting service worker, by itself,
+ * never blocks the user (that was 40p: a perpetually-waiting SW on Safari re-nagged
+ * on every resume). The SW is the MECHANISM that swaps the bundle when the gate
+ * fires and the user clicks "Update now".
+ *
+ * Tbug41s adds the other half: a waiting SW does not RAISE the gate, but its
+ * ABSENCE now VETOES it. `serverBuild > clientBuild` alone can be true forever when
+ * the backend deploys without the frontend (path-filtered workflows), which strands
+ * the user in an unescapable modal. So this module also registers the bundle probe
+ * appVersion consults before gating. Both directions keep all ServiceWorker
+ * mechanics here and the decision there.
  *
  * vite.config.js uses registerType 'prompt', so a new build sits in the waiting
  * SW until updateGateStore.runUpdate() drives activation via the reloader below.
@@ -46,6 +60,12 @@ export function setupPwaUpdatePrompt() {
   // so the ordered "actually land the new bundle" escalation lives here (Objective
   // 2), not in the store.
   useUpdateGateStore.getState().setSwReloader(() => landLatestBundle(updateSW, () => registration));
+
+  // Tbug41s: give appVersion the "is there actually a newer bundle?" question it
+  // must answer YES to before blocking the user. Registered unconditionally at
+  // setup; the probe itself returns false when there is no registration yet, so a
+  // slow/failed SW registration under-gates (safe) rather than looping (not safe).
+  setBundleProbe(() => probeForWaitingBundle(() => registration));
 
   // Returning to the app is the moment to re-check. Shared by visibilitychange
   // (tab switch / wake from sleep) and pageshow (Safari bfcache restore).
@@ -137,6 +157,57 @@ async function landLatestBundle(updateSW, getRegistration) {
     // unregister best-effort; a plain reload still usually lands a backend-only bump.
   }
   window.location.reload();
+}
+
+/**
+ * Tbug41s — the bundle probe appVersion consults before raising the gate.
+ * Resolves true ONLY when a newer bundle is genuinely waiting to take over.
+ *
+ * Why `waiting` specifically, and not "an SW installed": a FIRST-EVER registration
+ * installs and activates directly with nothing to supersede — that is THIS bundle
+ * registering itself, not an update. Treating it as one would gate a client that is
+ * already running the newest code it can get, i.e. the loop again.
+ */
+async function probeForWaitingBundle(getRegistration) {
+  const registration = getRegistration?.();
+  // No registration (SW unsupported, private mode, registration still pending or
+  // failed) — cannot prove a newer bundle exists, so do not gate.
+  if (!registration) return false;
+
+  try {
+    await registration.update();
+  } catch {
+    // Offline/flaky — unprovable, so "no". Retried after the probe cooldown.
+    return false;
+  }
+
+  if (registration.waiting) return true;
+
+  const installing = registration.installing;
+  if (!installing) return false; // update() found no new bytes → no newer bundle.
+
+  await waitForInstalledOrTimeout(installing, SW_INSTALL_TIMEOUT_MS);
+  // Re-read after settling: only `waiting` proves a supersede.
+  return !!registration.waiting;
+}
+
+/** Resolve once `worker` leaves the 'installing' state, or on timeout. */
+function waitForInstalledOrTimeout(worker, timeoutMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      worker.removeEventListener('statechange', onChange);
+      clearTimeout(timer);
+      resolve();
+    };
+    const onChange = () => {
+      if (worker.state !== 'installing') finish();
+    };
+    worker.addEventListener('statechange', onChange);
+    const timer = setTimeout(finish, timeoutMs);
+  });
 }
 
 /**

@@ -3,10 +3,13 @@ import { flushDurableState } from '../utils/updateFlush';
 import { useAuthStore } from './authStore';
 
 /**
- * T5070 / Tbug40p — owns the blocking update-gate's state. UpdateGateModal is a
- * pure View reading this store; the gate is now raised SOLELY by the truth
- * comparison (appVersion.checkServerVersion: serverBuild > clientBuild), observed
- * via sessionInit.js's header check and pwaUpdate.js's resume poll.
+ * T5070 / Tbug40p / Tbug41s — owns the blocking update-gate's state.
+ * UpdateGateModal is a pure View reading this store; the gate is raised by
+ * appVersion.checkServerVersion, observed via sessionInit.js's header check and
+ * pwaUpdate.js's resume poll. Tbug41s: that check now requires BOTH
+ * serverBuild > clientBuild AND a confirmed waiting bundle — a newer server alone
+ * can be true forever when the backend deploys without the frontend, which made
+ * this "never auto-closes" modal unescapable.
  *
  * The gate never auto-closes once required -- the only exit is a successful
  * reload onto the new bundle (a fresh bundle boots with a higher __APP_BUILD__,

@@ -5,8 +5,21 @@ import { useUpdateGateStore } from '../stores/updateGateStore';
  * (bootVersion latch + 2-observation debounce + sessionStorage "acknowledged
  * version") entirely.
  *
- * THE ONE RULE: gate iff the deployed server's build number is STRICTLY GREATER
- * than this running client's baked-in build number.
+ * THE RULE (amended by Tbug41s): gate iff the deployed server's build number is
+ * STRICTLY GREATER than this running client's baked-in build number AND a newer
+ * client bundle is actually obtainable.
+ *
+ * Tbug41s — why the second half is required. `serverBuild > clientBuild` proves the
+ * SERVER moved; it does NOT prove a newer CLIENT bundle exists. The two deploy
+ * independently (path-filtered workflows: deploy-backend.yml fires on
+ * `src/backend/**`, deploy-frontend.yml on `src/frontend/**`), so a backend-only
+ * commit raises the server's number with no matching bundle. The gate then demands
+ * an update that can never arrive: "Update now" reloads onto the SAME bundle, the
+ * comparison re-fires, forever. Observed on staging 2026-07-30 (server 3165 vs
+ * bundle 3163; commits 3164-3165 touched zero frontend files) and latent on prod
+ * for any `deploy_production.sh --backend-only`. Requiring a real waiting bundle
+ * makes the gate's PRECONDITION match its EXIT CONDITION, so the loop is
+ * structurally impossible rather than merely unlikely.
  *
  *   clientBuild  = __APP_BUILD__            (git rev-list --count HEAD, baked at
  *                                            build time — immutable for the life
@@ -43,6 +56,30 @@ export function __setClientBuildForTest(n) {
   clientBuild = Number(n);
 }
 
+// Tbug41s: set once by pwaUpdate.js (which owns the ServiceWorkerRegistration) to
+// an async () => boolean resolving true iff a NEWER client bundle is actually
+// waiting to be activated. Same seam shape as updateGateStore's _swReloader: all
+// ServiceWorker mechanics stay in pwaUpdate.js, this module just asks the question.
+let bundleProbe = null;
+
+// Probing costs a registration.update() network round trip, and checkServerVersion
+// runs on EVERY api response. Without a cooldown the staging case (server
+// permanently ahead, no bundle to find) would fire an update() per response.
+const PROBE_MIN_GAP_MS = 5 * 60 * 1000;
+let lastProbeAt = 0;
+let probeInFlight = null;
+
+export function setBundleProbe(fn) {
+  bundleProbe = fn;
+}
+
+/** Test-only seam: clear probe registration + throttle state between tests. */
+export function __resetProbeStateForTest() {
+  bundleProbe = null;
+  lastProbeAt = 0;
+  probeInFlight = null;
+}
+
 /**
  * Compare the deployed server's build against this client's and raise the gate
  * iff the client is strictly behind. A missing/non-numeric header (very old
@@ -51,12 +88,19 @@ export function __setClientBuildForTest(n) {
  *
  * @param {string|number|null} serverBuild  value of X-App-Build (or /api/version build)
  */
-export function checkServerVersion(serverBuild) {
+export async function checkServerVersion(serverBuild) {
   const server = Number(serverBuild);
   if (!Number.isFinite(server)) return; // header absent / unparseable → ignore
   if (server <= clientBuild) return; // up-to-date, or an older straggler → NEVER gate
 
-  // Strictly newer server build exists → a genuine new deploy.
+  // Already gated — the modal is up and the first fire won. Skip the probe rather
+  // than re-running a network check behind a blocking modal.
+  if (useUpdateGateStore.getState().isUpdateRequired) return;
+
+  // Tbug41s: the server moved, but is there actually a newer bundle to load?
+  if (!(await hasNewerBundle())) return;
+
+  // Strictly newer server build AND a bundle waiting → a genuine, ESCAPABLE update.
   //
   // Data-schema axis (Tbug40p decision #3 — seam only): a future deploy that also
   // advances the DB schema (PRAGMA user_version) would set needsMigration:true to
@@ -64,4 +108,50 @@ export function checkServerVersion(serverBuild) {
   // app-code bump routes to a clean reload, so we always pass false. When the first
   // real schema-advancing deploy lands, compare an X-Data-Schema header here.
   useUpdateGateStore.getState().requireUpdate({ needsMigration: false });
+}
+
+/**
+ * Tbug41s — is a newer client bundle actually obtainable right now?
+ *
+ * Throttled and de-duplicated: the staging failure mode leaves the server
+ * permanently ahead, so an unthrottled probe would fire a registration.update()
+ * on every single API response. Within PROBE_MIN_GAP_MS a repeat call reuses the
+ * in-flight promise, or answers "no" outright.
+ *
+ * NO PROBE REGISTERED → NO GATE, deliberately. pwaUpdate.js registers this during
+ * setup; if it hasn't (no ServiceWorker support, private mode, a failed
+ * registration, a dev server) we cannot PROVE a newer bundle exists, and gating on
+ * an unprovable claim is exactly what strands a user in the loop. Such clients also
+ * self-heal: with no SW there is no stale precache, so any ordinary reload already
+ * fetches the newest index.html from the CDN. Loud, not silent, per the
+ * no-silent-fallbacks rule.
+ */
+async function hasNewerBundle() {
+  if (!bundleProbe) {
+    console.warn(
+      '[appVersion] Server build is ahead but no bundle probe is registered ' +
+      '(no ServiceWorker?) - not gating, since a newer bundle cannot be confirmed.'
+    );
+    return false;
+  }
+
+  if (probeInFlight) return probeInFlight;
+
+  const now = Date.now();
+  if (now - lastProbeAt < PROBE_MIN_GAP_MS) return false;
+  lastProbeAt = now;
+
+  probeInFlight = (async () => {
+    try {
+      return await bundleProbe();
+    } catch {
+      // Offline/flaky: cannot confirm a newer bundle, so do not gate. The next
+      // response after the cooldown retries.
+      return false;
+    } finally {
+      probeInFlight = null;
+    }
+  })();
+
+  return probeInFlight;
 }
