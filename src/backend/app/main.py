@@ -123,9 +123,27 @@ async def lifespan(app: FastAPI):
     handlers with the fastapi lifespan pattern). Bodies are unchanged; only the
     registration mechanism moved. Startup runs before `yield`, shutdown after.
     """
+    # T6200: replace the loop's default executor. asyncio's default is
+    # ThreadPoolExecutor(max_workers=min(32, cpu_count + 4)) = 5 on a 1-vCPU
+    # Fly machine — far too small once request-path blocking I/O (validate_session,
+    # hot sqlite reads) is offloaded via asyncio.to_thread. These offloads are
+    # I/O-bound (psycopg2/sqlite3 release the GIL during their I/O), so a larger
+    # bounded pool genuinely overlaps them. Bounded (not unbounded) so a
+    # pathological burst can't exhaust memory; PG-touching offloads are further
+    # backpressured by the pool's maxconn=10.
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    io_executor = ThreadPoolExecutor(max_workers=32, thread_name_prefix="io")
+    asyncio.get_running_loop().set_default_executor(io_executor)
+    logger.info("[Startup] Default asyncio executor set to bounded I/O pool (max_workers=32)")
+
     await _startup_event()
-    yield
-    await _shutdown_event()
+    try:
+        yield
+    finally:
+        await _shutdown_event()
+        io_executor.shutdown(wait=False, cancel_futures=True)
 
 
 app = FastAPI(
