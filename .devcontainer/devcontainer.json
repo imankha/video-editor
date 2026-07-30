@@ -70,6 +70,8 @@
 
   // Runs once when the container is built.
   "onCreateCommand": "bash .devcontainer/setup.sh",
-  // Runs on every container start.
-  "postStartCommand": "bash .devcontainer/auth-sync.sh"
+  // Runs on every container start. git-config.sh repairs the Windows-only bits
+  // of the copied host ~/.gitconfig (github.com credential helper pointing at
+  // gh.exe, and CRLF line endings) -- see that script's header.
+  "postStartCommand": "bash .devcontainer/auth-sync.sh && bash .devcontainer/git-config.sh"
 }
