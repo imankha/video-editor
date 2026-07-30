@@ -265,6 +265,38 @@ if (!region.fps) {
 const fps = region.fps;
 ```
 
+### No Defensive Fixes for Internal Bugs
+
+**Don't add defensive code to work around bugs in code we control.** Defensive fixes mask underlying issues and make bugs harder to find. Reserve defensive strategies for code/behavior outside our control (external APIs, user input, third-party libraries).
+
+**Bad:**
+```python
+# "Defensive" fix that hides a bug in delete_project
+if auto_project_id:
+    cursor.execute("SELECT id FROM projects WHERE id = ?", (auto_project_id,))
+    if not cursor.fetchone():
+        # Silently clean up stale reference - masks the real bug
+        cursor.execute("UPDATE raw_clips SET auto_project_id = NULL WHERE id = ?", (clip_id,))
+        auto_project_id = None
+```
+
+**Good:**
+```python
+# Fix the root cause in delete_project instead
+cursor.execute("UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?", (project_id,))
+cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+```
+
+When the system encounters an invalid state, it should log appropriately and fail visibly - not silently "fix" itself. If you find yourself writing code to handle "impossible" states from your own codebase, fix the source of those states instead.
+
+### Correct Data, Not Workarounds
+
+**Data should have one canonical location. Code should work when data is correct. Migrations should make data correct.** Don't add fallback queries, "if exists" guards, or alternative data sources for data that should always be there. If data is missing, fix the source -- don't work around it.
+
+- If a query depends on a table populated by a prior migration, call that migration first -- don't add a fallback that reads from the raw source
+- If a column should always have a value, ensure the code that creates the row sets it -- don't add a default/guard at read time
+- Migrations must be self-sufficient: if they depend on another migration's data, run that migration as a prerequisite
+
 ---
 
 ## Code Organization
@@ -441,6 +473,8 @@ if export_mode == ExportMode.FAST:
 | No Stored Flags | Boolean flags computed, not stored on objects? |
 | No Magic Strings | Constants for repeated values? |
 | External Guards Only | Validation at boundaries, trust internal? |
+| No Defensive Fixes | Impossible internal states fail loudly, not self-repair? |
+| Correct Data | Fix data at the source/migration, no read-time guards for internal data? |
 | DRY | No duplicate logic? |
 | Single Code Path | One way to do each thing? |
 | Gesture-Based Persistence | Every DB write traces to a user gesture? No reactive useEffect persistence? |

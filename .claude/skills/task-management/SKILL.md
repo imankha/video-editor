@@ -1,4 +1,4 @@
-﻿---
+---
 name: task-management
 description: "Task creation, prioritization, and tracking. Tasks live in individual files under docs/plans/tasks/ with full context. PLAN.md contains priority ordering and status. Use gap-based IDs (T10, T20) to allow insertions."
 license: MIT

@@ -55,3 +55,11 @@ After Implementation (Stage 4), before Review (Stage 4.5). The Implementor chang
 - Don't modify data in migrations -- migrations change schema only
 - Don't skip version numbers
 - Don't create migrations for frontend-only or logic-only changes
+
+## Operations
+
+Fallback when the admin endpoint (`POST /api/admin/migrate`) is unavailable:
+
+```
+fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"
+```

@@ -62,26 +62,18 @@ Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostTo
 
 ### Task Status Rule
 
-Task statuses split into two kinds, with different owners:
+Statuses split into two kinds with different owners:
 
-**Factual statuses (AI auto-updates as part of the workflow).** These are objectively true from what the workflow did, so AI sets them in PLAN.md:
-- `WIP` — set when work begins (feature branch created, Stage 1) and whenever work resumes. See [1-task-start.md](.claude/workflows/1-task-start.md).
-- `WAITING ON USER` — set the moment the task is blocked on the user and cannot progress without them: a design-approval gate (Stage 2), a manual-test verdict (Stage 6), an open question, or a finished branch awaiting the user's test + merge (Stage 7). Say in the same message what you are waiting for. Set it back to `WIP` when the user unblocks it. A task must never sit at `WIP` while AI is actually idle — that is the distinction the board exists to show.
-- `STAGING` — set when the task branch lands on master (pushing to master auto-deploys staging). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
+**Factual (AI sets in PLAN.md):**
+- `WIP` — work begins or resumes (see [1-task-start.md](.claude/workflows/1-task-start.md)).
+- `WAITING ON USER` — set the MOMENT the task blocks on the user (design gate, manual-test verdict, open question, finished branch awaiting merge); say what you are waiting for. Back to `WIP` when unblocked. A task must never sit at `WIP` while AI is idle.
+- `STAGING` — task branch lands on master (auto-deploys staging; staging IS the test phase, so there is no separate TESTING step). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
 
-**DONE — the user's call, expressed by an explicit gesture.** STAGING is the test phase — being on staging *is* testing, so there is no separate TESTING step. `DONE`/`Resolved` is set only by a deliberate user gesture, of which there are exactly two:
-1. The user clicks **Resolve** on the task board (per-task, once satisfied on staging), OR
-2. The user runs **`/deploy`** — a prod deploy auto-promotes every task whose *implementation* shipped in that deploy to DONE (the deploy command is the user's "ship it, it's done" gesture). See [deploy skill](.claude/skills/deploy/SKILL.md) reconciliation. AI never marks DONE outside these two gestures.
+**DONE (user's call, exactly two gestures):** the user clicks **Resolve** on the task board, OR runs **`/deploy`** (a prod deploy auto-promotes every task whose implementation shipped in it — see [deploy skill](.claude/skills/deploy/SKILL.md)). AI never marks DONE otherwise.
 
-Lifecycle: `TODO -> WIP (AI) <-> WAITING ON USER (AI) -> STAGING (AI) -> DONE (user gesture: Resolve button or /deploy)`.
+Lifecycle: `TODO -> WIP (AI) <-> WAITING ON USER (AI) -> STAGING (AI) -> DONE (user gesture)`. DONE rows are hidden on the board.
 
-DONE rows are hidden on the task board by default, so the board only ever shows work that is still somewhere in this pipeline.
-
-**Branch visibility is derived, never recorded.** Do NOT put branch names in PLAN.md. The task board resolves each task's branch from git itself and shows it on hover (the `⑂` glyph on the task row):
-- a branch whose *name* carries the id (`feature/T{id}-slug`), and
-- for branches NOT named after a task (a wave's `integration/*` branch, a `fix/*` branch), any commit subject on that branch mentioning `T{id}` — this is how tasks stay attributed after a wave is collapsed into one integration branch and the per-task branches are deleted.
-
-The board fetches `origin` on startup so branches pushed by container workers resolve. The corollary is a convention that must hold: **every task commit subject starts with the task id** (`T5683: ...`), or the task loses its branch attribution once its own branch is gone.
+**Branch visibility is derived, never recorded.** No branch names in PLAN.md — the board resolves each task's branch from git (branch named `feature/T{id}-slug`, or any commit subject on a branch mentioning `T{id}` — that is how tasks stay attributed after wave branches collapse). Corollary that must hold: **every task commit subject starts with the task id** (`T5683: ...`), or the task loses attribution once its own branch is deleted.
 
 ### Classification Output (Required)
 
@@ -104,7 +96,7 @@ Before starting any task, produce:
 | Migration | Yes/No | {reason} |
 ```
 
-See [0-task-classification.md](.claude/workflows/0-task-classification.md) for full classification criteria and agent inclusion rules.
+See [0-task-classification.md](.claude/workflows/0-task-classification.md) for full criteria.
 
 ---
 
@@ -121,47 +113,32 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
 | 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
 | 4.75 | Migration | - | Migration | - |
-| 4.5 | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation* |
+| 4.5 | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation (protocol in ORCHESTRATION.md) |
 | 5 | Automated Testing + Coverage | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
 | 6 | Test & Fix Agent Handoff | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **New Conversation** |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
 
-**Note**: The task TIER (see Task Tiers above) sets the default path: S-tier skips all stages except implement+gates+commit; M-tier runs implement -> review; L-tier runs the full table. Classification can add/remove agents from the tier default with explicit justification. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
-
-*\*Conversation: Reviewer conducts solo review, then engages in structured conversation with implementor on MAJOR findings. Implementor can push back; reviewer evaluates on merit. Unresolved disagreements escalate to user. Max 2 rounds. See [ORCHESTRATION.md](.claude/ORCHESTRATION.md).*
+The TIER sets the path: S skips all stages except implement+gates+commit; M runs implement -> review; L runs the full table.
 
 ## Stage Detection Rules
 
 | User Says | Action |
 |-----------|--------|
-| "Implement T{id}..." / assigns task | → Stage 1 (task start) → Stage 2 (architecture) |
+| "Implement T{id}..." / assigns task | → Stage 1 → Stage 2 |
 | Reviews design doc | → Wait for "approved" or feedback |
-| "Approved" / "looks good" (design) | → Stage 3 (test-first) → Stage 4 (implement) |
-| "I think this works" / code complete | → Stage 5 (automated testing + coverage) |
-| All tests pass | → Stage 6 (generate Test & Fix Agent handoff) |
-| "Approved" / "that worked" (testing) | → Stage 7 (task complete) |
+| "Approved" / "looks good" (design) | → Stage 3 → Stage 4 |
+| "I think this works" / code complete | → Stage 5 |
+| All tests pass | → Stage 6 handoff |
+| "Approved" / "that worked" (testing) | → Stage 7 |
 | "Ready to merge?" / "can I push?" / "ready for PR?" | → Spawn Merge Reviewer agent |
 
 ## Agents
 
-| Agent | Purpose | Definition |
-|-------|---------|------------|
-| **Code Expert** | Audit codebase: entry points, data flow, similar patterns | [code-expert.md](.claude/agents/code-expert.md) |
-| **Refactor** | Clean up affected files before implementation; runs after Code Expert | [refactor.md](.claude/agents/refactor.md) |
-| **Architect** | Design with DRY, patterns, code smells; requires approval | [architect.md](.claude/agents/architect.md) |
-| **Tester** | Phase 1: create failing tests. Phase 2: run tests until pass | [tester.md](.claude/agents/tester.md) |
-| **Implementor** | Execute approved design with MVC, no state duplication | [implementor.md](.claude/agents/implementor.md) |
-| **Reviewer** | High-scrutiny review: rules-educated, conversation with implementor | [reviewer.md](.claude/agents/reviewer.md) |
-| **Project Manager** | Roadmap, prioritization, development cycles | [project-manager.md](.claude/agents/project-manager.md) |
-| **UI Designer** | Define UI details, maintain style guide; requires approval | [ui-designer.md](.claude/agents/ui-designer.md) |
-| **Migration** | Write versioned migration files for schema changes | [migration.md](.claude/agents/migration.md) |
-| **Merge Reviewer** | Pre-merge audit: sync strategy, state, architecture | [merge-reviewer.md](.claude/agents/merge-reviewer.md) |
-
-**Orchestration**: See [ORCHESTRATION.md](.claude/ORCHESTRATION.md) for agent spawning, handoffs, and skill access.
+Registered subagents live in `.claude/agents/` (frontmatter = name, description, tool scoping); spawn them by `subagent_type`, never by pasting instructions into `general-purpose`. Spawning templates, handoff protocol, review-conversation flow, and the implementation fan-out are in [ORCHESTRATION.md](.claude/ORCHESTRATION.md). **Pass artifact PATHS (design doc path, diff via `git diff`), never pasted content.** Before spawning, name the task's `.claude/knowledge/` doc(s) in the prompt so the agent loads them instead of re-exploring.
 
 ## Knowledge Base (persistent domain expertise)
 
-`.claude/knowledge/` holds one doc per code domain (entry points, data flow, invariants, landmines, active work). These replace re-exploring the codebase per task — the "code expert swarm" as cached knowledge, not repeated computation.
+`.claude/knowledge/` holds one doc per code domain (entry points, data flow, invariants, landmines, active work) — cached exploration, so tasks don't re-audit the codebase.
 
 | Doc | Domain |
 |-----|--------|
@@ -172,241 +149,74 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | [persistence-sync.md](.claude/knowledge/persistence-sync.md) | Gesture persistence, R2 sync, versioning |
 | [backend-services.md](.claude/knowledge/backend-services.md) | FastAPI structure, Postgres, migrations |
 
-**Rules:**
-1. **Load before exploring**: at task start, read the doc(s) matching the task's domain. Only fall back to Code Expert exploration for areas no doc covers.
-2. **Update at task complete**: Stage 7 includes updating the touched domain doc(s) with anything the task changed or revealed (new invariant, moved entry point, landmine found). Keep docs dense; prune stale lines when updating.
-3. **Docs are claims, code is truth**: if a doc contradicts the code, trust the code and fix the doc in the same commit.
+**Rules:** (1) Load the matching doc(s) at task start BEFORE exploring; only explore what they don't cover. (2) Update the touched doc(s) at Stage 7 (new invariants, moved entry points, landmines); prune stale lines. (3) Docs are claims, code is truth — fix contradicting docs in the same commit.
 
 ## References
 
 | Reference | Content |
 |-----------|---------|
-| [Coding Standards](.claude/references/coding-standards.md) | **All implementation rules** - MVC, state, types, coupling (single source of truth) |
+| [Coding Standards](.claude/references/coding-standards.md) | **All implementation rules** - MVC, state, types, coupling, persistence (single source of truth) |
 | [Code Smells](.claude/references/code-smells.md) | Fowler's refactoring catalog |
-| [Design Patterns](.claude/references/design-patterns.md) | GoF patterns relevant to React + FastAPI |
+| [Design Patterns](.claude/references/design-patterns.md) | GoF patterns for React + FastAPI |
 | [Testing Matrix](.claude/references/testing-matrix.md) | Coverage guidance by change type |
-| [UI Style Guide](.claude/references/ui-style-guide.md) | Colors, typography, components, patterns |
+| [UI Style Guide](.claude/references/ui-style-guide.md) | Colors, typography, components |
+| [Epic Rules](.claude/references/epic-rules.md) | Epic sequencing, task-file self-containment, handoff template, PLAN.md format |
 | [Handoff Schemas](.claude/schemas/handoffs.md) | Structured context passing between agents |
-| [Error Recovery](.claude/workflows/error-recovery.md) | Recovery procedures when things go wrong |
-| [Retrospectives](.claude/retrospectives/README.md) | Template for task retrospectives |
+| [Error Recovery](.claude/workflows/error-recovery.md) | Recovery procedures |
+| [Retrospectives](.claude/retrospectives/README.md) | Task retrospective template |
 
 ## Design Document
 
-Created at Stage 2: `docs/plans/tasks/T{id}-design.md`
-
-Contains:
-- **Current State** - Mermaid diagrams + pseudo code of how it works now
-- **Target State** - Mermaid diagrams + pseudo code of the goal
-- **Implementation Plan** - Files to change, pseudo code changes
-- **Risks & Open Questions**
-
-**Must be approved before implementation begins.**
+Stage 2 creates `docs/plans/tasks/T{id}-design.md` (current state, target state, implementation plan, risks — with diagrams/pseudo code). **Must be approved before implementation.** Details: [2-architecture.md](.claude/workflows/2-architecture.md).
 
 ## Task Management
 
-Use the [task-management skill](.claude/skills/task-management/SKILL.md) for:
-- Creating new tasks (file + PLAN.md entry)
-- Prioritizing by feedback velocity
-- Organizing epics (bundled infrastructure moves)
-- AI handoff context in task files
+Use the [task-management skill](.claude/skills/task-management/SKILL.md) to create tasks (file + PLAN.md entry) and organize epics. For roadmap decisions (placement, priorities, next task), use the [Project Manager agent](.claude/agents/project-manager.md); cycles run **INFRA → FEATURES → POLISH → repeat**. Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 
-For roadmap decisions, use the [Project Manager agent](.claude/agents/project-manager.md):
-- Adding tasks (knows where to place them)
-- Suggesting next task (based on development phase)
-- Development cycles: **INFRA → FEATURES → POLISH → repeat**
-
-Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md)
-
-## Epic Implementation Rules
-
-Epics are groups of related tasks that must be implemented together in sequence. Each epic has an `EPIC.md` file with shared context, goals, and completion criteria.
-
-### Sequencing
-
-Epic tasks are **implemented in order** (top to bottom in PLAN.md). Do not start task N+1 until task N is complete. The ordering reflects dependencies between tasks within the epic.
-
-### Task File Self-Containment
-
-Each epic task file **must be self-contained for agent handoff**. An agent should be able to implement the task by reading only the task file (plus referenced central docs like EPIC.md), without needing to read other task files in the epic.
-
-**Rules:**
-
-1. **Reference EPIC.md for design decisions, don't duplicate.** Say `See [EPIC.md](EPIC.md) for design decisions: no inbox, per-player filtering, overlap merging.` Don't copy those decisions into every task file.
-
-2. **Reference sibling tasks for shared code by ID + what to reuse.** When a task reuses logic from a prior task, name the specific function/helper: `Reuse T2830's game reference helper (games + game_videos + game_storage_refs insertion).` Don't copy the implementation details.
-
-3. **Schema/data changes must include full column mappings.** When a task creates or modifies DB tables, include exact columns, types, and where values come from. For cross-profile/cross-DB data copying, specify column-by-column what gets copied, what gets set to a default, and what gets omitted.
-
-4. **Wire dependencies to specific artifacts.** When a task depends on another task's schema, API, or component, name the specific table/endpoint/component: `Depends on T2825's shares + share_games tables` not just `Depends on T2825`.
-
-5. **When tasks overlap, include a comparison table.** If two tasks do similar things (e.g., both materialize games), add a table showing what's shared vs different so the implementing agent doesn't rebuild what already exists.
-
-### Agent Handoff
-
-Each epic task **must be handed off to its own agent** (via the standard workflow: classify, branch, implement, test). When handing off the next task in an epic:
-
-1. **Include all relevant learnings** from the previous task(s) in the handoff context
-2. Reference files that were created or modified in prior tasks
-3. Note any gotchas, edge cases, or architectural decisions discovered during prior tasks
-4. Include the EPIC.md shared context so the agent understands the broader goal
-
-**Handoff template for epic tasks:**
-```
-Implement T{id}: {name}
-
-## Epic Context
-This is task {N} of {total} in the {epic name} epic.
-Read: {path to EPIC.md}
-
-## Prior Task Learnings
-- T{prev_id} ({prev_name}): {key decisions, files changed, gotchas discovered}
-- {any other relevant prior task learnings}
-
-## Task Details
-{task file content or link}
-```
-
-### PLAN.md Format
-
-Epics appear inside milestone tables as:
-- **Epic header row**: Empty ID column, bold name linking to EPIC.md, description in last column
-- **Child task rows**: Task column prefixed with `↳` (e.g., `| T1610 | ↳ [Profile Fields](...) | ...`), immediately follow the header row
-- Epic tasks are moved together as a unit when reordering in the task board
-- The task-board uses `↳` in the Task column to detect epic children and render them as a collapsible group
+**Epics:** tasks implemented strictly in PLAN.md order, each handed to its own agent with prior-task learnings; task files must be self-contained (reference EPIC.md, don't duplicate it). Full rules + handoff template + PLAN.md `↳` format: [epic-rules.md](.claude/references/epic-rules.md).
 
 ## Coding Principles
 
-### No Silent Fallbacks for Internal Data
+Full rules and examples live in [coding-standards.md](.claude/references/coding-standards.md) — the single source of truth. The always-on rules:
 
-**Don't use fallbacks to hide missing data from our own code.** Fallbacks are appropriate for external dependencies (network, third-party services), but for internal data flow, missing data indicates a bug that should be visible.
-
-**Bad:**
-```javascript
-const fps = region.fps || 30;  // Silently uses default, hides the bug
-```
-
-**Good:**
-```javascript
-if (!region.fps) {
-  console.warn(`[Component] Region ${region.id} missing fps - re-export to fix.`);
-}
-const fps = region.fps;  // May be null, caller handles appropriately
-```
-
-This keeps failures visible and debuggable rather than silently producing wrong results.
-
-### No Defensive Fixes for Internal Bugs
-
-**Don't add defensive code to work around bugs in code we control.** Defensive fixes mask underlying issues and make bugs harder to find. Reserve defensive strategies for code/behavior outside our control (external APIs, user input, third-party libraries).
-
-**Bad:**
-```python
-# "Defensive" fix that hides a bug in delete_project
-if auto_project_id:
-    cursor.execute("SELECT id FROM projects WHERE id = ?", (auto_project_id,))
-    if not cursor.fetchone():
-        # Silently clean up stale reference - masks the real bug
-        cursor.execute("UPDATE raw_clips SET auto_project_id = NULL WHERE id = ?", (clip_id,))
-        auto_project_id = None
-```
-
-**Good:**
-```python
-# Fix the root cause in delete_project instead
-cursor.execute("UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?", (project_id,))
-cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-```
-
-When the system encounters an invalid state, it should log appropriately and fail visibly - not silently "fix" itself. If you find yourself writing code to handle "impossible" states from your own codebase, fix the source of those states instead.
-
-### Correct Data, Not Workarounds
-
-**Data should have one canonical location. Code should work when data is correct. Migrations should make data correct.** Don't add fallback queries, "if exists" guards, or alternative data sources for data that should always be there. If data is missing, fix the source -- don't work around it.
-
-- If a query depends on a table populated by a prior migration, call that migration first -- don't add a fallback that reads from the raw source
-- If a column should always have a value, ensure the code that creates the row sets it -- don't add a default/guard at read time
-- Migrations must be self-sufficient: if they depend on another migration's data, run that migration as a prerequisite
+- **No silent fallbacks for internal data.** `region.fps || 30` hides a bug; warn loudly and let the caller handle the missing value. Fallbacks are for external dependencies only.
+- **No defensive fixes for internal bugs.** Don't write code that "handles" impossible states our own code created — fix the source. Invalid state should log and fail visibly, never self-repair silently.
+- **Correct data, not workarounds.** One canonical location per datum; code assumes data is correct; migrations MAKE it correct (and are self-sufficient — they run their prerequisites, never fall back to raw sources).
 
 ### Persistence: Gesture-Based, Never Reactive
 
-**The app NEVER writes to the backend as a side effect of state changing.** Only explicit user actions trigger persistence. This is not a preference — reactive persistence creates feedback loops that corrupt data.
-
-**The rule:** Every DB write must trace back to a specific user gesture (click, drag, keypress). If you can't name the gesture, the write shouldn't exist.
-
-**Why reactive persistence corrupts data:**
-
-React hooks hold ephemeral editing state that includes runtime fixups (e.g., `ensurePermanentKeyframes` adds boundary keyframes, origin corrections normalize loaded data). These fixups are correct for rendering but were never part of the user's saved data. A reactive `useEffect` that watches hook state and writes it back to a store or backend will:
-
-1. Detect the fixup as a "change"
-2. Persist the fixup data (overwriting what was in the DB)
-3. On next load, the fixup runs again on already-fixed data
-4. Each load cycle compounds the corruption
-
-This is not hypothetical — it caused keyframe origin corruption in Framing (T350).
-
-**Persistence architecture:**
+**The app NEVER writes to the backend as a side effect of state changing.** Every DB write must trace to a named user gesture (click, drag, keypress) — if you can't name the gesture, the write shouldn't exist. Reactive persistence creates feedback loops that corrupt data (runtime fixups get persisted, then re-fixed on every load — this caused T350's keyframe corruption; mechanism + examples in [coding-standards.md](.claude/references/coding-standards.md) § Persistence).
 
 ```
-SURGICAL (gesture actions):
-  User gesture → handler → POST /actions with ONLY the changed field
-  Backend: reads current DB state → applies single change → writes back
-  Example: addCropKeyframe sends {frame, x, y, w, h} → backend appends to array
-
-FULL-STATE (explicit save):
-  Export button → saveCurrentClipState → PUT /clips/{id} with all current state
-  Only called on deliberate user action (export, not on every state change)
-
-NEVER (reactive):
-  useEffect watching state → write to store/backend    ← THIS IS BANNED
+SURGICAL:   gesture → handler → POST /actions with ONLY the changed field
+FULL-STATE: explicit save gesture only (export button → saveCurrentClipState)
+NEVER:      useEffect watching state → write to store/backend   ← BANNED
 ```
 
-**Rules:**
-1. **Gesture → surgical API call**: Each user action fires a backend call from its handler, sending ONLY the data that gesture changed
-2. **No reactive persistence**: Never `useEffect` to watch state and write to DB/store. No exceptions.
-3. **Runtime fixups are memory-only**: Internal corrections (`ensurePermanentKeyframes`, origin normalization) happen in hooks for rendering — they MUST NOT trigger persistence
-4. **Restore is read-only**: Loading data from DB into hooks must not trigger a write-back
-5. **Single write path per data**: Each piece of persistent data has exactly ONE code path that writes it
-6. **Full-state saves require explicit gesture**: `saveCurrentClipState` only runs on export button click, never reactively
-7. **A write path must prove its copy is current, or fail loudly** (T4310 upload side + T4315 restore side). The gesture rules above govern *what triggers* a write; this governs *whether it's safe to land*. Read-modify-write on a snapshot the writer never confirmed is current is a silent-clobber risk — a stale machine can force-push over newer state with no error. Two halves, both required — CAS alone still serves stale reads; restore-if-newer alone still races the upload:
-   - **Upload side (CAS):** compare-and-swap (R2 version metadata vs. the loaded-from version) refuses a stale upload instead of overwriting; on conflict: freeze that write (do not upload), log CRITICAL, and surface the existing failed-sync/Retry UX — never auto-merge, never blind-retry an overwrite.
-   - **Restore side:** a writer resolving a DB it does not already hold under the request's own session/profile context (admin grants, payment webhooks, cross-user/cross-profile materialization) must confirm R2 hasn't moved past its loaded-from version BEFORE mutating — restore-if-newer, not restore-if-absent — or refuse (never build on an unconfirmed/possibly-in-use copy). This is structural, not a per-caller flag: the shared connection-opening path itself enforces it for the foreign-user case, so a new call site can't silently skip the guard by forgetting to call it explicitly. Swapping a live WAL-mode file requires care — refuse instead of swapping when another connection may have it open.
-   See [persistence-sync.md](.claude/knowledge/persistence-sync.md) § CAS / SyncResult and § T4315.
+1. **Gesture → surgical call**: each handler sends ONLY the data that gesture changed
+2. **No reactive persistence**: never `useEffect` → DB/store write. No exceptions.
+3. **Runtime fixups are memory-only** (`ensurePermanentKeyframes`, origin normalization) — never persisted
+4. **Restore is read-only**: loading DB → hooks must not trigger a write-back
+5. **Single write path per data**
+6. **Full-state saves require an explicit gesture** (export click), never reactive
+7. **A write path must prove its copy is current, or fail loudly** (T4310 upload side + T4315 restore side). Read-modify-write on an unconfirmed snapshot silently clobbers newer state. Both halves required — CAS alone still serves stale reads; restore-if-newer alone still races the upload: **upload CAS** (R2 version compare-and-swap refuses a stale upload; on conflict freeze the write, log CRITICAL, surface the failed-sync/Retry UX — never auto-merge, never blind-retry) and **restore-if-newer** (a writer resolving a DB it does not already hold under the request's own session/profile context — admin grants, payment webhooks, cross-user materialization — must confirm R2 hasn't moved past its loaded-from version BEFORE mutating, or refuse; enforced structurally in the shared connection-opening path, so new call sites can't skip it). Never swap a live WAL-mode file another connection may hold — refuse instead. See [persistence-sync.md](.claude/knowledge/persistence-sync.md) § CAS / SyncResult and § T4315.
 
-**How to check if you're about to violate this:**
-- Am I writing a `useEffect` that calls an API or updates a store? → Probably wrong. Move the persistence call into the gesture handler instead.
-- Am I watching hook state for changes? → Ask: what user gesture caused this change? If "none" or "internal fixup", don't persist it.
-- Am I sending ALL keyframes/segments when only one changed? → Use a surgical action instead.
-
-See [coding-standards.md](.claude/references/coding-standards.md) for implementation patterns and anti-patterns.
+Self-check: writing a `useEffect` that calls an API or updates a store? → move it into the gesture handler. Watching hook state? → name the gesture; "internal fixup" means don't persist. Sending all keyframes when one changed? → make it surgical.
 
 ## Refactoring Rules
 
-Process rules for structural refactors (code motion, consolidation). Rationale and audit
-findings: [docs/plans/audit-2026-07-03-code-quality.md](docs/plans/audit-2026-07-03-code-quality.md).
-For the code-smell catalog and general coding standards (DRY, MVC, etc.), see
-[code-smells.md](.claude/references/code-smells.md) and
-[coding-standards.md](.claude/references/coding-standards.md) -- these rules add process
-constraints on top, they do not replace those references.
+Process rules for structural refactors (catalog: [code-smells.md](.claude/references/code-smells.md); rationale: [audit-2026-07-03](docs/plans/audit-2026-07-03-code-quality.md)):
 
-1. **Abstract on the 3rd duplication, never the 1st.** Two copies may be coincidence; three is
-   a system. Premature indirection hides code paths from grep and hurts agents more than
-   duplication does.
-2. **Characterization tests before structural change.** Pin current behavior (golden outputs)
-   before consolidating duplicated modules; strangler-fig (facade -> comparison -> flip ->
-   delete), never big-bang rewrite.
-3. **Moves are mechanical commits.** Code motion (file moves, renames) never mixes with
-   behavior change in a single commit -- reviewers must be able to trust "this diff only moves
-   code".
-4. **Keep reviewable units < ~200 lines of meaningful diff**; split larger refactors into
-   sequenced tasks.
-5. **Update CLAUDE.md/skills in the same PR as the refactor** -- a landed refactor that leaves
-   stale conventions actively misleads the next agent.
-6. **Greppability beats elegance:** explicit names, no dynamic dispatch/registry indirection for
-   internal code, string literals near their use or in `constants/` -- never computed.
+1. **Abstract on the 3rd duplication, never the 1st** — premature indirection hides code paths from grep and hurts agents more than duplication does
+2. **Characterization tests before structural change**; strangler-fig (facade -> comparison -> flip -> delete), never big-bang
+3. **Moves are mechanical commits** — code motion never mixes with behavior change
+4. **Keep reviewable units < ~200 lines of meaningful diff**; split larger refactors into sequenced tasks
+5. **Update CLAUDE.md/skills in the same PR as the refactor**
+6. **Greppability beats elegance** — explicit names, no dynamic dispatch/registries for internal code, string literals near use or in `constants/`, never computed
 
 ## Migration System
 
-AI never manually migrates accounts. AI writes migration code. Admin hits the endpoint.
+AI never manually migrates accounts. AI writes migration code; admin hits the endpoint.
 
 | Track | DB Type | Version Mechanism | Schema Location |
 |-------|---------|-------------------|-----------------|
@@ -414,54 +224,29 @@ AI never manually migrates accounts. AI writes migration code. Admin hits the en
 | `profile_db` | Profile SQLite (per-user-per-profile) | `PRAGMA user_version` | `src/backend/app/database.py` (`ensure_database()`) |
 | `postgres` | Fly Postgres (shared) | `schema_migrations` table | `src/backend/app/services/pg.py` (`_SCHEMA_DDL`) |
 
-**Migration files:** `src/backend/app/migrations/{track}/v{NNN}_{description}.py`
-
-**Migrations do NOT auto-run on deploy or startup.** `init_pg_schema()` only runs `_SCHEMA_DDL` (`CREATE TABLE IF NOT EXISTS`) for fresh DBs. Versioned migrations (`ALTER TABLE`, new tables on existing schemas) must be explicitly triggered after deploy:
-- **Admin endpoint:** `POST /api/admin/migrate` (requires admin session)
-- **SSH fallback:** `fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"`
-
-**When implementing schema changes:** Include the Migration agent in classification. It creates the versioned migration file after the Implementor changes the schema. See [migration.md](.claude/agents/migration.md). Update `_SCHEMA_DDL` in `pg.py` too (for fresh deployments).
-
-**Key rule:** `PRAGMA user_version` tracks schema version. `db_version` table / R2 `x-amz-meta-db-version` tracks sync version. They are independent.
+Migration files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`. **Migrations do NOT auto-run on deploy or startup** (`init_pg_schema()` only creates fresh DBs) — trigger after deploy via `POST /api/admin/migrate` (admin session); SSH fallback in [migration.md](.claude/agents/migration.md). Schema changes: include the Migration agent in classification AND update `_SCHEMA_DDL` in `pg.py` for fresh deployments. Key rule: `PRAGMA user_version` = schema version; `db_version` table / R2 `x-amz-meta-db-version` = sync version. Independent.
 
 ## Log handling
 
-**NEVER ingest raw logs.** A 2000-line log burns 20,000+ tokens of context and drowns out
-everything else. `reduce_log` reads the file server-side — only the reduced output enters
-your context. This is the single most important rule for effective log debugging.
+**NEVER ingest raw logs** — a 2000-line log burns 20k+ tokens. `reduce_log` reads the file server-side; only reduced output enters context. Always include `tail` (200-2000); filter with `grep`/`level`:
 
-Use `reduce_log` instead of Read/cat/head/tail for any log file. Always include `tail`
-(200-2000) to cap input size. Use `grep` or `level` to filter — don't load the whole log
-when you only need errors.
+```
+reduce_log({ file: "app.log", tail: 2000 })                            // auto-summary if large
+reduce_log({ file: "app.log", tail: 200, level: "error" })             // errors only
+reduce_log({ file: "app.log", tail: 200, grep: "timeout|connection" }) // regex search
+```
 
-reduce_log({ file: "app.log", tail: 2000 })                                     // just call it — auto-summary if large
-reduce_log({ file: "app.log", tail: 200, level: "error" })                      // errors only
-reduce_log({ file: "app.log", tail: 200, level: "error", before: 30, context_level: "warning" })  // errors + relevant context
-reduce_log({ file: "app.log", tail: 200, grep: "timeout|connection" })           // regex search
-reduce_log({ file: "app.log", tail: 2000, summary: true })                      // force structural overview
+Over-threshold calls without filters return an error/warning summary (use it to plan the next call); with filters they return output plus a narrowing TIP.
 
-**How the threshold gate works:**
-- **No filters + over threshold** → you get an enhanced summary: unique errors/warnings with
-  counts, timestamps, and components. Use this to plan your next call.
-- **Filters + over threshold** → you get the actual output with a TIP on how to narrow further.
-- **Under threshold** → you get the full reduced output directly.
+**Always redirect commands that might produce >20 lines** (`npm test`, `pytest`, `playwright`, `pip install`, `docker build`, ...):
 
-**Always redirect commands that might produce more than ~20 lines.** When in doubt, redirect.
-The cost of an unnecessary redirect is ~2 seconds. The cost of raw output in context is
-permanent token loss with no recovery. These commands MUST always be redirected:
+```
+pytest 2>&1 > /tmp/test-output.log; echo "exit: $?"
+```
 
-    npm test 2>&1 > /tmp/test-output.log; echo "exit: $?"
-    pytest 2>&1 > /tmp/test-output.log; echo "exit: $?"
-    npx playwright test 2>&1 > /tmp/test-output.log; echo "exit: $?"
-    pip install 2>&1 > /tmp/pip-output.log; echo "exit: $?"
-    docker build 2>&1 > /tmp/docker-output.log; echo "exit: $?"
+The exit code gives pass/fail; `reduce_log` the file only if details are needed. Short commands (`git status`, `ls`) run directly.
 
-The `echo "exit: $?"` gives you pass/fail immediately. Then `reduce_log` the file only if
-you need details. Short commands (`git status`, `ls`, `node -v`) can run directly.
-
-**When the user needs to provide logs:** never ask them to paste logs. Tell them to type
-`/logdump` (dumps clipboard to file + auto-reduces) or give a file path. If YOU need a log
-from the user, say: *"Copy the log to your clipboard and type `/logdump`"*.
+**User logs:** never ask the user to paste logs — tell them: *"Copy the log to your clipboard and type `/logdump`"* (or give a file path).
 
 ## Resources
 - [src/frontend/CLAUDE.md](src/frontend/CLAUDE.md) - Frontend skills and patterns
