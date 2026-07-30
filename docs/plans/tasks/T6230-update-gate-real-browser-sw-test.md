@@ -86,10 +86,17 @@ small static server fixture that can swap its build directory mid-test.
 
 **2026-07-30**: Filed as a follow-up from T6210. Not started.
 
-**Interim manual check (do before this task lands):** watch the next
-FRONTEND-ONLY staging deploy and confirm the gate still appears promptly. That is
-the cheap version of step 3 and the only current coverage of the over-correction
-risk.
+**2026-07-30 — interim manual check PASSED.** After the prod deploy to build #3171
+(`f309731d`), the user loaded prod on a browser holding the old #3166 service
+worker and got the update prompt **once**, which cleared permanently on Update.
+So `probeForWaitingBundle` does resolve truthy against a real `registration.waiting`,
+and the gate fires promptly — the over-correction risk is empirically ruled out for
+this path.
+
+**This does not close the task.** That was one observation, one browser, one
+lifecycle timing — it is evidence, not a regression guard. Nothing currently goes
+red if the probe breaks later. The remaining value here is purely automated
+regression protection, so the urgency dropped but the scope did not.
 
 ## Acceptance Criteria
 
