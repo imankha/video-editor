@@ -1,5 +1,6 @@
 ---
 domain: backend-services
+updated: 2026-07-31 (T6220: lockstep deploys so the build number stays accurate — see "Deploy + build-number lockstep (T6220)" below. Union `paths:` filter on both staging workflows (not dropped), asymmetric `deploy_production.sh` gate (`--frontend-only` stays allowed, `--backend-only` now refuses without `--accept-build-drift`), and `scripts/verify-build-lockstep.sh` asserts bundle build == backend build after every deploy. Follow-up from T6210.)
 updated: 2026-07-27 (T6030: closed the v025 residual — final_videos.slowmo_section_start/end now column_exists-guarded on BOTH the publish SELECT (downloads.py) and the render INSERT (overlay.py `_finalize_overlay_export`, which had blocked ALL exports in the deploy->migrate window). Added a structural regression test that drives every hot-path read against a below-head DB WITH ROWS; `test_registry_head_is_audited` turns the next added migration RED so the class can't silently reopen. See "Migration-window column guard audit" § v025 + Structural guard.)
 updated: 2026-07-27 (T5970: migration-window column-guard audit — see "Migration-window column guard audit (T5970)". Result: ONE unguarded hot read fixed (games.shared_by v026 in quests._check_all_steps, hit on bootstrap); everything else either ≤v18 (window closed) or off the app-load path. Added read-only GET /api/admin/migration-status.)
 updated: 2026-07-26 (T5840: credits moved from per-user SQLite to Postgres — see "Credits (Postgres, T5840)" below. Shipped as two deploy-safe commits since master auto-deploys staging and migrations don't auto-run: Slice A = additive v019 DDL + `credit_ledger` service + `credit_backfill` tool + admin backfill/gate endpoints, zero behavior change, safe pre-migration; Slice B = cutover flip, all call sites + purge/reset scripts point at Postgres, old `user_db` credit functions + SQLite credit columns removed.)
@@ -235,6 +236,60 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `POST /api/sync/flush-verify` (health router) is the update-gate's step-3 durable-flush barrier:
   checkpoints WAL + awaits R2 upload → **200** clean / **503** still-pending / **401** unauthenticated
   (the client treats 401 as a no-op, not a failure — logged-out users have nothing to flush).
+
+## Deploy + build-number lockstep (T6220)
+Follow-up from T6210 (which made a server-ahead-of-bundle update-gate loop *structurally impossible*
+regardless of build-number accuracy — see appVersion.js's Tbug41s comment). This section is the
+*belt* that keeps the numbers themselves accurate, on top of that *brace*; if this section's
+machinery is ever dropped, T6210's fix must stay intact — the reverse is not true.
+
+**The invariant:** a master push (or a prod deploy) never leaves the deployed bundle's build number
+and the backend's reported build number unequal — either both halves deploy from the same commit, or
+neither does. Drift used to be routine (measured on staging 2026-07-30: bundle #3163 vs backend
+#3165, zero frontend files in between) because the two workflows deployed independently on disjoint
+path filters; a backend-only commit raised the server's number with no matching bundle published.
+
+**Where the number comes from (two independent computations, kept in agreement by comment, not by
+sharing code):** `git rev-list --count HEAD` — `src/frontend/vite.config.js` bakes it into the bundle
+as `__APP_BUILD__`; `src/frontend/generate-version.js` (runs via `prebuild`/`predev`) computes the
+SAME expression independently and writes it to `public/build.json` (`{build, commit}`), which Vite
+copies verbatim into `dist/` — a fetchable fact, since scraping `__APP_BUILD__` back out of a hashed,
+minified bundle would be fragile. `.json` is outside `vite.config.js`'s `workbox.globPatterns`, so the
+service worker never precaches (and never serves stale) `build.json`. The backend gets its number as
+the `APP_BUILD` build-arg (`deploy-backend.yml` passes `git rev-list --count HEAD` computed in CI;
+`deploy_production.sh` computes it locally the same way), read by `app/version.py` and served via the
+`X-App-Build` header + `GET /api/version`'s `build` field (see the T5070 entry just above). Both
+workflows keep `fetch-depth: 0` on checkout (Tbug40p) — a shallow clone would bake in `1` and can
+never match.
+
+**Union path filter (staging), not "always deploy":** `deploy-frontend.yml` and `deploy-backend.yml`
+carry the SAME `paths: [src/frontend/**, src/backend/**]` block (plus `workflow_dispatch:`) — byte-
+identical by convention, verify with a diff after editing either. A commit touching EITHER half now
+deploys BOTH from that commit, so the numbers move together; a commit touching NEITHER (this repo's
+frequent `docs(plan): ...` commits) deploys NEITHER, so both stay at the same older — still equal —
+number, with no redundant CI. **Known, documented, unfixed hole:** a manual `workflow_dispatch` run
+still fires only that one workflow, so a deliberate single-half manual dispatch breaks lockstep on
+purpose — that's an operator's call, not a bug (commented in both YAMLs).
+
+**Asymmetric prod policy (`deploy_production.sh`), not a symmetric block:** `--frontend-only` stays
+allowed, unchanged — a bundle AHEAD of the server is harmless by construction:
+`appVersion.checkServerVersion` (src/frontend/src/utils/appVersion.js) raises the gate only when
+`serverBuild > clientBuild`, so `server <= clientBuild` can never fire it. `--backend-only` is the
+dangerous direction (server ahead, no bundle to load — the T6210 stranding precondition) and now
+REFUSES by default; it requires the explicit `--accept-build-drift` flag to proceed (order-
+independent relative to `--backend-only` — the old single-`$1` `case` was replaced with a proper arg
+loop). Do not "helpfully" symmetrize the two flags; they are not equivalent.
+
+**The assertion:** `scripts/verify-build-lockstep.sh --frontend-url <site-root> --backend-url
+<.../api/version>` fetches `<frontend-url>/build.json` and `<backend-url>`'s `build`, polling (both
+halves deploy concurrently and Cloudflare Pages propagation lags) every 10s up to 300s by default
+(overridable via `--interval`/`--timeout`), succeeding the instant the two numbers are equal. Exits
+non-zero with both numbers (or the specific fetch failure — 404, unparseable JSON, non-numeric field)
+named on timeout; no silent "assume ok". Wired into `deploy-frontend.yml` as the last step (covers
+the concurrent `deploy-backend.yml` job via polling) and into `deploy_production.sh` at the end, but
+ONLY when both halves deployed together in that run — an allowed `--frontend-only` or a drift-
+accepted `--backend-only` prints an explicit "skipping lockstep assertion because X" line instead of
+asserting the very inequality the operator just chose to accept.
 
 ## Active/upcoming work
 Bug tier (TODO): T4210 (overlay decode → 500, delete orphaned PUT), T4220-T4270, T4280 (silent-fallback sweep). **T4870 DONE** (admin credits read R2-canonical; silent-fallback removed). Guardrails first: T4290/T4300. Backend consolidations: **T4610** require_admin router Depends, T4620 fetch_or_404 + enums, **T4630** R2StreamProxy service (4 streaming-proxy copies), **T4640** games.py activation/share services (depends on T4360), **T4650** raw_clips write-path consolidation, **T4660** open_sqlite factory + game_display service. Export Write-Path epic T4370-T4410 (strict order: characterization tests → ExportJobRepository → finalize/publish single writer → backend-authoritative export → orchestration move). Full map: docs/plans/PLAN.md § Code Quality & Refactoring.

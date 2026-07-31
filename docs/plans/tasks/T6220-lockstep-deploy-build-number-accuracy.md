@@ -78,18 +78,52 @@ single-half flags either match that or refuse.
 ## Implementation
 
 ### Steps
-1. [ ] Remove `paths:` from both staging workflows; confirm a docs-only push deploys both
-2. [ ] Decide and implement the `deploy_production.sh` single-half policy
-3. [ ] Add the post-deploy build-number equality assertion
-4. [ ] Verify on staging that bundle build == backend build after an arbitrary push
+1. [x] Union the `paths:` filters on both staging workflows (NOT dropped — see Progress Log); confirm the two blocks are byte-identical
+2. [x] Decide and implement the `deploy_production.sh` single-half policy (asymmetric: `--frontend-only` stays allowed, `--backend-only` refuses without `--accept-build-drift`)
+3. [x] Add the post-deploy build-number equality assertion (`scripts/verify-build-lockstep.sh`, wired into staging + prod)
+4. [ ] Verify on staging that bundle build == backend build after an arbitrary push (requires a real deploy — cannot be done from the container; leave for the next staging push)
 
 ### Progress Log
 
 **2026-07-30**: Filed as a follow-up from T6210. Not started.
 
+**2026-07-31**: Implemented per two pre-made policy decisions (see below); QA'd everything provable
+without a live deploy. Step 4 (real staging deploy) is left for the next push to master — the
+container has no deploy path.
+
+- **Decision 1 (staging trigger):** did NOT drop the `paths:` filters (the task's literal text).
+  Implemented a UNION path filter instead — both `deploy-frontend.yml` and `deploy-backend.yml` now
+  carry the SAME `paths: [src/frontend/**, src/backend/**]` block plus `workflow_dispatch:`. The
+  invariant that matters is "bundle build == backend build", not "always deploy": a commit touching
+  EITHER half now deploys BOTH from the same commit (numbers move together), and a commit touching
+  NEITHER (e.g. `docs(plan): ...`, which this repo commits constantly) deploys NEITHER, so both stay
+  at the same older number — still equal, still correct, zero redundant CI. Rewrote AC #1 below to
+  state that invariant directly instead of the literal "still deploys both halves on a docs-only
+  push" reading, which would fire two full redundant deploys per docs commit for nothing shipped.
+  Documented (not fixed) the known hole: `workflow_dispatch` can still fire one workflow alone — a
+  deliberate manual single-half dispatch is an operator's call, comment added in both YAMLs.
+- **Decision 2 (prod script):** asymmetric gate, not a symmetric block/allow of both flags.
+  `--frontend-only` stays allowed unchanged — a bundle ahead of the server is harmless by
+  construction (`appVersion.checkServerVersion` gates iff `serverBuild > clientBuild`; `server <=
+  clientBuild` can never raise it). `--backend-only` now refuses unless paired with the new
+  `--accept-build-drift` flag (order-independent — replaced the old single-`$1` `case` with a proper
+  arg loop). `deploy_production.sh` calls `verify-build-lockstep.sh` at the end ONLY when both halves
+  deployed together, printing an explicit "skipping lockstep assertion because X" line otherwise.
+- Deployed bundle build number is now also served as `/build.json` (via `generate-version.js`, copied
+  verbatim into `dist/` by Vite) — a fetchable fact, since scraping `__APP_BUILD__` back out of a
+  hashed/minified bundle would be fragile. Confirmed NOT precached by the service worker (`.json` is
+  outside `workbox.globPatterns`).
+
 ## Acceptance Criteria
 
-- [ ] A master push touching neither `src/frontend/**` nor `src/backend/**` still deploys both halves
-- [ ] Staging bundle `__APP_BUILD__` equals the backend's reported build after any deploy
-- [ ] `deploy_production.sh` cannot silently ship one half
-- [ ] A deliberate mismatch fails the deploy workflow loudly
+- [x] **(rewritten from "A master push touching neither `src/frontend/**` nor `src/backend/**` still
+  deploys both halves" — see Decision 1 in the Progress Log)** A master push never leaves the
+  deployed bundle build and the backend build unequal: either both halves deploy from the same
+  commit, or neither does.
+- [ ] Staging bundle `build.json`'s `build` equals the backend's reported build after any deploy —
+  logic implemented and wired (`verify-build-lockstep.sh` in `deploy-frontend.yml`); the real-deploy
+  confirmation is Step 4, pending the next staging push.
+- [x] `deploy_production.sh` cannot silently ship one half — `--backend-only` refuses by default;
+  `--frontend-only` stays allowed (documented as deliberately harmless, not a silent gap).
+- [x] A deliberate mismatch fails the deploy workflow loudly — `verify-build-lockstep.sh` exits
+  non-zero with both build numbers named, in both the staging workflow and `deploy_production.sh`.
