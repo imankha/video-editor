@@ -234,8 +234,12 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
           await page.mouse.down();
           // Larger, multi-step drag so pixelToTime's per-pixel delta clears any
           // minimum-move threshold regardless of this timeline's zoom/scale.
+          // Drag RIGHT (extend), not left: ClipScrubRegion clamps the end handle to
+          // `start + MIN_REGION_DURATION` (0.5s, see ClipScrubRegion.jsx), and this
+          // account's seed clip is already exactly 0.5s — dragging left is a no-op
+          // against that clamp regardless of drag distance.
           for (let i = 1; i <= 20; i++) {
-            await page.mouse.move(startX - i * 10, startY);
+            await page.mouse.move(startX + i * 10, startY);
           }
           await page.waitForTimeout(100);
           await page.mouse.up();
@@ -310,17 +314,23 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     // that shares the same useReEditReel/onOpenProject path as the in-player Re-edit button
     // (e2e/reedit-reel.spec.js covers that path's public-viewer gating, not this menu).
     await page.getByRole('button', { name: /My Reels/ }).click().catch(() => {});
+    // Scope everything to the open slide-over panel itself (DownloadsPanel.jsx renders a
+    // separate bg-black/50 backdrop div + the animate-slide-in-right panel). An unscoped
+    // page-wide locator can match a same-testid header still mounted behind the panel
+    // (e.g. a Drafts-panel project-card), whose stale position sits under the backdrop and
+    // intercepts pointer events forever — hence the prior 180s click timeout.
+    const panel = page.locator('div.animate-slide-in-right');
+    await panel.waitFor({ timeout: 15000 }).catch(() => {});
     // The My Reels panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
     // individual ReelTile cards (and their "More actions" kebab) only render once a game
     // group is expanded. Expand the first one.
-    const groupHeader = page.locator('[data-testid="collapsible-group-header"]').first();
+    const groupHeader = panel.locator('[data-testid="collapsible-group-header"]').first();
     const hasGroup = await groupHeader.count();
     test.skip(!hasGroup, 'no game group in My Reels on this account data — seed a published reel');
     await groupHeader.click();
 
-    // Scope to the expanded group so the click can't hit an unrelated same-page element
-    // (e.g. a Drafts-panel project-card still mounted behind the My Reels slide-over).
-    const moreActions = page.getByRole('button', { name: 'More actions' }).first();
+    // Scope to the panel so the click can't hit an unrelated same-page element.
+    const moreActions = panel.getByRole('button', { name: 'More actions' }).first();
     await moreActions.waitFor({ timeout: 15000 }).catch(() => {});
     const hasMoreActions = await moreActions.count();
     console.log(`[T6190] My Reels "More actions" buttons found (after group expand) = ${hasMoreActions}`);
