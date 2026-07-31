@@ -213,6 +213,21 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   for an expired game with no recap video — a deliberate divergence from the old GameCard.
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
 
+- **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
+  (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).
+  `setPendingGameReference({sourceProfileId, sourceGameHash, sourceProfileName})` is the SEPARATE
+  cross-profile breadcrumb for a **reference card** (a `games` row with `source_profile_id`, T5800):
+  clicking it does NOT open Annotate — by user decision "you clicked a game card, you should get the
+  game card", it switches to the OWNING profile and lands on its **Games tab** with the real game
+  scrolled into view + a transient green ring. Consumed once in `ProjectManager` (a `ReferenceGameCard`
+  renders the link variant; the real `GameTile` is untouched). It survives `profileStore._resetDataStores`
+  (sessionStorage, not Zustand). The consume-effect must wait for the OWNING profile's OWN games fetch
+  (a `referenceLoadStartedRef` load-cycle guard: observe `gamesLoading` go true→false) before matching,
+  or it would consume against the stale pre-refetch list and false-degrade. The owning game is located
+  by **frozen `blake3_hash`** — the API does NOT expose the owning game's id (`source_game_id` is in the
+  SQL but never projected; see export-pipeline.md §Cross-profile). A multi-video (NULL-hash) reference
+  lands on the Games tab with no per-card highlight (never a false "deleted" notice). QA is real-browser
+  only (`e2e/T5820-reference-link-cards.qa.spec.js`) — jsdom gives false confidence on the switch race.
 - **Ready Draft tile contract (T6180) — do not undo when restyling `DraftTile.jsx`.** For a
   ready draft (`isReadyToPublish = has_final_video && !is_published`) the tile is a
   discoverable action surface, NOT the old 10px corner badge (which was a `<button>` labelled

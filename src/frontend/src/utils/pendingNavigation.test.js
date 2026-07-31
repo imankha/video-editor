@@ -6,6 +6,9 @@ import {
   setPendingProject,
   clearPendingProject,
   consumePendingProject,
+  setPendingGameReference,
+  peekPendingGameReference,
+  consumePendingGameReference,
 } from './pendingNavigation';
 
 describe('pendingNavigation', () => {
@@ -101,6 +104,57 @@ describe('pendingNavigation', () => {
       setPendingProject(2, { mode: 'overlay' });
       expect(consumePendingProject()).toEqual({ projectId: 2, mode: 'overlay', clipIndex: null });
       expect(hasPendingGame()).toBe(true);
+    });
+  });
+
+  describe('pending game reference (T5820)', () => {
+    it('round-trips profile id, owning-game hash, and owning-profile name', () => {
+      setPendingGameReference({
+        sourceProfileId: 'prof-A',
+        sourceGameHash: 'deadbeef',
+        sourceProfileName: 'Default',
+      });
+      expect(peekPendingGameReference()).toEqual({
+        sourceProfileId: 'prof-A',
+        sourceGameHash: 'deadbeef',
+        sourceProfileName: 'Default',
+      });
+    });
+
+    it('peek does NOT clear (the consume gate re-checks until the target settles)', () => {
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N' });
+      peekPendingGameReference();
+      expect(peekPendingGameReference()).not.toBeNull();
+    });
+
+    it('consume reads then clears — consumed-once semantics', () => {
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N' });
+      expect(consumePendingGameReference()).toEqual({
+        sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N',
+      });
+      expect(peekPendingGameReference()).toBeNull();
+      expect(consumePendingGameReference()).toBeNull();
+    });
+
+    it('supports a hash-less reference (multi-video owning game)', () => {
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceProfileName: 'N' });
+      expect(peekPendingGameReference()).toEqual({
+        sourceProfileId: 'prof-A', sourceGameHash: null, sourceProfileName: 'N',
+      });
+    });
+
+    it('returns null when nothing is pending', () => {
+      expect(peekPendingGameReference()).toBeNull();
+      expect(consumePendingGameReference()).toBeNull();
+    });
+
+    it('is independent of the annotate pending-game breadcrumb', () => {
+      setPendingGame(42, 12.5);
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N' });
+      consumePendingGameReference();
+      // The annotate breadcrumb is untouched by consuming the reference one.
+      expect(hasPendingGame()).toBe(true);
+      expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: 12.5, sourceClipId: null });
     });
   });
 });

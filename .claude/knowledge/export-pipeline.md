@@ -124,6 +124,16 @@ graph LR
   SELECT, so `_read_games_for_list` `column_exists`-guards them (projects `NULL` on a pre-v030 DB —
   nothing can create a reference until v030, so NULL is correct). Same class as T5970/T6030; the
   structural guard test `POST_V023_COLUMNS`/`HEAD_VERSION_AUDITED` was extended to v030.
+- **Games-tab UI for a reference (T5820).** The frontend renders a reference (`is_reference:true`)
+  as a `ReferenceGameCard` (subdued dashed link tile, "In {source_profile_name}" badge, NO expiry
+  chip / kebab / annotate-delete-recap actions, no poster fetch) — the real `GameTile` is byte-identical
+  for non-references. Clicking it switches to the owning profile (`profileStore.switchProfile`) and lands
+  on ITS Games tab with the real game highlighted, located by frozen **`blake3_hash`** — NOTE the API
+  deliberately does NOT surface the owning game's id: `source_game_id` is SELECTed in
+  `_read_games_for_list` but never added to the `_list_games_impl` response dict (only `is_reference`/
+  `source_profile_id`/`source_profile_name` are, per the list above). A deleted owning game degrades to
+  a visible in-tab notice at click time (no cross-profile existence check on list render). Details:
+  annotate.md §Landmines (T5820 breadcrumb).
 - **Moved reels CARRY remapped `game_ids` (T5810).** `downloads.py:move_reels_to_profile` no longer
   nulls `game_ids`/`game_id` (the old T4850 behavior). Instead `_build_reference_map` resolves each
   distinct source game to a target reference via `ensure_game_reference` (per-DISTINCT-game, NOT

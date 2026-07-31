@@ -24,6 +24,12 @@ import { EditGameModal } from './EditGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useProfileStore } from '../stores/profileStore';
+import {
+  setPendingGameReference,
+  peekPendingGameReference,
+  consumePendingGameReference,
+} from '../utils/pendingNavigation';
 import { InstallButton } from './InstallButton';
 // DraftTile (the restyled ProjectCard) + SegmentedProgressStrip were extracted to their
 // own files (T5672). Re-exported below (DraftTile aliased to ProjectCard) so existing
@@ -32,6 +38,7 @@ import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
+import { ReferenceGameCard } from './ReferenceGameCard';
 import { splitByAspect } from '../constants/aspectRatios';
 
 // Group games by month (YYYY-MM) in chronological order (newest first)
@@ -130,6 +137,12 @@ export function ProjectManager({
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
+  // T5820: transient cross-profile-reference landing state (NOT persisted — pure
+  // in-memory affordance). highlightGameId briefly rings the game we navigated to;
+  // referenceNotice shows the degraded-link message when the owning game is gone.
+  const [highlightGameId, setHighlightGameId] = useState(null);
+  const [referenceNotice, setReferenceNotice] = useState(null);
+  const currentProfileId = useProfileStore((s) => s.currentProfileId);
   const [shareGame, setShareGame] = useState(null);
   const [editGame, setEditGame] = useState(null);
   const gameFileInputRef = useRef(null);
@@ -520,6 +533,80 @@ export function ProjectManager({
     }
   }, [showNewProjectModal, onFetchGames]);
 
+  // T5820: clicking a reference card is a composite gesture — set the transient
+  // cross-profile breadcrumb, hint the Games tab (the existing read-once
+  // `projectManagerTab` mechanism, consumed by the effect above), then switch to
+  // the owning profile. The switch resets the data stores + navigates to Project
+  // Manager; the sessionStorage breadcrumb survives that reset (it clears Zustand
+  // only), and the effect below consumes it once the owning profile's games land.
+  const handleOpenReference = useCallback((game) => {
+    if (!game?.source_profile_id) {
+      console.error('[ProjectManager] reference card clicked without a source_profile_id — backend bug', game);
+      return;
+    }
+    setPendingGameReference({
+      sourceProfileId: game.source_profile_id,
+      sourceGameHash: game.blake3_hash,
+      sourceProfileName: game.source_profile_name,
+    });
+    sessionStorage.setItem('projectManagerTab', 'games');
+    useProfileStore.getState().switchProfile(game.source_profile_id);
+  }, []);
+
+  // T5820: after landing in the owning profile, locate the real game (by its frozen
+  // blake3_hash — the id-independent key the reference exposes), scroll it into view
+  // and ring it briefly. Detection of a deleted owning game is at THIS point (a list
+  // that settled with no match), never a cross-profile existence check on render.
+  //
+  // The switch flips currentProfileId BEFORE _resetDataStores refetches, so there is
+  // a transient render where we're "on" the owning profile but `games` still holds
+  // the previous profile's (stale) list with gamesLoading momentarily false. Consuming
+  // then would false-degrade. So we wait for the owning profile's OWN fetch to run:
+  // only consume after we've observed gamesLoading go true (fetch started) and back
+  // to false (fetch settled) while on the target profile.
+  const referenceLoadStartedRef = useRef(false);
+  useEffect(() => {
+    const pending = peekPendingGameReference();
+    if (!pending) return;
+    if (currentProfileId !== pending.sourceProfileId) return;
+    if (gamesLoading) {
+      referenceLoadStartedRef.current = true; // the target profile's fetch is in flight
+      return;
+    }
+    if (!referenceLoadStartedRef.current) return; // still the stale pre-refetch list
+
+    referenceLoadStartedRef.current = false;
+    consumePendingGameReference();
+    setActiveTab('games');
+
+    // A hash-less reference (multi-video owning game) can't be located per-card —
+    // land on the Games tab without a highlight rather than fabricate a match.
+    if (!pending.sourceGameHash) {
+      console.warn('[ProjectManager] reference has no blake3_hash (multi-video owning game); landing on Games tab without a per-card highlight');
+      return;
+    }
+
+    const target = games.find(
+      (g) => !g.is_reference && g.blake3_hash && g.blake3_hash === pending.sourceGameHash
+    );
+    if (target) {
+      setHighlightGameId(target.id);
+      requestAnimationFrame(() => {
+        gamesContainerRef.current
+          ?.querySelector(`[data-game-id="${target.id}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      const t = setTimeout(() => setHighlightGameId(null), 2500);
+      return () => clearTimeout(t);
+    }
+
+    // Degraded link: the owning game was deleted after the move. Keep the user
+    // informed (no silent no-op); the reference card stays for grouping context.
+    setReferenceNotice(`This game is no longer in ${pending.sourceProfileName || 'that profile'}.`);
+    const t = setTimeout(() => setReferenceNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [games, gamesLoading, currentProfileId, setActiveTab]);
+
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
     // Close modal first
@@ -743,6 +830,28 @@ export function ProjectManager({
         )}
       </div>
 
+      {/* T5820: degraded cross-profile link notice — the owning game was deleted
+          after the move, so the reference could not resolve to a real game. Shown
+          briefly so the click is never a silent no-op. */}
+      {referenceNotice && (
+        <div
+          role="status"
+          data-reference-notice
+          className="mb-4 flex items-start gap-2 rounded-lg border border-yellow-800/50 bg-yellow-900/30 px-3 py-2 text-sm text-yellow-200"
+        >
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-yellow-400" />
+          <span>{referenceNotice}</span>
+          <button
+            type="button"
+            onClick={() => setReferenceNotice(null)}
+            aria-label="Dismiss"
+            className="ml-auto flex-shrink-0 text-yellow-400/70 hover:text-yellow-200"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Content */}
       {activeTab === 'games' ? (
         /* Games List */
@@ -845,16 +954,28 @@ export function ProjectManager({
                         {/* Landscape tile grid: 6-up desktop, 3-up tablet, 2-up mobile */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
                           {groups[monthKey].map(game => (
-                            <div key={game.id} data-game-id={game.id}>
-                              <GameTile
-                                game={game}
-                                onLoad={() => onLoadGame(game.id)}
-                                onDelete={() => onDeleteGame(game.id)}
-                                onExtend={() => setExtensionGame(game)}
-                                onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
-                                onShare={() => setShareGame(game)}
-                                onEdit={() => setEditGame(game)}
-                              />
+                            <div
+                              key={game.id}
+                              data-game-id={game.id}
+                              className={game.id === highlightGameId
+                                ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
+                                : undefined}
+                            >
+                              {/* T5820: a reference (cross-profile link) renders a distinct,
+                                  non-editable link card; real games render the unchanged tile. */}
+                              {game.is_reference ? (
+                                <ReferenceGameCard game={game} onOpen={handleOpenReference} />
+                              ) : (
+                                <GameTile
+                                  game={game}
+                                  onLoad={() => onLoadGame(game.id)}
+                                  onDelete={() => onDeleteGame(game.id)}
+                                  onExtend={() => setExtensionGame(game)}
+                                  onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                                  onShare={() => setShareGame(game)}
+                                  onEdit={() => setEditGame(game)}
+                                />
+                              )}
                             </div>
                           ))}
                         </div>

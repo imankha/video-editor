@@ -68,6 +68,61 @@ export function consumePendingGame() {
   return pending;
 }
 
+// --- Cross-profile game reference (T5820) ---
+//
+// A reference game card in one profile's Games tab points at the REAL game owned
+// by a sibling profile. Clicking it switches to the owning profile and lands on
+// its Games tab with the real game scrolled into view + briefly highlighted
+// (user decision: a reference is a signpost, so it lands on the game's Games-tab
+// context, NOT the Annotate editor — hence a breadcrumb distinct from
+// setPendingGame above).
+//
+// This is TRANSIENT navigation intent, not view state — never a saved
+// preference. It is modelled on the read-once `projectManagerTab` hint
+// (ProjectManager.jsx): set before switching, consumed once after the switch,
+// then cleared. It survives `profileStore._resetDataStores()` because that only
+// resets Zustand stores + refetches — it never touches sessionStorage.
+//
+// The owning game is located in the target profile by its frozen `blake3_hash`
+// (the stable identifier the reference row exposes — the API does not surface the
+// owning game's id). A multi-video game has a NULL hash, so a hash-less reference
+// simply lands on the Games tab without a per-card highlight.
+
+const GAME_REF_PROFILE_KEY = 'pendingGameRefProfileId';
+const GAME_REF_HASH_KEY = 'pendingGameRefHash';
+const GAME_REF_PROFILE_NAME_KEY = 'pendingGameRefProfileName';
+
+export function setPendingGameReference({ sourceProfileId, sourceGameHash = null, sourceProfileName = null }) {
+  sessionStorage.setItem(GAME_REF_PROFILE_KEY, sourceProfileId);
+  if (sourceGameHash != null) {
+    sessionStorage.setItem(GAME_REF_HASH_KEY, sourceGameHash);
+  }
+  if (sourceProfileName != null) {
+    sessionStorage.setItem(GAME_REF_PROFILE_NAME_KEY, sourceProfileName);
+  }
+}
+
+/** Read the reference breadcrumb WITHOUT clearing it (the consume gate waits for
+ *  the target profile's games to settle before acting — peek lets it re-check). */
+export function peekPendingGameReference() {
+  const sourceProfileId = sessionStorage.getItem(GAME_REF_PROFILE_KEY);
+  if (sourceProfileId == null) return null;
+  return {
+    sourceProfileId,
+    sourceGameHash: sessionStorage.getItem(GAME_REF_HASH_KEY),
+    sourceProfileName: sessionStorage.getItem(GAME_REF_PROFILE_NAME_KEY),
+  };
+}
+
+export function consumePendingGameReference() {
+  const pending = peekPendingGameReference();
+  if (!pending) return null;
+  sessionStorage.removeItem(GAME_REF_PROFILE_KEY);
+  sessionStorage.removeItem(GAME_REF_HASH_KEY);
+  sessionStorage.removeItem(GAME_REF_PROFILE_NAME_KEY);
+  return pending;
+}
+
 // --- Projects/reels (consumed by ProjectsScreen restore effect) ---
 
 export function setPendingProject(projectId, { mode = null, clipIndex = null } = {}) {
