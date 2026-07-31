@@ -37,7 +37,6 @@ export const useProjectDataStore = create((set, get) => ({
   clipMetadataCache: {},
 
   // API loading state
-  clipsLoadedAt: 0,
   clipsFetching: false,
   clipsError: null,
 
@@ -118,7 +117,6 @@ export const useProjectDataStore = create((set, get) => ({
   // Batch update for loading project clips
   setProjectClips: ({ clips, aspectRatio }) => set((state) => ({
     clips,
-    clipsLoadedAt: Date.now(),
     selectedClipId: clips.length > 0 ? clips[0].id : null,
     aspectRatio: aspectRatio || state.aspectRatio,
   })),
@@ -126,6 +124,27 @@ export const useProjectDataStore = create((set, get) => ({
   // ========== API Methods ==========
 
   _clipsInflight: null,
+  // Monotonic request token (T6190). A late-resolving stale fetch must not clobber a
+  // fresher one that landed first — mirrors gamesDataStore's fetch-cancellation
+  // discipline ("Cancels any in-flight fetch to prevent stale data ... overwriting
+  // the current one"), adapted to fetch-token form since this is a plain fetch, not
+  // an AbortController-carrying request.
+  _clipsRequestId: 0,
+
+  /**
+   * T6190: Force a fresh clips fetch. Called from the gesture that leaves annotate
+   * (App.jsx handleModeChange) so Framing picks up boundary/clip edits made in
+   * annotate. Mirrors gamesDataStore.invalidateGames — invalidation is a gesture,
+   * not a reactive effect, and Framing no longer refetches on mount.
+   */
+  invalidateClips: (projectId) => {
+    if (!projectId) return Promise.resolve([]);
+    // Drop any in-flight latch so this refetch isn't deduped against a stale request;
+    // fetchClips's own request-token check discards that stale request's result when
+    // it eventually resolves, even though it's still in flight.
+    set({ _clipsInflight: null });
+    return get().fetchClips(projectId);
+  },
 
   fetchClips: (projectId) => {
     if (!projectId) return Promise.resolve([]);
@@ -133,18 +152,21 @@ export const useProjectDataStore = create((set, get) => ({
     const existing = get()._clipsInflight;
     if (existing && existing.projectId === projectId) return existing.promise;
 
-    set({ clipsFetching: true, clipsError: null });
+    const requestId = get()._clipsRequestId + 1;
+    set({ clipsFetching: true, clipsError: null, _clipsRequestId: requestId });
     const promise = apiFetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`)
       .then(response => {
         if (!response.ok) throw new Error('Failed to fetch clips');
         return response.json();
       })
       .then(data => {
+        // A newer fetchClips call (e.g. invalidateClips) already superseded this one —
+        // applying this stale response would clobber the fresher data it raced against.
+        if (get()._clipsRequestId !== requestId) return data;
         const { selectedClipId } = get();
         const clipStillExists = selectedClipId && data.some(c => c.id === selectedClipId);
         set({
           clips: data,
-          clipsLoadedAt: Date.now(),
           clipsFetching: false,
           _clipsInflight: null,
           selectedClipId: clipStillExists ? selectedClipId : (data.length > 0 ? data[0].id : null),
@@ -152,6 +174,7 @@ export const useProjectDataStore = create((set, get) => ({
         return data;
       })
       .catch(err => {
+        if (get()._clipsRequestId !== requestId) return [];
         set({ clipsError: err.message, clipsFetching: false, _clipsInflight: null });
         console.error('[projectDataStore] fetchClips error:', err);
         return [];

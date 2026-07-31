@@ -130,6 +130,34 @@ gesture-based rule and removes the guesswork.
 **2026-07-28**: Filed from user report + prod HAR analysis. Call sites traced and verified
 against source; not yet fixed.
 
+**2026-07-30**: Implemented on `feature/T6190-project-open-redundant-fetches` (commits
+`3c30c4ba`, `ddea57c6`). Pushed; Branch CI green; frontend suite 141 files / 1445 tests pass.
+Measured on the local stack: project-open fires **games=0, clips=1, health=0**. Annotate-edit
+-> Framing verified live (end label 48:53.9 -> 49:23.7; `end_time` 2933.907 -> 2963.657 read
+back after the switch). Approach taken: removed both FramingScreen mount effects, replaced the
+clips refetch with `invalidateClips` on the leave-annotate gesture (`App.handleModeChange`),
+deleted dead `clipsLoadedAt`, hoisted `<ConnectionStatus />` above the home/editor branch
+split. Added `invalidateClips` to the open-completed-reel handler too, since that path never
+runs `loadProject` and would otherwise open Framing with an empty clip list.
+
+**2026-07-30 (REGRESSION — blocks merge)**: User driving the real app on `ddea57c6` hit
+`Uncaught Error: Maximum update depth exceeded` in `<FramingScreen>` going annotate -> framing;
+React unmounts the screen. Console stack:
+`clearSaveCurrentClipState (framingStore.js:45)` <- `safelyCallDestroy` <-
+`commitHookEffectListUnmount`, with React's warning naming a `useEffect` whose dep changes
+every render. Loop candidate: the register/clear effect at `FramingScreen.jsx:396-399` keys on
+`[framingSaveCurrentClipState]` and setStates in BOTH body and cleanup; that callback is a
+`useCallback` (`FramingContainer.jsx:301`) with deps `[selectedClipId, selectedProjectId,
+clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, ...]` — several unstable
+identities. Suspected trigger from THIS task: the clips fetch moved earlier (mount-effect ->
+`handleModeChange`), so the response lands mid-mount rather than post-mount; `fetchClips` also
+reassigns `selectedClipId` when the previously selected clip is absent from the refetched list.
+Log evidence: video load id=1 aborted then id=2 started, and `[useSegments] Restoring state`
+fired 3x, the last for a different clip (videoDuration 11.553 -> 9.992). **Not yet confirmed as
+ours — must bisect against master.** Gap that let it through: the QA e2e drove this exact
+transition and asserted the boundary values, but never asserted the absence of console errors,
+so a crashing screen still read green.
+
 ## Acceptance Criteria
 
 - [ ] Clicking a draft into Framing fires **no** `GET /api/games`
@@ -140,3 +168,8 @@ against source; not yet fixed.
 - [ ] Connection-status indicator still works in the editor
 - [ ] Fresh HAR shows first R2 video byte measurably earlier than the 2.7s baseline
 - [ ] Frontend unit tests pass
+- [ ] **No `Maximum update depth exceeded` (or any uncaught React error) entering Framing from
+      Annotate** — the 2026-07-30 regression. Must be pinned by a test that asserts on the
+      browser console, not just on rendered values.
+- [ ] Re-edit from My Reels ("Open as Draft") opens Framing with a populated clip list —
+      currently unverified live (the dev account has no published reel to drive it)

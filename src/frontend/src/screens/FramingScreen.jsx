@@ -8,7 +8,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
+import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
@@ -119,9 +119,10 @@ export function FramingScreen({
     }
   }, [projectId, projectAspectRatio, changeAspectRatioAction, refreshProject]);
 
-  // Games — Zustand store (ready-only: pending uploads excluded)
+  // Games — Zustand store (ready-only: pending uploads excluded).
+  // Hydrated by /api/bootstrap (App.jsx setFromBootstrap); Framing reads the cached
+  // list and never refetches on mount — see the invariant in keyframes-framing.md.
   const games = useReadyGames();
-  const fetchGames = useGamesDataStore(state => state.fetchGames);
 
   // Helper: fetch and refresh clips from backend
   const fetchProjectClips = useCallback(() => {
@@ -135,11 +136,6 @@ export function FramingScreen({
     if (clip) return getClipFileUrlSelector(clip, projectId);
     return `${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/file`;
   }, [clips, projectId]);
-
-  // Fetch games on mount
-  useEffect(() => {
-    fetchGames();
-  }, [fetchGames]);
 
   // T740: No outdated clips check needed in framing mode.
   // Framing reads start_time/end_time fresh from raw_clips every load.
@@ -472,11 +468,10 @@ export function FramingScreen({
     return null;
   }, [selectedClip]);
 
-  // Re-fetch clips on mount — picks up any changes made in annotate mode.
-  // fetchClips dedupes in-flight requests, so concurrent calls from useProjectLoader are free.
-  useEffect(() => {
-    if (projectId) fetchClips(projectId);
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only refresh
+  // T6190: No mount refetch here. useProjectLoader.loadProject is the single owner of the
+  // project-open clips fetch; annotate edits reach Framing via invalidateClips on the
+  // leave-annotate mode-change gesture (App.jsx handleModeChange). See the invariant in
+  // keyframes-framing.md — do NOT re-add a "just to be safe" mount fetchClips.
 
   // T1460: gesture-driven warm. The /storage/warmup tier-1 queue is built at
   // app init and excludes exported projects, so opening framing on any project
