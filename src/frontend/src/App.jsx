@@ -566,6 +566,20 @@ function App() {
       return;
     }
 
+    // T6190: Leaving annotate for framing/overlay is the gesture that can carry annotate
+    // boundary/clip edits into the editor. Invalidate clips so the editor re-fetches the
+    // fresh list. This replaces the removed FramingScreen mount refetch — a gesture-driven
+    // fetch, not a reactive effect, and the single owner of "pick up annotate edits".
+    // Read the project id from the store, NOT the `selectedProjectId` closure/prop:
+    // AnnotateScreen.handleAnnotateModeChange calls selectProject() synchronously right
+    // before onModeChange(), so App has not re-rendered and the subscribed value is still
+    // the pre-navigation id (null on the fresh Home->Game->Annotate->Framing path).
+    const activeProjectId = useProjectsStore.getState().selectedProjectId;
+    if (editorMode === EDITOR_MODES.ANNOTATE && activeProjectId &&
+        (newMode === EDITOR_MODES.FRAMING || newMode === EDITOR_MODES.OVERLAY)) {
+      useProjectDataStore.getState().invalidateClips(activeProjectId);
+    }
+
     // For project-manager, also clear selection
     if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
       clearSelection();
@@ -728,6 +742,10 @@ function App() {
   if (resolveEditorScreen(editorMode, !!selectedProject) === APP_SCREENS.HOME) {
     return (
       <>
+        {/* T6190: Same stable first-child position as the editor return so ConnectionStatus
+            persists across the home↔editor navigation and never remounts (renders null
+            while connected, so no visible chrome on Drafts). */}
+        <ConnectionStatus />
         <ImpersonationBanner />
         {/* Shared bg-gray-900 wrapper: content + quest panel flow together, min-h-screen ensures background covers viewport */}
         <div className="min-h-screen bg-gray-900">
@@ -769,12 +787,16 @@ function App() {
   }
 
   return (
+    <>
+    {/* T6190: Connection status banner — mounted above the home/editor branch split (same
+        stable first-child position as the home return) so it persists across the
+        home↔editor navigation and its one-shot /api/health check fires once at app boot,
+        never on the project-open critical path. Renders null while connected. */}
+    <ConnectionStatus />
     <ProjectProvider>
     <AppStateProvider value={appStateValue}>
     <ImpersonationBanner />
     <div className="h-dvh overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
-      {/* Connection status banner - shows when backend is unreachable */}
-      <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === EDITOR_MODES.ANNOTATE && (
         <Suspense fallback={null}>
@@ -850,6 +872,10 @@ function App() {
             fetchProjects({ force: true }),
             selectProject(projectId),
           ]);
+          // T6190: this re-edit path never runs loadProject and FramingScreen no longer
+          // fetches clips on mount, so load the restored project's clips here — the
+          // "open reel" gesture owns its own fetch (reset() above cleared the old list).
+          useProjectDataStore.getState().invalidateClips(projectId);
           // Default to framing mode when opening a completed reel
           setEditorMode(EDITOR_MODES.FRAMING);
         }}
@@ -902,6 +928,7 @@ function App() {
     </div>
     </AppStateProvider>
     </ProjectProvider>
+    </>
   );
 }
 

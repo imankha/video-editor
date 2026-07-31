@@ -7,6 +7,7 @@ This module replaces the SQLite-based auth_db and sharing_db connection manageme
 
 import logging
 import os
+import threading
 import time
 from contextlib import contextmanager
 
@@ -17,6 +18,25 @@ from psycopg2.pool import ThreadedConnectionPool
 logger = logging.getLogger(__name__)
 
 _pool: ThreadedConnectionPool | None = None
+
+# T6200: the pool's capacity. psycopg2's ThreadedConnectionPool does NOT block when
+# full — ``getconn()`` RAISES ``PoolError`` the instant ``len(_used) == maxconn``.
+# Before T6200 the single event loop serialized every checkout so the pool never
+# neared this ceiling; once request-path blocking I/O is offloaded to the 32-thread
+# executor (see main.py lifespan), up to 32 worker threads can call getconn at once.
+# Past 10 that raises PoolError, which db_sync catches and turns into a 503 —
+# trading the latency we set out to fix for user-visible errors under exactly the
+# concurrency this task enables. ``_checkout_gate`` (a BoundedSemaphore sized to
+# this same number) closes that gap: threads WAIT for a free connection instead of
+# racing getconn past the ceiling. Sized from the one constant so pool capacity and
+# the gate can never drift apart.
+_MAX_POOL_CONN = 10
+
+# Bounds concurrent pool checkouts to _MAX_POOL_CONN so getconn is never called
+# while maxconn connections are already out (which would raise PoolError). Created
+# in init_pg_pool alongside the pool; enforced structurally in the single checkout
+# path (get_pg), so no PG caller can bypass it. None until the pool is initialized.
+_checkout_gate: threading.BoundedSemaphore | None = None
 
 # T4960 idle-age gate: only pre-ping a checked-out connection that has sat idle in
 # the pool longer than this. Connections reused within the window were just proven
@@ -338,25 +358,29 @@ INSERT INTO admin_users (email) VALUES ('imankh@gmail.com') ON CONFLICT DO NOTHI
 
 
 def init_pg_pool():
-    global _pool
+    global _pool, _checkout_gate
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL environment variable is required")
     try:
         _pool = ThreadedConnectionPool(
-            minconn=2, maxconn=10, dsn=dsn, cursor_factory=RealDictCursor,
+            minconn=2, maxconn=_MAX_POOL_CONN, dsn=dsn, cursor_factory=RealDictCursor,
             keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
         )
     except psycopg2.OperationalError:
         raise RuntimeError("Postgres is not running — start it with: docker start reelballers-postgres") from None
-    logger.info("[PG] Connection pool initialized (min=2, max=10, keepalive=30s)")
+    # T6200: gate concurrent checkouts to the pool's capacity — see _MAX_POOL_CONN.
+    _checkout_gate = threading.BoundedSemaphore(_MAX_POOL_CONN)
+    logger.info("[PG] Connection pool initialized (min=2, max=%d, keepalive=30s, checkout gate=%d)",
+                _MAX_POOL_CONN, _MAX_POOL_CONN)
 
 
 def close_pg_pool():
-    global _pool
+    global _pool, _checkout_gate
     if _pool:
         _pool.closeall()
         _pool = None
+        _checkout_gate = None
         logger.info("[PG] Connection pool closed")
 
 
@@ -388,69 +412,89 @@ def get_pg():
     if _pool is None:
         raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
 
-    conn = None
-    last_err = None
-    max_attempts = getattr(_pool, "maxconn", 1) + 1
-    for attempt in range(1, max_attempts + 1):
-        candidate = _pool.getconn()
-        if candidate.closed:
-            logger.warning(
-                "[PG] discarded stale connection (already closed, attempt %d/%d)",
-                attempt, max_attempts,
-            )
-            _last_returned.pop(id(candidate), None)
-            _pool.putconn(candidate, close=True)
-            continue
-        returned_at = _last_returned.get(id(candidate))
-        if returned_at is not None and (time.monotonic() - returned_at) < _IDLE_PING_THRESHOLD_S:
-            conn = candidate  # recently proven alive -> skip the ping (hot path)
-            break
-        try:
-            with candidate.cursor() as cur:
-                cur.execute("SELECT 1")
-            candidate.rollback()  # don't leak the ping's read transaction to the caller
-            conn = candidate
-            break
-        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-            last_err = e
-            logger.warning(
-                "[PG] discarded stale connection during pre-ping (attempt %d/%d): %s",
-                attempt, max_attempts, e,
-            )
-            _last_returned.pop(id(candidate), None)
-            _pool.putconn(candidate, close=True)
-    if conn is None:
-        raise last_err if last_err is not None else psycopg2.OperationalError(
-            "[PG] no live connection available after pre-ping retries"
-        )
-
+    # T6200: block until a connection slot is free instead of racing getconn past
+    # maxconn (which raises PoolError -> a 503 under an authed burst). Acquired
+    # OUTERMOST so the permit is held for the whole checkout — including the
+    # stale-discard retry loop below, which putconn()s before each re-getconn and
+    # so never holds more than one connection per permit. With permits == maxconn,
+    # at most maxconn threads are ever inside the getconn region, so getconn can
+    # never see the pool already full. Bare acquire/release (not a `with`) because
+    # this is a generator-based contextmanager; the outer `finally` guarantees the
+    # release even if setup below raises. A None gate (pool set directly in a test)
+    # degrades to the pre-T6200 unbounded behavior.
+    gate = _checkout_gate
+    if gate is not None:
+        gate.acquire()
     try:
-        yield conn
-        conn.commit()
-    except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-        logger.warning(f"[PG] Connection error, discarding: {e}")
+        conn = None
+        last_err = None
+        max_attempts = getattr(_pool, "maxconn", 1) + 1
+        for attempt in range(1, max_attempts + 1):
+            candidate = _pool.getconn()
+            if candidate.closed:
+                logger.warning(
+                    "[PG] discarded stale connection (already closed, attempt %d/%d)",
+                    attempt, max_attempts,
+                )
+                _last_returned.pop(id(candidate), None)
+                _pool.putconn(candidate, close=True)
+                continue
+            returned_at = _last_returned.get(id(candidate))
+            if returned_at is not None and (time.monotonic() - returned_at) < _IDLE_PING_THRESHOLD_S:
+                conn = candidate  # recently proven alive -> skip the ping (hot path)
+                break
+            try:
+                with candidate.cursor() as cur:
+                    cur.execute("SELECT 1")
+                candidate.rollback()  # don't leak the ping's read transaction to the caller
+                conn = candidate
+                break
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                last_err = e
+                logger.warning(
+                    "[PG] discarded stale connection during pre-ping (attempt %d/%d): %s",
+                    attempt, max_attempts, e,
+                )
+                _last_returned.pop(id(candidate), None)
+                _pool.putconn(candidate, close=True)
+        if conn is None:
+            raise last_err if last_err is not None else psycopg2.OperationalError(
+                "[PG] no live connection available after pre-ping retries"
+            )
+
         try:
-            conn.rollback()
-        except (psycopg2.InterfaceError, psycopg2.OperationalError):
-            pass
-        raise
-    except Exception:
-        try:
-            conn.rollback()
-        except (psycopg2.InterfaceError, psycopg2.OperationalError):
-            pass
-        raise
+            yield conn
+            conn.commit()
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            logger.warning(f"[PG] Connection error, discarding: {e}")
+            try:
+                conn.rollback()
+            except (psycopg2.InterfaceError, psycopg2.OperationalError):
+                pass
+            raise
+        except Exception:
+            try:
+                conn.rollback()
+            except (psycopg2.InterfaceError, psycopg2.OperationalError):
+                pass
+            raise
+        finally:
+            _pool.putconn(conn, close=conn.closed)
+            # Reconcile the idle-age ledger AFTER putconn: psycopg2 closes any conn
+            # returned while the free list is already at minconn (overflow) or flagged
+            # close=True, so its post-putconn ``closed`` state is the source of truth.
+            # Stamping only re-pooled (still-open) conns keeps the ledger bounded to
+            # the live pool and prevents leaked entries from causing id()-reuse skips.
+            if conn.closed:
+                _last_returned.pop(id(conn), None)
+            else:
+                _last_returned[id(conn)] = time.monotonic()
     finally:
-        _pool.putconn(conn, close=conn.closed)
-        # Reconcile the idle-age ledger AFTER putconn: psycopg2 closes any conn
-        # returned while the free list is already at minconn (overflow) or flagged
-        # close=True, so its post-putconn ``closed`` state is the source of truth.
-        # Stamping only re-pooled (still-open) conns keeps the ledger bounded to
-        # the live pool and prevents leaked entries from causing id()-reuse skips.
-        if conn.closed:
-            _last_returned.pop(id(conn), None)
-        else:
-            _last_returned[id(conn)] = time.monotonic()
+        # T6200: release the checkout permit LAST — after putconn has returned the
+        # connection to the pool — so a waiting thread only wakes once a slot is
+        # genuinely free.
+        if gate is not None:
+            gate.release()
 
 
 def init_pg_schema():
