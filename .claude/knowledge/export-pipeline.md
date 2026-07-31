@@ -107,8 +107,10 @@ graph LR
   no `game_ref_counts`** (EPIC decision 4 — video lifecycle stays 100% with the owning profile).
   So `list_games` (`games.py:_read_games_for_list`/`_list_games_impl`) **skips ALL storage-expiry
   computation for references** — a reference emits `storage_status=None`, `storage_expires_at=None`,
-  `can_extend=False`, plus `is_reference=true`/`source_profile_id`/`source_profile_name` (owning
-  profile's display name from `user_db.get_profiles`, ONE read, no N+1). Athlete stats are naturally
+  `can_extend=False`, plus `is_reference=true`/`source_profile_id`/`source_game_id`/`source_profile_name`
+  (owning profile's display name from `user_db.get_profiles`, ONE read, no N+1). `source_game_id` lets
+  the frontend (T5820) locate the owning game exactly, since `blake3_hash` is NULL for MULTI-VIDEO
+  games and can't be used as a fallback key. Athlete stats are naturally
   zero (no local `raw_clips`). NEVER show an expiry chip on a reference card.
 - **Primitive:** `materialization.ensure_game_reference(target_conn, target_profile_id,
   source_profile_id, source_game_row, source_game_videos) -> int` (the 2nd cross-profile game

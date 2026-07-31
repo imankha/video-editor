@@ -251,6 +251,7 @@ async def test_list_games_marks_references_and_skips_expiry(env):
     assert len(refs) == 1
     ref = refs[0]
     assert ref["source_profile_id"] == OWNER
+    assert ref["source_game_id"] == 501
     assert ref["source_profile_name"] == "Owner Athlete"   # resolved from user.sqlite
     # NEVER any expiry state on a reference (EPIC decision 4).
     assert ref["storage_expires_at"] is None

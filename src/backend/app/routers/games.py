@@ -1066,6 +1066,7 @@ async def _list_games_impl(skip_presigned_urls=False):
             # renders a reference as a link card back to the owning profile.
             'is_reference': is_reference,
             'source_profile_id': source_profile_id,
+            'source_game_id': row['source_game_id'] if is_reference else None,
             'source_profile_name': (
                 source_profile_names.get(source_profile_id) if is_reference else None
             ),
