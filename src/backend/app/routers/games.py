@@ -45,6 +45,7 @@ from app.storage import (
 )
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
+from app.utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -893,14 +894,16 @@ async def list_games():
     return await _list_games_impl(skip_presigned_urls=False)
 
 
-async def _list_games_impl(skip_presigned_urls=False):
-    from app.database import get_database_path
-    from app.profile_context import get_current_profile_id
-    from app.user_context import get_current_user_id
-    _profile = get_current_profile_id()
-    _db_path = get_database_path()
-    logger.info(f"[list_games] user={get_current_user_id()} profile={_profile} db={_db_path}")
+def _read_games_for_list():
+    """T6200: every blocking read for the games list, on ONE worker thread.
 
+    Runs the games/game_videos JOIN, the game_storage expiry read and athlete
+    stats (all sqlite via the request's profile connection) plus the Postgres
+    grace-hash read. Returns plain data only — no sqlite cursor/connection escapes
+    the thread (connections are thread-affine). Reads request contextvars
+    (get_db_connection resolves the current user/profile), so it MUST be invoked
+    via run_in_context so those contextvars survive into the thread.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -921,115 +924,135 @@ async def _list_games_impl(skip_presigned_urls=False):
         rows = cursor.fetchall()
 
         # Storage expiry from profile SQLite (per-user, single source of truth)
-        get_current_user_id()
         storage_rows = cursor.execute(
             "SELECT blake3_hash, storage_expires_at FROM game_storage"
         ).fetchall()
         expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_rows}
-        grace_hashes = get_grace_deletion_hashes()
         all_ref_hashes = {r['blake3_hash'] for r in storage_rows}
-
-        # T2880: Pre-generate presigned URLs for all games concurrently.
-        # T3380: Skip when called from bootstrap (URLs loaded lazily on demand).
-        if not skip_presigned_urls:
-            unique_hashes = {row['blake3_hash'] for row in rows if row['blake3_hash']}
-            if unique_hashes:
-                await asyncio.gather(*[
-                    asyncio.to_thread(generate_presigned_url_global, f"games/{h}.mp4", 14400)
-                    for h in unique_hashes
-                ])
 
         # Compute my_athlete-filtered stats and tag badges per game
         game_ids = [row['id'] for row in rows]
         athlete_stats = _compute_athlete_stats(cursor, game_ids) if game_ids else {}
 
-        games = []
-        for row in rows:
-            if not row['opponent_name'] or not row['game_date'] or not row['game_type']:
-                logger.warning(
-                    f"Game {row['id']} missing details: opponent={row['opponent_name']}, "
-                    f"date={row['game_date']}, type={row['game_type']}, name={row['name']}"
-                )
+    grace_hashes = get_grace_deletion_hashes()
+    return rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes
 
-            display_name = generate_game_display_name(
-                row['opponent_name'],
-                row['game_date'],
-                row['game_type'],
-                row['tournament_name'],
-                row['name']
+
+async def _list_games_impl(skip_presigned_urls=False):
+    from app.database import get_database_path
+    from app.profile_context import get_current_profile_id
+    from app.user_context import get_current_user_id
+    _profile = get_current_profile_id()
+    _db_path = get_database_path()
+    logger.info(f"[list_games] user={get_current_user_id()} profile={_profile} db={_db_path}")
+
+    # T6200: run all blocking sqlite/Postgres reads on a worker thread. Previously
+    # these ran directly on the event loop, serializing every concurrent request
+    # (a burst drained together — the HAR fingerprint). run_in_context carries the
+    # request contextvars so get_db_connection resolves the right profile in the
+    # thread. The presign warm below already offloads via to_thread; list-building
+    # then reads the warmed presigned-URL cache (no blocking) on the loop.
+    rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes = await run_in_context(
+        _read_games_for_list
+    )
+
+    # T2880: Pre-generate presigned URLs for all games concurrently.
+    # T3380: Skip when called from bootstrap (URLs loaded lazily on demand).
+    if not skip_presigned_urls:
+        unique_hashes = {row['blake3_hash'] for row in rows if row['blake3_hash']}
+        if unique_hashes:
+            await asyncio.gather(*[
+                asyncio.to_thread(generate_presigned_url_global, f"games/{h}.mp4", 14400)
+                for h in unique_hashes
+            ])
+
+    games = []
+    for row in rows:
+        if not row['opponent_name'] or not row['game_date'] or not row['game_type']:
+            logger.warning(
+                f"Game {row['id']} missing details: opponent={row['opponent_name']}, "
+                f"date={row['game_date']}, type={row['game_type']}, name={row['name']}"
             )
 
-            video_url = None if skip_presigned_urls else get_game_video_url(row['blake3_hash'], row['video_filename'])
+        display_name = generate_game_display_name(
+            row['opponent_name'],
+            row['game_date'],
+            row['game_type'],
+            row['tournament_name'],
+            row['name']
+        )
 
-            expires_at_val = expiry_by_hash.get(row['blake3_hash'])
-            storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'])
+        video_url = None if skip_presigned_urls else get_game_video_url(row['blake3_hash'], row['video_filename'])
 
-            blake3 = row['blake3_hash']
-            can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
+        expires_at_val = expiry_by_hash.get(row['blake3_hash'])
+        storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'])
 
-            stats = athlete_stats.get(row['id'], _EMPTY_ATHLETE_STATS)
+        blake3 = row['blake3_hash']
+        can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
 
-            games.append({
-                'id': row['id'],
-                'name': display_name,
-                'raw_name': row['name'],
-                'opponent_name': row['opponent_name'],
-                'game_date': row['game_date'],
-                'game_type': row['game_type'],
-                'tournament_name': row['tournament_name'],
-                'blake3_hash': blake3,
-                'video_url': video_url,
-                'clip_count': stats['clip_count'],  # derived live from raw_clips, not the stale stored column
-                'brilliant_count': stats['brilliant_count'],
-                'good_count': stats['good_count'],
-                'interesting_count': stats['interesting_count'],
-                'mistake_count': stats['mistake_count'],
-                'blunder_count': stats['blunder_count'],
-                'aggregate_score': stats['aggregate_score'],
-                'tag_badges': stats['tag_badges'],
-                'created_at': row['created_at'],
-                'video_duration': row['effective_duration'],
-                'viewed_duration': row['viewed_duration'] or 0,
-                'status': _game_status_or_log(row['status'], row['id']),
-                'storage_status': storage_status,
-                'storage_expires_at': expires_at_val,
-                'video_size': row['video_size'],
-                'auto_export_status': row['auto_export_status'],
-                'recap_video_url': row['recap_video_url'],
-                'can_extend': can_extend,
-            })
+        stats = athlete_stats.get(row['id'], _EMPTY_ATHLETE_STATS)
 
-        logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
+        games.append({
+            'id': row['id'],
+            'name': display_name,
+            'raw_name': row['name'],
+            'opponent_name': row['opponent_name'],
+            'game_date': row['game_date'],
+            'game_type': row['game_type'],
+            'tournament_name': row['tournament_name'],
+            'blake3_hash': blake3,
+            'video_url': video_url,
+            'clip_count': stats['clip_count'],  # derived live from raw_clips, not the stale stored column
+            'brilliant_count': stats['brilliant_count'],
+            'good_count': stats['good_count'],
+            'interesting_count': stats['interesting_count'],
+            'mistake_count': stats['mistake_count'],
+            'blunder_count': stats['blunder_count'],
+            'aggregate_score': stats['aggregate_score'],
+            'tag_badges': stats['tag_badges'],
+            'created_at': row['created_at'],
+            'video_duration': row['effective_duration'],
+            'viewed_duration': row['viewed_duration'] or 0,
+            'status': _game_status_or_log(row['status'], row['id']),
+            'storage_status': storage_status,
+            'storage_expires_at': expires_at_val,
+            'video_size': row['video_size'],
+            'auto_export_status': row['auto_export_status'],
+            'recap_video_url': row['recap_video_url'],
+            'can_extend': can_extend,
+        })
 
-        # T5683: Warm game source posters for visible games without recaps
-        # (non-blocking background). Recap posters are warmed at share creation.
-        async def warm_visible_game_sources():
-            """Warm game source posters (games without recaps) with bounded concurrency."""
-            warmer = get_poster_warmer()
-            user_id = get_current_user_id()
-            profile_id = _profile
-            tasks = []
-            for game in games:
-                # Only warm source posters for games without recap (recap already warmed at share).
-                if not game['recap_video_url']:
-                    game_id = game['id']
-                    coro = warmer.warm_game_source_poster_async(
-                        user_id, profile_id, game_id
-                    )
-                    tasks.append(warmer.warm_with_semaphore(coro))
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
-                logger.info(f"[ListWarm] warmed {len(tasks)} game source posters for {len(games)} visible games")
+    logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
 
-        # Fire-and-forget warming (never fails the list endpoint).
-        if games and not skip_presigned_urls:
-            try:
-                from app.services.poster_warmer import fire_and_forget, get_poster_warmer
-                fire_and_forget(warm_visible_game_sources())
-            except Exception as e:
-                logger.info(f"[ListWarm] game warming task creation failed: {e}")
+    # T5683: Warm game source posters for visible games without recaps
+    # (non-blocking background). Recap posters are warmed at share creation.
+    async def warm_visible_game_sources():
+        """Warm game source posters (games without recaps) with bounded concurrency."""
+        warmer = get_poster_warmer()
+        user_id = get_current_user_id()
+        profile_id = _profile
+        tasks = []
+        for game in games:
+            # Only warm source posters for games without recap (recap already warmed at share).
+            if not game['recap_video_url']:
+                game_id = game['id']
+                coro = warmer.warm_game_source_poster_async(
+                    user_id, profile_id, game_id
+                )
+                tasks.append(warmer.warm_with_semaphore(coro))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(f"[ListWarm] warmed {len(tasks)} game source posters for {len(games)} visible games")
 
-        return {'games': games}
+    # Fire-and-forget warming (never fails the list endpoint).
+    if games and not skip_presigned_urls:
+        try:
+            from app.services.poster_warmer import fire_and_forget, get_poster_warmer
+            fire_and_forget(warm_visible_game_sources())
+        except Exception as e:
+            logger.info(f"[ListWarm] game warming task creation failed: {e}")
+
+    return {'games': games}
 
 
 @router.get("/{game_id:int}/urls")

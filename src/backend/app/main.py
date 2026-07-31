@@ -123,9 +123,35 @@ async def lifespan(app: FastAPI):
     handlers with the fastapi lifespan pattern). Bodies are unchanged; only the
     registration mechanism moved. Startup runs before `yield`, shutdown after.
     """
+    # T6200: replace the loop's default executor. asyncio's default is
+    # ThreadPoolExecutor(max_workers=min(32, cpu_count + 4)) = 5 on a 1-vCPU
+    # Fly machine — far too small once request-path blocking I/O (validate_session,
+    # hot sqlite reads) is offloaded via asyncio.to_thread. These offloads are
+    # I/O-bound (psycopg2/sqlite3 release the GIL during their I/O), so a larger
+    # bounded pool genuinely overlaps them. Bounded (not unbounded) so a
+    # pathological burst can't exhaust memory.
+    #
+    # 32 (not maxconn=10): most offloads are sqlite/R2, not PG, and sqlite reads
+    # need no pool connection — sizing this to 10 would needlessly throttle them.
+    # The PG-touching subset is bounded SEPARATELY by pg.py's checkout gate
+    # (a BoundedSemaphore sized to maxconn), NOT by this pool and NOT by the PG
+    # pool itself: psycopg2's ThreadedConnectionPool does not backpressure — its
+    # getconn() RAISES PoolError the moment maxconn connections are out, which
+    # db_sync turns into a 503. So the two numbers are decoupled on purpose: 32
+    # threads for I/O concurrency, <=10 of them ever inside a PG checkout at once.
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    io_executor = ThreadPoolExecutor(max_workers=32, thread_name_prefix="io")
+    asyncio.get_running_loop().set_default_executor(io_executor)
+    logger.info("[Startup] Default asyncio executor set to bounded I/O pool (max_workers=32)")
+
     await _startup_event()
-    yield
-    await _shutdown_event()
+    try:
+        yield
+    finally:
+        await _shutdown_event()
+        io_executor.shutdown(wait=False, cancel_futures=True)
 
 
 app = FastAPI(
