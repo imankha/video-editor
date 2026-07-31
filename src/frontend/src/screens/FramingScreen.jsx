@@ -20,7 +20,7 @@ import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFramingForOverlayTransition } from './framingOverlayTransition';
 
@@ -393,10 +393,9 @@ export function FramingScreen({
   // step-3 flush (updateFlush.js), which runs outside the framing component tree.
   // Registration only -- no persistence happens here; the flush calls the
   // function itself, gesture-triggered by the "Update now" click.
-  useEffect(() => {
-    useFramingStore.getState().registerSaveCurrentClipState(framingSaveCurrentClipState);
-    return () => useFramingStore.getState().clearSaveCurrentClipState();
-  }, [framingSaveCurrentClipState]);
+  // T6190: registered via a STABLE ref-wrapper (not keyed on the handler identity) --
+  // a reactive registration fed an unbounded setState loop here. See framingStore.js.
+  useRegisterActiveSaveHandler(framingSaveCurrentClipState);
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);

@@ -129,6 +129,26 @@ gesture lands — no save/export.
   `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules
+- **Registering the mounted `saveCurrentClipState` MUST be stable, never keyed on the handler
+  identity (T6190, 2026-07-31 regression fix).** `FramingScreen` subscribes to the WHOLE
+  `framingStore` (selector-less `useFramingStore()`, FramingScreen.jsx:59-66). The effect that
+  exposes `saveCurrentClipState` to `updateFlush.js` used to `set()` the store keyed on
+  `[framingSaveCurrentClipState]` — but that handler's identity churns nearly every render (a
+  `useCrop` keyframe dispatch regenerates `getKeyframesForExport` while clips/metadata settle on
+  the annotate→framing entry). So each write re-rendered the whole-store subscriber, which
+  re-created the handler, which re-fired the effect: an unbounded setState loop ("Maximum update
+  depth exceeded"), crash stack `clearSaveCurrentClipState`→`forceStoreRerender`→
+  `checkForNestedUpdates`. `activeSaveCurrentClipState` is read ONLY imperatively
+  (`useFramingStore.getState()` in updateFlush.js), never subscribed, so registration has no
+  reason to be reactive. **Fix:** `framingStore.useRegisterActiveSaveHandler(fn)` holds the latest
+  handler in a ref and registers a STABLE wrapper once per mount (empty-deps effect). The
+  loop-HAZARD (whole-store sub + reactive registration) predates T6190 and is byte-identical on
+  master; T6190's `invalidateClips` firing during the transition (settling clips/metadata
+  mid-mount) was the TRIGGER that first activated it. Pinned by
+  `stores/framingStore.registration.test.jsx` (the pre-fix reactive pattern throws Maximum-update-
+  depth; the stable hook does not) + the console-error guard in the T6190 QA spec criterion 4.
+  Do NOT re-key this registration on the handler identity, and prefer selector-scoped framingStore
+  reads on this screen.
 - **Framing does NOT fetch games or clips on mount (T6190, 2026-07-30) — do not re-add a
   "just to be safe" mount refetch.** `FramingScreen` used to fire, on mount, an unconditional
   `fetchGames()` and a `fetchClips(projectId)` (with a WRONG comment claiming the latter deduped

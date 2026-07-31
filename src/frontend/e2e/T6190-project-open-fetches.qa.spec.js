@@ -184,6 +184,19 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     const page = await context.newPage();
     const net = recordRequests(page);
 
+    // T6190 regression guard: entering Framing from Annotate must not trip React's
+    // "Maximum update depth exceeded" (the annotate->framing render-loop crash). The
+    // register/clear of the mounted saveCurrentClipState is now a STABLE ref-registration
+    // (framingStore.useRegisterActiveSaveHandler), so the whole-store subscriber can't
+    // feed itself. Fail the test if that error ever reaches the console.
+    const maxDepthErrors = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error' && /Maximum update depth exceeded/i.test(m.text())) maxDepthErrors.push(m.text());
+    });
+    page.on('pageerror', (e) => {
+      if (/Maximum update depth exceeded/i.test(String(e))) maxDepthErrors.push(String(e));
+    });
+
     await gotoDrafts(page);
     await openFramingChip(page);
 
@@ -296,6 +309,10 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
       console.log('[T6190] criterion 4 verified via invalidation mechanism ONLY (see honest note above) — '
         + 'boundary-content assertion was NOT performed.');
     }
+    // T6190 render-loop regression: no "Maximum update depth exceeded" during annotate->framing.
+    await page.waitForTimeout(500); // let any late passive-effect loop surface
+    expect(maxDepthErrors, `annotate->framing must not trip the render loop:\n${maxDepthErrors.join('\n')}`).toEqual([]);
+
     await saveEvidence(page, 'T6190-criterion-4-annotate-edit-reaches-framing');
     await context.close();
   });
