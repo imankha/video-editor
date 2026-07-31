@@ -76,15 +76,55 @@ small static server fixture that can swap its build directory mid-test.
 ## Implementation
 
 ### Steps
-1. [ ] Build a fixture that serves two successive production builds from one origin
-2. [ ] Spec: fresh install → SW activates → no gate
-3. [ ] Spec: second build published → `registration.waiting` set → gate appears promptly
-4. [ ] Spec: server build ahead with no new bundle → no gate across N reloads
-5. [ ] Wire into the e2e suite; decide whether it belongs in the `@staging-gate` subset
+1. [x] Build a fixture that serves two successive production builds from one origin
+2. [x] Spec: fresh install → SW activates → no gate
+3. [x] Spec: second build published → `registration.waiting` set → gate appears promptly
+4. [x] Spec: server build ahead with no new bundle → no gate across N reloads
+5. [x] Wire into the e2e suite; decide whether it belongs in the `@staging-gate` subset
+       (decision: NOT a member — it serves its own origin and gives no staging signal;
+       runs in the local/CI suite with its own `npm run test:e2e:sw-gate` entry point)
 
 ### Progress Log
 
 **2026-07-30**: Filed as a follow-up from T6210. Not started.
+
+**2026-07-31 — implemented (branch `feature/T6230-update-gate-real-sw-test`).**
+
+Fixture (`e2e/helpers/staticBuildServer.js`): a single `node:http` origin serving a
+MUTABLE build dir + MUTABLE fake `serverBuild`, started inside the spec's `beforeAll`
+(no separate process, no new deps). `http://localhost:<port>` is a secure context so
+the real ServiceWorker registers. `sw.js` is served `no-cache`; `/api/version` returns
+`{build}` and every response is stamped `X-App-Build`; `/api/auth/me` → 401 (logged-out
+shell — the gate fires fine logged out, so no auth is built in).
+
+**Assumption that did NOT hold (reported, not papered over):** the task expected two
+successive `npm run build`s to diverge on their own via version.json's fresh `buildTime`.
+VERIFIED FALSE here — the only importer, `CropOverlay.jsx`, reads `versionInfo.environment`
+ONLY, so rollup tree-shakes `buildTime` out and two same-commit builds are **byte-identical**
+(`diff A/sw.js B/sw.js` → exit 0). Fallback per the task's instruction: build B injects a
+unique marker file into `public/` (removed again in a `finally`, so the repo tree stays
+clean), which Workbox precaches → distinct precache manifest → distinct `sw.js`
+(`diff A/sw.js B/sw.js` → exit 1; the only delta is the marker entry). The spec asserts
+`swDiffers` in `beforeAll` so a regression to identical builds fails LOUD.
+
+**Real-browser lifecycle facts learned (recorded in `e2e/STAGING-GATE.md` § T6230):**
+- A fresh navigation resets `appVersion.lastProbeAt` to 0, so reloads (never a lowered
+  throttle) drive the un-throttled probe. No production constant was touched.
+- The positive case must let **Workbox's own** `register()` update-check discover build B
+  (poll `registration.waiting`) BEFORE triggering the app's probe. Discovering B via a raw
+  `registration.update()` first makes it an *external* update, which vite-plugin-pwa does
+  NOT wire to its controlling→reload listener — so "Update now" would activate B but never
+  reload the page. Workbox-own discovery matches a real deploy (Workbox finds the new SW on
+  load) and makes case 4's reload deterministic.
+
+Cases (all in `e2e/T6230-update-gate-real-sw.spec.js`): 1 fresh-install-no-gate,
+2 over-correction guard (published B → `registration.waiting` → gate, on the modal copy),
+3 T6210 repro (server ahead, no new bundle → no gate ×5 reloads), 4 escapable (Update now →
+land B → gate does not reappear). No production source changed.
+
+QA evidence (pasted in the handoff report): 3 consecutive green runs (4/4 each);
+mutation RED/GREEN for the probe (case 2) and for the `hasNewerBundle` guard (case 3);
+`npm test` → 1440 passed with `appVersion.test.js` (17 tests) untouched and green.
 
 **2026-07-30 — interim manual check PASSED.** After the prod deploy to build #3171
 (`f309731d`), the user loaded prod on a browser holding the old #3166 service
@@ -100,8 +140,11 @@ regression protection, so the urgency dropped but the scope did not.
 
 ## Acceptance Criteria
 
-- [ ] A real browser with a real ServiceWorker exercises `probeForWaitingBundle`
-- [ ] The suite goes RED if the probe never reports a waiting bundle (over-correction caught)
-- [ ] The suite goes RED if the T6210 loop is reintroduced
-- [ ] First-ever install does not gate
-- [ ] Existing jsdom decision tests still pass unchanged
+- [x] A real browser with a real ServiceWorker exercises `probeForWaitingBundle`
+      (real Chromium + real SW; case 2 drives `registration.update()`/`.waiting`)
+- [x] The suite goes RED if the probe never reports a waiting bundle (over-correction caught)
+      (mutation: `probeForWaitingBundle` → `return false` → case 2 RED)
+- [x] The suite goes RED if the T6210 loop is reintroduced
+      (mutation: drop the `hasNewerBundle()` guard → case 3 RED)
+- [x] First-ever install does not gate (case 1)
+- [x] Existing jsdom decision tests still pass unchanged (`appVersion.test.js` untouched; `npm test` 1440 passed)
