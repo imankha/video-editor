@@ -21,6 +21,9 @@ const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
 // server's X-App-Build and gate ONLY when strictly behind. CI checks out full
 // history (fetch-depth: 0) so the count is correct; a failure (e.g. no .git) falls
 // back to 0, which never gates (0 is treated as "unknown/behind-nothing").
+// T6220: generate-version.js computes the SAME expression separately to write
+// public/build.json (a fetchable fact for scripts/verify-build-lockstep.sh) --
+// keep the two in agreement if this expression ever changes.
 let buildNumber = 0;
 try {
   buildNumber = Number(execSync('git rev-list --count HEAD').toString().trim()) || 0;

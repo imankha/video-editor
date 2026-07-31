@@ -3,8 +3,19 @@ name: Deploy Backend
 on:
   push:
     branches: [master]
+    # T6220: UNION of both halves' paths, identical in deploy-frontend.yml and
+    # deploy-backend.yml. The invariant that matters is "bundle build == backend
+    # build", not "always deploy": a commit touching EITHER half deploys BOTH
+    # halves from the same commit, so the two numbers move together. A push
+    # touching neither path deploys NEITHER half, so both stay at the same
+    # (older, still-equal) number -- still correct, with zero redundant CI for
+    # the docs(plan)-only commits this repo makes constantly.
     paths:
+      - 'src/frontend/**'
       - 'src/backend/**'
+  # T6220 known hole (documented, not fixed): a manual workflow_dispatch run
+  # still fires ONLY this workflow, so a deliberate single-half manual dispatch
+  # breaks lockstep on purpose. That is an operator's call, not a bug.
   workflow_dispatch:
 
 jobs:
