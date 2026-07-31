@@ -62,3 +62,49 @@ overrides (it uses `localhost` + your local data).
   the output, never a green pass. A real regression and a missing fixture never look alike.
 - **First-login retry is centralized.** `loginAsRealUser` retries a 5xx `dev-login` (staging PG
   stale-pool blip) up to 3× — specs don't re-implement it.
+
+---
+
+# T6230 — the real-browser update-gate SW test (NOT a `@staging-gate` member)
+
+`T6230-update-gate-real-sw.spec.js` is the automated regression guard T6210 asked for: it
+exercises `pwaUpdate.probeForWaitingBundle` against a REAL Chromium ServiceWorker, so the
+suite goes RED if the probe stops reporting a waiting bundle (the over-correction that
+would silently make the gate never fire) or if the T6210 loop (gate on server-ahead alone)
+is reintroduced. Run it with `npm run test:e2e:sw-gate`.
+
+**Why it is NOT in `@staging-gate`, but IS in the local/CI suite.** The `@staging-gate`
+subset answers "is the DEPLOYED staging build safe to promote?" This spec never touches
+staging — it compiles and serves its OWN two builds from an in-process `node:http` origin
+(`e2e/helpers/staticBuildServer.js`), so it gives zero signal about a deployed target and
+would only slow the gate by two `vite build`s. It `test.skip`s when `E2E_BASE_URL` is set
+(it owns its origin), matching `helpers/targetEnv.js`. Its value is pure local/CI
+regression protection, which is where it runs.
+
+**Why the dev server cannot host this test.** The Vite dev server builds no real
+ServiceWorker, so the probe has no registration and — by T6210's deliberate tradeoff (no
+probe registered = no gate) — never gates. The mechanism only exists against a BUILT,
+SERVED app. Hence the fixture builds the app for real and serves it over
+`http://localhost:<port>` (a secure context, so the SW registers).
+
+**Two hard-won facts for the next person (so they aren't rediscovered):**
+
+1. **Two successive `npm run build`s are byte-identical here.** The intuition that
+   version.json's fresh `buildTime` diverges the bundle is FALSE: its only importer
+   (`CropOverlay.jsx`) reads `versionInfo.environment` only, so rollup tree-shakes
+   `buildTime` out. `diff A/sw.js B/sw.js` → identical. The fixture therefore injects a
+   unique **marker file** into `public/` for build B (removed in a `finally`), forcing a
+   distinct Workbox precache manifest → distinct `sw.js`. The spec asserts `swDiffers`.
+
+2. **A reload resets the probe throttle.** `PROBE_MIN_GAP_MS` / `UPDATE_CHECK_MIN_GAP_MS`
+   are 5 min, but `lastProbeAt` / `lastCheckAt` start at 0 on every fresh page load, so a
+   navigation always gets one un-throttled check + probe. Drive the tests with reloads and
+   you never touch — and must never weaken — the production throttle.
+
+3. **Discover build B via Workbox, not a raw `registration.update()`, before triggering
+   the gate.** vite-plugin-pwa only wires its controlling→reload listener for updates
+   Workbox itself discovers on `register()`; a bundle staged by a raw
+   `registration.update()` is an *external* update it won't auto-reload for — so
+   "Update now" would activate the new SW but never reload the page. The spec polls
+   `registration.waiting` (Workbox's own discovery on the reload) before raising the gate,
+   which both matches a real deploy and makes the "Update now" reload deterministic.

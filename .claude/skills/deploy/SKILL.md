@@ -18,11 +18,16 @@ Deploy the app to production using `scripts/deploy_production.sh`.
 2. **Determine scope** from user intent:
    - Default (or "deploy", "push to prod"): `--all` (backend + frontend)
    - "deploy frontend" / "just the frontend": `--frontend-only`
-   - "deploy backend" / "just the backend": `--backend-only`
+   - "deploy backend" / "just the backend" — **only when the user explicitly asked for a
+     backend-only deploy**: `--backend-only --accept-build-drift`. T6220: `--backend-only`
+     alone now REFUSES (leaves the server build ahead of the deployed bundle with nothing to
+     load — the state T6210 had to defend against); `--accept-build-drift` is the explicit
+     confirmation the script requires. Do not add it speculatively — a plain "deploy" intent
+     stays `--all`.
 
 3. **Launch the deploy in the BACKGROUND** (do not block on it):
    ```bash
-   bash scripts/deploy_production.sh [--all | --frontend-only | --backend-only] > /tmp/deploy-output.log 2>&1; echo "DEPLOY_EXIT: $?"
+   bash scripts/deploy_production.sh [--all | --frontend-only | --backend-only --accept-build-drift] > /tmp/deploy-output.log 2>&1; echo "DEPLOY_EXIT: $?"
    ```
    Run it with `run_in_background: true` (timeout 600000ms; the harness notifies you when it exits).
    The script handles:

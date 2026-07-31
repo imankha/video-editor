@@ -1348,8 +1348,16 @@ async def delete_raw_clip(
 # ============ WORKING CLIPS (PROJECT CLIPS) ============
 
 @router.get("/projects/{project_id}/clips", response_model=list[WorkingClipResponse])
-async def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
-    """List all working clips for a project."""
+def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
+    """List all working clips for a project.
+
+    T6200: a plain `def` (not `async def`) so FastAPI runs its blocking sqlite +
+    presign reads in the anyio worker-thread pool, off the single event loop.
+    Previously this ran on the loop and serialized every concurrent request (the
+    HAR fingerprint). The whole body is synchronous (no `await`), so Option C
+    (flip to sync def) is the simplest correct fix; anyio propagates the request
+    contextvars into the worker thread, so get_db_connection resolves correctly.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -1902,8 +1910,14 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
 
 @router.get("/projects/{project_id}/clips/{clip_id}/playback-url")
-async def get_clip_playback_url(project_id: int, clip_id: int):
-    """Return presigned R2 URL + clip timing for direct browser playback."""
+def get_clip_playback_url(project_id: int, clip_id: int):
+    """Return presigned R2 URL + clip timing for direct browser playback.
+
+    T6200: plain `def` so its blocking sqlite read + R2 presign run in the anyio
+    worker-thread pool, off the event loop (body has no `await`; Option C). This is
+    the playback-gating request from the HAR — keeping it off the loop lets it
+    overlap the sibling list requests instead of queueing behind them.
+    """
     from app.routers.games import get_game_video_url
 
     with get_db_connection() as conn:

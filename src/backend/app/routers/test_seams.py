@@ -281,3 +281,40 @@ async def simulate_machine_cycle():
         "profile_db_deleted": profile_existed,
         "user_db_deleted": user_existed,
     }
+
+
+# --- T6200: concurrency / event-loop-serialization probe (test seam) ---------
+# Reproduces the "N concurrent requests all take the same time and finish
+# together" signature under the SAME single-worker uvicorn config prod runs.
+# Each mode performs a controlled `ms`-long unit of work, differing ONLY in how
+# it interacts with the asyncio event loop:
+#   block  -> time.sleep(ms)                 blocking work INSIDE an async def
+#             (mirrors validate_session's psycopg2 call + the async handlers'
+#              synchronous sqlite cursor.execute/fetchall, all run on the loop)
+#   async  -> await asyncio.sleep(ms)        properly yields the loop
+#   thread -> await asyncio.to_thread(sleep)  offloaded to the default executor
+#             (mirrors the proposed fix; executor is min(32, cpu+4) threads)
+# Fire N concurrent of each and compare per-request wall time (see
+# scripts/concurrency_probe.py). Linear scaling in `block` + flat in `async`
+# is the proof that blocking-on-the-loop is what serializes concurrent requests.
+# Prod-inert: test-seams router is only mounted in non-prod, and the handler
+# re-asserts the gate.
+@router.get("/loop-probe")
+async def loop_probe(mode: str = "block", ms: int = 200):
+    """Controlled event-loop workload for the T6200 concurrency probe."""
+    _require_seams_enabled()
+    import asyncio
+    import time
+
+    ms = max(0, min(ms, 10_000))  # clamp; never let a stray call wedge the loop
+    seconds = ms / 1000.0
+    t0 = time.perf_counter()
+    if mode == "async":
+        await asyncio.sleep(seconds)
+    elif mode == "thread":
+        await asyncio.to_thread(time.sleep, seconds)
+    else:  # "block" (default): synchronous sleep ON the event loop
+        mode = "block"
+        time.sleep(seconds)
+    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+    return {"mode": mode, "requested_ms": ms, "worked_ms": elapsed_ms}

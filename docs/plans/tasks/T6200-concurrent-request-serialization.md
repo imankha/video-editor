@@ -96,19 +96,82 @@ Starting points — the real file list depends on what step 3 attributes the wai
 ## Implementation
 
 ### Steps
-1. [ ] Build a concurrent-request probe against staging (N=1,2,4,8 on `/api/health`) and record per-request timing
-2. [ ] Confirm/deny linear scaling; capture the result in the Progress Log either way
-3. [ ] Verify HTTP/2 multiplexing at the Fly edge (T2540)
-4. [ ] Instrument session resolution / profile-DB open / handler body; attribute the wait
-5. [ ] Fix the attributed cause
+1. [x] Build a concurrent-request probe against staging (N=1,2,4,8 on `/api/health`) and record per-request timing — `scripts/concurrency_probe.py` + test seam `GET /api/test/loop-probe`
+2. [x] Confirm/deny linear scaling; capture the result in the Progress Log either way — **CONFIRMED** (see Progress Log 2026-07-30)
+3. [x] Verify HTTP/2 multiplexing at the Fly edge (T2540) — anon concurrent `/api/health` stays flat/independent (finishes staggered), so transport multiplexing is not the constraint; the serialization is server-side
+4. [x] Instrument session resolution / profile-DB open / handler body; attribute the wait — the middleware already emits `[REQ_TIMING]` (auth/init/handler/sync/overhead + inflight); wait attributed to blocking work on the single event loop, chiefly `validate_session`
+5. [ ] Fix the attributed cause — **AT DESIGN GATE** (Stage 2 / Architect), awaiting user approval before implementation
 6. [ ] Re-run the probe and a fresh browser HAR to prove the improvement
-7. [ ] Separately measure `playback-url`'s own cost once serialization is excluded
+7. [ ] Separately measure `playback-url`'s own cost once serialization is excluded (secondary; deferrable to a follow-up)
 
 ### Progress Log
 
 **2026-07-28**: Filed from the T6190 HAR analysis. Four concurrent requests including a trivial
 `/api/health` all took ~1460ms and completed within 2ms of each other. Cause not yet
 established — this task is scoped to measure before fixing.
+
+**2026-07-30 — HYPOTHESIS CONFIRMED (serialization is real; cold-start refuted as the primary cause).**
+Measured, not guessed. Artifacts: `scripts/concurrency_probe.py` + non-prod test seam
+`GET /api/test/loop-probe` (`app/routers/test_seams.py`).
+
+*Root cause:* the request path runs **blocking I/O directly on the single asyncio event loop** of
+the single-worker uvicorn process (`Dockerfile:23`, no `--workers`). The dominant offender is
+`validate_session()` — a synchronous psycopg2 query — called on the loop for EVERY authenticated
+request in `RequestContextMiddleware._dispatch_impl` (`db_sync.py:604`, not `await`ed / not
+`to_thread`). `async def` data handlers also run blocking `sqlite3` (`cursor.execute/fetchall`) on
+the loop (e.g. `list_games`). While the loop is blocked, uvicorn cannot flush ANY completed
+response, so a concurrent burst serializes AND all responses drain together → identical durations +
+simultaneous completion (the exact HAR fingerprint).
+
+*Evidence:*
+
+Local loop-probe (single-worker uvicorn, 200ms unit of work; block = blocking-on-loop, async =
+`await asyncio.sleep`, thread = `to_thread`):
+
+| N | block (per-req / finish-spread) | async | thread |
+|---|--------------------------------|-------|--------|
+| 1 | 227ms / 0.0ms | 206ms | 207ms |
+| 2 | 426ms / 0.0ms | 210ms | 224ms |
+| 4 | 876ms / 0.3ms | 212ms | 229ms |
+| 8 | **1753ms / 1.4ms** | 232ms | 226ms |
+
+`block` scales linearly and all N finish within ~1ms of each other (reproduces the HAR exactly);
+`async`/`thread` stay flat — the loop is the bottleneck, and offloading fixes it.
+
+Staging (warm, real machine), concurrent `/api/health`:
+
+| N | anon (no session) | authenticated (real cookie) |
+|---|-------------------|-----------------------------|
+| 1 | 202ms | 358ms |
+| 2 | 132ms | 357ms |
+| 4 | 90ms | 653ms |
+| 8 | **118ms (flat)** | **1271ms (finish-spread 26ms)** |
+
+The ONLY per-request code difference between anon and authed `/api/health` is `validate_session` on
+the loop. Anon stays flat under concurrency; authed scales to ~1271ms/N=8 with all requests
+finishing together — on a WARM server, so this is steady-state serialization, not a resume artifact.
+`/api/health` "paying" the full time does NOT mean it is expensive: it is cheap but stuck behind the
+burst's serialized work, and all responses flush together.
+
+*Cold-start tested and demoted to secondary:* staging single-request cold 712ms vs warm 105ms shows
+resume-from-suspend is real (~600ms), but prod runs `min_machines_running = 1` (a machine stays
+warm) and the warm authed probe reproduces the signature with no resume. Cold-start stacks on top
+when a machine did suspend, but it is not the primary cause of the HAR.
+
+*Named blocking stage:* the single asyncio event loop, blocked by synchronous DB/R2 calls on the
+request path — chiefly `validate_session` (auth stage), plus blocking SQLite in `async def`
+handlers, and `user_session_init` when `X-Profile-ID` is absent.
+
+*Proposed direction (for the design gate — NOT implemented):* keep the single process (preserves the
+machine-global per-user write lock `_USER_WRITE_LOCKS` + in-process caches that data safety depends
+on) and get blocking request-path I/O off the loop — offload `validate_session` (and hot blocking
+reads) via `asyncio.to_thread`/executor (psycopg2 + sqlite3 both release the GIL during I/O so they
+genuinely overlap), optionally with a short-TTL in-process session cache to cut the constant.
+**Reject naive `--workers N`:** on 1 shared vCPU / 1024MB it risks OOM AND, worse, makes
+`_USER_WRITE_LOCKS` per-process instead of per-machine — two workers could write the same user's
+`profile.sqlite` concurrently, the exact CAS/data-loss hazard that lock exists to prevent.
+Alternatives (convert async handlers to sync `def` for the anyio pool; session caching; VM resize)
+weighed in the design doc. Stopped here at the design gate per the task brief.
 
 ## Acceptance Criteria
 

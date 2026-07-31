@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { create } from 'zustand';
 
 /**
@@ -68,6 +69,31 @@ export const useFramingStore = create((set, get) => ({
     currentClipId: null,
   }),
 }));
+
+/**
+ * T6190: Stably register the mounted framing editor's `saveCurrentClipState` so the
+ * update-gate flush (updateFlush.js) can reach it from OUTSIDE the framing tree.
+ *
+ * The handler's identity churns on almost every FramingScreen render (its deps include
+ * `keyframes`, `clips`, segment state). Registration MUST NOT be reactive to that churn:
+ * `activeSaveCurrentClipState` is read ONLY imperatively (`useFramingStore.getState()` in
+ * updateFlush.js), never subscribed. Re-writing it on every identity change — while
+ * FramingScreen subscribes to the WHOLE framing store — re-rendered the screen, which
+ * re-created the handler (a useCrop keyframe dispatch churns it during the annotate->framing
+ * settling window), which re-fired this effect, which wrote the store again: an unbounded
+ * setState feedback loop ("Maximum update depth exceeded"). A ref holds the latest handler;
+ * a STABLE wrapper is registered exactly once per mount, so the loop is impossible regardless
+ * of how much the handler identity churns.
+ */
+export function useRegisterActiveSaveHandler(saveHandler) {
+  const saveHandlerRef = useRef(saveHandler);
+  saveHandlerRef.current = saveHandler;
+  useEffect(() => {
+    const stableSave = () => saveHandlerRef.current?.();
+    useFramingStore.getState().registerSaveCurrentClipState(stableSave);
+    return () => useFramingStore.getState().clearSaveCurrentClipState();
+  }, []); // register once per mount; the ref keeps the handler current without re-registering
+}
 
 // Selector hooks
 export const useFramingVideoFile = () => useFramingStore(state => state.videoFile);

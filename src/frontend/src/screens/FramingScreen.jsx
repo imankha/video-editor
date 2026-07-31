@@ -8,7 +8,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
+import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
@@ -20,7 +20,7 @@ import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFramingForOverlayTransition } from './framingOverlayTransition';
 
@@ -119,9 +119,10 @@ export function FramingScreen({
     }
   }, [projectId, projectAspectRatio, changeAspectRatioAction, refreshProject]);
 
-  // Games — Zustand store (ready-only: pending uploads excluded)
+  // Games — Zustand store (ready-only: pending uploads excluded).
+  // Hydrated by /api/bootstrap (App.jsx setFromBootstrap); Framing reads the cached
+  // list and never refetches on mount — see the invariant in keyframes-framing.md.
   const games = useReadyGames();
-  const fetchGames = useGamesDataStore(state => state.fetchGames);
 
   // Helper: fetch and refresh clips from backend
   const fetchProjectClips = useCallback(() => {
@@ -135,11 +136,6 @@ export function FramingScreen({
     if (clip) return getClipFileUrlSelector(clip, projectId);
     return `${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/file`;
   }, [clips, projectId]);
-
-  // Fetch games on mount
-  useEffect(() => {
-    fetchGames();
-  }, [fetchGames]);
 
   // T740: No outdated clips check needed in framing mode.
   // Framing reads start_time/end_time fresh from raw_clips every load.
@@ -397,10 +393,9 @@ export function FramingScreen({
   // step-3 flush (updateFlush.js), which runs outside the framing component tree.
   // Registration only -- no persistence happens here; the flush calls the
   // function itself, gesture-triggered by the "Update now" click.
-  useEffect(() => {
-    useFramingStore.getState().registerSaveCurrentClipState(framingSaveCurrentClipState);
-    return () => useFramingStore.getState().clearSaveCurrentClipState();
-  }, [framingSaveCurrentClipState]);
+  // T6190: registered via a STABLE ref-wrapper (not keyed on the handler identity) --
+  // a reactive registration fed an unbounded setState loop here. See framingStore.js.
+  useRegisterActiveSaveHandler(framingSaveCurrentClipState);
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
@@ -472,11 +467,10 @@ export function FramingScreen({
     return null;
   }, [selectedClip]);
 
-  // Re-fetch clips on mount — picks up any changes made in annotate mode.
-  // fetchClips dedupes in-flight requests, so concurrent calls from useProjectLoader are free.
-  useEffect(() => {
-    if (projectId) fetchClips(projectId);
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only refresh
+  // T6190: No mount refetch here. useProjectLoader.loadProject is the single owner of the
+  // project-open clips fetch; annotate edits reach Framing via invalidateClips on the
+  // leave-annotate mode-change gesture (App.jsx handleModeChange). See the invariant in
+  // keyframes-framing.md — do NOT re-add a "just to be safe" mount fetchClips.
 
   // T1460: gesture-driven warm. The /storage/warmup tier-1 queue is built at
   // app init and excludes exported projects, so opening framing on any project

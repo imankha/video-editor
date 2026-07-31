@@ -601,7 +601,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if session_id:
             auth_start = time.perf_counter()
             try:
-                session = validate_session(session_id)
+                # T6200: validate_session is a blocking psycopg2 query; running it
+                # directly on the event loop serialized every concurrent
+                # authenticated request (a burst drained together — the HAR
+                # fingerprint). Offload to a worker thread so the loop stays free.
+                # Bare to_thread is safe here: this runs BEFORE set_current_user_id
+                # (below) and validate_session reads no request contextvar (it takes
+                # session_id explicitly and resolves via the thread-safe PG pool).
+                session = await asyncio.to_thread(validate_session, session_id)
             except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError) as e:
                 logger.warning(f"[AUTH] Postgres unavailable during session validation: {e}")
                 session = None

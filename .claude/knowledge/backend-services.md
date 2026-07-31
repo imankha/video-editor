@@ -1,5 +1,7 @@
 ---
 domain: backend-services
+updated: 2026-07-31 (T6220: lockstep deploys so the build number stays accurate — see "Deploy + build-number lockstep (T6220)" below. Union `paths:` filter on both staging workflows (not dropped), asymmetric `deploy_production.sh` gate (`--frontend-only` stays allowed, `--backend-only` now refuses without `--accept-build-drift`), and `scripts/verify-build-lockstep.sh` asserts bundle build == backend build after every deploy. Follow-up from T6210.)
+updated: 2026-07-30 (T6200: documented the request concurrency model — ONE uvicorn process/loop, blocking I/O must never run on the loop (it serializes concurrent requests AND defers all responses to burst end = the HAR fingerprint), the two threadpools by handler shape (async def -> to_thread/run_in_context; plain def -> anyio pool), the bounded 32-thread default executor set in lifespan(), what /api/health costs, and where blocking work is offloaded. See "Request concurrency model (T6200)". Fix offloaded validate_session + hot list reads.)
 updated: 2026-07-27 (T6030: closed the v025 residual — final_videos.slowmo_section_start/end now column_exists-guarded on BOTH the publish SELECT (downloads.py) and the render INSERT (overlay.py `_finalize_overlay_export`, which had blocked ALL exports in the deploy->migrate window). Added a structural regression test that drives every hot-path read against a below-head DB WITH ROWS; `test_registry_head_is_audited` turns the next added migration RED so the class can't silently reopen. See "Migration-window column guard audit" § v025 + Structural guard.)
 updated: 2026-07-27 (T5970: migration-window column-guard audit — see "Migration-window column guard audit (T5970)". Result: ONE unguarded hot read fixed (games.shared_by v026 in quests._check_all_steps, hit on bootstrap); everything else either ≤v18 (window closed) or off the app-load path. Added read-only GET /api/admin/migration-status.)
 updated: 2026-07-26 (T5840: credits moved from per-user SQLite to Postgres — see "Credits (Postgres, T5840)" below. Shipped as two deploy-safe commits since master auto-deploys staging and migrations don't auto-run: Slice A = additive v019 DDL + `credit_ledger` service + `credit_backfill` tool + admin backfill/gate endpoints, zero behavior change, safe pre-migration; Slice B = cutover flip, all call sites + purge/reset scripts point at Postgres, old `user_db` credit functions + SQLite credit columns removed.)
@@ -31,6 +33,22 @@ Three databases, different access patterns:
 3. **Per-user SQLite** `user.sqlite` (profiles list/quests/activity — **credits moved OUT to Postgres, T5840**, see below): `app/services/user_db.py`, schema `_USER_DB_SCHEMA` (user_db.py:39).
 
 Binary blobs are msgpack via `app/utils/encoding.py` (`encode_data`/`decode_data`). Media files live in R2 under `{APP_ENV}/users/{user_id}/...`; game sources under `games/{blake3}.mp4` (no env prefix).
+
+## Request concurrency model (T6200 — measured, not assumed)
+**ONE uvicorn process, ONE asyncio event loop.** `Dockerfile:23` runs `uvicorn app.main:app` with **no `--workers`** (the Fly VM is 1 shared vCPU / 1024MB). Single-process is LOAD-BEARING, not laziness: `_USER_WRITE_LOCKS` (db_sync.py:215), the R2 sync version caches (`_user_db_versions`/`_user_sqlite_versions`) and the in-flight/upload locks are all in-process, so they are machine-global ONLY while there is one process. Adding `--workers` makes them per-process → two workers could write the same user's `profile.sqlite` concurrently = the CAS/last-write-wins data-loss hazard those locks exist to prevent (persistence-sync.md §T4310/T4315). Do NOT add workers without first moving the write lock + version cache out of process (PG advisory lock / Redis) AND resizing the VM.
+
+**The cardinal rule: never run blocking I/O (psycopg2 / sqlite3 / boto3-R2) directly on the event loop.** While the loop is blocked it can neither advance another request NOR flush any already-finished response, so a concurrent burst SERIALIZES and all responses drain together — identical durations + simultaneous completion (the T6200 HAR fingerprint: 4 GETs incl. a trivial `/api/health` all ~1460ms, finishing within 2ms). Measured warm on staging pre-fix: authed `/api/health` 358ms(N=1)→1271ms(N=8); anon (allowlisted, no work) stayed flat ~118ms. `/api/health` "paying" the full time did NOT mean it was expensive — it was cheap but stuck behind the burst, and every response flushed together.
+
+**Two threadpools, by handler shape (both get work OFF the loop):**
+- **`async def` handlers** run ON the loop. Any blocking call inside one must be offloaded: `await asyncio.to_thread(...)` (bare, only if the fn reads NO request contextvar) or `await run_in_context(fn, *args)` (`app/utils/offload.py` — copies contextvars via `copy_context()`+`ctx.run`, the bootstrap.py precedent, so `get_current_*()` resolve in the thread; the ONE greppable offload primitive). A bare `to_thread` on a fn that calls `get_current_user_id()` raises `RuntimeError: No user context set` inside the thread — the recurring landmine.
+- **plain `def` handlers** are run by FastAPI/Starlette in **anyio's worker-thread pool** (default 40 threads) automatically, off the loop, WITH contextvars propagated (starlette 0.37.2 `run_in_threadpool` → `anyio.to_thread.run_sync`). So a handler whose whole body is synchronous blocking sqlite should just be `def`, not `async def` (Option C). Handlers that must `await` (e.g. a presign gather, a fire-and-forget that schedules tasks) stay `async` and offload their blocking prefix via `run_in_context`.
+- **The loop's default executor is a bounded `ThreadPoolExecutor(max_workers=32)` set in `main.py lifespan()`** (T6200). asyncio's default is `min(32, cpu+4)` = 5 on 1 vCPU — too few once request-path I/O is offloaded. This 32-pool backs EVERY `to_thread`/`run_in_executor(None,...)` app-wide (bootstrap, `_background_sync`, etc.). psycopg2 and sqlite3 release the GIL during their I/O, so offloaded I/O genuinely overlaps even on 1 vCPU. Do NOT offload CPU-bound work here (it serializes on the GIL anyway). **PG-touching offloads are capped at `maxconn=10` NOT by this executor and NOT by the PG pool itself** — psycopg2's `ThreadedConnectionPool.getconn()` does not block, it RAISES `PoolError` the instant `len(_used) == maxconn`, which `db_sync` turns into a 503 (the T6200 regression the 32-thread bump would have introduced). The real cap is a **`threading.BoundedSemaphore(maxconn)` checkout gate in `pg.py get_pg()`** (T6200): callers WAIT for a free connection instead of racing getconn past the ceiling. Because that gate lives in the single checkout path, it bounds PG demand from BOTH threadpools at once — the 32-thread default executor AND the 40-thread anyio pool — so executor size and pool `maxconn` are decoupled on purpose (32 for I/O concurrency, ≤10 ever inside a PG checkout). Raising `maxconn` is a latency knob (fewer waits), not a correctness fix, and needs a Postgres `max_connections` + VM headroom check first.
+
+**Where blocking work is offloaded (T6200):** `validate_session` (blocking psycopg2, run for EVERY authed request) is `await asyncio.to_thread(validate_session, session_id)` in `db_sync.py:611` — bare-safe because it runs BEFORE `set_current_user_id` and reads no contextvar. The hot list reads are offloaded: `games.list_games` → `_read_games_for_list()` via `run_in_context`; `projects.list_projects` → `_read_projects_list()` via `run_in_context` (its poster-warm fire-and-forget stays on the loop — it schedules async tasks and needs the running loop); `clips.list_project_clips` + `clips.get_clip_playback_url` are plain `def` (no `await` in body). **`user_session_init` (db_sync.py:~700, blocking R2+sqlite) still runs on the loop** but only when `X-Profile-ID` is absent (rare on the hot path; normal clients send it) — a deferred follow-up if a `--no-profile` probe shows it matters.
+
+**What `/api/health` actually costs:** it is in BOTH `SKIP_SYNC_PATHS` and `SKIP_SESSION_INIT_PATHS`, so an authenticated health request's only real per-request work is `validate_session` (now offloaded); anon health is allowlisted and returns immediately via `call_next`. It is a genuine concurrency discriminator vs a data endpoint — health touches no profile DB. Cold-start (Fly `auto_stop_machines="suspend"`) adds ~600ms on the first hit after idle (staging cold 712ms vs warm 105ms) but prod runs `min_machines_running=1`, so it's a secondary contributor, not the HAR's primary cause.
+
+**Repeatable probes (committed):** `scripts/concurrency_probe.py` (fires N=1,2,4,8, reports per-request duration + finish-spread; loop-probe modes or a real endpoint, dev-header or real cookie) and the non-prod test seam `GET /api/test/loop-probe?mode={block,async,thread}` (`test_seams.py`). `block` mode intentionally blocks the loop and MUST still scale with N (it's the discriminator); `async`/`thread` stay flat. Perf guard: `tests/test_t6200_concurrency.py` asserts the overlap PROPERTY (N concurrent authed requests overlap, not serialize) with a controlled sleeping `validate_session` stub — counterfactual-verified (re-inlining the blocking call fails it).
 
 ### Credits (Postgres, T5840)
 Credits were per-user SQLite (`user.sqlite`, R2-synced) — a money ledger on eventually-consistent per-machine storage. Now a shared Postgres ledger (`_SCHEMA_DDL` in pg.py: `credits` balance row, `credit_transactions` append-only ledger with `UNIQUE(user_id, idempotency_key)` idempotency (`v019_credits.py`; the old SQLite-era `UNIQUE(user_id, source, reference_id) WHERE reference_id IS NOT NULL` index is gone -- `credit_key()` derives the idempotency_key from source+reference_id itself, so the uniqueness lives on that single column now), `credit_reservations` for in-flight exports incl. `profile_id`, `credit_migration_state` singleton row tracking gate/backfill status + `last_report` JSONB).
@@ -235,6 +253,60 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `POST /api/sync/flush-verify` (health router) is the update-gate's step-3 durable-flush barrier:
   checkpoints WAL + awaits R2 upload → **200** clean / **503** still-pending / **401** unauthenticated
   (the client treats 401 as a no-op, not a failure — logged-out users have nothing to flush).
+
+## Deploy + build-number lockstep (T6220)
+Follow-up from T6210 (which made a server-ahead-of-bundle update-gate loop *structurally impossible*
+regardless of build-number accuracy — see appVersion.js's Tbug41s comment). This section is the
+*belt* that keeps the numbers themselves accurate, on top of that *brace*; if this section's
+machinery is ever dropped, T6210's fix must stay intact — the reverse is not true.
+
+**The invariant:** a master push (or a prod deploy) never leaves the deployed bundle's build number
+and the backend's reported build number unequal — either both halves deploy from the same commit, or
+neither does. Drift used to be routine (measured on staging 2026-07-30: bundle #3163 vs backend
+#3165, zero frontend files in between) because the two workflows deployed independently on disjoint
+path filters; a backend-only commit raised the server's number with no matching bundle published.
+
+**Where the number comes from (two independent computations, kept in agreement by comment, not by
+sharing code):** `git rev-list --count HEAD` — `src/frontend/vite.config.js` bakes it into the bundle
+as `__APP_BUILD__`; `src/frontend/generate-version.js` (runs via `prebuild`/`predev`) computes the
+SAME expression independently and writes it to `public/build.json` (`{build, commit}`), which Vite
+copies verbatim into `dist/` — a fetchable fact, since scraping `__APP_BUILD__` back out of a hashed,
+minified bundle would be fragile. `.json` is outside `vite.config.js`'s `workbox.globPatterns`, so the
+service worker never precaches (and never serves stale) `build.json`. The backend gets its number as
+the `APP_BUILD` build-arg (`deploy-backend.yml` passes `git rev-list --count HEAD` computed in CI;
+`deploy_production.sh` computes it locally the same way), read by `app/version.py` and served via the
+`X-App-Build` header + `GET /api/version`'s `build` field (see the T5070 entry just above). Both
+workflows keep `fetch-depth: 0` on checkout (Tbug40p) — a shallow clone would bake in `1` and can
+never match.
+
+**Union path filter (staging), not "always deploy":** `deploy-frontend.yml` and `deploy-backend.yml`
+carry the SAME `paths: [src/frontend/**, src/backend/**]` block (plus `workflow_dispatch:`) — byte-
+identical by convention, verify with a diff after editing either. A commit touching EITHER half now
+deploys BOTH from that commit, so the numbers move together; a commit touching NEITHER (this repo's
+frequent `docs(plan): ...` commits) deploys NEITHER, so both stay at the same older — still equal —
+number, with no redundant CI. **Known, documented, unfixed hole:** a manual `workflow_dispatch` run
+still fires only that one workflow, so a deliberate single-half manual dispatch breaks lockstep on
+purpose — that's an operator's call, not a bug (commented in both YAMLs).
+
+**Asymmetric prod policy (`deploy_production.sh`), not a symmetric block:** `--frontend-only` stays
+allowed, unchanged — a bundle AHEAD of the server is harmless by construction:
+`appVersion.checkServerVersion` (src/frontend/src/utils/appVersion.js) raises the gate only when
+`serverBuild > clientBuild`, so `server <= clientBuild` can never fire it. `--backend-only` is the
+dangerous direction (server ahead, no bundle to load — the T6210 stranding precondition) and now
+REFUSES by default; it requires the explicit `--accept-build-drift` flag to proceed (order-
+independent relative to `--backend-only` — the old single-`$1` `case` was replaced with a proper arg
+loop). Do not "helpfully" symmetrize the two flags; they are not equivalent.
+
+**The assertion:** `scripts/verify-build-lockstep.sh --frontend-url <site-root> --backend-url
+<.../api/version>` fetches `<frontend-url>/build.json` and `<backend-url>`'s `build`, polling (both
+halves deploy concurrently and Cloudflare Pages propagation lags) every 10s up to 300s by default
+(overridable via `--interval`/`--timeout`), succeeding the instant the two numbers are equal. Exits
+non-zero with both numbers (or the specific fetch failure — 404, unparseable JSON, non-numeric field)
+named on timeout; no silent "assume ok". Wired into `deploy-frontend.yml` as the last step (covers
+the concurrent `deploy-backend.yml` job via polling) and into `deploy_production.sh` at the end, but
+ONLY when both halves deployed together in that run — an allowed `--frontend-only` or a drift-
+accepted `--backend-only` prints an explicit "skipping lockstep assertion because X" line instead of
+asserting the very inequality the operator just chose to accept.
 
 ## Active/upcoming work
 Bug tier (TODO): T4210 (overlay decode → 500, delete orphaned PUT), T4220-T4270, T4280 (silent-fallback sweep). **T4870 DONE** (admin credits read R2-canonical; silent-fallback removed). Guardrails first: T4290/T4300. Backend consolidations: **T4610** require_admin router Depends, T4620 fetch_or_404 + enums, **T4630** R2StreamProxy service (4 streaming-proxy copies), **T4640** games.py activation/share services (depends on T4360), **T4650** raw_clips write-path consolidation, **T4660** open_sqlite factory + game_display service. Export Write-Path epic T4370-T4410 (strict order: characterization tests → ExportJobRepository → finalize/publish single writer → backend-authoritative export → orchestration move). Full map: docs/plans/PLAN.md § Code Quality & Refactoring.
