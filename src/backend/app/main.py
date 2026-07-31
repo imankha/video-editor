@@ -129,8 +129,16 @@ async def lifespan(app: FastAPI):
     # hot sqlite reads) is offloaded via asyncio.to_thread. These offloads are
     # I/O-bound (psycopg2/sqlite3 release the GIL during their I/O), so a larger
     # bounded pool genuinely overlaps them. Bounded (not unbounded) so a
-    # pathological burst can't exhaust memory; PG-touching offloads are further
-    # backpressured by the pool's maxconn=10.
+    # pathological burst can't exhaust memory.
+    #
+    # 32 (not maxconn=10): most offloads are sqlite/R2, not PG, and sqlite reads
+    # need no pool connection — sizing this to 10 would needlessly throttle them.
+    # The PG-touching subset is bounded SEPARATELY by pg.py's checkout gate
+    # (a BoundedSemaphore sized to maxconn), NOT by this pool and NOT by the PG
+    # pool itself: psycopg2's ThreadedConnectionPool does not backpressure — its
+    # getconn() RAISES PoolError the moment maxconn connections are out, which
+    # db_sync turns into a 503. So the two numbers are decoupled on purpose: 32
+    # threads for I/O concurrency, <=10 of them ever inside a PG checkout at once.
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
 
