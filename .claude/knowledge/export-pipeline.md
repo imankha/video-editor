@@ -122,6 +122,17 @@ graph LR
   SELECT, so `_read_games_for_list` `column_exists`-guards them (projects `NULL` on a pre-v030 DB —
   nothing can create a reference until v030, so NULL is correct). Same class as T5970/T6030; the
   structural guard test `POST_V023_COLUMNS`/`HEAD_VERSION_AUDITED` was extended to v030.
+- **Moved reels CARRY remapped `game_ids` (T5810).** `downloads.py:move_reels_to_profile` no longer
+  nulls `game_ids`/`game_id` (the old T4850 behavior). Instead `_build_reference_map` resolves each
+  distinct source game to a target reference via `ensure_game_reference` (per-DISTINCT-game, NOT
+  per-reel — no N+1) and `_build_moved_reel_row` rewrites `game_ids` (sorted-distinct, re-encoded
+  msgpack) + scalar `game_id` through that map; `project_id`/`source_clip_id` still stay NULL
+  (editing lineage does not move). So a single-clip moved reel groups under the game header in the
+  target Gallery, exactly like the source. `collections.py` (`route_collection`/summary) is
+  UNCHANGED — grouping falls out of the remapped frozen `game_ids` (T4190 read path). Orphan
+  references are cleaned gesture-driven (move-away Phase 2 + reel-delete), never a sweep. Sync
+  ordering unchanged (rides the existing Phase-1 target `sync_db_to_r2_explicit`; persistence-sync.md
+  § 6b-T5810).
 
 ## Invariants & rules
 1. **Sync-then-announce (T4110 + T4200, DONE 2026-07-11):** the R2 DB sync must succeed BEFORE the export is announced complete. **ALL THREE overlay completion paths gate COMPLETE on `sync_export_db_to_r2`** (T5300 verified): the no-keyframes copy path (`overlay.py:2043`) and the test-mode copy path (`:2110`) run inline and return **503** + a retryable `sync_failed` progress event on failure; the real-render **background** path (`_run_overlay_export_background:1817-1833`, the one that returns **202** and finishes async) gates the same way but — having already returned 202 — emits the retryable `_export_sync_failed_data` event over the WS/`export_progress` dict INSTEAD of a 503 (there is no live HTTP response to fail). Also gated: framing (`framing.py:718-722`) and multi-clip (`multi_clip.py:2298-2301` + COMPLETE sites `:1440-1448/:1737`). DB-save failure is terminal — no phantom export announces success. The `export_sync_failed_data` helper lives in `export_helpers.py:379` (no router→router imports); it sets `code='sync_failed'`, `retryable=True`, `phase='error'`.
