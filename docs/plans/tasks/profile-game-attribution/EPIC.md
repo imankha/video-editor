@@ -1,7 +1,7 @@
 # Cross-Profile Game Attribution
 
-**Status:** TODO
-**Started:** -
+**Status:** WIP
+**Started:** 2026-07-31
 **Source:** Prod bug 37p (arshia.kalantari@gmail.com, 2026-07-24) — filed as a bug, actually a feature request.
 
 ## Goal
@@ -72,13 +72,23 @@ Moving the game itself can't fix this — one game, two destination profiles.
 
 | ID | Task | Status |
 |----|------|--------|
-| T5800 | [Game-reference primitive + schema (profile_db v030)](T5800-game-reference-primitive.md) | TODO |
-| T5810 | [Move-reels carries game attribution](T5810-move-carries-attribution.md) | TODO |
-| T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | TODO |
-| T5830 | [Heal arshia's already-moved reels](T5830-heal-arshia-moved-reels.md) | TODO |
+| T5800 | [Game-reference primitive + schema (profile_db v030)](T5800-game-reference-primitive.md) | WAITING ON USER — pushed, CI green |
+| T5810 | [Move-reels carries game attribution](T5810-move-carries-attribution.md) | WAITING ON USER — pushed, CI green (same branch as T5800) |
+| T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | WIP — worker `t5820` |
+| T5830 | [Heal arshia's already-moved reels](T5830-heal-arshia-moved-reels.md) | TODO — hard-blocked on 1-3 reaching prod + user sign-off on the dry-run mapping |
 
 Order is dependency order: schema/primitive → move flow → UI → heal (heal reuses the primitive
 and the remap logic, and must land after both are on prod).
+
+**2026-07-31 wave.** T5800 + T5810 were implemented in ONE container worker (hard dependency plus
+shared ownership of `materialization.py`) and pushed together as
+`feature/T5800-game-reference-attribution` — Branch CI green, awaiting the user's merge. T5820 is a
+second worker based on that unmerged branch so it builds against the real `is_reference` API. One
+design question the task files left open was decided by the user during the wave: a reference card
+click lands on the owning profile's **Games tab** (game scrolled-to + highlighted), **not** Annotate
+— which means a new consumed-once breadcrumb rather than reusing `setPendingGame`. T5830 was not
+started; it needs 1-3 on prod plus sign-off on a dry-run mapping table before touching his data, and
+its migration is now **v031** since T5800 took v030.
 
 ## Completion Criteria
 

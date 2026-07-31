@@ -1,10 +1,10 @@
 # T5830: Heal arshia's already-moved reels (restore game attribution)
 
-**Status:** TODO
+**Status:** TODO — hard-blocked (see Progress Log); deliberately not started
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-07-24
-**Updated:** 2026-07-24
+**Updated:** 2026-07-31
 **Epic:** [Cross-Profile Game Attribution](EPIC.md) — task 4 of 4. Read EPIC.md for design decisions.
 
 ## Problem
@@ -75,6 +75,30 @@ set `game_ids` (msgpack single-id list) — i.e. exactly the state T5810 would h
 5. [ ] Report to the user; user tells arshia / resolves bug 37p
 
 ### Progress Log
+
+**2026-07-31 — NOT STARTED, deliberately.** No worker was spawned for this task during the
+`/dotask` wave that implemented T5800/T5810/T5820. Two gates must clear first, and neither is
+AI-clearable:
+
+1. **T5800 + T5810 must be merged AND deployed to prod.** The heal writes T5810-shaped state via
+   `ensure_game_reference`, so the primitive and the v030 columns have to exist on prod first. As of
+   today they are on a pushed, CI-green branch awaiting the user's merge.
+2. **Dry-run mapping table + explicit user sign-off before any write** (data-safety rule: confirm
+   the exact scope of a data change). The matcher runs against *downloaded copies* of his prod R2
+   profile DBs and prints the proposed reel→game mapping; nothing is written until the user approves
+   that exact table. Ambiguous or unmatched reels get reported, never guessed.
+
+**Version number moved: use v031, not v030.** T5800 claimed v030 (`v030_games_source_reference.py`).
+This task's migration is head+1 at implementation time — re-check the head then rather than trusting
+this line.
+
+**Still to re-derive at dry-run time:** his kid-profile ids. The T5310-era ids `6ff007e6`/`22c7616a`
+are stale — pull current ids from prod `user.sqlite`, do not trust the numbers in Technical Notes.
+
+**Open question this task must still answer:** whether the 5 clobber-lost `final_videos` rows were
+restored. Per memory `project_arshia_lost_reels_move_clobber` they were re-inserted from
+authoritative source data, so this check will likely close cleanly — but it must be confirmed
+during the dry-run and reported, not assumed.
 
 ## Acceptance Criteria
 

@@ -1,10 +1,10 @@
 # T5800: Game-reference primitive + schema (profile_db v030)
 
-**Status:** TODO
+**Status:** WAITING ON USER — branch pushed, Branch CI green; waiting on user to fetch/test/merge
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-07-24
-**Updated:** 2026-07-24
+**Updated:** 2026-07-31
 **Epic:** [Cross-Profile Game Attribution](EPIC.md) — task 1 of 4. Read EPIC.md for design decisions.
 
 ## Problem
@@ -85,13 +85,45 @@ in Games tab actions, storage refs via `_create_storage_refs`, clip copying).
 ## Implementation
 
 ### Steps
-1. [ ] Add columns to `ensure_database()` DDL + write v030 migration
-2. [ ] Extract shared game-insert from `_copy_game`; add `ensure_game_reference` with the 4-step resolution order
-3. [ ] `list_games` reference fields + expiry skip
-4. [ ] Backend tests
-5. [ ] Migration run on staging after deploy (admin endpoint)
+1. [x] Add columns to `ensure_database()` DDL + write v030 migration
+2. [x] Extract shared game-insert from `_copy_game`; add `ensure_game_reference` with the 4-step resolution order
+3. [x] `list_games` reference fields + expiry skip
+4. [x] Backend tests
+5. [ ] Migration run on staging after deploy (admin endpoint) — **pending merge + deploy**
 
 ### Progress Log
+
+**2026-07-31 — implemented in container worker `t5800`, pushed, CI green.**
+
+Branch `feature/T5800-game-reference-attribution`, commit `1206dfcc` (T5810's `4de9d65a` rides the
+same branch). Branch CI run 30650715376: **green**. 14 files, +1178/−63 across both commits.
+
+What landed:
+- `games.source_profile_id` / `source_game_id` in `ensure_database()` DDL (fresh DBs) +
+  `migrations/profile_db/v030_games_source_reference.py`. No `is_reference` boolean — derived.
+- `ensure_game_reference` in `materialization.py`. The shared game-insert was **extracted out of
+  `_copy_game`** rather than duplicated (2nd copier, per the task's own instruction). `_copy_game`
+  behavior proven unchanged by the 46-test share-materialization suite.
+- 4-step resolution implemented and each step separately tested: existing `(source_profile_id,
+  source_game_id)` pair → chain collapse → hash dedup against a real local game → insert.
+- `list_games` emits `is_reference`, `source_profile_id`, `source_profile_name`; expiry computation
+  skipped for references (`storage_status`/`storage_expires_at` None, `can_extend` False).
+- `game_storage` / `game_storage_refs` / `game_ref_counts` never touched (test pins this).
+
+**Hot-path window decision: PRAGMA `column_exists` guard** (not same-deploy). This was the right
+call and it mattered — the new columns land on `_read_games_for_list`, which backs
+`list_games_metadata`, which runs on **`/api/bootstrap` on every app load**. Migrations run manually
+post-deploy, so naming the columns unconditionally would have 500'd every bootstrap in the
+deploy→migrate window (T5970/T6030 class). The guard projects `NULL AS source_profile_id/
+source_game_id` on a pre-v030 DB, which is *correct* rather than a fallback: nothing can create a
+reference before v030 exists. The T6030 structural window guard was extended to v030 so the alarm
+stays live. **Still run `POST /api/admin/migrate` promptly after deploy.**
+
+Tests: 309 green across affected modules, exit 0. No new known-failures.
+
+Not verified: live HTTP round-trip (the container has no R2/auth stack). Tests drive the real
+handler functions against real per-profile SQLite DBs, so logic is exercised rather than mocked —
+but the network path is unproven until staging.
 
 ## Acceptance Criteria
 

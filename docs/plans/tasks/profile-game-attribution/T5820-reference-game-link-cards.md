@@ -1,10 +1,10 @@
 # T5820: Games tab: reference game link cards
 
-**Status:** TODO
+**Status:** WIP — container worker `t5820` in flight
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-07-24
-**Updated:** 2026-07-24
+**Updated:** 2026-07-31
 **Epic:** [Cross-Profile Game Attribution](EPIC.md) — task 3 of 4. Read EPIC.md for design decisions.
 
 ## Problem
@@ -69,6 +69,37 @@ gate, unless classification says otherwise.
 4. [ ] Real-browser verification (drive-app-as-user) + e2e spec
 
 ### Progress Log
+
+**2026-07-31 — WIP in container worker `t5820`.**
+
+Based on the **unmerged** `feature/T5800-game-reference-attribution` branch (via `TASK_BASE`), not
+master, so the card is built against the real `is_reference` API and real reference rows rather than
+a stub — the acceptance criteria here are all real-browser, so stubbed evidence would prove nothing.
+
+In flight: new `components/ReferenceGameCard.jsx` + `__tests__/ReferenceGameCard.test.jsx` +
+`e2e/T5820-reference-link-cards.qa.spec.js`; `ProjectManager.jsx` and `utils/pendingNavigation.js`
+modified.
+
+**USER DECISION (locked 2026-07-31) — resolves this task file's open question.** The task file left
+the landing target undecided ("don't force Annotate"). The user chose: **clicking a reference card
+lands on the owning profile's GAMES TAB, with that game's card scrolled into view and briefly
+highlighted.** Rationale: you clicked a game card, you should get the game card — the reference is a
+signpost, so the landing must show the real game's full context (actions, recap, expiry), not an
+editor. Options rejected: reusing `setPendingGame` as-is (cheapest, but jumps into the Annotate
+editor unasked), and Games-tab-without-highlight (you'd hunt for the game in a long season list).
+
+Consequence: `setPendingGame` (`utils/pendingNavigation.js`) only feeds the Annotate deep-link, so a
+**new breadcrumb path** is required. Constraints given to the worker: it must survive
+`_resetDataStores()` (`profileStore.js:211`, awaited in `switchProfile:61/94`), and it is
+consumed-once transient navigation intent modelled on the `projectManagerTab` sessionStorage hint
+(`ProjectManager.jsx:497-499`, read-then-`removeItem`) — **never persisted view state**.
+
+Note: `gamesDataStore.pendingGameIds` is about pending **uploads**, unrelated to navigation — the
+worker was told explicitly not to overload it.
+
+Backend contract confirmed shipped by T5800 (consume, don't change): `is_reference`,
+`source_profile_id`, `source_game_id`, and `source_profile_name` already resolved server-side in one
+`profiles` read — no per-card lookup. References carry no expiry state by design.
 
 ## Acceptance Criteria
 

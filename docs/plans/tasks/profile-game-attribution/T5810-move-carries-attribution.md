@@ -1,10 +1,10 @@
 # T5810: Move-reels carries game attribution
 
-**Status:** TODO
+**Status:** WAITING ON USER — branch pushed, Branch CI green; waiting on user to fetch/test/merge
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-24
-**Updated:** 2026-07-24
+**Updated:** 2026-07-31
 **Epic:** [Cross-Profile Game Attribution](EPIC.md) — task 2 of 4. Read EPIC.md for design decisions.
 
 ## Problem
@@ -64,12 +64,51 @@ In the move flow, before inserting target `final_videos` rows:
 ## Implementation
 
 ### Steps
-1. [ ] Remap logic + `_build_moved_reel_row` changes
-2. [ ] Orphan-reference cleanup in move phase 2 + reel delete
-3. [ ] Tests (see criteria)
-4. [ ] Real-flow verification on staging: move 2 reels from one game into a kid profile, check Gallery grouping
+1. [x] Remap logic + `_build_moved_reel_row` changes
+2. [x] Orphan-reference cleanup in move phase 2 + reel delete
+3. [x] Tests (see criteria)
+4. [ ] Real-flow verification on staging: move 2 reels from one game into a kid profile, check
+       Gallery grouping — **pending merge + deploy; this is the step that closes the unverified gap below**
 
 ### Progress Log
+
+**2026-07-31 — implemented in container worker `t5800` (shared with T5800), pushed, CI green.**
+
+Branch `feature/T5800-game-reference-attribution`, commit `4de9d65a`. Branch CI run 30650715376:
+**green**. Merged into one worker with T5800 because of the hard dependency plus shared ownership of
+`materialization.py`.
+
+What landed:
+- `move_reels_to_profile` resolves each moved reel's `game_ids` (msgpack, plus the legacy scalar
+  `game_id`) through `ensure_game_reference` against the target DB and builds a
+  `{source_game_id → target_game_id}` map.
+- `_build_moved_reel_row` **remaps instead of nulling**. `project_id` / `source_clip_id` stay NULL
+  by design (editing lineage genuinely does not move).
+- Orphan cleanup is **gesture-driven only** — move phase 2 and reel delete. References only
+  (`source_profile_id IS NOT NULL`); real games are never deleted by cleanup (test pins this).
+- Missing source game → that id is dropped from the remapped list with a warn-log. Honest
+  unattributed, not a silent fallback.
+- **Zero `collections.py` changes**, as designed — the gallery read path was never the problem.
+
+**Built ON the `a5ff3e48` durability fix, not around it.** The `require_fresh` target refresh +
+`ProfileDBRefreshFailed` guard is intact (3 call sites verified present; the diff touches no
+`require_fresh` line). No new sync call sites — the reference insert rides the existing phase-1
+target write, preserving T4850's ordering and T5340's arg-keyed `sync_db_to_r2_explicit`.
+
+**Perf guard added** (`test_t5810_perf_guard.py`, `query_counter` fixture) because per-reel
+reference resolution is a natural N+1: the source game is resolved **once** for 6 same-game reels,
+and there is **one** `profiles` read for 8 references.
+
+**A pre-existing test was intentionally inverted.** `test_t4850_move_reels.py::
+test_collection_attribution_cleared` asserted that moved reels route to Mixes — i.e. it *pinned bug
+37p as correct behavior*. It is now `test_collection_attribution_carried` and asserts the remap plus
+exactly one reference row. This is the intended behavior change, not a test weakened to pass; the
+other 13 T4850 tests are unchanged and green.
+
+Not verified: the live HTTP `POST /api/downloads/move-to-profile` over the network (no R2/auth stack
+in the container). Every test drives the real handler functions end-to-end against real per-profile
+SQLite DBs with R2 disabled, so the reference/remap/orphan/chain-collapse logic is exercised rather
+than mocked. Step 4 above closes this on staging.
 
 ## Acceptance Criteria
 
