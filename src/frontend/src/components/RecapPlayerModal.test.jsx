@@ -125,15 +125,27 @@ const RECAP_DATA_WITH_CLIPS = {
   download_id: 'dl-123',
 };
 
+// T5710: a genuinely empty layer is `{clips: [], empty: true}` (recap-data's
+// row-0 empty-layer guard) — the `empty` flag, not clips.length, is what gates
+// the Team Recap tab's visibility.
 const RECAP_DATA_NO_CLIPS = {
   clips: [],
+  empty: true,
   download_id: 'dl-456',
 };
 
-function mockFetch(recapData = RECAP_DATA_WITH_CLIPS, highlightClips = []) {
+// T5710: RecapPlayerModal now fetches BOTH layers in parallel
+// (recap-data?layer=team / ?layer=athlete). Most existing tests exercise
+// single-recap mechanics (transport, T4130 overlay, mobile pull-up) that
+// predate the layer split — team defaults to an explicit empty layer so those
+// tests keep landing on exactly the same two tabs they always expected
+// ({Athlete} Recap + Highlights). Layer-specific behavior gets its own
+// dedicated describe block below with an explicit `teamData` override.
+function mockFetch(athleteData = RECAP_DATA_WITH_CLIPS, highlightClips = [], teamData = RECAP_DATA_NO_CLIPS) {
   return vi.fn(async (url) => {
     if (url.includes('/recap-data')) {
-      return { ok: true, json: async () => recapData };
+      const isTeam = url.includes('layer=team');
+      return { ok: true, json: async () => (isTeam ? teamData : athleteData) };
     }
     if (url.includes('/brilliant-clips')) {
       return { ok: true, json: async () => ({ clips: highlightClips }) };
@@ -148,7 +160,7 @@ function mockFetch(recapData = RECAP_DATA_WITH_CLIPS, highlightClips = []) {
 describe('RecapPlayerModal - Share Button', () => {
   const defaultProps = {
     game: { id: 42, name: 'Big Game' },
-    initialTab: 'annotations',
+    initialTab: 'athlete',
     onClose: vi.fn(),
   };
 
@@ -238,7 +250,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
@@ -251,7 +263,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game', storage_status: 'active' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
@@ -269,7 +281,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     const { container } = render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
@@ -287,7 +299,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     const { container } = render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
@@ -318,7 +330,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     const { container } = render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
@@ -339,7 +351,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     const { container } = render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
@@ -390,19 +402,19 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     expect(screen.queryByTitle('Create a clip in Annotate at this moment')).toBeNull();
   });
 
-  it('opens on the Annotations tab but still exposes the Highlights tab', async () => {
+  it('opens on the {Athlete} Recap tab but still exposes the Highlights tab', async () => {
     globalThis.fetch = mockFetch(GAME_VIDEO_DATA, [{ id: 101, name: 'Highlight 1', duration: 5 }]);
     render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
-        initialTab="annotations"
+        initialTab="athlete"
         onClose={vi.fn()}
       />
     );
     // Tab bar present with both tabs; user can switch to Highlights inside the modal.
     const highlightsTab = await screen.findByRole('button', { name: 'Highlights' });
     expect(highlightsTab).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Annotations' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'My Recap' })).toBeTruthy();
 
     fireEvent.click(highlightsTab);
     // After switching, the Highlights-only "Create clip" action appears.
@@ -430,7 +442,7 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
   const renderModal = (props = {}) => render(
     <RecapPlayerModal
       game={{ id: 42, name: 'Big Game' }}
-      initialTab="annotations"
+      initialTab="athlete"
       onClose={vi.fn()}
       {...props}
     />
@@ -544,7 +556,7 @@ describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
 
   it('renders the clip list stacked below the video (order-2 sidebar, order-1 video)', async () => {
     const { container } = render(
-      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />
+      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="athlete" onClose={vi.fn()} />
     );
     await waitFor(() => screen.getByTestId('clips-sidebar'));
     // The content row stacks as a column on phones and a row at >= sm.
@@ -560,7 +572,7 @@ describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
 
   it('pull-up handle collapses and re-expands the clip list', async () => {
     render(
-      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />
+      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="athlete" onClose={vi.fn()} />
     );
     await waitFor(() => screen.getByTestId('clips-sidebar'));
 
@@ -607,7 +619,7 @@ describe('RecapPlayerModal - fullscreen enter only (T5659)', () => {
 
   it('shows the enter button when windowed and calls requestFullscreen on click', async () => {
     Element.prototype.requestFullscreen = vi.fn(() => Promise.resolve());
-    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="athlete" onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));
 
     fireEvent.click(screen.getByTestId('toggle-fullscreen'));
@@ -615,7 +627,7 @@ describe('RecapPlayerModal - fullscreen enter only (T5659)', () => {
   });
 
   it('hides the fullscreen button once fullscreen (no in-app exit control)', async () => {
-    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="athlete" onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));
     expect(screen.getByTestId('toggle-fullscreen')).toBeTruthy();
 
@@ -625,5 +637,84 @@ describe('RecapPlayerModal - fullscreen enter only (T5659)', () => {
     await waitFor(() => expect(screen.getByTestId('is-fullscreen').textContent).toBe('fullscreen'));
 
     expect(screen.queryByTestId('toggle-fullscreen')).toBeNull();
+  });
+});
+
+// T5710: per-layer recap split (Team Recap / {Athlete} Recap).
+describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    recapState.activeClipId = null;
+  });
+
+  it('shows Team Recap and {Athlete} Recap tabs when both layers have clips', async () => {
+    globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_WITH_CLIPS);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Team Recap' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'My Recap' })).toBeTruthy();
+  });
+
+  it('hides the Team Recap tab when the team layer is explicitly empty', async () => {
+    globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_NO_CLIPS);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    expect(screen.queryByRole('button', { name: 'Team Recap' })).toBeNull();
+  });
+
+  it('defaults to the {Athlete} Recap tab (sticky-within-session default)', async () => {
+    globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_WITH_CLIPS);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    // My Recap tab is the active (cyan) one; Team Recap (amber) is not.
+    const athleteTab = screen.getByRole('button', { name: 'My Recap' });
+    expect(athleteTab.className).toContain('text-cyan-400');
+    const teamTab = screen.getByRole('button', { name: 'Team Recap' });
+    expect(teamTab.className).not.toContain('text-amber-400');
+  });
+
+  it('filters the Team Recap clip rail by tagged player (epic decision 7)', async () => {
+    const teamClips = [
+      { id: 1, name: 'Clip 1', tags: [], notes: '', recap_start: 0, recap_end: 5, tagged_teammates: ['Jake'] },
+      { id: 2, name: 'Clip 2', tags: [], notes: '', recap_start: 10, recap_end: 15, tagged_teammates: ['Sam'] },
+    ];
+    const teamData = { url: 'https://r2.example.com/team.mp4', clips: teamClips, video_kind: 'recap' };
+    globalThis.fetch = mockFetch(RECAP_DATA_NO_CLIPS, [], teamData);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="team" onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Jake' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sam' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'All' })).toBeTruthy();
+  });
+
+  it('shows a distinct legacy-combined banner, never under a per-layer label', async () => {
+    const combined = { url: 'https://r2.example.com/legacy.mp4', clips: [], video_kind: 'recap_legacy_combined' };
+    globalThis.fetch = mockFetch(combined, [], combined);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
+    expect(await screen.findByText(/original combined recap/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Team Recap' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'My Recap' })).toBeNull();
+  });
+
+  it('shows an explicit empty state on the Team Recap tab request without fabricating content', async () => {
+    globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_NO_CLIPS);
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    // Team layer is empty -> no Team Recap tab at all, never a fallback to athlete content under it.
+    expect(screen.queryByRole('button', { name: 'Team Recap' })).toBeNull();
+  });
+
+  it('renders above QuestPanel\'s floating nudge (z-[100] > QuestPanel\'s z-50), so the Team Recap tab is always clickable', async () => {
+    // Regression for the T5710 QA finding: the tab bar is now ALWAYS present
+    // once a game has clips on either layer (pre-T5710 it only rendered with
+    // Highlights), so this collision became reachable on a core interaction
+    // for exactly the new-user cohort this epic targets (active onboarding
+    // quest = incomplete Annotate/Extract flow). QuestPanel's floating nudge
+    // is `fixed z-50`; this modal must out-rank it.
+    globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_WITH_CLIPS);
+    const { container } = render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    const root = container.querySelector('.fixed.inset-0');
+    expect(root.className).toContain('z-[100]');
   });
 });

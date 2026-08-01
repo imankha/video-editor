@@ -124,6 +124,8 @@ graph LR
 ## Testing seams
 - `MODAL_ENABLED=false` → full local render path (T4120's sanctioned in-container verify mode); `FORCE_R2_SYNC_FAILURE` + machine-cycle simulation seams (prod-gated) exist for durability tests (`tests/test_t4050_durable_sync.py` is the pattern).
 - **`POST /api/test/migrate-current-profile` (T5300, gated like every seam):** migrates the logged-in user's CURRENT profile (+ user.sqlite) to head schema via the same `_migrate_profile_db`/`_migrate_user_db` machinery as `POST /api/admin/migrate`, scoped to one profile. The T4120 durability spec calls it after login because the container's pulled DB is at whatever version R2 holds and migrations never auto-run — without it the overlay render dies at the finalize INSERT before the durable boundary (see Invariant 1 landmine). NOT a schema shortcut — it runs the real versioned migrations.
+- **`POST /api/test/seed-recap-game` (T5710, gated like every seam):** seeds a game with rated clips on BOTH layers (`athlete_clips`/`team_clips`, team clips carry `tagged_teammates`) and (if `stitch=true`, default) runs the real `ensure_recap(game_id, layer)` for both layers so the game exits with genuine stitched per-layer recaps + `recap_video_url` set — same state a real auto-exported game reaches. Each clip is an 8s (`CLIP_SECONDS`) window, not 1s: a 1s-per-clip stitched video's autoplay drifted onto the next clip mid-assertion during a real e2e run's several-real-second Playwright steps, so "the active/currently-playing clip" (Create Clip's target, the NotesOverlay/transport label) would silently move on before the test finished checking the one it had just clicked. Bump `CLIP_SECONDS` further only if a similarly slow multi-step e2e flow reappears.
+- **Landmine — shared `test-login` account + Playwright's bare `request` fixture:** `POST /api/auth/test-login` always resolves to the SAME fixed `e2e@test.local` account (ignores the `X-User-ID` header entirely — see `auth.py::test_login`); `X-User-ID` is only consulted as a fallback when a request carries no session cookie (`db_sync.py` middleware, cookie wins when present). Any e2e spec that (1) logs in via `test-login` (minting an `rb_session` cookie for that fixed account) AND (2) also calls the plain `request` fixture (a separate `APIRequestContext` that does NOT share the page's cookies) for seeding/cleanup will silently operate on TWO DIFFERENT user identities — the seeded/cleaned-up data lands in an orphaned `X-User-ID` namespace the cookie-authenticated browser never queries, and the UI falls back to showing whatever pre-existing game on the shared account happens to reuse the same autoincrement id (T5710 hit this: the modal opened a stale leftover game instead of the freshly seeded one). Fix/pattern: always use `page.request` for API calls in a spec that also drives `page` post-login — never the bare `request` fixture. Other specs (`collections.spec.js`, `T5330-share-signup-nuf.spec.js`) share this same login-then-bare-`request`-cleanup pattern and likely have the same latent no-op-cleanup bug; not fixed here (out of T5710's scope), flagging for whoever touches them next.
 - WARNING (memory): backend tests TRUNCATE the real dev Postgres — warn the user before running; the guard blocks staging/prod only.
 - T4370 will add `tests/export_golden/`-style DB-delta snapshots for all 6 triggers; until it lands there is NO broad characterization net — prefer surgical diffs. **The multi-clip finalizer IS now pinned** by `tests/test_t5630_characterization.py` (local in-band, Modal in-band, recovery == in-band) + `test_t5630_finalize_unit.py` (upsert/finalize idempotency, fallback) — reuse the T5600/T4200 mocked-pipeline harness (mock Modal AI call, R2, detection, sync; real profile SQLite via a `_init_cache` test user) for any further finalize change.
 
@@ -240,6 +242,40 @@ graph LR
   gap** (no request in flight) = crop/highlight/canvas hydration, not latency (T4774).
 
 ## Active/upcoming work
+- **T5710 — per-layer recaps (2026-08-01):** the single combined recap is replaced by two
+  independently-stitched, layer-filtered recaps. `_get_annotated_clips(conn, game_id, layer)`
+  (`auto_export.py:138`) takes a layer predicate: athlete = `my_athlete = 1 OR my_athlete IS NULL`
+  (NULL defaults to athlete), team = `my_athlete = 0` exactly (imported clips land on team —
+  a team recap shows the whole team's plays regardless of annotator). `_generate_recap` produces
+  per-layer outputs on DERIVED keys (no schema change): athlete keeps `recaps/{game_id}.mp4`
+  (existing consumers/`resolve_clip_source` untouched), team is `recaps/{game_id}_team.mp4` +
+  `recaps/{game_id}_team_clips.json` mapping. `ensure_recap(user_id, profile_id, game_id, layer)`
+  (`auto_export.py:658`) is the idempotent, single-layer, synchronously-callable stitch helper —
+  cheap on the hit path (HEAD + mapping-stamp check, no ffmpeg), safe to call repeatedly; it does
+  NOT co-generate the sibling layer (only the auto-export sweep co-generates both). This is the
+  entry point T5720's share-creation gesture calls (`ensure_recap(game_id, 'team')`) before
+  minting a public link. `GET /api/games/{id}/recap-data?layer=athlete|team` (`games.py:1095`)
+  resolves per layer: stitched recap -> game-video seek-through with a layer-filtered clip
+  mapping -> explicit empty state (never a silent fallback to the other layer's content — an
+  empty team layer must never render athlete clips under the Team Recap label, and vice versa).
+  A pre-T5710 legacy combined recap (unrecoverable per-layer offsets) renders as its own
+  `recap_legacy_combined` entry, honestly labelled, no per-clip rail, never under either layer
+  label (both layer requests resolve to the SAME combined payload in that case). Frontend:
+  `RecapPlayerModal.jsx` splits the old single "Annotations" tab into Team Recap / {Athlete}
+  Recap tabs (sticky-within-session default: {Athlete}), each with its own `useRecapPlayback`
+  instance keyed to that layer's clips; the Team Recap rail additionally has player-tag filter
+  chips (epic decision 7) that filter the RENDERED rail list (`sidebarClips`) by
+  `tagged_teammates` — this does NOT touch the underlying `useRecapPlayback` clip list or
+  playback, so the currently-PLAYING clip's name still legitimately renders in the NotesOverlay
+  video overlay + PlaybackControls transport label even when it's filtered out of the rail (by
+  design: the stitched video autoplays through every clip regardless of the rail filter). The
+  rail has `data-testid="recap-clip-rail"` specifically so tests can distinguish "is this clip in
+  the filtered list" from "is this clip's name showing anywhere in the modal" — an e2e assertion
+  that doesn't scope to the rail will flake once the video autoplays past the clip it just
+  filtered out. Tests: `test_t5710_per_layer_recaps.py` (layer-filter SQL, empty-layer states,
+  seek-through offsets, stitched/stale-mapping resolution, `ensure_recap` idempotency, query-count
+  perf guard), `RecapPlayerModal.test.jsx`, `e2e/T5710-per-layer-recap.spec.js` (real-browser,
+  see the seed-recap-game seam note above).
 - **T4380** (TODO): unify the two competing job-create helpers (`exports.py:86` `'pending'` vs `export_helpers.py:37` `'processing'`).
 - **DONE (2026-07-11 bug sweep):** T4200 (framing+multi-clip sync-then-announce), T4210 (overlay blob decode→500 not []; PUT /overlay-data deleted), T4230 (projects.py catch-all crop-NULL fixed; renameProject no longer writes stale aspect_ratio), T4240 (four recovery bugs fixed), T4280 (backend silent-fallback sweep).
 - **Export Write-Path Unification epic** (`docs/plans/tasks/export-write-path/EPIC.md`, STRICT serial order): T4370 golden harness (DB-delta snapshots for all 6 triggers + local render goldens — gates everything after) → T4380 ExportJobRepository → T4390 finalize/publish single writers → T4400 backend-authoritative export (`mark-exported`; kills client-state authority) → T4410 pipelines→services + sweep unification. T4420 (interpolation) and T4430 (ffmpeg params/probe) also depend on T4370.

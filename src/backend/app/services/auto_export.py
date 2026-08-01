@@ -16,19 +16,27 @@ from pathlib import Path
 
 import ffmpeg
 
+from app.constants import RecapLayer
 from app.utils.encoding import decode_data
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
 from ..storage import (
+    file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
+    r2_head_object_global,
     upload_bytes_to_r2,
     upload_to_r2,
 )
 from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
+
+# T5710: stamp written into recaps/{game_id}[_team]_clips.json so a reader can
+# tell a fresh, layer-PURE mapping (this schema) from a pre-T5710 mapping (a
+# bare list -- legacy/MIXED, contains both layers). See load_recap_mapping.
+RECAP_MAP_SCHEMA = "recap-map/v2"
 
 EXPORT_TIMEOUT_SECONDS = 300
 
@@ -113,7 +121,24 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
             except Exception as e:
                 logger.error(f"[AutoExport] Brilliant clip {clip['id']} failed: {e}")
 
-        recap_url = _generate_recap(user_id, profile_id, game_id, annotated_clips)
+        # T5710: co-generate BOTH layers here (source is already open + being
+        # stitched, so the sibling is nearly free) -- design decision Q3, scoped
+        # to auto-export ONLY (ensure_recap's on-demand call stays single-layer).
+        # Write order matters: team FIRST, athlete LAST, so a crash mid-way never
+        # leaves team clips without a T4140 re-edit source (athlete overwrites
+        # the shared legacy `.mp4` key; team's `_team.mp4` is independent).
+        team_clips = _get_annotated_clips(game_id, RecapLayer.TEAM)
+        if team_clips:
+            _generate_recap(user_id, profile_id, game_id, team_clips, layer=RecapLayer.TEAM)
+        else:
+            logger.info(f"[AutoExport] game={game_id} team layer empty — skipping team recap")
+
+        athlete_clips = _get_annotated_clips(game_id, RecapLayer.ATHLETE)
+        if athlete_clips:
+            recap_url = _generate_recap(user_id, profile_id, game_id, athlete_clips, layer=RecapLayer.ATHLETE)
+        else:
+            recap_url = None
+            logger.info(f"[AutoExport] game={game_id} athlete layer empty — skipping athlete recap")
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -135,23 +160,88 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
         return 'failed'
 
 
-def _get_annotated_clips(game_id: int) -> list[dict]:
+def _get_annotated_clips(game_id: int, layer: str | None = None) -> list[dict]:
+    """Rated clips for a game, optionally filtered to one recap layer (T5710).
+
+    layer=None (default) -- ALL rated clips, unfiltered. Callers that need every
+    rated clip regardless of layer (the brilliant-clip Reel-Draft preservation
+    loop, the legacy-quality `backfill_hiq_recaps`) rely on this default.
+    layer=RecapLayer.ATHLETE -- (my_athlete = 1 OR my_athlete IS NULL); NULL is
+    pre-migration legacy, treated as athlete.
+    layer=RecapLayer.TEAM -- my_athlete = 0 (includes imported clips,
+    shared_by NOT NULL -- a team recap shows the whole team's plays).
+    """
+    layer_clause = ""
+    if layer == RecapLayer.TEAM:
+        layer_clause = " AND rc.my_athlete = 0"
+    elif layer == RecapLayer.ATHLETE:
+        layer_clause = " AND (rc.my_athlete = 1 OR rc.my_athlete IS NULL)"
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         rows = cursor.execute(
-            """SELECT rc.id, rc.name, rc.rating, rc.tags, rc.notes,
+            f"""SELECT rc.id, rc.name, rc.rating, rc.tags, rc.notes,
                       rc.start_time, rc.end_time, rc.auto_project_id,
-                      rc.video_sequence,
+                      rc.video_sequence, rc.my_athlete,
                       COALESCE(gv.blake3_hash, g.blake3_hash) as video_hash
                FROM raw_clips rc
                LEFT JOIN games g ON rc.game_id = g.id
                LEFT JOIN game_videos gv ON gv.game_id = rc.game_id
                    AND gv.sequence = COALESCE(rc.video_sequence, 1)
-               WHERE rc.game_id = ? AND rc.rating IS NOT NULL
+               WHERE rc.game_id = ? AND rc.rating IS NOT NULL{layer_clause}
                ORDER BY COALESCE(rc.video_sequence, 1), rc.start_time""",
             (game_id,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def recap_r2_keys(game_id: int, layer: str | None) -> tuple[str, str]:
+    """Derived (relative, per-user-prefixed by the caller) R2 keys for a game's
+    recap video + its frozen clip mapping.
+
+    layer=None or RecapLayer.ATHLETE -- the pre-T5710 keys
+    (`recaps/{game_id}.mp4` / `recaps/{game_id}_clips.json`); `games.recap_video_url`
+    keeps pointing at the .mp4 form, so this MUST stay unsuffixed for the athlete
+    layer (no schema change -- T5710 design decision 1/EPIC decision 2).
+    layer=RecapLayer.TEAM -- the derived `_team` sibling.
+    """
+    suffix = "_team" if layer == RecapLayer.TEAM else ""
+    return f"recaps/{game_id}{suffix}.mp4", f"recaps/{game_id}{suffix}_clips.json"
+
+
+def load_recap_mapping(user_id: str, mapping_key: str) -> tuple[str | None, list]:
+    """Load a recap clip-mapping JSON from R2, unwrapping the T5710 stamp.
+
+    Returns (layer, clips):
+      - stamped wrapper {"schema": RECAP_MAP_SCHEMA, "layer": "athlete"|"team",
+        "clips": [...]} -> (layer, clips) -- a fresh, layer-PURE mapping.
+      - bare list (pre-T5710 shape) -> (None, list) -- legacy/MIXED, contains
+        both layers' clips. Absence of the stamp IS the legacy signal (T5710
+        design decision 1) -- no separate marker needed.
+      - missing/unreadable -> (None, []).
+    """
+    import tempfile
+    from pathlib import Path
+
+    from ..storage import download_from_r2
+
+    with tempfile.TemporaryDirectory() as tmp:
+        local_path = Path(tmp) / "clips.json"
+        if not download_from_r2(user_id, mapping_key, local_path):
+            return None, []
+        with open(local_path) as f:
+            data = json.load(f)
+    if isinstance(data, dict) and "clips" in data:
+        return data.get("layer"), data["clips"]
+    return None, data
+
+
+def clip_matches_layer(my_athlete, layer: str) -> bool:
+    """Same predicate as `_get_annotated_clips`'s SQL, for filtering rows already
+    fetched (e.g. legacy mapping entries joined against live raw_clips)."""
+    if layer == RecapLayer.TEAM:
+        return my_athlete == 0
+    return my_athlete == 1 or my_athlete is None
 
 
 def _set_game_status(game_id: int, status: str) -> None:
@@ -310,9 +400,23 @@ def _pick_canonical_resolution(resolutions: list[tuple]) -> tuple:
 
 
 def _generate_recap(
-    user_id: str, profile_id: str, game_id: int, clips: list[dict]
+    user_id: str, profile_id: str, game_id: int, clips: list[dict],
+    layer: str | None = None,
 ) -> str:
-    """Generate a full-quality recap master by concatenating all annotated clips.
+    """Generate a full-quality recap master by concatenating the given clips.
+
+    T5710: `layer` selects the derived R2 keys + mapping stamp (`recap_r2_keys`):
+      - layer=None (default) -- pre-T5710 behavior UNCHANGED: writes the
+        unsuffixed `.mp4`/`_clips.json` keys with a BARE-LIST mapping (no
+        wrapper/stamp). `clips` is expected to be the caller's own selection --
+        `backfill_hiq_recaps` intentionally still passes ALL of a game's rated
+        clips here to re-encode a legacy MIXED recap at hi-q without migrating
+        its layer status (a quality upgrade, not a layer split).
+      - layer='athlete'|'team' -- writes the layer's derived keys with a
+        stamped wrapper {"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": [...]}
+        so readers (`load_recap_mapping`) can tell this mapping is layer-PURE.
+        `clips` must already be filtered to this layer by the caller
+        (`_get_annotated_clips(game_id, layer)`).
 
     T4140: the recap is the surviving re-edit source once the game video is
     reclaimed, so each clip is encoded at its NATIVE resolution at master-grade
@@ -448,18 +552,187 @@ def _generate_recap(
             .run(quiet=True, overwrite_output=True)
         )
 
-        recap_r2_key = f"recaps/{game_id}.mp4"
+        recap_r2_key, mapping_r2_key = recap_r2_keys(game_id, layer)
         upload_to_r2(user_id, recap_r2_key, recap_path)
 
+        mapping_payload = (
+            {"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": clip_mapping}
+            if layer is not None else clip_mapping
+        )
         upload_bytes_to_r2(
             user_id,
-            f"recaps/{game_id}_clips.json",
-            json.dumps(clip_mapping).encode(),
+            mapping_r2_key,
+            json.dumps(mapping_payload).encode(),
         )
 
     elapsed = time.perf_counter() - t0
-    logger.info(f"[AutoExport] Recap game={game_id} complete in {elapsed:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s duration)")
+    logger.info(f"[AutoExport] Recap game={game_id} layer={layer or 'legacy-mixed'} complete in {elapsed:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s duration)")
     return recap_r2_key
+
+
+def _generate_recap_from_legacy_slice(
+    user_id: str, profile_id: str, game_id: int, layer: str, legacy_entries: list[dict],
+) -> str:
+    """Stitch a per-layer recap by slicing segments out of the surviving LEGACY
+    mixed recap (`recaps/{game_id}.mp4`), for use when the game video itself has
+    already been reclaimed (T5710 design decision 2/4 -- `ensure_recap`'s miss
+    path when no game source remains).
+
+    `legacy_entries` are pre-filtered by the caller to this layer (join against
+    live `raw_clips.my_athlete` -- see `clip_matches_layer`). Unlike
+    `_generate_recap`, all segments come from ONE already-uniform-resolution
+    source file, so there is no mixed-resolution concat-normalization step.
+    Always writes the STAMPED wrapper (this is always a layer-pure slice).
+    """
+    t0 = time.perf_counter()
+    legacy_url = generate_presigned_url(user_id, f"recaps/{game_id}.mp4")
+    if not legacy_url:
+        raise RuntimeError(f"[AutoExport] game={game_id} legacy recap missing at slice time")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        extracted_paths = []
+        clip_mapping = []
+        recap_offset = 0.0
+        for entry in sorted(legacy_entries, key=lambda e: e.get('recap_start') or 0.0):
+            start, end = entry.get('recap_start'), entry.get('recap_end')
+            if start is None or end is None or end <= start:
+                logger.warning(
+                    f"[AutoExport] Recap-slice game={game_id} skipping entry "
+                    f"{entry.get('id')}: invalid range start={start} end={end}"
+                )
+                continue
+            out_path = Path(temp_dir) / f"clip_{entry['id']}.mp4"
+            (
+                ffmpeg.input(legacy_url, ss=start, to=end)
+                .output(
+                    str(out_path), vcodec="libx264", preset=RECAP_PRESET,
+                    crf=RECAP_CRF, acodec="aac", movflags="+faststart",
+                )
+                .run(quiet=True, overwrite_output=True)
+            )
+            extracted_paths.append(out_path)
+            duration = float(end) - float(start)
+            clip_mapping.append({
+                'id': entry['id'],
+                'name': entry.get('name'),
+                'rating': entry.get('rating'),
+                'tags': entry.get('tags') or [],
+                'notes': entry.get('notes') or '',
+                'recap_start': round(recap_offset, 3),
+                'recap_end': round(recap_offset + duration, 3),
+            })
+            recap_offset += duration
+
+        if not extracted_paths:
+            raise RuntimeError(
+                f"[AutoExport] game={game_id} layer={layer} no valid segments "
+                f"sliced from the legacy recap"
+            )
+
+        concat_list = Path(temp_dir) / "concat.txt"
+        with open(concat_list, "w") as f:
+            for path in extracted_paths:
+                f.write(f"file '{path}'\n")
+
+        recap_path = Path(temp_dir) / "recap.mp4"
+        (
+            ffmpeg.input(str(concat_list), f="concat", safe=0)
+            .output(str(recap_path), c="copy", movflags="+faststart")
+            .run(quiet=True, overwrite_output=True)
+        )
+
+        recap_r2_key, mapping_r2_key = recap_r2_keys(game_id, layer)
+        upload_to_r2(user_id, recap_r2_key, recap_path)
+        upload_bytes_to_r2(
+            user_id, mapping_r2_key,
+            json.dumps({"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": clip_mapping}).encode(),
+        )
+
+    logger.info(
+        f"[AutoExport] Recap-slice game={game_id} layer={layer} complete in "
+        f"{time.perf_counter() - t0:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s)"
+    )
+    return recap_r2_key
+
+
+def ensure_recap(user_id: str, profile_id: str, game_id: int, layer: str) -> dict:
+    """Idempotent per-layer recap stitch (T5710 design decision 4).
+
+    Callable synchronously from a request path -- T5720's share-creation
+    gesture invokes `ensure_recap(game_id, 'team')` and warms the poster BEFORE
+    returning a public link, so it must be cheap on the hit path (a HEAD +
+    mapping-stamp check, no ffmpeg) and safe to call repeatedly (idempotent).
+    Stays SINGLE-LAYER -- it does not co-generate the sibling layer (design
+    decision Q3; only the auto-export path co-generates both).
+
+    Returns {status, recap_key, mapping_key, poster_key, clip_count} where
+    status is one of:
+      - 'present'  -- the layer's recap already exists and its mapping is
+                      stamped for THIS layer; nothing re-stitched. A legacy
+                      unstamped '.mp4' does NOT count as a hit for the athlete
+                      layer -- the first call upgrades it to an athlete-pure
+                      recap.
+      - 'empty'    -- the layer has zero live rated clips; stitches nothing (no
+                      empty video is ever produced).
+      - 'stitched' -- a miss: stitched from the game source if it still exists,
+                      else sliced out of the surviving legacy mixed recap.
+    Raises only when clips exist for the layer but NEITHER the game source NOR
+    a usable legacy recap remains to stitch from (should not happen in
+    practice -- the game source or its recap always outlives annotation).
+    """
+    from .poster import ensure_recap_poster, recap_poster_r2_keys_for_layer
+
+    recap_key, mapping_key = recap_r2_keys(game_id, layer)
+    _, poster_key = recap_poster_r2_keys_for_layer(user_id, profile_id, game_id, layer)
+
+    def _result(status: str, clip_count: int) -> dict:
+        return {
+            "status": status,
+            "recap_key": recap_key,
+            "mapping_key": mapping_key,
+            "poster_key": poster_key,
+            "clip_count": clip_count,
+        }
+
+    # 1. Hit path -- cheap, no ffmpeg.
+    if file_exists_in_r2(user_id, recap_key):
+        mapping_layer, existing_clips = load_recap_mapping(user_id, mapping_key)
+        if mapping_layer == layer:
+            ensure_recap_poster(*recap_poster_r2_keys_for_layer(user_id, profile_id, game_id, layer))
+            return _result("present", len(existing_clips))
+
+    # 2. Empty path -- never stitch an empty video.
+    clips = _get_annotated_clips(game_id, layer)
+    if not clips:
+        return _result("empty", 0)
+
+    # 3. Miss -> stitch. Prefer the live game source; fall back to slicing the
+    # surviving legacy mixed recap once the game video is reclaimed.
+    hashes = {c['video_hash'] for c in clips if c['video_hash']}
+    game_source_present = bool(hashes) and all(
+        r2_head_object_global(f"games/{h}.mp4") is not None for h in hashes
+    )
+    if game_source_present:
+        _generate_recap(user_id, profile_id, game_id, clips, layer=layer)
+    else:
+        _mapping_layer, legacy_entries = load_recap_mapping(user_id, f"recaps/{game_id}_clips.json")
+        if _mapping_layer is not None or not legacy_entries:
+            raise RuntimeError(
+                f"ensure_recap: game={game_id} layer={layer} has {len(clips)} clips "
+                f"but neither the game source nor a legacy mixed recap is available "
+                f"to stitch from"
+            )
+        matching_ids = {c['id'] for c in clips}
+        layer_entries = [e for e in legacy_entries if e.get('id') in matching_ids]
+        if not layer_entries:
+            raise RuntimeError(
+                f"ensure_recap: game={game_id} layer={layer} clips are not present "
+                f"in the legacy mixed recap mapping -- cannot slice"
+            )
+        _generate_recap_from_legacy_slice(user_id, profile_id, game_id, layer, layer_entries)
+
+    ensure_recap_poster(*recap_poster_r2_keys_for_layer(user_id, profile_id, game_id, layer))
+    return _result("stitched", len(clips))
 
 
 def _recap_is_legacy_480p(user_id: str, game_id: int) -> bool | None:

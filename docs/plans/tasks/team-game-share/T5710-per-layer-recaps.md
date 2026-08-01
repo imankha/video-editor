@@ -93,6 +93,33 @@ Per [EPIC.md](EPIC.md) decision 5, the combined recap is REPLACED by two per-lay
 
 **2026-07-21**: Created from the epic consolidation.
 
+**2026-08-01**: Implementation complete (backend layer split, `ensure_recap`, frontend tab
+split + player-tag filter chips); real-browser e2e verification surfaced and fixed 3 issues
+in the verification harness itself (the player-tag filter was never broken):
+1. e2e assertions checked clip-name text against the whole modal instead of the clip rail,
+   so the currently-playing clip's name (legitimately rendered in the NotesOverlay overlay +
+   PlaybackControls transport label, independent of the rail's player-tag filter) produced a
+   false failure. Added `data-testid="recap-clip-rail"` to the rail container and scoped the
+   e2e's existence/absence assertions to it.
+2. Found a real test-isolation bug while chasing a follow-on failure: `seedRecapGame`/
+   `cleanupTestUser` used Playwright's bare `request` fixture (no shared cookies), while
+   `/api/auth/test-login` always resolves to the fixed shared `e2e@test.local` account
+   regardless of `X-User-ID` — so seeded data landed in an orphaned namespace the
+   cookie-authenticated browser never saw, and the UI opened a coincidental stale leftover
+   game instead. Fixed by switching both calls to `page.request`. Same latent pattern likely
+   exists in ~10 other specs (`collections.spec.js`, `T5330-share-signup-nuf.spec.js`, etc.) —
+   out of scope here, noted in export-pipeline.md for a future sweep.
+3. Seeded clips were 1s each; real autoplay drifted onto the next clip during the test's
+   multi-step assertions, racing Create Clip's target. Bumped to an 8s-per-clip constant
+   (`CLIP_SECONDS`) in the `seed-recap-game` test seam.
+
+e2e (`T5710-per-layer-recap.spec.js`) passes clean end-to-end (all 6 criterion evidence
+screenshots saved); backend `test_t5710_per_layer_recaps.py` + `test_auto_export.py` +
+`test_t3970_expired_share_block.py` (72 tests) and `RecapPlayerModal.test.jsx` (37 tests) all
+pass. Reviewer ran on the final diff: 0 blocking, 0 major findings, approved. Knowledge docs
+(`export-pipeline.md`, `annotate.md`) updated with the per-layer architecture, the seed seam,
+and the rail-vs-playback-overlay distinction.
+
 ## Acceptance Criteria
 
 - [ ] Team Recap = team-layer clips (own + imported); {Athlete} Recap = athlete-layer clips
