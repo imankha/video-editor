@@ -88,6 +88,11 @@ export function AnnotateContainer({
     setAnnotateSelectedLayer,
     annotateContainerRef,
     annotateFileInputRef,
+    // T5700: layer mode toggle (new-clip default) + clip-list layer filter
+    newClipLayerIsMine,
+    setNewClipLayerIsMine,
+    layerFilter,
+    setLayerFilter,
   } = useAnnotateState();
 
   useWakeLock();
@@ -569,6 +574,12 @@ export function AnnotateContainer({
     // expired->healthy switch doesn't briefly show the expired panel for the new
     // game. Re-set authoritatively from storage_status in applyGameData.
     setAnnotateSourceExpired(false);
+
+    // T5700: the layer mode toggle + clip-list filter are ephemeral session view
+    // state, sticky WITHIN a game but reset every time a game is opened. Reset
+    // imperatively here (the game-open gesture), not via a state-watching effect.
+    setNewClipLayerIsMine(true);
+    setLayerFilter('all');
 
     // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
     // first-paint src NOW and kick off /load. The src-set happens BEFORE awaiting
@@ -1329,6 +1340,13 @@ export function AnnotateContainer({
     isUploadingGameVideo: isUploadingFromStore, // From global store (persists across navigation)
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
+
+    // T5700: layer mode toggle (new-clip default) + clip-list layer filter.
+    // Both ephemeral session view state, reset on game open (see handleLoadGame).
+    newClipLayerIsMine,
+    setNewClipLayerIsMine,
+    layerFilter,
+    setLayerFilter,
 
     // Clip region state
     clipRegions,

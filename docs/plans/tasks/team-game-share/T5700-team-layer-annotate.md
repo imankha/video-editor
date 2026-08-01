@@ -93,6 +93,20 @@ My Athlete on game open, never persisted.
 **2026-07-21**: Created from the epic consolidation (T4920 superseded). Design session locked
 the one-layer model + sticky toggle.
 
+**2026-08-01**: Implementation complete on `feature/T5700-team-layer-annotate`. All five surfaces
+built (mode toggle + filter pills in `ClipsSidePanel`, per-clip `LayerSegmentedControl` in
+`ClipDetailsEditor`/`AnnotateFullscreenOverlay` — imported clips locked read-only per the design
+doc's resolved open question 5, `ClipListItem` layer chip + "Shared by" coexistence, `ClipRegionLayer`
+marker tint). Full frontend unit suite green (a handful of unrelated timing flakes in
+`gamesDataStore`/`profileStore`/`cacheWarming` confirmed to pass in isolation, logged in
+`docs/testing/known-failures.md`). Full T5700 e2e suite (10 tests, real account/real browser via
+`dev-verify.sh`) passing, including the two required QA cases (390px long-name + imported-clip
+truncation with Shared-by dropping to a second line; imported-clip layer control locked + asserted
+no write request on click). Deleted a dev-only diagnostic harness (`clipsdiag.html`) used mid-task
+to prove truncation — superseded by real-app e2e coverage in
+`e2e/T5700-team-layer-interactive.qa.spec.js` seeded via a disposable clip, so no throwaway page
+ships. Reviewer agent run on the diff; findings addressed inline (see PR/commit for detail).
+
 ## Acceptance Criteria
 
 - [ ] New clips land on the layer selected by the mode toggle; toggle resets to My Athlete on
