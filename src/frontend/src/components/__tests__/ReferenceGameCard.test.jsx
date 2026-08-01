@@ -68,4 +68,20 @@ describe('ReferenceGameCard (T5820)', () => {
     // Still renders a card (degrades visibly, not blank).
     expect(screen.getByRole('button')).toBeTruthy();
   });
+
+  // Regression: found on REAL prod data (arshia, 2026-08-01). The DEFAULT profile
+  // is legitimately unnamed, so source_profile_name comes back as ''. That is
+  // normal data, not a backend bug — it must NOT log an error, and the badge must
+  // say "In Default" (the app's existing label for that profile) rather than the
+  // vague "In another profile" reserved for a genuinely unresolved name.
+  it('labels an UNNAMED owning profile "Default" without warning', () => {
+    const unnamed = { ...refGame, source_profile_name: '' };
+    render(<ReferenceGameCard game={unnamed} onOpen={vi.fn()} />);
+
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(screen.getByText('In Default')).toBeTruthy();
+    expect(screen.queryByText(/another profile/)).toBeNull();
+    // Reads naturally (no stray possessive) in the hover title.
+    expect(screen.getByRole('button').getAttribute('title')).toBe('Open in Default profile');
+  });
 });

@@ -601,7 +601,12 @@ export function ProjectManager({
 
     // Degraded link: the owning game was deleted after the move. Keep the user
     // informed (no silent no-op); the reference card stays for grouping context.
-    setReferenceNotice(`This game is no longer in ${pending.sourceProfileName || 'that profile'}.`);
+    // Same owner-label rule as ReferenceGameCard: an UNNAMED profile is normal
+    // data (the default profile has no name) and the app calls it "Default";
+    // only a genuinely absent name falls back to the vague wording.
+    const ownerLabel = pending.sourceProfileName
+      || (pending.sourceProfileName == null ? 'that profile' : 'Default');
+    setReferenceNotice(`This game is no longer in ${ownerLabel}.`);
     const t = setTimeout(() => setReferenceNotice(null), 6000);
     return () => clearTimeout(t);
   }, [games, gamesLoading, currentProfileId, setActiveTab]);
