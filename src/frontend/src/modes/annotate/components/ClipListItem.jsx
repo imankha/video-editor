@@ -1,25 +1,26 @@
 import React, { useEffect, useRef } from 'react';
-import { Info, Play, User, Users, Share2 } from 'lucide-react';
+import { Info, Play, Users, Share2 } from 'lucide-react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
 
 /**
- * LayerChip - icon-only cyan "My Athlete" / amber "Team" marker for a clip-list
- * row (T5700 follow-up). No visible text at any breakpoint — the accessible
- * name (title + aria-label) carries the full layer name for screen-reader and
- * hover users, per locked UX decision (both layers icon-only, no text fallback).
+ * LayerChip - icon-only amber "Team" marker for a clip-list row (T5700 follow-up).
+ * ONLY the Team layer is marked: My Athlete is the default layer, so marking it
+ * too was pure noise on almost every row (user decision after testing). An
+ * unmarked row therefore means My Athlete. No visible text at any breakpoint —
+ * the accessible name (title + aria-label) carries the layer name for
+ * screen-reader and hover users.
  */
 function LayerChip({ isMine }) {
-  const label = isMine ? 'My Athlete' : 'Team';
-  const Icon = isMine ? User : Users;
+  if (isMine) return null;
   return (
     <span
-      className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
-                  ${isMine ? 'bg-cyan-500 text-cyan-950' : 'bg-amber-500 text-amber-950'}`}
-      title={`${label} layer`}
-      aria-label={`${label} layer`}
+      className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
+                 bg-amber-500 text-amber-950"
+      title="Team layer"
+      aria-label="Team layer"
     >
-      <Icon size={12} />
+      <Users size={12} />
     </span>
   );
 }
@@ -72,6 +73,9 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
   return (
     <div
       ref={rowRef}
+      // Stable hook for asserting on row SETS. Needed since only Team rows carry
+      // a layer marker now — "count the My Athlete rows" has no marker to count.
+      data-testid="clip-row"
       onClick={isMobile ? undefined : onClick}
       className={`
         ${isMobile ? '' : 'cursor-pointer'} transition-all

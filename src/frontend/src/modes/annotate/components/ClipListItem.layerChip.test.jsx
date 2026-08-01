@@ -10,19 +10,18 @@ import { ClipListItem } from './ClipListItem';
 const LONG_NAME = 'Incredible give-and-go through the midfield ending in a screamer from outside the box';
 
 describe('ClipListItem — layer marker (T5700)', () => {
-  it('renders the My Athlete marker (icon only, accessible name) when my_athlete is true', () => {
+  it('renders NO marker when my_athlete is true (My Athlete is the unmarked default)', () => {
     render(<ClipListItem region={{ id: 'c1', rating: 4, name: 'Clip', my_athlete: true }} index={0} isSelected={false} />);
-    const marker = screen.getByTitle('My Athlete layer');
-    expect(marker).toBeTruthy();
-    expect(marker.getAttribute('aria-label')).toBe('My Athlete layer');
-    expect(marker.textContent).toBe('');
+    expect(screen.queryByTitle('My Athlete layer')).toBeNull();
+    expect(screen.queryByTitle('Team layer')).toBeNull();
   });
 
-  it('defaults to the My Athlete marker when my_athlete is undefined/null (legacy rule)', () => {
+  it('renders NO marker when my_athlete is undefined/null (legacy rule = My Athlete)', () => {
     render(<ClipListItem region={{ id: 'c1', rating: 4, name: 'Clip' }} index={0} isSelected={false} />);
-    const marker = screen.getByTitle('My Athlete layer');
-    expect(marker).toBeTruthy();
-    expect(marker.textContent).toBe('');
+    // The legacy-NULL rule must resolve to the UNMARKED default, never to Team —
+    // a Team marker here would mislabel every pre-T5700 clip.
+    expect(screen.queryByTitle('Team layer')).toBeNull();
+    expect(screen.queryByTitle('My Athlete layer')).toBeNull();
   });
 
   it('renders the Team marker (icon only, accessible name) when my_athlete is false', () => {

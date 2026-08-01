@@ -114,16 +114,24 @@ test.describe('T5700 — mode toggle: new clips land on the selected layer', () 
     await saveEvidence(page, 'criterion-new-clip-team-layer');
   });
 
-  test('My Athlete layer selected -> new clip gets my_athlete=true, MY ATHLETE chip, cyan marker foot', async ({ page }) => {
+  test('My Athlete layer selected -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
     // Explicitly select Team then back to My Athlete to prove the toggle drives it (not just the default).
     await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
     await modeToggle(page).getByRole('radio', { name: 'My Athlete layer' }).click();
     await expect(modeToggle(page).getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
 
+    const teamMarkersBefore = await page.getByTitle('Team layer').count();
+
     const id = await createClipViaUI(page, 1);
     createdIds.push(id);
 
-    await expect(page.getByTitle('My Athlete layer').first()).toBeVisible({ timeout: 5000 });
+    // Only Team rows are marked now, so the layer is proven via the per-clip
+    // editor control (which reflects the just-created, now-selected clip) plus
+    // the absence of any NEW Team marker in the list.
+    await expect(
+      page.locator('[data-clip-details]').getByRole('radio', { name: /^My Athlete layer/ })
+    ).toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
+    expect(await page.getByTitle('Team layer').count()).toBe(teamMarkersBefore);
     await saveEvidence(page, 'criterion-new-clip-my-athlete-layer');
   });
 });
@@ -215,8 +223,11 @@ test.describe('T5700 — filter pills', () => {
   });
 
   test('My Athlete / Team / All filters produce the right row sets', async ({ page }) => {
-    const countMine = async () => page.getByTitle('My Athlete layer').count();
+    // Only Team rows carry a marker now, so My Athlete rows are counted as
+    // "rows without a Team marker" rather than by a marker of their own.
+    const countRows = async () => page.getByTestId('clip-row').count();
     const countTeam = async () => page.getByTitle('Team layer').count();
+    const countMine = async () => (await countRows()) - (await countTeam());
 
     await page.getByRole('button', { name: 'My Athlete', exact: true }).click();
     expect(await countMine()).toBeGreaterThanOrEqual(1);
@@ -224,6 +235,7 @@ test.describe('T5700 — filter pills', () => {
 
     await page.getByRole('button', { name: 'Team', exact: true }).click();
     expect(await countTeam()).toBeGreaterThanOrEqual(1);
+    // Every visible row under the Team filter must be a Team row.
     expect(await countMine()).toBe(0);
 
     await page.getByRole('button', { name: 'All', exact: true }).click();
