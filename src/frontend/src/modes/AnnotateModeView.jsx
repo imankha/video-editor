@@ -104,6 +104,8 @@ export function AnnotateModeView({
   teammateSuggestions = [],
   // T2905: Share annotated playback
   onSharePlayback,
+  // T5700: which layer NEW clips default to (mode toggle)
+  newClipLayerIsMine = true,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -590,6 +592,7 @@ export function AnnotateModeView({
                 isFullscreen={annotateFullscreen}
                 teammateSuggestions={teammateSuggestions}
                 onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
+                newClipLayerIsMine={newClipLayerIsMine}
               />
             )}
 
@@ -660,6 +663,7 @@ export function AnnotateModeView({
                     layout={isLandscape ? 'landscape-inline' : 'inline'}
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
+                    newClipLayerIsMine={newClipLayerIsMine}
                   />
                 </div>
               ) : (
@@ -764,6 +768,7 @@ export function AnnotateModeView({
               isFullscreen={false}
               layout="inline"
               teammateSuggestions={teammateSuggestions}
+              newClipLayerIsMine={newClipLayerIsMine}
             />
           </div>
         )}

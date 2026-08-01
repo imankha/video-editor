@@ -199,6 +199,8 @@ describe('useAnnotateState', () => {
         result.current.setAnnotatePlaybackSpeed(2);
         result.current.setAnnotateFullscreen(true);
         result.current.setAnnotateSelectedLayer('playhead');
+        result.current.setNewClipLayerIsMine(false);
+        result.current.setLayerFilter('team');
       });
 
       expect(result.current.hasAnnotateVideo).toBe(true);
@@ -218,6 +220,9 @@ describe('useAnnotateState', () => {
       expect(result.current.annotateFullscreen).toBe(false);
       expect(result.current.annotateSelectedLayer).toBe('clips');
       expect(result.current.hasAnnotateVideo).toBe(false);
+      // T5700: layer mode toggle + clip-list filter reset to My Athlete / All.
+      expect(result.current.newClipLayerIsMine).toBe(true);
+      expect(result.current.layerFilter).toBe('all');
     });
 
     it('revokes object URL when resetting from file upload', async () => {

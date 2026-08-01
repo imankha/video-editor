@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-07-16 (T4933 landscape sidebar scroll region)
+updated: 2026-08-01 (T5700 team/my-athlete layer)
 ---
 # Annotate — Domain Knowledge
 
@@ -137,6 +137,23 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   (`RecapPlayerModal` `recapVideoMissing`).
 - **Resume position**: `computeResumePosition` prefers `last_playhead_position`, falls back to
   viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
+- **Team / My Athlete layer (T5700).** `raw_clips.my_athlete` (existing bit, no schema change) is
+  now a visible two-value layer: `1`/`NULL` → My Athlete, `0` → Team. Legacy-NULL rule
+  `region.my_athlete ?? true` must be applied at every read site (`LayerSegmentedControl`,
+  `ClipListItem`'s `LayerChip`, `ClipRegionLayer`'s `layerColorFor`/`layerLabelFor`,
+  `ClipsSidePanel`'s filter) — never read `region.my_athlete` bare. Shared component
+  `LayerSegmentedControl.jsx` (`value`/`onChange` boolean, `disabled`/`disabledReason`) is reused by
+  three call sites: `ClipsSidePanel` header (mode toggle, sets the default for NEW clips only —
+  does not retag existing clips), `ClipDetailsEditor` (desktop + mobile per-clip switch, replaced
+  the old on/off toggle), `AnnotateFullscreenOverlay` (mobile add/edit, seeded from the mode toggle
+  on create, from the clip on edit). Imported clips (`shared_by` NOT NULL) render the control
+  **disabled or locked to Team, read-only** — a recipient cannot re-tag someone else's shared clip
+  onto their own My Athlete layer (that layer feeds reels/rankings/collections, T5330 provenance).
+  Mode toggle (`newClipLayerIsMine`) and clip-list filter (`layerFilter`) are ephemeral,
+  screen-owned state in `useAnnotateState.js` — reset **imperatively** in
+  `AnnotateContainer.handleLoadGame` (the game-open gesture), never via a state-watching effect, and
+  are never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
+  a secondary cue (colored border/underline), not a replacement for the rating-hue primary signal.
 
 ## Landmines & history
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is

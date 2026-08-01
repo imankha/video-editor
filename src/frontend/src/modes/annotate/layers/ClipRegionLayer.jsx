@@ -31,6 +31,15 @@ const RATING_COLORS = {
   5: '#66BB6A', // Light Green - Excellent (festive!)
 };
 
+// T5700: layer tint — a secondary cue (colored underline foot), NOT a
+// replacement for the rating hue above, which stays the primary scanning signal.
+const LAYER_COLORS = {
+  mine: '#06b6d4', // cyan-500
+  team: '#f59e0b', // amber-500
+};
+const layerColorFor = (region) => (region.my_athlete === false ? LAYER_COLORS.team : LAYER_COLORS.mine);
+const layerLabelFor = (region) => (region.my_athlete === false ? 'Team' : 'My Athlete');
+
 /**
  * ClipRegionLayer - Timeline layer displaying clip markers with rating notation
  *
@@ -115,6 +124,8 @@ export default function ClipRegionLayer({
           const showTooltip = isSelected || isHovered;
           // Use same fallback logic as ClipListItem
           const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
+          const layerColor = layerColorFor(region);
+          const layerLabel = layerLabelFor(region);
 
           return (
             <div
@@ -144,6 +155,7 @@ export default function ClipRegionLayer({
                     height: isSelected ? '28px' : '20px',
                     backgroundColor: color,
                     border: '1px solid rgba(0,0,0,0.3)',
+                    borderBottom: `3px solid ${layerColor}`,
                     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                   }}
                 />
@@ -162,6 +174,7 @@ export default function ClipRegionLayer({
                   color: '#ffffff',
                   textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                   border: '1px solid rgba(0,0,0,0.3)',
+                  borderBottom: `2px solid ${layerColor}`,
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
               >
@@ -173,6 +186,7 @@ export default function ClipRegionLayer({
                   <span className="text-blue-400">{formatTime(region.endTime)}</span>
                   <span className="text-gray-500 mx-1">|</span>
                   <span className="text-gray-400">{region.index + 1}.</span> {displayName}
+                  <span className={region.my_athlete === false ? 'text-amber-300' : 'text-cyan-300'}> &middot; {layerLabel}</span>
                 </div>
               )}
             </div>

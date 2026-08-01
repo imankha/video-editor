@@ -224,6 +224,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateClipCount,
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
+    // T5700: layer mode toggle (new-clip default) + clip-list layer filter
+    newClipLayerIsMine,
+    setNewClipLayerIsMine,
+    layerFilter,
+    setLayerFilter,
     // Handlers
     handleGameVideoSelect,
     handleLoadGame,
@@ -622,6 +627,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onOverlayClose={handleOverlayClose}
           teammateSuggestions={teammateSuggestions}
           boundaryOffsets={multiVideo?.boundaryOffsets}
+          newClipLayerIsMine={newClipLayerIsMine}
+          onSetNewClipLayer={setNewClipLayerIsMine}
+          layerFilter={layerFilter}
+          onSetLayerFilter={setLayerFilter}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -647,6 +656,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               boundaryOffsets={multiVideo?.boundaryOffsets}
               onSeek={effectiveSeek}
               videoController={videoController}
+              newClipLayerIsMine={newClipLayerIsMine}
+              onSetNewClipLayer={setNewClipLayerIsMine}
+              layerFilter={layerFilter}
+              onSetLayerFilter={setLayerFilter}
               onJumpToClip={(regionId, endTime) => {
                 if (playback?.isPlaybackMode) {
                   playback.seekToClip(regionId);
@@ -756,6 +769,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onLayerSelect={setAnnotateSelectedLayer}
         // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
+        // T5700: which layer NEW clips default to (mode toggle)
+        newClipLayerIsMine={newClipLayerIsMine}
         // T710: Annotation playback
         playback={playback}
         lockScrub={lockScrub}

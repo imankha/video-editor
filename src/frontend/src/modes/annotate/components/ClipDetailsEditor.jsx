@@ -9,6 +9,7 @@ import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
+import { LayerSegmentedControl } from './LayerSegmentedControl';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -162,11 +163,6 @@ export function ClipDetailsEditor({
     onUpdate({ tagged_teammates: newTeammates });
   };
 
-  const handleMyAthleteChange = () => {
-    const current = region.my_athlete ?? true;
-    onUpdate({ my_athlete: !current });
-  };
-
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
   };
@@ -279,25 +275,24 @@ export function ClipDetailsEditor({
           </div>
         )}
 
-        {/* My Athlete Toggle — desktop only */}
-        {!isMobile && (
-          <div className="flex items-center gap-2">
-            <label className="text-gray-400 text-xs w-16 shrink-0">My Athlete</label>
-            <button
-              type="button"
-              onClick={handleMyAthleteChange}
-              className={`relative w-9 h-5 rounded-full transition-colors ${
-                (region.my_athlete ?? true) ? 'bg-cyan-600' : 'bg-gray-600'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                  (region.my_athlete ?? true) ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-        )}
+        {/* Layer — replaces the old My Athlete on/off toggle. Rendered on BOTH
+            mobile-takeover and desktop now (drop the old !isMobile guard): the
+            mobile detail view uses this same editor (ClipsSidePanel.jsx). Locked
+            to Team, read-only, for imported clips (shared_by set) — the My
+            Athlete layer feeds reels/rankings/collections, and promoting
+            someone else's annotation into it would misattribute content and
+            regress T5330 quest-blindness (T5700, epic decision 2). */}
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Layer</label>
+          <LayerSegmentedControl
+            size="sm"
+            value={region.my_athlete ?? true}
+            disabled={!!region.shared_by}
+            disabledReason={region.shared_by ? `Shared by ${region.shared_by} — imported clips stay on the Team layer` : ''}
+            onChange={(mine) => onUpdate({ my_athlete: mine })}
+            className="flex-1"
+          />
+        </div>
 
         {/* Teammates — desktop only */}
         {!isMobile && (
