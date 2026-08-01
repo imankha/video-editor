@@ -413,6 +413,59 @@ def mark_game_share_materialized(
 
 
 # ---------------------------------------------------------------------------
+# Public game-link claims (T5730)
+# ---------------------------------------------------------------------------
+
+def get_share_claim(share_id: int, claimer_user_id: str) -> dict | None:
+    """The existing claim row for (share, claimer), or None (T5730).
+
+    Powers idempotency: a repeat claim resolves to the SAME local game via this
+    row; a re-claim that upgrades game-only -> with-annotations is detected by
+    comparing include_annotations."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, share_id, claimer_user_id, claimer_profile_id,
+                      include_annotations, local_game_id, claimed_at
+               FROM share_claims
+               WHERE share_id = %s AND claimer_user_id = %s""",
+            (share_id, claimer_user_id),
+        )
+        return cur.fetchone()
+
+
+def record_share_claim(
+    share_id: int,
+    claimer_user_id: str,
+    claimer_profile_id: str,
+    include_annotations: bool,
+    local_game_id: int,
+) -> None:
+    """Upsert the per-claimer claim record (T5730).
+
+    Keyed by (share_id, claimer_user_id) so a re-claim updates in place rather
+    than piling up rows. include_annotations is OR-ed: once a claimer imported
+    annotations it stays true even if a later idempotent game-only call arrives.
+    local_game_id is refreshed to the resolved local game."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO share_claims
+               (share_id, claimer_user_id, claimer_profile_id,
+                include_annotations, local_game_id)
+               VALUES (%s, %s, %s, %s, %s)
+               ON CONFLICT (share_id, claimer_user_id) DO UPDATE
+               SET include_annotations =
+                       share_claims.include_annotations OR EXCLUDED.include_annotations,
+                   local_game_id = EXCLUDED.local_game_id,
+                   claimer_profile_id = EXCLUDED.claimer_profile_id,
+                   claimed_at = now()""",
+            (share_id, claimer_user_id, claimer_profile_id,
+             include_annotations, local_game_id),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Pending teammate shares (multi-profile / non-user recipients)
 # ---------------------------------------------------------------------------
 

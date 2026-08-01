@@ -129,6 +129,25 @@ class PublicGameLinkResponse(BaseModel):
     clip_count: int
 
 
+# --- Claim & import (T5730) --------------------------------------------------
+# The frozen claim contract from T5720 §7 / the Dual-Camera epic. `share_token`
+# is carried for the shared identifier but the PATH token is authoritative;
+# `import_annotations` is the consent opt-in (game always, annotations optional);
+# `target_profile_id` is the explicit athlete pick for multi-profile accounts
+# (single-profile accounts omit it).
+class ClaimGameRequest(BaseModel):
+    share_token: str | None = None
+    import_annotations: bool = True
+    target_profile_id: str | None = None
+
+
+class ClaimGameResponse(BaseModel):
+    game_id: int
+    profile_id: str
+    already_claimed: bool
+    imported_annotations: bool
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -591,6 +610,92 @@ async def record_shared_game_view(share_token: str, background_tasks: Background
          "share_type": "game_link"},
     )
     return Response(status_code=204)
+
+
+@shared_router.post("/game/{share_token}/claim", response_model=ClaimGameResponse)
+async def claim_shared_game(
+    share_token: str, body: ClaimGameRequest, request: Request,
+):
+    """Claim a public game link into the caller's account (T5730).
+
+    A signed-in user GESTURE -- never a silent materialize on auth (EPIC decision
+    8). The deferred no-account path completes here after signup, via the import
+    dialog's explicit Confirm. Game is always imported; team annotations are
+    opt-in (`import_annotations`). Multi-profile accounts pick the athlete profile
+    (`target_profile_id`); single-profile accounts omit it.
+
+    Routes through materialize_game_share so the copied game + clips inherit a
+    NON-NULL `shared_by` (T5330 -- onboarding stays blind to imported content).
+    Idempotent: claim twice -> same local game; a re-claim with annotations after a
+    game-only claim adds the Team-layer clips to that same game.
+
+    Errors: 401 (not signed in -- /api/shared is public, so this is enforced
+    here), 404 (unknown / not a game_link), 410 (revoked), 400 (missing/foreign
+    profile), 503 (R2 sync could not be confirmed -- retryable, never a lying 200)."""
+    import asyncio
+
+    from app.services.db_refresh import RefreshFailed
+    from app.services.materialization import claim_game_link
+    from app.services.user_db import get_profiles
+
+    # Auth required. The /api/shared prefix is allowlisted (public resolve), so an
+    # unauthenticated request lands here with no user context -> explicit 401.
+    user_id = _get_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(401, "Sign in to claim this game")
+
+    share = get_game_share_by_token(share_token)
+    if not share or share["share_type"] != "game_link":
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This link is no longer active")
+
+    # Resolve the target profile: explicit pick, or the sole profile for a
+    # single-profile account. A missing pick on a multi-profile account, or a
+    # foreign id, is a loud 400 -- never a silent default into the wrong athlete.
+    profiles = await asyncio.to_thread(get_profiles, user_id)
+    profile_ids = {p["id"] for p in profiles}
+    target = body.target_profile_id
+    if target:
+        if target not in profile_ids:
+            raise HTTPException(400, "Unknown profile")
+    elif len(profiles) == 1:
+        target = profiles[0]["id"]
+    else:
+        raise HTTPException(400, "Choose a profile to import this game into")
+
+    sharer = get_user_by_id(share["sharer_user_id"])
+    sharer_email = sharer["email"] if sharer else share["recipient_email"]
+
+    try:
+        # Blocking R2 I/O (sharer DB pull + recipient materialize/sync) -- offload
+        # so this doesn't serialize the event loop (T6200).
+        result = await asyncio.to_thread(
+            claim_game_link,
+            share=share,
+            claimer_user_id=user_id,
+            claimer_profile_id=target,
+            include_annotations=body.import_annotations,
+            sharer_email=sharer_email,
+        )
+    except RefreshFailed:
+        # A profile DB could not be confirmed current / synced -- retryable, not a
+        # partial success. Mirrors the payments-grant 503 contract.
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "sync_failed",
+                    "message": "Could not import right now, please retry."},
+        )
+
+    return ClaimGameResponse(
+        # profile_id is the profile the game ACTUALLY landed in (claim_game_link
+        # may override the pick on an annotations-upgrade re-claim), so the client
+        # lands on the right profile's recap.
+        game_id=result["game_id"],
+        profile_id=result.get("profile_id") or target,
+        already_claimed=result["already_claimed"],
+        imported_annotations=result["imported_annotations"],
+    )
 
 
 @shared_router.get("/collection/{share_token}")

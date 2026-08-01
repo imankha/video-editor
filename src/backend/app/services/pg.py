@@ -169,6 +169,19 @@ CREATE TABLE IF NOT EXISTS share_games (
 CREATE INDEX IF NOT EXISTS idx_share_games_game ON share_games(game_id);
 CREATE INDEX IF NOT EXISTS idx_share_games_recipient_profile ON share_games(recipient_profile_id);
 
+-- T5730: per-claimer record of a public game-link claim (idempotency + T5740 funnel).
+CREATE TABLE IF NOT EXISTS share_claims (
+    id SERIAL PRIMARY KEY,
+    share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+    claimer_user_id TEXT NOT NULL,
+    claimer_profile_id TEXT,
+    include_annotations BOOLEAN NOT NULL DEFAULT false,
+    local_game_id INTEGER,
+    claimed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_share_claims_unique ON share_claims(share_id, claimer_user_id);
+CREATE INDEX IF NOT EXISTS idx_share_claims_share ON share_claims(share_id);
+
 CREATE TABLE IF NOT EXISTS pending_teammate_shares (
     id SERIAL PRIMARY KEY,
     share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,

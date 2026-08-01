@@ -8,6 +8,7 @@ import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { SharedCollectionView } from './components/SharedCollectionView';
 import { SharedGameView } from './components/SharedGameView';
+import { ClaimGameView } from './components/ClaimGameView';
 import { QuestPanel } from './components/QuestPanel';
 import { TutorialVideoModal } from './components/TutorialVideoModal';
 import { useTutorialStore } from './stores/useTutorialStore';
@@ -377,6 +378,15 @@ function App() {
     return match ? match[1] : null;
   });
 
+  // T5730: Detect /claim/game/:token URL and render the claim & import dialog.
+  // The token is the LAST path segment so it survives a signup reload. Stateful
+  // (with a setter) so the claim view can close itself after import, letting the
+  // app render home + the post-import recap breadcrumb.
+  const [claimGameToken, setClaimGameToken] = useState(() => {
+    const match = window.location.pathname.match(/^\/claim\/game\/([a-f0-9-]+)$/i);
+    return match ? match[1] : null;
+  });
+
   // T1740: Detect /privacy and /terms URLs for public legal pages
   const [legalPage] = useState(() => {
     const path = window.location.pathname;
@@ -395,6 +405,13 @@ function App() {
     window.history.replaceState({}, '', '/');
   }, []);
 
+  // T5730: leave the claim route -> render the app at home (the post-import
+  // recap breadcrumb + tag nudge fire there). setEditorMode owns the URL.
+  const handleCloseClaim = useCallback(() => {
+    setClaimGameToken(null);
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+  }, []);
+
   // T5330b: SharedAnnotationView sets sessionStorage 'shared_annotation_flow' to
   // suppress the onboarding QuestPanel while the recipient is on the /shared/teammate
   // view (kept in sessionStorage so it survives the share->login reload). It has no
@@ -403,11 +420,14 @@ function App() {
   // shared-annotation route. Keyed on "left the shared view" (not merely
   // "authenticated"), so an existing user actively viewing a shared annotation keeps
   // the intended suppression.
+  // T5730: the claim route reuses the SAME flag (ClaimGameView sets it), so keep
+  // the suppression alive while claiming and clear it only once the user is
+  // authenticated AND off both shared routes.
   useEffect(() => {
-    if (isAuthenticated && !teammateShareToken) {
+    if (isAuthenticated && !teammateShareToken && !claimGameToken) {
       sessionStorage.removeItem('shared_annotation_flow');
     }
-  }, [isAuthenticated, teammateShareToken]);
+  }, [isAuthenticated, teammateShareToken, claimGameToken]);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
@@ -726,6 +746,12 @@ function App() {
   // T5720: Public game watch page — team recap only, no auth required
   if (gameShareToken) {
     return <SharedGameView token={gameShareToken} />;
+  }
+
+  // T5730: Claim & import dialog — shown to both signed-out (sign-up CTA) and
+  // signed-in (import dialog) users, so it sits BEFORE the auth wall.
+  if (claimGameToken) {
+    return <ClaimGameView token={claimGameToken} onClose={handleCloseClaim} />;
   }
 
   // T1780: Shared video — public route, no auth required

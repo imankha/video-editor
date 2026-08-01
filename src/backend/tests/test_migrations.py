@@ -129,9 +129,9 @@ class TestTrackImports:
 
     def test_postgres_track(self):
         from app.migrations.postgres import MIGRATIONS, RUNNER
-        assert len(MIGRATIONS) == 20
+        assert len(MIGRATIONS) == 21
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 20
+        assert RUNNER.latest_version == 21
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status
