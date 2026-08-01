@@ -20,6 +20,7 @@ import { buildEarlyGameVideoSrc } from '../../../containers/annotateVideoLoad';
 
 const DEFAULT_PLAYBACK_SPEED = 1;
 const DEFAULT_SELECTED_LAYER = 'clips';
+const DEFAULT_LAYER_FILTER = 'all';
 
 export default function useAnnotateState() {
   // Video state
@@ -62,6 +63,14 @@ export default function useAnnotateState() {
   // UI state
   // NOTE: showAnnotateOverlay removed — now derived from useClipSelection state machine
   const [annotateSelectedLayer, setAnnotateSelectedLayer] = useState(DEFAULT_SELECTED_LAYER);
+
+  // T5700: which raw_clips.my_athlete layer NEW clips land on, and which layer
+  // the clip list is filtered to. Both are ephemeral session view state — never
+  // persisted (no backend write, no store that syncs) — and are reset to their
+  // defaults imperatively on the game-open gesture (AnnotateContainer.handleLoadGame),
+  // not via a state-watching effect.
+  const [newClipLayerIsMine, setNewClipLayerIsMine] = useState(true);
+  const [layerFilter, setLayerFilter] = useState(DEFAULT_LAYER_FILTER);
 
   // Ref for fullscreen container
   const annotateContainerRef = useRef(null);
@@ -138,6 +147,8 @@ export default function useAnnotateState() {
     setAnnotatePlaybackSpeed(DEFAULT_PLAYBACK_SPEED);
     setAnnotateFullscreen(false);
     setAnnotateSelectedLayer(DEFAULT_SELECTED_LAYER);
+    setNewClipLayerIsMine(true);
+    setLayerFilter(DEFAULT_LAYER_FILTER);
   }, [annotateVideoUrl, annotateVideoFile]);
 
   /**
@@ -217,6 +228,12 @@ export default function useAnnotateState() {
     // UI state
     annotateSelectedLayer,
     setAnnotateSelectedLayer,
+
+    // T5700: layer mode toggle (new-clip default) + clip-list layer filter
+    newClipLayerIsMine,
+    setNewClipLayerIsMine,
+    layerFilter,
+    setLayerFilter,
 
     // Refs
     annotateContainerRef,

@@ -84,6 +84,9 @@ def isolated_profile_db(tmp_path):
             game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
             auto_project_id INTEGER,
             video_sequence INTEGER,
+            tagged_teammates BLOB DEFAULT NULL,
+            my_athlete INTEGER DEFAULT 1,
+            shared_by TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE game_videos (
@@ -178,13 +181,16 @@ def _insert_game(db_path, name="Test Game", blake3_hash="abc123", status=None):
 
 
 def _insert_clip(db_path, game_id, rating=5, start=0.0, end=5.0, name="Goal",
-                 auto_project_id=None, tags=None, notes=None):
+                 auto_project_id=None, tags=None, notes=None,
+                 my_athlete=1, shared_by=None, tagged_teammates=None):
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         """INSERT INTO raw_clips (filename, rating, start_time, end_time,
-           game_id, name, auto_project_id, tags, notes)
-           VALUES ('clip.mp4', ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (rating, start, end, game_id, name, auto_project_id, tags, notes),
+           game_id, name, auto_project_id, tags, notes, my_athlete, shared_by,
+           tagged_teammates)
+           VALUES ('clip.mp4', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (rating, start, end, game_id, name, auto_project_id, tags, notes,
+         my_athlete, shared_by, tagged_teammates),
     )
     conn.commit()
     clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]

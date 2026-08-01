@@ -1,7 +1,28 @@
 import React, { useEffect, useRef } from 'react';
-import { Info, Play } from 'lucide-react';
+import { Info, Play, User, Users, Share2 } from 'lucide-react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
+
+/**
+ * LayerChip - icon-only cyan "My Athlete" / amber "Team" marker for a clip-list
+ * row (T5700 follow-up). No visible text at any breakpoint — the accessible
+ * name (title + aria-label) carries the full layer name for screen-reader and
+ * hover users, per locked UX decision (both layers icon-only, no text fallback).
+ */
+function LayerChip({ isMine }) {
+  const label = isMine ? 'My Athlete' : 'Team';
+  const Icon = isMine ? User : Users;
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
+                  ${isMine ? 'bg-cyan-500 text-cyan-950' : 'bg-amber-500 text-amber-950'}`}
+      title={`${label} layer`}
+      aria-label={`${label} layer`}
+    >
+      <Icon size={12} />
+    </span>
+  );
+}
 
 // Format seconds to MM:SS or HH:MM:SS
 const formatTime = (seconds) => {
@@ -83,10 +104,28 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
           {notation}
         </div>
 
-        {/* Clip title + end time */}
-        <div className="flex-1 min-w-0 text-sm text-white truncate" title={tooltipText}>
-          <span className="text-gray-500 mr-1">{index + 1}.</span>
-          {displayName}
+        {/* Layer chip (T5700): fixed left cluster, always visible */}
+        <div className="mr-2 flex-shrink-0">
+          <LayerChip isMine={region.my_athlete ?? true} />
+        </div>
+
+        {/* Clip title + end time (+ "Shared by" attribution on imported clips,
+            desktop only — chip and pill are both shrink-0 so the NAME truncates
+            first, keeping layer identity and provenance visible). */}
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          <span className="min-w-0 flex-1 truncate text-sm text-white" title={tooltipText}>
+            <span className="text-gray-500 mr-1">{index + 1}.</span>
+            {displayName}
+          </span>
+          {!isMobile && region.shared_by && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full
+                         text-[10px] bg-purple-900/40 border border-purple-700/40 text-purple-200"
+              title={`Shared by ${region.shared_by}`}
+            >
+              <Share2 size={9} /> {region.shared_by}
+            </span>
+          )}
         </div>
 
         {/* Desktop: in-match soccer-notation time, right-aligned (T4080) */}
@@ -121,6 +160,16 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
           </div>
         ) : null}
       </div>
+
+      {/* Mobile: "Shared by" drops to a second line (no room inline at 390px);
+          provenance stays visible without crowding the name (T5700). */}
+      {isMobile && region.shared_by && (
+        <div className="px-2 pb-1.5 -mt-1">
+          <span className="text-[10px] text-purple-300 truncate block" title={`Shared by ${region.shared_by}`}>
+            Shared by {region.shared_by}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

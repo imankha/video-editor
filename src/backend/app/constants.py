@@ -280,6 +280,14 @@ class GameCreateStatus(str, Enum):
     CREATED = "created"
 
 
+class RecapLayer(str, Enum):
+    """Per-layer recap split (T5710). Mirrors raw_clips.my_athlete:
+    ATHLETE = (my_athlete = 1 OR my_athlete IS NULL) -- NULL is pre-migration legacy.
+    TEAM = my_athlete = 0 (includes imported clips, shared_by NOT NULL)."""
+    ATHLETE = "athlete"
+    TEAM = "team"
+
+
 # =============================================================================
 # Video Processing Constants
 # =============================================================================

@@ -10,6 +10,7 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
+import { LayerSegmentedControl } from './LayerSegmentedControl';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -109,6 +110,7 @@ export function AnnotateFullscreenOverlay({
   layout = 'overlay',
   teammateSuggestions = [],
   onScrubDragChange,
+  newClipLayerIsMine = true,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
@@ -133,6 +135,11 @@ export function AnnotateFullscreenOverlay({
   // the scrub handles outside ClipScrubRegion's window, hiding them.
   const currentTimeRef = useRef(currentTime);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  // T5700: same pattern — read the mode toggle at transition time without
+  // re-running the reset effect (and wiping an in-progress form) if the user
+  // flips the toggle while the Add Clip form is already open.
+  const newClipLayerIsMineRef = useRef(newClipLayerIsMine);
+  useEffect(() => { newClipLayerIsMineRef.current = newClipLayerIsMine; }, [newClipLayerIsMine]);
 
   const [scrubStartTime, setScrubStartTime] = useState(
     Math.max(0, currentTime - DEFAULT_CLIP_BEFORE)
@@ -174,8 +181,8 @@ export function AnnotateFullscreenOverlay({
       setScrubEndTime(Math.min(t + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
       setNotes('');
       setTaggedTeammates([]);
-      setMyAthlete(true);
-      setCreateProject(DEFAULT_RATING === 5);
+      setMyAthlete(newClipLayerIsMineRef.current);
+      setCreateProject(DEFAULT_RATING === 5 && newClipLayerIsMineRef.current);
       setCreateProjectManuallySet(false);
     }
   }, [existingClip]);
@@ -288,8 +295,8 @@ export function AnnotateFullscreenOverlay({
     setScrubEndTime(Math.min(currentTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
     setNotes('');
     setTaggedTeammates([]);
-    setMyAthlete(true);
-    setCreateProject(DEFAULT_RATING === 5);
+    setMyAthlete(newClipLayerIsMine);
+    setCreateProject(DEFAULT_RATING === 5 && newClipLayerIsMine);
     setCreateProjectManuallySet(false);
     onResume();
   };
@@ -385,33 +392,26 @@ export function AnnotateFullscreenOverlay({
           </div>
         )}
 
-        {/* My Athlete Toggle — desktop only */}
-        {!isMobile && (
-          <div className="mb-4 flex items-center gap-2">
-            <label className="text-gray-400 text-sm">My Athlete</label>
-            <button
-              type="button"
-              onClick={() => {
-                setMyAthlete(prev => {
-                  const next = !prev;
-                  if (!createProjectManuallySet) {
-                    setCreateProject(rating === 5 && next);
-                  }
-                  return next;
-                });
-              }}
-              className={`relative w-9 h-5 rounded-full transition-colors ${
-                myAthlete ? 'bg-cyan-600' : 'bg-gray-600'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                  myAthlete ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-        )}
+        {/* Layer — replaces the old My Athlete on/off toggle. Shown on mobile
+            too: this overlay IS the mobile add/edit surface. Locked to Team,
+            read-only, for imported clips (shared_by set) — they can never be
+            promoted onto the My Athlete layer (T5700, epic decision 2). */}
+        <div className="mb-4">
+          <label className="block text-gray-400 text-sm mb-2">Layer</label>
+          <LayerSegmentedControl
+            size={isMobile ? 'md' : 'sm'}
+            value={myAthlete}
+            disabled={!!existingClip?.shared_by}
+            disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+            onChange={(mine) => {
+              setMyAthlete(mine);
+              if (!createProjectManuallySet) {
+                setCreateProject(rating === 5 && mine);
+              }
+            }}
+            className="w-full"
+          />
+        </div>
 
         {/* Teammates — desktop only */}
         {!isMobile && (

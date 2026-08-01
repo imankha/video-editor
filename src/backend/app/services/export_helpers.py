@@ -17,11 +17,10 @@ Usage:
     )
 """
 
-import json
 import logging
 import re
 
-from app.constants import ExportPhase, ExportStatus
+from app.constants import ExportPhase, ExportStatus, RecapLayer
 from app.database import get_db_connection
 from app.utils.encoding import decode_data, encode_data
 from app.websocket import export_progress, make_progress_data, manager
@@ -469,17 +468,24 @@ def source_confirmed_unavailable(clip: dict) -> bool:
         return False
 
     game_id = clip.get('game_id')
-    return not (game_id and file_exists_in_r2(user_id, f"recaps/{game_id}.mp4"))
+    if not game_id:
+        return True
+    # T5710: a clip may be resolvable from EITHER per-layer recap (the athlete
+    # `.mp4` or the `_team.mp4`) -- see _resolve_recap_source below.
+    return not (
+        file_exists_in_r2(user_id, f"recaps/{game_id}.mp4")
+        or file_exists_in_r2(user_id, f"recaps/{game_id}_team.mp4")
+    )
 
 
 def _resolve_recap_source(clip: dict):
     """Resolve a clip to its surviving recap segment (T4140).
 
-    The recap (recaps/{game_id}.mp4) is a full-quality re-edit master that
-    outlives the game video (auto_export._generate_recap). Its per-clip mapping
-    recaps/{game_id}_clips.json keys each clip's frozen recap_start/recap_end by
-    the RAW clip id (a recap entry's 'id' is the raw_clips.id — see games.py
-    _compute_recap_clips). Returns:
+    The recap (recaps/{game_id}.mp4 / recaps/{game_id}_team.mp4) is a
+    full-quality re-edit master that outlives the game video
+    (auto_export._generate_recap). Its per-clip mapping keys each clip's frozen
+    recap_start/recap_end by the RAW clip id (a recap entry's 'id' is the
+    raw_clips.id — see games.py _compute_recap_clips). Returns:
 
       (recap_url, recap_start, recap_end, flexible=False)   # frozen bounds
 
@@ -487,11 +493,14 @@ def _resolve_recap_source(clip: dict):
     when the game_id, the recap mapping, the matching entry, or the recap object
     is missing. No silent fallback (CLAUDE.md): a missing recap fails visibly
     rather than pretending a source exists.
-    """
-    import tempfile
-    from pathlib import Path
 
-    from app.storage import download_from_r2, generate_presigned_url
+    T5710: searches BOTH per-layer recaps (athlete/legacy-mixed key first, then
+    team) — a clip may belong to either layer, and the auto-export write-order
+    invariant (team stitched before the shared legacy key is overwritten
+    athlete-pure) means either recap may hold this clip's segment.
+    """
+    from app.services.auto_export import load_recap_mapping, recap_r2_keys
+    from app.storage import generate_presigned_url
     from app.user_context import get_current_user_id
 
     game_id = clip.get('game_id')
@@ -506,25 +515,21 @@ def _resolve_recap_source(clip: dict):
 
     user_id = get_current_user_id()
 
-    with tempfile.TemporaryDirectory() as tmp:
-        local_path = Path(tmp) / "clips.json"
-        if not download_from_r2(user_id, f"recaps/{game_id}_clips.json", local_path):
-            return None
-        with open(local_path) as f:
-            mapping = json.load(f)
-
-    entry = next((e for e in mapping if e.get('id') == raw_clip_id), None)
-    if entry is None:
-        return None
-    recap_start = entry.get('recap_start')
-    recap_end = entry.get('recap_end')
-    if recap_start is None or recap_end is None:
-        return None
-
-    recap_url = generate_presigned_url(user_id, f"recaps/{game_id}.mp4")
-    if not recap_url:
-        return None
-    return (recap_url, float(recap_start), float(recap_end), False)
+    for candidate_layer in (None, RecapLayer.TEAM):
+        recap_key, mapping_key = recap_r2_keys(game_id, candidate_layer)
+        _layer, mapping = load_recap_mapping(user_id, mapping_key)
+        entry = next((e for e in mapping if e.get('id') == raw_clip_id), None)
+        if entry is None:
+            continue
+        recap_start = entry.get('recap_start')
+        recap_end = entry.get('recap_end')
+        if recap_start is None or recap_end is None:
+            continue
+        recap_url = generate_presigned_url(user_id, recap_key)
+        if not recap_url:
+            continue
+        return (recap_url, float(recap_start), float(recap_end), False)
+    return None
 
 
 def resolve_clip_source(clip: dict) -> tuple:

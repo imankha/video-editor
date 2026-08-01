@@ -4,8 +4,21 @@ import { Button } from '../../../components/shared/Button';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
+import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 import { clipGameClock } from '../../../utils/timeFormat';
+
+// T5700: clip-list layer filter — ephemeral, screen-owned, reset on game open.
+const LAYER_FILTER_OPTIONS = [
+  { value: 'all', label: 'All', activeCls: 'bg-gray-600 text-white' },
+  { value: 'mine', label: 'My Athlete', activeCls: 'bg-cyan-600 text-white' },
+  { value: 'team', label: 'Team', activeCls: 'bg-amber-600 text-white' },
+];
+
+const EMPTY_FILTER_COPY = {
+  mine: 'No My Athlete clips',
+  team: 'No Team clips',
+};
 
 /**
  * ClipsSidePanel - Left sidebar for managing clip regions in Annotate mode
@@ -40,8 +53,18 @@ export function ClipsSidePanel({
   onOverlayClose,
   teammateSuggestions = [],
   boundaryOffsets,
+  newClipLayerIsMine = true,
+  onSetNewClipLayer,
+  layerFilter = 'all',
+  onSetLayerFilter,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
+
+  // T5700: client-side layer filter for the list only — never mutates data or
+  // hits the backend. Timeline markers and selection are unaffected.
+  const filteredRegions = layerFilter === 'all'
+    ? clipRegions
+    : clipRegions.filter(r => (layerFilter === 'mine' ? (r.my_athlete ?? true) : r.my_athlete === false));
   const fileInputRef = useRef(null);
   const [importErrors, setImportErrors] = useState(null);
   const [importSuccess, setImportSuccess] = useState(null);
@@ -151,7 +174,42 @@ export function ClipsSidePanel({
               <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Clips</h2>
               <span className="ml-auto text-xs text-gray-500">{clipCount}</span>
             </div>
-            <p className="text-xs text-gray-500 mb-3">Click timeline to add clip</p>
+            <p className="text-xs text-gray-500 mb-2">Click timeline to add clip</p>
+
+            {/* Surface (a): tagging-mode toggle — which layer NEW clips land on.
+                Ephemeral, sticky within the game session, never persisted. */}
+            <div className="mb-3">
+              <span className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
+                New clips go to:
+              </span>
+              <LayerSegmentedControl
+                size="sm"
+                value={newClipLayerIsMine}
+                onChange={onSetNewClipLayer}
+                className="w-full"
+                ariaLabel="New clips go to"
+              />
+            </div>
+
+            {/* Surface (e): clip-list layer filter — client-side only, ephemeral. */}
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Show</span>
+              {LAYER_FILTER_OPTIONS.map(({ value, label, activeCls }) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={layerFilter === value}
+                  onClick={() => onSetLayerFilter?.(value)}
+                  className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                    layerFilter === value
+                      ? activeCls
+                      : 'bg-gray-700/50 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
             {/* Import/Export - desktop only, dev only */}
             {!isMobile && !import.meta.env.PROD && (
@@ -235,10 +293,14 @@ export function ClipsSidePanel({
               <div className="p-4 text-gray-500 text-sm text-center">
                 No clips yet
               </div>
+            ) : filteredRegions.length === 0 ? (
+              <div className="p-4 text-gray-500 text-sm text-center">
+                {EMPTY_FILTER_COPY[layerFilter] || 'No clips match this filter'}
+              </div>
             ) : (
               // Sort by in-match start time so the list matches the timeline and
               // the in-game-time ordering of Reel Drafts / My Reels (T4080).
-              [...clipRegions].sort((a, b) => {
+              [...filteredRegions].sort((a, b) => {
                 const seqA = a.videoSequence ?? 1;
                 const seqB = b.videoSequence ?? 1;
                 if (seqA !== seqB) return seqA - seqB;
@@ -295,6 +357,7 @@ export function ClipsSidePanel({
               videoController={videoController}
               layout="inline"
               teammateSuggestions={teammateSuggestions}
+              newClipLayerIsMine={newClipLayerIsMine}
             />
           )}
         </>

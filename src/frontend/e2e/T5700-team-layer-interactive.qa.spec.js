@@ -1,0 +1,434 @@
+import { test, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// e2e -> frontend -> src -> repo root -> user_data
+const USER_DATA_BASE = path.resolve(__dirname, '..', '..', '..', 'user_data');
+
+/**
+ * T5700 — Team / My Athlete layer in Annotate: interactive REAL-BROWSER QA.
+ *
+ * Drives the REAL account (imankh@gmail.com, game 6 — active storage, real
+ * video, 32 real annotated clips, all starting after t=100s) via dev-login.
+ * Every test that CREATES a clip deletes it via the API in afterEach through
+ * `context.request` (SAME cookie jar as the logged-in browser context — the
+ * bare `request` fixture is a separate, unauthenticated context and silently
+ * 401s on cleanup, which is a real data-safety hazard: confirmed by hand
+ * after the first run of this spec left two stray clips in the account,
+ * cleaned up manually). A failed cleanup now THROWS (loud, not swallowed).
+ * Read-only tests (toggle default/reset, filter pills text, marker tint)
+ * touch nothing.
+ *
+ * Run: bash scripts/dev-verify.sh e2e/T5700-team-layer-interactive.qa.spec.js
+ */
+
+const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
+const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
+const GAME_ID = Number(process.env.E2E_GAME_ID || 6);
+const apiBase = process.env.E2E_API_BASE || '/api';
+
+test.use({ viewport: { width: 1280, height: 800 } });
+
+async function gotoGame(page) {
+  await openGameInAnnotate(page, GAME_ID);
+  await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
+}
+
+function modeToggle(page) {
+  return page.getByText('New clips go to:').locator('..').getByRole('radiogroup');
+}
+
+/**
+ * Seek to `seekTime` (a spot far from any real clip's [100s, 5200s] range AND
+ * from any clip this test itself just created) and make sure "Add Clip" is
+ * actually showing — the app may land the resume position (or the playhead
+ * leaving a just-created clip) inside a clip's range and auto-select it
+ * instead, which hides "Add Clip" behind "Edit Clip"/the details editor.
+ */
+async function ensureAddClipVisible(page, seekTime) {
+  await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; if (!v.paused) v.pause(); }, seekTime);
+  await page.waitForTimeout(500);
+  // Desktop renders a labeled "Add Clip" button (hidden sm:flex); below the
+  // `sm` breakpoint AnnotateControls swaps in an icon-only twin with the same
+  // title (flex sm:hidden) — match on title + :visible so either width works.
+  const addBtn = page.locator('button[title="Add clip ending at current time (A)"]:visible').first();
+  if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) return addBtn;
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(500);
+  await expect(addBtn).toBeVisible({ timeout: 10000 });
+  return addBtn;
+}
+
+/** Click Add Clip, Save immediately (defaults only). Returns the created raw_clip_id. */
+async function createClipViaUI(page, seekTime) {
+  const addBtn = await ensureAddClipVisible(page, seekTime);
+  await addBtn.click();
+  // The desktop ClipsSidePanel stays mounted (`hidden sm:flex`) even on a
+  // mobile viewport, so its own inline add-clip form also renders — scope to
+  // the VISIBLE [data-add-clip-form] only (mobile's inline form, or desktop's).
+  const form = page.locator('[data-add-clip-form]:visible');
+  await expect(form).toBeVisible({ timeout: 5000 });
+
+  const [saveResp] = await Promise.all([
+    page.waitForResponse((res) => res.url().includes('/api/clips/raw/save') && res.request().method() === 'POST'),
+    form.locator('button.bg-green-600:has-text("Save")').click(),
+  ]);
+  const body = await saveResp.json();
+  return body.raw_clip_id;
+}
+
+/** Uses context.request — the SAME cookie jar as loginAsRealUser — never the bare `request` fixture. */
+async function deleteClip(context, rawClipId) {
+  if (!rawClipId) return;
+  const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
+  if (!res.ok()) {
+    throw new Error(`[T5700 cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
+  }
+}
+
+test.describe('T5700 — mode toggle: new clips land on the selected layer', () => {
+  let createdIds = [];
+
+  test.beforeEach(async ({ context, page }) => {
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+    await gotoGame(page);
+    createdIds = [];
+  });
+
+  test.afterEach(async ({ context }) => {
+    for (const id of createdIds) await deleteClip(context, id);
+  });
+
+  test('Team layer selected -> new clip gets my_athlete=false, TEAM chip, amber marker foot', async ({ page }) => {
+    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
+    await expect(modeToggle(page).getByRole('radio', { name: 'Team layer' })).toHaveAttribute('aria-checked', 'true');
+
+    const id = await createClipViaUI(page, 1);
+    createdIds.push(id);
+
+    await expect(page.getByTitle('Team layer').first()).toBeVisible({ timeout: 5000 });
+    await saveEvidence(page, 'criterion-new-clip-team-layer');
+  });
+
+  test('My Athlete layer selected -> new clip gets my_athlete=true, MY ATHLETE chip, cyan marker foot', async ({ page }) => {
+    // Explicitly select Team then back to My Athlete to prove the toggle drives it (not just the default).
+    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
+    await modeToggle(page).getByRole('radio', { name: 'My Athlete layer' }).click();
+    await expect(modeToggle(page).getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+
+    const id = await createClipViaUI(page, 1);
+    createdIds.push(id);
+
+    await expect(page.getByTitle('My Athlete layer').first()).toBeVisible({ timeout: 5000 });
+    await saveEvidence(page, 'criterion-new-clip-my-athlete-layer');
+  });
+});
+
+test.describe('T5700 — toggle + filter reset on game open (ephemeral, never persisted)', () => {
+  test.beforeEach(async ({ context }) => {
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+  });
+
+  test('setting Team then reopening the SAME game resets to My Athlete / All, with zero writes from the toggle itself', async ({ page }) => {
+    await gotoGame(page);
+
+    const writeRequests = [];
+    page.on('request', (req) => {
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method())) writeRequests.push(`${req.method()} ${req.url()}`);
+    });
+
+    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
+    await expect(modeToggle(page).getByRole('radio', { name: 'Team layer' })).toHaveAttribute('aria-checked', 'true');
+    // Flip the filter pill too — same ephemeral rule.
+    await page.getByRole('button', { name: 'Team', exact: true }).click();
+
+    // Toggling + filtering must never write anything.
+    expect(writeRequests, `Unexpected write request(s) from toggling: ${writeRequests.join(', ')}`).toHaveLength(0);
+
+    // No localStorage write for the layer state either.
+    const layerKeysInStorage = await page.evaluate(() =>
+      Object.keys(localStorage).filter((k) => /layer|myAthlete|my_athlete/i.test(k))
+    );
+    expect(layerKeysInStorage).toHaveLength(0);
+
+    // Leave the game (back to Games list), then reopen the SAME game.
+    await page.goto('/');
+    await gotoGame(page);
+
+    await expect(modeToggle(page).getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await saveEvidence(page, 'criterion-toggle-resets-on-reopen');
+  });
+});
+
+test.describe('T5700 — per-clip switch: gesture-based surgical save + survives reload', () => {
+  let clipId;
+
+  test.beforeEach(async ({ context, page }) => {
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+    await gotoGame(page);
+    clipId = await createClipViaUI(page, 1); // defaults to My Athlete (toggle default on fresh game open)
+  });
+
+  test.afterEach(async ({ context }) => {
+    await deleteClip(context, clipId);
+  });
+
+  test('switching a clip to Team sends ONLY {my_athlete:false} and persists across reload', async ({ page }) => {
+    const editor = page.locator('[data-clip-details]');
+    await expect(editor).toBeVisible({ timeout: 5000 });
+    await expect(editor.getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+
+    const [putReq] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
+      editor.getByRole('radio', { name: 'Team layer' }).click(),
+    ]);
+    const putBody = putReq.postDataJSON();
+    expect(putBody).toEqual({ my_athlete: false });
+
+    await page.reload();
+    await gotoGame(page);
+    await expect(page.locator('[data-clip-details]').getByRole('radio', { name: 'Team layer' }))
+      .toHaveAttribute('aria-checked', 'true', { timeout: 10000 });
+    await saveEvidence(page, 'criterion-per-clip-switch-persists');
+  });
+});
+
+test.describe('T5700 — filter pills', () => {
+  let mineId, teamId;
+
+  test.beforeEach(async ({ context, page }) => {
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+    await gotoGame(page);
+    mineId = await createClipViaUI(page, 1); // My Athlete default on fresh open
+    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
+    teamId = await createClipViaUI(page, 60); // spaced 60s apart so it lands outside the first clip's [~-9,+3]s span
+  });
+
+  test.afterEach(async ({ context }) => {
+    await deleteClip(context, mineId);
+    await deleteClip(context, teamId);
+  });
+
+  test('My Athlete / Team / All filters produce the right row sets', async ({ page }) => {
+    const countMine = async () => page.getByTitle('My Athlete layer').count();
+    const countTeam = async () => page.getByTitle('Team layer').count();
+
+    await page.getByRole('button', { name: 'My Athlete', exact: true }).click();
+    expect(await countMine()).toBeGreaterThanOrEqual(1);
+    expect(await countTeam()).toBe(0);
+
+    await page.getByRole('button', { name: 'Team', exact: true }).click();
+    expect(await countTeam()).toBeGreaterThanOrEqual(1);
+    expect(await countMine()).toBe(0);
+
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    expect(await countMine()).toBeGreaterThanOrEqual(1);
+    expect(await countTeam()).toBeGreaterThanOrEqual(1);
+    await saveEvidence(page, 'criterion-filter-pills');
+  });
+});
+
+const SEED_SHARED_BY_SCRIPT = `
+import sqlite3, sys
+db_path, clip_id, shared_by = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+conn = sqlite3.connect(db_path)
+conn.execute("UPDATE raw_clips SET my_athlete = 0, shared_by = ? WHERE id = ?", (shared_by, clip_id))
+conn.commit()
+conn.close()
+`;
+
+test.describe('T5700 — imported clip: layer control locked, no request sent', () => {
+  let clipId;
+  let userId;
+
+  test.beforeEach(async ({ context, page }) => {
+    const loginData = await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+    userId = loginData.user_id;
+    await gotoGame(page);
+    clipId = await createClipViaUI(page, 1);
+
+    // No live UI path exists yet to create a genuinely materialized imported
+    // clip — `shared_by` is written exclusively by materialization.py's claim
+    // flow, which ships in T5720/T5730 (later tasks in this epic). Seed the
+    // EXACT data shape directly on this disposable test clip (deleted in
+    // afterEach) so the UI contract can be proven end-to-end against a real
+    // running app instead of only at the component-test level.
+    const dbPath = path.join(USER_DATA_BASE, userId, 'profiles', PROFILE_ID, 'profile.sqlite');
+    execFileSync('python3', ['-c', SEED_SHARED_BY_SCRIPT, dbPath, String(clipId), 'Dana Smith']);
+
+    await page.reload();
+    await gotoGame(page);
+  });
+
+  test.afterEach(async ({ context }) => {
+    await deleteClip(context, clipId);
+  });
+
+  test("the imported clip's Layer control is locked to Team, and clicking it sends NO request", async ({ page }) => {
+    // Select the freshly-imported clip via its unique "Shared by" attribution pill.
+    await page.locator('[title="Shared by Dana Smith"]').first().click();
+    const editor = page.locator('[data-clip-details]');
+    await expect(editor).toBeVisible({ timeout: 5000 });
+
+    const mine = editor.getByRole('radio', { name: /^My Athlete layer/ });
+    const team = editor.getByRole('radio', { name: /^Team layer/ });
+    await expect(mine).toBeDisabled();
+    await expect(team).toBeDisabled();
+    await expect(team).toHaveAttribute('aria-checked', 'true');
+    await expect(editor).toContainText('Dana Smith');
+
+    const writeRequests = [];
+    page.on('request', (req) => {
+      if (req.url().includes(`/clips/raw/${clipId}`) && ['PUT', 'POST', 'PATCH'].includes(req.method())) {
+        writeRequests.push(`${req.method()} ${req.url()}`);
+      }
+    });
+    // force:true bypasses Playwright's actionability check (which would
+    // itself refuse to click a disabled element) — the point is to prove the
+    // APPLICATION ignores the click, not that Playwright is polite about it.
+    await mine.click({ force: true });
+    await page.waitForTimeout(1000);
+    expect(writeRequests, `Unexpected write request(s) from clicking the locked control: ${writeRequests.join(', ')}`).toHaveLength(0);
+    // The UI itself never flips either — still locked to Team.
+    await expect(team).toHaveAttribute('aria-checked', 'true');
+
+    await saveEvidence(page, 'criterion-imported-clip-locked');
+  });
+});
+
+test.describe('T5700 — mobile (390px): create on both layers', () => {
+  let createdIds = [];
+
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test.beforeEach(async ({ context, page }) => {
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+    await gotoGame(page);
+    createdIds = [];
+  });
+
+  test.afterEach(async ({ context }) => {
+    for (const id of createdIds) await deleteClip(context, id);
+  });
+
+  test('mobile Add Clip flow shows the Layer control and saves on the toggled layer', async ({ page }) => {
+    // Below the `sm` breakpoint the desktop ClipsSidePanel is `hidden sm:flex`;
+    // the mode toggle only becomes reachable via the mobile sidebar drawer —
+    // and the drawer overlay must be closed again (its backdrop covers the
+    // whole screen) before "Add Clip" underneath is clickable.
+    await page.locator('button[title="Show clips"]').click();
+    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
+    await page.locator('.fixed.inset-0.z-50').locator('button:has(svg.lucide-x)').click(); // drawer's X close button
+
+    const id = await createClipViaUI(page, 1);
+    createdIds.push(id);
+
+    // The clip-list chip lives in the mobile sidebar drawer, which is closed
+    // right now (closed above to reach "Add Clip") — reopen it to see the row.
+    await page.locator('button[title="Show clips"]').click();
+    // The CSS-hidden desktop sidebar (`hidden sm:flex`) stays mounted and
+    // renders its own chip too — scope to the :visible one.
+    await expect(page.locator('[title="Team layer"]:visible').first()).toBeVisible({ timeout: 5000 });
+    await assertNoHorizontalOverflow(page);
+    await saveEvidence(page, 'criterion-mobile-390-create-team-layer');
+  });
+});
+
+const SEED_LONG_NAME_SHARED_SCRIPT = `
+import sqlite3, sys
+db_path, clip_id, name, shared_by = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+conn = sqlite3.connect(db_path)
+conn.execute("UPDATE raw_clips SET my_athlete = 0, shared_by = ?, name = ? WHERE id = ?", (shared_by, name, clip_id))
+conn.commit()
+conn.close()
+`;
+
+const LONG_CLIP_NAME = 'Incredible give-and-go through the midfield ending in a screamer from outside the box';
+
+test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long name, real app)', () => {
+  // Supersedes the earlier dev-only /clipsdiag.html harness + its Playwright
+  // spec: that harness rendered a synthetic ClipListItem outside the real app
+  // (fine for proving Tailwind classes, but not real coverage). Proving
+  // truncation against the REAL ClipsSidePanel/ClipListItem, with a clip
+  // seeded via the same DB-write pattern already used above for `shared_by`,
+  // is strictly stronger evidence and needs no throwaway page.
+  let clipId;
+  let userId;
+
+  test.beforeEach(async ({ context, page }) => {
+    const loginData = await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+    userId = loginData.user_id;
+    await gotoGame(page);
+    clipId = await createClipViaUI(page, 1);
+
+    const dbPath = path.join(USER_DATA_BASE, userId, 'profiles', PROFILE_ID, 'profile.sqlite');
+    execFileSync('python3', ['-c', SEED_LONG_NAME_SHARED_SCRIPT, dbPath, String(clipId), LONG_CLIP_NAME, 'Dana Smith']);
+
+    await page.reload();
+    await gotoGame(page);
+  });
+
+  test.afterEach(async ({ context }) => {
+    await deleteClip(context, clipId);
+  });
+
+  function nameOverflow(row) {
+    return row.evaluate((el) => {
+      const nameSpan = [...el.querySelectorAll('span')].find((s) => s.textContent.includes('Incredible give-and-go'));
+      return nameSpan ? nameSpan.scrollWidth > nameSpan.clientWidth : null;
+    });
+  }
+
+  test('desktop (352px sidebar): chip + inline Shared-by pill stay fully visible; the NAME truncates', async ({ page }) => {
+    const chip = page.locator('[title="Team layer"]:visible').first();
+    const sharedPill = page.locator('[title="Shared by Dana Smith"]:visible').first();
+    await expect(chip).toBeVisible();
+    await expect(sharedPill).toBeVisible();
+
+    const row = page.locator('div.flex.items-center.px-2', { has: sharedPill });
+    expect(await nameOverflow(row)).toBe(true);
+
+    await assertNoHorizontalOverflow(page);
+    await saveEvidence(page, 'criterion-long-name-imported-clip-desktop-352');
+  });
+
+  test('mobile (390px viewport): chip stays visible, name truncates, "Shared by" drops to a readable second line', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.locator('button[title="Show clips"]').click();
+
+    const chip = page.locator('[title="Team layer"]:visible').first();
+    await expect(chip).toBeVisible();
+    // The desktop inline PILL (rounded-full "Shared by" badge) is scoped
+    // `!isMobile` in ClipListItem — it must NOT render on the mobile row.
+    await expect(page.locator('.rounded-full[title="Shared by Dana Smith"]:visible')).toHaveCount(0);
+    const attribution = page.getByText('Shared by Dana Smith').locator('visible=true').first();
+    await expect(attribution).toBeVisible();
+    await expect(attribution).not.toHaveClass(/rounded-full/);
+
+    // Scope by the seeded clip's own (unique) name text rather than `has: chip` —
+    // the account has other real Team-layer clips too, so filtering on the Team
+    // marker alone is ambiguous once more than one exists (pre-existing latent
+    // bug, unmasked once the earlier stray-clip flake below was cleaned up).
+    const row = page.locator('div.flex.items-center.px-2:visible', { hasText: 'Incredible give-and-go' });
+    expect(await nameOverflow(row)).toBe(true);
+
+    await assertNoHorizontalOverflow(page);
+    await saveEvidence(page, 'criterion-long-name-imported-clip-mobile-390');
+  });
+});
+
+test.describe('T5700 — responsive sweep', () => {
+  test.beforeEach(async ({ context }) => {
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
+  });
+
+  test('Annotate screen: no horizontal overflow at 375px or desktop', async ({ page }) => {
+    await gotoGame(page);
+    await responsiveSweep(page);
+  });
+});

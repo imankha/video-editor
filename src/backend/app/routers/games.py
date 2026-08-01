@@ -36,7 +36,6 @@ from app.services.auth_db import (
 from app.services.credit_ledger import CreditsUnavailable, deduct_credits
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
 from app.storage import (
-    download_from_r2,
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
@@ -1093,26 +1092,13 @@ async def get_recap_url(game_id: int):
     return {"url": url}
 
 
-def _try_load_recap_mapping(user_id: str, game_id: int):
-    """Try loading stored clip mapping JSON from R2. Returns list or None."""
-    import tempfile
-    from pathlib import Path
-
-    with tempfile.TemporaryDirectory() as tmp:
-        local_path = Path(tmp) / "clips.json"
-        if not download_from_r2(user_id, f"recaps/{game_id}_clips.json", local_path):
-            return None
-        with open(local_path) as f:
-            return json.load(f)
-
-
-def _compute_recap_clips(game_id: int):
+def _compute_recap_clips(game_id: int, layer: str | None = None):
     """Compute recap clip positions from DB by summing durations in concat order."""
     from collections import defaultdict
 
     from app.services.auto_export import _get_annotated_clips
 
-    clips = _get_annotated_clips(game_id)
+    clips = _get_annotated_clips(game_id, layer)
     clips_by_hash = defaultdict(list)
     for clip in clips:
         clips_by_hash[clip['video_hash']].append(clip)
@@ -1135,7 +1121,7 @@ def _compute_recap_clips(game_id: int):
     return result
 
 
-def _compute_game_clips(game_id: int):
+def _compute_game_clips(game_id: int, layer: str | None = None):
     """Clips with timestamps relative to the GAME video (not a stitched recap).
 
     Field names mirror _compute_recap_clips (recap_start / recap_end) because the
@@ -1146,7 +1132,7 @@ def _compute_game_clips(game_id: int):
     from app.services.auto_export import _get_annotated_clips
 
     result = []
-    for clip in _get_annotated_clips(game_id):
+    for clip in _get_annotated_clips(game_id, layer):
         if clip['start_time'] is None or clip['end_time'] is None:
             continue
         result.append({
@@ -1162,22 +1148,51 @@ def _compute_game_clips(game_id: int):
 
 
 @router.get("/{game_id:int}/recap-data")
-async def get_recap_data(game_id: int):
-    """Get a playable video URL + clip timeline for the recap / annotation viewer.
+async def get_recap_data(game_id: int, layer: str = "athlete"):
+    """Get a playable video URL + clip timeline for the per-layer recap viewer
+    (T5710): Team Recap (`layer=team`) or {Athlete} Recap (`layer=athlete`,
+    default — NULL/pre-migration `my_athlete` is legacy-athlete).
 
-    Resolution order (robust for expired in-grace games whose stitched recap may
-    never have existed):
-      1. Stitched recap exists in R2  -> recap url + recap-relative clips.
-      2. Else game video exists in R2 -> game video url + game-relative clips.
-      3. Else (post-grace hard-delete) -> url=None + clips so the modal lists them.
+    Resolution order per layer (full rationale:
+    docs/plans/tasks/team-game-share/T5710-design.md):
+      0. Layer has ZERO live rated clips -> explicit empty state. Never a
+         silent fallback to the other layer, never an empty stitched video.
+      1. A per-layer STITCHED recap exists (its mapping is stamped for THIS
+         layer) -> that recap's url + its frozen, layer-pure mapping.
+      2. Else the GAME VIDEO still exists -> game url + a LIVE layer-filtered,
+         game-relative clip list (always correct, works pre-stitch too).
+      3. Else a LEGACY (pre-T5710, unstamped) mixed recap survives:
+         a. its mapping resolves against live raw_clips -> seek-filtered to
+            this layer (may resolve to zero entries — a legitimate "nothing of
+            this layer in this old artifact" result, video_kind='recap_legacy').
+         b. the mapping is missing, or NONE of its clip ids resolve at all ->
+            offsets are unrecoverable; degrade to a single COMBINED entry that
+            plays the whole legacy file, honestly labelled as the old
+            pre-team-layer recap (video_kind='recap_legacy_combined',
+            clips=[]) — an explicit state, NEVER presented under either
+            per-layer label.
+      4. Nothing playable survives for this layer -> url=None + the layer's
+         live clip list (names only, so the modal still lists them).
 
     Only 404s when the game row itself is missing. video_kind tells the client
-    which source was chosen ('recap' | 'game' | None).
+    which source was chosen: 'recap' | 'game' | 'recap_legacy' |
+    'recap_legacy_combined' | None.
     """
+    from app.constants import RecapLayer
+    from app.services.auto_export import (
+        _get_annotated_clips,
+        clip_matches_layer,
+        load_recap_mapping,
+        recap_r2_keys,
+    )
+
+    if layer not in (RecapLayer.ATHLETE.value, RecapLayer.TEAM.value):
+        raise HTTPException(status_code=400, detail=f"Invalid layer: {layer!r}")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         game = cursor.execute(
-            "SELECT blake3_hash, video_filename, recap_video_url FROM games WHERE id = ?",
+            "SELECT blake3_hash, video_filename FROM games WHERE id = ?",
             (game_id,),
         ).fetchone()
 
@@ -1185,30 +1200,76 @@ async def get_recap_data(game_id: int):
         raise HTTPException(status_code=404, detail="Game not found")
 
     user_id = get_current_user_id()
-    recap_key = game['recap_video_url']
     blake3 = game['blake3_hash']
     game_video_key = f"games/{blake3}.mp4" if blake3 else None
-
-    recap_exists = bool(recap_key) and file_exists_in_r2(user_id, recap_key)
     game_video_exists = bool(game_video_key) and (r2_head_object_global(game_video_key) is not None)
 
-    if recap_exists:
-        url = generate_presigned_url(user_id, recap_key, expires_in=14400)
-        clips = _try_load_recap_mapping(user_id, game_id)
-        if clips is None:
-            clips = _compute_recap_clips(game_id)
+    # 0. Empty-layer guard, based on LIVE clips, checked before any artifact I/O.
+    if not _get_annotated_clips(game_id, layer):
+        logger.info(f"[recap-data] game={game_id} layer={layer} -> empty (no live clips)")
+        return {"url": None, "clips": [], "video_kind": None, "empty": True}
+
+    layer_recap_key, layer_mapping_key = recap_r2_keys(game_id, layer)
+    layer_recap_exists = file_exists_in_r2(user_id, layer_recap_key)
+    stamped_mapping_layer, stamped_clips = (
+        load_recap_mapping(user_id, layer_mapping_key) if layer_recap_exists else (None, [])
+    )
+
+    if layer_recap_exists and stamped_mapping_layer == layer:
+        # 1. Per-layer stitched recap.
+        url = generate_presigned_url(user_id, layer_recap_key, expires_in=14400)
+        clips = stamped_clips
         video_kind = 'recap'
-        source = f"recap ({recap_key})"
+        source = f"recap ({layer_recap_key})"
     elif game_video_exists:
+        # 2. Game video seek-through, live layer filter.
         url = get_game_video_url(blake3, game['video_filename'])
-        clips = _compute_game_clips(game_id)
+        clips = _compute_game_clips(game_id, layer)
         video_kind = 'game'
         source = f"game video ({game_video_key})"
     else:
-        url = None
-        clips = _compute_game_clips(game_id)
-        video_kind = None
-        source = "none (video unavailable post-grace)"
+        # 3/4. Game video is gone. Check for a surviving LEGACY (unstamped)
+        # mixed recap under the unsuffixed key — for the athlete layer this IS
+        # `layer_recap_key` (already ruled out above via the stamp check); for
+        # the team layer it's the shared pre-T5710 artifact.
+        legacy_key, legacy_mapping_key = recap_r2_keys(game_id, None)
+        legacy_exists = file_exists_in_r2(user_id, legacy_key)
+        legacy_layer, legacy_entries = (
+            load_recap_mapping(user_id, legacy_mapping_key) if legacy_exists else (None, [])
+        )
+        if legacy_exists and legacy_layer is None:
+            ids = [e['id'] for e in legacy_entries if 'id' in e]
+            resolvable = {}
+            if ids:
+                with get_db_connection() as conn:
+                    placeholders = ",".join("?" * len(ids))
+                    rows = conn.execute(
+                        f"SELECT id, my_athlete FROM raw_clips WHERE id IN ({placeholders})", ids,
+                    ).fetchall()
+                resolvable = {r['id']: r['my_athlete'] for r in rows}
+            url = generate_presigned_url(user_id, legacy_key, expires_in=14400)
+            if not resolvable:
+                # 3b. Offsets unrecoverable — explicit combined state, NEVER
+                # presented under a per-layer label.
+                clips = []
+                video_kind = 'recap_legacy_combined'
+                source = f"legacy combined recap, unresolvable mapping ({legacy_key})"
+            else:
+                # 3a. Seek-filtered to this layer (may resolve to zero entries).
+                clips = [
+                    e for e in legacy_entries
+                    if e.get('id') in resolvable and clip_matches_layer(resolvable[e['id']], layer)
+                ]
+                video_kind = 'recap_legacy'
+                source = f"legacy recap, layer-filtered ({legacy_key})"
+        else:
+            # 4. Nothing playable survives (post-grace + no legacy — or the
+            # unsuffixed key is itself a stamped OTHER-layer recap). Clip
+            # NAMES still list from live data.
+            url = None
+            clips = _compute_game_clips(game_id, layer)
+            video_kind = None
+            source = "none (video unavailable, no usable legacy recap)"
 
     # T4080: enrich each clip with its unified in-match start (seconds) so the recap
     # clip list can show the soccer-notation game time. Derived from raw_clips (a
@@ -1218,6 +1279,9 @@ async def get_recap_data(game_id: int):
     # T4130: also surface `in_drafts` (does this clip already have a draft reel?) from the
     # same raw_clips row so the recap viewer's "Create clip" button can disable when a draft
     # already exists. Mirrors update_raw_clip's auto_project_id dedup; no new query/storage.
+    # T5710: also surface `tagged_teammates` (decoded) for the Team Recap clip
+    # rail's per-player filter chips — always derived LIVE (never baked into a
+    # frozen mapping), so it works for stitched/legacy/combined clips alike.
     from app.services.collection_metadata import compute_unified_clip_start
     with get_db_connection() as conn:
         _cur = conn.cursor()
@@ -1226,7 +1290,7 @@ async def get_recap_data(game_id: int):
             # archived (= published) projects don't count. Mirrors the
             # archived-aware join used by the games list query below.
             rc = _cur.execute(
-                """SELECT rc.start_time,
+                """SELECT rc.start_time, rc.tagged_teammates,
                           CASE WHEN p.id IS NOT NULL AND p.archived_at IS NULL
                                THEN rc.auto_project_id ELSE NULL END AS auto_project_id
                    FROM raw_clips rc
@@ -1237,10 +1301,10 @@ async def get_recap_data(game_id: int):
                 if rc['start_time'] is not None:
                     c['game_start_time'] = compute_unified_clip_start(_cur, c['id'], rc['start_time'])
                 c['in_drafts'] = rc['auto_project_id'] is not None
+                c['tagged_teammates'] = decode_data(rc['tagged_teammates']) or []
 
     logger.info(
-        f"[recap-data] game={game_id} "
-        f"recap_key={recap_key!r} recap_exists={recap_exists} "
+        f"[recap-data] game={game_id} layer={layer} "
         f"game_video_key={game_video_key!r} game_video_exists={game_video_exists} "
         f"-> source={source}, video_kind={video_kind}, clips={len(clips)}"
     )

@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-07-16 (T4933 landscape sidebar scroll region)
+updated: 2026-08-01 (T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
 
@@ -122,6 +122,23 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `updateClip(clipId, {create_project: true})` → `PUT /clips/raw/{id}`, optimistically flips
   `in_drafts`; button disabled while `in_drafts` is true. Clips have NO independent source video,
   so re-materializing clips from an expired game was deferred.
+- **T5710 — per-layer recap tabs + player-tag filter is a RAIL-ONLY filter, never a
+  playback filter.** `RecapPlayerModal.jsx` splits the old single recap tab into Team Recap /
+  {Athlete} Recap (see [export-pipeline.md](export-pipeline.md) § Active/upcoming work T5710 for
+  the backend layer split). Each layer gets its OWN `useRecapPlayback(videoRef, clips)` instance
+  over that layer's UNFILTERED clip list — this is the thing that drives autoplay, the active-clip
+  overlay (`NotesOverlay`), the transport bar's current-segment label, and `handleCreateRecapClip`'s
+  target (via `activeRecapClip = activeLayerData.clips.find(c => c.id === activePlayback.activeClipId)`).
+  The Team Recap's player-tag filter chips only narrow `sidebarClips` — the list handed to
+  `RecapClipsSidebar` for rendering — they do NOT touch `useRecapPlayback`'s clip list. Consequence:
+  a clip filtered OUT of the rail can still legitimately show its name in the video overlay and
+  transport label if it's the one currently playing (the stitched video autoplays straight through
+  every clip regardless of the rail filter). The rail div carries
+  `data-testid="recap-clip-rail"` specifically so tests can assert "is this clip in the filtered
+  list" without false-failing on "is this clip's name showing anywhere in the modal". An assertion
+  scoped to the whole modal will flake once autoplay drifts past the clip it just filtered out —
+  this bit the original T5710 e2e spec (see export-pipeline.md's seed-recap-game seam note for the
+  fix: 8s-per-clip seed duration + rail-scoped locators).
 - **Expired-game Annotate playback = graceful degradation (bug 27p).** When
   `annotateSourceExpired` (from `/load`'s `game.storage_status === 'expired'`), `AnnotateModeView`
   renders a deliberate yellow "Source video expired" panel in the video area INSTEAD of any
@@ -137,6 +154,42 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   (`RecapPlayerModal` `recapVideoMissing`).
 - **Resume position**: `computeResumePosition` prefers `last_playhead_position`, falls back to
   viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
+- **Team / My Athlete layer (T5700).** `raw_clips.my_athlete` (existing bit, no schema change) is
+  now a visible two-value layer: `1`/`NULL` → My Athlete, `0` → Team. Legacy-NULL rule
+  `region.my_athlete ?? true` must be applied at every read site (`LayerSegmentedControl`,
+  `ClipListItem`'s `LayerChip` — icon-only (cyan `User` / amber `Users`), no visible text at any
+  breakpoint per a follow-up UX decision; accessible name carries the layer via title/aria-label —
+  `ClipRegionLayer`'s `layerColorFor`/`layerLabelFor`,
+  `ClipsSidePanel`'s filter) — never read `region.my_athlete` bare. Shared component
+  `LayerSegmentedControl.jsx` (`value`/`onChange` boolean, `disabled`/`disabledReason`) is reused by
+  three call sites: `ClipsSidePanel` header (mode toggle, sets the default for NEW clips only —
+  does not retag existing clips), `ClipDetailsEditor` (desktop + mobile per-clip switch, replaced
+  the old on/off toggle), `AnnotateFullscreenOverlay` (mobile add/edit, seeded from the mode toggle
+  on create, from the clip on edit). Imported clips (`shared_by` NOT NULL) render the control
+  **disabled or locked to Team, read-only** — a recipient cannot re-tag someone else's shared clip
+  onto their own My Athlete layer (that layer feeds reels/rankings/collections, T5330 provenance).
+  Mode toggle (`newClipLayerIsMine`) and clip-list filter (`layerFilter`) are ephemeral,
+  screen-owned state in `useAnnotateState.js` — reset **imperatively** in
+  `AnnotateContainer.handleLoadGame` (the game-open gesture), never via a state-watching effect, and
+  are never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
+  a secondary cue (colored border/underline), not a replacement for the rating-hue primary signal.
+- **Two clip lanes on desktop, one on phone (T5700 follow-up).** `AnnotateTimeline.jsx` splits the
+  single tinted "Clips" track into two stacked, labeled `ClipRegionLayer` lanes — "My Athlete" (cyan)
+  and "Team" (amber) — each fed a pre-filtered `regions` subset using the same legacy-NULL rule
+  (`my_athlete !== false` → mine, `my_athlete === false` → team). An empty lane still renders (label +
+  a lane-specific empty message via `ClipRegionLayer`'s new `emptyMessage` prop) rather than
+  disappearing — an empty Team lane is meaningful signal. Gated on **`useIsMobile()`** (width<1024 OR
+  coarse pointer), deliberately NOT the `sm` (640px) breakpoint the sidebar uses: `sm` would
+  misclassify a landscape phone (>=640px wide, the T4933 landmine below) as desktop and hand it the
+  taller 3-row timeline in an already height-starved viewport; `useIsMobile`'s width clause (<1024)
+  keeps a landscape phone single-lane regardless of orientation. `totalLayerHeight` switches
+  '6.75rem' (mobile, video + 1 track) / '9.75rem' (desktop, video + 2 lanes). Both lane labels'
+  `onClick` still select the ONE `'clips'` keyboard-nav layer (arrow-key nav in
+  `useKeyboardShortcuts.js` walks the full unfiltered `clipRegions` array regardless of which lane a
+  clip renders in) — there is no per-lane selection state. `region.index` is left as-is when
+  filtering into per-lane arrays (it reflects position in the full chronological list, not
+  position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
+  `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
 
 ## Landmines & history
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
