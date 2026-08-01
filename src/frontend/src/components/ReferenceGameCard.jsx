@@ -23,10 +23,18 @@ import { GAME } from '../config/themeColors';
 export function ReferenceGameCard({ game, onOpen }) {
   const profileName = game.source_profile_name;
 
-  // No silent fallback for internal data: a row flagged is_reference MUST carry a
-  // server-resolved owning-profile name (games.py resolves it in one user_db read).
-  // A missing name is OUR bug — surface it loudly instead of papering it over.
-  if (!profileName) {
+  // Two DIFFERENT cases that must not be conflated:
+  //
+  //  - null/undefined => the server never resolved a name for a row it flagged
+  //    is_reference. That is OUR bug (games.py resolves it in one user_db read),
+  //    so surface it loudly rather than papering over it.
+  //  - '' (empty)     => resolved fine; the profile is simply UNNAMED. The default
+  //    profile legitimately has no name, so this is normal data, not a bug — the
+  //    app already labels that profile "Default" (ManageProfilesModal). Treating
+  //    it as an error logged a false alarm AND rendered "In another profile" for
+  //    the single most common owner (found on real prod data, arshia 2026-08-01).
+  const nameUnresolved = profileName == null;
+  if (nameUnresolved) {
     console.error(
       `[ReferenceGameCard] reference game ${game.id} has no source_profile_name — ` +
       `this is a backend bug (an is_reference row must carry the resolved owning-profile ` +
@@ -34,7 +42,7 @@ export function ReferenceGameCard({ game, onOpen }) {
     );
   }
 
-  const ownerLabel = profileName || 'another profile';
+  const ownerLabel = profileName || (nameUnresolved ? 'another profile' : 'Default');
   const dateStr = game.created_at
     ? new Date(game.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
