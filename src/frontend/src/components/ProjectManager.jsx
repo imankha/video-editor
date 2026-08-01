@@ -34,6 +34,13 @@ import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
 import { splitByAspect } from '../constants/aspectRatios';
 
+// Shared layout class strings for the Games tab poster grid (T5681/T6310). The
+// loaded games grid AND its loading skeleton both consume these so the skeleton
+// can never drift from the real layout again (the T6310 bug). If the grid shape
+// changes, change it here and both surfaces move together.
+const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
+const GAMES_TILE_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4';
+
 // Group games by month (YYYY-MM) in chronological order (newest first)
 function groupGamesByMonth(games) {
   const groups = {};
@@ -774,7 +781,7 @@ export function ProjectManager({
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
-          <div className="w-full max-w-6xl 2xl:max-w-7xl">
+          <div className={GAMES_GRID_CONTAINER_CLASS}>
             {/* Active Upload Section - Currently uploading */}
             {activeUpload && (
               <div className="mb-6">
@@ -843,7 +850,7 @@ export function ProjectManager({
                           </span>
                         </div>
                         {/* Landscape tile grid: 6-up desktop, 3-up tablet, 2-up mobile */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+                        <div className={GAMES_TILE_GRID_CLASS}>
                           {groups[monthKey].map(game => (
                             <div key={game.id} data-game-id={game.id}>
                               <GameTile
@@ -889,7 +896,8 @@ export function ProjectManager({
           </div>
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
-             audit finding #13 desktop dead-space fix); the Games tab stays max-w-2xl. */
+             audit finding #13 desktop dead-space fix); the Games tab now uses the same
+             GAMES_GRID_CONTAINER_CLASS width (max-w-6xl 2xl:max-w-7xl) for its poster grid. */
           <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
@@ -1321,32 +1329,27 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 
 
 /**
- * GamesListSkeleton - placeholder shown while the games list loads (T4771).
- * Mirrors the loaded layout: "Your Games" heading + a stack of shell cards, so
- * the screen never blank-then-pops or shows bare "Loading..." text. Pure render;
- * each card is a p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 shell
- * with icon + title + metadata rows.
+ * GamesListSkeleton - placeholder shown while the Games tab loads (T4771, rebuilt
+ * T6310). Mirrors the loaded poster grid (GameTile, T5681): same container width
+ * and same responsive tile grid as the real list (shared via GAMES_GRID_CONTAINER_CLASS
+ * / GAMES_TILE_GRID_CLASS), with `aspect-video` shells instead of GameTiles, so data
+ * arriving does not snap the layout. Pure render — no fetching, no subscribing.
+ *
+ * `count` defaults to 6: the grid is 6-up on desktop, 3-up on tablet, 2-up on
+ * mobile, and 6 divides all three, so it fills exactly one desktop row / two tablet
+ * rows / three mobile rows with no ragged partial row at any breakpoint.
  */
-export function GamesListSkeleton({ count = 4 }) {
+export function GamesListSkeleton({ count = 6 }) {
   return (
-    <div className="w-full max-w-2xl" data-testid="games-skeleton">
-      <div className="h-3.5 w-24 bg-gray-700/70 rounded mb-3 animate-pulse" />
-      <div className="space-y-2">
+    <div className={GAMES_GRID_CONTAINER_CLASS} data-testid="games-skeleton">
+      {/* "Your Games" heading placeholder */}
+      <div className="h-3.5 w-24 bg-gray-700/70 rounded mb-4 animate-pulse" />
+      <div className={GAMES_TILE_GRID_CLASS}>
         {Array.from({ length: count }).map((_, i) => (
           <div
             key={i}
-            className="p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-[18px] h-[18px] bg-gray-700 rounded flex-shrink-0" />
-              <div className="h-4 bg-gray-700 rounded w-40 max-w-[55%]" />
-            </div>
-            <div className="mt-2 flex items-center gap-3">
-              <div className="h-3 bg-gray-700/70 rounded w-16" />
-              <div className="h-3 bg-gray-700/70 rounded w-12" />
-              <div className="h-3 bg-gray-700/70 rounded w-20 hidden sm:block" />
-            </div>
-          </div>
+            className="aspect-video bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
+          />
         ))}
       </div>
     </div>
