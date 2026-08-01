@@ -1,6 +1,6 @@
 # T5810: Move-reels carries game attribution
 
-**Status:** WAITING ON USER — branch pushed, Branch CI green; waiting on user to fetch/test/merge
+**Status:** STAGING — merged to master 2026-08-01 (auto-deploys staging); run POST /api/admin/migrate after deploy
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-24

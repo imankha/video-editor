@@ -1,6 +1,6 @@
 # Cross-Profile Game Attribution
 
-**Status:** WIP
+**Status:** WIP — T5800-T5820 on staging; T5830 remains blocked
 **Started:** 2026-07-31
 **Source:** Prod bug 37p (arshia.kalantari@gmail.com, 2026-07-24) — filed as a bug, actually a feature request.
 
@@ -72,9 +72,9 @@ Moving the game itself can't fix this — one game, two destination profiles.
 
 | ID | Task | Status |
 |----|------|--------|
-| T5800 | [Game-reference primitive + schema (profile_db v030)](T5800-game-reference-primitive.md) | WAITING ON USER — pushed, CI green |
-| T5810 | [Move-reels carries game attribution](T5810-move-carries-attribution.md) | WAITING ON USER — pushed, CI green (same branch as T5800) |
-| T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | WAITING ON USER — pushed, CI green |
+| T5800 | [Game-reference primitive + schema (profile_db v030)](T5800-game-reference-primitive.md) | STAGING |
+| T5810 | [Move-reels carries game attribution](T5810-move-carries-attribution.md) | STAGING |
+| T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | STAGING |
 | T5830 | [Heal arshia's already-moved reels](T5830-heal-arshia-moved-reels.md) | TODO — hard-blocked on 1-3 reaching prod + user sign-off on the dry-run mapping |
 
 Order is dependency order: schema/primitive → move flow → UI → heal (heal reuses the primitive
