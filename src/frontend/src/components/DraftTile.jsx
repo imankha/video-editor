@@ -5,6 +5,7 @@ import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { useProjectsStore } from '../stores/projectsStore';
+import { useCurrentProfile } from '../stores/profileStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -63,6 +64,9 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // (mouse) at ANY width -> hover reveal; coarse pointer -> long-press, unchanged.
   const isCoarsePointer = useIsCoarsePointer();
   const isOffline = useSyncStore((state) => state.isOffline);
+  // T5130: the preview plays this profile's published reel, so the scrub handle
+  // is the active profile's sport ball (undefined sport -> plain dot in MediaPlayer).
+  const currentProfileSport = useCurrentProfile()?.sport;
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
@@ -723,6 +727,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
                 src={`${API_BASE}/api/downloads/${project.final_video_id}/stream`}
                 autoPlay
                 onClose={() => setIsPreviewing(false)}
+                sport={currentProfileSport}
               />
             </div>
           </div>
