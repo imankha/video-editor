@@ -218,7 +218,11 @@ export function DownloadsPanel({
   const { moveReels, moving } = useMoveReels(onReelsMoved);
 
   // Native share support
-  const { isMobile, copyLink, webShare } = useWebShare();
+  // T6300: isMobile is no longer threaded to ReelTile — the reveal gate moved to
+  // useIsCoarsePointer() inside the tile, and Share/Copy Link are now both always
+  // listed in its kebab (see ReelTile.jsx header comment), so the UA-sniff isMobile
+  // flag has no remaining consumer here.
+  const { copyLink, webShare } = useWebShare();
 
   if (!isOpen && !storyPlayer) return null;
 
@@ -392,7 +396,6 @@ export function DownloadsPanel({
       posterUrl={`${API_BASE}/api/downloads/${download.id}/poster.jpg`}
       isUnwatched={!download.watched_at}
       unwatchedStyle={getUnwatchedStyle(download.id)}
-      isMobile={isMobile}
       displayName={download.project_name}
       metaLine={reelMetaLine(download)}
       onPlay={handlePlay}

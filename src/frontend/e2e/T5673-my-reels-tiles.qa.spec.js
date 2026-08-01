@@ -115,13 +115,15 @@ test.describe('T5673 + T5678 — My Reels visual tiles (real account)', () => {
     test.skip(!hasReels, 'no published reels on this account/profile');
 
     const tile = page.getByTestId('reel-card').first();
-    await tile.hover();
-    // Play + copy-link (desktop) are direct actions on the tile.
+    // T6300: Play is the persistent primary (no hover needed to discover it);
+    // Copy Link / Share moved into the kebab (previously a direct hover chip).
     await expect(tile.getByRole('button', { name: /Play video/i })).toBeVisible();
-    await expect(tile.getByRole('button', { name: /Copy link/i })).toBeVisible();
-    // Kebab opens the overflow set.
+    // Kebab opens the overflow set (hover-revealed on a fine pointer, T6300).
+    await tile.hover();
     await tile.getByRole('button', { name: /More actions/i }).click();
     await expect(page.getByRole('button', { name: /^Download$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Share$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Copy Link$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Rename$/ })).toBeVisible();
     await saveEvidence(page, 'T5673-criterion-2-tile-kebab');
 
