@@ -269,16 +269,27 @@ def get_collection_share_by_token(token: str) -> dict | None:
 
 def create_game_share(
     game_id: int,
-    tag_name: str,
+    tag_name: str | None,
     sharer_user_id: str,
     sharer_profile_id: str,
     recipient_email: str,
     game_name: str | None = None,
     game_blake3: str | None = None,
     first_clip_start: float | None = None,
-    clip_names: list[str] | None = None,
+    clip_names: list | None = None,
     share_type: str = "game",
+    game_date: str | None = None,
 ) -> dict:
+    """Create a share + its share_games row.
+
+    T5720: `share_type='game_link'` is the public broadcast link. It has no
+    recipient (public), so callers pass the sharer's own email (the self-share
+    convention -- `recipient_email` is NOT NULL). `game_date` snapshots the
+    game's date onto the row so the public resolve endpoint never opens the
+    sharer's per-profile SQLite. For game links, `clip_names` carries the frozen
+    TEAM-layer clip rail (a list of {name, recap_start, recap_end, player_tags}
+    objects), read only by the game-link resolve endpoint.
+    """
     sharer_sport = _sharer_default_sport(sharer_user_id)
     with get_sharing_db() as conn:
         cur = conn.cursor()
@@ -296,15 +307,60 @@ def create_game_share(
         cur.execute(
             """INSERT INTO share_games
                (share_id, game_id, tag_name, game_name, game_blake3,
-                first_clip_start, clip_names)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                first_clip_start, clip_names, game_date)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
             (share_id, game_id, tag_name, game_name, game_blake3,
-             first_clip_start, json.dumps(clip_names) if clip_names else None),
+             first_clip_start, json.dumps(clip_names) if clip_names else None,
+             game_date),
         )
     return {
         "share_token": token,
         "recipient_email": recipient_email.lower().strip(),
     }
+
+
+def get_active_game_link_share(game_id: int, sharer_user_id: str) -> dict | None:
+    """Active (non-revoked) public game link for a game+sharer, or None (T5720).
+
+    Enforces idempotency: 'Copy link' twice must return the SAME token instead
+    of piling up rows. At most one active `game_link` per (game, sharer) exists
+    because create looks this up before inserting. Mirrors the reel-link
+    idempotency helper `get_active_public_share_for_video`."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT s.share_token, s.recipient_email
+               FROM shares s
+               JOIN share_games sg ON sg.share_id = s.id
+               WHERE sg.game_id = %s
+                 AND s.sharer_user_id = %s
+                 AND s.share_type = 'game_link'
+                 AND s.revoked_at IS NULL
+               ORDER BY s.shared_at DESC
+               LIMIT 1""",
+            (game_id, sharer_user_id),
+        )
+        return cur.fetchone()
+
+
+def revoke_game_link_share(game_id: int, sharer_user_id: str) -> bool:
+    """Revoke the active public game link for a game (T5720). Sets `revoked_at`
+    (-> the resolve endpoint returns 410). Returns True if a link was revoked,
+    False if none was active. Idempotent: re-revoking returns False."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE shares s
+               SET revoked_at = now()
+               FROM share_games sg
+               WHERE sg.share_id = s.id
+                 AND sg.game_id = %s
+                 AND s.sharer_user_id = %s
+                 AND s.share_type = 'game_link'
+                 AND s.revoked_at IS NULL""",
+            (game_id, sharer_user_id),
+        )
+        return cur.rowcount > 0
 
 
 def get_game_share_by_token(token: str) -> dict | None:
@@ -317,7 +373,7 @@ def get_game_share_by_token(token: str) -> dict | None:
                       sg.game_id, sg.tag_name, sg.recipient_profile_id,
                       sg.materialized_at,
                       sg.game_name, sg.game_blake3, sg.first_clip_start,
-                      sg.clip_names
+                      sg.clip_names, sg.game_date
                FROM shares s
                JOIN share_games sg ON sg.share_id = s.id
                WHERE s.share_token = %s""",
@@ -485,6 +541,11 @@ SHARE_TYPE_TO_CHANNEL = {
     "game": "game_share",
     "annotation_playback": "annotation_share",
     "collection": "collection_share",
+    # T5720: a claimant who arrived via a public game link. Attribution keys off
+    # recipient_email, which a game_link stores as the sharer's own address, so
+    # this only fires once T5730 records a real claimant -- the key lands now for
+    # greppable completeness.
+    "game_link": "game_link_share",
 }
 
 

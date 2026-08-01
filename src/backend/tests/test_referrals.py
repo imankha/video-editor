@@ -3,6 +3,7 @@
 import hashlib
 
 import pytest
+
 from app.services.auth_db import create_user
 from app.services.sharing_db import (
     SHARE_TYPE_TO_CHANNEL,
@@ -54,7 +55,7 @@ class TestResolveInviteCode:
         create_user("user-a", email="a@test.com")
 
     def test_returns_user_id_for_known_code(self, pg_conn):
-        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        code = hashlib.sha256(b"user-a").hexdigest()[:8]
         persist_invite_code("user-a", code)
         result = resolve_invite_code(code)
         assert result == "user-a"
@@ -95,10 +96,12 @@ class TestChannelMapping:
         assert SHARE_TYPE_TO_CHANNEL["game"] == "game_share"
         assert SHARE_TYPE_TO_CHANNEL["annotation_playback"] == "annotation_share"
         assert SHARE_TYPE_TO_CHANNEL["collection"] == "collection_share"
+        # T5720: a claimant who arrived via a public game link.
+        assert SHARE_TYPE_TO_CHANNEL["game_link"] == "game_link_share"
 
     def test_no_extra_keys(self):
         assert set(SHARE_TYPE_TO_CHANNEL.keys()) == {
-            "video", "game", "annotation_playback", "collection"}
+            "video", "game", "annotation_playback", "collection", "game_link"}
 
 
 class TestInviteLinkAttribution:
@@ -107,11 +110,11 @@ class TestInviteLinkAttribution:
     @pytest.fixture(autouse=True)
     def _create_referrer(self, pg_conn):
         create_user("user-a", email="referrer@test.com")
-        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        code = hashlib.sha256(b"user-a").hexdigest()[:8]
         persist_invite_code("user-a", code)
 
     def test_signup_with_ref_creates_referral(self, pg_conn):
-        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        code = hashlib.sha256(b"user-a").hexdigest()[:8]
         create_user("user-b", email="referred@test.com")
         referrer_id = resolve_invite_code(code)
         assert referrer_id == "user-a"
@@ -119,7 +122,7 @@ class TestInviteLinkAttribution:
         assert result is True
 
     def test_signup_with_ref_then_share_only_first_wins(self, pg_conn):
-        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        code = hashlib.sha256(b"user-a").hexdigest()[:8]
         create_user("user-b", email="referred@test.com")
         record_referral("user-a", "user-b", "invite_link", code)
         result = record_referral("user-a", "user-b", "game_share", "share-99")
@@ -135,8 +138,9 @@ class TestAttributeFromExistingShares:
         create_user("recipient-user", email="recipient@test.com")
 
     def _insert_share(self, sharer_id, recipient_email, share_type="video"):
-        from app.services.pg import get_pg
         import uuid
+
+        from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(

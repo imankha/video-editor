@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Loader } from 'lucide-react';
+import { X, Loader, Link2, Check } from 'lucide-react';
 import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
@@ -10,6 +10,61 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // T5720: public game link ("here's the game" broadcast link)
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // T5720: create-or-copy the public game link. The backend stitches the team
+  // recap + warms the poster before returning (idempotent per game), and refuses
+  // a zero-team-clip game with an actionable 409.
+  const handleCopyLink = useCallback(async () => {
+    setLinkBusy(true);
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/games/${gameId}/share-link`, {
+        method: 'POST',
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => null);
+        const msg = data?.detail?.message || data?.detail || `Failed to create link (${resp.status})`;
+        toast.error(msg);
+        return;
+      }
+      const data = await resp.json();
+      const url = `${window.location.origin}${data.path}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success('Game link copied — drop it in the team chat');
+      } catch {
+        toast.success(url);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to create link');
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [gameId]);
+
+  const handleRevokeLink = useCallback(async () => {
+    setLinkBusy(true);
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/games/${gameId}/share-link`, {
+        method: 'DELETE',
+      });
+      if (resp.ok) {
+        toast.success('Game link revoked');
+      } else if (resp.status === 404) {
+        toast.error('No active link for this game');
+      } else {
+        toast.error(`Failed to revoke (${resp.status})`);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to revoke link');
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [gameId]);
 
   useEffect(() => {
     apiFetch(`${API_BASE}/api/gallery/contacts`)
@@ -72,6 +127,28 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />
           </button>
+        </div>
+
+        {/* T5720: public "here's the game" broadcast link (team recap only) */}
+        <div className="mb-4 pb-4 border-b border-gray-700">
+          <label className="block text-sm text-gray-400 mb-1.5">Public game link</label>
+          <p className="text-xs text-gray-500 mb-2">
+            Anyone with the link watches the team recap — no account needed.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="cyan" onClick={handleCopyLink} disabled={linkBusy}>
+              {linkBusy ? (
+                <span className="flex items-center gap-2"><Loader size={14} className="animate-spin" />Working...</span>
+              ) : copied ? (
+                <span className="flex items-center gap-2"><Check size={14} />Copied</span>
+              ) : (
+                <span className="flex items-center gap-2"><Link2 size={14} />Copy link</span>
+              )}
+            </Button>
+            <Button variant="ghost" onClick={handleRevokeLink} disabled={linkBusy}>
+              Revoke link
+            </Button>
+          </div>
         </div>
 
         <div className="mb-4">

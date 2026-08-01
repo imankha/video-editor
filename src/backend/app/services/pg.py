@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS r2_grace_deletions (
 CREATE TABLE IF NOT EXISTS shares (
     id SERIAL PRIMARY KEY,
     share_token TEXT UNIQUE NOT NULL,
-    share_type TEXT NOT NULL CHECK (share_type IN ('video', 'game', 'annotation_playback', 'collection')),
+    share_type TEXT NOT NULL CHECK (share_type IN ('video', 'game', 'annotation_playback', 'collection', 'game_link')),
     sharer_user_id TEXT NOT NULL REFERENCES users(user_id),
     sharer_profile_id TEXT NOT NULL,
     recipient_email TEXT NOT NULL,
@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS share_games (
     materialized_at TIMESTAMPTZ,
     game_name TEXT,
     game_blake3 TEXT,
+    game_date TEXT,
     first_clip_start REAL,
     clip_names JSONB
 );

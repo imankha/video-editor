@@ -7,6 +7,7 @@ import { DownloadsPanel } from './components/DownloadsPanel';
 import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { SharedCollectionView } from './components/SharedCollectionView';
+import { SharedGameView } from './components/SharedGameView';
 import { QuestPanel } from './components/QuestPanel';
 import { TutorialVideoModal } from './components/TutorialVideoModal';
 import { useTutorialStore } from './stores/useTutorialStore';
@@ -369,6 +370,13 @@ function App() {
     return match ? match[1] : null;
   });
 
+  // T5720: Detect /shared/game/:token URL and render the public game watch page
+  // (SPA fallthrough target for functions/shared/game/[token].js + in-app view)
+  const [gameShareToken] = useState(() => {
+    const match = window.location.pathname.match(/^\/shared\/game\/([a-f0-9-]+)$/i);
+    return match ? match[1] : null;
+  });
+
   // T1740: Detect /privacy and /terms URLs for public legal pages
   const [legalPage] = useState(() => {
     const path = window.location.pathname;
@@ -713,6 +721,11 @@ function App() {
   // T3620: Public collection viewer — mobile-primary share link, no auth required
   if (collectionShareToken) {
     return <SharedCollectionView token={collectionShareToken} />;
+  }
+
+  // T5720: Public game watch page — team recap only, no auth required
+  if (gameShareToken) {
+    return <SharedGameView token={gameShareToken} />;
   }
 
   // T1780: Shared video — public route, no auth required
