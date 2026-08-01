@@ -1,6 +1,6 @@
 # T5820: Games tab: reference game link cards
 
-**Status:** WIP — container worker `t5820` in flight
+**Status:** WAITING ON USER — branch pushed, Branch CI green; waiting on user to fetch/test/merge
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-07-24
@@ -63,10 +63,10 @@ gate, unless classification says otherwise.
 ## Implementation
 
 ### Steps
-1. [ ] Card variant + badge (mobile 360-428 AND desktop, per ui-pass standard)
-2. [ ] Click → profile switch + game landing; breadcrumb survives store reset
-3. [ ] Degraded-link notice
-4. [ ] Real-browser verification (drive-app-as-user) + e2e spec
+1. [x] Card variant + badge (mobile 360-428 AND desktop, per ui-pass standard)
+2. [x] Click → profile switch + game landing; breadcrumb survives store reset
+3. [x] Degraded-link notice
+4. [x] Real-browser verification (drive-app-as-user) + e2e spec
 
 ### Progress Log
 
@@ -100,6 +100,50 @@ worker was told explicitly not to overload it.
 Backend contract confirmed shipped by T5800 (consume, don't change): `is_reference`,
 `source_profile_id`, `source_game_id`, and `source_profile_name` already resolved server-side in one
 `profiles` read — no per-card lookup. References carry no expiry state by design.
+
+**2026-07-31 (later) — DONE, pushed, CI green.** Branch `feature/T5820-reference-game-link-cards`
+(commits `0b2e2374`, `10bde7eb`), Branch CI run 30675917326 green. 8 files, +694/−12,
+**frontend-only — zero backend files touched**. Branch is based on
+`feature/T5800-game-reference-attribution`.
+
+What landed:
+- `ReferenceGameCard.jsx` — dashed subdued tile, `↗ In {source_profile_name}` badge, whole card is
+  one keyboard-accessible `<button>`. "Not editable here" reads through **absence**: no kebab, no
+  expiry chip, no actions, and no clip count ("0 clips" would mislead). No poster fetch at all, so
+  reference cards make **zero network calls**.
+- **`GameTile.jsx` was not modified** — references route to a separate component, so real games are
+  structurally incapable of regressing. Its 13 unit tests are unchanged and green.
+- `setPendingGameReference` in `pendingNavigation.js` — sessionStorage, consumed-once, cleared on
+  read. Survives `_resetDataStores()` because that only resets Zustand + refetches.
+- **`referenceLoadStartedRef` load-cycle guard.** `switchProfile` flips `currentProfileId` *before*
+  the refetch, so there is a stale window where the previous profile's game list is still in the
+  store. The guard waits for `gamesLoading` to go true→false on the target profile before matching,
+  so the breadcrumb can never resolve against the stale list.
+
+**A real contract defect was found and fixed mid-task.** The first implementation had to locate the
+owning game by frozen `blake3_hash`, because `/api/games` SELECTed `source_game_id` but never
+projected it. That hash is **NULL for multi-video games**, so those references would have landed
+with no highlight — quietly undoing part of the user's locked decision. Fixed on the T5800 branch
+(commit `16679992`, gated + test-pinned), then this task rebased and switched to **exact
+`source_game_id` matching** (commit `10bde7eb`). Multi-video highlighting is now pinned by e2e
+criterion 2b (game id 301 with `blake3_hash: null` → `ring-green-400` after the cross-profile click).
+
+Evidence: 26 unit tests green (exit 0); **5/5 real-browser Playwright criteria** green (`[verify]
+PASS`) — both-direction kid↔default navigation with a real Chromium profile switch, degraded notice,
+real-tile parity, `responsiveSweep` at 375/1280 with no horizontal overflow, and warm navigation at
+158 ms against a 3 s budget.
+
+**QA caveat worth remembering:** a leftover Vite dev-server process (~5 h old, not caught by
+`pkill -f vite`) served a **stale transform** of `ProjectManager.jsx` and made a correct
+implementation look broken; clearing `node_modules/.vite` alone did not fix it. Traced via `/proc`
+cmdline inspection and `kill -9` on the real PIDs, after which a genuinely fresh stack went green.
+The authoritative 5/5 run is post-kill. Recorded in `annotate.md`.
+
+**Scope note:** the two-profile navigation, `switchProfile`, `_resetDataStores`, breadcrumb,
+scroll+highlight and degraded notice all ran for real in Chromium; only the `/api/games` payloads
+were injected (the T5880-established pattern), because no test seam can attribute `game_ids` to a
+seeded reel, so a move cannot materialize a reference without the full pipeline. The backend
+materialization itself is covered by `test_t5800_game_reference.py` / `test_t5810_move_attribution.py`.
 
 ## Acceptance Criteria
 

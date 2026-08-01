@@ -125,6 +125,14 @@ Not verified: live HTTP round-trip (the container has no R2/auth stack). Tests d
 handler functions against real per-profile SQLite DBs, so logic is exercised rather than mocked —
 but the network path is unproven until staging.
 
+**Follow-up fix `16679992` (same day, CI re-green): `list_games` now also projects
+`source_game_id`.** It was SELECTed in `_read_games_for_list` but never added to the response dict,
+so T5820 had to locate the owning game by frozen `blake3_hash` — which is **NULL for multi-video
+games**, meaning those references would have landed with no highlight and quietly undone part of the
+user's locked "game highlighted" decision. Caught by the T5820 worker, verified against the code,
+fixed with the same `is_reference` gating as `source_profile_name`, pinned by the reference-shape
+API test, and the contradicting line in `export-pipeline.md` corrected.
+
 ## Acceptance Criteria
 
 - [ ] v030 migrates an existing profile DB; real games keep NULL source columns

@@ -74,7 +74,7 @@ Moving the game itself can't fix this — one game, two destination profiles.
 |----|------|--------|
 | T5800 | [Game-reference primitive + schema (profile_db v030)](T5800-game-reference-primitive.md) | WAITING ON USER — pushed, CI green |
 | T5810 | [Move-reels carries game attribution](T5810-move-carries-attribution.md) | WAITING ON USER — pushed, CI green (same branch as T5800) |
-| T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | WIP — worker `t5820` |
+| T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | WAITING ON USER — pushed, CI green |
 | T5830 | [Heal arshia's already-moved reels](T5830-heal-arshia-moved-reels.md) | TODO — hard-blocked on 1-3 reaching prod + user sign-off on the dry-run mapping |
 
 Order is dependency order: schema/primitive → move flow → UI → heal (heal reuses the primitive
@@ -89,6 +89,16 @@ click lands on the owning profile's **Games tab** (game scrolled-to + highlighte
 — which means a new consumed-once breadcrumb rather than reusing `setPendingGame`. T5830 was not
 started; it needs 1-3 on prod plus sign-off on a dry-run mapping table before touching his data, and
 its migration is now **v031** since T5800 took v030.
+
+**Both branches are pushed and CI-green, awaiting merge.** T5820's branch is based on T5800's, so
+merging T5820 brings all three tasks; merging T5800's branch first is equally fine.
+
+One cross-task defect surfaced and was fixed inside the wave: `list_games` SELECTed
+`source_game_id` but never returned it, forcing T5820 to match the owning game on `blake3_hash`,
+which is NULL for **multi-video** games — those references would have landed without a highlight,
+partially undoing the user's own decision. Fixed on T5800's branch, then T5820 rebased onto it and
+switched to exact-id matching. Worth remembering as an epic-level lesson: a field that exists in the
+query is not a field that exists in the API, and the consuming task is where that gap shows up.
 
 ## Completion Criteria
 
