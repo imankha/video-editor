@@ -405,6 +405,10 @@ export function AnnotateFullscreenOverlay({
             disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
             onChange={(mine) => {
               setMyAthlete(mine);
+              // T5725: switching TO My Athlete clears teammate tags — teammates
+              // are Team-layer-only, so a My Athlete clip must never carry them.
+              // Persisted on Save; visible now because the Teammates block hides.
+              if (mine) setTaggedTeammates([]);
               if (!createProjectManuallySet) {
                 setCreateProject(rating === 5 && mine);
               }
@@ -413,8 +417,10 @@ export function AnnotateFullscreenOverlay({
           />
         </div>
 
-        {/* Teammates — desktop only */}
-        {!isMobile && (
+        {/* Teammates — Team-layer only (T5725). Dropped the old !isMobile gate:
+            teammate tagging reveals on the Team layer for BOTH desktop and
+            mobile, and is hidden entirely when the clip is on My Athlete. */}
+        {!myAthlete && (
           <div className="mb-4">
             <label className="block text-gray-400 text-sm mb-2">Teammates</label>
             <TeammateTagInput
