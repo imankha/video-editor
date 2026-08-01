@@ -130,9 +130,10 @@ class SeedReelRequest(BaseModel):
     with_media: bool = True  # generate + upload a real tiny MP4 to R2
 
 
-def _generate_tiny_mp4() -> bytes | None:
-    """Render a ~1s faststart MP4 via ffmpeg so a seeded reel is genuinely playable
-    (metadata + seekable). Returns None if ffmpeg is unavailable."""
+def _generate_tiny_mp4(duration: int = 1) -> bytes | None:
+    """Render a ~`duration`s faststart MP4 via ffmpeg so a seeded reel/game is
+    genuinely playable (metadata + seekable). Returns None if ffmpeg is
+    unavailable."""
     import subprocess
     import tempfile
 
@@ -142,7 +143,7 @@ def _generate_tiny_mp4() -> bytes | None:
             subprocess.run(
                 [
                     "ffmpeg", "-y", "-f", "lavfi",
-                    "-i", "color=c=blue:s=180x320:d=1:r=15",
+                    "-i", f"color=c=blue:s=180x320:d={duration}:r=15",
                     "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-movflags", "+faststart", str(out),
                 ],
@@ -280,6 +281,129 @@ async def simulate_machine_cycle():
         "status": "ok",
         "profile_db_deleted": profile_existed,
         "user_db_deleted": user_existed,
+    }
+
+
+# --- T5710: seed a both-layer recap game (test seam) -------------------------
+
+class SeedRecapGameRequest(BaseModel):
+    name: str = "T5710 Seed Game"
+    athlete_clips: int = 2
+    team_clips: int = 2
+    stitch: bool = True  # also run ensure_recap for both layers + set recap_video_url,
+                          # so the game card's "Watch recap" entry (gated on
+                          # recap_video_url) is discoverable through the real UI.
+
+
+@router.post("/seed-recap-game")
+async def seed_recap_game(req: SeedRecapGameRequest):
+    """Seed a game with rated clips on BOTH layers, for T5710 e2e verification
+    (test seam). Uploads a real tiny MP4 as the global `games/{hash}.mp4` source
+    long enough to cover every seeded clip, then (if `stitch`) runs the REAL
+    `ensure_recap(game_id, layer)` for both layers so the game exits with actual
+    stitched per-layer recaps + `games.recap_video_url` set (matching what
+    auto-export would eventually produce). Non-prod only (gated three ways like
+    every seam)."""
+    _require_seams_enabled()
+
+    import hashlib
+    import time
+
+    from ..constants import RecapLayer
+    from ..database import get_db_connection
+    from ..profile_context import get_current_profile_id
+    from ..storage import R2_ENABLED, upload_bytes_to_r2_global
+    from ..user_context import get_current_user_id
+    from ..utils.encoding import encode_data
+
+    # T5710: each clip gets an 8s window (not 1s) so a real e2e run -- which
+    # spends several real wall-clock seconds on sequential Playwright
+    # assertions (chip visibility, filter clicks, Create Clip) -- can't have
+    # the stitched video's autoplay drift onto the NEXT clip mid-assertion.
+    # A 1s-per-clip video reliably caused exactly that: the "active" clip
+    # (and therefore Create Clip's target + the NotesOverlay/transport label)
+    # would silently move on before the test finished checking the one it
+    # just clicked.
+    CLIP_SECONDS = 8
+    total_clips = req.athlete_clips + req.team_clips
+    data = _generate_tiny_mp4(duration=max(total_clips, 1) * CLIP_SECONDS)
+    video_hash = hashlib.sha256(
+        (data or b"") + str(time.time()).encode()
+    ).hexdigest()[:32]
+    media_uploaded = False
+    if data and R2_ENABLED:
+        media_uploaded = upload_bytes_to_r2_global(f"games/{video_hash}.mp4", data)
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO games (name, blake3_hash) VALUES (?, ?)",
+            (req.name, video_hash),
+        )
+        game_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO game_videos (game_id, blake3_hash, sequence) VALUES (?, ?, 1)",
+            (game_id, video_hash),
+        )
+
+        athlete_ids, team_ids = [], []
+        offset = 0.0
+        for i in range(req.athlete_clips):
+            cur.execute(
+                """INSERT INTO raw_clips (game_id, filename, name, rating,
+                                           start_time, end_time, video_sequence, my_athlete)
+                   VALUES (?, '', ?, 4, ?, ?, 1, 1)""",
+                (game_id, f"Athlete clip {i+1}", offset, offset + CLIP_SECONDS),
+            )
+            athlete_ids.append(cur.lastrowid)
+            offset += CLIP_SECONDS
+        for i in range(req.team_clips):
+            cur.execute(
+                """INSERT INTO raw_clips (game_id, filename, name, rating,
+                                           start_time, end_time, video_sequence,
+                                           my_athlete, tagged_teammates)
+                   VALUES (?, '', ?, 4, ?, ?, 1, 0, ?)""",
+                (game_id, f"Team clip {i+1}", offset, offset + CLIP_SECONDS,
+                 encode_data([f"Player {i+1}"])),
+            )
+            team_ids.append(cur.lastrowid)
+            offset += CLIP_SECONDS
+        conn.commit()
+
+    stitched = {}
+    if req.stitch and media_uploaded:
+        from ..services.auto_export import ensure_recap
+
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+        for layer in (RecapLayer.TEAM, RecapLayer.ATHLETE):
+            try:
+                stitched[layer.value] = ensure_recap(user_id, profile_id, game_id, layer)
+            except Exception as e:
+                logger.warning(f"[TEST] seed-recap-game stitch failed for layer={layer}: {e}")
+                stitched[layer.value] = {"status": "failed", "error": str(e)}
+
+        athlete_result = stitched.get(RecapLayer.ATHLETE.value)
+        if athlete_result and athlete_result.get("status") in ("present", "stitched"):
+            with get_db_connection() as conn:
+                conn.execute(
+                    "UPDATE games SET auto_export_status = 'complete', recap_video_url = ? WHERE id = ?",
+                    (athlete_result["recap_key"], game_id),
+                )
+                conn.commit()
+
+    logger.warning(
+        f"[TEST] seeded recap game id={game_id} name={req.name!r} "
+        f"athlete_clips={athlete_ids} team_clips={team_ids} media={media_uploaded} "
+        f"stitched={stitched}"
+    )
+    return {
+        "status": "ok",
+        "game_id": game_id,
+        "athlete_clip_ids": athlete_ids,
+        "team_clip_ids": team_ids,
+        "media_uploaded": media_uploaded,
+        "stitched": stitched,
     }
 
 

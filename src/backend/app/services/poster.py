@@ -718,6 +718,24 @@ def recap_poster_r2_keys(user_id: str, profile_id: str, game_id: int) -> tuple[s
     )
 
 
+def recap_poster_r2_keys_for_layer(
+    user_id: str, profile_id: str, game_id: int, layer: str,
+) -> tuple[str, str]:
+    """Full R2 keys for a game's PER-LAYER recap master + its FULL-SIZE poster
+    (T5710), under the sharer's profile prefix. layer='athlete' is byte-identical
+    to `recap_poster_r2_keys` (same unsuffixed keys -- the athlete layer keeps
+    the pre-T5710 scheme); layer='team' returns the derived `_team` siblings.
+    The pre-existing unsuffixed helper stays untouched for its existing callers
+    (email teammate share -- EPIC decision 6, that flow is unchanged)."""
+    from ..constants import RecapLayer
+    from ..storage import profile_r2_key
+    suffix = "_team" if layer == RecapLayer.TEAM else ""
+    return (
+        profile_r2_key(user_id, profile_id, f"recaps/{game_id}{suffix}.mp4"),
+        profile_r2_key(user_id, profile_id, f"recaps/posters/{game_id}{suffix}.jpg"),
+    )
+
+
 def recap_card_poster_r2_key(user_id: str, profile_id: str, game_id: int) -> str:
     """Full R2 key for a game's CARD-SIZE (480px) poster thumbnail (T5682), used
     ONLY by the owner-facing home/games-tab tile (`games.py::get_game_poster`) --

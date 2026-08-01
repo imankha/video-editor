@@ -122,6 +122,23 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `updateClip(clipId, {create_project: true})` → `PUT /clips/raw/{id}`, optimistically flips
   `in_drafts`; button disabled while `in_drafts` is true. Clips have NO independent source video,
   so re-materializing clips from an expired game was deferred.
+- **T5710 — per-layer recap tabs + player-tag filter is a RAIL-ONLY filter, never a
+  playback filter.** `RecapPlayerModal.jsx` splits the old single recap tab into Team Recap /
+  {Athlete} Recap (see [export-pipeline.md](export-pipeline.md) § Active/upcoming work T5710 for
+  the backend layer split). Each layer gets its OWN `useRecapPlayback(videoRef, clips)` instance
+  over that layer's UNFILTERED clip list — this is the thing that drives autoplay, the active-clip
+  overlay (`NotesOverlay`), the transport bar's current-segment label, and `handleCreateRecapClip`'s
+  target (via `activeRecapClip = activeLayerData.clips.find(c => c.id === activePlayback.activeClipId)`).
+  The Team Recap's player-tag filter chips only narrow `sidebarClips` — the list handed to
+  `RecapClipsSidebar` for rendering — they do NOT touch `useRecapPlayback`'s clip list. Consequence:
+  a clip filtered OUT of the rail can still legitimately show its name in the video overlay and
+  transport label if it's the one currently playing (the stitched video autoplays straight through
+  every clip regardless of the rail filter). The rail div carries
+  `data-testid="recap-clip-rail"` specifically so tests can assert "is this clip in the filtered
+  list" without false-failing on "is this clip's name showing anywhere in the modal". An assertion
+  scoped to the whole modal will flake once autoplay drifts past the clip it just filtered out —
+  this bit the original T5710 e2e spec (see export-pipeline.md's seed-recap-game seam note for the
+  fix: 8s-per-clip seed duration + rail-scoped locators).
 - **Expired-game Annotate playback = graceful degradation (bug 27p).** When
   `annotateSourceExpired` (from `/load`'s `game.storage_status === 'expired'`), `AnnotateModeView`
   renders a deliberate yellow "Source video expired" panel in the video area INSTEAD of any

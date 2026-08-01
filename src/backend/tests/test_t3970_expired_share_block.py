@@ -240,13 +240,19 @@ class TestRecapDataFallback:
         assert len(data["clips"]) == 3
 
     def test_returns_recap_when_recap_exists(self, client):
-        """A real stitched recap in R2 is preferred and reported as kind=recap."""
+        """A real per-layer STAMPED stitched recap in R2 is preferred over the
+        game video and reported as kind=recap (T5710: an unstamped/legacy
+        mapping does NOT count as a hit -- see test_t5710_per_layer_recaps.py
+        for that resolution-order case)."""
         game_id = _seed_game(ACTIVE_HASH, _future(), recap_url="recaps/g.mp4")
         with patch("app.routers.games.file_exists_in_r2", return_value=True), \
              patch("app.routers.games.r2_head_object_global", return_value={"ContentLength": 1}), \
              patch("app.routers.games.generate_presigned_url",
                    return_value="https://r2.example.com/recaps/g.mp4"), \
-             patch("app.routers.games._try_load_recap_mapping", return_value=None):
+             patch("app.services.auto_export.load_recap_mapping",
+                   return_value=("athlete", [{"id": 1, "name": "Clip 1", "rating": 3,
+                                               "tags": [], "notes": "",
+                                               "recap_start": 0.0, "recap_end": 5.0}])):
             resp = client.get(
                 f"/api/games/{game_id}/recap-data",
                 headers=_auth_headers(SHARER_ID),
