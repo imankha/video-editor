@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-08-01 (T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
+updated: 2026-08-01 (T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
 
@@ -193,6 +193,36 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   filtering into per-lane arrays (it reflects position in the full chronological list, not
   position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
   `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
+
+## Adding a sport (T5695) — the tag registry is NOT the only place
+A sport = a tag-set file + registry wiring + a backend curated combo, but since
+T5695 it ALSO has a **cross-repo mirror in `src/landing/` that self-contradicts if
+skipped** (the landing site is Astro and generates a crawlable `/{slug}` page per
+sport — the task file's old "optional `src/landing/src/App.tsx`" note is STALE).
+The full checklist for an 11th→Nth sport:
+- **Editor**: new `src/frontend/src/modes/annotate/constants/{sport}Tags.js` (mirror
+  `baseballTags.js`) + 4 edits in `tagRegistry.js` (import, `TAG_SETS`,
+  `SUPPORTED_SPORTS`, `SPORT_EMOJI`). The registry is the SOURCE OF TRUTH.
+- **Backend**: a `CURATED_COMBOS[sport]` entry in `routers/collections.py` — tag names
+  **case-sensitive, must match the registry EXACTLY** (a cross-language guard,
+  `tagRegistry.test.js` `CURATED_COMBO_TAGS`, asserts every curated tag exists in the
+  registry AND that `Object.keys(CURATED_COMBO_TAGS) === SUPPORTED_SPORTS ids`).
+  `test_collections_summary.py::test_each_sport_curated_and_per_tag` is parametrized over
+  `CURATED_COMBOS.keys()`, so it auto-covers the new sport.
+- **Landing MIRROR** (`src/landing/`, all four or the site lies): (1) a `{sport}` key in
+  `src/data/sportTags.json` mirroring the editor's positions+plays (copy names/descriptions
+  verbatim); (2) a `Sport` entry in `src/data/sports.ts` (hand-written SEO copy — title ≤60,
+  description ≤155); (3) `FACTS` counts in `src/site.ts` — `sportCount`, `positionCount`,
+  `playTypeCount` are advertised as VERIFIED counts, so they must move with the data (verify
+  arithmetically: `node -e` sum over `sportTags.json` — T5695 confirmed 11/46/136); (4) the
+  hardcoded prose sport list AND the hardcoded "N sports" number in
+  `src/pages/index.astro` (a FAQ answer enumerates every sport next to `${FACTS.sportCount}`,
+  and the PageLayout `description=` had a literal `10 sports`). Grep `src/landing/` for other
+  hardcoded enumerations; the `sports.astro` lists are dynamic (`SPORTS.map`) or "and more",
+  so they self-update. Verify with `cd src/landing && npm run check && npm run build && node
+  scripts/verify-seo.mjs dist` (sport pages build to `dist/{slug}.html`, not `/{slug}/index.html`).
+  NOTE: `verify-seo` exits 1 on the pre-existing `public/google3f2f68ce4662a3cd.html` Search
+  Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is

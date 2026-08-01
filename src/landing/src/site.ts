@@ -56,11 +56,11 @@ export const SAME_AS: string[] = []
  */
 export const FACTS = {
   /** SUPPORTED_SPORTS in the editor's tagRegistry. */
-  sportCount: 10,
+  sportCount: 11,
   /** Sum of positions across all sport tag sets. */
-  positionCount: 42,
+  positionCount: 46,
   /** Sum of play-type presets across all positions. */
-  playTypeCount: 123,
+  playTypeCount: 136,
   /** Upscale target of the Elevate step. */
   upscaleTarget: '4K',
   /** What a viewer needs to watch a shared reel. */

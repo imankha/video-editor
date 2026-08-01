@@ -8,6 +8,7 @@ import { volleyballTags, positions as volleyballPositions } from './volleyballTa
 import { hockeyTags, positions as hockeyPositions } from './hockeyTags';
 import { tennisTags, positions as tennisPositions } from './tennisTags';
 import { baseballTags, positions as baseballPositions } from './baseballTags';
+import { softballTags, positions as softballPositions } from './softballTags';
 
 const TAG_SETS = {
   soccer: { positions: soccerPositions, tags: soccerTags },
@@ -20,6 +21,7 @@ const TAG_SETS = {
   hockey: { positions: hockeyPositions, tags: hockeyTags },
   tennis: { positions: tennisPositions, tags: tennisTags },
   baseball: { positions: baseballPositions, tags: baseballTags },
+  softball: { positions: softballPositions, tags: softballTags },
 };
 
 const DEFAULT_SPORT = 'soccer';
@@ -35,6 +37,7 @@ export const SUPPORTED_SPORTS = [
   { id: 'hockey', name: 'Hockey' },
   { id: 'tennis', name: 'Tennis' },
   { id: 'baseball', name: 'Baseball' },
+  { id: 'softball', name: 'Softball' },
 ];
 
 export function sportDisplayName(storedValue) {
@@ -63,6 +66,7 @@ const SPORT_EMOJI = {
   hockey: '🏒',     // 🏒
   tennis: '🎾',     // 🎾
   baseball: '⚾',         // ⚾
+  softball: '🥎',        // 🥎
 };
 
 export function sportEmoji(sport) {
