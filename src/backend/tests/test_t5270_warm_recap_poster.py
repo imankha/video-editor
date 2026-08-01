@@ -142,7 +142,7 @@ class TestShareGameWarmsPoster:
                    return_value={"share_token": "tok1", "recipient_email": "friend@example.com"}), \
              patch("app.services.email.send_game_share_email", new_callable=AsyncMock, return_value=True), \
              patch.object(poster_mod, "ensure_recap_poster", side_effect=fake_ensure):
-            result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(emails=["friend@example.com"])))
+            result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(recipients=[games.RecipientShare(email="friend@example.com", scope="game_only")])))
 
         assert result["all_sent"] is True
         # The marker was set INSIDE the awaited call -- proves the response
@@ -158,7 +158,7 @@ class TestShareGameWarmsPoster:
         with patch("app.services.sharing_db.create_game_share", side_effect=RuntimeError("db down")), \
              patch("app.services.email.send_game_share_email", new_callable=AsyncMock, return_value=True), \
              patch("app.services.poster.warm_recap_poster", new_callable=AsyncMock) as warm:
-            result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(emails=["friend@example.com"])))
+            result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(recipients=[games.RecipientShare(email="friend@example.com", scope="game_only")])))
 
         warm.assert_not_called()
         assert result["results"] == [{"email": "friend@example.com", "sent": True}]
@@ -173,7 +173,7 @@ class TestShareGameWarmsPoster:
                    return_value={"share_token": "tok1", "recipient_email": "friend@example.com"}), \
              patch("app.services.email.send_game_share_email", new_callable=AsyncMock, return_value=True), \
              patch.object(poster_mod, "ensure_recap_poster", side_effect=RuntimeError("ffmpeg exploded")):
-            result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(emails=["friend@example.com"])))
+            result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(recipients=[games.RecipientShare(email="friend@example.com", scope="game_only")])))
 
         assert result["all_sent"] is True
 
@@ -278,7 +278,7 @@ def test_first_get_after_creation_does_not_reencode(db_env):
          patch.object(poster_mod, "_jpeg_dimensions", return_value=(100, 100)), \
          patch.object(shares, "r2_head_object_global", side_effect=fake_r2.head), \
          patch.object(shares, "generate_presigned_url_global", side_effect=fake_r2.presign):
-        result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(emails=["friend@example.com"])))
+        result = asyncio.run(games.share_game(game_id, games.ShareGameRequest(recipients=[games.RecipientShare(email="friend@example.com", scope="game_only")])))
 
         assert result["all_sent"] is True
         assert fake_r2.extract_calls == 1  # generated exactly once, at share-creation time

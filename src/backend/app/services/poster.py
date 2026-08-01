@@ -746,25 +746,39 @@ def recap_card_poster_r2_key(user_id: str, profile_id: str, game_id: int) -> str
     return profile_r2_key(user_id, profile_id, f"recaps/posters/{game_id}.card.jpg")
 
 
-async def warm_recap_poster(user_id: str, profile_id: str, game_id: int) -> None:
-    """Warm the recap poster cache at teammate-share-CREATION time (T5270), so
-    the R2 object exists before the link can be pasted into a messenger -- the
-    old generate-on-first-request path made the first crawler pay the ffmpeg
-    cost, which is too slow for the few seconds a crawler allots og:image.
+async def warm_recap_poster(
+    user_id: str, profile_id: str, game_id: int, layer: str = "athlete",
+) -> None:
+    """Warm the recap poster cache at share-CREATION time (T5270), so the R2
+    object exists before the link can be pasted into a messenger -- the old
+    generate-on-first-request path made the first crawler pay the ffmpeg cost,
+    which is too slow for the few seconds a crawler allots og:image.
+
+    `layer` selects which per-layer recap's poster to warm (T5720): the default
+    `'athlete'` is byte-identical to the pre-T5710 behavior (unsuffixed keys) and
+    keeps the existing email-teammate caller unchanged (EPIC decision 6); the
+    public game link passes `'team'` to warm the `_team` poster. One warmer, one
+    layer knob -- never a parallel `warm_team_recap_poster`.
 
     Best-effort only: `ensure_recap_poster` already never raises (missing recap,
     ffmpeg failure, R2 hiccup all return False), but this wrapper never lets an
     unexpected error escape either -- share creation must never fail or slow
     meaningfully because of poster warming. Runs off the event loop
     (`asyncio.to_thread`) since generation shells out to ffmpeg. The on-demand
-    GET path (`shares.py::get_shared_teammate_poster`) stays as the fallback for
-    shares created before this warmed, or whose cached object was evicted.
+    GET path (`shares.py::get_shared_teammate_poster` /
+    `get_shared_game_poster`) stays as the fallback for shares created before
+    this warmed, or whose cached object was evicted.
     """
-    recap_key, poster_key = recap_poster_r2_keys(user_id, profile_id, game_id)
+    recap_key, poster_key = recap_poster_r2_keys_for_layer(
+        user_id, profile_id, game_id, layer,
+    )
     try:
         await asyncio.to_thread(ensure_recap_poster, recap_key, poster_key)
     except Exception as e:
-        logger.info(f"[RecapPoster] warm-at-share-creation failed for game_id={game_id}: {e}")
+        logger.info(
+            f"[RecapPoster] warm-at-share-creation failed for game_id={game_id} "
+            f"layer={layer}: {e}"
+        )
 
 
 # ---------------------------------------------------------------------------

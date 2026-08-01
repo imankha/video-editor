@@ -956,6 +956,77 @@ async def analytics_channels(
     return {"channels": channels}
 
 
+@router.get("/analytics/share-funnel")
+async def analytics_share_funnel(limit: int = Query(100)):
+    """Read-only per-link growth funnel for public game links (T5740).
+
+    Answers ONE question per link: views -> claims -> activated accounts, so we can
+    tell whether the watch-first loop converts. No new tables and no new writes:
+      - views:     the sharer's already-logged `share_viewed` events (per token)
+      - claims:    distinct claimers in share_claims (T5730)
+      - activated: claimers who then recorded an `export_completed` milestone
+    Analytics stays OFF any user path -- this is a normal admin query (T4840)."""
+    _require_admin()
+    from ..analytics import share_view_counts
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT s.id, s.share_token, s.sharer_user_id, s.shared_at, s.revoked_at,
+                   u.email AS sharer_email,
+                   sg.game_id, sg.game_name,
+                   COUNT(DISTINCT sc.claimer_user_id) AS claims,
+                   COUNT(DISTINCT sc.claimer_user_id)
+                       FILTER (WHERE act.user_id IS NOT NULL) AS activated
+            FROM shares s
+            JOIN share_games sg ON sg.share_id = s.id
+            LEFT JOIN users u ON u.user_id = s.sharer_user_id
+            LEFT JOIN share_claims sc ON sc.share_id = s.id
+            LEFT JOIN (
+                SELECT DISTINCT user_id FROM user_actions
+                WHERE action = 'export_completed' AND count > 0
+            ) act ON act.user_id = sc.claimer_user_id
+            WHERE s.share_type = 'game_link'
+            GROUP BY s.id, u.email, sg.game_id, sg.game_name
+            ORDER BY s.shared_at DESC
+            LIMIT %s
+        """, (limit,))
+        rows = cur.fetchall()
+
+    # Views live per-token in each sharer's SQLite -- group by sharer so each
+    # sharer DB is opened at most once for the whole page.
+    tokens_by_sharer: dict[str, list[str]] = {}
+    for r in rows:
+        tokens_by_sharer.setdefault(r["sharer_user_id"], []).append(r["share_token"])
+    views_by_token: dict[str, int] = {}
+    view_lookup_failed: set[str] = set()
+    for sharer_id, tokens in tokens_by_sharer.items():
+        counts = share_view_counts(sharer_id, tokens)
+        if counts is None:
+            view_lookup_failed.add(sharer_id)
+        else:
+            views_by_token.update(counts)
+
+    links = []
+    for r in rows:
+        unknown_views = r["sharer_user_id"] in view_lookup_failed
+        links.append({
+            "share_token": r["share_token"],
+            "game_id": r["game_id"],
+            "game_name": r["game_name"] or "Untitled Game",
+            "sharer_email": r["sharer_email"],
+            "created_at": r["shared_at"].isoformat() if r["shared_at"] else None,
+            "revoked": r["revoked_at"] is not None,
+            # None -> the sharer's view log couldn't be read (honest 'unknown'),
+            # distinct from 0 (read fine, nobody watched).
+            "views": None if unknown_views else views_by_token.get(r["share_token"], 0),
+            "claims": r["claims"],
+            "activated": r["activated"],
+        })
+
+    return {"links": links, "activation_metric": "export_completed"}
+
+
 @router.get("/analytics/cohorts")
 async def analytics_cohorts(
     granularity: str = Query("week"),

@@ -134,7 +134,7 @@ class TestExpiredGameShareBlocked:
         game_id = _seed_game(EXPIRED_HASH, _past())
         resp = client.post(
             f"/api/games/{game_id}/share",
-            json={"emails": [UNKNOWN_EMAIL]},
+            json={"recipients": [{"email": UNKNOWN_EMAIL, "scope": "game_only"}]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 410
@@ -155,7 +155,7 @@ class TestExpiredGameShareBlocked:
         game_id = _seed_game(EXPIRED_HASH, _past())
         client.post(
             f"/api/games/{game_id}/share",
-            json={"emails": [UNKNOWN_EMAIL]},
+            json={"recipients": [{"email": UNKNOWN_EMAIL, "scope": "game_only"}]},
             headers=_auth_headers(SHARER_ID),
         )
         assert list_shares_for_game(game_id, SHARER_ID) == []
@@ -170,7 +170,7 @@ class TestActiveGameStillShareable:
         game_id = _seed_game(ACTIVE_HASH, _future())
         resp = client.post(
             f"/api/games/{game_id}/share",
-            json={"emails": [UNKNOWN_EMAIL]},
+            json={"recipients": [{"email": UNKNOWN_EMAIL, "scope": "game_only"}]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 200
@@ -181,7 +181,7 @@ class TestActiveGameStillShareable:
         game_id = _seed_game(ACTIVE_HASH, None)
         resp = client.post(
             f"/api/games/{game_id}/share",
-            json={"emails": [UNKNOWN_EMAIL]},
+            json={"recipients": [{"email": UNKNOWN_EMAIL, "scope": "game_only"}]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 200

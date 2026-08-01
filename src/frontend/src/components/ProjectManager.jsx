@@ -6,6 +6,8 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
+import { toast } from './shared/Toast';
+import { consumePendingRecap } from '../utils/pendingNavigation';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
 import { compareGameTime } from '../utils/timeFormat';
@@ -519,6 +521,22 @@ export function ProjectManager({
       onFetchGames();
     }
   }, [showNewProjectModal, onFetchGames]);
+
+  // T5730: post-claim landing = the claimed game's recap (watching first), with a
+  // one-time "tag your athlete's plays" nudge toward Annotate. Consumed once the
+  // games list has loaded so the freshly-imported game is present; the breadcrumb
+  // is cleared on read so it fires exactly once (never on a later home visit).
+  useEffect(() => {
+    if (loading || games.length === 0) return;
+    const recapGameId = consumePendingRecap();
+    if (recapGameId == null) return;
+    const game = games.find(g => g.id === recapGameId);
+    if (!game) return;
+    setRecapGame({ game, initialTab: 'team' });
+    toast.info('Tag your athlete’s plays', {
+      message: 'This game is on your Team layer — open Annotate to tag your own athlete.',
+    });
+  }, [games, loading]);
 
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
