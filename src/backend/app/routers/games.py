@@ -19,11 +19,11 @@ import logging
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
-from app.constants import GameCreateStatus, GameStatus, GameType, get_rating_adjective
+from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope, get_rating_adjective
 from app.database import ensure_directories, get_db_connection
 from app.profile_context import get_current_profile_id
 from app.queries import normalize_rating
@@ -1827,13 +1827,25 @@ def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
         return True
 
 
+class RecipientShare(BaseModel):
+    """One share recipient + the clip scope they receive (T5740). scope defaults
+    to ALL_TEAM so an omitted scope preserves the 'team clips by default' intent."""
+    email: str
+    scope: ShareClipScope = ShareClipScope.ALL_TEAM
+
+
 class ShareGameRequest(BaseModel):
-    emails: list[str]
+    # T5740: one honest wire shape -- each recipient carries its own clip scope.
+    # (Replaces the pre-T5740 {emails: [...]} game-only shape; the ShareGameModal
+    # is the only caller and moves to this in the same change.)
+    recipients: list[RecipientShare]
 
 
 @router.post("/{game_id:int}/share")
 async def share_game(game_id: int, body: ShareGameRequest):
-    """Share a game with recipients via email. Game-only sharing (no annotations)."""
+    """Share a game with recipients via email, each recipient receiving the clips
+    for their per-recipient scope (T5740: all team clips / only clips they're tagged
+    in / game only). My-Athlete clips never cross (EPIC 1/3)."""
     import asyncio
 
     from app.services.auth_db import get_user_by_email, get_user_by_id
@@ -1841,6 +1853,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
     from app.services.email import _is_existing_user, _resolve_sender_name, send_game_share_email
     from app.services.materialization import (
         materialize_game_share,
+        resolve_scoped_clips,
         serialize_clip_data,
     )
     from app.services.sharing_db import (
@@ -1856,6 +1869,8 @@ async def share_game(game_id: int, body: ShareGameRequest):
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
     sender_name = _resolve_sender_name(sharer_email)
+
+    emails = [r.email for r in body.recipients]
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1881,11 +1896,19 @@ async def share_game(game_id: int, body: ShareGameRequest):
                 detail="Storage expired - extend storage to share this game.",
             )
 
+        # Resolve each recipient's clips ONCE, up front, on the sharer's profile DB
+        # (this same conn). resolve_scoped_clips is the shared source of truth with
+        # the /share-preview read, so what a recipient is shown == what they receive.
+        clip_data_by_email = {
+            r.email: resolve_scoped_clips(conn, game_id, r.email, r.scope.value)
+            for r in body.recipients
+        }
+
     email_results = []
     all_sent = True
 
     share_records = []
-    for email in body.emails:
+    for email in emails:
         try:
             share = create_game_share(
                 game_id=game_id,
@@ -1908,7 +1931,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
         await warm_recap_poster(user_id, profile_id, game_id)
 
     tasks = {}
-    for email, share in zip(body.emails, share_records):
+    for email, share in zip(emails, share_records):
         is_first_touch = not _is_existing_user(email)
         tasks[email] = send_game_share_email(
             recipient_email=email,
@@ -1922,7 +1945,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
     if tasks:
         send_results = await asyncio.gather(*tasks.values())
         for (email, share), sent in zip(
-            zip(body.emails, share_records), send_results
+            zip(emails, share_records), send_results
         ):
             email_results.append({"email": email, "sent": sent})
             if not sent:
@@ -1932,9 +1955,13 @@ async def share_game(game_id: int, body: ShareGameRequest):
                         revoke_share(share["share_token"], user_id)
 
     if all_sent and email_results:
-        for email, share in zip(body.emails, share_records):
+        for email, share in zip(emails, share_records):
             if not share:
                 continue
+            # T5740: the clips this recipient's scope resolved to, up front. Both the
+            # pending-share snapshot and the live materialize below use this so the
+            # scope choice is honored on every delivery path.
+            scoped_clips = clip_data_by_email.get(email, [])
             try:
                 recipient_user = get_user_by_email(email)
                 share_record = get_share_by_token(share["share_token"])
@@ -1949,7 +1976,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
                         recipient_email=email,
                         game_id=game_id,
                         tag_name=None,
-                        clip_data_bytes=serialize_clip_data([]),
+                        clip_data_bytes=serialize_clip_data(scoped_clips),
                     )
                     logger.info(f"[share-game] Created pending share for non-user {email}")
                     continue
@@ -1987,8 +2014,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
                             recipient_user_id=recipient_user["user_id"],
                             recipient_profile_id=profiles[0]["id"],
                             game_id=game_id,
+                            # tag_name stays None: this is the game-share channel,
+                            # not a teammate share. The scope is expressed by the
+                            # explicit clip_data, not by re-querying a tag.
                             tag_name=None,
                             share_id=share_record["id"],
+                            clip_data=scoped_clips,
                             sharer_email=sharer_email,
                         )
                         logger.info(f"[share-game] Materialized for {email}")
@@ -2000,7 +2031,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
                             recipient_email=email,
                             game_id=game_id,
                             tag_name=None,
-                            clip_data_bytes=serialize_clip_data([]),
+                            clip_data_bytes=serialize_clip_data(scoped_clips),
                         )
                         logger.info(f"[share-game] Created pending share for multi-profile user {email}")
                 except RefreshFailed:
@@ -2018,7 +2049,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
                         recipient_email=email,
                         game_id=game_id,
                         tag_name=None,
-                        clip_data_bytes=serialize_clip_data([]),
+                        clip_data_bytes=serialize_clip_data(scoped_clips),
                     )
                     logger.warning(
                         f"[share-game] Materialization refused for {email} "
@@ -2028,6 +2059,60 @@ async def share_game(game_id: int, body: ShareGameRequest):
                 logger.error(f"[share-game] Materialization failed for {email}: {e}")
 
     return {"results": email_results, "all_sent": all_sent}
+
+
+class SharePreviewClip(BaseModel):
+    id: int
+    name: str | None = None
+    rating: int | None = None
+    start_time: float | None = None
+
+
+class SharePreviewResponse(BaseModel):
+    # Both scopes' clip lists for ONE recipient email, so the modal can switch the
+    # per-row dropdown without a refetch. game_only is trivially empty client-side.
+    all_team: list[SharePreviewClip]
+    tagged: list[SharePreviewClip]
+    # False -> the email has no teammate_emails mapping, so 'Only clips they're
+    # tagged in' yields zero clips (the untagged state the modal warns about).
+    tagged_has_mapping: bool
+
+
+def _preview_clip(clip: dict) -> SharePreviewClip:
+    return SharePreviewClip(
+        id=clip["id"],
+        name=clip.get("name"),
+        rating=clip.get("rating"),
+        start_time=clip.get("start_time"),
+    )
+
+
+@router.get("/{game_id:int}/share-preview", response_model=SharePreviewResponse)
+async def share_preview(game_id: int, email: str = Query(...)):
+    """Plain read (T5740): the clips a recipient would receive per scope, so the
+    share modal can show the count/list BEFORE sending. Uses the SAME
+    resolve_scoped_clips the send path uses -> the preview can never lie about what
+    the share materializes. No writes, never on an analytics path."""
+    from app.services.materialization import (
+        _tag_names_for_email,
+        resolve_scoped_clips,
+    )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        all_team = resolve_scoped_clips(conn, game_id, email, ShareClipScope.ALL_TEAM.value)
+        tagged = resolve_scoped_clips(conn, game_id, email, ShareClipScope.TAGGED_ONLY.value)
+        has_mapping = bool(_tag_names_for_email(conn, email))
+
+    return SharePreviewResponse(
+        all_team=[_preview_clip(c) for c in all_team],
+        tagged=[_preview_clip(c) for c in tagged],
+        tagged_has_mapping=has_mapping,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -328,6 +328,41 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
         logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s event=%s", user_id, event)
 
 
+def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] | None:
+    """Per-link `share_viewed` counts for the T5740 admin funnel (read-only).
+
+    share_viewed milestones are logged per-event in the sharer's per-user SQLite
+    (record_milestone -> user_action_log) with the share_token in `context`. T5740
+    reads them back rather than adding a second counter (the beacon already exists).
+    This is an admin READ, never on a user-facing response path (T4840).
+
+    Returns {token: view_count} (missing tokens = 0 views), or None if the sharer's
+    DB can't be opened -- an honest 'unknown', never a silent 0 that would read as
+    'nobody watched'."""
+    if not tokens:
+        return {}
+    try:
+        from app.services.user_db import get_user_db_connection
+        placeholders = ",".join("?" * len(tokens))
+        with get_user_db_connection(sharer_user_id) as conn:
+            rows = conn.execute(
+                f"""SELECT json_extract(context, '$.share_token') AS token,
+                           COUNT(*) AS views
+                    FROM user_action_log
+                    WHERE action = 'share_viewed'
+                      AND json_extract(context, '$.share_token') IN ({placeholders})
+                    GROUP BY token""",
+                tokens,
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+    except Exception:
+        logger.warning(
+            "[Analytics] share_view_counts failed for sharer=%s", sharer_user_id,
+            exc_info=True,
+        )
+        return None
+
+
 def update_session(user_id: str, is_pwa: bool = False):
     # T1515: an impersonating admin's requests must not bump the user's session
     # timing (last_active_at / current_session_start / total_usage_seconds).

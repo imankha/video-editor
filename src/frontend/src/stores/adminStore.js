@@ -23,6 +23,7 @@ export const useAdminStore = create((set, get) => ({
   userFilter: null,
 
   funnelData: null, funnelLoading: false,
+  shareFunnelData: null, shareFunnelLoading: false,
   channelsData: null, channelsLoading: false,
   cohortsData: null, cohortsLoading: false,
   pulseData: null, pulseLoading: false,
@@ -193,6 +194,15 @@ export const useAdminStore = create((set, get) => ({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ funnelData: await res.json(), funnelLoading: false });
     } catch { set({ funnelLoading: false }); }
+  },
+
+  fetchShareFunnel: async () => {
+    set({ shareFunnelLoading: true });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/share-funnel`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ shareFunnelData: await res.json(), shareFunnelLoading: false });
+    } catch { set({ shareFunnelLoading: false }); }
   },
 
   fetchChannels: async (from, to) => {

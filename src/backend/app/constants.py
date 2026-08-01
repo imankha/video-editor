@@ -288,6 +288,22 @@ class RecapLayer(str, Enum):
     TEAM = "team"
 
 
+class ShareClipScope(str, Enum):
+    """T5740: per-recipient clip scope on the game share (Google-Docs-style).
+    Picks WHICH clips a recipient receives; My-Athlete clips (my_athlete != 0)
+    NEVER cross under any scope (EPIC decision 1/3).
+
+    ALL_TEAM     -> every Team-layer clip (my_athlete = 0) for the game.
+    TAGGED_ONLY  -> only Team clips the recipient's email is tagged in
+                    (teammate_emails -> tag_name -> clip_teammates). Zero clips
+                    when the email has no tag mapping -- surfaced before send.
+    GAME_ONLY    -> the game/team recap and zero clips (preserves the pre-T5740
+                    game-only share behavior as an explicit, selectable choice)."""
+    ALL_TEAM = "all_team"
+    TAGGED_ONLY = "tagged_only"
+    GAME_ONLY = "game_only"
+
+
 # =============================================================================
 # Video Processing Constants
 # =============================================================================

@@ -318,6 +318,57 @@ def team_layer_clips_for_game(conn: sqlite3.Connection, game_id: int) -> list[di
     ]
 
 
+def _tag_names_for_email(conn: sqlite3.Connection, email: str) -> list[str]:
+    """Resolve a recipient email to its teammate tag_name(s) (T5740).
+
+    teammate_emails holds tag_name <-> email mappings (clips.py). An email may map
+    to more than one tag; all are returned so tagged-only sharing unions every clip
+    that recipient is tagged in. Case-insensitive to match UserPicker's normalized
+    (lower-cased) emails against however the mapping was entered. Empty list means
+    'no tag mapping' -> tagged-only yields zero clips (the untagged state)."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT tag_name FROM teammate_emails WHERE lower(email) = lower(?)",
+        (email,),
+    )
+    return [row["tag_name"] for row in cur.fetchall()]
+
+
+def resolve_scoped_clips(
+    conn: sqlite3.Connection, game_id: int, email: str, scope: str
+) -> list[dict]:
+    """Return the EXACT clip dicts a recipient receives for the given share scope.
+
+    SINGLE SOURCE OF TRUTH (T5740): the share-preview READ and the share SEND path
+    both call this, so the preview list can never diverge from what is materialized.
+    Reuses the existing selection machinery -- no new clip-selection query:
+      ALL_TEAM    -> team_layer_clips_for_game (my_athlete = 0)
+      TAGGED_ONLY -> _filter_clips_for_tag per resolved tag, unioned by clip id
+      GAME_ONLY   -> [] (game/recap only)
+    My-Athlete clips (my_athlete != 0) never appear via any branch (EPIC 1/3)."""
+    from app.constants import ShareClipScope
+
+    if scope == ShareClipScope.ALL_TEAM.value:
+        return team_layer_clips_for_game(conn, game_id)
+    if scope == ShareClipScope.TAGGED_ONLY.value:
+        # INTERSECT tagged clips with the Team layer: _filter_clips_for_tag alone
+        # would return a My-Athlete clip that happens to carry the tag, which must
+        # NEVER cross (EPIC decision 1/3). Restricting to my_athlete = 0 ids keeps
+        # the invariant even when a tag spans both layers.
+        team_ids = {c["id"] for c in team_layer_clips_for_game(conn, game_id)}
+        seen: set = set()
+        unioned: list[dict] = []
+        for tag in _tag_names_for_email(conn, email):
+            for clip in _filter_clips_for_tag(conn, game_id, tag):
+                if clip["id"] in team_ids and clip["id"] not in seen:
+                    seen.add(clip["id"])
+                    unioned.append(clip)
+        return unioned
+    if scope == ShareClipScope.GAME_ONLY.value:
+        return []
+    raise ValueError(f"Unknown share clip scope: {scope!r}")
+
+
 def clips_overlap(a: dict, b: dict) -> bool:
     """Two clips overlap if video_sequence matches and time ranges intersect."""
     if a.get("video_sequence") != b.get("video_sequence"):

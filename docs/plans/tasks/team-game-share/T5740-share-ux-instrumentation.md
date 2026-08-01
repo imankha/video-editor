@@ -15,25 +15,39 @@ measurable. Without a native share sheet + prefilled message, "drop it in the te
 is copy-paste friction; without funnel numbers, we can't tune the watch page CTA or know
 whether the loop converts.
 
-## Solution
+## Solution (AS BUILT — 2026-08-01)
 
-1. **Share sheet** — from the game card menu and the Team Recap viewer: one tap →
-   `navigator.share` on mobile (title + prefilled message + link), copy-link fallback on
-   desktop with a "Link copied" toast. Prefilled message pattern:
-   `"⚽ Highlights from {game name} — watch the team's best plays: {link}"` (exact copy via
-   UI Designer; mirror the Dual-Camera T5510 share-sheet pattern so the two flows feel
-   identical — whichever lands first establishes the component, the other reuses it).
-2. **Entry-point placement** — game card menu ("Share with team") + Team Recap viewer header.
-   The existing email-teammate-share entry stays as-is (different job — see epic architecture
-   decision 6); UI Designer resolves how the two share affordances read side-by-side without
-   confusion.
-3. **Funnel instrumentation** — per-token counters across the loop:
-   `share_created` / `share_viewed` (T5720's beacon) / `share_claimed` (T5730's
-   `share_claims`) / claimed-account activation (existing milestone machinery). Surface:
-   admin dashboard section (links per game, views, claims, activated) — enough to answer
-   "does the loop convert" per link; no new analytics infra.
-4. **Revoke polish** — revoke control confirmation + revoked-state display on the game card
-   (link inactive), per T5720's backend.
+> **The original "share sheet + second entry point" premise is DEAD.** The user rejected a
+> native share sheet and any new share affordance: the existing `ShareGameModal.jsx` already
+> does the job. The real work was making that ONE modal control **which clips each recipient
+> receives** (Google-Docs-style per-recipient permission), plus the read-only funnel. Design:
+> [T5740-ui-design.md](T5740-ui-design.md).
+
+1. **Per-recipient clip scope in the ONE modal.** `ShareGameModal.jsx` restructured into
+   **People with access** (each added email becomes a row with a per-recipient scope dropdown
+   + expandable clip preview) and **General access** (the T5720 public link + revoke
+   confirmation + revoked state). No new entry point, no native share sheet.
+   - Scope options (user-approved verbatim, `src/constants/shareClipScope.js`): **"All team
+     clips"** (default) / **"Only clips they're tagged in"** / **"Game only (no clips)"**.
+   - Zero-clip tagged-only recipient is surfaced BEFORE send twice (inline amber row warning +
+     send-time banner); send stays enabled (game-only is a legitimate choice).
+2. **Backend scope wiring (reuse, not rebuild).** `POST /api/games/{id}/share` body is now
+   `{recipients: [{email, scope}]}` (one honest shape; `ShareGameModal` is the only caller).
+   `materialization.resolve_scoped_clips(conn, game_id, email, scope)` is the single source of
+   truth: ALL_TEAM → `team_layer_clips_for_game`; TAGGED_ONLY → `_filter_clips_for_tag` per
+   `teammate_emails` tag, **intersected with the team layer** so `my_athlete != 0` clips never
+   cross; GAME_ONLY → `[]`. The same resolver backs `GET /api/games/{id}/share-preview?email=`
+   so the preview list equals what is materialized. `shared_by` stays NON-NULL every scope
+   (T5330). No schema change.
+3. **Funnel instrumentation (READS only).** `share_created`/`share_viewed` already emitted by
+   T5720; claims already in `share_claims` (T5730). `GET /api/admin/analytics/share-funnel`
+   (read-only) answers per link: views (`share_view_counts` reads the sharer's logged
+   `share_viewed` events) → claims (`share_claims`) → activated (claimers with
+   `export_completed`). Surface: "Share Links" sub-tab (`admin/ShareFunnelTable.jsx`). No new
+   tables, migration count stays 21, analytics never on a user path.
+4. **Revoke polish** — revoke goes through a confirmation dialog (backdrop inert per the
+   no-backdrop-dismiss rule; Escape closes the confirm first), then a visible revoked state
+   with "Create new link", inside the General access section.
 
 ## Context
 
