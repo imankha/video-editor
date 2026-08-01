@@ -40,7 +40,7 @@ const realGameA = {
 const refInA_toB = {
   id: 102, name: 'Vs Bravo Jul 2', created_at: '2026-07-02T12:00:00Z',
   blake3_hash: HASH_B, status: 'ready', is_reference: true,
-  source_profile_id: PROF_B, source_profile_name: 'Default',
+  source_profile_id: PROF_B, source_game_id: 201, source_profile_name: 'Default',
   clip_count: 0, storage_status: null, storage_expires_at: null, can_extend: false,
   recap_video_url: null, tag_badges: {},
 };
@@ -55,7 +55,24 @@ const realGameB = {
 const refInB_toA = {
   id: 202, name: 'Vs Alpha Jul 1', created_at: '2026-07-01T12:00:00Z',
   blake3_hash: HASH_A, status: 'ready', is_reference: true,
-  source_profile_id: PROF_A, source_profile_name: 'Kid',
+  source_profile_id: PROF_A, source_game_id: 101, source_profile_name: 'Kid',
+  clip_count: 0, storage_status: null, storage_expires_at: null, can_extend: false,
+  recap_video_url: null, tag_badges: {},
+};
+
+// Multi-video owning game (null blake3_hash — hash matching couldn't locate this
+// before T5800 projected source_game_id) + a reference pointing at it from A.
+const realGameB_multiVideo = {
+  id: 301, name: 'Vs Charlie Jul 3', created_at: '2026-07-03T12:00:00Z',
+  blake3_hash: null, status: 'ready', is_reference: false,
+  source_profile_id: null, source_profile_name: null,
+  clip_count: 5, storage_status: 'active', can_extend: true,
+  recap_video_url: null, tag_badges: {},
+};
+const refInA_toB_multiVideo = {
+  id: 302, name: 'Vs Charlie Jul 3', created_at: '2026-07-03T12:00:00Z',
+  blake3_hash: null, status: 'ready', is_reference: true,
+  source_profile_id: PROF_B, source_game_id: 301, source_profile_name: 'Default',
   clip_count: 0, storage_status: null, storage_expires_at: null, can_extend: false,
   recap_video_url: null, tag_badges: {},
 };
@@ -182,6 +199,28 @@ test.describe('T5820 reference game link cards', () => {
     // No reference card ever triggered a per-card poster fetch (refs 102/202).
     expect(state.posterRequests, 'reference cards make no per-card network calls')
       .not.toEqual(expect.arrayContaining([102, 202]));
+  });
+
+  test('criterion 2b: click navigates + highlights a MULTI-VIDEO owning game (null blake3_hash)', async ({ page }) => {
+    // Regression coverage for the id-based match (T5820 follow-up): a multi-video
+    // owning game has a NULL blake3_hash, so it can only be located via source_game_id.
+    const state = await installStubs(page, {
+      gamesByProfile: {
+        [PROF_A]: [realGameA, refInA_toB_multiVideo],
+        [PROF_B]: [realGameB_multiVideo, refInB_toA],
+      },
+      initialProfile: PROF_A,
+    });
+    await authAndGoto(page, TEST_USER_ID());
+
+    await page.locator('[data-reference-card]').click();
+    const charlieWrap = page.locator('[data-game-id="301"]');
+    await expect(charlieWrap).toBeVisible({ timeout: 10000 });
+    await expect(charlieWrap.getByRole('heading', { name: 'Vs Charlie Jul 3' })).toBeVisible();
+    await expect(charlieWrap).toHaveClass(/ring-green-400/, { timeout: 2000 });
+    expect(state.current, 'switched to the owning profile B').toBe(PROF_B);
+    await expect(page.locator('[data-reference-notice]')).toHaveCount(0);
+    await saveEvidence(page, 'criterion-2b-multi-video-highlighted');
   });
 
   test('criterion 3: owning game deleted -> visible notice, no crash, no silent no-op', async ({ page }) => {

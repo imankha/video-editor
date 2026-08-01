@@ -546,17 +546,18 @@ export function ProjectManager({
     }
     setPendingGameReference({
       sourceProfileId: game.source_profile_id,
-      sourceGameHash: game.blake3_hash,
+      sourceGameId: game.source_game_id,
       sourceProfileName: game.source_profile_name,
     });
     sessionStorage.setItem('projectManagerTab', 'games');
     useProfileStore.getState().switchProfile(game.source_profile_id);
   }, []);
 
-  // T5820: after landing in the owning profile, locate the real game (by its frozen
-  // blake3_hash — the id-independent key the reference exposes), scroll it into view
-  // and ring it briefly. Detection of a deleted owning game is at THIS point (a list
-  // that settled with no match), never a cross-profile existence check on render.
+  // T5820: after landing in the owning profile, locate the real game by its exact
+  // `source_game_id` (projected by GET /api/games under is_reference — T5800),
+  // scroll it into view and ring it briefly. Detection of a deleted owning game is
+  // at THIS point (a list that settled with no match), never a cross-profile
+  // existence check on render.
   //
   // The switch flips currentProfileId BEFORE _resetDataStores refetches, so there is
   // a transient render where we're "on" the owning profile but `games` still holds
@@ -579,15 +580,13 @@ export function ProjectManager({
     consumePendingGameReference();
     setActiveTab('games');
 
-    // A hash-less reference (multi-video owning game) can't be located per-card —
-    // land on the Games tab without a highlight rather than fabricate a match.
-    if (!pending.sourceGameHash) {
-      console.warn('[ProjectManager] reference has no blake3_hash (multi-video owning game); landing on Games tab without a per-card highlight');
+    if (pending.sourceGameId == null) {
+      console.error('[ProjectManager] reference breadcrumb missing sourceGameId — backend bug', pending);
       return;
     }
 
     const target = games.find(
-      (g) => !g.is_reference && g.blake3_hash && g.blake3_hash === pending.sourceGameHash
+      (g) => !g.is_reference && g.id === pending.sourceGameId
     );
     if (target) {
       setHighlightGameId(target.id);

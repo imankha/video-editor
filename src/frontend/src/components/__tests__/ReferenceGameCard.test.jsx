@@ -8,6 +8,7 @@ const refGame = {
   created_at: '2026-07-01T12:00:00Z',
   is_reference: true,
   source_profile_id: 'prof-owner',
+  source_game_id: 501,
   source_profile_name: 'Default',
   blake3_hash: 'a'.repeat(64),
   // References carry no expiry/clip state (T5800).

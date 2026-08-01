@@ -108,38 +108,38 @@ describe('pendingNavigation', () => {
   });
 
   describe('pending game reference (T5820)', () => {
-    it('round-trips profile id, owning-game hash, and owning-profile name', () => {
+    it('round-trips profile id, owning-game id, and owning-profile name', () => {
       setPendingGameReference({
         sourceProfileId: 'prof-A',
-        sourceGameHash: 'deadbeef',
+        sourceGameId: 501,
         sourceProfileName: 'Default',
       });
       expect(peekPendingGameReference()).toEqual({
         sourceProfileId: 'prof-A',
-        sourceGameHash: 'deadbeef',
+        sourceGameId: 501,
         sourceProfileName: 'Default',
       });
     });
 
     it('peek does NOT clear (the consume gate re-checks until the target settles)', () => {
-      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N' });
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameId: 501, sourceProfileName: 'N' });
       peekPendingGameReference();
       expect(peekPendingGameReference()).not.toBeNull();
     });
 
     it('consume reads then clears — consumed-once semantics', () => {
-      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N' });
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameId: 501, sourceProfileName: 'N' });
       expect(consumePendingGameReference()).toEqual({
-        sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N',
+        sourceProfileId: 'prof-A', sourceGameId: 501, sourceProfileName: 'N',
       });
       expect(peekPendingGameReference()).toBeNull();
       expect(consumePendingGameReference()).toBeNull();
     });
 
-    it('supports a hash-less reference (multi-video owning game)', () => {
+    it('supports a missing owning-game id (defensive — the backend always projects one for a reference)', () => {
       setPendingGameReference({ sourceProfileId: 'prof-A', sourceProfileName: 'N' });
       expect(peekPendingGameReference()).toEqual({
-        sourceProfileId: 'prof-A', sourceGameHash: null, sourceProfileName: 'N',
+        sourceProfileId: 'prof-A', sourceGameId: null, sourceProfileName: 'N',
       });
     });
 
@@ -150,7 +150,7 @@ describe('pendingNavigation', () => {
 
     it('is independent of the annotate pending-game breadcrumb', () => {
       setPendingGame(42, 12.5);
-      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameHash: 'h', sourceProfileName: 'N' });
+      setPendingGameReference({ sourceProfileId: 'prof-A', sourceGameId: 501, sourceProfileName: 'N' });
       consumePendingGameReference();
       // The annotate breadcrumb is untouched by consuming the reference one.
       expect(hasPendingGame()).toBe(true);

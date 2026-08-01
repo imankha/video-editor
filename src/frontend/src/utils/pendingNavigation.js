@@ -83,19 +83,20 @@ export function consumePendingGame() {
 // then cleared. It survives `profileStore._resetDataStores()` because that only
 // resets Zustand stores + refetches — it never touches sessionStorage.
 //
-// The owning game is located in the target profile by its frozen `blake3_hash`
-// (the stable identifier the reference row exposes — the API does not surface the
-// owning game's id). A multi-video game has a NULL hash, so a hash-less reference
-// simply lands on the Games tab without a per-card highlight.
+// The owning game is located in the target profile by its `source_game_id` (the
+// owning game's real id, projected by GET /api/games under the is_reference gate —
+// T5800). This is an exact id match, so it works for MULTI-VIDEO owning games too
+// (those have a NULL blake3_hash, which is why an earlier version of this code had
+// to fall back to a hash match and silently skip the highlight for them).
 
 const GAME_REF_PROFILE_KEY = 'pendingGameRefProfileId';
-const GAME_REF_HASH_KEY = 'pendingGameRefHash';
+const GAME_REF_GAME_ID_KEY = 'pendingGameRefGameId';
 const GAME_REF_PROFILE_NAME_KEY = 'pendingGameRefProfileName';
 
-export function setPendingGameReference({ sourceProfileId, sourceGameHash = null, sourceProfileName = null }) {
+export function setPendingGameReference({ sourceProfileId, sourceGameId = null, sourceProfileName = null }) {
   sessionStorage.setItem(GAME_REF_PROFILE_KEY, sourceProfileId);
-  if (sourceGameHash != null) {
-    sessionStorage.setItem(GAME_REF_HASH_KEY, sourceGameHash);
+  if (sourceGameId != null) {
+    sessionStorage.setItem(GAME_REF_GAME_ID_KEY, sourceGameId.toString());
   }
   if (sourceProfileName != null) {
     sessionStorage.setItem(GAME_REF_PROFILE_NAME_KEY, sourceProfileName);
@@ -107,9 +108,10 @@ export function setPendingGameReference({ sourceProfileId, sourceGameHash = null
 export function peekPendingGameReference() {
   const sourceProfileId = sessionStorage.getItem(GAME_REF_PROFILE_KEY);
   if (sourceProfileId == null) return null;
+  const sourceGameId = sessionStorage.getItem(GAME_REF_GAME_ID_KEY);
   return {
     sourceProfileId,
-    sourceGameHash: sessionStorage.getItem(GAME_REF_HASH_KEY),
+    sourceGameId: sourceGameId != null ? parseInt(sourceGameId) : null,
     sourceProfileName: sessionStorage.getItem(GAME_REF_PROFILE_NAME_KEY),
   };
 }
@@ -118,7 +120,7 @@ export function consumePendingGameReference() {
   const pending = peekPendingGameReference();
   if (!pending) return null;
   sessionStorage.removeItem(GAME_REF_PROFILE_KEY);
-  sessionStorage.removeItem(GAME_REF_HASH_KEY);
+  sessionStorage.removeItem(GAME_REF_GAME_ID_KEY);
   sessionStorage.removeItem(GAME_REF_PROFILE_NAME_KEY);
   return pending;
 }

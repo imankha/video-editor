@@ -109,8 +109,8 @@ graph LR
   computation for references** — a reference emits `storage_status=None`, `storage_expires_at=None`,
   `can_extend=False`, plus `is_reference=true`/`source_profile_id`/`source_game_id`/`source_profile_name`
   (owning profile's display name from `user_db.get_profiles`, ONE read, no N+1). `source_game_id` lets
-  the frontend (T5820) locate the owning game exactly, since `blake3_hash` is NULL for MULTI-VIDEO
-  games and can't be used as a fallback key. Athlete stats are naturally
+  the frontend (T5820) locate the owning game by exact id match — including MULTI-VIDEO owning games,
+  whose `blake3_hash` is NULL and so could never be used as a matching key. Athlete stats are naturally
   zero (no local `raw_clips`). NEVER show an expiry chip on a reference card.
 - **Primitive:** `materialization.ensure_game_reference(target_conn, target_profile_id,
   source_profile_id, source_game_row, source_game_videos) -> int` (the 2nd cross-profile game
@@ -128,11 +128,11 @@ graph LR
   as a `ReferenceGameCard` (subdued dashed link tile, "In {source_profile_name}" badge, NO expiry
   chip / kebab / annotate-delete-recap actions, no poster fetch) — the real `GameTile` is byte-identical
   for non-references. Clicking it switches to the owning profile (`profileStore.switchProfile`) and lands
-  on ITS Games tab with the real game highlighted, located by frozen **`blake3_hash`** — NOTE the API
-  deliberately does NOT surface the owning game's id: `source_game_id` is SELECTed in
-  `_read_games_for_list` but never added to the `_list_games_impl` response dict (only `is_reference`/
-  `source_profile_id`/`source_profile_name` are, per the list above). A deleted owning game degrades to
-  a visible in-tab notice at click time (no cross-profile existence check on list render). Details:
+  on ITS Games tab with the real game highlighted, located by exact `source_game_id` match against the
+  target profile's own game list (`_list_games_impl` projects `source_game_id` under the `is_reference`
+  gate, per the list above) — this works for MULTI-VIDEO owning games too, since it never depends on
+  `blake3_hash`. A deleted owning game (its id no longer present in the target profile's list) degrades
+  to a visible in-tab notice at click time (no cross-profile existence check on list render). Details:
   annotate.md §Landmines (T5820 breadcrumb).
 - **Moved reels CARRY remapped `game_ids` (T5810).** `downloads.py:move_reels_to_profile` no longer
   nulls `game_ids`/`game_id` (the old T4850 behavior). Instead `_build_reference_map` resolves each
