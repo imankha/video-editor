@@ -1,0 +1,94 @@
+name: Master CI
+
+# Full-suite sweep of master on every merge. Branch CI verifies each feature
+# branch against ITS OWN base pre-merge; this workflow verifies the COMBINED
+# state after merges land (two independently-green branches can still conflict
+# semantically). Non-blocking by design: staging auto-deploys in parallel and
+# staging IS the test phase -- a red run here is a fast flag, not a deploy gate.
+# Known pre-existing failures are catalogued in docs/testing/known-failures.md.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: master-ci
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: ESLint regression gate (merged state must not regrow the backlog)
+        # Same baseline as branch-ci.yml -- keep the two numbers in sync.
+        run: npx eslint src --max-warnings 360
+      - name: Viewport-unit gate (T4930)
+        working-directory: .
+        run: node scripts/check-viewport-units.mjs
+      - name: Media-api-base gate (T5890)
+        working-directory: .
+        run: node scripts/check-media-api-base.mjs
+      - name: Unit tests (vitest, retry absorbs known flakes)
+        run: npx vitest run --retry=2
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_test
+      APP_ENV: dev
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: src/backend/requirements*.txt
+      - name: Install ffmpeg (metadata tests use ffprobe)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install deps
+        run: pip install -r requirements.prod.txt -r requirements.test.txt ruff
+      - name: Ruff regression gate (merged state must not regrow the backlog)
+        # Same baseline as branch-ci.yml -- keep the two numbers in sync.
+        run: |
+          OUT=$(ruff check app --output-format=concise || true)
+          COUNT=$(printf '%s\n' "$OUT" | grep -c '^app/' || true)
+          echo "ruff error count: $COUNT (baseline 239)"
+          if [ "$COUNT" -gt 239 ]; then
+            echo "::error::ruff errors grew past the baseline of 239 (now $COUNT)."
+            exit 1
+          fi
+      - name: Import check
+        run: python -c "from app.main import app"
+      - name: Pytest (deselects = docs/testing/known-failures.md)
+        # selection mirrors run_tests.py (canonical suite); see branch-ci.yml
+        run: >-
+          python -m pytest tests/test_*.py --tb=short --capture=sys
