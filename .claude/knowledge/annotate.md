@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-08-01 (T5700 team/my-athlete layer)
+updated: 2026-08-01 (T5700 team/my-athlete layer; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
 
