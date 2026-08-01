@@ -1,10 +1,10 @@
 # T5695: Add Fastpitch Softball as a supported sport
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-23
-**Updated:** 2026-07-23
+**Updated:** 2026-08-01
 
 ## Problem
 
@@ -161,6 +161,16 @@ Tag names must match the registry EXACTLY (case-sensitive). Mirror baseball:
 8. [ ] Sanity-check in the app: select Softball, confirm positions/tags render and the 🥎 chip shows.
 
 ### Progress Log
+
+**2026-08-01**: Implemented and merged to master (commit 6622f697, merge 111432d5).
+Decisions taken: display name "Softball" (not "Fastpitch"); landing site IN scope. Landing note
+in this ticket was stale -- the site is Astro now, so the mirror is sportTags.json + sports.ts
+(a real /softball SEO page) + FACTS counts (11/46/136) + the hardcoded sport list in index.astro,
+not the deleted App.tsx. Verified: registry guards 4/4, test_each_sport_curated_and_per_tag[softball]
+PASSED, astro check clean, dist/softball.html built, live drive green (picker glyph, persisted
+sport=softball, Rise Ball + Slap Hit in the palette), responsive 375/1280 no overflow.
+Collections combos verified by parametrized test, not live-driven (a fresh softball profile has no
+published reels to surface). Branch CI green.
 
 **2026-07-23**: Ticket authored. Codebase surface mapped (11th sport = 1 new file + 4 registry
 edits + 1 backend combo + 1 frontend test map; backend test auto-covers via parametrize).
