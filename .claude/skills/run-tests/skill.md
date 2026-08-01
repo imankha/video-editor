@@ -1,96 +1,94 @@
 # Run Tests Skill
 
-Run all tests for the video-editor project (frontend unit, backend unit, and E2E).
+Run tests for the video-editor project at the RIGHT scope. Default is **targeted**
+(tests that exercise changed code); the full sweep is CI's job, not the worker's.
+
+## Scope policy (the rule behind everything below)
+
+- **Pre-handoff / iteration (default):** run only tests that exercise the changed
+  code — tests written for the task, tests that import the changed modules, and the
+  e2e spec(s) covering the changed flow. Never run full suites to "confirm no
+  regressions" locally.
+- **Full sweep:** Branch CI runs the complete vitest + pytest suites on every push
+  (`branch-ci.yml`, ~5 min, zero tokens), and Master CI re-runs them on the merged
+  state of master (`master-ci.yml`). The mandatory `gh run watch` CI verdict after
+  push IS the no-regressions proof.
+- **Fix loop:** when a test fails, fix it, then re-run (a) the failing test and
+  (b) tests that exercise the files the FIX touched. Tests that already passed and
+  whose subject code did not change are NOT re-run — the next push's Branch CI
+  re-proves them for free.
+- **Explicit full run:** only when the user asks for it ("/run-tests full", "run
+  everything") or when no CI is reachable.
 
 ## Usage
-Invoke with `/run-tests` or when the user asks to "run tests", "run all tests", or "check if tests pass".
+Invoke with `/run-tests` (targeted, default) or `/run-tests full`. Also when the
+user asks to "run tests" / "check if tests pass" — targeted unless they say full.
 
-## Instructions
+## 1. Targeted mode (default)
 
-### 1. Frontend Unit Tests
-Run the Vitest unit tests:
+### Frontend unit (Vitest)
+`vitest related` resolves which tests import the given SOURCE files — the exact
+"tests exercised by the change" set:
 ```bash
+cd src/frontend
+CHANGED=$(git diff --name-only master...HEAD -- 'src/frontend/src/**/*.js' 'src/frontend/src/**/*.jsx' | sed 's|^src/frontend/||' | grep -v '\.test\.')
+npx vitest related --run $CHANGED
+# Plus any test files the task added/changed, by path:
+npx vitest run src/components/Foo.test.jsx
+```
+
+### Backend (pytest)
+No `related` equivalent — map changed modules to their test files by convention
+(`app/routers/clips.py` -> `tests/test_clips*.py`) and by import:
+```bash
+cd src/backend
+grep -l "changed_module" tests/test_*.py   # tests importing the changed code
+.venv/Scripts/python.exe -m pytest tests/test_clips.py tests/test_exports.py -v --tb=short --capture=sys
+```
+**Warning:** backend tests TRUNCATE the real dev Postgres — fine in a task
+container, warn the user first in the shared checkout.
+
+### E2E (Playwright) — targeted only, never full
+Full e2e is hours-class and runs nowhere routinely. Run the spec(s) for the
+changed flow, plus the screen-usability audit grep'd to changed screens:
+```bash
+cd src/frontend
+npm run test:e2e -- e2e/T4850-move-reels.spec.js          # the changed flow
+npx playwright test screen-usability.spec.js --grep "Gallery"  # changed screen only
+```
+Servers must be running (ports 8000/5173) — or use `bash scripts/dev-verify.sh <spec>`.
+
+### Fix loop (all layers)
+1. Failing test -> diagnose -> fix.
+2. Re-run the failing test by file:line / `-k` name.
+3. Re-run tests exercising the fix's files (`vitest related` on them / the pytest
+   module map). NOT the full suite.
+4. Compare any pre-existing failure against `docs/testing/known-failures.md`
+   instead of re-proving it.
+5. Push; the Branch CI verdict is the full-suite confirmation.
+
+## 2. Full mode (explicit request only)
+
+```bash
+# Frontend unit — ~1,400 tests / ~140 files, ~1-2 min
 cd src/frontend && npm test
-```
-Expected: ~349 tests pass across 15 test files.
 
-### 2. Backend Unit Tests
-**Important**: The backend uses a Python venv and requires explicit file globbing due to pytest discovery issues.
-
-Run using the helper script:
-```bash
+# Backend — ~2,400 tests / ~200 files, ~4-8 min
 cd src/backend && .venv/Scripts/python.exe run_tests.py
+# (equivalent: .venv/Scripts/python.exe -m pytest tests/test_*.py -v --tb=short --capture=sys)
 ```
+Redirect output to a log and `reduce_log` it (CLAUDE.md § Log handling). There is
+no "full e2e" step even here — ~300 tests / 90+ specs with a 5-min per-test
+timeout; scope e2e to named specs or defer to the staging pass.
 
-Or manually with:
-```bash
-cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_*.py -v --tb=short --capture=sys
-```
-
-Expected: ~314 tests pass across 18 test files (6 skipped - they need real video files).
-
-### 3. E2E Tests (Playwright)
-**Requires servers running first!**
-
-#### Start servers (if not already running):
-```bash
-# Terminal 1 - Backend
-cd src/backend && .venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
-
-# Terminal 2 - Frontend
-cd src/frontend && npm run dev
-```
-
-#### Run E2E tests:
-```bash
-cd src/frontend && npm run test:e2e
-```
-
-#### E2E test options:
-```bash
-npm run test:e2e -- --ui          # Interactive UI mode (recommended for debugging)
-npm run test:e2e -- --grep @smoke # Fast smoke tests only
-npm run test:e2e -- --grep @full  # Full coverage tests
-```
-
-#### Re-running only failing tests:
-When tests fail, re-run ONLY the specific failing tests until they pass, then run the full suite:
-
-```bash
-# Run specific test by file:line
-npm run test:e2e -- regression-tests.spec.js:1128
-
-# Run multiple specific tests by line number
-npm run test:e2e -- regression-tests.spec.js:1128 regression-tests.spec.js:1170
-
-# Run by exact test name (use quotes for spaces)
-npm run test:e2e -- --grep "Framing: video first frame loads"
-```
-
-**Workflow:**
-1. Run full suite → note failures
-2. Re-run ONLY failing tests by file:line until all pass
-3. Run full suite again to confirm no regressions
-
-Expected: ~21+ tests pass. Tests in `e2e/` directory:
-- `full-workflow.spec.js` - Complete user workflow tests
-- `game-loading.spec.js` - Game/video loading tests
-- `regression-tests.spec.js` - Regression prevention tests
-
-### Key Details
-- Frontend unit tests: Vitest with jsdom environment
-- Backend venv: `src/backend/.venv`
-- Backend pytest: Use `--capture=sys` to avoid closed file handle issues
-- E2E tests: Playwright, requires ports 5173 (frontend) and 8000 (backend)
-- E2E test data: Located at `../../formal annotations/12.6.carlsbad` relative to frontend
-
-### Checking if servers are running:
-```bash
-curl -s http://localhost:8000/api/health  # Backend
-curl -s http://localhost:5173             # Frontend
-```
+## Key Details
+- Frontend unit: Vitest 4 + jsdom; `vitest related` needs SOURCE paths, not test paths
+- Backend venv: `src/backend/.venv`; pytest needs `--capture=sys` (closed-handle issue)
+- Plain `pytest tests/` crashes — always glob `tests/test_*.py` (see project memory)
+- E2E: ports 5173 + 8000; test data at `../../formal annotations/12.6.carlsbad`
+- Server check: `curl -s http://localhost:8000/api/health` / `curl -s http://localhost:5173`
 
 ## Success Criteria
-- Frontend unit: ~349 tests pass
-- Backend unit: ~314 tests pass (6 skipped OK)
-- E2E: ~21+ tests pass (some may fail if UI behavior changed)
+- Targeted mode: every test exercising the changed code passes; scope note says
+  which suites were intentionally NOT run (they're CI's job).
+- Full mode: suites green modulo `docs/testing/known-failures.md`.

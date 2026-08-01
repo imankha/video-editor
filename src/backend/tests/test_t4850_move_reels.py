@@ -212,14 +212,31 @@ async def test_multi_clip_reel_stays_unranked(env):
 
 
 @pytest.mark.asyncio
-async def test_collection_attribution_cleared(env):
+async def test_collection_attribution_carried(env):
+    # T5810 (was test_collection_attribution_cleared): moving a reel now CARRIES its
+    # game attribution via a target-profile reference, instead of nulling game_ids.
     from app.services.collection_metadata import route_collection
     fid = _insert_reel(env, SRC, project_id=501, game_id=42, game_ids=[42])
     await _move([fid])
 
     dst = _rows(env, DST)[0]
-    # No dangling source game ref -> routes to Mixes (None), not a phantom "Game 42".
-    assert route_collection(dst["game_ids"], dst["clip_count"]) is None
+    # game_ids remaps to the TARGET reference game id -> the reel stays in a game
+    # group (no longer Mixes), and game_id follows.
+    routed = route_collection(dst["game_ids"], dst["clip_count"])
+    assert routed is not None
+    assert dst["game_id"] == routed
+
+    # Exactly ONE reference row was created in the target, keyed to the source game.
+    c = _conn(env, DST)
+    refs = c.execute(
+        "SELECT id, source_profile_id, source_game_id FROM games "
+        "WHERE source_profile_id IS NOT NULL"
+    ).fetchall()
+    c.close()
+    assert len(refs) == 1
+    assert refs[0]["id"] == routed
+    assert refs[0]["source_profile_id"] == SRC
+    assert refs[0]["source_game_id"] == 42
 
 
 # --------------------------------------------------------------------------- #

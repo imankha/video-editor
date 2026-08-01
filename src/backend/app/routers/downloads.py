@@ -25,6 +25,7 @@ from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.materialization import (
     ProfileDBRefreshFailed,
     _open_profile_db,
+    ensure_game_reference,
     ensure_profile_db_local,
 )
 from app.services.poster import generate_poster_at_publish, poster_basename, poster_rel_path
@@ -38,7 +39,7 @@ from app.storage import (
     profile_object_exists,
 )
 from app.user_context import get_current_req_id, get_current_user_id
-from app.utils.encoding import decode_data
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -859,6 +860,16 @@ async def delete_download(
             DELETE FROM final_videos WHERE id = ?
         """, (download_id,))
 
+        # T5810: deleting the last reel that attributed to a moved-in game reference
+        # orphans that reference -> clean it up (gesture-driven, references only,
+        # real games never touched).
+        orphaned = _delete_orphan_reference_games(cursor)
+        if orphaned:
+            logger.info(
+                f"[Downloads] deleting reel {download_id} cleaned {orphaned} "
+                f"orphaned game reference(s)"
+            )
+
         conn.commit()
 
         # Optionally remove the file
@@ -1057,7 +1068,7 @@ _MOVED_REEL_CARRY_COLUMNS = (
 )
 
 
-def _build_moved_reel_row(src_row) -> dict:
+def _build_moved_reel_row(src_row, game_remap: dict[int, int]) -> dict:
     """Map a source-profile final_videos row to the target-profile INSERT values.
 
     Decision 1 (published-reel-only MOVE): only the frozen metadata that lets the
@@ -1065,15 +1076,16 @@ def _build_moved_reel_row(src_row) -> dict:
     Decision 4 (enter target as new): reset every per-profile reference so the reel
     joins the target profile's pool clean, with no dangling cross-profile ids.
 
-    - project_id / game_id / game_ids: NULL/None. They reference SOURCE-profile
-      projects+games that do not exist in the target; keeping them would dangle
-      (violates the no-orphan-refs criterion) and would fabricate a phantom
-      "Game N" collection in the target (collections.py resolves a routed-but-
-      missing game to a 'Game N' fallback). Cleared -> the reel routes to Mixes /
-      date-fallback grouping, honestly unattributed in its new profile.
-    - source_clip_id: NULL. It points at a SOURCE raw_clip; a collision with a
-      target raw_clip id could wrongly twin-sync ratings or exclude the reel as a
-      teammate reel. Cleared -> the moved reel is an individual ranking contestant.
+    - game_ids / game_id (T5810): REMAPPED through `game_remap` (source game id ->
+      target reference/real game id, built by move_reels_to_profile via
+      ensure_game_reference) so the moved reel keeps its by-game grouping in the
+      target Gallery. A source game id absent from the map (its source game was
+      deleted after publish) is DROPPED -- that attribution honestly cannot be
+      carried. An empty remapped list -> None (routes to Mixes, matching the
+      unattributed-reel behavior). game_ids is stored sorted-distinct, msgpack.
+    - project_id / source_clip_id: NULL. Editing lineage genuinely does not move
+      (project_id references a SOURCE project absent in the target; source_clip_id
+      points at a SOURCE raw_clip and a collision could wrongly twin-sync ratings).
     - rating/rd/match_count: re-seeded exactly as a fresh export would (single-clip
       reels re-seed from their frozen quality_score; multi-clip / unrated reels
       stay NULL and never rank). match_count -> 0 discards source ranking history.
@@ -1083,9 +1095,14 @@ def _build_moved_reel_row(src_row) -> dict:
 
     row = {col: src_row[col] for col in _MOVED_REEL_CARRY_COLUMNS}
     row["project_id"] = None
-    row["game_id"] = None
-    row["game_ids"] = None
     row["source_clip_id"] = None
+
+    # T5810: remap the frozen game attribution into the target profile.
+    src_game_ids = decode_data(src_row["game_ids"]) or []
+    remapped = sorted({game_remap[g] for g in src_game_ids if g in game_remap})
+    row["game_ids"] = encode_data(remapped) if remapped else None
+    src_scalar = src_row["game_id"]
+    row["game_id"] = game_remap.get(src_scalar) if src_scalar is not None else None
     row["watched_at"] = None
     row["published_at"] = src_row["published_at"]
     # Re-seed ranking: only reels that were rankable in the source (rating set)
@@ -1098,6 +1115,104 @@ def _build_moved_reel_row(src_row) -> dict:
         row["rd"] = None
     row["match_count"] = 0
     return row
+
+
+# Source games columns ensure_game_reference reads (metadata + reference pointers).
+# source_profile_id/source_game_id are column_exists-guarded below for the deploy->
+# migrate window (a pre-v030 source has no references, so NULL is correct).
+_SOURCE_GAME_META_COLS = (
+    "id", "name", "opponent_name", "game_date", "game_type", "tournament_name",
+    "blake3_hash", "video_duration", "video_width", "video_height", "video_size",
+    "video_fps", "created_at",
+)
+
+
+def _build_reference_map(
+    source_cursor, target_conn, source_rows,
+    source_profile_id, target_profile_id, user_id, req_id,
+) -> dict[int, int]:
+    """T5810: for every distinct source game id the moved reels attribute to, ensure a
+    game reference exists in the target profile and return {source_game_id ->
+    target_game_id}. A source game deleted after publish (reels outlive games) is
+    DROPPED from the map with a loud warning (honest-unattributed, NOT a silent
+    fallback). Chain-collapse / move-back-to-owner are resolved inside
+    ensure_game_reference. Reads the SOURCE cursor, writes references via target_conn
+    (committed by the caller alongside the moved final_videos rows)."""
+    source_game_ids: set[int] = set()
+    for src_row in source_rows:
+        for gid in decode_data(src_row["game_ids"]) or []:
+            source_game_ids.add(gid)
+        if src_row["game_id"] is not None:
+            source_game_ids.add(src_row["game_id"])
+
+    game_remap: dict[int, int] = {}
+    if not source_game_ids:
+        return game_remap
+
+    has_ref_cols = column_exists(source_cursor, "games", "source_profile_id")
+    ref_select = (
+        "source_profile_id, source_game_id" if has_ref_cols
+        else "NULL AS source_profile_id, NULL AS source_game_id"
+    )
+    meta_select = ", ".join(_SOURCE_GAME_META_COLS)
+    for sgid in source_game_ids:
+        source_cursor.execute(
+            f"SELECT {meta_select}, {ref_select} FROM games WHERE id = ?", (sgid,)
+        )
+        sg = source_cursor.fetchone()
+        if sg is None:
+            logger.warning(
+                f"[MoveReels] source game {sgid} missing (deleted after publish); "
+                f"dropping its attribution from moved reels {source_profile_id}->"
+                f"{target_profile_id} user={user_id} req_id={req_id}"
+            )
+            continue
+        source_cursor.execute(
+            "SELECT blake3_hash, sequence, duration, video_width, video_height, "
+            "video_size, fps FROM game_videos WHERE game_id = ? ORDER BY sequence",
+            (sgid,),
+        )
+        source_videos = source_cursor.fetchall()
+        game_remap[sgid] = ensure_game_reference(
+            target_conn, target_profile_id, source_profile_id, sg, source_videos
+        )
+    return game_remap
+
+
+def _delete_orphan_reference_games(cursor) -> int:
+    """Delete REFERENCE games (source_profile_id NOT NULL) in the CURRENT profile that
+    no remaining final_videos still attribute to (game_ids blob or scalar game_id).
+
+    Gesture-driven ONLY -- called from the move-away (source side) and reel-delete
+    gestures that can orphan a reference, NEVER a reactive sweep (EPIC decision). REAL
+    games (source_profile_id NULL) are never touched. Returns the count deleted; the
+    caller commits."""
+    if not column_exists(cursor, "games", "source_profile_id"):
+        return 0
+    ref_ids = {
+        r[0] for r in cursor.execute(
+            "SELECT id FROM games WHERE source_profile_id IS NOT NULL"
+        ).fetchall()
+    }
+    if not ref_ids:
+        return 0
+
+    referenced: set[int] = set()
+    for row in cursor.execute(
+        "SELECT game_ids FROM final_videos WHERE game_ids IS NOT NULL"
+    ).fetchall():
+        for gid in decode_data(row[0]) or []:
+            referenced.add(gid)
+    for row in cursor.execute(
+        "SELECT game_id FROM final_videos WHERE game_id IS NOT NULL"
+    ).fetchall():
+        referenced.add(row[0])
+
+    orphans = ref_ids - referenced
+    for oid in orphans:
+        cursor.execute("DELETE FROM game_videos WHERE game_id = ?", (oid,))
+        cursor.execute("DELETE FROM games WHERE id = ?", (oid,))
+    return len(orphans)
 
 
 @router.post("/move-to-profile")
@@ -1283,8 +1398,18 @@ async def move_reels_to_profile(
         inserted_target_ids: list[int] = []
         try:
             tcur = target_conn.cursor()
+            # T5810: materialize a game REFERENCE in the target for each distinct
+            # source game the moved reels attribute to, then remap the reels'
+            # game_ids/game_id through it (chain-collapse + move-back-to-owner are
+            # handled inside ensure_game_reference). The reference insert rides THIS
+            # phase-1 target write (committed + synced below) -- no new sync call site
+            # (invariant 6b). Built inside the try so a failure rolls the target back.
+            game_remap = _build_reference_map(
+                cursor, target_conn, source_rows,
+                source_profile_id, target_profile_id, user_id, req_id,
+            )
             for src_row in source_rows:
-                new_row = _build_moved_reel_row(src_row)
+                new_row = _build_moved_reel_row(src_row, game_remap)
                 # T4890: don't carry a poster ref whose object we did NOT relocate
                 # (missing source object) -- keeps the moved row from dangling.
                 if src_row["poster_filename"] and src_row["id"] not in posters_moved:
@@ -1354,6 +1479,15 @@ async def move_reels_to_profile(
                 "UPDATE projects SET final_video_id = NULL WHERE final_video_id = ?", (vid,)
             )
             cursor.execute("DELETE FROM final_videos WHERE id = ?", (vid,))
+        # T5810: a reel moving AWAY can orphan a source-profile reference (e.g. moving
+        # a reel back to the owning profile leaves its B-side reference unreferenced).
+        # Clean orphaned REFERENCES only, gesture-driven (never a sweep).
+        orphaned = _delete_orphan_reference_games(cursor)
+        if orphaned:
+            logger.info(
+                f"[MoveReels] cleaned {orphaned} orphaned source reference(s) in "
+                f"{source_profile_id} user={user_id} req_id={req_id}"
+            )
         conn.commit()
 
     # --- Phase 3: delete the SOURCE-prefix media objects LAST ---------------

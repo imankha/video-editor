@@ -76,6 +76,12 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Write ALL meaningful tests**, not one smoke test: happy path, each edge case the task
      names, each failure mode touched, and a regression test pinning the original bug. If a
      case can't be tested, the report must say which and why — silence is not allowed.
+   - **Test-RUN scope is changed-code only** (writing broad, running narrow): execute the
+     task's tests + `npx vitest related --run <changed sources>` + the pytest modules for the
+     changed backend code + the e2e spec(s) for the changed flow. NEVER full suites in the
+     container — the Branch CI verdict in step 5 IS the full-suite sweep, and Master CI
+     re-runs it on merge. Fix loop: re-run the failing test + tests exercising the files the
+     fix touched, nothing more (`.claude/skills/run-tests/SKILL.md` § Scope policy).
    - **Adversarial self-check**: re-read the task's acceptance criteria one by one and show
      evidence per criterion (test name or live-drive observation). Unverified criterion =
      task not done.
@@ -83,7 +89,10 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      `saveEvidence(page, 'criterion-N-...')` screenshots each criterion's end state into
      `<repo>/qa/` (gitignored; readable from the host at `C:\work\tasks\<SLUG>\qa\`).
    - **Responsive check (any UI change)**: `responsiveSweep(page)` runs the changed screen at
-     375px + desktop, asserts no horizontal overflow, and saves both screenshots.
+     375px + desktop, asserts no horizontal overflow, and saves both screenshots. The
+     screen-usability audit runs for the CHANGED screen(s) only
+     (`npx playwright test screen-usability.spec.js --grep "<screen>"`), not the full
+     5-viewport matrix over every screen.
    - **Perf guards (when queries/endpoints changed)**: backend — use the `query_counter`
      pytest fixture (seed N rows, assert statement count stays flat; see
      tests/test_query_counter.py); frontend — assert a sane timing budget in the e2e spec

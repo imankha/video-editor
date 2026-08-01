@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, get_rating_adjective
-from app.database import ensure_directories, get_db_connection
+from app.database import column_exists, ensure_directories, get_db_connection
 from app.profile_context import get_current_profile_id
 from app.queries import normalize_rating
 from app.services.auth_db import (
@@ -903,14 +903,30 @@ def _read_games_for_list():
     (get_db_connection resolves the current user/profile), so it MUST be invoked
     via run_in_context so those contextvars survive into the thread.
     """
+    from app.user_context import get_current_user_id
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
+        # T5800: the reference columns (source_profile_id/source_game_id, profile_db
+        # v030) land on this bootstrap-hot SELECT. Migrations run MANUALLY post-deploy,
+        # so between deploy and migrate an un-migrated DB has NO such columns -- naming
+        # them unconditionally would 500 every games read in that window (the T5970/
+        # T6030 class). Guard with column_exists and project NULLs when absent: a
+        # pre-v030 DB simply has no references yet (nothing can create one until v030),
+        # so NULL is the correct value.
+        has_ref_cols = column_exists(cursor, "games", "source_profile_id")
+        ref_select = (
+            "g.source_profile_id, g.source_game_id"
+            if has_ref_cols
+            else "NULL AS source_profile_id, NULL AS source_game_id"
+        )
+
+        cursor.execute(f"""
             SELECT g.id, g.name, g.blake3_hash, g.video_filename, g.created_at,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
                    g.video_duration, g.viewed_duration, g.status, g.video_size,
-                   g.auto_export_status, g.recap_video_url,
+                   g.auto_export_status, g.recap_video_url, {ref_select},
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
             LEFT JOIN (
@@ -933,8 +949,24 @@ def _read_games_for_list():
         game_ids = [row['id'] for row in rows]
         athlete_stats = _compute_athlete_stats(cursor, game_ids) if game_ids else {}
 
+    # T5800: resolve owning-profile display names for reference cards. ONE user.sqlite
+    # read regardless of reference count (no per-row lookup -> no N+1); skipped
+    # entirely when there are no references.
+    source_profile_names: dict[str, str] = {}
+    ref_profile_ids = {
+        row['source_profile_id'] for row in rows if row['source_profile_id']
+    }
+    if ref_profile_ids:
+        from app.services.user_db import get_profiles
+        for p in get_profiles(get_current_user_id()):
+            if p['id'] in ref_profile_ids:
+                source_profile_names[p['id']] = p['name']
+
     grace_hashes = get_grace_deletion_hashes()
-    return rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes
+    return (
+        rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes,
+        source_profile_names,
+    )
 
 
 async def _list_games_impl(skip_presigned_urls=False):
@@ -951,9 +983,8 @@ async def _list_games_impl(skip_presigned_urls=False):
     # request contextvars so get_db_connection resolves the right profile in the
     # thread. The presign warm below already offloads via to_thread; list-building
     # then reads the warmed presigned-URL cache (no blocking) on the loop.
-    rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes = await run_in_context(
-        _read_games_for_list
-    )
+    (rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes,
+     source_profile_names) = await run_in_context(_read_games_for_list)
 
     # T2880: Pre-generate presigned URLs for all games concurrently.
     # T3380: Skip when called from bootstrap (URLs loaded lazily on demand).
@@ -983,11 +1014,22 @@ async def _list_games_impl(skip_presigned_urls=False):
 
         video_url = None if skip_presigned_urls else get_game_video_url(row['blake3_hash'], row['video_filename'])
 
-        expires_at_val = expiry_by_hash.get(row['blake3_hash'])
-        storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'])
+        # T5800: a reference (source_profile_id NOT NULL) is a metadata-only link to a
+        # game owned by a sibling profile. It has NO game_storage row, so skip all
+        # storage-expiry computation -- a reference must never show expiry chips or a
+        # can-extend affordance (EPIC decision 4; video lifecycle stays with the owner).
+        source_profile_id = row['source_profile_id']
+        is_reference = source_profile_id is not None
 
         blake3 = row['blake3_hash']
-        can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
+        if is_reference:
+            expires_at_val = None
+            storage_status = None
+            can_extend = False
+        else:
+            expires_at_val = expiry_by_hash.get(blake3)
+            storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'])
+            can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
 
         stats = athlete_stats.get(row['id'], _EMPTY_ATHLETE_STATS)
 
@@ -1019,6 +1061,14 @@ async def _list_games_impl(skip_presigned_urls=False):
             'auto_export_status': row['auto_export_status'],
             'recap_video_url': row['recap_video_url'],
             'can_extend': can_extend,
+            # T5800: reference (cross-profile game-attribution link) fields. A UI (T5820)
+            # renders a reference as a link card back to the owning profile.
+            'is_reference': is_reference,
+            'source_profile_id': source_profile_id,
+            'source_game_id': row['source_game_id'] if is_reference else None,
+            'source_profile_name': (
+                source_profile_names.get(source_profile_id) if is_reference else None
+            ),
         })
 
     logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")

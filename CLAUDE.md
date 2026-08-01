@@ -60,6 +60,10 @@ Classification starts by picking a tier. The tier sets the DEFAULT pipeline; cla
 
 Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostToolUse hook on every edit (`.claude/hooks/lint-changed.cjs`) and block until clean. Test evidence (actual output, not claims) is required before a task is called complete.
 
+### Test Scope Policy (all tiers)
+
+Local/worker test runs are **changed-code only**: the task's tests + `npx vitest related --run <changed sources>` + pytest modules for the changed backend code + the e2e spec(s) for the changed flow. Never run full suites locally to "confirm no regressions" — Branch CI runs the complete vitest+pytest suites on every push (the mandatory CI verdict) and Master CI re-runs them on every merge to master. Fix loop: a failing test gets fixed, then re-run that test + tests exercising the files the fix touched; already-passed tests whose subject code didn't change are not re-run. Details: `.claude/skills/run-tests/SKILL.md`.
+
 ### Task Status Rule
 
 Statuses split into two kinds with different owners:

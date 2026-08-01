@@ -299,6 +299,24 @@ The full checklist for an 11th→Nth sport:
   for an expired game with no recap video — a deliberate divergence from the old GameCard.
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
 
+- **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
+  (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).
+  `setPendingGameReference({sourceProfileId, sourceGameId, sourceProfileName})` is the SEPARATE
+  cross-profile breadcrumb for a **reference card** (a `games` row with `source_profile_id`, T5800):
+  clicking it does NOT open Annotate — by user decision "you clicked a game card, you should get the
+  game card", it switches to the OWNING profile and lands on its **Games tab** with the real game
+  scrolled into view + a transient green ring. Consumed once in `ProjectManager` (a `ReferenceGameCard`
+  renders the link variant; the real `GameTile` is untouched). It survives `profileStore._resetDataStores`
+  (sessionStorage, not Zustand). The consume-effect must wait for the OWNING profile's OWN games fetch
+  (a `referenceLoadStartedRef` load-cycle guard: observe `gamesLoading` go true→false) before matching,
+  or it would consume against the stale pre-refetch list and false-degrade. The owning game is located
+  by exact **`source_game_id`** match against the target profile's own (non-reference) games — the API
+  projects `source_game_id` alongside `is_reference` (see export-pipeline.md §Cross-profile), so this
+  works for MULTI-VIDEO owning games too (their `blake3_hash` is NULL, which is why an earlier version
+  of this breadcrumb matched on hash and had to skip the highlight for them). A missing match now means
+  the owning game was genuinely deleted — the degraded notice fires; there is no other reason for
+  `source_game_id` to not resolve. QA is real-browser only (`e2e/T5820-reference-link-cards.qa.spec.js`)
+  — jsdom gives false confidence on the switch race.
 - **Ready Draft tile contract (T6180) — do not undo when restyling `DraftTile.jsx`.** For a
   ready draft (`isReadyToPublish = has_final_video && !is_published`) the tile is a
   discoverable action surface, NOT the old 10px corner badge (which was a `<button>` labelled

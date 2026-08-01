@@ -95,6 +95,57 @@ graph LR
 - **Multi-clip transitions:** strategy pattern in `app/services/transitions/` (`base.py:15 TransitionStrategy`, `TransitionFactory`; cut/fade/dissolve self-register). Called from `concatenate_clips_with_transition` (`multi_clip.py:1100`); unknown type falls back to `'cut'`; chapter markers embedded after concat (`multi_clip.py:1139-1188`).
 - **before_after.py:** builds "Before vs After" comparison videos from `before_after_tracks` (rows written by `overlay.py:1283-1327` during `/final`). Pure local FFmpeg; no R2/DB writes, no `export_jobs`.
 
+## Cross-profile game references (T5800, profile_db v030)
+- A **reference game** is a `games` row with `source_profile_id IS NOT NULL` (+ `source_game_id`,
+  both nullable, profile_db **v030**). It is a **metadata-only link** to a game owned by a SIBLING
+  profile of the same user, materialized so a MOVED reel (T5810) keeps its by-game grouping in the
+  target profile's Gallery. Referenceness is DERIVED (`source_profile_id IS NOT NULL`), there is NO
+  `is_reference` boolean (EPIC decision 3). Metadata is FROZEN at materialization (name/opponent/
+  date/type/tournament/dims/durations + `created_at` copied from source; a later rename of the
+  owning game does NOT propagate).
+- **What a reference row is NOT:** it has **no `game_storage` row, no Postgres `game_storage_refs`,
+  no `game_ref_counts`** (EPIC decision 4 — video lifecycle stays 100% with the owning profile).
+  So `list_games` (`games.py:_read_games_for_list`/`_list_games_impl`) **skips ALL storage-expiry
+  computation for references** — a reference emits `storage_status=None`, `storage_expires_at=None`,
+  `can_extend=False`, plus `is_reference=true`/`source_profile_id`/`source_game_id`/`source_profile_name`
+  (owning profile's display name from `user_db.get_profiles`, ONE read, no N+1). `source_game_id` lets
+  the frontend (T5820) locate the owning game by exact id match — including MULTI-VIDEO owning games,
+  whose `blake3_hash` is NULL and so could never be used as a matching key. Athlete stats are naturally
+  zero (no local `raw_clips`). NEVER show an expiry chip on a reference card.
+- **Primitive:** `materialization.ensure_game_reference(target_conn, target_profile_id,
+  source_profile_id, source_game_row, source_game_videos) -> int` (the 2nd cross-profile game
+  copier; shares the insert with `_copy_game` via `_insert_game_with_videos`). 4-step resolution:
+  (1) dedup on `(source_profile_id, source_game_id)`; (2) chain-collapse — a reference SOURCE
+  resolves through its own source pointer so references never point at references (EPIC dec. 6);
+  (3) hash-dedup against a REAL local game (share-materialized earlier) via
+  `_find_existing_game_by_hashes` → reuse it, no reference; (4) else insert a reference. Takes an
+  ALREADY-OPEN target conn (Row factory); callers own cross-profile DB opening + R2 sync ordering.
+- **Migration-window (v030):** `source_profile_id`/`source_game_id` land on the bootstrap-hot games
+  SELECT, so `_read_games_for_list` `column_exists`-guards them (projects `NULL` on a pre-v030 DB —
+  nothing can create a reference until v030, so NULL is correct). Same class as T5970/T6030; the
+  structural guard test `POST_V023_COLUMNS`/`HEAD_VERSION_AUDITED` was extended to v030.
+- **Games-tab UI for a reference (T5820).** The frontend renders a reference (`is_reference:true`)
+  as a `ReferenceGameCard` (subdued dashed link tile, "In {source_profile_name}" badge, NO expiry
+  chip / kebab / annotate-delete-recap actions, no poster fetch) — the real `GameTile` is byte-identical
+  for non-references. Clicking it switches to the owning profile (`profileStore.switchProfile`) and lands
+  on ITS Games tab with the real game highlighted, located by exact `source_game_id` match against the
+  target profile's own game list (`_list_games_impl` projects `source_game_id` under the `is_reference`
+  gate, per the list above) — this works for MULTI-VIDEO owning games too, since it never depends on
+  `blake3_hash`. A deleted owning game (its id no longer present in the target profile's list) degrades
+  to a visible in-tab notice at click time (no cross-profile existence check on list render). Details:
+  annotate.md §Landmines (T5820 breadcrumb).
+- **Moved reels CARRY remapped `game_ids` (T5810).** `downloads.py:move_reels_to_profile` no longer
+  nulls `game_ids`/`game_id` (the old T4850 behavior). Instead `_build_reference_map` resolves each
+  distinct source game to a target reference via `ensure_game_reference` (per-DISTINCT-game, NOT
+  per-reel — no N+1) and `_build_moved_reel_row` rewrites `game_ids` (sorted-distinct, re-encoded
+  msgpack) + scalar `game_id` through that map; `project_id`/`source_clip_id` still stay NULL
+  (editing lineage does not move). So a single-clip moved reel groups under the game header in the
+  target Gallery, exactly like the source. `collections.py` (`route_collection`/summary) is
+  UNCHANGED — grouping falls out of the remapped frozen `game_ids` (T4190 read path). Orphan
+  references are cleaned gesture-driven (move-away Phase 2 + reel-delete), never a sweep. Sync
+  ordering unchanged (rides the existing Phase-1 target `sync_db_to_r2_explicit`; persistence-sync.md
+  § 6b-T5810).
+
 ## Invariants & rules
 1. **Sync-then-announce (T4110 + T4200, DONE 2026-07-11):** the R2 DB sync must succeed BEFORE the export is announced complete. **ALL THREE overlay completion paths gate COMPLETE on `sync_export_db_to_r2`** (T5300 verified): the no-keyframes copy path (`overlay.py:2043`) and the test-mode copy path (`:2110`) run inline and return **503** + a retryable `sync_failed` progress event on failure; the real-render **background** path (`_run_overlay_export_background:1817-1833`, the one that returns **202** and finishes async) gates the same way but — having already returned 202 — emits the retryable `_export_sync_failed_data` event over the WS/`export_progress` dict INSTEAD of a 503 (there is no live HTTP response to fail). Also gated: framing (`framing.py:718-722`) and multi-clip (`multi_clip.py:2298-2301` + COMPLETE sites `:1440-1448/:1737`). DB-save failure is terminal — no phantom export announces success. The `export_sync_failed_data` helper lives in `export_helpers.py:379` (no router→router imports); it sets `code='sync_failed'`, `retryable=True`, `phase='error'`.
    - **Landmine (T5300):** the sync-fault only surfaces as `sync_failed` if the render REACHES the durable boundary. On the background path the finalize INSERT (`_finalize_overlay_export`, `overlay.py:183`) writes `final_videos` incl. the v025 `slowmo_section_start/end` columns; a profile DB **behind head schema** throws `table final_videos has no column named slowmo_section_start` at that INSERT — BEFORE the boundary — so the terminal event is a plain `error` (no `code`), masking the durability check. This is NOT a durability gap: the boundary is sound; the DB was just un-migrated. A /dotask container pulls the user DB from R2 at whatever version R2 holds and does NOT auto-run migrations, so the self-verify spec must migrate the profile to head first (see Testing seams: `/api/test/migrate-current-profile`).

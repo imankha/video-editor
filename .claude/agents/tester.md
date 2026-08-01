@@ -24,11 +24,16 @@ Manage automated testing throughout the task lifecycle. Responsible for:
 
 | Affected Layer | Tests to Run | Command |
 |----------------|--------------|---------|
-| Frontend only | Unit tests for changed files + relevant E2E | `npm test -- {files}` |
+| Frontend only | Unit tests for changed files + relevant E2E | `npx vitest related --run {changed sources}` |
 | Backend only | Backend tests for changed modules | `pytest tests/{modules} -v` |
 | Frontend + Backend | Frontend unit + E2E + Backend | Both |
 | Modal | Backend integration + Modal logs | `pytest -k "modal"` |
-| Database | Backend + migration verification | Full backend suite |
+| Database | Backend tests for changed modules + migration tests | `pytest tests/test_{modules}*.py tests/test_migrations*.py` |
+
+The full suites run in CI, not here: Branch CI (every push) and Master CI (every
+merge) execute complete vitest + pytest. Local scope is always changed-code only;
+the fix loop re-runs the failing test + tests exercising the fix's files, never
+"the full suite again".
 
 ### Identifying Affected Tests
 
