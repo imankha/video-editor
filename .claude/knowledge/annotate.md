@@ -157,7 +157,9 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
 - **Team / My Athlete layer (T5700).** `raw_clips.my_athlete` (existing bit, no schema change) is
   now a visible two-value layer: `1`/`NULL` → My Athlete, `0` → Team. Legacy-NULL rule
   `region.my_athlete ?? true` must be applied at every read site (`LayerSegmentedControl`,
-  `ClipListItem`'s `LayerChip`, `ClipRegionLayer`'s `layerColorFor`/`layerLabelFor`,
+  `ClipListItem`'s `LayerChip` — icon-only (cyan `User` / amber `Users`), no visible text at any
+  breakpoint per a follow-up UX decision; accessible name carries the layer via title/aria-label —
+  `ClipRegionLayer`'s `layerColorFor`/`layerLabelFor`,
   `ClipsSidePanel`'s filter) — never read `region.my_athlete` bare. Shared component
   `LayerSegmentedControl.jsx` (`value`/`onChange` boolean, `disabled`/`disabledReason`) is reused by
   three call sites: `ClipsSidePanel` header (mode toggle, sets the default for NEW clips only —

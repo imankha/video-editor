@@ -410,7 +410,11 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
     await expect(attribution).toBeVisible();
     await expect(attribution).not.toHaveClass(/rounded-full/);
 
-    const row = page.locator('div.flex.items-center.px-2:visible', { has: chip });
+    // Scope by the seeded clip's own (unique) name text rather than `has: chip` —
+    // the account has other real Team-layer clips too, so filtering on the Team
+    // marker alone is ambiguous once more than one exists (pre-existing latent
+    // bug, unmasked once the earlier stray-clip flake below was cleaned up).
+    const row = page.locator('div.flex.items-center.px-2:visible', { hasText: 'Incredible give-and-go' });
     expect(await nameOverflow(row)).toBe(true);
 
     await assertNoHorizontalOverflow(page);

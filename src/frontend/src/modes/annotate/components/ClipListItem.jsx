@@ -4,22 +4,22 @@ import { getRatingDisplay } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
 
 /**
- * LayerChip - cyan "My Athlete" / amber "Team" pill for a clip-list row (T5700).
- * uppercase (CSS) renders the visible text as "MY ATHLETE" / "TEAM"; the DOM
- * text + title/aria-label stay in title case for screen readers.
+ * LayerChip - icon-only cyan "My Athlete" / amber "Team" marker for a clip-list
+ * row (T5700 follow-up). No visible text at any breakpoint — the accessible
+ * name (title + aria-label) carries the full layer name for screen-reader and
+ * hover users, per locked UX decision (both layers icon-only, no text fallback).
  */
 function LayerChip({ isMine }) {
   const label = isMine ? 'My Athlete' : 'Team';
   const Icon = isMine ? User : Users;
   return (
     <span
-      className={`shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full
-                  text-[10px] font-semibold uppercase tracking-wide
+      className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
                   ${isMine ? 'bg-cyan-500 text-cyan-950' : 'bg-amber-500 text-amber-950'}`}
       title={`${label} layer`}
       aria-label={`${label} layer`}
     >
-      <Icon size={9} /> {label}
+      <Icon size={12} />
     </span>
   );
 }
