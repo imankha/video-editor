@@ -51,8 +51,10 @@ POST_V023_COLUMNS = {
     "working_videos": ["detections_data"],                                              # v027
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation"],                                                       # v029
+    # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
+    # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
 }
-HEAD_VERSION_AUDITED = 29
+HEAD_VERSION_AUDITED = 31
 
 
 def _cleanup(user_id: str) -> None:

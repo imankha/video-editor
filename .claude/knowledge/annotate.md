@@ -176,6 +176,31 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `AnnotateContainer.handleLoadGame` (the game-open gesture), never via a state-watching effect, and
   are never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
   a secondary cue (colored border/underline), not a replacement for the rating-hue primary signal.
+- **Teammate tagging is Team-layer only (T5725).** Teammates <-> Team is now a hard invariant: the
+  Teammates control (`ClipDetailsEditor.jsx`, `AnnotateFullscreenOverlay.jsx`) renders ONLY when the
+  clip is on the Team layer (`(my_athlete ?? true) === false`), replacing the old `!isMobile` gate --
+  so teammate tagging is available on Team clips for BOTH desktop and mobile, and there is NO
+  teammate-tagging affordance on any My Athlete clip. **Clear-on-switch:** switching a clip TO My
+  Athlete clears its teammate tags in the SAME gesture (ClipDetailsEditor sends the surgical
+  `{my_athlete:true, tagged_teammates:[]}`; the overlay clears local `taggedTeammates`, persisted on
+  Save) -- chosen over leave-and-hide because it cannot leave an invisible contradictory state and the
+  clearing is VISIBLE (the Teammates block + chips disappear as the control hides). Switching TO Team
+  still sends ONLY `{my_athlete:false}`. This resolves the contradiction that `_filter_clips_for_tag`
+  (materialization.py:253) joins `clip_teammates` with NO layer predicate, so a teammate tag on a My
+  Athlete clip used to leak that clip into another family's per-player share. The share path is
+  DELIBERATELY left unfiltered -- no `AND my_athlete = 0` was added (CLAUDE.md "correct data, not
+  workarounds"); the UI keeps new data correct and the migration heals old data. **profile_db v031**
+  (`v031_reclassify_teammate_clips_to_team.py` — numbered v031 not v030 to avoid colliding with the
+  sibling T5800 branch's v030, which merges ahead) MOVES every teammate-tagged My-Athlete/NULL clip to
+  Team (`my_athlete = 0`), PRESERVING tags (reclassify, not strip) -- decides "has teammates" by
+  decoding the msgpack `tagged_teammates` blob in Python (an empty list encodes to a NON-NULL blob, so
+  it can't be tested in SQL) OR a `clip_teammates` join row; idempotent; logs the count; positional
+  row reads (tuple row factory). **Accepted consequence:** moved clips leave the My Athlete layer, so
+  they leave reels/rankings/collections eligibility (`queries.py:exclude_teammate_reels_clause` keeps
+  those on `my_athlete = 1`); already-published reels are unaffected. Migrations do NOT auto-run --
+  hit `POST /api/admin/migrate` per env. Covered by `ClipDetailsEditor.teammates.test.jsx`,
+  `AnnotateFullscreenOverlay.teammates.test.jsx`, `test_t5725_reclassify_teammate_clips.py`, and
+  `e2e/T5725-teammates-team-only.qa.spec.js`.
 - **Two clip lanes on desktop, one on phone (T5700 follow-up).** `AnnotateTimeline.jsx` splits the
   single tinted "Clips" track into two stacked, labeled `ClipRegionLayer` lanes — "My Athlete" (cyan)
   and "Team" (amber) — each fed a pre-filtered `regions` subset using the same legacy-NULL rule

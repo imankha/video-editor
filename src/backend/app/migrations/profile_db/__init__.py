@@ -28,6 +28,7 @@ from .v026_games_shared_by import V026GamesSharedBy
 from .v027_working_video_detections_data import V027WorkingVideoDetectionsData
 from .v028_export_job_stages import V028ExportJobStages
 from .v029_working_clips_rotation import V029WorkingClipsRotation
+from .v031_reclassify_teammate_clips_to_team import V031ReclassifyTeammateClipsToTeam
 
 MIGRATIONS = [
     V001Baseline(),
@@ -59,6 +60,7 @@ MIGRATIONS = [
     V027WorkingVideoDetectionsData(),
     V028ExportJobStages(),
     V029WorkingClipsRotation(),
+    V031ReclassifyTeammateClipsToTeam(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
