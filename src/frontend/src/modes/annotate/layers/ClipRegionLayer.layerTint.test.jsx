@@ -45,4 +45,11 @@ describe('ClipRegionLayer — layer tint (T5700)', () => {
     render(<ClipRegionLayer regions={regions} duration={100} selectedRegionId="team" onSelectRegion={() => {}} />);
     expect(screen.getByText('Team', { exact: false })).toBeTruthy();
   });
+
+  // T5700 follow-up: an empty per-layer lane (Annotate's two-lane desktop split) still
+  // renders a track with a custom empty message, rather than silently disappearing.
+  it('renders a caller-provided emptyMessage when there are no regions', () => {
+    render(<ClipRegionLayer regions={[]} duration={100} selectedRegionId={null} onSelectRegion={() => {}} emptyMessage="No Team clips yet" />);
+    expect(screen.getByText('No Team clips yet')).toBeTruthy();
+  });
 });

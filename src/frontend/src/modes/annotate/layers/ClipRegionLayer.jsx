@@ -58,7 +58,8 @@ export default function ClipRegionLayer({
   selectedRegionId,
   onSelectRegion,
   onDeleteRegion,
-  edgePadding = 20
+  edgePadding = 20,
+  emptyMessage = 'Use "Add Clip" button or pause in fullscreen to add clips',
 }) {
   const trackRef = useRef(null);
   const [hoveredRegionId, setHoveredRegionId] = useState(null);
@@ -195,8 +196,8 @@ export default function ClipRegionLayer({
 
         {/* Empty state message */}
         {regions.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
-            Use "Add Clip" button or pause in fullscreen to add clips
+          <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm px-2 text-center">
+            {emptyMessage}
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-08-01 (T5700 team/my-athlete layer; T5710 per-layer recap tabs)
+updated: 2026-08-01 (T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
 
@@ -171,6 +171,23 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `AnnotateContainer.handleLoadGame` (the game-open gesture), never via a state-watching effect, and
   are never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
   a secondary cue (colored border/underline), not a replacement for the rating-hue primary signal.
+- **Two clip lanes on desktop, one on phone (T5700 follow-up).** `AnnotateTimeline.jsx` splits the
+  single tinted "Clips" track into two stacked, labeled `ClipRegionLayer` lanes — "My Athlete" (cyan)
+  and "Team" (amber) — each fed a pre-filtered `regions` subset using the same legacy-NULL rule
+  (`my_athlete !== false` → mine, `my_athlete === false` → team). An empty lane still renders (label +
+  a lane-specific empty message via `ClipRegionLayer`'s new `emptyMessage` prop) rather than
+  disappearing — an empty Team lane is meaningful signal. Gated on **`useIsMobile()`** (width<1024 OR
+  coarse pointer), deliberately NOT the `sm` (640px) breakpoint the sidebar uses: `sm` would
+  misclassify a landscape phone (>=640px wide, the T4933 landmine below) as desktop and hand it the
+  taller 3-row timeline in an already height-starved viewport; `useIsMobile`'s width clause (<1024)
+  keeps a landscape phone single-lane regardless of orientation. `totalLayerHeight` switches
+  '6.75rem' (mobile, video + 1 track) / '9.75rem' (desktop, video + 2 lanes). Both lane labels'
+  `onClick` still select the ONE `'clips'` keyboard-nav layer (arrow-key nav in
+  `useKeyboardShortcuts.js` walks the full unfiltered `clipRegions` array regardless of which lane a
+  clip renders in) — there is no per-lane selection state. `region.index` is left as-is when
+  filtering into per-lane arrays (it reflects position in the full chronological list, not
+  position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
+  `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
 
 ## Landmines & history
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
