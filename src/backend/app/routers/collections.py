@@ -116,6 +116,10 @@ CURATED_COMBOS = {
         _combo("baseball_hits_homers", "Top Hits & Homers", {"Home Run", "Hit"}),
         _combo("baseball_defense", "Top Defensive Plays", {"Strikeout", "Double Play"}),
     ],
+    "softball": [
+        _combo("softball_hits_homers", "Top Hits & Homers", {"Home Run", "Hit"}),
+        _combo("softball_defense", "Top Defensive Plays", {"Strikeout", "Double Play"}),
+    ],
 }
 
 

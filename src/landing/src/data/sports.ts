@@ -132,6 +132,23 @@ export const SPORTS: Sport[] = [
       'College baseball recruiters typically want mechanics over outcomes: the same swing or delivery from a consistent angle, repeated. Many also want unedited at-bat sequences alongside the highlight cut.',
   },
   {
+    slug: 'softball',
+    id: 'softball',
+    name: 'Softball',
+    lower: 'softball',
+    emoji: '🥎',
+    title: 'Softball Highlight Video Maker | ReelBallers',
+    description:
+      'Turn fastpitch softball game footage into a highlight reel. Tag rise balls, slaps, hits, and defensive plays, then export a recruiting cut. Free.',
+    h1: 'Softball highlight video maker',
+    answer:
+      'ReelBallers turns fastpitch softball game footage into a highlight reel: tag strikeouts, rise balls, hits, slaps, and fielding plays as you watch, then export a recruiting cut or a vertical clip for social.',
+    challenge:
+      'Fastpitch is a reaction-time sport: the windmill delivery covers the 43-foot circle in a blink, and a rise ball only reads its late jump on video when the camera holds the pitcher and batter tight. From the backstop or the outfield fence a wide phone shot flattens that movement, which is exactly what auto-follow framing recovers -- it crops in so the spin and the swing stay legible.',
+    scouting:
+      'College and travel-ball softball evaluators want repeatable mechanics from a steady angle -- a pitcher spin and release, a slapper footwork out of the box, a middle infielder transfer on the double play. Showcase and club-tournament reels carry more weight when they show full at-bats and defensive sequences than a cut of results alone.',
+  },
+  {
     slug: 'volleyball',
     id: 'volleyball',
     name: 'Volleyball',

@@ -25,6 +25,7 @@ const CURATED_COMBO_TAGS = {
   hockey: [['Goal', 'Assist'], ['Goal', 'Save']],
   tennis: [['Ace', 'Forehand Winner', 'Backhand Winner']],
   baseball: [['Home Run', 'Hit'], ['Strikeout', 'Double Play']],
+  softball: [['Home Run', 'Hit'], ['Strikeout', 'Double Play']],
 };
 
 describe('tag registry — all supported sports', () => {
