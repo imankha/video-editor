@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-08-02 (T6340: the profile_db MIGRATION RUNNER is now a baseline-establishing caller. `_migrate_profile_db` force-downloads the canonical R2 profile.sqlite and `shutil.move`s it over the local file; the R2 sync version lives in object metadata, NOT in the bytes, so the swapped-in file had NO db_version row → get_local_db_version()==None → CAS BLOCKING-2 refused the post-migration upload UNCONDITIONALLY → NO profile_db migration ever reached R2 on staging/prod (v030/v031 stuck). FIX: after the swap, record the DOWNLOADED copy's sync version as the confirmed baseline via set_local_db_version, atomically — `_download_profile_db` now fetches bytes+metadata in ONE get_object so no separate HEAD can observe a moved version (recording a moved version would force-push older bytes at a bumped version = clobber). CAS guard UNCHANGED (fix the caller, not the guard). r2_version now populated in error rows (was always null) via one HEAD on the FAILURE path only. `_migrate_user_db` (user.sqlite) does NOT share the defect — ensure_user_database's restore records the baseline from the same download. See T6340 section.)
 updated: 2026-07-28 (T6160: a CAS conflict now SELF-HEALS — restore is first-access-only, so a running machine never noticed R2 moving ahead and every write refused forever (Retry futile until restart). On conflict the loaded-from version is now invalidated (profile: memory + persisted db_version file row + cooldown; user.sqlite: memory version + `_initialized_user_dbs` init flag + cooldown) so the NEXT request's first-access restore re-pulls R2's newer copy. CAS refusal UNCHANGED (baseline never advanced; a None baseline still refuses via BLOCKING-2). The refused in-flight edit is DISCARDED by the re-pull (decision 2, never merged/force-pushed). ensure_database/ensure_user_database first-access restore gained the T4315 WAL guard (before_download + clear_stale_wal_sidecars) since the re-pull can now fire on a running machine. See T6160 section.)
 updated: 2026-07-27 (T6040: reader-vs-writer split on `conflict` — a no-write session now gets a quiet "newer version available" + Reload notice instead of total silence; `failed` stays silent for readers because the `conflict`/`failed` asymmetry (R2-ahead vs local-ahead) means only `conflict` readers are looking at stale data; frontend-only, backend untouched; see T5960/T6010/T6020/T6040 section)
 updated: 2026-07-27 (T6020 follow-up: renamed the write-attempt gate's call-site marker `rbLifecycleWrite` -> `rbNonDataWrite` and marked 5 auth-gesture sites the original table missed (google/verify-otp/send-otp/logout/report-problem) — the old name misled at the auth boundary since login IS a gesture but still can't touch the profile SQLite; supervisor-audit-caught regression vs the T5960 baseline; see T5960/T6010/T6020 section)
@@ -82,6 +83,56 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 5. **User-level migrated/skipped only when ALL registered profiles verify.** If any registered profile lands in errors[], the user's failing profiles are reported in errors[] and the user is NOT counted as migrated or skipped.
 6. **Orphan cleanup is opt-in.** `scripts/cleanup_orphan_profiles.py` archives orphan R2 objects (copies to `orphans/` prefix, then deletes originals). Dry-run by default; `--apply` + manual confirmation required. Never auto-invoked by the runner.
 7. **`MigrateResult` status values:** `"ok"` (profile verified at head), `"sync_failed"` (upload returned False), `"not_at_head"` (R2 user_version ≠ head after sync), `"missing"` (registered profile has no R2 object), `"download_failed"` (transient R2 download error).
+8. **The swap MUST record a confirmed sync baseline (T6340).** `_migrate_profile_db` swaps the canonical R2 profile.sqlite in place, so it is a baseline-establishing caller like `ensure_database`'s restore — **any caller that swaps a profile.sqlite file in place must record the swapped-in copy's sync version as its confirmed baseline, atomically with the bytes, or refuse to write.** See the T6340 section.
+
+## T6340 — the migration runner must establish a sync baseline for the copy it swaps in
+
+**The bug (staging + prod, every R2-enabled deploy):** `_migrate_profile_db`
+(`app/migrations/__init__.py`) force-downloads the canonical R2 `profile.sqlite` and
+`shutil.move`s it over the local file, bypassing `ensure_database`. The **sync** version lives in R2
+object metadata (`x-amz-meta-db-version`), NOT inside the SQLite bytes, so the swapped-in file has
+**no `db_version` row**. `get_local_db_version` then returns `None`, and storage.py's CAS guard
+(`storage.py:~1197`, BLOCKING-2: `r2_version > 0 and (current_version is None or ...)`) refuses the
+post-migration upload **unconditionally** (R2 always has content). T6160 re-heal then discards the
+migrated local file on next access. Net: **no profile_db migration ever reached R2** — v030 (T5800)
+and v031 (T5725) sat stuck while `run_all_migrations()` reported `sync_failed` on every profile, with
+`r2_version: null` that made a CAS refusal read as an R2 outage. T4315 (never force-push an
+unconfirmed DB) and T6160 (clear the baseline so the next access re-pulls) were BOTH behaving
+correctly — the runner just never established a baseline for the copy it downloaded.
+
+**The fix (fix the CALLER, guard is byte-identical):**
+1. **Record the downloaded copy's sync version as the confirmed baseline after the swap** —
+   `set_local_db_version(user_id, profile_id, downloaded_sync_version)` (one call does BOTH the
+   in-memory cache and the persisted `db_version` row; there is NO `_persist_db_version`). The later
+   `sync_db_to_r2_explicit` then sees `current_version == r2_version` → no conflict → uploads
+   `r2_version + 1`.
+2. **Atomicity — bytes and version from ONE `get_object`.** `_download_profile_db` now returns
+   `(found, sync_version)` from a single `client.get_object` (Body + Metadata together), so the
+   recorded baseline provably matches the bytes on disk. A separate HEAD after the download could
+   observe a version R2 moved to mid-download; recording THAT would later force-push the OLDER bytes
+   at a bumped version — a clobber, worse than the original bug. (`FakeR2.get_object` was extended to
+   return `Metadata` for the tests.)
+3. **Two refusal shapes, both correct, both now report the real `r2_version`.** The swap path's
+   `current_version is None` refusal is the one the fix eliminates. The `local_version > r2_version`
+   (local schema AHEAD) branch skips the swap and syncs local up directly; if THAT refuses it is a
+   genuinely unconfirmed/stale local copy (`loaded=v2696 r2=v2697`) and refusing is correct — do NOT
+   force-push there. Both non-OK paths now populate `MigrateResult.r2_version` via
+   `_r2_version_or_none` (one HEAD, FAILURE path only; coerces the `R2VersionResult` enum to `None`
+   so it never leaks into JSON as a version). `status` stays `"sync_failed"` (consumed by
+   `test_migration_runner.py` scenario (d) and the admin endpoint).
+4. **`_migrate_user_db` (user.sqlite) does NOT share the defect.** It uses `ensure_user_database`,
+   whose first-access restore calls `sync_user_db_from_r2_if_newer` and records the baseline
+   with `set_local_user_db_version(user_id, new_version)` from the SAME download that gated it — so
+   the subsequent `sync_user_db_to_r2_explicit` has a confirmed baseline. No manual swap-without-
+   baseline, so no fix needed there.
+
+**Tests:** `tests/test_t6340_migration_sync_baseline.py` (real storage.py CAS against FakeR2): the
+bug pinned (swap + re-heal → R2 reaches head, sync `N`→`N+1`), content preserved, a genuinely stale
+non-None writer still refused with the real `r2_version`, NOT_FOUND/ERROR/enum never fabricate a
+baseline or upload, a mid-download move refuses (never clobbers), and an end-to-end multi-profile
+`_migrate_user` that converges and is idempotent on re-run. `test_migration_runner.py` (T4830) five
+scenarios unchanged and green. **Out of the container's reach (post-deploy):** staging reaching v031
+in R2, and the prod below-head audit.
 
 ## Overlay action failure visibility (T4900 / prod bug 31p)
 

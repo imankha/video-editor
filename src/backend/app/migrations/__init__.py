@@ -213,7 +213,7 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
     Verifies in R2 after every run.  Returns MigrateResult; status "ok" means
     the profile verified at head in R2.
     """
-    from ..database import USER_DATA_BASE, sync_db_to_r2_explicit
+    from ..database import USER_DATA_BASE, set_local_db_version, sync_db_to_r2_explicit
     from ..profile_context import set_current_profile_id
     from ..storage import get_r2_client
     from ..user_context import set_current_user_id
@@ -224,31 +224,63 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
     client = get_r2_client()
 
     if client:
-        # Force-download the canonical R2 copy to a temp file
+        # Force-download the canonical R2 copy to a temp file. T6340: this fetches
+        # the bytes AND their sync version (x-amz-meta-db-version) in one atomic
+        # get_object, so downloaded_sync_version provably matches these bytes.
         tmp_path = db_path.with_name("profile.sqlite.migrating_tmp")
         tmp_path.unlink(missing_ok=True)
 
         try:
-            found = _download_profile_db(user_id, profile_id, tmp_path)
+            dl = _download_profile_db(user_id, profile_id, tmp_path)
         except Exception as e:
             logger.warning("[Migration] Download failed for %s/%s: %s", user_id, profile_id, e)
             return MigrateResult(status="download_failed", applied=[])
+
+        # Normalize: real code returns (found, sync_version); a legacy/test double
+        # may return a bare bool (no version) — carry no baseline in that case so
+        # we never fabricate one (T4315).
+        found, downloaded_sync_version = dl if isinstance(dl, tuple) else (dl, None)
 
         if found and tmp_path.exists():
             r2_version = _read_sqlite_user_version(tmp_path)
             local_version = _read_sqlite_user_version(db_path) if db_path.exists() else -1
 
             if local_version > r2_version:
-                # Local AHEAD of R2: sync local up first, then keep local file
+                # Local SCHEMA is AHEAD of R2 (unsynced local writes): keep the
+                # local file and sync it UP. We do NOT record a baseline here — the
+                # local file already carries its own confirmed db_version row from
+                # whatever write advanced it. If that SYNC baseline is genuinely
+                # stale relative to R2 (the second live refusal shape: a real
+                # loaded=v2696 r2=v2697 conflict, NOT the swap path's None
+                # baseline), CAS SHOULD refuse — do NOT force-push here, refusing a
+                # genuinely unconfirmed copy is correct. Surface the real R2 sync
+                # version in the error row (T6340 #3), never null.
                 tmp_path.unlink(missing_ok=True)
                 set_current_user_id(user_id)
                 set_current_profile_id(profile_id)
                 if not sync_db_to_r2_explicit(user_id, profile_id):
-                    return MigrateResult(status="sync_failed", applied=[])
+                    return MigrateResult(
+                        status="sync_failed", applied=[],
+                        r2_version=_r2_version_or_none(user_id, profile_id),
+                    )
                 # db_path stays as-is (already newer than R2 was)
             else:
-                # R2 is canonical: overwrite local with the downloaded copy
+                # R2 is canonical: overwrite local with the downloaded copy, then
+                # record the DOWNLOADED copy's sync version as the confirmed local
+                # baseline. T6340 (the whole fix): the swapped-in R2 bytes carry NO
+                # db_version row (the sync version lives ONLY in R2 object metadata,
+                # not inside the SQLite file), so without this get_local_db_version
+                # returns None and storage.py's CAS guard refuses the post-migration
+                # upload UNCONDITIONALLY (BLOCKING-2) — no profile_db migration ever
+                # reaches R2. downloaded_sync_version came from the SAME get_object
+                # response as these bytes, so no separate HEAD can observe a version
+                # newer than the bytes on disk (that window would let us force-push
+                # OLDER bytes at a bumped version — a clobber). Recording it lets the
+                # later sync see current_version == r2_version and upload r2_version+1.
+                # NEVER fabricate a baseline (T4315): if the download yielded no real
+                # int version, leave it unset (None) and let CAS refuse.
                 shutil.move(str(tmp_path), str(db_path))
+                set_local_db_version(user_id, profile_id, downloaded_sync_version)
         elif not found:
             # Key not in R2 — registered profile has no R2 object (fail loud)
             return MigrateResult(status="missing", applied=[])
@@ -273,7 +305,13 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
 
     if applied and client:
         if not sync_db_to_r2_explicit(user_id, profile_id):
-            return MigrateResult(status="sync_failed", applied=applied)
+            # T6340 #3: thread the REAL R2 sync version into the error row instead
+            # of null (which made a CAS refusal read as an R2 outage). One HEAD,
+            # and ONLY on the failure path — never added to the success path.
+            return MigrateResult(
+                status="sync_failed", applied=applied,
+                r2_version=_r2_version_or_none(user_id, profile_id),
+            )
 
     # Always verify in R2 (when R2 available): re-download and assert user_version == head
     if client:
@@ -312,12 +350,35 @@ def _get_profile_ids(user_id: str) -> list[str]:
         return []
 
 
-def _download_profile_db(user_id: str, profile_id: str, local_path) -> bool:
-    """
-    Download profile.sqlite from R2 to local_path.
+def _is_not_found_error(client, e) -> bool:
+    """True if an R2 client error means the object does not exist (vs. transient)."""
+    is_not_found = False
+    if hasattr(e, "response"):
+        code = (e.response or {}).get("Error", {}).get("Code", "")
+        is_not_found = code in ("NoSuchKey", "404", "NoSuchBucket")
+    if not is_not_found and hasattr(client, "exceptions") and hasattr(client.exceptions, "NoSuchKey"):
+        is_not_found = is_not_found or isinstance(e, client.exceptions.NoSuchKey)
+    return is_not_found
 
-    Returns True if downloaded successfully, False if the key does not exist in R2
-    (or if no R2 client is available).  Raises on other download errors (fail loud).
+
+def _download_profile_db(user_id: str, profile_id: str, local_path) -> tuple[bool, int | None]:
+    """
+    Download profile.sqlite from R2 to local_path, returning (found, sync_version).
+
+    T6340: fetches the object body AND its x-amz-meta-db-version metadata in a
+    SINGLE client.get_object round trip, so the returned sync_version provably
+    corresponds to the exact bytes written to local_path. A separate HEAD after
+    the download could observe a version newer than the bytes on disk (R2 moved
+    mid-download); recording THAT as the confirmed baseline would later force-push
+    the older bytes over newer R2 data at a bumped version (a clobber, worse than
+    the bug this closes). One call, no window.
+
+    Returns:
+      (True, version)  — downloaded; `version` is the object's sync version
+                         (0 for a legacy object with no db-version metadata,
+                         matching get_db_version_from_r2's legacy handling).
+      (False, None)    — key not in R2 (or no R2 client).
+    Raises on any OTHER download error (fail loud — caller returns download_failed).
     Accepts both Path and str for local_path.
     """
     from ..storage import APP_ENV, R2_BUCKET, get_r2_client
@@ -325,26 +386,44 @@ def _download_profile_db(user_id: str, profile_id: str, local_path) -> bool:
     local_path = Path(local_path)  # fix Path/str bug: ensure .parent works
     client = get_r2_client()
     if not client:
-        return False
+        return False, None
 
     key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/profile.sqlite"
     try:
+        response = client.get_object(Bucket=R2_BUCKET, Key=key)
+        body = response["Body"].read()
+        metadata = response.get("Metadata", {}) or {}
+        version_str = metadata.get("db-version")
+        sync_version = int(version_str) if version_str else 0
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        client.download_file(R2_BUCKET, key, str(local_path))
-        logger.info(f"[Migration] Downloaded profile DB from R2: {key}")
-        return True
+        with open(local_path, "wb") as f:
+            f.write(body)
+        logger.info(f"[Migration] Downloaded profile DB from R2: {key} (sync v{sync_version})")
+        return True, sync_version
     except Exception as e:
         # NoSuchKey / 404 → not found (not an error)
-        is_not_found = False
-        if hasattr(e, "response"):
-            code = (e.response or {}).get("Error", {}).get("Code", "")
-            is_not_found = code in ("NoSuchKey", "404", "NoSuchBucket")
-        if not is_not_found and hasattr(client, "exceptions") and hasattr(client.exceptions, "NoSuchKey"):
-            is_not_found = is_not_found or isinstance(e, client.exceptions.NoSuchKey)
-        if is_not_found:
-            return False
+        if _is_not_found_error(client, e):
+            return False, None
         # Any other error: propagate (fail loud — caller catches and returns download_failed)
         raise
+
+
+def _r2_version_or_none(user_id: str, profile_id: str) -> int | None:
+    """Best-effort REAL R2 sync version for a profile, for populating the
+    r2_version field of a FAILED migration's error row (T6340 #3).
+
+    get_db_version_from_r2 returns int | R2VersionResult — coerce the enum
+    (NOT_FOUND / ERROR) to None so a R2VersionResult NEVER leaks into the JSON
+    response as a version. One HEAD, and ONLY on the failure path (the success
+    path already knows the version from the upload); never added to the hot path.
+    """
+    from ..storage import get_db_version_from_r2
+    try:
+        v = get_db_version_from_r2(user_id, profile_id=profile_id)
+    except Exception as e:
+        logger.warning("[Migration] r2_version lookup failed for %s/%s: %s", user_id, profile_id, e)
+        return None
+    return v if isinstance(v, int) else None
 
 
 def _read_sqlite_user_version(db_path: Path) -> int:
@@ -369,7 +448,7 @@ def _read_r2_profile_user_version(user_id: str, profile_id: str) -> int | None:
 
     tmp_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite.verify_tmp"
     try:
-        downloaded = _download_profile_db(user_id, profile_id, tmp_path)
+        downloaded, _sync_version = _download_profile_db(user_id, profile_id, tmp_path)
         if not downloaded or not tmp_path.exists():
             return None
         return _read_sqlite_user_version(tmp_path)
