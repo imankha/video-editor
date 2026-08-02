@@ -1,15 +1,22 @@
-"""T5090: Slow-mo-first reel poster (clearest frame in first half of slow-mo).
+"""T5090: Slow-mo section location (multi-clip, final-timeline offset math).
 
 Covers:
 - first_slowmo_section window math: single clip, multi-clip offset, trimRange,
   splits-only boundary canonicalization, no-slow-mo -> None
-- generate_and_store_poster policy plumbing: slow-mo -> clearest frame in the
-  FIRST HALF window; no slow-mo / missing data -> plain first frame
-- extract_clearest_frame_jpeg window actually restricts sampling (real ffmpeg)
+- extract_clearest_frame_jpeg window actually restricts sampling (real ffmpeg;
+  still used by recap/draft posters, T5410 dropped it from the reel path)
 - read_clip_segments_for_project / load_project_clip_segments read the project's
   latest working clips in sort order (real DB)
-- backfill reconstructs segments per final video (SAME policy as live publish)
+- backfill reconstructs segments per final video (SAME policy as live export,
+  T5410: open_play_window + midpoint, no ranking)
 - poster failure never fails the export (finalize best-effort preserved)
+
+T5410 note: the byte-size "clearest frame in the first half" reel policy this
+file originally covered was REPLACED by the open-play window gate
+(open_play_window/select_poster_frame, tests in test_t5410_poster_selection.py)
+-- generate_and_store_poster was CUT. This file keeps the still-true
+first_slowmo_section/DB-read/backfill coverage and drops the retired plumbing
+tests.
 """
 
 import shutil
@@ -22,7 +29,6 @@ import pytest
 from app.services import poster as poster_mod
 from app.services.poster import (
     first_slowmo_section,
-    generate_and_store_poster,
     load_project_clip_segments,
     read_clip_segments_for_project,
 )
@@ -102,81 +108,9 @@ def test_leading_segmentless_clip_with_unknown_duration_bails():
 
 
 # ---------------------------------------------------------------------------
-# generate_and_store_poster: slow-mo -> first-half window; else first frame
-# ---------------------------------------------------------------------------
-
-def test_generate_poster_slowmo_samples_first_half(monkeypatch):
-    captured = {}
-
-    def fake_clearest(source, output_path, window=None, resize_width=None, jpeg_quality=3):
-        captured["window"] = window
-        from pathlib import Path
-        Path(output_path).write_bytes(b"\xff\xd8jpeg")
-        return True
-
-    def boom_first(source, output_path, resize_width=None, jpeg_quality=3):
-        raise AssertionError("first-frame path must NOT run when slow-mo exists")
-
-    monkeypatch.setattr(poster_mod, "generate_presigned_url", lambda *a, **k: "http://x/v.mp4")
-    monkeypatch.setattr(poster_mod, "extract_clearest_frame_jpeg", fake_clearest)
-    monkeypatch.setattr(poster_mod, "extract_first_frame_jpeg", boom_first)
-    monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: (100, 200))
-    monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
-
-    # Caller resolves the FULL section; the poster samples the FIRST HALF.
-    res = generate_and_store_poster(USER_ID, "reel.mp4", (2.0, 6.0))
-    assert res == "reel.mp4.jpg"
-    assert captured["window"] == (2.0, 4.0)
-
-
-def test_generate_poster_no_slowmo_uses_first_frame(monkeypatch):
-    called = {}
-
-    def fake_first(source, output_path, resize_width=None, jpeg_quality=3):
-        called["yes"] = True
-        from pathlib import Path
-        Path(output_path).write_bytes(b"\xff\xd8jpeg")
-        return True
-
-    def boom_clearest(source, output_path, window=None, resize_width=None, jpeg_quality=3):
-        raise AssertionError("clearest path must NOT run without slow-mo")
-
-    monkeypatch.setattr(poster_mod, "generate_presigned_url", lambda *a, **k: "http://x/v.mp4")
-    monkeypatch.setattr(poster_mod, "extract_first_frame_jpeg", fake_first)
-    monkeypatch.setattr(poster_mod, "extract_clearest_frame_jpeg", boom_clearest)
-    monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: (100, 200))
-    monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
-
-    # No section resolved (no slow-mo) -> first frame.
-    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
-    assert called.get("yes")
-
-
-def test_generate_poster_missing_segments_uses_first_frame(monkeypatch):
-    called = {}
-
-    def fake_first(source, output_path, resize_width=None, jpeg_quality=3):
-        called["yes"] = True
-        from pathlib import Path
-        Path(output_path).write_bytes(b"\xff\xd8jpeg")
-        return True
-
-    monkeypatch.setattr(poster_mod, "generate_presigned_url", lambda *a, **k: "http://x/v.mp4")
-    monkeypatch.setattr(poster_mod, "extract_first_frame_jpeg", fake_first)
-    def boom_clearest(source, output_path, window=None, resize_width=None, jpeg_quality=3):
-        raise AssertionError("no window without data")
-    monkeypatch.setattr(poster_mod, "extract_clearest_frame_jpeg", boom_clearest)
-    monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: None)
-    monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
-
-    # Explicit None AND the default both -> first frame (no fabricated section).
-    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
-    assert generate_and_store_poster(USER_ID, "reel.mp4") == "reel.mp4.jpg"
-    assert called.get("yes")
-
-
-# ---------------------------------------------------------------------------
 # extract_clearest_frame_jpeg: the window really restricts sampling (real ffmpeg)
+# -- still used by recap (T5180) and draft (T5671) posters; T5410 dropped it
+# from the reel path (see test_t5410_poster_selection.py).
 # ---------------------------------------------------------------------------
 
 @pytest.mark.skipif(not _HAS_FFMPEG, reason="ffmpeg not available")
@@ -474,7 +408,9 @@ def test_finalize_freezes_slowmo_section(db):
     pid = _seed_full_project(db, segments)
 
     with patch("app.analytics.record_milestone"):
-        fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
+        fv_id, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
+            pid, "out.mp4", "expP", USER_ID
+        )
 
     row = _connect(db).execute(
         "SELECT poster_filename, slowmo_section_start, slowmo_section_end "
@@ -488,7 +424,9 @@ def test_finalize_freezes_null_when_no_slowmo(db):
 
     pid = _seed_full_project(db, {"boundaries": [0, 6], "segmentSpeeds": {}})
     with patch("app.analytics.record_milestone"):
-        fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
+        fv_id, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
+            pid, "out.mp4", "expP", USER_ID
+        )
     row = _connect(db).execute(
         "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id = ?",
         (fv_id,)).fetchone()
@@ -501,19 +439,20 @@ def test_finalize_freezes_null_when_no_slowmo(db):
 
 def test_backfill_prefers_frozen_section(db):
     # A published reel with a FROZEN section -> backfill uses it directly (no
-    # reconstruction), passes it to the poster generator.
+    # reconstruction), passes the resulting window to the frame grab (T5410:
+    # open_play_window + midpoint, no ranking).
     conn = _connect(db)
     conn.execute(
-        "INSERT INTO final_videos (id, filename, published_at, "
-        "slowmo_section_start, slowmo_section_end) VALUES (88, 'f.mp4', '2026-01-01', 1.5, 5.5)"
+        "INSERT INTO final_videos (id, filename, published_at, duration, "
+        "slowmo_section_start, slowmo_section_end) VALUES (88, 'f.mp4', '2026-01-01', 10.0, 1.5, 5.5)"
     )
     conn.commit()
     conn.close()
 
     seen = {}
 
-    def capture(user_id, filename, slowmo_section=None):
-        seen["section"] = slowmo_section
+    def capture(user_id, filename, t):
+        seen["t"] = t
         return "f.mp4.jpg"
 
     def fake_exists(user_id, rel_path):
@@ -523,27 +462,36 @@ def test_backfill_prefers_frozen_section(db):
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
          patch("app.migrations._migrate_profile_db") as mig, \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
-         patch.object(poster_mod, "generate_and_store_poster", side_effect=capture), \
+         patch.object(poster_mod, "_grab_and_store_poster_frame", side_effect=capture), \
          patch.object(poster_mod, "resolve_slowmo_section") as reconstruct, \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):
         mig.return_value = type("R", (), {"status": "ok"})()
         res = poster_mod.backfill_posters(limit=25, dry_run=False)
 
     assert set(res["generated"]) == {88}
-    assert seen["section"] == (1.5, 5.5)
+    # window = open_play_window((1.5, 5.5), 10.0) = (3.5, min(5.5, 9.7)) = (3.5, 5.5)
+    # -> midpoint 4.5
+    assert seen["t"] == pytest.approx(4.5)
     reconstruct.assert_not_called()  # frozen columns win; no reconstruction
+
+    row = _connect(db).execute(
+        "SELECT poster_filename, poster_frame_time, poster_source FROM final_videos WHERE id = 88"
+    ).fetchone()
+    assert row["poster_filename"] == "f.mp4.jpg"
+    assert row["poster_frame_time"] == pytest.approx(4.5)
+    assert row["poster_source"] == "auto"
 
 
 def test_backfill_reconstructs_and_heals_when_unfrozen(db):
     # A published reel with NULL section but live working_clips still present ->
-    # backfill reconstructs the section, passes it to the generator, AND heals the
-    # frozen columns so a future regen skips reconstruction.
+    # backfill reconstructs the section, applies the SAME window-gate policy, AND
+    # heals the frozen columns so a future regen skips reconstruction.
     segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
     pid = _seed_full_project(db, segments)
     conn = _connect(db)
     conn.execute(
-        "INSERT INTO final_videos (id, project_id, filename, published_at) "
-        "VALUES (77, ?, 'r.mp4', '2026-01-01')",
+        "INSERT INTO final_videos (id, project_id, filename, published_at, duration) "
+        "VALUES (77, ?, 'r.mp4', '2026-01-01', 10.0)",
         (pid,),
     )
     conn.commit()
@@ -551,8 +499,8 @@ def test_backfill_reconstructs_and_heals_when_unfrozen(db):
 
     seen = {}
 
-    def capture(user_id, filename, slowmo_section=None):
-        seen["section"] = slowmo_section
+    def capture(user_id, filename, t):
+        seen["t"] = t
         return "r.mp4.jpg"
 
     def fake_exists(user_id, rel_path):
@@ -562,16 +510,20 @@ def test_backfill_reconstructs_and_heals_when_unfrozen(db):
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
          patch("app.migrations._migrate_profile_db") as mig, \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
-         patch.object(poster_mod, "generate_and_store_poster", side_effect=capture), \
+         patch.object(poster_mod, "_grab_and_store_poster_frame", side_effect=capture), \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):
         mig.return_value = type("R", (), {"status": "ok"})()
         res = poster_mod.backfill_posters(limit=25, dry_run=False)
 
     assert set(res["generated"]) == {77}
-    # Reconstructed the SAME section live publish would freeze...
-    assert seen["section"] == (2.0, 6.0)
+    # Reconstructed section (2.0, 6.0) -> window = (4.0, min(6.0, 9.7)) = (4.0, 6.0)
+    # -> midpoint 5.0
+    assert seen["t"] == pytest.approx(5.0)
     # ...and healed the frozen columns on the row.
     row = _connect(db).execute(
-        "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id = 77"
+        "SELECT slowmo_section_start, slowmo_section_end, poster_frame_time, poster_source "
+        "FROM final_videos WHERE id = 77"
     ).fetchone()
     assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (2.0, 6.0)
+    assert row["poster_frame_time"] == pytest.approx(5.0)
+    assert row["poster_source"] == "auto"

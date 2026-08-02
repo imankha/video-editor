@@ -1,9 +1,11 @@
-"""T4890: Share-link first-frame preview image (poster).
+"""T4890: Share-link preview image (poster).
 
 Covers:
 - poster key scheme (basename + per-profile rel path)
 - real ffmpeg first-frame extraction on a tiny MP4 (test seam)
-- generate_and_store_poster: content-type + width/height metadata on upload
+- _grab_and_store_poster_frame: content-type + width/height metadata on upload
+  (T5410: replaces generate_and_store_poster -- single-seek grab at an
+  already-decided time, no clearest-frame sampling)
 - finalize wiring: _finalize_overlay_export freezes poster_filename on the row
   (and is best-effort -- None when generation fails, no crash)
 - profile_db v024 migration: adds the column, idempotent
@@ -22,7 +24,6 @@ import pytest
 from app.services import poster as poster_mod
 from app.services.poster import (
     backfill_posters,
-    generate_and_store_poster,
     poster_basename,
     poster_rel_path,
 )
@@ -97,11 +98,11 @@ def test_extract_first_frame_bad_source(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# generate_and_store_poster: metadata + content type
+# _grab_and_store_poster_frame (T5410): metadata + content type
 # ---------------------------------------------------------------------------
 
 @pytest.mark.skipif(not _HAS_FFMPEG, reason="ffmpeg not available")
-def test_generate_and_store_poster_sets_content_type_and_dims(tmp_path):
+def test_grab_and_store_poster_frame_sets_content_type_and_dims(tmp_path):
     mp4 = _tiny_mp4(tmp_path / "clip.mp4")
     captured = {}
 
@@ -111,7 +112,7 @@ def test_generate_and_store_poster_sets_content_type_and_dims(tmp_path):
 
     with patch.object(poster_mod, "generate_presigned_url", return_value=mp4), \
          patch.object(poster_mod, "upload_bytes_to_r2", side_effect=fake_upload):
-        basename = generate_and_store_poster(USER_ID, "reel_x.mp4")
+        basename = poster_mod._grab_and_store_poster_frame(USER_ID, "reel_x.mp4", 0.0)
 
     assert basename == "reel_x.mp4.jpg"
     assert captured["rel_path"] == "final_videos/posters/reel_x.mp4.jpg"
@@ -120,9 +121,9 @@ def test_generate_and_store_poster_sets_content_type_and_dims(tmp_path):
     assert captured["size"] > 0
 
 
-def test_generate_and_store_poster_no_url_returns_none():
+def test_grab_and_store_poster_frame_no_url_returns_none():
     with patch.object(poster_mod, "generate_presigned_url", return_value=None):
-        assert generate_and_store_poster(USER_ID, "reel_x.mp4") is None
+        assert poster_mod._grab_and_store_poster_frame(USER_ID, "reel_x.mp4", 0.0) is None
 
 
 # ---------------------------------------------------------------------------
@@ -154,14 +155,16 @@ def _seed_project(db_path, name="My Reel", aspect="9:16", duration=12.0):
 
 
 def test_finalize_does_not_set_poster_filename(db):
-    # T5280: render no longer extracts a poster; poster_filename stays NULL at
-    # finalize (publish fills it). generate_and_store_poster is no longer even
-    # imported into the overlay module.
+    # T5410 (still true post-T5280): finalize itself never extracts a poster --
+    # poster_filename stays NULL until the caller's separate
+    # generate_poster_at_export call (after finalize returns) fills it.
     from app.routers.export import overlay
     assert not hasattr(overlay, "generate_and_store_poster")
     pid = _seed_project(db)
     with patch("app.analytics.record_milestone"):
-        fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
+        fv_id, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
+            pid, "out.mp4", "expP", USER_ID
+        )
     row = _connect(db).execute(
         "SELECT poster_filename FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
     assert row["poster_filename"] is None
@@ -222,9 +225,9 @@ def test_backfill_generates_heals_skips_and_is_idempotent(db):
     # r3: video gone -> skipped
     # r4: unpublished -> never a candidate
     conn.executemany(
-        "INSERT INTO final_videos (id, filename, published_at) VALUES (?, ?, ?)",
-        [(1, "r1.mp4", "2026-01-01"), (2, "r2.mp4", "2026-01-01"),
-         (3, "r3.mp4", "2026-01-01")],
+        "INSERT INTO final_videos (id, filename, published_at, duration) VALUES (?, ?, ?, ?)",
+        [(1, "r1.mp4", "2026-01-01", 10.0), (2, "r2.mp4", "2026-01-01", 10.0),
+         (3, "r3.mp4", "2026-01-01", 10.0)],
     )
     conn.execute("INSERT INTO final_videos (id, filename, published_at) VALUES (4, 'r4.mp4', NULL)")
     conn.commit()
@@ -240,29 +243,36 @@ def test_backfill_generates_heals_skips_and_is_idempotent(db):
     with patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}]), \
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
-         patch.object(poster_mod, "generate_and_store_poster", return_value="r1.mp4.jpg") as gen, \
+         patch.object(poster_mod, "_grab_and_store_poster_frame", return_value="r1.mp4.jpg") as gen, \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):
         res = backfill_posters(limit=25, dry_run=False)
 
     assert set(res["generated"]) == {1}
     assert set(res["already_present"]) == {2}
     assert set(res["skipped_gone"]) == {3}
-    # T5090: backfill now resolves + passes the reel's frozen/reconstructed slow-mo
-    # section. r1 has no project rows here (unreconstructable) -> None (first frame).
-    gen.assert_called_once_with(USER_ID, "r1.mp4", None)
+    # T5410: backfill resolves the reel's frozen/reconstructed slow-mo section,
+    # applies open_play_window + midpoint (no ranking), and grabs that ONE frame.
+    # r1 has no project rows here (unreconstructable section=None) -> whole-clip-
+    # minus-margin window: open_play_window(None, 10.0) = (0.0, 9.7) -> midpoint 4.85.
+    gen.assert_called_once_with(USER_ID, "r1.mp4", pytest.approx(4.85))
 
-    # Columns healed/set for r1 + r2.
-    rows = {r["id"]: r["poster_filename"]
-            for r in _connect(db).execute("SELECT id, poster_filename FROM final_videos").fetchall()}
-    assert rows[1] == "r1.mp4.jpg"
-    assert rows[2] == "r2.mp4.jpg"
-    assert rows[3] is None and rows[4] is None
+    # Columns healed/set for r1 + r2 (r1 gets the full poster_source/frame_time
+    # write; r2's heal-only path only sets poster_filename, per design).
+    rows = {r["id"]: dict(r)
+            for r in _connect(db).execute(
+                "SELECT id, poster_filename, poster_frame_time, poster_source FROM final_videos"
+            ).fetchall()}
+    assert rows[1]["poster_filename"] == "r1.mp4.jpg"
+    assert rows[1]["poster_frame_time"] == pytest.approx(4.85)
+    assert rows[1]["poster_source"] == "auto"
+    assert rows[2]["poster_filename"] == "r2.mp4.jpg"
+    assert rows[3]["poster_filename"] is None and rows[4]["poster_filename"] is None
 
     # Idempotent: a second run finds no NULL-poster published candidates for r1/r2.
     with patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}]), \
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
-         patch.object(poster_mod, "generate_and_store_poster", return_value="x") as gen2, \
+         patch.object(poster_mod, "_grab_and_store_poster_frame", return_value="x") as gen2, \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):
         res2 = backfill_posters(limit=25, dry_run=False)
     assert res2["generated"] == [] and res2["already_present"] == []

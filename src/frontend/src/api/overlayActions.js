@@ -184,6 +184,58 @@ export async function setHighlightShape(projectId, highlightShape) {
   return sendAction(projectId, 'set_highlight_shape', null, { highlight_shape: highlightShape });
 }
 
+/**
+ * T5410: set (or clear) the pre-export poster marker time.
+ * @param {number} projectId
+ * @param {number | null} time - seconds on the final timeline, or null to
+ *   clear the override back to auto (export-time window midpoint).
+ * @returns {Promise<{success: boolean, time: number|null}>}
+ */
+export async function setPosterTime(projectId, time) {
+  try {
+    const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/poster-time`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ time }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      console.error('[overlayActions] setPosterTime failed:', result.error);
+      return { success: false, error: result.error, status: response.status };
+    }
+    return result;
+  } catch (err) {
+    console.error('[overlayActions] setPosterTime network error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * T5410: upload a custom cover image for the project's current final video.
+ * @param {number} projectId
+ * @param {File} file
+ * @returns {Promise<{success: boolean, poster_filename?: string, error?: string}>}
+ */
+export async function uploadPoster(projectId, file) {
+  try {
+    const form = new FormData();
+    form.append('image', file);
+    const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/poster/upload`, {
+      method: 'POST',
+      body: form,
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      console.error('[overlayActions] uploadPoster failed:', result.detail || result.error);
+      return { success: false, error: result.detail || result.error, status: response.status };
+    }
+    return result;
+  } catch (err) {
+    console.error('[overlayActions] uploadPoster network error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 export default {
   createRegion,
   deleteRegion,
@@ -199,4 +251,6 @@ export default {
   setFillOpacity,
   setDimStrength,
   setHighlightShape,
+  setPosterTime,
+  uploadPoster,
 };

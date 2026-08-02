@@ -169,7 +169,9 @@ class TestStamping:
         conn.commit(); conn.close()
 
         with patch("app.analytics.record_milestone"):
-            fv_id = _finalize_overlay_export(project_id, "out.mp4", "exp1", USER_ID)
+            fv_id, _slowmo_section, _duration, _poster_marker_time = _finalize_overlay_export(
+                project_id, "out.mp4", "exp1", USER_ID
+            )
 
         fv = _get_final_video(db, fv_id)
         assert decode_data(fv["game_ids"]) == sorted([g1, g2])
@@ -196,7 +198,9 @@ class TestStamping:
         conn.commit(); conn.close()
 
         with patch("app.analytics.record_milestone"):
-            fv_id = _finalize_overlay_export(project_id, "out.mp4", "expA", USER_ID)
+            fv_id, _slowmo_section, _duration, _poster_marker_time = _finalize_overlay_export(
+                project_id, "out.mp4", "expA", USER_ID
+            )
 
         fv = _get_final_video(db, fv_id)
         assert fv["source_type"] == "brilliant_clip"

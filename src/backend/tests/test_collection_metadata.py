@@ -187,7 +187,9 @@ class TestOverlayFinalizeStamps:
         conn.close()
 
         with patch("app.analytics.record_milestone"):
-            fv_id = _finalize_overlay_export(project_id, "out.mp4", "exp1", USER_ID)
+            fv_id, _slowmo_section, _duration, _poster_marker_time = _finalize_overlay_export(
+                project_id, "out.mp4", "exp1", USER_ID
+            )
 
         fv = _get_final_video(db, fv_id)
         assert fv["duration"] == 42.5

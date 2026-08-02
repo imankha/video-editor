@@ -3,6 +3,8 @@ import { Film, Circle, Crosshair } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import RegionLayer from '../../components/timeline/RegionLayer';
 import DetectionMarkerLayer from './layers/DetectionMarkerLayer';
+import PosterMarkerLayer from './layers/PosterMarkerLayer';
+import { openPlayWindow, selectPosterFrame } from '../../utils/posterWindow';
 
 /**
  * OverlayMode - Container component for Overlay mode.
@@ -67,6 +69,12 @@ export function OverlayMode({
   onTimelineScrollPositionChange,
   trimRange = null,
   isPlaying = false,
+  // T5410: pre-export poster (cover-photo) marker
+  posterMarkerTime = null,     // source-time seconds, or null (auto default)
+  posterSlowmoSection = null,  // [start, end] (source/final time -- identity map) or null
+  posterUploaded = false,      // a custom image is in use -- marker renders inactive
+  onPosterMarkerDragEnd,       // (sourceTime) => void
+  isExportInFlight = false,
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
@@ -82,6 +90,27 @@ export function OverlayMode({
       return '10.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem)
     }
     return '8.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + padding
+  };
+
+  // T5410: default marker position (no override yet) = midpoint of the
+  // open-play window, computed client-side from the SAME algorithm the
+  // export-time selector uses (posterWindow.js mirrors poster.py exactly) --
+  // never a guessed default that could diverge from what export picks.
+  const effectiveDuration = visualDuration || duration || 0;
+  const posterVisualTime = (() => {
+    if (!effectiveDuration) return 0;
+    if (posterMarkerTime != null) {
+      return sourceTimeToVisualTime ? sourceTimeToVisualTime(posterMarkerTime) : posterMarkerTime;
+    }
+    const window = openPlayWindow(posterSlowmoSection, duration || effectiveDuration);
+    const defaultSourceTime = selectPosterFrame(window, null);
+    return sourceTimeToVisualTime ? sourceTimeToVisualTime(defaultSourceTime) : defaultSourceTime;
+  })();
+
+  const handlePosterMarkerDragEnd = (newVisualTime) => {
+    if (!onPosterMarkerDragEnd) return;
+    const sourceTime = visualTimeToSourceTime ? visualTimeToSourceTime(newVisualTime) : newVisualTime;
+    onPosterMarkerDragEnd(sourceTime);
   };
 
   /**
@@ -210,6 +239,21 @@ export function OverlayMode({
                 edgePadding={EDGE_PADDING}
               />
             </div>
+
+            {/* Poster (cover-photo) marker (T5410) -- pinned to the video-track
+                top rail (see PosterMarkerLayer's own -top-3 absolute position),
+                the SAME band the playhead occupies, so it never collides with
+                the region drag handles above. */}
+            <PosterMarkerLayer
+              visualTime={posterVisualTime}
+              duration={duration}
+              visualDuration={visualDuration || duration}
+              isUploaded={posterUploaded}
+              onDragEnd={handlePosterMarkerDragEnd}
+              visualTimeToSourceTime={visualTimeToSourceTime}
+              edgePadding={EDGE_PADDING}
+              disabled={isExportInFlight}
+            />
           </TimelineBase>
         </div>
       )}

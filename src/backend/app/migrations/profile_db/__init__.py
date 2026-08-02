@@ -30,6 +30,7 @@ from .v028_export_job_stages import V028ExportJobStages
 from .v029_working_clips_rotation import V029WorkingClipsRotation
 from .v030_games_source_reference import V030GamesSourceReference
 from .v031_reclassify_teammate_clips_to_team import V031ReclassifyTeammateClipsToTeam
+from .v032_add_poster_marker_fields import V032AddPosterMarkerFields
 
 MIGRATIONS = [
     V001Baseline(),
@@ -63,6 +64,7 @@ MIGRATIONS = [
     V029WorkingClipsRotation(),
     V030GamesSourceReference(),
     V031ReclassifyTeammateClipsToTeam(),
+    V032AddPosterMarkerFields(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

@@ -58,8 +58,12 @@ from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.poster import (
     first_slowmo_section,
+    generate_poster_at_export,
+    get_project_poster_marker_time,
     load_project_clip_segments,
     read_clip_segments_for_project,
+    set_project_poster_marker_time,
+    store_override_poster,
 )
 from ...services.video_detections import hoist_video_detections, slice_detections
 from ...storage import (
@@ -118,21 +122,22 @@ def _finalize_overlay_export(
     user_id: str,
     gpu_seconds: float = None,
     modal_function: str = None,
-) -> int:
+) -> tuple[int, tuple[float, float] | None, float, float | None]:
     """Save final_videos record, update project, update export_jobs, archive.
 
     Shared by all overlay export completion paths (no-keyframes copy, local,
-    Modal GPU, test mode). Returns the final_video_id.
+    Modal GPU, test mode). Returns
+    `(final_video_id, slowmo_section, duration, poster_marker_time)` -- the
+    caller awaits `generate_poster_at_export(...)` with these AFTER this
+    returns and BEFORE the sync-then-announce barrier (T5410; poster capture
+    moved here from publish, T5280 REVERSED).
     """
-    # T5280: the poster (og:image JPEG) is NO LONGER extracted here. Its only
-    # consumers are share links, which can't exist before publish, so the ~5-seek
-    # ffmpeg capture moved to the "Move to My Reels" gesture (downloads.py
-    # publish_to_my_reels). A draft that never publishes now pays nothing.
-    # T5090 (KEPT): still compute the reel's first slow-mo section from the
-    # project's ordered working clips and FREEZE it onto the final_videos row --
-    # this is cheap (no ffmpeg) and is the durable source of truth publish/backfill
-    # read after the publish-time working_clips prune. poster_filename is left NULL
-    # here; publish fills it.
+    # T5410: still compute the reel's first slow-mo section from the project's
+    # ordered working clips and FREEZE it onto the final_videos row -- this is
+    # cheap (no ffmpeg) and is the durable source of truth publish/backfill read
+    # after the publish-time working_clips prune. poster_filename/_frame_time/
+    # _source are left NULL in the INSERT below; the caller's
+    # generate_poster_at_export call (after this returns) fills them.
     slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
     slowmo_start = slowmo_section[0] if slowmo_section else None
     slowmo_end = slowmo_section[1] if slowmo_section else None
@@ -167,6 +172,17 @@ def _finalize_overlay_export(
         cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
         project_row = cursor.fetchone()
         fv_name = project_row['name'] if project_row else f"Video {project_id}"
+
+        # T5410: the user's pre-export overlay marker, read here (same cursor,
+        # same project read) so the caller can pass it straight into
+        # generate_poster_at_export. Column-guarded for the deploy->migrate
+        # window (v032 not yet applied) -- mirrors the _has_slowmo pattern below.
+        poster_marker_time = None
+        if column_exists(cursor, "projects", "poster_marker_time"):
+            cursor.execute("SELECT poster_marker_time FROM projects WHERE id = ?", (project_id,))
+            pm_row = cursor.fetchone()
+            if pm_row and pm_row["poster_marker_time"] is not None:
+                poster_marker_time = float(pm_row["poster_marker_time"])
 
         # T3600: freeze collection metadata while working data still exists
         # (publish archives + deletes it). T3605: freeze game_ids too.
@@ -239,7 +255,7 @@ def _finalize_overlay_export(
     record_milestone(user_id, "export_completed", {"export_id": export_id, "type": "overlay"})
     record_milestone(user_id, "overlay_exported", {"export_id": export_id, "project_id": project_id})
 
-    return final_video_id
+    return final_video_id, slowmo_section, duration, poster_marker_time
 
 
 # T4200: the sync_failed payload builder now lives in export_helpers so framing and
@@ -1360,6 +1376,15 @@ async def export_final(
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # T5410: the user's pre-export overlay marker (column-guarded for the
+        # deploy->migrate window, v032 not yet applied -- mirrors _has_slowmo below).
+        poster_marker_time = None
+        if column_exists(cursor, "projects", "poster_marker_time"):
+            cursor.execute("SELECT poster_marker_time FROM projects WHERE id = ?", (project_id,))
+            pm_row = cursor.fetchone()
+            if pm_row and pm_row["poster_marker_time"] is not None:
+                poster_marker_time = float(pm_row["poster_marker_time"])
+
         if not project['working_video_id']:
             raise HTTPException(
                 status_code=400,
@@ -1517,6 +1542,14 @@ async def export_final(
     # T4010: only after the swap is committed, best-effort delete the prior object.
     if not keep_prior:
         _delete_prior_final_object(user_id, prior_filename, filename)
+
+    # T5410: capture the poster AFTER finalize, BEFORE the durable_sync barrier
+    # (the `_durable` dependency awaits the R2 sync AFTER this handler returns,
+    # so setting poster_* on the local row here still rides that same sync).
+    await generate_poster_at_export(
+        user_id, final_video_id, filename,
+        slowmo_section, duration, poster_marker_time,
+    )
 
     return JSONResponse({
         'success': True,
@@ -1781,6 +1814,16 @@ async def get_overlay_data(project_id: int):
             sample = highlights[0]
             logger.info(f"[Overlay Data] First region: id={sample.get('id')}, detections={len(sample.get('detections', []))}, videoWidth={sample.get('videoWidth')}")
 
+        # T5410: the pre-export poster marker (projects.poster_marker_time), so
+        # the overlay timeline can render the marker at the user's saved choice
+        # (or the default midpoint, computed client-side, when None). Also send
+        # the reel's first slow-mo section (SAME helper the export-time selector
+        # uses) so the client can compute the identical open-play window for
+        # that default preview -- never a guessed default that could diverge
+        # from what export actually picks.
+        poster_marker_time = get_project_poster_marker_time(project_id)
+        poster_slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
+
         return JSONResponse({
             'highlights_data': highlights,
             'detections_data': video_detections,
@@ -1795,6 +1838,8 @@ async def get_overlay_data(project_id: int):
             'fill_enabled': fill_enabled,
             'fill_opacity': fill_opacity,
             'dim_strength': dim_strength,
+            'poster_marker_time': poster_marker_time,
+            'poster_slowmo_section': list(poster_slowmo_section) if poster_slowmo_section else None,
         })
 
 
@@ -1839,6 +1884,94 @@ async def list_highlights(raw_clip_id: int = None):
         'images': images,
         'count': len(images)
     })
+
+
+# =============================================================================
+# T5410: Poster marker + upload endpoints (pre-export, gesture-scoped)
+# =============================================================================
+
+class PosterTimeRequest(BaseModel):
+    """Body for the poster-time surgical write. `time=None` clears the
+    override back to auto (the export-time window midpoint)."""
+    time: float | None = None
+
+
+@router.post("/projects/{project_id}/poster-time")
+async def set_poster_time(project_id: int, body: PosterTimeRequest):
+    """Surgical, gesture-only write of the user's pre-export poster marker
+    (T5410) -- fired from the overlay timeline marker's drag-end or the
+    "Use current frame as cover" button, never a useEffect. `time: null`
+    clears the override back to auto (the export-time window midpoint).
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    stored = set_project_poster_marker_time(project_id, body.time)
+    return JSONResponse({"success": True, "time": stored})
+
+
+@router.post("/projects/{project_id}/poster/upload")
+async def upload_poster_image(project_id: int, image: UploadFile = File(...)):
+    """Upload a custom cover image for a project's current final video (T5410).
+
+    Decode-verifies the upload is a real image (rejects anything cv2 can't
+    decode), re-encodes as JPEG capped to a ~1440px long edge (aspect
+    preserved, no forced crop), and overwrites the deterministic poster key.
+    Sets poster_source='upload', poster_frame_time=NULL (no source frame --
+    the overlay UI shows the uploaded thumbnail instead of a marker position).
+
+    Requires the project to already have a final video (the poster's R2 key
+    is derived from the final video's filename) -- uploading before the first
+    export has nothing to key against.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT p.final_video_id AS final_video_id, fv.filename AS filename "
+            "FROM projects p LEFT JOIN final_videos fv ON fv.id = p.final_video_id "
+            "WHERE p.id = ?",
+            (project_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Project not found")
+        final_video_id = row["final_video_id"]
+        final_filename = row["filename"]
+        if not final_video_id or not final_filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Project has no exported final video yet -- export before uploading a custom cover",
+            )
+
+    raw = await image.read()
+
+    import cv2
+    import numpy as np
+
+    decoded = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    if decoded is None:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
+
+    height, width = decoded.shape[:2]
+    max_long_edge = 1440
+    long_edge = max(height, width)
+    if long_edge > max_long_edge:
+        scale = max_long_edge / long_edge
+        decoded = cv2.resize(decoded, (int(width * scale), int(height * scale)))
+
+    ok, buf = cv2.imencode(".jpg", decoded, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        raise HTTPException(status_code=400, detail="Could not encode uploaded image as JPEG")
+
+    user_id = get_current_user_id()
+    stored = store_override_poster(user_id, final_video_id, final_filename, buf.tobytes())
+    if not stored:
+        raise HTTPException(status_code=500, detail="Failed to store the uploaded cover image")
+
+    return JSONResponse({"success": True, "poster_filename": stored})
 
 
 # =============================================================================
@@ -1918,12 +2051,20 @@ async def _run_overlay_export_background(
         logger.info(f"[Overlay Background] Processing complete (parallel={parallel_used})")
 
         _t0 = time_module.monotonic()
-        final_video_id = await asyncio.to_thread(
+        final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
             _finalize_overlay_export,
             project_id, output_filename, export_id, user_id,
             gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
         )
         logger.info(f"[T1110] _finalize_overlay_export (background) took {time_module.monotonic() - _t0:.2f}s (threaded)")
+
+        # T5410: capture the poster AFTER finalize, BEFORE the sync barrier below,
+        # so poster_filename/_frame_time/_source ride the same durable R2 sync.
+        # Best-effort/never-raises -- poster failure must never fail export.
+        await generate_poster_at_export(
+            user_id, final_video_id, output_filename,
+            slowmo_section, final_duration, poster_marker_time,
+        )
 
         # T4110: DURABLE BOUNDARY. The new final_videos/export_jobs rows are
         # committed only to the LOCAL profile.sqlite; a single Fly machine that
@@ -2163,9 +2304,17 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             )
 
             _t0 = time_module.monotonic()
-            final_video_id = await asyncio.to_thread(_finalize_overlay_export, project_id, output_filename, export_id, user_id)
+            final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
+                _finalize_overlay_export, project_id, output_filename, export_id, user_id
+            )
             logger.info(f"[T1110] _finalize_overlay_export (no GPU) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Overlay Render] Complete (no GPU): final_video_id={final_video_id}")
+
+            # T5410: capture the poster AFTER finalize, BEFORE the sync barrier below.
+            await generate_poster_at_export(
+                user_id, final_video_id, output_filename,
+                slowmo_section, final_duration, poster_marker_time,
+            )
 
             # T4110: durable boundary — sync the new final_videos row to R2 before
             # announcing completion; on failure return 503 (+ retryable WS event).
@@ -2230,9 +2379,17 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             )
 
             _t0 = time_module.monotonic()
-            final_video_id = await asyncio.to_thread(_finalize_overlay_export, project_id, output_filename, export_id, user_id)
+            final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
+                _finalize_overlay_export, project_id, output_filename, export_id, user_id
+            )
             logger.info(f"[T1110] _finalize_overlay_export (test mode) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Overlay Render] TEST MODE complete: final_video_id={final_video_id}")
+
+            # T5410: capture the poster AFTER finalize, BEFORE the sync barrier below.
+            await generate_poster_at_export(
+                user_id, final_video_id, output_filename,
+                slowmo_section, final_duration, poster_marker_time,
+            )
 
             # T4110: durable boundary — sync the new final_videos row to R2 before
             # announcing completion; on failure return 503 (+ retryable WS event).

@@ -27,6 +27,13 @@ export const useOverlayStore = create((set) => ({
   fillOpacity: 0.20,
   dimStrength: 0.20,
 
+  // T5410: pre-export poster (cover-photo) marker. Raw values only -- no
+  // derived "isOverride" flag; the marker's default vs. user-set/uploaded
+  // states are computed on read from these.
+  posterMarkerTime: null,       // seconds on the final timeline, or null (auto)
+  posterSlowmoSection: null,    // [start, end] or null -- feeds the client-side default preview only
+  posterUploadedFilename: null, // last-uploaded cover's stored basename, or null
+
   isLoadingWorkingVideo: false,
 
   overlayChangedSinceExport: false,
@@ -41,6 +48,10 @@ export const useOverlayStore = create((set) => ({
   setFillOpacity: (o) => set({ fillOpacity: o }),
   setDimStrength: (d) => set({ dimStrength: d }),
 
+  setPosterMarkerTime: (t) => set({ posterMarkerTime: t }),
+  setPosterSlowmoSection: (s) => set({ posterSlowmoSection: s }),
+  setPosterUploadedFilename: (f) => set({ posterUploadedFilename: f }),
+
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
   setOverlayChangedSinceExport: (changed) => set({ overlayChangedSinceExport: changed }),
@@ -53,6 +64,9 @@ export const useOverlayStore = create((set) => ({
     fillEnabled: true,
     fillOpacity: 0.20,
     dimStrength: 0.20,
+    posterMarkerTime: null,
+    posterSlowmoSection: null,
+    posterUploadedFilename: null,
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),

@@ -1,23 +1,21 @@
-"""T5280: capture the share poster at PUBLISH ("Move to My Reels"), not at render.
+"""T5280 REVERSED by T5410: poster capture moved back OUT of publish.
 
-Covers:
-- Render finalize freezes the slow-mo section but does NOT extract a poster
-  (poster_filename stays NULL) -- both overlay finalize paths.
-- generate_poster_at_publish: prefers the frozen section columns; reconstructs +
-  heals when unfrozen (live working_clips); no slow-mo -> first frame; sets
-  final_videos.poster_filename; never raises (best effort); idempotent overwrite.
-- publish_to_my_reels captures the poster BEFORE archive_project, passing the
-  row's frozen section columns; poster failure never fails publish (still 200).
+T5410 moved poster select+generate to overlay EXPORT (generate_poster_at_export,
+tests in test_t5410_poster_selection.py) because the no-detection selection is
+now cheap enough (one ffmpeg seek) to run at export instead of deferring to
+publish. This file now covers the REVERSAL:
+- publish_to_my_reels no longer calls any poster-generation function -- only a
+  best-effort HEAD check against the deterministic poster key (no ffmpeg, no
+  R2 write).
+- A missing poster at publish time is logged, not fatal -- publish still 200s.
+- render finalize (export/final) still does not extract a poster inline
+  (unchanged from T5280 -- the poster call is a separate step after finalize).
 """
 
 import sqlite3
 from unittest.mock import patch
 
 import pytest
-
-from app.services import poster as poster_mod
-from app.services.poster import generate_poster_at_publish
-from app.utils.encoding import encode_data
 
 USER_ID = "test-user-t5280"
 PROFILE_ID = "t5280prof"
@@ -44,181 +42,16 @@ def _connect(path):
     return conn
 
 
-def _seed_published_final(db_path, *, frozen=None, filename="reel.mp4"):
-    """A published final_videos row with optional frozen slow-mo columns."""
-    conn = _connect(db_path)
-    cur = conn.cursor()
-    start, end = (frozen if frozen else (None, None))
-    cur.execute(
-        "INSERT INTO final_videos (filename, version, published_at, "
-        "slowmo_section_start, slowmo_section_end) "
-        "VALUES (?, 1, '2026-01-01', ?, ?)",
-        (filename, start, end),
-    )
-    fv_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    return fv_id
-
-
-def _seed_project_with_clips(db_path, segments, *, filename="r.mp4", raw_end=6.0):
-    """A project with live working_clips + a published final referencing it
-    (slow-mo section left UNFROZEN so the helper must reconstruct)."""
-    conn = _connect(db_path)
-    cur = conn.cursor()
-    cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('R', '9:16')")
-    pid = cur.lastrowid
-    cur.execute(
-        "INSERT INTO raw_clips (filename, rating, start_time, end_time) "
-        "VALUES ('c.mp4', 5, 0.0, ?)", (raw_end,))
-    rc = cur.lastrowid
-    cur.execute(
-        "INSERT INTO working_clips (project_id, raw_clip_id, version, sort_order, segments_data) "
-        "VALUES (?, ?, 1, 0, ?)", (pid, rc, encode_data(segments)))
-    cur.execute(
-        "INSERT INTO final_videos (project_id, filename, version, published_at) "
-        "VALUES (?, ?, 1, '2026-01-01')", (pid, filename))
-    fv_id = cur.lastrowid
-    cur.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (fv_id, pid))
-    conn.commit()
-    conn.close()
-    return pid, fv_id
-
-
-def _poster_col(db_path, fv_id):
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT poster_filename, slowmo_section_start, slowmo_section_end "
-        "FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
-    conn.close()
-    return row
-
-
-# ---------------------------------------------------------------------------
-# generate_poster_at_publish: section resolution + poster_filename write
-# ---------------------------------------------------------------------------
-
-def test_publish_helper_prefers_frozen_section(db):
-    fv_id = _seed_published_final(db, frozen=(1.5, 5.5), filename="f.mp4")
-    seen = {}
-
-    def capture(user_id, filename, slowmo_section=None):
-        seen["section"] = slowmo_section
-        seen["filename"] = filename
-        return "f.mp4.jpg"
-
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=capture), \
-         patch.object(poster_mod, "resolve_slowmo_section") as reconstruct:
-        res = generate_poster_at_publish(USER_ID, fv_id, "f.mp4", 500, 1.5, 5.5)
-
-    assert res == "f.mp4.jpg"
-    assert seen["section"] == (1.5, 5.5)     # frozen columns used verbatim
-    assert seen["filename"] == "f.mp4"
-    reconstruct.assert_not_called()          # frozen wins -> no reconstruction
-    assert _poster_col(db, fv_id)["poster_filename"] == "f.mp4.jpg"
-
-
-def test_publish_helper_reconstructs_and_heals_when_unfrozen(db):
-    # NULL frozen columns + live working_clips (present at publish, before archive):
-    # reconstruct the section, pass it to the generator, AND heal the frozen columns.
-    segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
-    pid, fv_id = _seed_project_with_clips(db, segments, filename="r.mp4")
-    seen = {}
-
-    def capture(user_id, filename, slowmo_section=None):
-        seen["section"] = slowmo_section
-        return "r.mp4.jpg"
-
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=capture):
-        res = generate_poster_at_publish(USER_ID, fv_id, "r.mp4", pid, None, None)
-
-    assert res == "r.mp4.jpg"
-    assert seen["section"] == (2.0, 6.0)     # reconstructed from live working_clips
-    row = _poster_col(db, fv_id)
-    assert row["poster_filename"] == "r.mp4.jpg"
-    assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (2.0, 6.0)  # healed
-
-
-def test_publish_helper_no_slowmo_uses_first_frame(db):
-    # No slow-mo in live clips + NULL frozen -> section None (plain first frame),
-    # but the poster is still captured + the column set.
-    segments = {"boundaries": [0, 6], "segmentSpeeds": {}}
-    pid, fv_id = _seed_project_with_clips(db, segments, filename="p.mp4")
-    seen = {}
-
-    def capture(user_id, filename, slowmo_section=None):
-        seen["section"] = slowmo_section
-        return "p.mp4.jpg"
-
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=capture):
-        res = generate_poster_at_publish(USER_ID, fv_id, "p.mp4", pid, None, None)
-
-    assert res == "p.mp4.jpg"
-    assert seen["section"] is None
-    row = _poster_col(db, fv_id)
-    assert row["poster_filename"] == "p.mp4.jpg"
-    assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (None, None)
-
-
-def test_publish_helper_never_raises_on_generation_error(db):
-    # Poster generation raising must NOT propagate (publish invariant) and must
-    # leave poster_filename untouched.
-    fv_id = _seed_published_final(db, frozen=(1.0, 3.0), filename="e.mp4")
-
-    def boom(*a, **k):
-        raise RuntimeError("ffmpeg exploded")
-
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=boom):
-        res = generate_poster_at_publish(USER_ID, fv_id, "e.mp4", 1, 1.0, 3.0)
-
-    assert res is None
-    assert _poster_col(db, fv_id)["poster_filename"] is None
-
-
-def test_publish_helper_generation_returns_none(db):
-    # Generation returning None (e.g. R2 presign failed) -> None, column stays NULL.
-    fv_id = _seed_published_final(db, frozen=(1.0, 3.0), filename="n.mp4")
-    with patch.object(poster_mod, "generate_and_store_poster", return_value=None):
-        res = generate_poster_at_publish(USER_ID, fv_id, "n.mp4", 1, 1.0, 3.0)
-    assert res is None
-    assert _poster_col(db, fv_id)["poster_filename"] is None
-
-
-def test_publish_helper_idempotent_overwrite(db):
-    # Re-publish (unpublish -> publish again) captures at the SAME deterministic
-    # key each time -- overwrite in place, same policy -> same basename.
-    fv_id = _seed_published_final(db, frozen=(1.0, 3.0), filename="i.mp4")
-    calls = []
-
-    def capture(user_id, filename, slowmo_section=None):
-        calls.append((filename, slowmo_section))
-        return "i.mp4.jpg"
-
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=capture):
-        first = generate_poster_at_publish(USER_ID, fv_id, "i.mp4", 1, 1.0, 3.0)
-        second = generate_poster_at_publish(USER_ID, fv_id, "i.mp4", 1, 1.0, 3.0)
-
-    assert first == second == "i.mp4.jpg"
-    assert calls == [("i.mp4", (1.0, 3.0)), ("i.mp4", (1.0, 3.0))]  # deterministic
-    assert _poster_col(db, fv_id)["poster_filename"] == "i.mp4.jpg"
-
-
-# ---------------------------------------------------------------------------
-# publish_to_my_reels: captures the poster BEFORE archive; never fails publish
-# ---------------------------------------------------------------------------
-
-def _seed_publishable(db_path, *, frozen=None, filename="pub.mp4"):
+def _seed_publishable(db_path, *, poster_filename=None, filename="pub.mp4"):
     """A project + rendered (unpublished-at-render, published-here) final."""
     conn = _connect(db_path)
     cur = conn.cursor()
     cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('Reel', '9:16')")
     pid = cur.lastrowid
-    start, end = (frozen if frozen else (None, None))
     cur.execute(
-        "INSERT INTO final_videos (project_id, filename, version, source_type, name, "
-        "slowmo_section_start, slowmo_section_end) "
-        "VALUES (?, ?, 1, 'custom_project', 'Reel', ?, ?)",
-        (pid, filename, start, end))
+        "INSERT INTO final_videos (project_id, filename, version, source_type, name, poster_filename) "
+        "VALUES (?, ?, 1, 'custom_project', 'Reel', ?)",
+        (pid, filename, poster_filename))
     fv_id = cur.lastrowid
     cur.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (fv_id, pid))
     conn.commit()
@@ -226,69 +59,75 @@ def _seed_publishable(db_path, *, frozen=None, filename="pub.mp4"):
     return pid, fv_id
 
 
+# ---------------------------------------------------------------------------
+# publish_to_my_reels: no longer generates a poster; best-effort HEAD only
+# ---------------------------------------------------------------------------
+
 @pytest.mark.asyncio
-async def test_publish_captures_poster_before_archive(db):
+async def test_publish_does_not_generate_poster(db):
     from app.routers import downloads
 
-    pid, fv_id = _seed_publishable(db, frozen=(2.0, 6.0), filename="pub.mp4")
-    order = []
+    pid, fv_id = _seed_publishable(db, filename="pub.mp4")
 
-    def fake_poster(user_id, final_video_id, final_filename, project_id, fs, fe):
-        order.append(("poster", final_video_id, final_filename, project_id, fs, fe))
-        return "pub.mp4.jpg"
-
-    def fake_archive(project_id, user_id):
-        order.append(("archive", project_id))
-        return True
-
-    with patch.object(downloads, "generate_poster_at_publish", side_effect=fake_poster), \
-         patch("app.routers.downloads.archive_project", side_effect=fake_archive), \
+    with patch("app.routers.downloads.file_exists_in_r2", return_value=True) as head, \
+         patch("app.routers.downloads.archive_project", return_value=True), \
          patch("app.routers.downloads.sync_db_to_r2_explicit", return_value=True), \
          patch("app.routers.auth.mark_user_archived"):
         result = await downloads.publish_to_my_reels(pid)
 
     assert result["success"] is True
     assert result["final_video_id"] == fv_id
-    # Poster capture ran BEFORE archive, with the row's frozen section columns.
-    assert order[0] == ("poster", fv_id, "pub.mp4", pid, 2.0, 6.0)
-    assert order[1] == ("archive", pid)
+    # Best-effort existence check only -- no ffmpeg, no R2 write.
+    head.assert_called_once()
+    assert head.call_args[0][1] == "final_videos/posters/pub.mp4.jpg"
 
 
 @pytest.mark.asyncio
-async def test_publish_poster_failure_still_returns_200(db):
-    # A poster generation error inside the helper must never fail publish.
+async def test_publish_missing_poster_logs_but_still_succeeds(db, caplog):
     from app.routers import downloads
 
-    pid, fv_id = _seed_publishable(db, frozen=(1.0, 3.0), filename="pf.mp4")
+    pid, fv_id = _seed_publishable(db, filename="nopost.mp4")
 
-    def boom(*a, **k):
-        raise RuntimeError("ffmpeg died")
-
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=boom), \
-         patch("app.routers.downloads.archive_project", return_value=False), \
-         patch("app.routers.downloads.sync_db_to_r2_explicit", return_value=True):
+    with patch("app.routers.downloads.file_exists_in_r2", return_value=False), \
+         patch("app.routers.downloads.archive_project", return_value=True), \
+         patch("app.routers.downloads.sync_db_to_r2_explicit", return_value=True), \
+         patch("app.routers.auth.mark_user_archived"), \
+         caplog.at_level("INFO"):
         result = await downloads.publish_to_my_reels(pid)
 
     assert result["success"] is True
     assert result["final_video_id"] == fv_id
-    # published_at still set despite the poster failure.
-    conn = _connect(db)
-    published = conn.execute(
-        "SELECT published_at, poster_filename FROM final_videos WHERE id = ?",
-        (fv_id,)).fetchone()
-    conn.close()
-    assert published["published_at"] is not None
-    assert published["poster_filename"] is None  # poster failed, best effort
+    assert any("published without a poster" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_publish_poster_check_never_fails_publish(db):
+    # A HEAD-check error must never fail publish (best-effort, matches the old
+    # never-fails-publish invariant the T5280 poster generator had).
+    from app.routers import downloads
+
+    pid, fv_id = _seed_publishable(db, filename="err.mp4")
+
+    def boom(*a, **k):
+        raise RuntimeError("R2 down")
+
+    with patch("app.routers.downloads.file_exists_in_r2", side_effect=boom), \
+         patch("app.routers.downloads.archive_project", return_value=True), \
+         patch("app.routers.downloads.sync_db_to_r2_explicit", return_value=True), \
+         patch("app.routers.auth.mark_user_archived"):
+        result = await downloads.publish_to_my_reels(pid)
+
+    assert result["success"] is True
+    assert result["final_video_id"] == fv_id
 
 
 # ---------------------------------------------------------------------------
-# Live API drive (real ASGI stack + in-memory R2): the extraction seam is hit at
-# PUBLISH, NOT at render finalize. Reuses the T4050 FakeR2 harness.
+# Live API drive: publish never touches poster generation seams
 # ---------------------------------------------------------------------------
 
-import io
+import io  # noqa: E402
 
-import httpx
+import httpx  # noqa: E402
 
 from tests.test_t4050_durable_sync import (  # noqa: E402
     FakeR2,
@@ -326,7 +165,7 @@ def _live_client(app):
     )
 
 
-def _seed_unpublished_reel(db_path, *, frozen=(2.0, 6.0), filename="final_9x16.mp4"):
+def _seed_unpublished_reel(db_path, *, filename="final_9x16.mp4"):
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -344,10 +183,9 @@ def _seed_unpublished_reel(db_path, *, frozen=(2.0, 6.0), filename="final_9x16.m
         "VALUES (?, 'wv.mp4', 1, 6.0)", (pid,))
     wv_id = cur.lastrowid
     cur.execute(
-        "INSERT INTO final_videos (project_id, filename, version, source_type, name, "
-        "slowmo_section_start, slowmo_section_end) "
-        "VALUES (?, ?, 1, 'custom_project', 'Reel', ?, ?)",
-        (pid, filename, frozen[0], frozen[1]))
+        "INSERT INTO final_videos (project_id, filename, version, source_type, name) "
+        "VALUES (?, ?, 1, 'custom_project', 'Reel')",
+        (pid, filename))
     fv_id = cur.lastrowid
     cur.execute("UPDATE projects SET working_video_id = ?, final_video_id = ? WHERE id = ?",
                 (wv_id, fv_id, pid))
@@ -357,29 +195,27 @@ def _seed_unpublished_reel(db_path, *, frozen=(2.0, 6.0), filename="final_9x16.m
 
 
 @pytest.mark.asyncio
-async def test_live_publish_attempts_poster_capture(live_env):
-    """Driving the REAL POST /api/downloads/publish/{pid} hits the extraction
-    seam (generate_and_store_poster) with the row's frozen section, and the
-    poster_filename column is written -- all before the 200 returns."""
+async def test_live_publish_never_calls_poster_generation(live_env):
+    """Driving the REAL POST /api/downloads/publish/{pid} must not hit ANY
+    poster-generation seam (generate_poster_at_export / _grab_and_store_poster_frame)
+    -- T5410 moved that entirely to export. Publish only HEAD-checks."""
     app, fake, db_path = live_env
-    pid, fv_id = _seed_unpublished_reel(db_path, frozen=(2.0, 6.0))
+    pid, fv_id = _seed_unpublished_reel(db_path)
 
-    seen = {}
+    from app.services import poster as poster_mod
 
-    def spy(user_id, final_filename, slowmo_section=None):
-        seen["called"] = True
-        seen["filename"] = final_filename
-        seen["section"] = slowmo_section
-        return f"{final_filename}.jpg"
+    called = {"n": 0}
 
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=spy):
+    def spy(*a, **k):
+        called["n"] += 1
+        return "x.jpg"
+
+    with patch.object(poster_mod, "_grab_and_store_poster_frame", side_effect=spy):
         async with _live_client(app) as c:
             resp = await c.post(f"/api/downloads/publish/{pid}")
 
     assert resp.status_code == 200, resp.text
-    assert seen.get("called") is True                 # poster attempted AT publish
-    assert seen["filename"] == "final_9x16.mp4"
-    assert seen["section"] == (2.0, 6.0)              # frozen section threaded through
+    assert called["n"] == 0, "publish must NOT generate a poster (T5410 reversed T5280)"
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -388,15 +224,18 @@ async def test_live_publish_attempts_poster_capture(live_env):
         (fv_id,)).fetchone()
     conn.close()
     assert row["published_at"] is not None
-    assert row["poster_filename"] == "final_9x16.mp4.jpg"
+    assert row["poster_filename"] is None  # never exported -> never generated
 
 
 @pytest.mark.asyncio
-async def test_live_finalize_does_not_attempt_poster_capture(live_env):
-    """Driving the REAL POST /api/export/final (render finalize) must NOT hit the
-    extraction seam -- poster capture no longer happens at render (T5280)."""
+async def test_live_finalize_does_not_attempt_poster_capture_inline(live_env):
+    """Driving the REAL POST /api/export/final (render finalize) still must not
+    hit the frame-grab seam SYNCHRONOUSLY inside the finalize INSERT -- the
+    poster call is a separate step generate_poster_at_export runs after."""
     app, fake, db_path = live_env
-    pid, _ = _seed_unpublished_reel(db_path, frozen=(2.0, 6.0))
+    pid, _ = _seed_unpublished_reel(db_path)
+
+    from app.services import poster as poster_mod
 
     called = {"n": 0}
 
@@ -404,7 +243,10 @@ async def test_live_finalize_does_not_attempt_poster_capture(live_env):
         called["n"] += 1
         return "x.jpg"
 
-    with patch.object(poster_mod, "generate_and_store_poster", side_effect=spy):
+    # Patch the actual extraction step generate_poster_at_export delegates to,
+    # rather than short-circuiting generate_poster_at_export itself, so this
+    # test still proves finalize's INSERT completes before any extraction runs.
+    with patch.object(poster_mod, "_grab_and_store_poster_frame", side_effect=spy):
         async with _live_client(app) as c:
             resp = await c.post(
                 "/api/export/final",
@@ -413,4 +255,7 @@ async def test_live_finalize_does_not_attempt_poster_capture(live_env):
             )
 
     assert resp.status_code == 200, resp.text
-    assert called["n"] == 0, "render finalize must NOT extract a poster (T5280)"
+    # export/final DOES call generate_poster_at_export (T5410) -- unlike the old
+    # T5280 world where render never touched the poster at all. It should have
+    # extracted exactly once (no slow-mo -> whole-clip-minus-margin midpoint).
+    assert called["n"] == 1

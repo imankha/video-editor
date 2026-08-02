@@ -86,6 +86,13 @@ export function OverlayScreen({
     setFillEnabled,
     setFillOpacity,
     setDimStrength,
+    // T5410: pre-export poster (cover-photo) marker
+    posterMarkerTime,
+    posterSlowmoSection,
+    posterUploadedFilename,
+    setPosterMarkerTime,
+    setPosterSlowmoSection,
+    setPosterUploadedFilename,
   } = useOverlayStore();
   const hasClips = clips && clips.length > 0;
 
@@ -577,6 +584,11 @@ export function OverlayScreen({
           if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
           if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
           if (data.dim_strength != null) setDimStrength(data.dim_strength);
+          // T5410: read-only restore of the pre-export poster marker + the
+          // slow-mo section (feeds the client-side default-preview midpoint).
+          setPosterMarkerTime(data.poster_marker_time ?? null);
+          setPosterSlowmoSection(data.poster_slowmo_section ?? null);
+          setPosterUploadedFilename(null);
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -653,6 +665,11 @@ export function OverlayScreen({
           if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
           if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
           if (data.dim_strength != null) setDimStrength(data.dim_strength);
+          // T5410: read-only restore of the pre-export poster marker + the
+          // slow-mo section (feeds the client-side default-preview midpoint).
+          setPosterMarkerTime(data.poster_marker_time ?? null);
+          setPosterSlowmoSection(data.poster_slowmo_section ?? null);
+          setPosterUploadedFilename(null);
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -856,6 +873,41 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightShape, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: poster (cover-photo) marker drag-end / "Use current
+  // frame as cover" (T5410). Fires the surgical poster-time write ONCE per
+  // gesture -- never a useEffect. `time=null` (unused here) would clear back
+  // to auto; the marker always sends a concrete time from a drag-end or the
+  // playhead-capture button.
+  const wrappedSetPosterMarkerTime = useCallback((time) => {
+    setPosterMarkerTime(time);
+    setPosterUploadedFilename(null); // dragging/re-picking supersedes any prior upload
+    if (canSyncActions) {
+      dispatchOverlayAction('setPosterTime', () => overlayActions.setPosterTime(projectId, time));
+    }
+  }, [setPosterMarkerTime, setPosterUploadedFilename, projectId, canSyncActions]);
+
+  // Wrapped handler: upload a custom cover image (T5410). Gesture-triggered
+  // from the file input's onChange -- awaited (not fire-and-forget) so the
+  // panel can reflect the uploaded state only once the write actually lands.
+  const wrappedUploadPoster = useCallback(async (file) => {
+    if (!canSyncActions) return;
+    const result = await overlayActions.uploadPoster(projectId, file);
+    if (result?.success) {
+      setPosterUploadedFilename(result.poster_filename);
+      track('overlay_poster_upload', {}, { debugOnly: true });
+    } else {
+      console.error('[OverlayScreen] Poster upload failed:', result?.error);
+    }
+  }, [projectId, canSyncActions, setPosterUploadedFilename]);
+
+  // Wrapped handler: "Remove" the uploaded cover, reactivating the marker in
+  // the UI. Known limitation: this only clears local UI state -- the uploaded
+  // R2 object stays until the next export overwrites the deterministic poster
+  // key with the marker/auto frame (generate_poster_at_export always runs).
+  const wrappedRemoveUpload = useCallback(() => {
+    setPosterUploadedFilename(null);
+  }, [setPosterUploadedFilename]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -1202,6 +1254,13 @@ export function OverlayScreen({
       onFillEnabledChange={wrappedSetFillEnabled}
       onFillOpacityChange={wrappedSetFillOpacity}
       onDimStrengthChange={wrappedSetDimStrength}
+      // T5410: cover-photo (poster) marker
+      posterMarkerTime={posterMarkerTime}
+      posterSlowmoSection={posterSlowmoSection}
+      posterUploaded={!!posterUploadedFilename}
+      onPosterMarkerDragEnd={wrappedSetPosterMarkerTime}
+      onUploadPoster={wrappedUploadPoster}
+      onRemoveUpload={wrappedRemoveUpload}
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}

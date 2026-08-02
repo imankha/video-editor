@@ -276,7 +276,7 @@ class TestOverlayFinalizeCleanup:
         with patch.object(overlay, "delete_from_r2", side_effect=_capture_delete) as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
-            new_fid = overlay._finalize_overlay_export(
+            new_fid, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
                 project_id, "new_final.mp4", "exp-t4010-d", USER_ID)
 
         # pointer repointed to the new version
@@ -299,7 +299,7 @@ class TestOverlayFinalizeCleanup:
         with patch.object(overlay, "delete_from_r2") as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=True), \
              patch("app.analytics.record_milestone"):
-            new_fid = overlay._finalize_overlay_export(
+            new_fid, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
                 project_id, "new_final.mp4", "exp-t4010-e", USER_ID)
 
         mock_del.assert_not_called()
@@ -317,7 +317,7 @@ class TestOverlayFinalizeCleanup:
         with patch.object(overlay, "delete_from_r2", side_effect=RuntimeError("R2 down")), \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
-            new_fid = overlay._finalize_overlay_export(
+            new_fid, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
                 project_id, "new_final.mp4", "exp-t4010-f", USER_ID)
 
         assert _pointers(db, project_id)[1] == new_fid, \
