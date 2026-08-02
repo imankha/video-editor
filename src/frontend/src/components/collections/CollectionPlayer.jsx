@@ -5,6 +5,7 @@ import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
 import { ProgressTrack } from '../shared/ProgressTrack';
+import { PlayheadHandle } from '../shared/PlayheadHandle';
 
 const SWIPE_THRESHOLD_PX = 48;
 
@@ -35,6 +36,12 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     project (T4030). Author-only: the public viewer omits this
  *                                     prop, so its player never shows it. Hidden on Mixes/multi-clip.
  * @param {number|null=} reRankLoadingId - download id currently re-ranking; spins the button for it
+ * @param {string=}  handleGlyph    - T6320: sport-ball playhead glyph for the ACTIVE segment
+ *                                     only (e.g. '⚽'). Absent -> no handle at all (byte-identical
+ *                                     to before this task). Caller resolves the sport and passes a
+ *                                     plain string — this component stays store-free. Currently
+ *                                     wired only from DownloadsPanel (My Reels); the public share
+ *                                     viewer, RankingGame, and the diag harness omit it on purpose.
  */
 export function CollectionPlayer({
   reels,
@@ -49,6 +56,7 @@ export function CollectionPlayer({
   reEditLoadingId,
   onReRank,
   reRankLoadingId,
+  handleGlyph,
 }) {
   const videoRef = useRef(null);
   const panelRef = useRef(null);
@@ -226,6 +234,20 @@ export function CollectionPlayer({
                     : 0
                 }
               />
+              {/* T6320: the sport-ball playhead lives on the ACTIVE segment only,
+                  and only when a glyph was resolved (My Reels today). Rendered as
+                  a SIBLING of ProgressTrack, not nested inside it, because the
+                  track clips overflow (overflow-hidden) and the ball must be
+                  allowed to ride past a segment edge (Gate 3: allow overflow,
+                  don't clamp) rather than being cut off. The button's symmetric
+                  py-2 padding keeps top-1/2 centred on the track either way. */}
+              {i === activeIndex && handleGlyph && (
+                <PlayheadHandle
+                  progress={segmentProgress * 100}
+                  glyph={handleGlyph}
+                  size={{ box: 16, font: 14 }}
+                />
+              )}
               {hoverIndex === i && label && (
                 <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 max-w-[80vw] -translate-x-1/2 truncate rounded bg-black/80 px-2 py-1 text-xs text-white shadow">
                   {label}

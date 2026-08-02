@@ -97,3 +97,39 @@ describe('CollectionPlayer segment seek behaviour (T6320 characterization)', () 
     expect(mockGoTo).toHaveBeenCalledWith(2, 0.4);
   });
 });
+
+describe('CollectionPlayer active-segment playhead handle (T6320 — closes the T5130 gap)', () => {
+  it('shows the glyph handle on the ACTIVE segment only when handleGlyph is provided', () => {
+    const { container } = render(
+      <CollectionPlayer reels={reels} title="T" onClose={vi.fn()} handleGlyph="⚽" />,
+    );
+    const glyphs = container.querySelectorAll('[data-testid="scrub-handle-glyph"]');
+    expect(glyphs).toHaveLength(1);
+    expect(glyphs[0].textContent).toBe('⚽');
+    // Positioned inside the active segment (index 1), not the first or last.
+    expect(segmentButtons()[1].contains(glyphs[0])).toBe(true);
+    expect(segmentButtons()[0].contains(glyphs[0])).toBe(false);
+    expect(segmentButtons()[2].contains(glyphs[0])).toBe(false);
+  });
+
+  it('renders a different glyph for a different sport (not hardcoded soccer)', () => {
+    const { getByTestId } = render(
+      <CollectionPlayer reels={reels} title="T" onClose={vi.fn()} handleGlyph="🏀" />,
+    );
+    expect(getByTestId('scrub-handle-glyph').textContent).toBe('🏀');
+  });
+
+  it('has NO handle when handleGlyph is absent — public share viewer / RankingGame / diag harness parity', () => {
+    const { container } = render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+    expect(container.querySelector('[data-testid="scrub-handle-glyph"]')).toBeNull();
+  });
+
+  it('is rendered as a sibling of the (overflow-hidden) track, not nested inside it, so it is not clipped', () => {
+    const { container } = render(
+      <CollectionPlayer reels={reels} title="T" onClose={vi.fn()} handleGlyph="⚽" />,
+    );
+    const activeTrack = segmentButtons()[1].querySelector('.h-1.rounded-full.bg-white\\/25');
+    expect(activeTrack.querySelector('[data-testid="scrub-handle-glyph"]')).toBeNull();
+    expect(container.querySelector('[data-testid="scrub-handle-glyph"]')).not.toBeNull();
+  });
+});

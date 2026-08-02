@@ -28,6 +28,7 @@ import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { formatGameClock } from '../utils/timeFormat';
+import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
@@ -194,6 +195,13 @@ export function DownloadsPanel({
   const currentProfileId = useProfileStore((state) => state.currentProfileId);
   const otherProfiles = profiles.filter((p) => p.id !== currentProfileId);
   const canMoveProfiles = profiles.length >= 2;
+
+  // T6320: the story player's active-segment playhead shows the active profile's
+  // sport ball (closing the T5130 gap for My Reels). Same read ProfileSportButton
+  // uses. Unknown/absent sport -> undefined -> CollectionPlayer renders no handle
+  // at all, never a hardcoded fallback sport.
+  const currentProfile = profiles.find((p) => p.id === currentProfileId);
+  const storyPlayerHandleGlyph = currentProfile?.sport ? sportEmoji(currentProfile.sport) : undefined;
 
   // Ids currently targeted by the Move-to-profile modal (a single-reel list).
   const [movingIds, setMovingIds] = useState(null);
@@ -533,6 +541,7 @@ export function DownloadsPanel({
           reEditLoadingId={restoringId}
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}
+          handleGlyph={storyPlayerHandleGlyph}
         />
       )}
     </>
