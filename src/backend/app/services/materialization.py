@@ -380,6 +380,16 @@ def clips_overlap(a: dict, b: dict) -> bool:
     return a_start < b_end and b_start < a_end
 
 
+def _is_team_layer(clip: dict) -> bool:
+    """True if the clip is on the Team layer (my_athlete == 0).
+
+    Layer semantics: my_athlete NULL or 1 = My Athlete; 0 = Team. NULL must be
+    read as My Athlete, never as Team or "unknown" -- so this is an explicit
+    ``== 0`` test, not a truthiness check on a possibly-NULL value.
+    """
+    return clip.get("my_athlete") == 0
+
+
 def merge_clips(existing: dict, incoming: dict) -> dict:
     """Merge two overlapping clips: earliest start, latest end, combined notes.
 
@@ -417,7 +427,7 @@ def _get_existing_clips(conn: sqlite3.Connection, game_id: int) -> list[dict]:
     cur = conn.cursor()
     cur.execute(
         """SELECT id, rating, name, notes, start_time, end_time, video_sequence,
-                  tagged_teammates
+                  tagged_teammates, my_athlete
            FROM raw_clips WHERE game_id = ?""",
         (game_id,),
     )
@@ -488,16 +498,24 @@ def _materialize_clips(
         incoming_athletes = _build_athlete_set(clip, sharer_profile_name)
         overlap_found = False
         for ex in existing:
-            if clips_overlap(ex, clip):
+            # Incoming share clips are always Team layer (my_athlete=0). Merge
+            # only with an existing clip on the SAME (Team) layer -- a cross-
+            # layer intersection (the recipient's own My Athlete clip on the
+            # same play) must NOT be merged, or the recipient loses their own
+            # curation. A cross-layer overlap falls through to a plain insert
+            # so both clips coexist (T5745).
+            if _is_team_layer(ex) and clips_overlap(ex, clip):
                 merged_data = merge_clips(ex, clip)
                 existing_athletes = set(decode_data(ex.get("tagged_teammates")) or [])
                 all_athletes = existing_athletes | incoming_athletes
                 merged_teammates = encode_data(sorted(all_athletes)) if all_athletes else None
                 cur = recipient_conn.cursor()
+                # Never rewrite the row's my_athlete -- both clips are already
+                # Team layer, and a merge must never change a row's layer.
                 cur.execute(
                     """UPDATE raw_clips
                        SET start_time = ?, end_time = ?, name = ?, notes = ?,
-                           tagged_teammates = ?, my_athlete = 0
+                           tagged_teammates = ?
                        WHERE id = ?""",
                     (
                         merged_data["start_time"],
