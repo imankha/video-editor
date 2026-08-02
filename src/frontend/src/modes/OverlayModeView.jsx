@@ -172,6 +172,16 @@ export function OverlayModeView({
   onFillOpacityChange,
   onDimStrengthChange,
 
+  // T5410: cover-photo (poster) marker
+  posterMarkerTime = null,
+  posterSlowmoSection = null,
+  posterUploaded = false,
+  posterMarkerTimeLabel = null,
+  onPosterMarkerDragEnd,
+  onUseCurrentFrameAsCover,
+  onUploadPoster,
+  onRemoveUpload,
+
   // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
   playerDetections,
@@ -512,6 +522,13 @@ export function OverlayModeView({
       onHighlightEffectTypeChange={onHighlightEffectTypeChange}
       isHighlightEnabled={highlightRegions.length > 0}
       disabled={settingsDisabled}
+      posterMarkerTimeLabel={
+        !posterUploaded && posterMarkerTime != null ? formatTimeSimple(posterMarkerTime) : null
+      }
+      posterUploaded={posterUploaded}
+      onUseCurrentFrameAsCover={() => onPosterMarkerDragEnd?.(currentTime)}
+      onUploadPoster={onUploadPoster}
+      onRemoveUpload={onRemoveUpload}
     />
   );
 
@@ -704,6 +721,11 @@ export function OverlayModeView({
             showPlayerBoxes={showPlayerBoxes}
             onTogglePlayerBoxes={onTogglePlayerBoxes}
             onDetectionMarkerClick={onDetectionMarkerClick}
+            posterMarkerTime={posterMarkerTime}
+            posterSlowmoSection={posterSlowmoSection}
+            posterUploaded={posterUploaded}
+            onPosterMarkerDragEnd={onPosterMarkerDragEnd}
+            isExportInFlight={settingsDisabled}
               />
             ) : isLoading ? (
               <div className="animate-pulse">
@@ -778,6 +800,11 @@ export function OverlayModeView({
                         showPlayerBoxes={showPlayerBoxes}
                         onTogglePlayerBoxes={onTogglePlayerBoxes}
                         onDetectionMarkerClick={onDetectionMarkerClick}
+                        posterMarkerTime={posterMarkerTime}
+                        posterSlowmoSection={posterSlowmoSection}
+                        posterUploaded={posterUploaded}
+                        onPosterMarkerDragEnd={onPosterMarkerDragEnd}
+                        isExportInFlight={settingsDisabled}
                       />
                     </div>
                   )}

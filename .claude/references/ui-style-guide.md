@@ -379,6 +379,40 @@ One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentatio
 </div>
 ```
 
+### Timeline marker vocabulary (playhead / region levers / poster marker)
+
+The overlay/framing timeline (`TimelineBase.jsx`) stacks bands and layers a set of
+distinct markers over them. When adding a new timeline affordance, keep it visually
+and positionally distinct from the ones already present:
+
+| Marker | Element / shape | Color | Vertical band | z-index | Source |
+|--------|-----------------|-------|---------------|---------|--------|
+| **Playhead** | `w-1` vertical line + `w-3 h-3` circle knob at top | `bg-white` | spans full `totalLayerHeight`; knob at the very top of the video track | in-flow (below `z-50` markers) | `TimelineBase.jsx:397-407` |
+| **Region levers** (highlight start/end) | `w-4 h-4 rounded-full border-2` circle, `flex items-end` (bottom of region row) | `border-orange-400`, `bg-gray-900`→`bg-orange-400` on drag | the region-track band only (below the video track) | `zIndex: 100` | `RegionLayer.jsx:411-452` |
+| **Keyframe diamonds** | `w-3 h-3 rotate-45` diamond | orange/blue per layer | centered in its layer row | `z-50` | `KeyframeMarker.jsx:59-101` |
+| **Poster (cover-frame) marker** | inverted teardrop pin: `Image` icon (Lucide) in a rounded chip, pointer down | `bg-cyan-500` / `border-cyan-300` | pinned to the **top rail of the video track**, above the progress bar — the one band region levers never occupy | `z-30` (above progress fill + region fills, below the `z-50` keyframe controls and the playhead knob) | poster marker (T5410) |
+
+**Positioning math is shared:** every marker positions with the EDGE_PADDING formula
+`left: calc(${EDGE_PADDING}px + (100% - ${EDGE_PADDING*2}px) * ${pct/100})` so it stays
+aligned with the playhead at any `timelineScale`. Never position a timeline marker with a
+bare `%` — it drifts off the playhead once `timelineScale > 1`.
+
+**Drag pattern is shared (Pointer Events, T5450):** draggable timeline handles use
+`onPointerDown` + `setPointerCapture(e.pointerId)` + `touch-none`, with `pointermove`/
+`pointerup`/`pointercancel` listeners on `window` filtered by `pointerId` — NOT mouse
+events (mouse events don't fire during a touch drag). Coarse pointers get a >=44px
+transparent hit box around the visible handle (`useIsCoarsePointer()` → `leverHitWidth`,
+or the `coarse-pointer:` variant). See `RegionLayer.jsx:98-132, 411-452`.
+
+### Discoverable (never hover-only) affordances
+
+Shipped-twice bug (T5910, T6300): an affordance that only appears on hover is invisible on
+a coarse pointer and undiscoverable on desktop. Rule: **a control the user must find is
+rendered at rest** — full opacity, no `opacity-0 group-hover:opacity-100` gate on the
+primary shape. Hover/selection may *reveal secondary controls* (a delete button), but the
+thing you grab is always visible. Pair every icon-only marker/handle with a `title` **and**
+`aria-label`, and give it a >=44px coarse-pointer hit target.
+
 ---
 
 ## Icons
@@ -464,3 +498,4 @@ duration-300         /* panel animations */
 | 2026-07-23 | Poster tile (`DraftTile`, 9:16, scrim, lazy poster + branded fallback) and card carousel (`CardCarousel`, snap-scroll + fine-pointer chevrons) patterns (T5672) | user |
 | 2026-07-23 | Published-reel tile (`ReelTile`) for the My Reels drawer: DraftTile idiom minus draft chrome, per-reel aspect (9:16/16:9), owner poster endpoint `/api/downloads/{id}/poster.jpg`, tiles laid out in `CardCarousel`; batch Select removed, per-reel Move-to-profile with confirm (T5673/T5678) | user |
 | 2026-07-24 | Games tab poster grid (`GameTile`, 16:9 landscape, chronological grid 2-up mobile / 3-up tablet / 6-up desktop, month grouping with game-count badges, minimal overlay date+clip-count, top-right expiry chip, grayscale expired variant, poster endpoint `/api/games/{id}/poster.jpg`) (T5681) | user |
+| 2026-08-02 | Timeline marker vocabulary (playhead / region levers / keyframe diamonds / poster cover-frame marker), shared EDGE_PADDING positioning + Pointer-Events drag pattern, and the "discoverable never hover-only" rule (T5910/T6300 guard). Poster marker: cyan `Image`-pin on the video-track top rail, `z-30` (T5410) | user |

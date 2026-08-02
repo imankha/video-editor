@@ -18,6 +18,14 @@ either source guard turns the corresponding *_guarded_* test red with the Operat
 so this is genuine red-first evidence for both call sites -- the INSERT path gets its own
 proof because it is the one that blocks all exports. The *_hard_..._raises tests pin the
 raw pre-guard SQL failure so a future refactor can't silently reopen the hole.
+
+T5410 note: site (1) above no longer applies. Publish stopped reading
+slowmo_section_start/_end entirely (T5410 reversed T5280 -- poster capture moved
+to export, so publish has nothing left to reconstruct a slow-mo section for) and
+its SELECT was simplified to `id, filename` with no column-guard needed. The
+publish-side guard tests below were removed; `test_publish_completes_on_below_v025`
+keeps minimal coverage that publish still succeeds on a below-v025 DB. Site (2)
+(export finalize) is unchanged by T5410 and keeps its full coverage.
 """
 
 import asyncio
@@ -114,35 +122,16 @@ def _seed_published_reel(user_id: str) -> int:
     return project_id
 
 
-def test_publish_hard_select_raises_on_below_v025(below_v025_user):
-    # RED pin: the pre-guard SELECT (naming both columns) 500s on the below-v025 DB.
-    _seed_published_reel(below_v025_user)
-    from app.database import get_db_connection
-
-    with get_db_connection() as conn, pytest.raises(
-        sqlite3.OperationalError, match="no such column"
-    ):
-        conn.cursor().execute(
-            "SELECT id, filename, slowmo_section_start, slowmo_section_end "
-            "FROM final_videos ORDER BY version DESC LIMIT 1"
-        ).fetchone()
-
-
-def test_publish_guarded_completes_on_below_v025(below_v025_user, monkeypatch):
-    # GREEN: the SHIPPED publish endpoint completes on the below-v025 DB. Reverting the
-    # downloads.py guard turns this red with `no such column: slowmo_section_start`.
+def test_publish_completes_on_below_v025(below_v025_user, monkeypatch):
+    # T5410: publish's SELECT no longer names the slowmo columns at all (it never
+    # reconstructs a section -- poster capture moved to export), so there is
+    # nothing left to guard here; this just confirms publish still succeeds on
+    # a below-v025 DB.
     project_id = _seed_published_reel(below_v025_user)
 
     import app.routers.downloads as downloads
 
-    poster_args = {}
-
-    def _fake_poster(user_id, fv_id, filename, proj_id, start, end):
-        poster_args["start"] = start
-        poster_args["end"] = end
-        return None
-
-    monkeypatch.setattr(downloads, "generate_poster_at_publish", _fake_poster)
+    monkeypatch.setattr(downloads, "file_exists_in_r2", lambda *a, **k: False)
     monkeypatch.setattr(downloads, "archive_project", lambda *a, **k: False)
 
     set_current_user_id(below_v025_user)
@@ -151,10 +140,6 @@ def test_publish_guarded_completes_on_below_v025(below_v025_user, monkeypatch):
 
     assert result["success"] is True
     assert result["final_video_id"] is not None
-    # The window value for both frozen columns is NULL -> poster reconstructs from live
-    # clips (exactly what the poster comment anticipates for a pre-v025 reel).
-    assert poster_args["start"] is None
-    assert poster_args["end"] is None
 
     # published_at was actually committed.
     from app.database import get_db_connection
@@ -212,7 +197,7 @@ def test_export_finalize_guarded_completes_on_below_v025(below_v025_user, monkey
 
     set_current_user_id(below_v025_user)
     set_current_profile_id(TEST_PROFILE_ID)
-    final_video_id = _finalize_overlay_export(
+    final_video_id, _slowmo_section, _duration, _poster_marker_time = _finalize_overlay_export(
         project_id=project_id,
         output_filename="rendered.mp4",
         export_id="job-t6030",
@@ -258,7 +243,7 @@ def test_export_finalize_at_head_persists_slowmo(at_head_user, monkeypatch):
     monkeypatch.setattr(overlay, "load_project_clip_segments", lambda pid: [])
 
     project_id = _seed_project(at_head_user)
-    final_video_id = overlay._finalize_overlay_export(
+    final_video_id, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
         project_id=project_id,
         output_filename="rendered.mp4",
         export_id="job-head",
@@ -320,18 +305,7 @@ def test_finalize_guard_is_one_probe_not_per_row(below_v025_user, monkeypatch, q
     )
     assert _final_videos_probes(query_counter) - before == 1
 
-
-def test_publish_guard_is_one_probe(below_v025_user, monkeypatch, query_counter):
-    project_id = _seed_published_reel(below_v025_user)
-
-    import app.routers.downloads as downloads
-
-    monkeypatch.setattr(downloads, "generate_poster_at_publish", lambda *a, **k: None)
-    monkeypatch.setattr(downloads, "archive_project", lambda *a, **k: False)
-
-    set_current_user_id(below_v025_user)
-    set_current_profile_id(TEST_PROFILE_ID)
-
-    before = _final_videos_probes(query_counter)
-    asyncio.run(downloads.publish_to_my_reels(project_id, _durable=None))
-    assert _final_videos_probes(query_counter) - before == 1
+# test_publish_guard_is_one_probe removed (T5410): publish no longer runs a
+# column_exists probe on final_videos at all (its SELECT was simplified to
+# `id, filename` -- see test_publish_completes_on_below_v025 above), so there
+# is no probe count left to assert here.

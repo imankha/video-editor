@@ -36,6 +36,12 @@ export default function OverlaySettingsCard({
   isHighlightEnabled,
   disabled = false,
   className = '',
+  // T5410: cover-photo (poster) controls
+  posterMarkerTimeLabel,       // formatted time string of the current marker, or null
+  posterUploaded = false,
+  onUseCurrentFrameAsCover,
+  onUploadPoster,
+  onRemoveUpload,
 }) {
   return (
     <div className={`bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4 ${className}`}>
@@ -206,6 +212,63 @@ export default function OverlaySettingsCard({
           </div>
         </>
       )}
+
+      {/* Cover photo (T5410): honest copy -- picks the middle of the open-play
+          slow-mo. Never "AI-picked" / "smart". */}
+      <div className="border-t border-gray-700 pt-3 space-y-2">
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-gray-200">Cover photo</span>
+          <span className="text-xs text-gray-400">
+            {posterUploaded
+              ? 'Custom image in use'
+              : posterMarkerTimeLabel
+                ? `Frame you picked · ${posterMarkerTimeLabel}`
+                : 'Auto: middle of the slow-mo. Drag the pin on the timeline, or:'}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => onUseCurrentFrameAsCover?.()}
+            disabled={disabled}
+            className={`
+              px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600
+              coarse-pointer:min-h-11 transition-all
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            Use current frame as cover
+          </button>
+          <label
+            className={`
+              px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600
+              coarse-pointer:min-h-11 transition-all inline-flex items-center
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            Upload your own
+            <input
+              type="file"
+              accept="image/*"
+              disabled={disabled}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onUploadPoster?.(file);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          {posterUploaded && (
+            <button
+              onClick={() => onRemoveUpload?.()}
+              disabled={disabled}
+              className="text-xs text-gray-400 hover:text-white px-1"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Export Info */}
       <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">

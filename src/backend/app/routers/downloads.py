@@ -28,7 +28,7 @@ from app.services.materialization import (
     ensure_game_reference,
     ensure_profile_db_local,
 )
-from app.services.poster import generate_poster_at_publish, poster_basename, poster_rel_path
+from app.services.poster import poster_basename, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
     R2_ENABLED,
@@ -1631,18 +1631,12 @@ async def publish_to_my_reels(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # T6030: slowmo_section_start/end arrive with profile_db v025, which runs
-        # manually (not on deploy/startup). Publishing a reel that predates v025 on a
-        # below-v025 profile DB would 500 ("no such column") because this SELECT names
-        # both columns. Project NULL when absent (the v025 default) so the row still
-        # loads and poster capture below reconstructs the slow-mo section from the live
-        # working clips -- exactly the "columns are unfrozen (pre-v025)" case the poster
-        # comment already anticipates.
-        _has_slowmo = column_exists(cursor, "final_videos", "slowmo_section_start")
-        cursor.execute(f"""
-            SELECT id, filename,
-                   {'slowmo_section_start' if _has_slowmo else 'NULL AS slowmo_section_start'},
-                   {'slowmo_section_end' if _has_slowmo else 'NULL AS slowmo_section_end'}
+        # T5410: publish no longer reads slowmo_section_start/end (that was only
+        # ever consumed by the T5280 poster generator this reverses -- poster
+        # capture now runs at export, not here). Plain SELECT, no column guard
+        # needed.
+        cursor.execute("""
+            SELECT id, filename
             FROM final_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1691,22 +1685,29 @@ async def publish_to_my_reels(
             f"(R2 sync still pending - runs in middleware background task)"
         )
 
-    # T5280: capture the share poster HERE (the publish gesture), not at render.
-    # Runs BEFORE archive_project prunes working_clips, so a reel whose slow-mo
-    # section columns are unfrozen (pre-v025) can still reconstruct from live clips.
-    # Blocking ffmpeg+R2 runs off the event loop but WITHIN the request, so the
-    # poster object + poster_filename land before this endpoint's durable-sync
-    # barrier (T4110) -- NOT fire-and-forget. Poster failure NEVER fails publish
-    # (generate_poster_at_publish is best-effort and never raises).
-    poster_fn = await asyncio.to_thread(
-        generate_poster_at_publish,
-        user_id, row['id'], row['filename'], project_id,
-        row['slowmo_section_start'], row['slowmo_section_end'],
-    )
-    logger.info(
-        f"[Publish] poster capture project={project_id} final_video_id={row['id']} "
-        f"user={user_id} req_id={req_id} poster={poster_fn or 'none'}"
-    )
+    # T5410: REVERSED T5280 -- poster capture no longer happens at publish. It
+    # now runs at overlay EXPORT (generate_poster_at_export, routers/export/
+    # overlay.py), so by the time a reel reaches publish the poster object
+    # should already exist. This is a best-effort existence check only (no
+    # ffmpeg, no R2 write) -- logged at info so a draft published without one
+    # (pre-T5410 export, or a poster that failed at export) is visible without
+    # failing publish.
+    try:
+        poster_key = poster_rel_path(poster_basename(row['filename']))
+        has_poster = await asyncio.to_thread(file_exists_in_r2, user_id, poster_key)
+        if not has_poster:
+            logger.info(
+                f"[Publish] project={project_id} final_video_id={row['id']} user={user_id} "
+                f"req_id={req_id} published without a poster at {poster_key}; unfurl falls "
+                f"back to text until a re-export or admin backfill produces one"
+            )
+    except Exception as e:
+        # Best-effort only -- a transient R2 hiccup on this check must never
+        # fail the publish gesture (same invariant the old poster generation had).
+        logger.info(
+            f"[Publish] project={project_id} final_video_id={row['id']} user={user_id} "
+            f"req_id={req_id} poster existence check failed: {e}"
+        )
 
     archived = await asyncio.to_thread(archive_project, project_id, user_id)
     if archived:

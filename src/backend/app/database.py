@@ -820,6 +820,7 @@ def ensure_database():
                 archived_at TIMESTAMP DEFAULT NULL,
                 restored_at TIMESTAMP DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                poster_marker_time REAL DEFAULT NULL,
                 FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
                 FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
             )
@@ -906,6 +907,8 @@ def ensure_database():
                 poster_filename TEXT,
                 slowmo_section_start REAL,
                 slowmo_section_end REAL,
+                poster_frame_time REAL,
+                poster_source TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)

@@ -169,11 +169,16 @@ async def test_overlay_background_gates_complete_on_durable_sync(monkeypatch):
         return None
 
     def fake_finalize(*a, **k):
-        return 4242
+        # (final_video_id, slowmo_section, duration, poster_marker_time) -- T5410
+        return 4242, None, 10.0, None
+
+    async def fake_generate_poster(*a, **k):
+        return None
 
     monkeypatch.setattr(ov.manager, "send_progress", fake_send_progress)
     monkeypatch.setattr(ov, "call_modal_overlay_auto", fake_modal)
     monkeypatch.setattr(ov, "_finalize_overlay_export", fake_finalize)
+    monkeypatch.setattr(ov, "generate_poster_at_export", fake_generate_poster)
     # send_progress / create_progress_callback / store_modal_call_id are imported
     # from export_helpers inside the worker — patch them at the source module.
     monkeypatch.setattr(helpers, "send_progress", fake_helper_progress)

@@ -46,15 +46,19 @@ FLOOR_VERSION = 23
 # below-head schema. When a new migration adds a column, extend this map AND bump
 # HEAD_VERSION_AUDITED -- test_registry_head_is_audited enforces that you do.
 POST_V023_COLUMNS = {
-    "final_videos": ["poster_filename", "slowmo_section_start", "slowmo_section_end"],  # v024, v025
+    "final_videos": [
+        "poster_filename", "slowmo_section_start", "slowmo_section_end",  # v024, v025
+        "poster_frame_time", "poster_source",                             # v032
+    ],
     "games": ["shared_by", "source_profile_id", "source_game_id"],                       # v026, v030
     "working_videos": ["detections_data"],                                              # v027
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation"],                                                       # v029
+    "projects": ["poster_marker_time"],                                                  # v032
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
 }
-HEAD_VERSION_AUDITED = 31
+HEAD_VERSION_AUDITED = 32
 
 
 def _cleanup(user_id: str) -> None:
@@ -206,6 +210,16 @@ def test_overlay_data(below_head):
     from app.routers.export.overlay import get_overlay_data
 
     _run(get_overlay_data(below_head["project_id"]))  # working_videos.detections_data (v027)
+    # T5410: projects.poster_marker_time (v032) is read in the SAME response --
+    # a below-head DB must not 500 on the new column either.
+    #
+    # NOTE: _finalize_overlay_export's OWN poster_marker_time guard is NOT
+    # exercised here -- that function's INSERT already names other v024+
+    # columns (poster_filename) unconditionally and was never a below-head-
+    # tolerant "list" read this file's fixture set was built to cover (it's
+    # covered by test_t6030_slowmo_migration_window.py's dedicated guard tests
+    # instead). test_t5410_poster_selection.py covers the poster_marker_time
+    # getter/setter's own column-guard directly.
 
 
 def test_gallery_downloads(below_head):

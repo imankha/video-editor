@@ -1,11 +1,18 @@
-"""Poster (first-frame preview image) generation for final videos (T4890).
+"""Poster (cover-frame preview image) generation for final videos (T4890).
 
 A shared reel link (`/shared/{token}`) unfurls in iMessage/WhatsApp/social. Chat
 apps need an `og:image` to render a visual card; without one the unfurl is text
-only. We extract the FIRST FRAME of the final video at publish/finalize time,
-store it as a JPEG in R2 next to the video, and freeze the reference on the
-`final_videos` row so it is never re-derived later (per the export pipeline's
-"explicit names after archive" principle).
+only. We extract a poster FRAME of the final video at overlay EXPORT time
+(T5410; moved from publish, T5280 REVERSED), store it as a JPEG in R2 next to
+the video, and freeze the reference on the `final_videos` row so it is never
+re-derived later (per the export pipeline's "explicit names after archive"
+principle).
+
+T5410: the reel poster policy is the open-play window gate (`open_play_window`
++ `select_poster_frame`) -- NO object detection of any kind. The frame is
+either the user's overlay timeline marker (honoured verbatim) or the
+deterministic midpoint of the open-play slow-mo window. See
+`generate_poster_at_export`.
 
 Key scheme (per-profile, same prefix as the video):
     final_videos/posters/{final_filename}.jpg
@@ -274,6 +281,67 @@ def first_slowmo_section(
     return None
 
 
+# ---------------------------------------------------------------------------
+# T5410: open-play window gate (NO detection). The study's only strong signal
+# (zone: open-play slow-mo beats the spotlight instant) is realized purely as a
+# TIME-WINDOW decision on the already-frozen slow-mo section -- no pixels, no
+# YOLO, no Modal call. Within the window every pixel/box feature measured
+# |Spearman| <= 0.23 (noise at n~25); pick the midpoint and stop, and hand the
+# aesthetic residual to the user's overlay marker (select_poster_frame).
+# ---------------------------------------------------------------------------
+
+SPOTLIGHT_SKIP_SECONDS = 2.0
+END_MARGIN_SECONDS = 0.3
+MIN_WINDOW_SECONDS = 0.5
+
+
+def open_play_window(
+    section: tuple[float, float] | None, final_duration: float,
+) -> tuple[float, float]:
+    """The candidate poster window on the FINAL timeline: (start, end) seconds.
+
+    `section` is the frozen first slow-mo section (`first_slowmo_section` /
+    `slowmo_section_start,_end`), or None when the reel has no slow-mo.
+    `final_duration` is the final video's total duration in seconds.
+
+    - No slow-mo section: the whole clip minus a small end margin (skips
+      fade/black tail frames; no fabricated slow-mo region).
+    - Slow-mo section: skip the first SPOTLIGHT_SKIP_SECONDS (the contested/
+      occluded spotlight instant the study ranked WORST) and clamp the end to
+      final_duration - END_MARGIN_SECONDS. If what's left is too short
+      (MIN_WINDOW_SECONDS), degrade to the WHOLE section rather than a
+      near-empty sliver.
+
+    Pure arithmetic -- no I/O, no detection. This is the whole algorithm.
+    """
+    if section is None:
+        return (0.0, max(0.0, final_duration - END_MARGIN_SECONDS))
+    start, end = section
+    cand_start = start + SPOTLIGHT_SKIP_SECONDS
+    cand_end = min(end, final_duration - END_MARGIN_SECONDS)
+    if cand_end - cand_start < MIN_WINDOW_SECONDS:
+        return (start, end)
+    return (cand_start, cand_end)
+
+
+def select_poster_frame(
+    window: tuple[float, float], user_marker_time: float | None,
+) -> float:
+    """The poster frame's time (final-video seconds): the user's overlay marker
+    when set, else the window's midpoint.
+
+    The marker is honoured VERBATIM, never clamped into the window -- a
+    deliberate spotlight-frame pick is a decision, not an error. Within the
+    window every pixel/box feature the study measured was noise
+    (|Spearman| <= 0.23), so absent a marker the midpoint is the honest,
+    deterministic pick (no fabricated ranking).
+    """
+    if user_marker_time is not None:
+        return user_marker_time
+    start, end = window
+    return start + (end - start) / 2.0
+
+
 def read_clip_segments_for_project(
     cursor, project_id: int | None
 ) -> list[tuple[dict | None, float | None]]:
@@ -421,61 +489,84 @@ def _set_slowmo_section(final_video_id: int, section: tuple[float, float] | None
         conn.commit()
 
 
-def generate_and_store_poster(
-    user_id: str,
-    final_filename: str,
-    slowmo_section: tuple[float, float] | None = None,
-) -> str | None:
-    """Extract a poster frame of a final video and store it in R2.
+# ---------------------------------------------------------------------------
+# T5410: pre-export poster marker (projects.poster_marker_time). Stored on the
+# PROJECT row, not working_videos: upsert_working_video (export_finalize.py)
+# INSERTS a new version row on every re-render, so a working_videos column
+# would be silently dropped on re-export; archive_project also DELETEs
+# working_videos at publish. The projects row's id never changes across
+# re-render/archive/restore, so a column there survives the reel's whole
+# lifecycle for free (Architect gate, T5410).
+# ---------------------------------------------------------------------------
 
-    Runs in the CURRENT profile context (r2_key embeds the ContextVar profile),
-    so it must be called on the same profile that owns the final video (every
-    finalize/publish writer does). Returns the poster BASENAME to store on the
-    `final_videos` row, or None when the poster could not be produced (best
-    effort -- the caller stores NULL and the export still succeeds).
+def get_project_poster_marker_time(project_id: int | None) -> float | None:
+    """The user's pre-export poster marker time (final-video seconds), or None
+    (no override -> select_poster_frame falls back to the window midpoint).
 
-    Reel poster policy (T5090): `slowmo_section` is the FULL first slow-mo section
-    `[start, end]` in FINAL-video time (resolved by the caller from frozen columns,
-    live working clips, or the R2 archive -- see resolve_slowmo_section). When
-    present, the poster is the clearest frame within the FIRST HALF of that section.
-    None (no slow-mo / unreconstructable) -> the plain first frame (logged at info;
-    never a fabricated slow-mo region). Recap posters do NOT go through here -- they
-    call extract_clearest_frame_jpeg directly (whole-clip, T5180).
+    Column-guarded for the deploy->migrate window (v032 not yet applied) --
+    mirrors the T6030 pattern (never raises "no such column" on a hot path).
+    """
+    if project_id is None:
+        return None
+    from ..database import column_exists, get_db_connection
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if not column_exists(cursor, "projects", "poster_marker_time"):
+            return None
+        cursor.execute("SELECT poster_marker_time FROM projects WHERE id = ?", (project_id,))
+        row = cursor.fetchone()
+        return float(row["poster_marker_time"]) if row and row["poster_marker_time"] is not None else None
+
+
+def set_project_poster_marker_time(project_id: int, time: float | None) -> float | None:
+    """Surgical write of the projects.poster_marker_time override (gesture-only
+    -- fired from an explicit drag-end / button click, never a useEffect).
+    `time=None` clears it back to auto (window midpoint). Returns the stored
+    value."""
+    from ..database import get_db_connection
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE projects SET poster_marker_time = ? WHERE id = ?",
+            (time, project_id),
+        )
+        conn.commit()
+    return time
+
+
+def _resolve_final_duration(
+    user_id: str, filename: str, stored_duration: float | None,
+) -> float | None:
+    """final_videos.duration when frozen, else probe the R2 object (legacy rows
+    from before duration was frozen at finalize). None when both are
+    unavailable -- caller must skip (no fabricated duration)."""
+    if stored_duration:
+        return float(stored_duration)
+    video_url = generate_presigned_url(user_id, f"final_videos/{filename}", expires_in=3600)
+    if not video_url:
+        return None
+    return _probe_duration(video_url)
+
+
+def _grab_and_store_poster_frame(user_id: str, final_filename: str, t: float) -> str | None:
+    """Single-seek frame grab + upload at an ALREADY-DECIDED time `t` (final-video
+    seconds). No sampling/ranking -- the window gate + midpoint/marker decision
+    already happened (open_play_window / select_poster_frame); this just extracts
+    that one frame. Returns the stored basename, or None (never raises).
+
+    T5682: this is the FULL-SIZE og:image object (shares.py's _build_poster_r2_key
+    reads the SAME poster_basename/poster_rel_path) -- NEVER resized. The
+    owner-facing My Reels tile gets its own separate card-size thumbnail
+    (ensure_reel_card_poster, downscaled from this full-size JPEG on demand).
     """
     video_url = generate_presigned_url(user_id, f"final_videos/{final_filename}", expires_in=3600)
     if not video_url:
-        # R2 disabled or presign failed -> no poster this time (info, not error:
-        # the reel is fine, the unfurl just falls back to text until backfilled).
         logger.info(f"[Poster] no presigned URL for final_videos/{final_filename}; skipping poster")
         return None
-
-    window: tuple[float, float] | None = None
-    if slowmo_section is not None and slowmo_section[1] > slowmo_section[0]:
-        start, end = slowmo_section
-        window = (start, start + (end - start) / 2.0)  # first half of the section
-        logger.info(
-            f"[Poster] {final_filename}: first slow-mo section {slowmo_section} on "
-            f"the final timeline -> sampling clearest frame in first half {window}"
-        )
-    else:
-        logger.info(
-            f"[Poster] {final_filename}: no slow-mo section -> plain first frame"
-        )
-
-    # T5682: this is the FULL-SIZE og:image object (shares.py's _build_poster_r2_key
-    # reads the SAME poster_basename/poster_rel_path) -- NEVER resized. The
-    # owner-facing My Reels tile gets its own separate card-size thumbnail
-    # (ensure_reel_card_poster, downscaled from this full-size JPEG on demand).
     basename = poster_basename(final_filename)
     with tempfile.TemporaryDirectory() as tmp:
         out_path = str(Path(tmp) / basename)
-        extracted = (
-            extract_clearest_frame_jpeg(video_url, out_path, window=window)
-            if window is not None
-            else extract_first_frame_jpeg(video_url, out_path)
-        )
-        if not extracted:
-            logger.info(f"[Poster] extraction failed for {final_filename}; no poster stored")
+        if not extract_first_frame_jpeg(video_url, out_path, seek=max(0.0, t)):
+            logger.info(f"[Poster] extraction failed for {final_filename} at t={t:.3f}s")
             return None
         data = Path(out_path).read_bytes()
         dims = _jpeg_dimensions(out_path)
@@ -495,61 +586,100 @@ def generate_and_store_poster(
     return basename
 
 
-def generate_poster_at_publish(
+def _set_poster_fields(
+    final_video_id: int, basename: str, frame_time: float | None, source: str,
+) -> None:
+    """Set poster_filename + poster_frame_time + poster_source on a final_videos
+    row in the CURRENT profile DB. Column-guarded for the deploy->migrate window
+    (v032 not yet applied) -- mirrors the T6030 pattern; falls back to setting
+    only poster_filename rather than crashing the export/backfill path."""
+    from ..database import column_exists, get_db_connection
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if column_exists(cursor, "final_videos", "poster_frame_time"):
+            cursor.execute(
+                "UPDATE final_videos SET poster_filename = ?, poster_frame_time = ?, "
+                "poster_source = ? WHERE id = ?",
+                (basename, frame_time, source, final_video_id),
+            )
+        else:
+            cursor.execute(
+                "UPDATE final_videos SET poster_filename = ? WHERE id = ?",
+                (basename, final_video_id),
+            )
+            logger.info(
+                f"[Poster] fv={final_video_id} poster_frame_time/poster_source columns "
+                f"absent (pre-migration window); stored filename only"
+            )
+        conn.commit()
+
+
+async def generate_poster_at_export(
     user_id: str,
     final_video_id: int,
     final_filename: str,
-    project_id: int | None,
-    frozen_start=None,
-    frozen_end=None,
+    section: tuple[float, float] | None,
+    final_duration: float,
+    user_marker_time: float | None,
 ) -> str | None:
-    """Capture + store the share poster at PUBLISH ("Move to My Reels"), T5280.
+    """Capture + store the share poster at OVERLAY EXPORT (T5410, replaces the
+    T5280 publish-time capture -- REVERSED, see downloads.py).
 
-    The poster's ONLY consumers are share links / og:image, which cannot exist
-    before publish -- so the JPEG is captured at the publish gesture, NOT at
-    render. Drafts that never get published no longer pay the ~5-seek ffmpeg
-    cost, and publish is the same freeze point T5260 uses for the reel name.
+    NO detection of any kind. The study's only strong signal (open-play zone)
+    is realized as a pure time-window gate on the already-frozen slow-mo
+    section (open_play_window); within the window the frame is either the
+    user's overlay marker (honoured verbatim, never clamped) or the
+    deterministic midpoint (select_poster_frame).
 
-    Section resolution mirrors backfill_posters (single policy everywhere):
-    prefer the FROZEN slow-mo columns (written at render finalize, durable
-    across the publish-time working_clips prune); when unfrozen, reconstruct
-    from live working_clips (still present -- publish archives AFTER this runs)
-    or the R2 archive, and HEAL the frozen columns so a later regen skips the
-    work. No slow-mo / unreconstructable -> plain first frame (no fabrication,
-    T5090).
-
-    Blocking (ffmpeg + R2): the publish endpoint runs this via asyncio.to_thread
-    INSIDE the request, so the poster object + poster_filename both land before
-    the endpoint's durable-sync barrier (T4110) -- never fire-and-forget.
-    Idempotent: the R2 poster key is deterministic, so a re-publish overwrites
-    in place (same policy -> same frame). Best-effort: any failure returns None
-    and is logged at info; publish NEVER fails because of the poster. Returns the
-    stored poster basename (also written to final_videos.poster_filename) or None.
+    Runs AFTER _finalize_overlay_export returns (the final video + its row both
+    exist) and BEFORE the sync-then-announce barrier, so poster_filename/
+    poster_frame_time/poster_source ride the existing durable R2 sync. One
+    ffmpeg seek + one R2 upload -- best-effort, NEVER raises (poster failure
+    must never fail export, T4110 barrier).
     """
     try:
-        section = _decode_frozen_section(frozen_start, frozen_end)
-        if section is None:
-            section, src = resolve_slowmo_section(user_id, project_id)
-            if section is not None:
-                _set_slowmo_section(final_video_id, section)
-                logger.info(
-                    f"[PublishPoster] fv={final_video_id} section reconstructed via "
-                    f"{src}: {section}"
-                )
-        stored = generate_and_store_poster(user_id, final_filename, section)
-        if stored:
-            _set_poster_filename(final_video_id, stored)
-            logger.info(f"[PublishPoster] fv={final_video_id} stored poster {stored}")
-        else:
+        window = open_play_window(section, final_duration)
+        t = select_poster_frame(window, user_marker_time)
+        source = "overlay" if user_marker_time is not None else "auto"
+        stored = await asyncio.to_thread(_grab_and_store_poster_frame, user_id, final_filename, t)
+        if not stored:
             logger.info(
-                f"[PublishPoster] fv={final_video_id} no poster stored (best effort); "
-                f"share unfurl falls back to text until backfilled"
+                f"[Poster] fv={final_video_id} no poster stored (best effort); "
+                f"share unfurl falls back to text until backfilled/re-exported"
             )
+            return None
+        _set_poster_fields(final_video_id, stored, t, source)
+        logger.info(f"[Poster] fv={final_video_id} stored {stored} at t={t:.3f}s source={source}")
         return stored
     except Exception as e:
-        # Never let poster work fail publish (same invariant as render finalize).
-        logger.info(f"[PublishPoster] fv={final_video_id} poster capture error: {e}")
+        # Never let poster work fail export (same invariant as the old publish capture).
+        logger.info(f"[Poster] fv={final_video_id} generation error: {e}")
         return None
+
+
+def store_override_poster(
+    user_id: str, final_video_id: int, final_filename: str, jpeg_bytes: bytes,
+) -> str | None:
+    """Overwrite the deterministic poster key with a user-uploaded cover image
+    (T5410). Sets poster_source='upload', poster_frame_time=NULL (no source
+    frame on the final timeline -- the overlay UI shows the uploaded thumbnail
+    instead of a marker position). Returns the stored basename, or None on R2
+    failure (never raises)."""
+    basename = poster_basename(final_filename)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = str(Path(tmp) / basename)
+        Path(tmp_path).write_bytes(jpeg_bytes)
+        dims = _jpeg_dimensions(tmp_path)
+    metadata = {"width": dims[0], "height": dims[1]} if dims else None
+    if not upload_bytes_to_r2(
+        user_id, poster_rel_path(basename), jpeg_bytes,
+        fast=True, content_type="image/jpeg", metadata=metadata,
+    ):
+        logger.info(f"[Poster] upload override R2 write failed for {poster_rel_path(basename)}")
+        return None
+    _set_poster_fields(final_video_id, basename, None, "upload")
+    logger.info(f"[Poster] fv={final_video_id} stored upload override {poster_rel_path(basename)}")
+    return basename
 
 
 # ---------------------------------------------------------------------------
@@ -592,9 +722,10 @@ def ensure_reel_card_poster(user_id: str, filename_basename: str) -> str | None:
     deterministically (`reel_card_poster_rel_path`). Steps:
       1. Card object already cached -> return its path, no work.
       2. Else the full-size poster (og:image object) must already exist -- this
-         function does NOT generate the full-size poster (that only happens at
-         publish, `generate_poster_at_publish`); a reel with no full-size poster
-         yet (pre-T5280 / generation failed) yields None here too.
+         function does NOT generate the full-size poster (that happens at
+         overlay export, `generate_poster_at_export`, T5410); a reel with no
+         full-size poster yet (not yet exported / generation failed) yields
+         None here too.
       3. Downscale the full-size JPEG (already in R2, fetched via presigned URL)
          to 480px width and upload to the card key.
 
@@ -1134,10 +1265,13 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
     failure is recorded in `failed` and the scan continues.
 
     `force=True` REGENERATES posters for ALL published reels (poster or not) --
-    used to upgrade legacy first-frame posters to clearest-frame selection. The
-    object key is deterministic, so regeneration just overwrites in place.
+    used to upgrade legacy posters to the open-play window-gate selection
+    (T5410). The object key is deterministic, so regeneration just overwrites
+    in place. Rows with `poster_source IN ('overlay', 'upload')` are ALWAYS
+    skipped (counted in `skipped_override`), even under force -- a user's
+    manual cover choice is never clobbered by a backfill sweep.
     """
-    from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
+    from ..database import column_exists, ensure_database, get_db_connection, sync_db_to_r2_explicit
     from ..migrations import _get_profile_ids, _migrate_profile_db
     from ..profile_context import set_current_profile_id
     from ..storage import file_exists_in_r2
@@ -1152,6 +1286,7 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
         "generated": [],
         "already_present": [],
         "skipped_gone": [],
+        "skipped_override": [],
         "failed": [],
         "partial": False,
     }
@@ -1196,8 +1331,22 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                 )
                 continue
 
+            # T5410: duration/poster_source are named unconditionally below UNLESS
+            # absent -- an ancient/orphan profile predating even v007 (duration)
+            # can reach here (migrated to head does NOT retroactively add a v007
+            # column if the profile started life without the base schema this
+            # candidate query assumes). Column-guarded the same way slowmo_cols
+            # already is, so a profile missing either just gets NULL rather than
+            # aborting the whole candidate query (T5110's "never one crash starves
+            # the sweep" invariant).
+            with get_db_connection() as _guard_conn:
+                _guard_cursor = _guard_conn.cursor()
+                _has_duration = column_exists(_guard_cursor, "final_videos", "duration")
+                _has_poster_source = column_exists(_guard_cursor, "final_videos", "poster_source")
+            duration_col = "duration" if _has_duration else "NULL AS duration"
+            poster_source_col = "poster_source" if _has_poster_source else "NULL AS poster_source"
             candidate_sql = (
-                "SELECT id, filename, project_id, "
+                f"SELECT id, filename, project_id, {duration_col}, {poster_source_col}, "
                 "slowmo_section_start, slowmo_section_end FROM final_videos "
                 "WHERE published_at IS NOT NULL"
                 + ("" if force else " AND poster_filename IS NULL")
@@ -1230,6 +1379,12 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                 result["scanned"] += 1
                 basename = poster_basename(filename)
 
+                # A user's manual cover choice (overlay marker or upload) is NEVER
+                # clobbered by the sweep -- skip unconditionally, even under force.
+                if row["poster_source"] in ("overlay", "upload"):
+                    result["skipped_override"].append(fv_id)
+                    continue
+
                 # Skip-if-poster-exists: the object is already there, just heal the
                 # ref. Bypassed under force: regeneration overwrites in place.
                 if not force and file_exists_in_r2(user_id, poster_rel_path(basename)):
@@ -1251,11 +1406,12 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
 
                 try:
                     # Resolve the reel's first slow-mo section so backfill applies
-                    # the SAME slow-mo-first policy as live publish. Prefer the
-                    # FROZEN columns (durable across working_clips pruning); only
+                    # the SAME open-play window-gate policy as live export. Prefer
+                    # the FROZEN columns (durable across working_clips pruning); only
                     # fall back to reconstruction (live clips -> R2 archive) when
                     # unfrozen, and heal the columns so future regens skip the work.
-                    # Unreconstructable -> None -> first frame (T5090, no fabrication).
+                    # Unreconstructable -> None -> whole-clip-minus-margin midpoint
+                    # (open_play_window, no fabricated slow-mo region).
                     section = _decode_frozen_section(
                         row["slowmo_section_start"], row["slowmo_section_end"]
                     )
@@ -1268,11 +1424,19 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                         if section is not None and not dry_run:
                             _set_slowmo_section(fv_id, section)
                             profile_changed = True
-                    stored = generate_and_store_poster(user_id, filename, section)
+
+                    final_duration = _resolve_final_duration(user_id, filename, row["duration"])
+                    if final_duration is None:
+                        result["failed"].append({"id": fv_id, "error": "duration_unresolvable"})
+                        continue
+
+                    window = open_play_window(section, final_duration)
+                    t = select_poster_frame(window, None)  # backfill never has a user marker
+                    stored = _grab_and_store_poster_frame(user_id, filename, t)
                     if not stored:
                         result["failed"].append({"id": fv_id, "error": "poster generation returned None"})
                         continue
-                    _set_poster_filename(fv_id, stored)
+                    _set_poster_fields(fv_id, stored, t, "auto")
                     profile_changed = True
                     result["generated"].append(fv_id)
                     budget -= 1
