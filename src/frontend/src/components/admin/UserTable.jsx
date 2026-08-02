@@ -52,6 +52,8 @@ const COLUMNS = [
   { key: 'action_count', label: 'Actions', align: 'right' },
   { key: 'session_count', label: 'Sessions', align: 'right' },
   { key: 'total_usage_seconds', label: 'Usage', align: 'right' },
+  { key: 'avg_weekly_seconds', label: 'Avg/wk', align: 'right' },
+  { key: 'last_7d_seconds', label: 'Last 7d', align: 'right' },
   { key: 'last_active_at', label: 'Last active', align: 'right' },
 ];
 
@@ -389,6 +391,8 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.action_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.session_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{fmtDuration(user.total_usage_seconds)}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{fmtDuration(user.avg_weekly_seconds)}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{fmtDuration(user.last_7d_seconds)}</td>
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
                   <div className="flex items-center justify-end gap-1.5">

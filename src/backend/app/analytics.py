@@ -362,6 +362,40 @@ def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] 
         )
         return None
 
+def add_usage_seconds(cur, user_id: str, seconds: int) -> None:
+    """Single write path for engaged-usage time (T5770).
+
+    Bumps BOTH the all-time running total (``user_segments.total_usage_seconds``)
+    and today's per-day bucket (``user_usage_daily``) using the SAME cursor, so
+    they join the caller's open transaction and move atomically together — the
+    admin panel's all-time total and its trailing "last 7 days" figure can never
+    disagree. Both callers already hold an open pg cursor, so there is no extra
+    round-trip.
+
+    ``seconds`` is the engaged span just banked (from
+    :func:`session_engaged_seconds`). A 0 (an instant open/close) is a no-op — no
+    empty bucket row is written.
+
+    Day = ``CURRENT_DATE`` at write time: a session spanning midnight attributes
+    its whole banked increment to the day the increment lands, not split across
+    the two days. That is acceptable for admin metrics — noted, not engineered
+    around.
+    """
+    if seconds <= 0:
+        return
+    cur.execute(
+        "UPDATE user_segments SET total_usage_seconds = total_usage_seconds + %s "
+        "WHERE user_id = %s",
+        (seconds, user_id),
+    )
+    cur.execute(
+        """INSERT INTO user_usage_daily (user_id, day, seconds)
+           VALUES (%s, CURRENT_DATE, %s)
+           ON CONFLICT (user_id, day)
+           DO UPDATE SET seconds = user_usage_daily.seconds + %s""",
+        (user_id, seconds, seconds),
+    )
+
 
 def update_session(user_id: str, is_pwa: bool = False):
     # T1515: an impersonating admin's requests must not bump the user's session
@@ -399,19 +433,23 @@ def update_session(user_id: str, is_pwa: bool = False):
             total_usage_seconds = seg_row["total_usage_seconds"]
 
             if is_new_session:
-                if current_session_start is not None and last_active_at is not None:
-                    # Bank the just-ended session (now=None -> no idle tail).
-                    total_usage_seconds += session_engaged_seconds(
-                        current_session_start, last_active_at
-                    )
+                # Roll the session window forward; the just-ended session's span
+                # (if any) is banked via the single usage write path so the
+                # running total and the daily bucket move together (T5770).
                 cur.execute(
                     """UPDATE user_segments
                        SET last_active_at = now(),
-                           current_session_start = now(),
-                           total_usage_seconds = %s
+                           current_session_start = now()
                        WHERE user_id = %s""",
-                    (total_usage_seconds, user_id),
+                    (user_id,),
                 )
+                if current_session_start is not None and last_active_at is not None:
+                    # Bank the just-ended session (now=None -> no idle tail).
+                    banked = session_engaged_seconds(
+                        current_session_start, last_active_at
+                    )
+                    add_usage_seconds(cur, user_id, banked)
+                    total_usage_seconds += banked  # keep local accurate for the log line
             elif current_session_start is None:
                 cur.execute(
                     """UPDATE user_segments
@@ -516,16 +554,17 @@ def close_session(user_id: str):
             duration = session_engaged_seconds(
                 row["current_session_start"], row["last_active_at"], datetime.now(UTC)
             )
-            total = (row["total_usage_seconds"] or 0) + duration
 
             cur.execute(
                 """UPDATE user_segments
-                   SET total_usage_seconds = %s,
-                       current_session_start = NULL,
+                   SET current_session_start = NULL,
                        last_active_at = now()
                    WHERE user_id = %s""",
-                (total, user_id),
+                (user_id,),
             )
+            # Single usage write path (T5770): running total + today's bucket, one txn.
+            add_usage_seconds(cur, user_id, duration)
+            total = (row["total_usage_seconds"] or 0) + duration
             logger.info("[Analytics] Session closed: user=%s duration=%ss total=%ss", user_id, duration, total)
     except Exception:
         logger.exception("[Analytics] Failed to close session for %s", user_id)

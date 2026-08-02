@@ -176,7 +176,7 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({
   await page.waitForTimeout(300);
   // Scope to a REEL card's copy link (posts /api/gallery/{id}/share) — NOT the
   // group-level collection copy link (which posts /api/collections/share and would
-  // leave sharePosts at 0). The action row is hover-revealed; attach + force-click.
+  // leave sharePosts at 0).
   const reelCard = page.locator('[data-testid="reel-card"]').first();
   for (let i = 0; i < 4; i++) {
     if (await reelCard.isVisible().catch(() => false)) break;
@@ -184,15 +184,24 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({
     if (await reelCard.waitFor({ state: 'visible', timeout: 12000 }).then(() => true).catch(() => false)) break;
   }
   await reelCard.waitFor({ state: 'visible', timeout: 15000 });
-  const copyBtn = reelCard.getByTitle('Copy link').first();
-  await copyBtn.waitFor({ state: 'attached', timeout: 30000 });
-  // Hover the CARD, not the button: ReelTile's action row is
-  // `pointer-events-none ... group-hover/tile:pointer-events-auto`, so the button
-  // cannot take a hover until its TILE ancestor is hovered.
+  // T6300: Copy Link moved from a direct hover-revealed chip into the kebab menu,
+  // and each menu item click also calls setMenuOpen(false) — a naive "click 5
+  // times" loop would only land the FIRST click on a mounted button (the menu
+  // unmounts before Playwright's 2nd .click() actionability wait resolves).
+  // Fire all 5 native clicks SYNCHRONOUSLY in one JS tick instead: React batches
+  // the setMenuOpen(false) state update and does not unmount the button until the
+  // event-dispatch call stack unwinds, so 5 back-to-back el.click() calls in a
+  // single evaluate() all land on the SAME still-mounted node before the menu
+  // closes — faithfully reproducing "5 rapid fires" and exercising the exact
+  // dedup this test targets: useWebShare's `inflightShareUrl` Map coalescing
+  // concurrent createShareUrl(downloadId) calls.
+  const kebab = reelCard.getByTitle('More actions');
+  await kebab.waitFor({ state: 'attached', timeout: 30000 });
   await reelCard.hover().catch(() => {});
-  for (let i = 0; i < 5; i++) {
-    await copyBtn.click({ force: true, delay: 10 });
-  }
+  await kebab.click({ force: true, delay: 10 });
+  await page.getByRole('button', { name: /^Copy Link$/ }).evaluate((el) => {
+    for (let i = 0; i < 5; i++) el.click();
+  });
 
   // WAIT for the toast rather than sleeping a fixed 2.5s. copyReelLink only toasts
   // AFTER createShareUrl's POST /api/gallery/{id}/share resolves, and that call takes

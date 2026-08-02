@@ -942,7 +942,9 @@ def ensure_database():
                 auto_export_status TEXT,
                 auto_export_attempts INTEGER DEFAULT 0,
                 recap_video_url TEXT,
-                shared_by TEXT DEFAULT NULL
+                shared_by TEXT DEFAULT NULL,
+                source_profile_id TEXT DEFAULT NULL,
+                source_game_id INTEGER DEFAULT NULL
             )
         """)
 

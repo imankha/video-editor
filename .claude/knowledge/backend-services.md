@@ -1,5 +1,6 @@
 ---
 domain: backend-services
+updated: 2026-08-01 (T5770: admin Avg/wk + Last 7d usage columns — new postgres v022 `user_usage_daily` table, single-write-path `analytics.add_usage_seconds` helper, derived weekly average. See "Admin weekly-usage columns: Avg/wk + Last 7d (T5770)" below. Postgres migration head moved v018→v022 in the table below; v019/v022 documented, v020/v021 reserved by unmerged sibling branches.)
 updated: 2026-07-31 (T6220: lockstep deploys so the build number stays accurate — see "Deploy + build-number lockstep (T6220)" below. Union `paths:` filter on both staging workflows (not dropped), asymmetric `deploy_production.sh` gate (`--frontend-only` stays allowed, `--backend-only` now refuses without `--accept-build-drift`), and `scripts/verify-build-lockstep.sh` asserts bundle build == backend build after every deploy. Follow-up from T6210.)
 updated: 2026-07-30 (T6200: documented the request concurrency model — ONE uvicorn process/loop, blocking I/O must never run on the loop (it serializes concurrent requests AND defers all responses to burst end = the HAR fingerprint), the two threadpools by handler shape (async def -> to_thread/run_in_context; plain def -> anyio pool), the bounded 32-thread default executor set in lifespan(), what /api/health costs, and where blocking work is offloaded. See "Request concurrency model (T6200)". Fix offloaded validate_session + hot list reads.)
 updated: 2026-07-27 (T6030: closed the v025 residual — final_videos.slowmo_section_start/end now column_exists-guarded on BOTH the publish SELECT (downloads.py) and the render INSERT (overlay.py `_finalize_overlay_export`, which had blocked ALL exports in the deploy->migrate window). Added a structural regression test that drives every hot-path read against a below-head DB WITH ROWS; `test_registry_head_is_audited` turns the next added migration RED so the class can't silently reopen. See "Migration-window column guard audit" § v025 + Structural guard.)
@@ -98,8 +99,8 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
-| `postgres` | Fly Postgres | `schema_migrations` table | v018 |
-| `profile_db` | profile.sqlite | `PRAGMA user_version` | v031 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section; **v027 `working_videos.detections_data` T5600** — video-level player-detection store, backfills by hoisting the union of existing regions' embedded detections via `app/services/video_detections.hoist_video_detections`, see keyframes-framing.md § Video-level player-detection store; v028 export_jobs.stage/output_key; v029 working_clips.rotation; **v030 games source reference — sibling T5800 branch (cross-profile game attribution), NOT on the T5725 branch, merges ahead**; **v031 reclassify teammate-tagged clips to Team T5725** — DATA-ONLY (no column): moves every teammate-tagged My-Athlete/NULL `raw_clips` row to `my_athlete = 0`, tags preserved, idempotent, positional tuple-row reads, numbered v031 to avoid the v030 collision with T5800, see annotate.md § Teammate tagging is Team-layer only) |
+| `postgres` | Fly Postgres | `schema_migrations` table | v022 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again. Re-verify sibling branches before numbering the NEXT postgres migration.) |
+| `profile_db` | profile.sqlite | `PRAGMA user_version` | v031 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section; **v027 `working_videos.detections_data` T5600** — video-level player-detection store, backfills by hoisting the union of existing regions' embedded detections via `app/services/video_detections.hoist_video_detections`, see keyframes-framing.md § Video-level player-detection store; v028 export_jobs.stage/output_key; v029 working_clips.rotation; **v030 games source reference T5800** (cross-profile game attribution); **v031 reclassify teammate-tagged clips to Team T5725** — DATA-ONLY (no column): moves every teammate-tagged My-Athlete/NULL `raw_clips` row to `my_athlete = 0`, tags preserved, idempotent, positional tuple-row reads, numbered v031 to avoid the v030 collision with T5800, see annotate.md § Teammate tagging is Team-layer only) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 
 - Only versions `> current` are applied (base.py:38-40) — never reuse or renumber a version.
@@ -206,6 +207,43 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   (no days branch: `26h`, not `1d 2h`). Decisions: NO backfill (values self-correct as new
   sessions accrue), all-time cumulative window (unchanged). Tests: `test_analytics.py`
   (`TestSessionEngagedSeconds`, `TestCloseSessionBanking`, `TestHeartbeatGapCap`).
+- **Admin weekly-usage columns: Avg/wk + Last 7d (T5770).** Two metrics, two
+  storage strategies (no-redundant-state rule). **`avg_weekly_seconds`** is
+  DERIVED at read time in `admin.py list_users` — `effective_usage / max(1,
+  weeks_since_signup)` — and stored nowhere; `effective_usage` is the SAME
+  value the Usage column shows (all-time total + any still-open live session).
+  Weeks-since-signup uses `user_segments.acquired_at`, falling back to
+  `users.created_at` when the LEFT JOIN segment is NULL (there is no
+  `signup_completed_at` column on `user_segments` — that name lives only on
+  the separate `user_milestones` table from v005; do not confuse the two).
+  Clamped to a minimum of 1 week so a brand-new signup neither divides by zero
+  nor produces an absurd average. **`last_7d_seconds`** is REAL bucketed data:
+  new table `user_usage_daily(user_id, day, seconds)` (postgres v022 — see
+  Migration system table), summed over `day >= CURRENT_DATE - INTERVAL '6
+  days'` as ONE grouped query keyed by the page's user ids (joined into the
+  existing admin list query, no per-user N+1). History is NEVER backfilled —
+  the column honestly under-reports for ~7 days after this migration runs,
+  same wait-and-self-correct decision as T5660's Usage column.
+  **Single write path:** `analytics.add_usage_seconds(cur, user_id, seconds)`
+  bumps `user_segments.total_usage_seconds` AND the `user_usage_daily` bucket
+  (`ON CONFLICT (user_id, day) DO UPDATE SET seconds = seconds + %s`) on the
+  SAME cursor passed in by the caller, so both numbers move inside the
+  caller's existing transaction — they can never disagree. Both prior
+  `total_usage_seconds` write sites (the session-rollover branch in
+  `update_session` and `close_session`) now call this helper instead of
+  writing the column directly; a 0-second call (an instant open/close) is a
+  no-op that writes no empty bucket row. Day = `CURRENT_DATE` at write time —
+  a session spanning midnight attributes its whole increment to the day the
+  increment lands, not split across days (acceptable for admin metrics, noted
+  not engineered around). **Impersonation:** already covered by the existing
+  T1515 guards in `update_session`/`close_session` (both early-return on
+  `get_current_impersonator_id()` BEFORE reaching the new helper), so an
+  admin browsing as a user cannot inflate either store — no separate guard
+  was needed in `add_usage_seconds` itself. Tests: `test_t5770_usage_daily.py`
+  (helper atomicity, ON CONFLICT accumulation, both write sites, impersonation
+  no-op, endpoint fields, weeks-clamp, bounded-query perf guard via a
+  psycopg2-execute counter — the project's `query_counter` fixture wraps
+  SQLite only and can't see this Postgres path).
 - **Stripe revenue reconciliation (T5760).** Stripe is the source of truth for money;
   `user_segments.total_spent_cents` is a local cache written at fulfillment (admin-view
   speed — no per-page-load Stripe latency). **`total_spent_cents` is NET of refunds AND

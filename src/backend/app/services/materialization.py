@@ -191,6 +191,46 @@ def _find_existing_game_by_hashes(
     return row["game_id"] if row else None
 
 
+# The game_videos columns copied by BOTH cross-profile game copiers, in order.
+_GAME_VIDEO_COLUMNS = (
+    "blake3_hash", "sequence", "duration", "video_width", "video_height",
+    "video_size", "fps",
+)
+
+
+def _insert_game_with_videos(
+    target_conn: sqlite3.Connection,
+    game_columns: dict,
+    game_videos,
+) -> int:
+    """Shared game-insert primitive used by BOTH cross-profile game copiers
+    (`_copy_game` share-materialization AND `ensure_game_reference`, T5800) -- the
+    2nd copier reuses this rather than duplicating the INSERT.
+
+    Inserts ONE games row from an explicit column->value map, then inserts the given
+    game_videos rows (each an indexable mapping/Row carrying `_GAME_VIDEO_COLUMNS`).
+    Returns the new game id. Touches ONLY the two profile-local tables; never
+    game_storage / Postgres game_storage_refs / game_ref_counts (EPIC decision 4).
+    """
+    cols = list(game_columns.keys())
+    rcur = target_conn.cursor()
+    rcur.execute(
+        f"INSERT INTO games ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+        [game_columns[c] for c in cols],
+    )
+    new_game_id = rcur.lastrowid
+
+    video_cols = ", ".join(("game_id", *_GAME_VIDEO_COLUMNS))
+    video_placeholders = ", ".join("?" for _ in range(len(_GAME_VIDEO_COLUMNS) + 1))
+    for vrow in game_videos:
+        rcur.execute(
+            f"INSERT INTO game_videos ({video_cols}) VALUES ({video_placeholders})",
+            [new_game_id, *[vrow[c] for c in _GAME_VIDEO_COLUMNS]],
+        )
+
+    return new_game_id
+
+
 def _copy_game(
     sharer_conn: sqlite3.Connection,
     recipient_conn: sqlite3.Connection,
@@ -215,43 +255,126 @@ def _copy_game(
     if not game:
         raise ValueError(f"Game {game_id} not found in sharer's database")
 
-    rcur = recipient_conn.cursor()
-    rcur.execute(
-        """INSERT INTO games
-           (name, blake3_hash, video_duration, video_width, video_height,
-            video_size, opponent_name, game_date, game_type, tournament_name,
-            video_fps, video_filename, viewed_duration, status, shared_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 'ready', ?)""",
-        (
-            game["name"], game["blake3_hash"], game["video_duration"],
-            game["video_width"], game["video_height"], game["video_size"],
-            game["opponent_name"], game["game_date"], game["game_type"],
-            game["tournament_name"], game["video_fps"], shared_by,
-        ),
-    )
-    new_game_id = rcur.lastrowid
-
-    # Copy game_videos
+    game_columns = {
+        "name": game["name"],
+        "blake3_hash": game["blake3_hash"],
+        "video_duration": game["video_duration"],
+        "video_width": game["video_width"],
+        "video_height": game["video_height"],
+        "video_size": game["video_size"],
+        "opponent_name": game["opponent_name"],
+        "game_date": game["game_date"],
+        "game_type": game["game_type"],
+        "tournament_name": game["tournament_name"],
+        "video_fps": game["video_fps"],
+        "video_filename": None,
+        "viewed_duration": 0,
+        "status": "ready",
+        "shared_by": shared_by,
+    }
     cur.execute(
-        """SELECT blake3_hash, sequence, duration, video_width, video_height,
-                  video_size, fps
-           FROM game_videos WHERE game_id = ? ORDER BY sequence""",
+        f"""SELECT {', '.join(_GAME_VIDEO_COLUMNS)}
+            FROM game_videos WHERE game_id = ? ORDER BY sequence""",
         (game_id,),
     )
-    for vrow in cur.fetchall():
-        rcur.execute(
-            """INSERT INTO game_videos
-               (game_id, blake3_hash, sequence, duration, video_width,
-                video_height, video_size, fps)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                new_game_id, vrow["blake3_hash"], vrow["sequence"],
-                vrow["duration"], vrow["video_width"], vrow["video_height"],
-                vrow["video_size"], vrow["fps"],
-            ),
-        )
+    return _insert_game_with_videos(recipient_conn, game_columns, cur.fetchall())
 
-    return new_game_id
+
+def _hashes_from_game_row(game_row, game_videos) -> list[str]:
+    """Video hashes for an already-loaded game row + its game_videos rows (the
+    ensure_game_reference analogue of _collect_video_hashes, which queries by id).
+    Single-video games carry the hash on the games row; multi-video games carry it
+    per game_videos row."""
+    if game_row["blake3_hash"]:
+        return [game_row["blake3_hash"]]
+    return [v["blake3_hash"] for v in game_videos if v["blake3_hash"]]
+
+
+def ensure_game_reference(
+    target_conn: sqlite3.Connection,
+    target_profile_id: str,
+    source_profile_id: str,
+    source_game_row,
+    source_game_videos,
+) -> int:
+    """Ensure a metadata-only game REFERENCE (T5800) for the owning-profile game
+    exists in `target_conn`'s profile, returning the resolved target game id.
+
+    A reference is a `games` row with `source_profile_id IS NOT NULL`: it lets the
+    target profile resolve `final_videos.game_ids` for by-game grouping WITHOUT
+    owning the media (no game_storage / storage_refs / refcounts -- EPIC decision 4).
+    This is the 2nd cross-profile game copier; the shared insert is
+    `_insert_game_with_videos`.
+
+    `target_conn` MUST be a NORMAL (already-open) connection with a `sqlite3.Row`
+    row factory. The caller owns cross-profile DB opening and R2 sync ordering.
+
+    Resolution order (return an existing id when possible, else insert a reference):
+      1. Existing row already keyed to (owner_profile, owner_game) -> reuse
+         (idempotent across repeat moves; dedups two reels from the same game).
+      2. Chain collapse: if the SOURCE row is itself a reference, resolve through ITS
+         source pointer so the new reference points at the ORIGINAL owner, never at
+         another reference (EPIC decision 6 -- references never chain). Moving a reel
+         back to the owning profile therefore maps to the REAL game (step 3, via
+         hash-dedup) and inserts no reference.
+      3. A REAL local game (share-materialized earlier) with matching video hashes ->
+         reuse it -- grouping attaches to the real copy, not a redundant reference.
+      4. Else insert a fresh reference row.
+    """
+    # Step 2 first: a reference source resolves to its own owner so we never point
+    # a reference at another reference.
+    src_source_profile = source_game_row["source_profile_id"]
+    if src_source_profile:
+        owner_profile_id = src_source_profile
+        owner_game_id = source_game_row["source_game_id"]
+    else:
+        owner_profile_id = source_profile_id
+        owner_game_id = source_game_row["id"]
+
+    cur = target_conn.cursor()
+
+    # Step 1: dedup on the (owner_profile, owner_game) reference key.
+    cur.execute(
+        "SELECT id FROM games WHERE source_profile_id = ? AND source_game_id = ?",
+        (owner_profile_id, owner_game_id),
+    )
+    row = cur.fetchone()
+    if row:
+        return row["id"]
+
+    # Step 3: a real local game (share-materialized) with the same hashes wins over
+    # a redundant reference.
+    hashes = _hashes_from_game_row(source_game_row, source_game_videos)
+    existing = _find_existing_game_by_hashes(target_conn, hashes)
+    if existing is not None:
+        return existing
+
+    # Step 4: insert the reference. Metadata frozen at materialization (EPIC dec. 5).
+    game_columns = {
+        "name": source_game_row["name"],
+        "opponent_name": source_game_row["opponent_name"],
+        "game_date": source_game_row["game_date"],
+        "game_type": source_game_row["game_type"],
+        "tournament_name": source_game_row["tournament_name"],
+        "blake3_hash": source_game_row["blake3_hash"],
+        "video_duration": source_game_row["video_duration"],
+        "video_width": source_game_row["video_width"],
+        "video_height": source_game_row["video_height"],
+        "video_size": source_game_row["video_size"],
+        "video_fps": source_game_row["video_fps"],
+        "created_at": source_game_row["created_at"],
+        "video_filename": None,
+        "status": "ready",
+        "source_profile_id": owner_profile_id,
+        "source_game_id": owner_game_id,
+        "shared_by": None,
+        "recap_video_url": None,
+        "viewed_duration": 0,
+        "last_playhead_position": None,
+        "auto_export_status": None,
+        "auto_export_attempts": 0,
+    }
+    return _insert_game_with_videos(target_conn, game_columns, source_game_videos)
 
 
 def _filter_clips_for_tag(

@@ -47,7 +47,7 @@ FLOOR_VERSION = 23
 # HEAD_VERSION_AUDITED -- test_registry_head_is_audited enforces that you do.
 POST_V023_COLUMNS = {
     "final_videos": ["poster_filename", "slowmo_section_start", "slowmo_section_end"],  # v024, v025
-    "games": ["shared_by"],                                                             # v026
+    "games": ["shared_by", "source_profile_id", "source_game_id"],                       # v026, v030
     "working_videos": ["detections_data"],                                              # v027
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation"],                                                       # v029

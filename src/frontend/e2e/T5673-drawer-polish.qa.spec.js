@@ -205,42 +205,20 @@ test.describe('T5673 drawer polish QA', () => {
     await saveEvidence(page, 'T5673-criterion2-mobile-leading-posters');
 
     // Criterion 1c: tap kebab on a reel tile -> bottom action sheet (not the
-    // clipped inline dropdown). Long-press first reveals the action buttons
-    // (mobile hides them until long-press/reveal), per ReelTile's own gesture.
+    // clipped inline dropdown). T6300: the kebab is now PERSISTENTLY visible on
+    // coarse pointers (useIsCoarsePointer, no long-press needed) — this fixed the
+    // touch-Windows dead end where isMobile's UA sniff never wired long-press at
+    // all. A direct tap is the real user path now; no synthetic long-press needed.
     const reelCards = panel.locator('[data-testid="reel-card"]');
     const reelCount = await reelCards.count();
     expect(reelCount, 'at least one reel tile visible on mobile').toBeGreaterThan(0);
     const firstCard = reelCards.first();
     await firstCard.scrollIntoViewIfNeeded();
-    const box = await firstCard.boundingBox();
-    // Simulate the long-press that reveals actions (500ms timer in ReelTile).
-    // dispatchEvent's `touches` init requires a fully-formed Touch (identifier,
-    // target, client/page/screen coords) -- the locator API's plain-object form
-    // 404s on the browser's `new Touch({...})` constructor, so build it in-page.
-    const cardHandle = await firstCard.elementHandle();
-    await page.evaluate(({ el, x, y }) => {
-      const touch = new Touch({
-        identifier: 1, target: el,
-        clientX: x, clientY: y, pageX: x, pageY: y, screenX: x, screenY: y,
-      });
-      el.dispatchEvent(new TouchEvent('touchstart', {
-        touches: [touch], targetTouches: [touch], changedTouches: [touch],
-        bubbles: true, cancelable: true,
-      }));
-    }, { el: cardHandle, x: box.x + 10, y: box.y + 10 });
-    await page.waitForTimeout(600);
-    await page.evaluate((el) => {
-      el.dispatchEvent(new TouchEvent('touchend', {
-        touches: [], targetTouches: [], changedTouches: [],
-        bubbles: true, cancelable: true,
-      }));
-    }, cardHandle);
 
     const kebab = firstCard.getByTitle('More actions');
-    await kebab.tap({ force: true }).catch(async () => {
-      // Fallback: actions may already be visible without the synthetic touch sim.
-      await kebab.click({ force: true });
-    });
+    await expect(kebab, 'kebab is persistently visible on a coarse pointer, no reveal gesture needed').toBeVisible();
+    expect(await kebab.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    await kebab.tap();
     await page.waitForTimeout(300);
 
     // Bottom sheet signature: fixed inset-0 overlay (portal to document.body) with

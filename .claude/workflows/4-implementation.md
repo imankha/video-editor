@@ -73,7 +73,7 @@ Spawn parallel `general-purpose` subagents for consumer files. Rules:
 After all consumer subagents complete:
 - Main agent handles file deletions and index.js updates (small, mechanical)
 - Spawn one subagent for test file updates (if needed)
-- Main agent runs `npm test` + `npm run build`
+- Main agent runs `npx vitest related --run {changed files}` + `npm run build` (full suite is Branch CI's job)
 - Main agent fixes any failures (or delegates targeted fixes)
 
 ### What Stays in Main Context
@@ -109,7 +109,7 @@ Tests (1 subagent):
   ClipSelectorSidebar.test.jsx + ExportButtonContainer.test.js
 
 Verify (main agent):
-  npm test && npm run build
+  npx vitest related --run {changed files} && npm run build
 ```
 
 Context saved: ~60% less file content in main agent.

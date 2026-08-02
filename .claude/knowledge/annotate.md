@@ -324,6 +324,24 @@ The full checklist for an 11th→Nth sport:
   for an expired game with no recap video — a deliberate divergence from the old GameCard.
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
 
+- **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
+  (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).
+  `setPendingGameReference({sourceProfileId, sourceGameId, sourceProfileName})` is the SEPARATE
+  cross-profile breadcrumb for a **reference card** (a `games` row with `source_profile_id`, T5800):
+  clicking it does NOT open Annotate — by user decision "you clicked a game card, you should get the
+  game card", it switches to the OWNING profile and lands on its **Games tab** with the real game
+  scrolled into view + a transient green ring. Consumed once in `ProjectManager` (a `ReferenceGameCard`
+  renders the link variant; the real `GameTile` is untouched). It survives `profileStore._resetDataStores`
+  (sessionStorage, not Zustand). The consume-effect must wait for the OWNING profile's OWN games fetch
+  (a `referenceLoadStartedRef` load-cycle guard: observe `gamesLoading` go true→false) before matching,
+  or it would consume against the stale pre-refetch list and false-degrade. The owning game is located
+  by exact **`source_game_id`** match against the target profile's own (non-reference) games — the API
+  projects `source_game_id` alongside `is_reference` (see export-pipeline.md §Cross-profile), so this
+  works for MULTI-VIDEO owning games too (their `blake3_hash` is NULL, which is why an earlier version
+  of this breadcrumb matched on hash and had to skip the highlight for them). A missing match now means
+  the owning game was genuinely deleted — the degraded notice fires; there is no other reason for
+  `source_game_id` to not resolve. QA is real-browser only (`e2e/T5820-reference-link-cards.qa.spec.js`)
+  — jsdom gives false confidence on the switch race.
 - **Ready Draft tile contract (T6180) — do not undo when restyling `DraftTile.jsx`.** For a
   ready draft (`isReadyToPublish = has_final_video && !is_published`) the tile is a
   discoverable action surface, NOT the old 10px corner badge (which was a `<button>` labelled
@@ -350,6 +368,46 @@ The full checklist for an 11th→Nth sport:
     per-URL transform of an edited source file across `dev-verify.sh` reuse — a fix looks broken for
     runs on end. If a real-browser result contradicts the code, kill 5173, `rm -rf
     src/frontend/node_modules/.vite`, and restart before trusting the run.
+
+- **Published-reel tile persistent actions (T6300) — mirror when T6180 lands on `DraftTile.jsx`.**
+  `ReelTile.jsx`'s ENTIRE actions cluster (Play + Copy/Share + kebab) used to sit in one
+  `opacity-0 pointer-events-none` wrapper, hover/long-press-gated — invisible until discovered by
+  accident, AND a functional dead end on touch-Windows (see capability-detection bullet below). Fix:
+  - **Persistent primary = Play**, always mounted at `bottom-1.5 left-1.5`, never hover-gated — this
+    IS the discoverability fix (no hovering needed to find a reel has actions).
+  - **Kebab = corner-anchored (`top-1.5 right-1.5`), NOT always-visible on a fine pointer** (explicit
+    user decision, T6300 design gate: matches DraftTile's existing hover/focus-reveal convention —
+    `opacity-0 group-hover/tile:opacity-100 focus:opacity-100`). On a **coarse pointer** the SAME
+    button is `opacity-100` unconditionally (no hover, no long-press) — this is the touch-Windows fix.
+  - **Copy Link / Share absorbed into the kebab** (previously a third direct hover chip) per the
+    T6180 house rule "main button + kebab for the rest." The bottom sheet (coarse) needed a NEW
+    "Share" item added — it had never had one (mobile's only path to `onWebShare` used to be the now-
+    removed inline chip); the desktop popover already listed both.
+  - **NEW-dot ↔ kebab coexistence:** the unwatched dot shifts to `right-11` (stacks left of the
+    44px-floor kebab) instead of overlapping it, only when `isUnwatched`.
+  - Long-press (`actionsRevealed` state, touch handlers) is DELETED entirely — an always-reachable
+    coarse-pointer kebab replaces it, so there is no reveal gesture left to miss.
+  - **QA landmine (Chromium dynamic pointer/hover media features): a `page.screenshot()` call
+    itself flips `(pointer: coarse)` → fine on a hybrid `hasTouch: true` desktop-viewport context**
+    (confirmed by direct `matchMedia` probing — NOT caused by any `.click()`/`.tap()`). Order matters:
+    run every coarse-pointer-dependent assertion/interaction BEFORE the first screenshot in a test:
+    a screenshot taken between "read coarse-pointer state" and "click the coarse-gated element" makes
+    the click land on the FINE branch instead, producing a confusing false failure that looks like the
+    component regressed. See `e2e/T6300-reel-tile-persistent-actions.qa.spec.js`'s `criterion 2` test
+    for the pattern (also: prefer a raw in-page `el.click()` over Playwright's `.tap()` for a coarse-
+    context interaction — `.tap()` still repositions Chromium's virtual pointer for actionability
+    before dispatching touch events, which can independently trigger the same flip).
+  - **Capability detection**: reveal gate + menu-shell selector (bottom sheet vs desktop popover) now
+    read `useIsCoarsePointer()` (live `matchMedia`), not `useWebShare().isMobile` (a UA sniff that
+    misses touchscreen Windows). `useWebShare().isMobile` had NO remaining consumer once Share/Copy
+    Link were both unconditionally listed, so it was dropped from `DownloadsPanel`→`ReelTile` prop
+    wiring entirely (not kept "just in case" — CLAUDE.md: no dead code).
+  - When T6180 ships DraftTile's ready-state kebab, keep the two tiles' formulas byte-identical
+    (same `isCoarsePointer` opacity branches, same corner, same `aria-haspopup`/`aria-expanded`).
+  - Covered by `ReelTile.test.jsx` (capability-gated visibility, every menu item fires, dot/kebab
+    stacking) + `e2e/T6300-reel-tile-persistent-actions.qa.spec.js` (live touch-Windows repro: coarse
+    pointer + non-UA-sniffed-mobile context, at-rest opacity/pointer-events read directly, every
+    kebab item reachable with zero hover and zero long-press).
 
 ## Perf attribution (T4770, 2026-07-09)
 - **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and

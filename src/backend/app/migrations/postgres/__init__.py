@@ -20,6 +20,7 @@ from .v018_share_sharer_sport import V018ShareSharerSport
 from .v019_credits import V019Credits
 from .v020_game_link_share_type import V020GameLinkShareType
 from .v021_share_claims import V021ShareClaims
+from .v022_user_usage_daily import V022UserUsageDaily
 
 MIGRATIONS = [
     V001Baseline(),
@@ -43,6 +44,7 @@ MIGRATIONS = [
     V019Credits(),
     V020GameLinkShareType(),
     V021ShareClaims(),
+    V022UserUsageDaily(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

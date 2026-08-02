@@ -85,6 +85,61 @@ export function consumePendingRecap() {
   if (gameId == null) return null;
   sessionStorage.removeItem(RECAP_GAME_ID_KEY);
   return parseInt(gameId);
+// --- Cross-profile game reference (T5820) ---
+//
+// A reference game card in one profile's Games tab points at the REAL game owned
+// by a sibling profile. Clicking it switches to the owning profile and lands on
+// its Games tab with the real game scrolled into view + briefly highlighted
+// (user decision: a reference is a signpost, so it lands on the game's Games-tab
+// context, NOT the Annotate editor — hence a breadcrumb distinct from
+// setPendingGame above).
+//
+// This is TRANSIENT navigation intent, not view state — never a saved
+// preference. It is modelled on the read-once `projectManagerTab` hint
+// (ProjectManager.jsx): set before switching, consumed once after the switch,
+// then cleared. It survives `profileStore._resetDataStores()` because that only
+// resets Zustand stores + refetches — it never touches sessionStorage.
+//
+// The owning game is located in the target profile by its `source_game_id` (the
+// owning game's real id, projected by GET /api/games under the is_reference gate —
+// T5800). This is an exact id match, so it works for MULTI-VIDEO owning games too
+// (those have a NULL blake3_hash, which is why an earlier version of this code had
+// to fall back to a hash match and silently skip the highlight for them).
+
+const GAME_REF_PROFILE_KEY = 'pendingGameRefProfileId';
+const GAME_REF_GAME_ID_KEY = 'pendingGameRefGameId';
+const GAME_REF_PROFILE_NAME_KEY = 'pendingGameRefProfileName';
+
+export function setPendingGameReference({ sourceProfileId, sourceGameId = null, sourceProfileName = null }) {
+  sessionStorage.setItem(GAME_REF_PROFILE_KEY, sourceProfileId);
+  if (sourceGameId != null) {
+    sessionStorage.setItem(GAME_REF_GAME_ID_KEY, sourceGameId.toString());
+  }
+  if (sourceProfileName != null) {
+    sessionStorage.setItem(GAME_REF_PROFILE_NAME_KEY, sourceProfileName);
+  }
+}
+
+/** Read the reference breadcrumb WITHOUT clearing it (the consume gate waits for
+ *  the target profile's games to settle before acting — peek lets it re-check). */
+export function peekPendingGameReference() {
+  const sourceProfileId = sessionStorage.getItem(GAME_REF_PROFILE_KEY);
+  if (sourceProfileId == null) return null;
+  const sourceGameId = sessionStorage.getItem(GAME_REF_GAME_ID_KEY);
+  return {
+    sourceProfileId,
+    sourceGameId: sourceGameId != null ? parseInt(sourceGameId) : null,
+    sourceProfileName: sessionStorage.getItem(GAME_REF_PROFILE_NAME_KEY),
+  };
+}
+
+export function consumePendingGameReference() {
+  const pending = peekPendingGameReference();
+  if (!pending) return null;
+  sessionStorage.removeItem(GAME_REF_PROFILE_KEY);
+  sessionStorage.removeItem(GAME_REF_GAME_ID_KEY);
+  sessionStorage.removeItem(GAME_REF_PROFILE_NAME_KEY);
+  return pending;
 }
 
 // --- Projects/reels (consumed by ProjectsScreen restore effect) ---

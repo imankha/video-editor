@@ -26,6 +26,12 @@ import { EditGameModal } from './EditGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useProfileStore } from '../stores/profileStore';
+import {
+  setPendingGameReference,
+  peekPendingGameReference,
+  consumePendingGameReference,
+} from '../utils/pendingNavigation';
 import { InstallButton } from './InstallButton';
 // DraftTile (the restyled ProjectCard) + SegmentedProgressStrip were extracted to their
 // own files (T5672). Re-exported below (DraftTile aliased to ProjectCard) so existing
@@ -34,7 +40,15 @@ import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
+import { ReferenceGameCard } from './ReferenceGameCard';
 import { splitByAspect } from '../constants/aspectRatios';
+
+// Shared layout class strings for the Games tab poster grid (T5681/T6310). The
+// loaded games grid AND its loading skeleton both consume these so the skeleton
+// can never drift from the real layout again (the T6310 bug). If the grid shape
+// changes, change it here and both surfaces move together.
+const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
+const GAMES_TILE_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4';
 
 // Group games by month (YYYY-MM) in chronological order (newest first)
 function groupGamesByMonth(games) {
@@ -132,6 +146,12 @@ export function ProjectManager({
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
+  // T5820: transient cross-profile-reference landing state (NOT persisted — pure
+  // in-memory affordance). highlightGameId briefly rings the game we navigated to;
+  // referenceNotice shows the degraded-link message when the owning game is gone.
+  const [highlightGameId, setHighlightGameId] = useState(null);
+  const [referenceNotice, setReferenceNotice] = useState(null);
+  const currentProfileId = useProfileStore((s) => s.currentProfileId);
   const [shareGame, setShareGame] = useState(null);
   const [editGame, setEditGame] = useState(null);
   const gameFileInputRef = useRef(null);
@@ -537,6 +557,83 @@ export function ProjectManager({
       message: 'This game is on your Team layer — open Annotate to tag your own athlete.',
     });
   }, [games, loading]);
+  // T5820: clicking a reference card is a composite gesture — set the transient
+  // cross-profile breadcrumb, hint the Games tab (the existing read-once
+  // `projectManagerTab` mechanism, consumed by the effect above), then switch to
+  // the owning profile. The switch resets the data stores + navigates to Project
+  // Manager; the sessionStorage breadcrumb survives that reset (it clears Zustand
+  // only), and the effect below consumes it once the owning profile's games land.
+  const handleOpenReference = useCallback((game) => {
+    if (!game?.source_profile_id) {
+      console.error('[ProjectManager] reference card clicked without a source_profile_id — backend bug', game);
+      return;
+    }
+    setPendingGameReference({
+      sourceProfileId: game.source_profile_id,
+      sourceGameId: game.source_game_id,
+      sourceProfileName: game.source_profile_name,
+    });
+    sessionStorage.setItem('projectManagerTab', 'games');
+    useProfileStore.getState().switchProfile(game.source_profile_id);
+  }, []);
+
+  // T5820: after landing in the owning profile, locate the real game by its exact
+  // `source_game_id` (projected by GET /api/games under is_reference — T5800),
+  // scroll it into view and ring it briefly. Detection of a deleted owning game is
+  // at THIS point (a list that settled with no match), never a cross-profile
+  // existence check on render.
+  //
+  // The switch flips currentProfileId BEFORE _resetDataStores refetches, so there is
+  // a transient render where we're "on" the owning profile but `games` still holds
+  // the previous profile's (stale) list with gamesLoading momentarily false. Consuming
+  // then would false-degrade. So we wait for the owning profile's OWN fetch to run:
+  // only consume after we've observed gamesLoading go true (fetch started) and back
+  // to false (fetch settled) while on the target profile.
+  const referenceLoadStartedRef = useRef(false);
+  useEffect(() => {
+    const pending = peekPendingGameReference();
+    if (!pending) return;
+    if (currentProfileId !== pending.sourceProfileId) return;
+    if (gamesLoading) {
+      referenceLoadStartedRef.current = true; // the target profile's fetch is in flight
+      return;
+    }
+    if (!referenceLoadStartedRef.current) return; // still the stale pre-refetch list
+
+    referenceLoadStartedRef.current = false;
+    consumePendingGameReference();
+    setActiveTab('games');
+
+    if (pending.sourceGameId == null) {
+      console.error('[ProjectManager] reference breadcrumb missing sourceGameId — backend bug', pending);
+      return;
+    }
+
+    const target = games.find(
+      (g) => !g.is_reference && g.id === pending.sourceGameId
+    );
+    if (target) {
+      setHighlightGameId(target.id);
+      requestAnimationFrame(() => {
+        gamesContainerRef.current
+          ?.querySelector(`[data-game-id="${target.id}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      const t = setTimeout(() => setHighlightGameId(null), 2500);
+      return () => clearTimeout(t);
+    }
+
+    // Degraded link: the owning game was deleted after the move. Keep the user
+    // informed (no silent no-op); the reference card stays for grouping context.
+    // Same owner-label rule as ReferenceGameCard: an UNNAMED profile is normal
+    // data (the default profile has no name) and the app calls it "Default";
+    // only a genuinely absent name falls back to the vague wording.
+    const ownerLabel = pending.sourceProfileName
+      || (pending.sourceProfileName == null ? 'that profile' : 'Default');
+    setReferenceNotice(`This game is no longer in ${ownerLabel}.`);
+    const t = setTimeout(() => setReferenceNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [games, gamesLoading, currentProfileId, setActiveTab]);
 
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
@@ -761,6 +858,28 @@ export function ProjectManager({
         )}
       </div>
 
+      {/* T5820: degraded cross-profile link notice — the owning game was deleted
+          after the move, so the reference could not resolve to a real game. Shown
+          briefly so the click is never a silent no-op. */}
+      {referenceNotice && (
+        <div
+          role="status"
+          data-reference-notice
+          className="mb-4 flex items-start gap-2 rounded-lg border border-yellow-800/50 bg-yellow-900/30 px-3 py-2 text-sm text-yellow-200"
+        >
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-yellow-400" />
+          <span>{referenceNotice}</span>
+          <button
+            type="button"
+            onClick={() => setReferenceNotice(null)}
+            aria-label="Dismiss"
+            className="ml-auto flex-shrink-0 text-yellow-400/70 hover:text-yellow-200"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Content */}
       {activeTab === 'games' ? (
         /* Games List */
@@ -792,7 +911,7 @@ export function ProjectManager({
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
-          <div className="w-full max-w-6xl 2xl:max-w-7xl">
+          <div className={GAMES_GRID_CONTAINER_CLASS}>
             {/* Active Upload Section - Currently uploading */}
             {activeUpload && (
               <div className="mb-6">
@@ -861,18 +980,30 @@ export function ProjectManager({
                           </span>
                         </div>
                         {/* Landscape tile grid: 6-up desktop, 3-up tablet, 2-up mobile */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+                        <div className={GAMES_TILE_GRID_CLASS}>
                           {groups[monthKey].map(game => (
-                            <div key={game.id} data-game-id={game.id}>
-                              <GameTile
-                                game={game}
-                                onLoad={() => onLoadGame(game.id)}
-                                onDelete={() => onDeleteGame(game.id)}
-                                onExtend={() => setExtensionGame(game)}
-                                onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
-                                onShare={() => setShareGame(game)}
-                                onEdit={() => setEditGame(game)}
-                              />
+                            <div
+                              key={game.id}
+                              data-game-id={game.id}
+                              className={game.id === highlightGameId
+                                ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
+                                : undefined}
+                            >
+                              {/* T5820: a reference (cross-profile link) renders a distinct,
+                                  non-editable link card; real games render the unchanged tile. */}
+                              {game.is_reference ? (
+                                <ReferenceGameCard game={game} onOpen={handleOpenReference} />
+                              ) : (
+                                <GameTile
+                                  game={game}
+                                  onLoad={() => onLoadGame(game.id)}
+                                  onDelete={() => onDeleteGame(game.id)}
+                                  onExtend={() => setExtensionGame(game)}
+                                  onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                                  onShare={() => setShareGame(game)}
+                                  onEdit={() => setEditGame(game)}
+                                />
+                              )}
                             </div>
                           ))}
                         </div>
@@ -907,7 +1038,8 @@ export function ProjectManager({
           </div>
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
-             audit finding #13 desktop dead-space fix); the Games tab stays max-w-2xl. */
+             audit finding #13 desktop dead-space fix); the Games tab now uses the same
+             GAMES_GRID_CONTAINER_CLASS width (max-w-6xl 2xl:max-w-7xl) for its poster grid. */
           <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
@@ -1339,32 +1471,27 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 
 
 /**
- * GamesListSkeleton - placeholder shown while the games list loads (T4771).
- * Mirrors the loaded layout: "Your Games" heading + a stack of shell cards, so
- * the screen never blank-then-pops or shows bare "Loading..." text. Pure render;
- * each card is a p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 shell
- * with icon + title + metadata rows.
+ * GamesListSkeleton - placeholder shown while the Games tab loads (T4771, rebuilt
+ * T6310). Mirrors the loaded poster grid (GameTile, T5681): same container width
+ * and same responsive tile grid as the real list (shared via GAMES_GRID_CONTAINER_CLASS
+ * / GAMES_TILE_GRID_CLASS), with `aspect-video` shells instead of GameTiles, so data
+ * arriving does not snap the layout. Pure render — no fetching, no subscribing.
+ *
+ * `count` defaults to 6: the grid is 6-up on desktop, 3-up on tablet, 2-up on
+ * mobile, and 6 divides all three, so it fills exactly one desktop row / two tablet
+ * rows / three mobile rows with no ragged partial row at any breakpoint.
  */
-export function GamesListSkeleton({ count = 4 }) {
+export function GamesListSkeleton({ count = 6 }) {
   return (
-    <div className="w-full max-w-2xl" data-testid="games-skeleton">
-      <div className="h-3.5 w-24 bg-gray-700/70 rounded mb-3 animate-pulse" />
-      <div className="space-y-2">
+    <div className={GAMES_GRID_CONTAINER_CLASS} data-testid="games-skeleton">
+      {/* "Your Games" heading placeholder */}
+      <div className="h-3.5 w-24 bg-gray-700/70 rounded mb-4 animate-pulse" />
+      <div className={GAMES_TILE_GRID_CLASS}>
         {Array.from({ length: count }).map((_, i) => (
           <div
             key={i}
-            className="p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-[18px] h-[18px] bg-gray-700 rounded flex-shrink-0" />
-              <div className="h-4 bg-gray-700 rounded w-40 max-w-[55%]" />
-            </div>
-            <div className="mt-2 flex items-center gap-3">
-              <div className="h-3 bg-gray-700/70 rounded w-16" />
-              <div className="h-3 bg-gray-700/70 rounded w-12" />
-              <div className="h-3 bg-gray-700/70 rounded w-20 hidden sm:block" />
-            </div>
-          </div>
+            className="aspect-video bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
+          />
         ))}
       </div>
     </div>

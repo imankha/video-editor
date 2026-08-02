@@ -250,15 +250,15 @@ Coverage pyramid:
 **Examples**: Code restructuring, extracting utilities
 
 **Testing**:
-- ✅ Existing tests should still pass
+- ✅ Existing tests for the refactored modules should still pass
 - ⚠️ Add tests if coverage was missing
 - ❌ Don't add new tests for same behavior
 
 ```bash
-# Run existing tests - they should all pass
-npm test
-npm run test:e2e
-cd src/backend && python run_tests.py
+# Run the tests that exercise the refactored code - not the whole suite
+cd src/frontend && npx vitest related --run {refactored source files}
+cd src/backend && pytest tests/test_{refactored_module}*.py -v --tb=short --capture=sys
+# Full-suite confirmation = Branch CI on push (branch-ci.yml), Master CI on merge
 ```
 
 ---

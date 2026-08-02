@@ -64,16 +64,22 @@ Write tests covering:
 
 **Target:** Every new function, endpoint, and component should have tests for its primary behaviors AND its failure modes. Aim for the test plan items in the kickoff prompt plus any additional cases discovered during implementation.
 
-**Run all tests after expansion:**
+**Run the CHANGED-CODE tests after expansion (never the full suite):**
 ```bash
-# Frontend
-cd src/frontend && npm test
+# Frontend: the task's test files + everything that imports the changed sources
+cd src/frontend && npx vitest related --run {changed source files}
+cd src/frontend && npx vitest run {task's test files}
 
-# Backend
-cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_{feature}.py -v
+# Backend: test modules for the changed code only
+cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_{feature}.py -v --tb=short --capture=sys
 ```
 
-Fix any failures, then commit the test expansion.
+The full suites are CI's job: Branch CI runs complete vitest + pytest on every
+push, Master CI re-runs them on merge. Do not burn worker time duplicating them.
+
+Fix any failures, then commit the test expansion. Fix loop: re-run the failing
+test + tests exercising the files the fix touched — nothing more (see
+`.claude/skills/run-tests/SKILL.md` § Scope policy).
 
 ### 4. All Tests Pass
 
@@ -104,23 +110,22 @@ git log --oneline -5  # Review recent commits
 ## Test Commands Reference
 
 ```bash
-# Frontend unit tests
-cd src/frontend && npm test
+# Frontend: tests importing the changed sources (the default scope)
+cd src/frontend && npx vitest related --run src/hooks/useFoo.js
 
 # Specific test file
-cd src/frontend && npm test -- src/components/Foo.test.jsx
+cd src/frontend && npx vitest run src/components/Foo.test.jsx
 
-# E2E tests
-cd src/frontend && npm run test:e2e
-
-# Specific E2E spec
-cd src/frontend && npm run test:e2e -- tests/foo.spec.js
-
-# Backend tests
-cd src/backend && .venv/Scripts/python.exe run_tests.py
+# Specific E2E spec (never the full e2e suite — hours-class)
+cd src/frontend && npm run test:e2e -- e2e/foo.spec.js
 
 # Specific backend test
-cd src/backend && pytest tests/test_foo.py -v
+cd src/backend && pytest tests/test_foo.py -v --tb=short --capture=sys
+
+# Full suites — CI's job (branch-ci.yml / master-ci.yml), run locally only on
+# explicit request:
+cd src/frontend && npm test
+cd src/backend && .venv/Scripts/python.exe run_tests.py
 ```
 
 ---
