@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { createRegion, deleteKeyframe } from './overlayActions';
+import { createRegion, deleteKeyframe, revertPoster } from './overlayActions';
 
 /**
  * Prod report 2026-07-29 ("Keyframe at 2.0s not found").
@@ -91,5 +91,33 @@ describe('overlayActions', () => {
 
     expect(result.success).toBe(false);
     expect(result.status).toBeUndefined();
+  });
+
+  // T6380: Remove is a real revert, not a local-only reset. It POSTs to
+  // /poster/revert (which overwrites the R2 object) and returns the resulting
+  // source so the caller updates from the response, never optimistically.
+  it('revertPoster POSTs to /poster/revert and returns the resulting source', async () => {
+    ok({ success: true, poster_filename: 'r.mp4.jpg', poster_source: 'auto' });
+
+    const result = await revertPoster(42);
+
+    const [url, opts] = apiFetch.mock.calls[0];
+    expect(url).toBe('http://test.local/api/export/projects/42/poster/revert');
+    expect(opts.method).toBe('POST');
+    expect(result).toEqual({ success: true, poster_filename: 'r.mp4.jpg', poster_source: 'auto' });
+  });
+
+  it('revertPoster surfaces the HTTP status on failure (e.g. 400 no final video)', async () => {
+    apiFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ detail: 'Project has no exported final video yet -- nothing to revert' }),
+    });
+
+    const result = await revertPoster(42);
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe(400);
+    expect(result.error).toMatch(/nothing to revert/);
   });
 });

@@ -682,6 +682,78 @@ def store_override_poster(
     return basename
 
 
+async def revert_to_auto_poster(
+    user_id: str,
+    project_id: int,
+    final_video_id: int,
+    final_filename: str,
+) -> str | None:
+    """Revert a custom cover (uploaded image or overlay marker) back to the
+    auto/marker cover and OVERWRITE the deterministic poster key (T6380).
+
+    This is the inverse of `store_override_poster`. It re-runs the SINGLE
+    poster-selection path (`generate_poster_at_export`) -- there is deliberately
+    no second re-derivation of the frame -- so the stored object and the
+    poster_source/poster_frame_time columns return to exactly what a fresh
+    export would produce: 'overlay' when the project still carries a poster
+    marker, else 'auto' at the open-play window midpoint. Because the object
+    key is deterministic (`poster_rel_path`), the overwrite is in place and
+    every consumer (shares.py `_resolve_poster`, edge og:image, share email)
+    needs zero changes.
+
+    Section resolution mirrors `backfill_posters`: prefer the FROZEN
+    slowmo_section columns (durable across the publish-time working_clips
+    prune), fall back to live/archive reconstruction (`resolve_slowmo_section`).
+    Duration prefers the frozen `final_videos.duration`, else probes the R2
+    object. Both column reads are guarded for the deploy->migrate window.
+
+    Returns the stored basename, or None on failure (never raises -- inherits
+    `generate_poster_at_export`'s best-effort contract). The caller decides
+    whether a None is a user-facing error."""
+    from ..database import column_exists, get_db_connection
+
+    section = None
+    stored_duration = None
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        has_slowmo = column_exists(cursor, "final_videos", "slowmo_section_start")
+        has_duration = column_exists(cursor, "final_videos", "duration")
+        slowmo_cols = (
+            "slowmo_section_start, slowmo_section_end"
+            if has_slowmo
+            else "NULL AS slowmo_section_start, NULL AS slowmo_section_end"
+        )
+        duration_col = "duration" if has_duration else "NULL AS duration"
+        cursor.execute(
+            f"SELECT {duration_col}, {slowmo_cols} FROM final_videos WHERE id = ?",
+            (final_video_id,),
+        )
+        row = cursor.fetchone()
+        if row is not None:
+            stored_duration = row["duration"]
+            section = _decode_frozen_section(
+                row["slowmo_section_start"], row["slowmo_section_end"]
+            )
+
+    if section is None:
+        section, src = resolve_slowmo_section(user_id, project_id)
+        logger.info(
+            f"[Poster] revert fv={final_video_id} section reconstructed via {src}: {section}"
+        )
+
+    final_duration = _resolve_final_duration(user_id, final_filename, stored_duration)
+    if final_duration is None:
+        logger.info(
+            f"[Poster] revert fv={final_video_id}: duration unresolvable -> cannot regenerate"
+        )
+        return None
+
+    user_marker_time = get_project_poster_marker_time(project_id)
+    return await generate_poster_at_export(
+        user_id, final_video_id, final_filename, section, final_duration, user_marker_time,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Reel card-size poster thumbnail (T5682): the owner-facing My Reels tile needs
 # a small (~480px) image for fast TTFB, but the FULL-SIZE poster
