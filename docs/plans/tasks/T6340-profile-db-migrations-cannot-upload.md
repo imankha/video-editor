@@ -1,4 +1,4 @@
-# T6330: profile_db migrations can NEVER reach R2 - the migration runner destroys its own sync baseline
+# T6340: profile_db migrations can NEVER reach R2 - the migration runner destroys its own sync baseline
 
 **Status:** TODO
 **Impact:** 9
