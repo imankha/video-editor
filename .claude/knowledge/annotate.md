@@ -464,6 +464,36 @@ The full checklist for an 11th→Nth sport:
   stream TTFB 848→626ms. FOREGROUND_PROXY/DIRECT abort + `clearForegroundActive` resume machinery is
   unchanged — a warmed foreground video (game clip ranges / gallery) still starts fast.
 
+## Shared player contract (T6320, post-T5130)
+- **`ProgressTrack` + `PlayheadHandle`** (`src/frontend/src/components/shared/`) are the shared,
+  **store-free** progress-bar primitives. `VideoControls.jsx` (the continuous scrub bar, used by
+  `MediaPlayer` → `DraftTile`/`SharedVideoOverlay`, and directly by `TutorialVideoModal`) and
+  `CollectionPlayer.jsx` (the segmented story-bar, used by `DownloadsPanel`/My Reels,
+  `SharedCollectionView` public viewer, `RankingGame`, and the `collectionplayerdiag` dev harness)
+  both compose them. **Never import a store inside either primitive** — `VideoControls` is
+  transitively pulled into the **landing build** via the `@editor` Vite alias, so a store import
+  there breaks that build.
+- **Parameterize, not converge**: `ProgressTrack` takes full `trackClassName`/`fillClassName`/
+  `trackStyle` strings (not semantic color/height tokens) because the two surfaces' markup
+  genuinely differs (fill positioning/rounding, `overflow-hidden` clipping). Each caller keeps its
+  exact current visual look; this was an explicit design-gate decision, not an oversight — do not
+  "clean up" the two surfaces onto one visual treatment without a fresh gate.
+- **Nesting rule**: `PlayheadHandle` may nest as a `ProgressTrack` child ONLY when that track has no
+  `overflow-hidden` (`VideoControls`). When the track clips (`CollectionPlayer`'s segments), render
+  `PlayheadHandle` as a **sibling** in the same positioned ancestor instead — nesting it inside would
+  clip the ball at a segment boundary instead of letting it overflow (approved: allow overflow,
+  don't clamp).
+- **My Reels' handle is prop-gated**: `CollectionPlayer` takes an optional `handleGlyph` prop and
+  renders `PlayheadHandle` on the **active segment only**, only when present. `DownloadsPanel`
+  resolves it the same way `ProfileSportButton` does — `profiles.find(p => p.id ===
+  currentProfileId)?.sport` → `sportEmoji(sport)` — and passes `undefined` for an unset profile
+  sport (no handle at all). The public share viewer, RankingGame, and the diag harness deliberately
+  never pass this prop, so they render byte-identical to pre-T6320.
+- Characterization tests (`VideoControls.characterization.test.jsx`,
+  `CollectionPlayer.characterization.test.jsx`) pin the byte-identical track/fill/handle markup for
+  both surfaces — keep them green through any future player-polish change; they're the regression
+  guard against the two bars silently drifting apart again.
+
 ## Active/upcoming work
 - ~~**T4220**~~ DONE 2026-07-11 (speed re-index).
 - ~~**T4260**~~ DONE 2026-07-11 (reactive PATCH removed; clears way for T4290 ESLint guardrail).
