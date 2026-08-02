@@ -122,6 +122,11 @@ export function VideoControls({
   chapters,          // [{startTime, title}] — absent or [] = no chapter UI
   onSeekChapter,     // (startTime) => void
   formatTime = formatTimeCompact, // time display formatter; default keeps existing decimal-seconds
+  // Optional sport-ball scrub handle (T5130): a plain emoji string (e.g. '⚽').
+  // Present → the glyph rides the progress in place of the purple dot. Absent →
+  // byte-identical to today's plain purple dot. Stays store-free: consumers
+  // resolve the sport and pass a plain string (the landing build reuses this).
+  handleGlyph,
 }) {
   const videoProgress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const timelineRef = useRef(null);
@@ -237,6 +242,7 @@ export function VideoControls({
       {/* Scrub bar */}
       <div
         ref={timelineRef}
+        data-testid="scrub-timeline"
         className="relative w-full cursor-pointer z-10"
         style={{ paddingTop: IS_COARSE ? 20 : 8, paddingBottom: IS_COARSE ? 14 : 8 }}
         onMouseDown={handleMouseDown}
@@ -264,15 +270,35 @@ export function VideoControls({
             style={{ width: `${progress}%` }}
           />
 
-          {/* Scrub dot — always visible like YouTube */}
-          <div
-            className="absolute top-1/2 -translate-y-1/2 rounded-full bg-purple-500 transition-all duration-100"
-            style={{
-              width: IS_COARSE ? 20 : (active ? 14 : 12),
-              height: IS_COARSE ? 20 : (active ? 14 : 12),
-              left: `calc(${progress}% - ${IS_COARSE ? 10 : (active ? 7 : 6)}px)`,
-            }}
-          />
+          {/* Scrub handle — always visible like YouTube. With a sport glyph
+              (T5130) the ball rides the progress; without one it's the plain
+              purple dot (byte-identical to before). Both centre on the track via
+              top-1/2 -translate-y-1/2 and are pointer-transparent so the timeline
+              container still owns drag-to-seek. */}
+          {handleGlyph ? (
+            <div
+              className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center leading-none pointer-events-none select-none transition-all duration-100"
+              style={{
+                fontSize: IS_COARSE ? 20 : (active ? 16 : 14),
+                width: IS_COARSE ? 22 : (active ? 18 : 16),
+                height: IS_COARSE ? 22 : (active ? 18 : 16),
+                left: `calc(${progress}% - ${IS_COARSE ? 11 : (active ? 9 : 8)}px)`,
+              }}
+              aria-hidden="true"
+              data-testid="scrub-handle-glyph"
+            >
+              {handleGlyph}
+            </div>
+          ) : (
+            <div
+              className="absolute top-1/2 -translate-y-1/2 rounded-full bg-purple-500 transition-all duration-100"
+              style={{
+                width: IS_COARSE ? 20 : (active ? 14 : 12),
+                height: IS_COARSE ? 20 : (active ? 14 : 12),
+                left: `calc(${progress}% - ${IS_COARSE ? 10 : (active ? 7 : 6)}px)`,
+              }}
+            />
+          )}
 
           {/* Chapter tick marks (only when chapters present) */}
           {chapters?.length > 0 && chapters.map((ch, i) => (

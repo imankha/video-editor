@@ -83,6 +83,11 @@ class ShareDetailResponse(BaseModel):
     video_poster_height: int | None = None
     is_public: bool
     shared_at: Union[str, datetime]
+    # T5130: the publishing profile's sport, frozen onto the share row at
+    # creation time (shares.sharer_default_sport, v018/T2915). Lets the public
+    # viewer render the sport-ball scrub handle without a live cross-user read.
+    # None for a sharer whose sport is unknown -> the viewer keeps the plain dot.
+    sport: str | None = None
 
 
 class ShareListItem(BaseModel):
@@ -513,6 +518,7 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
         video_poster_height=poster_h,
         is_public=bool(share["is_public"]),
         shared_at=share["shared_at"],
+        sport=share["sharer_default_sport"],
     )
 
 

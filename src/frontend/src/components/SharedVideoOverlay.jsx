@@ -102,6 +102,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
             autoPlay={!showEndCard}
             onClose={onClose}
             onEnded={() => setShowEndCard(true)}
+            sport={share.sport}
           />
           <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
         </div>

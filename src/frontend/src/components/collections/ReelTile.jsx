@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { RATIO } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
+import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 
 /**
  * ReelTile - a PUBLISHED reel as a poster tile (T5673).
@@ -21,19 +22,38 @@ import { REEL } from '../../config/themeColors';
  * row share an aspect — heights stay consistent within a row.
  *
  * View-only: every action is a handler passed down from DownloadsPanel; this tile
- * owns only ephemeral UI state (poster load, kebab open, inline rename, long-press).
+ * owns only ephemeral UI state (poster load, kebab open, inline rename).
+ *
+ * Persistent actions (T6300): a hover-gated cluster made every action — including
+ * the kebab — invisible until the tile was hovered, and `isMobile` (a UA sniff from
+ * useWebShare) misdetected touch-Windows as desktop, wiring long-press (the
+ * hover replacement) only for "mobile" -> a functional dead end on that hardware.
+ * Fixed by splitting into two independently-placed, ALWAYS-MOUNTED chips: a
+ * persistent Play (bottom-left, never hover-gated - a published reel's natural
+ * primary) and a corner kebab (top-right, DraftTile's exact visibility formula:
+ * hover/focus-revealed on fine pointers, always opacity-100 on coarse pointers via
+ * the live useIsCoarsePointer() matchMedia - no long-press, no dead end). The
+ * inline Copy/Share chip is absorbed into the kebab per the T6180 house rule
+ * "main button + kebab for the rest" — BOTH Share and Copy Link now live in
+ * BOTH menu shells (the desktop popover already listed both; the mobile sheet
+ * previously only got Web Share via the removed inline chip, so a "Share" item
+ * was added there too — dropping it would have silently removed native-share
+ * reachability on touch). Since both items are always listed, the `isMobile`
+ * prop this component used to take (for the Share-vs-Copy-link choice) is no
+ * longer needed and was dropped, along with DownloadsPanel's now-dead
+ * `useWebShare().isMobile` read that only fed it.
  *
  * Kebab menu (T5673 redesign): rendered via createPortal to document.body, fixed-
  * position anchored to button rect, flips upward when near viewport bottom. Desktop
  * renders w-48 right-aligned popover with icons + full labels, groups + separators.
- * Coarse pointers (mobile) open bottom action sheet instead (existing pattern).
+ * Coarse pointers open a bottom action sheet instead (existing pattern) - now
+ * selected by isCoarsePointer, not the isMobile UA sniff.
  */
 export function ReelTile({
   download,
   posterUrl,
   isUnwatched,
   unwatchedStyle,
-  isMobile,
   displayName,
   metaLine,
   // actions (all take the download, wired in the panel)
@@ -58,14 +78,15 @@ export function ReelTile({
   // 'error' -> branded fallback (the endpoint 404s when no poster exists).
   const [posterState, setPosterState] = useState('loading');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [actionsRevealed, setActionsRevealed] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [menuPos, setMenuPos] = useState(null); // {top, left, flipped} for portal
   const menuRef = useRef(null);
   const kebabBtnRef = useRef(null);
-  const longPressTimer = useRef(null);
-  const longPressFired = useRef(false);
+  // T6300: reveal/interaction gate is CAPABILITY (pointer type), not the isMobile
+  // UA-sniff prop — a live matchMedia so a touch-Windows device is correctly
+  // detected as coarse instead of falling into the (dead-end) desktop hover path.
+  const isCoarsePointer = useIsCoarsePointer();
 
   const isLandscape = download.aspect_ratio === RATIO.LANDSCAPE;
   // Landscape tiles are wider + shorter; portrait match DraftTile's footprint.
@@ -122,30 +143,12 @@ export function ReelTile({
     setIsRenaming(false);
   };
 
-  // Mobile reveals actions on long-press; desktop on hover (group-hover/tile).
-  const handleTouchStart = () => {
-    longPressFired.current = false;
-    longPressTimer.current = setTimeout(() => {
-      longPressTimer.current = null;
-      longPressFired.current = true;
-      setActionsRevealed(true);
-    }, 500);
-  };
-  const clearLongPress = () => {
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-  };
-  const actionsVisibility = isMobile
-    ? (actionsRevealed ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')
-    : 'opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto';
   const actionBtnClass = 'inline-flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] min-h-[32px] min-w-[32px]';
   const menuItemClass = 'w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50';
 
   return (
     <div
       data-testid="reel-card"
-      onTouchStart={isMobile ? handleTouchStart : undefined}
-      onTouchMove={isMobile ? clearLongPress : undefined}
-      onTouchEnd={isMobile ? clearLongPress : undefined}
       className={`group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150
         hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:ring-2 hover:ring-cyan-400/60 ${sizeClass} ${
         isUnwatched ? unwatchedStyle.border : `border-gray-700 hover:border-cyan-400`
@@ -172,9 +175,10 @@ export function ReelTile({
         </div>
       )}
 
-      {/* Unwatched (NEW) dot */}
+      {/* Unwatched (NEW) dot — shifted left of the persistent kebab (T6300) so the
+          two top-right occupants stack instead of overlapping (design doc §2.2). */}
       {isUnwatched && (
-        <span className={`absolute top-1.5 right-1.5 z-20 w-3 h-3 rounded-full ${unwatchedStyle.dot} ring-2 ring-black/40`} title="New" />
+        <span className={`absolute top-2.5 right-11 z-20 w-3 h-3 rounded-full ${unwatchedStyle.dot} ring-2 ring-black/40`} title="New" />
       )}
 
       {/* Top Play rank badge (T5679) */}
@@ -212,31 +216,42 @@ export function ReelTile({
         )}
       </div>
 
-      {/* Actions — play + share direct; kebab for overflow. Hover (desktop) / long-press (mobile). */}
-      <div className={`absolute top-1.5 left-1.5 z-30 flex items-center gap-1 transition-opacity ${actionsVisibility}`}>
-        <button type="button" onClick={(e) => onPlay(e, download)} title="Play video" aria-label="Play video" className={actionBtnClass}>
+      {/* Persistent primary — Play. Always visible, never hover-gated (T6300):
+          discovering that a reel HAS actions must not require hovering it. */}
+      {!isRenaming && (
+        <button
+          type="button"
+          onClick={(e) => onPlay(e, download)}
+          title="Play video"
+          aria-label="Play video"
+          className={`absolute bottom-1.5 left-1.5 z-30 ${actionBtnClass}`}
+        >
           <Play size={16} className={REEL.accent} />
         </button>
-        {isMobile ? (
-          <button type="button" onClick={(e) => onWebShare(e, download)} title="Share video" aria-label="Share video" className={actionBtnClass}>
-            <Share2 size={16} />
-          </button>
-        ) : (
-          <button type="button" onClick={(e) => onCopyLink(e, download)} title="Copy link" aria-label="Copy link" className={actionBtnClass}>
-            <Link2 size={16} />
-          </button>
-        )}
-        <button
-          ref={kebabBtnRef}
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
-          title="More actions"
-          aria-label="More actions"
-          className={actionBtnClass}
-        >
-          <MoreVertical size={16} />
-        </button>
-        {menuOpen && isMobile ? (
+      )}
+
+      {/* Overflow kebab — corner-anchored, always mounted. Copies DraftTile's
+          visibility formula exactly (T6300): persistent on coarse pointers (fixes
+          the touch-Windows dead end — no hover, no long-press needed), hover/
+          focus-revealed on fine pointers but in a fixed discoverable corner. Copy
+          link / Share (previously an inline chip) now live in this menu. */}
+      <button
+        ref={kebabBtnRef}
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+        title="More actions"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className={`absolute top-1.5 right-1.5 z-40 ${actionBtnClass} transition-opacity ${
+          isCoarsePointer
+            ? 'opacity-100'
+            : 'opacity-0 group-hover/tile:opacity-100 focus:opacity-100'
+        } ${menuOpen ? 'opacity-100' : ''}`}
+      >
+        <MoreVertical size={16} />
+      </button>
+      {menuOpen && isCoarsePointer ? (
           <div ref={menuRef} className="fixed inset-0 z-50 flex flex-col">
             <div className="flex-1 bg-black/40" onClick={() => setMenuOpen(false)} />
             <div className="bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto">
@@ -249,6 +264,13 @@ export function ReelTile({
                     ? <Loader size={20} className="text-gray-400 animate-spin flex-shrink-0" />
                     : <Download size={20} className="text-gray-300 flex-shrink-0" />}
                   <span className="text-gray-200">Download</span>
+                </button>
+                {/* T6300: the removed inline chip was the only mobile path to
+                    onWebShare (native share sheet) — restored here so coarse
+                    pointers keep that capability, not just Copy Link. */}
+                <button onClick={(e) => { onWebShare(e, download); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
+                  <Share2 size={20} className="text-gray-300 flex-shrink-0" />
+                  <span className="text-gray-200">Share</span>
                 </button>
                 <button onClick={(e) => { onCopyLink(e, download); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
                   <Link2 size={20} className="text-gray-300 flex-shrink-0" />
@@ -351,7 +373,6 @@ export function ReelTile({
             document.body
           )
         ) : null}
-      </div>
     </div>
   );
 }

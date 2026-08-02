@@ -3,6 +3,7 @@ import { Play } from 'lucide-react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { VideoControls } from './shared/VideoControls';
 import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
+import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
  * MediaPlayer - Video player with built-in controls
@@ -22,7 +23,12 @@ import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
  * @param {Function} props.onClose - Callback when Escape is pressed
  * @param {Function=} props.onEnded - Callback when video playback ends
  */
-export function MediaPlayer({ src, autoPlay = true, onClose, onEnded }) {
+export function MediaPlayer({ src, autoPlay = true, onClose, onEnded, sport }) {
+  // T5130: resolve the sport-ball scrub handle from the publishing profile's
+  // sport. A KNOWN sport (incl. a custom "Other" → 🏅) gets its glyph; a
+  // genuinely-unknown sport stays undefined → VideoControls renders the plain
+  // purple dot (no soccer fabrication — CLAUDE.md no-silent-fallback rule).
+  const handleGlyph = sport ? sportEmoji(sport) : undefined;
   const containerRef = useRef(null);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -212,6 +218,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose, onEnded }) {
         visible={showControls}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        handleGlyph={handleGlyph}
       />
 
       {/* Big Play Button (when paused and loaded) */}
