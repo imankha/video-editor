@@ -7,7 +7,6 @@ import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
-import { consumePendingRecap } from '../utils/pendingNavigation';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
 import { compareGameTime } from '../utils/timeFormat';
@@ -28,6 +27,7 @@ import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProfileStore } from '../stores/profileStore';
 import {
+  consumePendingRecap,
   setPendingGameReference,
   peekPendingGameReference,
   consumePendingGameReference,

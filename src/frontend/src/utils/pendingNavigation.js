@@ -85,6 +85,8 @@ export function consumePendingRecap() {
   if (gameId == null) return null;
   sessionStorage.removeItem(RECAP_GAME_ID_KEY);
   return parseInt(gameId);
+}
+
 // --- Cross-profile game reference (T5820) ---
 //
 // A reference game card in one profile's Games tab points at the REAL game owned
