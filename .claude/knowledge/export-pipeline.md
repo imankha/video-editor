@@ -293,6 +293,42 @@ graph LR
 - Editor post-video "settle" (`videoReady→settled` ~1.5s in framing AND overlay) is a **main-thread JS
   gap** (no request in flight) = crop/highlight/canvas hydration, not latency (T4774).
 
+## Video-failure diagnostics (T6330, 2026-08-01)
+- **Every video/poster-serving FAILURE logs ONE structured line** so "missing" vs "denied" vs
+  "expired" is triaged from logs alone -- no manual R2 archaeology (read `blake3_hash`, probe R2
+  across prefixes, re-request with a fresh session). Motivating incident: a game video 401'd on a
+  cloned account; confirming the object was actually present took three manual steps because **the
+  backend never recorded the key it resolved.**
+- **Shared helper `storage.log_video_resolution(log, *, kind, outcome, key, entity_id, user_id,
+  profile_id, blake3_hash, head_found, reason, bucket)`** (storage.py) formats + emits the line
+  `[VIDEO_RESOLVE] kind=… outcome=… entity_id=… user_id=… profile_id=… blake3_hash=… bucket=…
+  key=… head_found=… reason=…`. `outcome` is `VideoServeOutcome` (`redirect_302` | `missing` |
+  `denied` | `expired`). **Level: DEBUG for `redirect_302` (success -- never INFO on a hot path),
+  WARNING for the three failure outcomes.** `storage.video_outcome_for_status(status)` maps an
+  upstream R2 status (401/403→denied, 410→expired, else→missing) for the proxy paths.
+- **Log the KEY, NEVER the presigned URL** — it embeds short-lived credentials, worthless AND
+  unsafe in a log. `log_video_resolution` redacts any credential-bearing value slipped into `key`
+  (a scheme, `X-Amz-`, or `?` → `<redacted_url>`; a real R2 key contains none of these).
+- **Env-prefix asymmetry is printed, not templated** (the whole point): game sources are
+  env-prefix-FREE `games/{blake3}.mp4` (global namespace; `_game_video_r2_key`/`get_game_video_url`),
+  while per-user media (reel/working videos, posters) is env-prefixed
+  `{env}/users/{uid}/profiles/{pid}/…` via `r2_key`. Print the REAL key so a reader never guesses.
+- **Failure-path HEAD is the classifier, and ONLY on failure** (T2880/T3380 keep presign off the
+  hot path -- do NOT add a HEAD to a success path). Game/clip video: `games.log_game_video_failure`
+  does one HEAD (`r2_head_object_global` global / `file_exists_in_r2` old per-user) → object present
+  ⇒ `denied` (a session/serve problem, NOT absence); absent + `_is_game_storage_expired` ⇒
+  `expired`; absent otherwise ⇒ `missing`. The R2-fetch proxies (download_file, stream_download,
+  stream_working_video, poster proxies) already observe R2's status, so they classify via
+  `video_outcome_for_status` with no extra HEAD.
+- **Diagnostics ONLY — no new fallback behavior.** A missing object still fails loudly (404); we
+  never substitute a placeholder and never mutate the row to hide the miss (CLAUDE.md § no silent
+  fallbacks). Call sites: `games.py` (get_game_video 302 + DEBUG success line, get_game_playback_url,
+  get_game_poster), `clips.py` (get_clip_playback_url), `downloads.py` (download_file,
+  stream_download, _serve_reel_poster_jpeg), `projects.py` (stream_working_video,
+  get_working_video_playback_url — the T6130 dangling-ref WARNING now rides this helper). Tests:
+  `test_t6330_video_failure_diagnostics.py` (pins log OUTPUT per outcome, credential absence, and the
+  success path's no-INFO/no-HEAD contract).
+
 ## Active/upcoming work
 - **T5710 — per-layer recaps (2026-08-01):** the single combined recap is replaced by two
   independently-stitched, layer-filtered recaps. `_get_annotated_clips(conn, game_id, layer)`

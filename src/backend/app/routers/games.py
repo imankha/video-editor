@@ -36,11 +36,15 @@ from app.services.auth_db import (
 from app.services.credit_ledger import CreditsUnavailable, deduct_credits
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
 from app.storage import (
+    R2_ENABLED,
+    VideoServeOutcome,
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
     get_r2_client,
+    log_video_resolution,
     r2_head_object_global,
+    r2_key,
 )
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
@@ -1708,6 +1712,17 @@ async def get_game_video(game_id: int):
         row = cursor.fetchone()
 
         if not row:
+            # No hash/key to probe -- the game record itself is gone.
+            log_video_resolution(
+                logger,
+                kind="game_video",
+                outcome=VideoServeOutcome.MISSING,
+                key=None,
+                entity_id=game_id,
+                user_id=get_current_user_id(),
+                profile_id=get_current_profile_id(),
+                reason="game_row_not_found",
+            )
             raise HTTPException(status_code=404, detail="Game not found")
 
         # Update last_accessed_at (local + global)
@@ -1720,7 +1735,28 @@ async def get_game_video(game_id: int):
         # Support both new (blake3_hash) and old (video_filename) storage
         presigned_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
         if presigned_url:
+            # Success: record the RESOLVED key at DEBUG (never INFO -- this is a
+            # hot path) so a later client-side 401/404 can be tied to the exact
+            # key without a HEAD here. NO failure-path HEAD on success (T2880).
+            log_video_resolution(
+                logger,
+                kind="game_video",
+                outcome=VideoServeOutcome.REDIRECT_302,
+                key=_game_video_r2_key(row['blake3_hash'], row['video_filename']),
+                entity_id=game_id,
+                user_id=get_current_user_id(),
+                profile_id=get_current_profile_id(),
+                blake3_hash=row['blake3_hash'],
+            )
             return RedirectResponse(url=presigned_url, status_code=302)
+        log_game_video_failure(
+            cursor,
+            game_id=game_id,
+            blake3_hash=row['blake3_hash'],
+            video_filename=row['video_filename'],
+            kind="game_video",
+            reason="presign_unavailable",
+        )
         raise HTTPException(status_code=404, detail="Video not available")
 
 
@@ -1875,6 +1911,67 @@ def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
         # possibly-gone video), and log; never silently report "not expired".
         logger.error(f"[games] Unparseable storage_expires_at {expires_at_val!r} for {blake3_hash}: {e}. Treating as EXPIRED.")
         return True
+
+
+def _game_video_r2_key(blake3_hash: str | None, video_filename: str | None) -> str | None:
+    """The fully-qualified R2 key the code resolves for a game source video.
+
+    New storage is the env-prefix-FREE global scheme `games/{blake3}.mp4`; old
+    (pre-T80) storage is env-prefixed per-user `{env}/users/{uid}/profiles/{pid}/
+    games/{filename}`. Printing the REAL key (not a template) is the whole point
+    of T6330 -- that asymmetry is why "where did the code look?" is non-obvious.
+    """
+    if blake3_hash:
+        return f"games/{blake3_hash}.mp4"
+    if video_filename:
+        return r2_key(get_current_user_id(), f"games/{video_filename}")
+    return None
+
+
+def log_game_video_failure(
+    cursor,
+    *,
+    game_id: int,
+    blake3_hash: str | None,
+    video_filename: str | None,
+    kind: str,
+    reason: str,
+) -> None:
+    """Log ONE triage line for a game-video/clip serving FAILURE (T6330).
+
+    Does at most ONE failure-path HEAD (never on the success path) to record
+    whether the object is actually where the code looked, then classifies:
+    object present -> denied (a session/serve problem, NOT missing); absent +
+    storage expired/swept -> expired; absent otherwise -> missing.
+    """
+    key = _game_video_r2_key(blake3_hash, video_filename)
+    head_found: bool | None = None
+    outcome = VideoServeOutcome.MISSING
+
+    if R2_ENABLED and key is not None:
+        if blake3_hash:
+            head_found = r2_head_object_global(key) is not None
+        else:
+            head_found = file_exists_in_r2(get_current_user_id(), f"games/{video_filename}")
+        if head_found:
+            # The object IS where we looked -- so the request did not fail for
+            # absence. Do not claim "missing" (that would resume the archaeology).
+            outcome = VideoServeOutcome.DENIED
+        elif _is_game_storage_expired(cursor, blake3_hash):
+            outcome = VideoServeOutcome.EXPIRED
+
+    log_video_resolution(
+        logger,
+        kind=kind,
+        outcome=outcome,
+        key=key,
+        entity_id=game_id,
+        user_id=get_current_user_id(),
+        profile_id=get_current_profile_id(),
+        blake3_hash=blake3_hash,
+        head_found=head_found,
+        reason=reason,
+    )
 
 
 class ShareGameRequest(BaseModel):
@@ -2331,12 +2428,28 @@ async def get_game_playback_url(game_id: int):
         row = cursor.fetchone()
 
     if not row:
+        log_video_resolution(
+            logger, kind="game_video", outcome=VideoServeOutcome.MISSING, key=None,
+            entity_id=game_id, user_id=get_current_user_id(),
+            profile_id=get_current_profile_id(), reason="game_row_not_found",
+        )
         raise HTTPException(404, "Game not found")
     if not row['blake3_hash']:
+        log_video_resolution(
+            logger, kind="game_video", outcome=VideoServeOutcome.MISSING, key=None,
+            entity_id=game_id, user_id=get_current_user_id(),
+            profile_id=get_current_profile_id(), reason="no_blake3_hash",
+        )
         raise HTTPException(422, "Game video missing blake3 hash")
 
     url = get_game_video_url(row['blake3_hash'], row['video_filename'])
     if not url:
+        with get_db_connection() as _conn:
+            log_game_video_failure(
+                _conn.cursor(), game_id=game_id, blake3_hash=row['blake3_hash'],
+                video_filename=row['video_filename'], kind="game_video",
+                reason="presign_unavailable",
+            )
         raise HTTPException(502, "Failed to generate R2 URL")
 
     return {
@@ -2730,7 +2843,7 @@ async def get_game_poster(game_id: int, request: Request):
         ensure_recap_poster,
         recap_card_poster_r2_key,
     )
-    from app.storage import APP_ENV, r2_head_object_global
+    from app.storage import APP_ENV, r2_head_object_global, video_outcome_for_status
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
@@ -2764,6 +2877,11 @@ async def get_game_poster(game_id: int, request: Request):
         recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
         # Ensure card-size poster exists (generate on first request if recap exists).
         if not ensure_recap_poster(recap_key, card_poster_key, resize_width=480, jpeg_quality=3):
+            log_video_resolution(
+                logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
+                key=card_poster_key, entity_id=game_id, user_id=user_id,
+                profile_id=profile_id, reason="recap_poster_unavailable",
+            )
             # T5682: negative cache on 404s (60s)
             return Response(
                 status_code=404,
@@ -2776,6 +2894,11 @@ async def get_game_poster(game_id: int, request: Request):
         # card size (T5682) to the SAME card key so the serving path below is
         # identical. An expired/reclaimed source (no live video) -> False -> 404.
         if not ensure_game_source_poster(user_id, profile_id, game_id):
+            log_video_resolution(
+                logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
+                key=card_poster_key, entity_id=game_id, user_id=user_id,
+                profile_id=profile_id, reason="source_poster_unavailable",
+            )
             # T5682: negative cache on 404s (60s)
             return Response(
                 status_code=404,
@@ -2805,6 +2928,12 @@ async def get_game_poster(game_id: int, request: Request):
     from app.storage import get_poster_r2_client
     resp = await get_poster_r2_client().get(url)
     if resp.status_code != 200:
+        log_video_resolution(
+            logger, kind="game_poster",
+            outcome=video_outcome_for_status(resp.status_code),
+            key=card_poster_key, entity_id=game_id, user_id=user_id,
+            profile_id=profile_id, reason=f"r2_status_{resp.status_code}",
+        )
         raise HTTPException(status_code=502, detail="Poster fetch failed")
 
     # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
