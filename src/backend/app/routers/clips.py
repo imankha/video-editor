@@ -1918,13 +1918,14 @@ def get_clip_playback_url(project_id: int, clip_id: int):
     the playback-gating request from the HAR — keeping it off the loop lets it
     overlap the sibling list requests instead of queueing behind them.
     """
-    from app.routers.games import get_game_video_url
+    from app.routers.games import get_game_video_url, log_game_video_failure
+    from app.storage import VideoServeOutcome, log_video_resolution
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
-                rc.start_time, rc.end_time,
+                rc.start_time, rc.end_time, rc.game_id,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename,
                 COALESCE(gv.video_size, g.video_size) AS video_size
@@ -1938,14 +1939,29 @@ def get_clip_playback_url(project_id: int, clip_id: int):
         """, (clip_id, project_id))
         row = cursor.fetchone()
 
-    if not row:
-        raise HTTPException(404, "Clip not found")
-    if not row['blake3_hash']:
-        raise HTTPException(422, "Game video missing blake3 hash")
+        if not row:
+            log_video_resolution(
+                logger, kind="clip_video", outcome=VideoServeOutcome.MISSING,
+                key=None, entity_id=clip_id, user_id=get_current_user_id(),
+                reason="clip_row_not_found",
+            )
+            raise HTTPException(404, "Clip not found")
+        if not row['blake3_hash']:
+            log_video_resolution(
+                logger, kind="clip_video", outcome=VideoServeOutcome.MISSING,
+                key=None, entity_id=clip_id, user_id=get_current_user_id(),
+                reason="no_blake3_hash",
+            )
+            raise HTTPException(422, "Game video missing blake3 hash")
 
-    url = get_game_video_url(row['blake3_hash'], row['video_filename'])
-    if not url:
-        raise HTTPException(502, "Failed to generate R2 URL")
+        url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+        if not url:
+            log_game_video_failure(
+                cursor, game_id=row['game_id'], blake3_hash=row['blake3_hash'],
+                video_filename=row['video_filename'], kind="clip_video",
+                reason="presign_unavailable",
+            )
+            raise HTTPException(502, "Failed to generate R2 URL")
 
     return {
         "url": url,

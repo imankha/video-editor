@@ -32,16 +32,26 @@ from app.services.poster import generate_poster_at_publish, poster_basename, pos
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
     R2_ENABLED,
+    VideoServeOutcome,
     copy_profile_object,
     delete_profile_object,
     file_exists_in_r2,
     generate_presigned_url,
+    log_video_resolution,
     profile_object_exists,
+    r2_key,
+    video_outcome_for_status,
 )
 from app.user_context import get_current_req_id, get_current_user_id
 from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
+
+
+def _reel_video_r2_key(filename: str) -> str:
+    """Fully-qualified (env-prefixed, per-user) R2 key for a final/reel video --
+    the key that would be probed by hand during triage (T6330)."""
+    return r2_key(get_current_user_id(), f"final_videos/{filename}")
 
 
 def get_download_file_url(filename: str, verify_exists: bool = False) -> str | None:
@@ -651,6 +661,15 @@ async def download_file(download_id: int):
                 logger.error(
                     f"[Download] R2 presigned URL failed for: {row['filename']}"
                 )
+                # verify_exists=True already HEAD-probed the object -> a None here
+                # with R2 on means the object is absent (head_found=false).
+                log_video_resolution(
+                    logger, kind="reel_video", outcome=VideoServeOutcome.MISSING,
+                    key=_reel_video_r2_key(row['filename']), entity_id=download_id,
+                    user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+                    head_found=(False if R2_ENABLED else None),
+                    reason="presign_verify_failed",
+                )
                 raise HTTPException(status_code=404, detail="Video file not found in storage")
 
             logger.info("[Download] Streaming from R2 with branded outro")
@@ -665,6 +684,14 @@ async def download_file(download_id: int):
                         timeout=httpx.Timeout(120.0, connect=10.0)
                     ) as client, client.stream("GET", presigned_url) as response:
                         if response.status_code != 200:
+                            log_video_resolution(
+                                logger, kind="reel_video",
+                                outcome=video_outcome_for_status(response.status_code),
+                                key=_reel_video_r2_key(row['filename']),
+                                entity_id=download_id, user_id=get_current_user_id(),
+                                profile_id=get_current_profile_id(),
+                                reason=f"r2_status_{response.status_code}",
+                            )
                             raise HTTPException(
                                 status_code=response.status_code,
                                 detail=f"R2 returned {response.status_code}",
@@ -771,10 +798,21 @@ async def stream_download(download_id: int, request: Request):
         cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
         row = cursor.fetchone()
     if not row or not row['filename']:
+        log_video_resolution(
+            logger, kind="reel_video", outcome=VideoServeOutcome.MISSING, key=None,
+            entity_id=download_id, user_id=get_current_user_id(),
+            profile_id=get_current_profile_id(), reason="reel_row_not_found",
+        )
         raise HTTPException(status_code=404, detail="Download not found")
 
     presigned_url = get_download_file_url(row['filename'])
     if not presigned_url:
+        log_video_resolution(
+            logger, kind="reel_video", outcome=VideoServeOutcome.MISSING,
+            key=_reel_video_r2_key(row['filename']), entity_id=download_id,
+            user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+            reason="presign_unavailable",
+        )
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
     client = _get_r2_stream_client()
@@ -786,6 +824,13 @@ async def stream_download(download_id: int, request: Request):
     if request.method == "HEAD":
         probe = await client.get(presigned_url, headers={"Range": "bytes=0-0"})
         if probe.status_code not in (200, 206):
+            log_video_resolution(
+                logger, kind="reel_video",
+                outcome=video_outcome_for_status(probe.status_code),
+                key=_reel_video_r2_key(row['filename']), entity_id=download_id,
+                user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+                reason=f"r2_head_status_{probe.status_code}",
+            )
             raise HTTPException(status_code=probe.status_code, detail=f"R2 probe returned {probe.status_code}")
         headers = dict(base_headers)
         cr = probe.headers.get("content-range")
@@ -802,6 +847,13 @@ async def stream_download(download_id: int, request: Request):
     )
     if r2.status_code not in (200, 206):
         await r2.aclose()
+        log_video_resolution(
+            logger, kind="reel_video",
+            outcome=video_outcome_for_status(r2.status_code),
+            key=_reel_video_r2_key(row['filename']), entity_id=download_id,
+            user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+            reason=f"r2_status_{r2.status_code}",
+        )
         raise HTTPException(status_code=r2.status_code, detail=f"R2 returned {r2.status_code}")
 
     headers = dict(base_headers)
@@ -953,9 +1005,20 @@ async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = Non
         user_id, rel_path, expires_in=3600, content_type="image/jpeg"
     )
     if not url:
+        log_video_resolution(
+            logger, kind="reel_poster", outcome=VideoServeOutcome.MISSING,
+            key=r2_key(user_id, rel_path), user_id=user_id,
+            profile_id=get_current_profile_id(), reason="presign_unavailable",
+        )
         raise HTTPException(status_code=404, detail="No poster for this reel")
     resp = await get_poster_r2_client().get(url)
     if resp.status_code != 200:
+        log_video_resolution(
+            logger, kind="reel_poster",
+            outcome=video_outcome_for_status(resp.status_code),
+            key=r2_key(user_id, rel_path), user_id=user_id,
+            profile_id=get_current_profile_id(), reason=f"r2_status_{resp.status_code}",
+        )
         raise HTTPException(status_code=502, detail="Poster fetch failed")
 
     # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.

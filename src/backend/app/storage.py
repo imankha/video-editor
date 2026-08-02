@@ -1747,6 +1747,136 @@ def r2_global_key(path: str) -> str:
     return f"{APP_ENV}/{path}"
 
 
+# ============================================================================
+# Video-serving failure diagnostics (T6330)
+# ============================================================================
+# A video that won't load used to take three manual steps to triage (read the
+# game's blake3_hash out of the profile DB, probe R2 across candidate prefixes,
+# re-request with a fresh session) because the backend NEVER recorded the key it
+# resolved. `log_video_resolution` emits ONE structured line on every
+# video/poster serving FAILURE so "missing" vs "denied" vs "expired" is one
+# glance in the logs -- no R2 archaeology. See export-pipeline.md § Video-failure
+# diagnostics.
+
+
+class VideoServeOutcome(str, Enum):
+    """Resolved outcome of a video/poster serving attempt (T6330).
+
+    The three FAILURE outcomes must be distinguishable from logs alone:
+    - MISSING: the object is absent from R2 (a failure-path HEAD/GET saw 404).
+    - DENIED: an auth/session check rejected the request (401/403) -- no key
+      probe needed; the object's presence is irrelevant.
+    - EXPIRED: the source was reclaimed/swept (an expiry state caused refusal),
+      which must NOT be reported as a bare 404.
+    REDIRECT_302 is the SUCCESS outcome (presign issued / object served) and is
+    logged at DEBUG only -- never INFO on a hot path.
+    """
+
+    REDIRECT_302 = "redirect_302"
+    MISSING = "missing"
+    DENIED = "denied"
+    EXPIRED = "expired"
+
+
+def video_outcome_for_status(status: int) -> "VideoServeOutcome":
+    """Map an upstream R2/HTTP status observed on a serving FAILURE to a triage
+    outcome (T6330). 401/403 -> denied; 410 Gone -> expired; everything else
+    non-2xx (incl. 404) -> missing.
+    """
+    if status in (401, 403):
+        return VideoServeOutcome.DENIED
+    if status == 410:
+        return VideoServeOutcome.EXPIRED
+    return VideoServeOutcome.MISSING
+
+
+def _redact_if_credential_bearing(key: str | None) -> str | None:
+    """Guard: never let a presigned URL (which embeds short-lived credentials)
+    reach a log line. A legitimate R2 KEY never contains a scheme, an AWS
+    signature parameter, or a query string, so any of those markers means a
+    caller mistakenly passed a URL -- redact it rather than leak it.
+    """
+    if key is None:
+        return None
+    k = str(key)
+    low = k.lower()
+    if "://" in k or "x-amz-" in low or "?" in k:
+        return "<redacted_url>"
+    return k
+
+
+def log_video_resolution(
+    log: logging.Logger,
+    *,
+    kind: str,
+    outcome: "VideoServeOutcome | str",
+    key: str | None = None,
+    entity_id=None,
+    user_id: str | None = None,
+    profile_id: str | None = None,
+    blake3_hash: str | None = None,
+    head_found: bool | None = None,
+    reason: str | None = None,
+    bucket: str | None = None,
+) -> str:
+    """Emit ONE line describing where a video/poster request looked and why it
+    failed, so a future incident is triaged from logs alone (T6330).
+
+    Level: DEBUG for the success outcome (REDIRECT_302) -- success on a hot path
+    must never be per-request INFO noise -- and WARNING for every FAILURE
+    outcome (missing/denied/expired).
+
+    NEVER pass a presigned URL: this logs the fully-qualified R2 KEY only (a URL
+    embeds credentials and is short-lived, so it is worthless AND unsafe in a
+    log). A credential-bearing value slipped into `key` is redacted.
+
+    Returns the formatted line (for the caller / tests).
+
+    Args:
+        kind: which surface (e.g. "game_video", "reel_video", "working_video",
+            "game_poster", "reel_poster").
+        outcome: a VideoServeOutcome.
+        key: the fully-qualified R2 key that was probed/resolved (env-prefix-FREE
+            `games/{blake3}.mp4` for game sources; env-prefixed
+            `{env}/users/{uid}/profiles/{pid}/...` for per-user media). Pass the
+            REAL key, not a template -- that asymmetry is exactly what makes
+            "where did the code look?" non-obvious to a reader.
+        head_found: whether a failure-path HEAD found the object (missing vs not).
+        reason: which check rejected the request (e.g. "no_blake3_hash",
+            "r2_status_403").
+    """
+    outcome_val = (
+        outcome.value if isinstance(outcome, VideoServeOutcome) else str(outcome)
+    )
+
+    parts = [
+        "[VIDEO_RESOLVE]",
+        f"kind={kind}",
+        f"outcome={outcome_val}",
+    ]
+    if entity_id is not None:
+        parts.append(f"entity_id={entity_id}")
+    if user_id is not None:
+        parts.append(f"user_id={user_id}")
+    if profile_id is not None:
+        parts.append(f"profile_id={profile_id}")
+    if blake3_hash is not None:
+        parts.append(f"blake3_hash={blake3_hash}")
+    parts.append(f"bucket={bucket if bucket is not None else R2_BUCKET}")
+    parts.append(f"key={_redact_if_credential_bearing(key) or '-'}")
+    if head_found is not None:
+        parts.append(f"head_found={'true' if head_found else 'false'}")
+    if reason:
+        parts.append(f"reason={reason}")
+
+    line = " ".join(parts)
+    if outcome_val == VideoServeOutcome.REDIRECT_302.value:
+        log.debug(line)
+    else:
+        log.warning(line)
+    return line
+
+
 def r2_user_key(user_id: str, path: str) -> str:
     """
     Generate R2 object key for user-level files (outside profiles).

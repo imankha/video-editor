@@ -14,7 +14,15 @@ from pydantic import BaseModel
 from app.database import get_db_connection
 from app.queries import derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
-from app.storage import R2_ENABLED, file_exists_in_r2, generate_presigned_url
+from app.storage import (
+    R2_ENABLED,
+    VideoServeOutcome,
+    file_exists_in_r2,
+    generate_presigned_url,
+    log_video_resolution,
+    r2_key,
+    video_outcome_for_status,
+)
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
 from app.utils.offload import run_in_context
@@ -53,6 +61,12 @@ def _generate_working_video_presigned_url(filename: str) -> str | None:
         expires_in=3600,
         content_type="video/mp4"
     )
+
+
+def _working_video_r2_key(filename: str) -> str:
+    """Fully-qualified (env-prefixed, per-user) R2 key for a working video --
+    the key that would be probed by hand during triage (T6330)."""
+    return r2_key(get_current_user_id(), f"working_videos/{filename}")
 
 
 def _get_season_for_month(month: int) -> str:
@@ -1094,11 +1108,24 @@ async def stream_working_video(project_id: int, request: Request):
         """, (project_id,))
         row = cursor.fetchone()
 
+    from app.profile_context import get_current_profile_id
+
     if not row or not row['filename']:
+        log_video_resolution(
+            logger, kind="working_video", outcome=VideoServeOutcome.MISSING, key=None,
+            entity_id=project_id, user_id=get_current_user_id(),
+            profile_id=get_current_profile_id(), reason="working_video_row_not_found",
+        )
         raise HTTPException(status_code=404, detail="Working video not found")
 
     presigned_url = _generate_working_video_presigned_url(row['filename'])
     if not presigned_url:
+        log_video_resolution(
+            logger, kind="working_video", outcome=VideoServeOutcome.MISSING,
+            key=_working_video_r2_key(row['filename']), entity_id=project_id,
+            user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+            reason="presign_unavailable",
+        )
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
     client = _get_working_video_r2_client()
@@ -1113,6 +1140,13 @@ async def stream_working_video(project_id: int, request: Request):
     if request.method == "HEAD":
         probe = await client.get(presigned_url, headers={"Range": "bytes=0-0"})
         if probe.status_code not in (200, 206):
+            log_video_resolution(
+                logger, kind="working_video",
+                outcome=video_outcome_for_status(probe.status_code),
+                key=_working_video_r2_key(row['filename']), entity_id=project_id,
+                user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+                reason=f"r2_head_status_{probe.status_code}",
+            )
             raise HTTPException(
                 status_code=probe.status_code,
                 detail=f"R2 probe returned {probe.status_code}",
@@ -1153,6 +1187,13 @@ async def stream_working_video(project_id: int, request: Request):
             f"r2_content_type={r2.headers.get('content-type', 'unknown')} "
             f"filename={row['filename']} range={range_hdr or 'full'} "
             f"body_snippet={error_body!r}"
+        )
+        log_video_resolution(
+            logger, kind="working_video",
+            outcome=video_outcome_for_status(r2.status_code),
+            key=_working_video_r2_key(row['filename']), entity_id=project_id,
+            user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+            reason=f"r2_status_{r2.status_code}",
         )
         raise HTTPException(
             status_code=r2.status_code,
@@ -1237,11 +1278,17 @@ async def get_working_video_playback_url(project_id: int):
     # is a SUSTAINED miss, not a flaky network moment.
     key = f"working_videos/{row['filename']}"
     if R2_ENABLED and not file_exists_in_r2(get_current_user_id(), key):
-        logger.warning(
-            "[working-video-playback-url] dangling ref: R2 object missing "
-            f"project_id={project_id} key={key} user_id={get_current_user_id()} "
-            "-> 404 (re-export to rebuild). If no env-copy/wipe explains this, "
-            "an upstream producer left a ref without its object."
+        # T6330: uniform video-failure diagnostics. head_found=false is
+        # authoritative (file_exists_in_r2 retries transient blips), so this is a
+        # SUSTAINED miss -> the dangling-ref state (re-export to rebuild). If no
+        # env-copy/wipe explains it, an upstream producer left a ref without its
+        # object.
+        from app.profile_context import get_current_profile_id
+        log_video_resolution(
+            logger, kind="working_video", outcome=VideoServeOutcome.MISSING,
+            key=_working_video_r2_key(row['filename']), entity_id=project_id,
+            user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+            head_found=False, reason="dangling_ref",
         )
         raise HTTPException(status_code=404, detail="Working video asset missing")
 
