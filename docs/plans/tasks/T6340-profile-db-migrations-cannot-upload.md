@@ -14,7 +14,12 @@ single time, and the local change is subsequently discarded by the T6160 re-heal
 
 This is why **profile_db v030 (`v030_games_source_reference`, T5800) is still not applied on
 staging** even though T5800 merged to master some time ago. Staging profiles sit at schema **29**
-while master's head is **30**.
+while master's head is **31** (see the updated stuck-migration list below).
+
+> **Update 2026-08-02, after the Share the Game epic merged (`43728f77`).** Independently reproduced
+> a fifth time while migrating staging for that epic. Nothing below contradicts the analysis above —
+> it adds the current stuck list, a user-visible correctness consequence, and a sibling defect in the
+> same runner family. See **"Update: state as of the Share the Game merge"** near the end.
 
 ### Reproduced deterministically (staging, 2026-08-02)
 
@@ -144,6 +149,118 @@ ahead of a file with no `db_version` row. Required evidence:
 - Not a data-loss bug: the guards prevented the bad write, and T6160 restores the local copy from R2
   on next access. Verified on staging - game counts intact (6/2/10), `local_sync == r2_sync` after heal.
 
+---
+
+## Update: state as of the Share the Game merge (2026-08-02, master `43728f77`)
+
+### Reproduced a fifth time, with the CAS refusal captured in the same run
+
+Ran `run_all_migrations()` on staging right after the epic deployed. Same outcome, and the log line
+that proves the mechanism appeared in the same output:
+
+```
+[SYNC_CONFLICT] user=3ed03fb5… profile=9fa7378c loaded=v2696 r2=v2697 machine=d8933d5f417308
+  — NOT uploading, NOT re-downloading (WAL-unsafe swap off the write lock)
+[ExportWorker] R2 version conflict … refused (R2 at v2697), baseline frozen at v2696;
+  scheduled re-pull on next access (T6160)
+```
+```json
+"postgres": {"applied": [], "current_version": 22, "latest_version": 22, "error": null},
+"users": {"total": 3, "migrated": 0, "skipped": 1, "errors": [ …6 profiles, all "sync_failed"… ]}
+```
+
+Note `loaded=v2696 r2=v2697` — a *confirmed* baseline one behind R2, not the `None` baseline of the
+migration path. Both refusal shapes are live; the fix must satisfy the CAS guard, not dodge it.
+
+### Stuck migrations — the list grew
+
+| Track | Version | Task | Status on staging |
+|---|---|---|---|
+| profile_db | **v030** `games_source_reference` | T5800 | NOT applied (profiles at 29) |
+| profile_db | **v031** `reclassify_teammate_clips_to_team` | T5725 | NOT applied |
+
+profile_db head on master is now **31**. Every additional profile_db migration merged before this is
+fixed widens the gap and lengthens the catch-up run once it works.
+
+### ⚠️ This now has a user-visible correctness consequence (new — raises urgency)
+
+T5725 (Share the Game epic) deliberately did **not** add a layer predicate to
+`_filter_clips_for_tag`, on the explicit rule *"migration makes data correct, not a filter."* v031 is
+the migration that was supposed to make it correct — it moves every teammate-tagged My-Athlete clip
+onto the Team layer.
+
+**Because v031 cannot run, that premise is false on staging and production right now.** The older
+email-teammate share path still calls `_filter_clips_for_tag` with no layer predicate at
+`routers/clips.py:2566`, `:2706`, `:2748`, and it is still reachable from the UI
+(`AnnotateContainer.jsx:620` reads `teammate-shares`). So **a My-Athlete clip that carries a teammate
+tag can still be shared to that teammate** — exactly the leak T5725 was written to close.
+
+Not affected: the new epic share path. `resolve_scoped_clips`
+(`services/materialization.py:~477`) intersects tagged clips with the Team layer explicitly and has a
+test pinning it (`test_my_athlete_clip_never_crosses_on_any_scope`), so sharing through the
+redesigned modal cannot cross layers regardless of v031.
+
+Whoever picks this up should decide between:
+- **(preferred)** fix this task → v031 runs → the epic's stated rule holds as designed; or
+- add the layer predicate to those three legacy call sites as an interim guard — contradicts the
+  epic rule, but stops depending on a migration that currently cannot execute.
+
+### 🔴 Sibling defect found while migrating — SHOULD BE ITS OWN TASK
+
+Different bug, same runner family, equally silent. **The postgres runner skips version gaps
+permanently.**
+
+`MigrationRunner.get_pending` (`app/migrations/base.py:38`) computes pending as
+`version > MAX(applied)`. For postgres, `get_current_version` is `SELECT MAX(version) FROM
+schema_migrations` — a **maximum, not a set membership test**. So a migration numbered *below* an
+already-applied version is never applied, with no error and no log.
+
+This actually happened. T5770 correctly numbered its migration **v022** because v020/v021 were
+reserved by the then-unmerged Share the Game branches. T5770 merged and was migrated first. Result on
+both dev and staging:
+
+```
+applied: [1 … 19, 22]     max: 22     GAPS: [20, 21]
+```
+
+`run_all_migrations()` reported success while applying nothing, and `shares.share_type` never gained
+`'game_link'` — so every public-game-link creation would have 500'd on the CHECK constraint, on an
+environment that reported itself fully migrated.
+
+Fixed by hand on dev and staging (applied v020/v021 explicitly, then stamped `schema_migrations`);
+both are now contiguous 1–22. **The runner defect is untouched and will recur** the next time
+branches merge out of numeric order — which the branch-numbering discipline actively encourages.
+
+Suggested fix: make `get_pending` compare against the applied *set*, not the max —
+`SELECT version FROM schema_migrations` and return migrations whose version is not present. Guard it
+with a test that seeds `[1..19, 22]` and asserts v020/v021 are still pending. Consider whether
+`PRAGMA user_version` tracks (user_db/profile_db) can gap the same way — they store a single integer,
+so they can only move forward, but a merge that lands a lower version has the same silent-skip shape.
+
+### Verification recipes that work (cost me a failed attempt)
+
+The Fly Postgres cursor returns **dict rows, not tuples** — `r[0]` raises `KeyError: 0`. Index by
+name, or defensively:
+
+```bash
+fly ssh console -a reel-ballers-api-staging -C "python -c \"
+from app.services.pg import init_pg_pool, get_pg
+init_pg_pool()
+with get_pg() as c:
+    cur=c.cursor(); cur.execute('SELECT version FROM schema_migrations ORDER BY version')
+    v=[(r['version'] if isinstance(r,dict) else r[0]) for r in cur.fetchall()]
+    print('applied:', v, 'GAPS:', [n for n in range(1, max(v)+1) if n not in v])
+\""
+```
+
+This probe is read-only and safe — prefer it over `run_all_migrations()` for checking state
+(running the full migrator just to look iterates every user's R2 DB).
+
+Also: a `game_link` row in a **dev** Postgres breaks any local test run that replays migrations from
+v001, because v016 rebuilds the `share_type` CHECK without `'game_link'` and the existing row
+violates it. Symptom is a wall of fixture errors that look environmental. Delete the stray row.
+Harmless on staging/prod, where v016 is long applied and never replays.
+
 ## Acceptance Criteria
 
 - [ ] `run_all_migrations()` on staging reports profiles migrated, not `sync_failed`
@@ -152,3 +269,8 @@ ahead of a file with no `db_version` row. Required evidence:
 - [ ] `r2_version` is populated in migration error rows instead of null
 - [ ] Integration test that fails on current code and passes after
 - [ ] Prod profiles audited for below-head schema and brought to head
+- [ ] Staging profiles reach **v031** (not just v030) — v030 T5800 and v031 T5725 are both stuck
+- [ ] Confirm T5725's rule holds once v031 lands: no teammate-tagged clip remains on the My-Athlete
+      layer, so `_filter_clips_for_tag`'s missing layer predicate is genuinely safe again
+- [ ] The postgres gap-skip sibling defect is filed as its own task (see the update section) — do NOT
+      silently fold it in here; it is a separate runner bug with its own regression test
