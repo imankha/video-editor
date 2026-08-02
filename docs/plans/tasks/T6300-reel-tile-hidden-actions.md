@@ -1,6 +1,6 @@
 # T6300: My Reels tile actions are invisible until hover — user could not find them
 
-**Status:** TODO
+**Status:** WAITING ON USER — feature/T6300-reel-tile-visible-actions pushed, Branch CI green (30733762815); awaiting fetch/test/merge
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-31
