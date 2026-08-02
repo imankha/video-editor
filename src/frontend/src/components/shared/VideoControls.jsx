@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Pause, RotateCcw, Volume2, VolumeX, Maximize, Minimize, List } from 'lucide-react';
 import { formatTimeCompact } from '../../utils/timeFormat';
+import { ProgressTrack } from './ProgressTrack';
+import { PlayheadHandle } from './PlayheadHandle';
 
 /** Speed picker — tap-friendly popup above the button */
 function SpeedMenu({ rates, playbackRate, onPlaybackRate }) {
@@ -251,54 +253,29 @@ export function VideoControls({
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
-        {/* Track container */}
-        <div
-          className="relative w-full transition-all duration-150 bg-white/25 rounded-full"
-          style={{ height: IS_COARSE ? 6 : (active ? 5 : 3) }}
+        {/* Track container — ProgressTrack (track+fill+hover) with the scrub
+            handle and chapter ticks nested as children so they share its
+            positioning box (T6320: byte-identical to the pre-extraction
+            markup; track has no overflow-hidden, so nesting the handle here
+            is safe — see ProgressTrack's clipping note). */}
+        <ProgressTrack
+          trackClassName="relative w-full transition-all duration-150 bg-white/25 rounded-full"
+          trackStyle={{ height: IS_COARSE ? 6 : (active ? 5 : 3) }}
+          progress={progress}
+          fillClassName="absolute inset-y-0 left-0 bg-purple-500"
+          hoverPercent={active && !isDragging ? hoverPercent : undefined}
         >
-          {/* Hover fill */}
-          {active && !isDragging && (
-            <div
-              className="absolute inset-y-0 left-0 bg-white/20 rounded-full"
-              style={{ width: `${hoverPercent}%` }}
-            />
-          )}
-
-          {/* Progress */}
-          <div
-            className="absolute inset-y-0 left-0 bg-purple-500"
-            style={{ width: `${progress}%` }}
-          />
-
           {/* Scrub handle — always visible like YouTube. With a sport glyph
               (T5130) the ball rides the progress; without one it's the plain
-              purple dot (byte-identical to before). Both centre on the track via
-              top-1/2 -translate-y-1/2 and are pointer-transparent so the timeline
-              container still owns drag-to-seek. */}
-          {handleGlyph ? (
-            <div
-              className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center leading-none pointer-events-none select-none transition-all duration-100"
-              style={{
-                fontSize: IS_COARSE ? 20 : (active ? 16 : 14),
-                width: IS_COARSE ? 22 : (active ? 18 : 16),
-                height: IS_COARSE ? 22 : (active ? 18 : 16),
-                left: `calc(${progress}% - ${IS_COARSE ? 11 : (active ? 9 : 8)}px)`,
-              }}
-              aria-hidden="true"
-              data-testid="scrub-handle-glyph"
-            >
-              {handleGlyph}
-            </div>
-          ) : (
-            <div
-              className="absolute top-1/2 -translate-y-1/2 rounded-full bg-purple-500 transition-all duration-100"
-              style={{
-                width: IS_COARSE ? 20 : (active ? 14 : 12),
-                height: IS_COARSE ? 20 : (active ? 14 : 12),
-                left: `calc(${progress}% - ${IS_COARSE ? 10 : (active ? 7 : 6)}px)`,
-              }}
-            />
-          )}
+              purple dot (byte-identical to before). */}
+          <PlayheadHandle
+            progress={progress}
+            glyph={handleGlyph}
+            size={handleGlyph
+              ? { box: IS_COARSE ? 22 : (active ? 18 : 16), font: IS_COARSE ? 20 : (active ? 16 : 14) }
+              : { box: IS_COARSE ? 20 : (active ? 14 : 12) }}
+            dotClassName="bg-purple-500"
+          />
 
           {/* Chapter tick marks (only when chapters present) */}
           {chapters?.length > 0 && chapters.map((ch, i) => (
@@ -310,7 +287,7 @@ export function VideoControls({
               onClick={(e) => { e.stopPropagation(); onSeekChapter?.(ch.startTime); }}
             />
           ))}
-        </div>
+        </ProgressTrack>
 
         {/* Hover tooltip — chapter name (when present) above the time */}
         {active && !isDragging && (
