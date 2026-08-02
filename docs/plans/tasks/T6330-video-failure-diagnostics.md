@@ -1,6 +1,6 @@
 # T6330: Video failures must log where the code looked, so "missing" vs "denied" is one glance
 
-**Status:** WAITING ON USER — feature/T6330-video-failure-diagnostics pushed, Branch CI green (30733761773); awaiting fetch/test/merge
+**Status:** STAGING — merged to master 2026-08-01 (auto-deploys staging)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-01
