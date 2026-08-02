@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MigrateResult:
     """Per-profile migration outcome from _migrate_profile_db."""
-    status: str  # "ok" | "sync_failed" | "not_at_head" | "missing" | "download_failed"
+    status: str  # "ok" | "sync_failed" | "not_at_head" | "missing" | "download_failed" | "wal_busy"
+    #   wal_busy: a -wal/-shm sidecar was present when the swap was about to run
+    #   (a live connection holds the file open, or a crash left sidecars) — the
+    #   swap was REFUSED to avoid replaying old WAL frames onto the new file; a
+    #   later migrate run retries once the file is quiescent.
     applied: list = field(default_factory=list)
     r2_version: int | None = None
 
@@ -231,15 +235,10 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
         tmp_path.unlink(missing_ok=True)
 
         try:
-            dl = _download_profile_db(user_id, profile_id, tmp_path)
+            found, downloaded_sync_version = _download_profile_db(user_id, profile_id, tmp_path)
         except Exception as e:
             logger.warning("[Migration] Download failed for %s/%s: %s", user_id, profile_id, e)
             return MigrateResult(status="download_failed", applied=[])
-
-        # Normalize: real code returns (found, sync_version); a legacy/test double
-        # may return a bare bool (no version) — carry no baseline in that case so
-        # we never fabricate one (T4315).
-        found, downloaded_sync_version = dl if isinstance(dl, tuple) else (dl, None)
 
         if found and tmp_path.exists():
             r2_version = _read_sqlite_user_version(tmp_path)
@@ -267,19 +266,48 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
             else:
                 # R2 is canonical: overwrite local with the downloaded copy, then
                 # record the DOWNLOADED copy's sync version as the confirmed local
-                # baseline. T6340 (the whole fix): the swapped-in R2 bytes carry NO
-                # db_version row (the sync version lives ONLY in R2 object metadata,
-                # not inside the SQLite file), so without this get_local_db_version
-                # returns None and storage.py's CAS guard refuses the post-migration
-                # upload UNCONDITIONALLY (BLOCKING-2) — no profile_db migration ever
-                # reaches R2. downloaded_sync_version came from the SAME get_object
-                # response as these bytes, so no separate HEAD can observe a version
-                # newer than the bytes on disk (that window would let us force-push
-                # OLDER bytes at a bumped version — a clobber). Recording it lets the
-                # later sync see current_version == r2_version and upload r2_version+1.
-                # NEVER fabricate a baseline (T4315): if the download yielded no real
-                # int version, leave it unset (None) and let CAS refuse.
+                # baseline. T6340 (the whole fix): the swapped-in R2 bytes' internal
+                # db_version row (if any) is NOT authoritative for sync — the sync
+                # version lives in R2 object metadata (x-amz-meta-db-version), and a
+                # normally-synced object carries an INTERNAL db_version row equal to
+                # metadata_version - 1 (database.py:~1521 persists the row AFTER the
+                # upload, so the bytes uploaded at metadata vN internally read vN-1).
+                # So without recording the metadata version, get_local_db_version
+                # returns either None (re-heal / never-synced object with no row) or
+                # a STALE vN-1 — either way storage.py's CAS guard refuses the
+                # post-migration upload (BLOCKING-2 for None; a stale-baseline
+                # conflict for vN-1) and no profile_db migration reaches R2.
+                # downloaded_sync_version came from the SAME get_object response as
+                # these bytes, so no separate HEAD can observe a version newer than
+                # the bytes on disk (that window would let us force-push OLDER bytes
+                # at a bumped version — a clobber). Recording it (INSERT OR REPLACE
+                # overrides any stale persisted row) lets the later sync see
+                # current_version == r2_version and upload r2_version+1. NEVER
+                # fabricate a baseline (T4315): if the download yielded no real int
+                # version, leave it unset (None) and let CAS refuse.
+                #
+                # WAL safety (mirrors database.py:~727 first-access restore): this
+                # swap runs on a LIVE Fly machine serving requests. profile.sqlite is
+                # WAL mode; if a live connection holds it open (or a crash left them),
+                # a -wal from the OLD file sits beside it and the next connection
+                # would replay those frames onto the swapped-in NEW file (cross-DB
+                # page mixing) — and the baseline fix above would then make that
+                # page-mixed result UPLOADABLE at r2_version+1 (pre-fix, CAS refused
+                # the upload so the damage stayed local). A live connection blocks
+                # only the swap: refuse and let a later migrate run retry.
+                from ..services.db_refresh import clear_stale_wal_sidecars, wal_sidecars_present
+                if wal_sidecars_present(db_path):
+                    tmp_path.unlink(missing_ok=True)
+                    logger.warning(
+                        "[Migration] WAL sidecar present for %s/%s — refusing swap "
+                        "(live connection or stale crash sidecar); retry later",
+                        user_id, profile_id,
+                    )
+                    return MigrateResult(status="wal_busy", applied=[])
                 shutil.move(str(tmp_path), str(db_path))
+                # Defense-in-depth for the window between the check above and the
+                # move completing (a new connection could open mid-swap).
+                clear_stale_wal_sidecars(db_path)
                 set_local_db_version(user_id, profile_id, downloaded_sync_version)
         elif not found:
             # Key not in R2 — registered profile has no R2 object (fail loud)

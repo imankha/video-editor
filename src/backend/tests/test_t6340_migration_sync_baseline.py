@@ -95,6 +95,10 @@ def _write_local_profile(db_path: Path, *, user_version: int) -> None:
     conn.close()
 
 
+def _read_local_user_version(db_path: Path) -> int:
+    return sqlite3.connect(str(db_path)).execute("PRAGMA user_version").fetchone()[0]
+
+
 def _r2_bytes_user_version(fake: FakeR2, key: str, tmp_path: Path) -> int:
     data = fake._objects[key]["data"]
     p = tmp_path / "readback.sqlite"
@@ -135,8 +139,17 @@ def _runner_advances_to_head(conn, db_type):
 
 
 def _clear_baseline(user_id: str, profile_id: str) -> None:
-    from app.database import set_local_db_version
+    """Simulate a T6160 re-heal that wiped the confirmed baseline.
+
+    set_local_db_version(..., None) only pops the in-memory cache — the persisted
+    db_version ROW inside the file survives and get_local_db_version reads it back
+    (database.py fallback branch). So we MUST also call the real clearer
+    (_clear_persisted_db_version), or a seeded db_version row resurrects a stale
+    baseline and the finding-3 test would pass for the wrong reason."""
+    from app.database import USER_DATA_BASE, _clear_persisted_db_version, set_local_db_version
     set_local_db_version(user_id, profile_id, None)
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    _clear_persisted_db_version(db_path)
 
 
 def _profile_env(tmp_path):
@@ -170,6 +183,38 @@ def test_swapped_profile_reaches_head_in_r2_after_reheal(tmp_path):
     assert _r2_bytes_user_version(fake, key, tmp_path) == HEAD, "R2 PRAGMA user_version did not reach head"
     assert _r2_sync_version(fake, key) == str(N + 1), \
         f"R2 sync version must advance to {N + 1}, got {_r2_sync_version(fake, key)}"
+
+
+def test_swapped_profile_with_stale_persisted_row_overridden_by_baseline(tmp_path):
+    """The DOMINANT prod shape: a normally-synced R2 object carries an INTERNAL
+    db_version row equal to metadata_version - 1 (sync_db_to_r2_explicit persists
+    the row into the file AFTER the upload at database.py:~1521, so bytes uploaded
+    at metadata vN internally read vN-1). Test 1's db_version_row=None shape only
+    occurs for objects never synced through that path.
+
+    After the swap, get_local_db_version would read the STALE persisted N-1 and CAS
+    would refuse (r2=N > current=N-1). The fix records the metadata N as the
+    confirmed baseline (INSERT OR REPLACE overrides the stale row), so the sync
+    sees current==r2 and uploads N+1. RED pre-fix for the right reason: a stale
+    persisted baseline, not a None one."""
+    user_id, profile_id, N = "t6340u1b", "aaaa1112", 12
+    fake = FakeR2()
+    # bytes carry the stale internal row N-1 that a real synced object would have.
+    data = _build_profile_bytes(tmp_path, user_version=HEAD - 1, games=3,
+                                db_version_row=N - 1)
+    key = _seed_r2_profile(fake, user_id, profile_id, data, sync_version=N)
+    _clear_baseline(user_id, profile_id)
+
+    p1, p2 = _profile_env(tmp_path)
+    with p1, p2, _r2_patched(fake):
+        result = _migrate_profile_db(user_id, profile_id)
+
+    assert result.status == "ok", \
+        f"expected ok, got {result.status} (r2_version={result.r2_version})"
+    assert _r2_bytes_user_version(fake, key, tmp_path) == HEAD, "R2 PRAGMA user_version did not reach head"
+    assert _r2_sync_version(fake, key) == str(N + 1), \
+        f"recorded baseline must OVERRIDE the stale persisted N-1 and advance to " \
+        f"{N + 1}, got {_r2_sync_version(fake, key)}"
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +365,57 @@ def test_mid_download_move_refuses_never_clobbers(tmp_path):
     assert _r2_bytes_user_version(fake, key, tmp_path) == HEAD - 1, \
         "R2 bytes changed — older bytes were force-pushed over newer R2 data (clobber)"
     assert fake.profile_uploads() == [], "an upload occurred despite the mid-download move"
+
+
+# ---------------------------------------------------------------------------
+# 6. WAL SIDECAR GUARD — a live -wal beside the file refuses the swap
+# ---------------------------------------------------------------------------
+
+def test_wal_sidecar_present_refuses_swap_and_upload(tmp_path):
+    """profile.sqlite is WAL mode and the swap runs on a LIVE machine. If a -wal
+    sidecar sits beside the local file (a live connection holds it open, or a crash
+    left it), a blind swap would let the next connection replay OLD frames onto the
+    swapped-in NEW file (cross-DB page mixing) — and the baseline fix would then make
+    that page-mixed result UPLOADABLE. The runner must REFUSE: status 'wal_busy', no
+    swap, no upload. Mirrors database.py's first-access-restore WAL guard."""
+    user_id, profile_id, N = "t6340u6", "aaaa6666", 15
+    fake = FakeR2()
+    # R2 canonical at HEAD-1 (so the swap branch is taken, not local-ahead).
+    data = _build_profile_bytes(tmp_path, user_version=HEAD - 1, games=3)
+    key = _seed_r2_profile(fake, user_id, profile_id, data, sync_version=N)
+    _clear_baseline(user_id, profile_id)
+
+    # A local WAL-mode file at the SAME schema version (<= r2 → swap branch) with a
+    # LIVE connection holding it open — this is what leaves a real -wal/-shm sidecar
+    # (a stray -wal beside a non-WAL db gets auto-removed the moment SQLite opens it,
+    # so it would not model the live-machine hazard). The open connection stands in
+    # for a request being served on the same Fly machine mid-migrate.
+    db_path = tmp_path / user_id / "profiles" / profile_id / "profile.sqlite"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    live = sqlite3.connect(str(db_path))
+    try:
+        live.execute("PRAGMA journal_mode=WAL")
+        live.execute("CREATE TABLE games (id INTEGER PRIMARY KEY, name TEXT)")
+        live.execute("INSERT INTO games (name) VALUES ('live-uncheckpointed')")
+        live.execute(f"PRAGMA user_version = {HEAD - 1}")
+        live.commit()  # frames now sit in -wal, connection stays open
+        wal_path = db_path.with_name(db_path.name + "-wal")
+        assert wal_path.exists(), "test setup: expected a live -wal sidecar"
+
+        p1, p2 = _profile_env(tmp_path)
+        with p1, p2, _r2_patched(fake):
+            result = _migrate_profile_db(user_id, profile_id)
+
+        assert result.status == "wal_busy", f"a live -wal must refuse the swap, got {result.status}"
+        assert fake.profile_uploads() == [], "uploaded despite a live WAL sidecar"
+        # No swap: local file untouched (still HEAD-1, never advanced), sidecar intact.
+        assert _read_local_user_version(db_path) == HEAD - 1, "local file was swapped/migrated despite the WAL guard"
+        assert wal_path.exists(), "WAL sidecar was cleared on a refused swap (should only clear after a move)"
+        # No churn in R2 either.
+        assert _r2_bytes_user_version(fake, key, tmp_path) == HEAD - 1, "R2 bytes changed despite the refusal"
+        assert _r2_sync_version(fake, key) == str(N), "R2 sync version changed despite the refusal"
+    finally:
+        live.close()
 
 
 # ---------------------------------------------------------------------------

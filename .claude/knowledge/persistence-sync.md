@@ -125,14 +125,38 @@ correctly — the runner just never established a baseline for the copy it downl
    with `set_local_user_db_version(user_id, new_version)` from the SAME download that gated it — so
    the subsequent `sync_user_db_to_r2_explicit` has a confirmed baseline. No manual swap-without-
    baseline, so no fix needed there.
+5. **WAL sidecar guard on the swap (review round, MAJOR).** `_migrate_profile_db` runs on a LIVE Fly
+   machine serving requests and `shutil.move`s over a WAL-mode `profile.sqlite`. If a `-wal`/`-shm`
+   sidecar is present (a live connection holds the file open, or a crash left it), a blind swap lets
+   the next connection replay the OLD file's frames onto the swapped-in NEW file (cross-DB page
+   mixing) — and the baseline fix (1) would then make that page-mixed result UPLOADABLE at
+   `r2_version+1` (pre-baseline-fix, CAS refused the upload so the damage stayed local). So the swap
+   now mirrors `database.py`'s first-access restore (`database.py:~727`): refuse with a new
+   `MigrateResult.status == "wal_busy"` when `wal_sidecars_present(db_path)`, and call
+   `clear_stale_wal_sidecars(db_path)` immediately after a move that proceeded (defense-in-depth for
+   the check→move window). A live connection blocks only the swap; a later migrate run retries once
+   the file is quiescent. **Invariant refinement:** the "swap in place → record baseline OR refuse"
+   rule (list item 8 above) now has TWO refusal triggers — no confirmable sync version (leave baseline
+   unset, CAS refuses) AND a live WAL sidecar (`wal_busy`, never swap a file another connection holds).
+
+Also note: a normally-synced R2 object carries an INTERNAL `db_version` row equal to
+`metadata_version - 1` (`sync_db_to_r2_explicit` persists the row into the file AFTER the upload at
+`database.py:~1521`), so the swapped-in bytes' own row is NOT authoritative for sync — it is stale by
+one. `set_local_db_version(downloaded_sync_version)` (INSERT OR REPLACE) overrides it. The
+`db_version_row=None` case (never-synced object) is the minority shape; the dominant prod shape is the
+stale-by-one row, and both are pinned by tests.
 
 **Tests:** `tests/test_t6340_migration_sync_baseline.py` (real storage.py CAS against FakeR2): the
-bug pinned (swap + re-heal → R2 reaches head, sync `N`→`N+1`), content preserved, a genuinely stale
-non-None writer still refused with the real `r2_version`, NOT_FOUND/ERROR/enum never fabricate a
-baseline or upload, a mid-download move refuses (never clobbers), and an end-to-end multi-profile
+bug pinned in BOTH shapes (swap + re-heal with no persisted row, AND the dominant prod shape with a
+stale `N-1` persisted row overridden by the recorded baseline → R2 reaches head, sync `N`→`N+1`),
+content preserved, a genuinely stale non-None writer still refused with the real `r2_version`,
+NOT_FOUND/ERROR/enum never fabricate a baseline or upload, a mid-download move refuses (never
+clobbers), a live WAL sidecar refuses the swap+upload (`wal_busy`), and an end-to-end multi-profile
 `_migrate_user` that converges and is idempotent on re-run. `test_migration_runner.py` (T4830) five
-scenarios unchanged and green. **Out of the container's reach (post-deploy):** staging reaching v031
-in R2, and the prod below-head audit.
+scenarios unchanged and green (its download double now returns the real `(found, sync_version)` tuple;
+the bare-bool normalization shim in `_migrate_profile_db` was deleted — no production caller returned
+a bare bool). **Out of the container's reach (post-deploy):** staging reaching v031 in R2, and the
+prod below-head audit.
 
 ## Overlay action failure visibility (T4900 / prod bug 31p)
 
