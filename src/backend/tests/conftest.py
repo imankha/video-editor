@@ -77,6 +77,7 @@ _TEST_USER_IDS = (
     "admin-user", "regular-user", "sharer-user", "recipient-user",
     "user-1", "user-2", "test-user-1", "test-user", "user-a", "user-b", "user-c",
     "other-admin", "target-user", "other-regular",
+    "claimer-user", "claimer-b",  # T5730 claim-flow tests
 )
 
 

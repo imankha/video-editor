@@ -107,6 +107,52 @@ class ShareVisibilityRequest(BaseModel):
     is_public: bool
 
 
+# --- Public game link (T5720) ------------------------------------------------
+# The anonymous-scope guarantee is STRUCTURAL: these models declare ONLY
+# team-layer, public-safe fields. There is deliberately NO game_url / game_blake3
+# / video_warm_url / full-game field anywhere in them, so a future careless edit
+# that computes a full-game value has nowhere to serialize it -- FastAPI drops
+# anything not declared here at the response boundary. Anonymous visitors watch
+# the TEAM RECAP ONLY (EPIC decision 3). Do NOT add a game-source field here.
+
+class PublicGameClip(BaseModel):
+    name: str
+    recap_start: float | None = None
+    recap_end: float | None = None
+    player_tags: list[str] = []
+
+
+class PublicGameLinkResponse(BaseModel):
+    share_token: str
+    is_public: bool = True  # a game_link is public by definition
+    game_name: str
+    game_date: str | None = None
+    sharer_name: str
+    recap_url: str | None  # presigned TEAM recap master -- NEVER the game source
+    poster_url: str  # stable proxy path, never presigned (T5180)
+    clips: list[PublicGameClip] = []
+    clip_count: int
+
+
+# --- Claim & import (T5730) --------------------------------------------------
+# The frozen claim contract from T5720 §7 / the Dual-Camera epic. `share_token`
+# is carried for the shared identifier but the PATH token is authoritative;
+# `import_annotations` is the consent opt-in (game always, annotations optional);
+# `target_profile_id` is the explicit athlete pick for multi-profile accounts
+# (single-profile accounts omit it).
+class ClaimGameRequest(BaseModel):
+    share_token: str | None = None
+    import_annotations: bool = True
+    target_profile_id: str | None = None
+
+
+class ClaimGameResponse(BaseModel):
+    game_id: int
+    profile_id: str
+    already_claimed: bool
+    imported_annotations: bool
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -179,6 +225,26 @@ def _recap_poster_r2_key(share: dict) -> str:
         f"{APP_ENV}/users/{share['sharer_user_id']}"
         f"/profiles/{share['sharer_profile_id']}"
         f"/recaps/posters/{share['game_id']}.jpg"
+    )
+
+
+def _team_recap_r2_key(share: dict) -> str:
+    """Full R2 key for a game link's TEAM recap master (T5720,
+    `recaps/{game_id}_team.mp4`) under the sharer's profile prefix."""
+    return (
+        f"{APP_ENV}/users/{share['sharer_user_id']}"
+        f"/profiles/{share['sharer_profile_id']}"
+        f"/recaps/{share['game_id']}_team.mp4"
+    )
+
+
+def _team_recap_poster_r2_key(share: dict) -> str:
+    """Full R2 key for a game link's TEAM recap POSTER (T5720,
+    `recaps/posters/{game_id}_team.jpg`) under the sharer's profile prefix."""
+    return (
+        f"{APP_ENV}/users/{share['sharer_user_id']}"
+        f"/profiles/{share['sharer_profile_id']}"
+        f"/recaps/posters/{share['game_id']}_team.jpg"
     )
 
 
@@ -440,6 +506,201 @@ async def get_shared_teammate(share_token: str, request: Request):
         "video_warm_url": video_warm_url,
         "poster_url": poster_url,
     }
+
+
+@shared_router.get("/game/{share_token}", response_model=PublicGameLinkResponse)
+async def get_shared_game_link(
+    share_token: str, background_tasks: BackgroundTasks,
+):
+    """Public resolver for a broadcast game link (T5720). No auth.
+
+    Anonymous scope is the TEAM RECAP ONLY: this builds a PublicGameLinkResponse
+    (a model with NO full-game field), presigns the TEAM recap master, and draws
+    the clip rail from the snapshot frozen on the share row at creation. No
+    game-source URL, no athlete-layer data, ever leaves here (EPIC decision 3).
+    Revoked -> 410; not a game_link / unknown -> 404. Expired game SOURCE does
+    not matter: the team recap survives expiry and keeps playing (recap-only
+    degradation, NOT T3970's hard block)."""
+    from ..services.email import _resolve_sender_name
+
+    share = get_game_share_by_token(share_token)
+    if not share or share["share_type"] != "game_link":
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This link is no longer active")
+
+    sharer = get_user_by_id(share["sharer_user_id"])
+    sharer_email = sharer["email"] if sharer else share["recipient_email"]
+    # Public page: show a friendly display name, never the raw email.
+    sharer_name = _resolve_sender_name(sharer_email)
+
+    # Presign the TEAM recap master ONLY -- never the game source. None (recap
+    # object evicted) is an explicit state: the edge requires recap_url and
+    # falls through to the SPA, which shows a graceful message.
+    recap_url = generate_presigned_url_global(_team_recap_r2_key(share), expires_in=14400)
+
+    clip_names = share["clip_names"] or []
+    clips = [
+        PublicGameClip(
+            name=c.get("name") or "Clip",
+            recap_start=c.get("recap_start"),
+            recap_end=c.get("recap_end"),
+            player_tags=c.get("player_tags") or [],
+        )
+        for c in clip_names
+        if isinstance(c, dict)
+    ]
+
+    # T4840: record the view off the response path (analytics never on the wire).
+    background_tasks.add_task(
+        record_milestone,
+        share["sharer_user_id"],
+        "share_viewed",
+        {"share_token": share_token, "sharer_user_id": share["sharer_user_id"],
+         "share_type": "game_link"},
+    )
+
+    return PublicGameLinkResponse(
+        share_token=share_token,
+        game_name=share["game_name"] or "Shared Game",
+        game_date=share["game_date"],
+        sharer_name=sharer_name,
+        recap_url=recap_url,
+        poster_url=f"/api/shared/game/{share_token}/poster.jpg",
+        clips=clips,
+        clip_count=len(clips),
+    )
+
+
+@shared_router.get("/game/{share_token}/poster.jpg")
+async def get_shared_game_poster(share_token: str):
+    """Stable unfurl image for a public game link: the TEAM recap's clearest
+    frame (T5720). Generated-on-first-request at `recaps/posters/{game_id}_team.jpg`
+    then reused; never a presigned URL in og:image (T4890). 404 when no team
+    recap exists -> the edge keeps the branded card (never a broken image)."""
+    from ..services.poster import ensure_recap_poster
+
+    share = get_game_share_by_token(share_token)
+    if (
+        not share
+        or share["revoked_at"]
+        or share["share_type"] != "game_link"
+        or not share.get("game_id")
+    ):
+        raise HTTPException(404, "Share not found")
+
+    team_poster_key = _team_recap_poster_r2_key(share)
+    if not ensure_recap_poster(_team_recap_r2_key(share), team_poster_key):
+        raise HTTPException(404, "No recap poster for this share")
+    return await _serve_poster_jpeg(team_poster_key)
+
+
+@shared_router.post("/game/{share_token}/viewed", status_code=204)
+async def record_shared_game_view(share_token: str, background_tasks: BackgroundTasks):
+    """T4840: fire-and-forget view beacon for the edge-rendered game watch page.
+    The edge caches the resolve JSON, so this records a `share_viewed` milestone
+    on EVERY render (cache hits included). Unknown token -> 404; revoked -> 204
+    with no record; otherwise 204."""
+    share = get_game_share_by_token(share_token)
+    if not share or share["share_type"] != "game_link":
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        return Response(status_code=204)
+
+    background_tasks.add_task(
+        record_milestone,
+        share["sharer_user_id"],
+        "share_viewed",
+        {"share_token": share_token, "sharer_user_id": share["sharer_user_id"],
+         "share_type": "game_link"},
+    )
+    return Response(status_code=204)
+
+
+@shared_router.post("/game/{share_token}/claim", response_model=ClaimGameResponse)
+async def claim_shared_game(
+    share_token: str, body: ClaimGameRequest, request: Request,
+):
+    """Claim a public game link into the caller's account (T5730).
+
+    A signed-in user GESTURE -- never a silent materialize on auth (EPIC decision
+    8). The deferred no-account path completes here after signup, via the import
+    dialog's explicit Confirm. Game is always imported; team annotations are
+    opt-in (`import_annotations`). Multi-profile accounts pick the athlete profile
+    (`target_profile_id`); single-profile accounts omit it.
+
+    Routes through materialize_game_share so the copied game + clips inherit a
+    NON-NULL `shared_by` (T5330 -- onboarding stays blind to imported content).
+    Idempotent: claim twice -> same local game; a re-claim with annotations after a
+    game-only claim adds the Team-layer clips to that same game.
+
+    Errors: 401 (not signed in -- /api/shared is public, so this is enforced
+    here), 404 (unknown / not a game_link), 410 (revoked), 400 (missing/foreign
+    profile), 503 (R2 sync could not be confirmed -- retryable, never a lying 200)."""
+    import asyncio
+
+    from app.services.db_refresh import RefreshFailed
+    from app.services.materialization import claim_game_link
+    from app.services.user_db import get_profiles
+
+    # Auth required. The /api/shared prefix is allowlisted (public resolve), so an
+    # unauthenticated request lands here with no user context -> explicit 401.
+    user_id = _get_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(401, "Sign in to claim this game")
+
+    share = get_game_share_by_token(share_token)
+    if not share or share["share_type"] != "game_link":
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This link is no longer active")
+
+    # Resolve the target profile: explicit pick, or the sole profile for a
+    # single-profile account. A missing pick on a multi-profile account, or a
+    # foreign id, is a loud 400 -- never a silent default into the wrong athlete.
+    profiles = await asyncio.to_thread(get_profiles, user_id)
+    profile_ids = {p["id"] for p in profiles}
+    target = body.target_profile_id
+    if target:
+        if target not in profile_ids:
+            raise HTTPException(400, "Unknown profile")
+    elif len(profiles) == 1:
+        target = profiles[0]["id"]
+    else:
+        raise HTTPException(400, "Choose a profile to import this game into")
+
+    sharer = get_user_by_id(share["sharer_user_id"])
+    sharer_email = sharer["email"] if sharer else share["recipient_email"]
+
+    try:
+        # Blocking R2 I/O (sharer DB pull + recipient materialize/sync) -- offload
+        # so this doesn't serialize the event loop (T6200).
+        result = await asyncio.to_thread(
+            claim_game_link,
+            share=share,
+            claimer_user_id=user_id,
+            claimer_profile_id=target,
+            include_annotations=body.import_annotations,
+            sharer_email=sharer_email,
+        )
+    except RefreshFailed:
+        # A profile DB could not be confirmed current / synced -- retryable, not a
+        # partial success. Mirrors the payments-grant 503 contract.
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "sync_failed",
+                    "message": "Could not import right now, please retry."},
+        )
+
+    return ClaimGameResponse(
+        # profile_id is the profile the game ACTUALLY landed in (claim_game_link
+        # may override the pick on an annotations-upgrade re-claim), so the client
+        # lands on the right profile's recap.
+        game_id=result["game_id"],
+        profile_id=result.get("profile_id") or target,
+        already_claimed=result["already_claimed"],
+        imported_annotations=result["imported_annotations"],
+    )
 
 
 @shared_router.get("/collection/{share_token}")

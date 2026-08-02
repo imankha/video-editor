@@ -4,11 +4,13 @@ import { PulseCards } from './PulseCards';
 import { FunnelChart } from './FunnelChart';
 import { ChannelsTable } from './ChannelsTable';
 import { CohortGrid } from './CohortGrid';
+import { ShareFunnelTable } from './ShareFunnelTable';
 
 const SUB_TABS = [
   { key: 'funnel', label: 'Funnel' },
   { key: 'channels', label: 'Campaigns' },
   { key: 'cohorts', label: 'Cohorts' },
+  { key: 'shares', label: 'Share Links' },
 ];
 
 export function AnalyticsDashboard() {
@@ -18,11 +20,14 @@ export function AnalyticsDashboard() {
   const fetchFunnel = useAdminStore(s => s.fetchFunnel);
   const fetchChannels = useAdminStore(s => s.fetchChannels);
   const fetchCohorts = useAdminStore(s => s.fetchCohorts);
+  const fetchShareFunnel = useAdminStore(s => s.fetchShareFunnel);
 
   const pulseData = useAdminStore(s => s.pulseData);
   const pulseLoading = useAdminStore(s => s.pulseLoading);
   const funnelData = useAdminStore(s => s.funnelData);
   const funnelLoading = useAdminStore(s => s.funnelLoading);
+  const shareFunnelData = useAdminStore(s => s.shareFunnelData);
+  const shareFunnelLoading = useAdminStore(s => s.shareFunnelLoading);
   const channelsData = useAdminStore(s => s.channelsData);
   const channelsLoading = useAdminStore(s => s.channelsLoading);
   const cohortsData = useAdminStore(s => s.cohortsData);
@@ -36,7 +41,8 @@ export function AnalyticsDashboard() {
     if (subTab === 'funnel' && !funnelData) fetchFunnel();
     if (subTab === 'channels' && !channelsData) fetchChannels();
     if (subTab === 'cohorts' && !cohortsData) fetchCohorts();
-  }, [subTab, funnelData, channelsData, cohortsData, fetchFunnel, fetchChannels, fetchCohorts]);
+    if (subTab === 'shares' && !shareFunnelData) fetchShareFunnel();
+  }, [subTab, funnelData, channelsData, cohortsData, shareFunnelData, fetchFunnel, fetchChannels, fetchCohorts, fetchShareFunnel]);
 
   return (
     <div>
@@ -74,6 +80,11 @@ export function AnalyticsDashboard() {
           cohortsLoading
             ? <p className="text-gray-500 text-sm">Loading cohorts...</p>
             : <CohortGrid data={cohortsData} />
+        )}
+        {subTab === 'shares' && (
+          shareFunnelLoading
+            ? <p className="text-gray-500 text-sm">Loading share links...</p>
+            : <ShareFunnelTable data={shareFunnelData} />
         )}
       </div>
     </div>

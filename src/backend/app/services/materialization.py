@@ -15,7 +15,11 @@ from app.database import USER_DATA_BASE, sync_db_to_r2_explicit
 from app.services.auth_db import get_game_storage_ref, insert_game_storage_ref
 from app.services.db_refresh import RefreshFailed, clear_stale_wal_sidecars, wal_sidecars_present
 from app.services.pg import get_pg
-from app.services.sharing_db import mark_game_share_materialized
+from app.services.sharing_db import (
+    get_share_claim,
+    mark_game_share_materialized,
+    record_share_claim,
+)
 from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
@@ -403,6 +407,91 @@ def _filter_clips_for_tag(
     ]
 
 
+def team_layer_clips_for_game(conn: sqlite3.Connection, game_id: int) -> list[dict]:
+    """Get a game's TEAM-layer raw_clips (my_athlete = 0) from the sharer's DB (T5730).
+
+    The public game link is team-recap-only, so a claim that imports annotations
+    imports exactly the Team layer -- the same clips the shared recap plays. Mirrors
+    the shape _filter_clips_for_tag returns (tags kept as the raw blob, tagged_teammates
+    decoded) so it drops straight into _materialize_clips via materialize_game_share's
+    clip_data path. my_athlete is compared to 0 exactly: NULL/1 are the My-Athlete layer
+    and never cross into a recipient's account through this path (EPIC decision 1/3)."""
+    cur = conn.cursor()
+    cur.execute(
+        """SELECT rc.id, rc.rating, rc.tags, rc.name, rc.notes,
+                  rc.start_time, rc.end_time, rc.video_sequence,
+                  rc.tagged_teammates
+           FROM raw_clips rc
+           WHERE rc.game_id = ? AND rc.my_athlete = 0""",
+        (game_id,),
+    )
+    return [
+        {
+            "id": row["id"],
+            "rating": row["rating"],
+            "tags": row["tags"],
+            "name": row["name"],
+            "notes": row["notes"],
+            "start_time": row["start_time"],
+            "end_time": row["end_time"],
+            "video_sequence": row["video_sequence"],
+            "tagged_teammates": decode_data(row["tagged_teammates"]),
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def _tag_names_for_email(conn: sqlite3.Connection, email: str) -> list[str]:
+    """Resolve a recipient email to its teammate tag_name(s) (T5740).
+
+    teammate_emails holds tag_name <-> email mappings (clips.py). An email may map
+    to more than one tag; all are returned so tagged-only sharing unions every clip
+    that recipient is tagged in. Case-insensitive to match UserPicker's normalized
+    (lower-cased) emails against however the mapping was entered. Empty list means
+    'no tag mapping' -> tagged-only yields zero clips (the untagged state)."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT tag_name FROM teammate_emails WHERE lower(email) = lower(?)",
+        (email,),
+    )
+    return [row["tag_name"] for row in cur.fetchall()]
+
+
+def resolve_scoped_clips(
+    conn: sqlite3.Connection, game_id: int, email: str, scope: str
+) -> list[dict]:
+    """Return the EXACT clip dicts a recipient receives for the given share scope.
+
+    SINGLE SOURCE OF TRUTH (T5740): the share-preview READ and the share SEND path
+    both call this, so the preview list can never diverge from what is materialized.
+    Reuses the existing selection machinery -- no new clip-selection query:
+      ALL_TEAM    -> team_layer_clips_for_game (my_athlete = 0)
+      TAGGED_ONLY -> _filter_clips_for_tag per resolved tag, unioned by clip id
+      GAME_ONLY   -> [] (game/recap only)
+    My-Athlete clips (my_athlete != 0) never appear via any branch (EPIC 1/3)."""
+    from app.constants import ShareClipScope
+
+    if scope == ShareClipScope.ALL_TEAM.value:
+        return team_layer_clips_for_game(conn, game_id)
+    if scope == ShareClipScope.TAGGED_ONLY.value:
+        # INTERSECT tagged clips with the Team layer: _filter_clips_for_tag alone
+        # would return a My-Athlete clip that happens to carry the tag, which must
+        # NEVER cross (EPIC decision 1/3). Restricting to my_athlete = 0 ids keeps
+        # the invariant even when a tag spans both layers.
+        team_ids = {c["id"] for c in team_layer_clips_for_game(conn, game_id)}
+        seen: set = set()
+        unioned: list[dict] = []
+        for tag in _tag_names_for_email(conn, email):
+            for clip in _filter_clips_for_tag(conn, game_id, tag):
+                if clip["id"] in team_ids and clip["id"] not in seen:
+                    seen.add(clip["id"])
+                    unioned.append(clip)
+        return unioned
+    if scope == ShareClipScope.GAME_ONLY.value:
+        return []
+    raise ValueError(f"Unknown share clip scope: {scope!r}")
+
+
 def clips_overlap(a: dict, b: dict) -> bool:
     """Two clips overlap if video_sequence matches and time ranges intersect."""
     if a.get("video_sequence") != b.get("video_sequence"):
@@ -412,6 +501,16 @@ def clips_overlap(a: dict, b: dict) -> bool:
     b_start = b.get("start_time", 0) or 0
     b_end = b.get("end_time", 0) or 0
     return a_start < b_end and b_start < a_end
+
+
+def _is_team_layer(clip: dict) -> bool:
+    """True if the clip is on the Team layer (my_athlete == 0).
+
+    Layer semantics: my_athlete NULL or 1 = My Athlete; 0 = Team. NULL must be
+    read as My Athlete, never as Team or "unknown" -- so this is an explicit
+    ``== 0`` test, not a truthiness check on a possibly-NULL value.
+    """
+    return clip.get("my_athlete") == 0
 
 
 def merge_clips(existing: dict, incoming: dict) -> dict:
@@ -451,7 +550,7 @@ def _get_existing_clips(conn: sqlite3.Connection, game_id: int) -> list[dict]:
     cur = conn.cursor()
     cur.execute(
         """SELECT id, rating, name, notes, start_time, end_time, video_sequence,
-                  tagged_teammates
+                  tagged_teammates, my_athlete
            FROM raw_clips WHERE game_id = ?""",
         (game_id,),
     )
@@ -522,16 +621,24 @@ def _materialize_clips(
         incoming_athletes = _build_athlete_set(clip, sharer_profile_name)
         overlap_found = False
         for ex in existing:
-            if clips_overlap(ex, clip):
+            # Incoming share clips are always Team layer (my_athlete=0). Merge
+            # only with an existing clip on the SAME (Team) layer -- a cross-
+            # layer intersection (the recipient's own My Athlete clip on the
+            # same play) must NOT be merged, or the recipient loses their own
+            # curation. A cross-layer overlap falls through to a plain insert
+            # so both clips coexist (T5745).
+            if _is_team_layer(ex) and clips_overlap(ex, clip):
                 merged_data = merge_clips(ex, clip)
                 existing_athletes = set(decode_data(ex.get("tagged_teammates")) or [])
                 all_athletes = existing_athletes | incoming_athletes
                 merged_teammates = encode_data(sorted(all_athletes)) if all_athletes else None
                 cur = recipient_conn.cursor()
+                # Never rewrite the row's my_athlete -- both clips are already
+                # Team layer, and a merge must never change a row's layer.
                 cur.execute(
                     """UPDATE raw_clips
                        SET start_time = ?, end_time = ?, name = ?, notes = ?,
-                           tagged_teammates = ?, my_athlete = 0
+                           tagged_teammates = ?
                        WHERE id = ?""",
                     (
                         merged_data["start_time"],
@@ -842,3 +949,102 @@ def serialize_clip_data(clips: list[dict]) -> bytes:
             "tagged_teammates": c.get("tagged_teammates"),
         })
     return encode_data(clean)
+
+
+def claim_game_link(
+    share: dict,
+    claimer_user_id: str,
+    claimer_profile_id: str,
+    include_annotations: bool,
+    sharer_email: str | None = None,
+) -> dict:
+    """Materialize a public game-link claim into the claimer's chosen profile (T5730).
+
+    `share` is a get_game_share_by_token(...) row (must be a live `game_link`; the
+    caller enforces share_type/revoked). Routes through materialize_game_share so the
+    copied game + clips inherit a NON-NULL `shared_by` (T5330 invariant -- onboarding
+    stays blind to imported content). Game always; team annotations opt-in.
+
+    Idempotency (EPIC decision 5):
+      - A repeat claim resolves to the SAME local game via the share_claims row AND
+        video-hash dedup, never a second copy.
+      - A re-claim with include_annotations=True after a game-only claim materializes
+        the Team-layer clips into that same game (materialize's merge path handles
+        overlap), and upgrades the claim row.
+
+    Returns {game_id, already_claimed, imported_annotations}.
+    """
+    share_id = share["id"]
+    sharer_user_id = share["sharer_user_id"]
+    sharer_profile_id = share["sharer_profile_id"]
+    game_id = share["game_id"]
+
+    existing = get_share_claim(share_id, claimer_user_id)
+    if existing:
+        # Idempotent: already imported annotations, OR this call adds nothing new
+        # (game-only re-claim). Return the SAME local game -- no re-materialize.
+        if existing["include_annotations"] or not include_annotations:
+            return {
+                "game_id": existing["local_game_id"],
+                "profile_id": existing["claimer_profile_id"],
+                "already_claimed": True,
+                "imported_annotations": bool(existing["include_annotations"]),
+            }
+        # Upgrade path: game-only -> with-annotations. Land the clips in the SAME
+        # profile the game was first claimed into so hash-dedup finds that game.
+        claimer_profile_id = existing["claimer_profile_id"] or claimer_profile_id
+        include_annotations = True
+
+    # The claimer is (almost always) a different user than the sharer, so the
+    # sharer's profile DB may not be cached on this machine. Pull it read-only
+    # from R2 before materialize_game_share's local-only _open_profile_db needs it
+    # (same move the collection-share resolve uses). No require_fresh: this is a
+    # read of the SOURCE, never written back.
+    ensure_profile_db_local(sharer_user_id, sharer_profile_id)
+
+    clip_data: list[dict] = []
+    if include_annotations:
+        source_conn = open_profile_db_readonly(sharer_user_id, sharer_profile_id)
+        if source_conn is None:
+            raise ValueError(
+                f"Sharer profile DB unavailable for claim: "
+                f"{sharer_user_id}/{sharer_profile_id}"
+            )
+        try:
+            clip_data = team_layer_clips_for_game(source_conn, game_id)
+        finally:
+            source_conn.close()
+
+    # tag_name="" (falsy) -> materialize attributes the referral via the share's
+    # own type (game_link -> "game_link_share"), NOT the teammate_share channel.
+    result = materialize_game_share(
+        sharer_user_id=sharer_user_id,
+        sharer_profile_id=sharer_profile_id,
+        recipient_user_id=claimer_user_id,
+        recipient_profile_id=claimer_profile_id,
+        game_id=game_id,
+        tag_name="",
+        share_id=share_id,
+        clip_data=clip_data,
+        sharer_email=sharer_email,
+    )
+    local_game_id = result["game_id"]
+
+    record_share_claim(
+        share_id=share_id,
+        claimer_user_id=claimer_user_id,
+        claimer_profile_id=claimer_profile_id,
+        include_annotations=include_annotations,
+        local_game_id=local_game_id,
+    )
+
+    return {
+        "game_id": local_game_id,
+        # The profile the game ACTUALLY landed in -- may differ from the caller's
+        # pick on an annotations-upgrade re-claim (forced to the original claim's
+        # profile so hash-dedup lands the clips in the SAME game). The endpoint
+        # echoes THIS so the frontend lands on the right profile's recap.
+        "profile_id": claimer_profile_id,
+        "already_claimed": False,
+        "imported_annotations": include_annotations,
+    }

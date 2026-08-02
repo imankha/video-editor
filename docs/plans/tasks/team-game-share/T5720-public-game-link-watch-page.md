@@ -90,19 +90,33 @@ must play the **team recap** instantly with no account.
 ## Implementation
 
 ### Steps
-1. [ ] Architect design: endpoint contracts, share row shape, anonymous-scope guarantee,
-       revocation/expiry semantics (user approval gate)
-2. [ ] Backend: create (idempotent) + resolve + poster proxy + viewed beacon + revoke
-3. [ ] Stitch-on-share wiring (`ensure_recap` + poster warm; zero-team-clips explicit error)
-4. [ ] Edge function + SPA route/view + game-card entry points
-5. [ ] Tests: idempotent create, revoked 410, anonymous payload contains no full-game URL,
-       OG tags, zero-clip refusal; edge fallthrough paths
+1. [x] Architect design: endpoint contracts, share row shape, anonymous-scope guarantee,
+       revocation/expiry semantics (user approval gate) — `T5720-design.md`, approved 2026-08-01
+2. [x] Backend: create (idempotent) + resolve + poster proxy + viewed beacon + revoke
+3. [x] Stitch-on-share wiring (`ensure_recap` + poster warm; zero-team-clips explicit error)
+4. [x] Edge function + SPA route/view + game-card entry points
+5. [x] Tests: idempotent create, revoked 410, anonymous payload contains no full-game URL,
+       OG tags, zero-clip refusal; edge fallthrough paths (`test_t5720_public_game_link.py`
+       16 tests + `functions/shared/game/game-page.test.js` 10 tests)
 6. [ ] Real unfurl verify (WhatsApp/iMessage) on staging — poster + title within crawler
-       timeout (T5270 gate)
+       timeout (T5270 gate) — deferred to staging (supervisor push)
 
 ### Progress Log
 
 **2026-07-21**: Created from the epic consolidation (T4910 watch/unfurl half).
+
+**2026-08-01**: Architect design gate approved (`T5720-design.md`). Implemented backend
+(create/resolve/poster/viewed/revoke), stitch-on-share via `ensure_recap(...,'team')` +
+`warm_recap_poster(layer='team')`, edge function `functions/shared/game/[token].js`, SPA
+`SharedGameView` + `/shared/game/:token` route, and the game-card Copy/Revoke link in
+ShareGameModal. **DDL required** (v020): the `shares.share_type` CHECK had to widen to include
+`'game_link'`, plus a `share_games.game_date` snapshot column — migration written, `_SCHEMA_DDL`
+updated, does NOT auto-run (admin hits `POST /api/admin/migrate` after deploy). Anonymous-scope
+guarantee is structural (`PublicGameLinkResponse` has no game-source field). Tests: 16 backend
+(`test_t5720_public_game_link.py`) + 10 edge (`game-page.test.js`) green; full share/game/recap/
+referral regression suite green (211 passed after updating the `SHARE_TYPE_TO_CHANNEL` lock-test).
+Reviewer run: 1 MAJOR (sync `record_milestone` on create path) fixed → now `BackgroundTasks`; minors
+addressed. Real chat-app unfurl verify deferred to staging (supervisor push).
 
 ## Acceptance Criteria
 

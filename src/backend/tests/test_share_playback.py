@@ -431,7 +431,7 @@ class TestShareGameEndpoint:
         ), caplog.at_level("WARNING"):
             resp = client.post(
                 f"/api/games/{game_id}/share",
-                json={"emails": [RECIPIENT_EMAIL]},
+                json={"recipients": [{"email": RECIPIENT_EMAIL, "scope": "game_only"}]},
                 headers=_auth_headers(SHARER_ID),
             )
 

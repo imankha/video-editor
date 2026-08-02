@@ -68,6 +68,25 @@ export function consumePendingGame() {
   return pending;
 }
 
+// --- Post-claim recap (T5730) ---
+// After a public game link is claimed + imported, the landing is the game
+// card / recap (NOT Annotate). ProjectManager consumes this once its games
+// have loaded to auto-open the claimed game's recap with a tag-your-athlete
+// nudge. Set by ClaimGameView right before it navigates home.
+
+const RECAP_GAME_ID_KEY = 'pendingRecapGameId';
+
+export function setPendingRecap(gameId) {
+  sessionStorage.setItem(RECAP_GAME_ID_KEY, gameId.toString());
+}
+
+export function consumePendingRecap() {
+  const gameId = sessionStorage.getItem(RECAP_GAME_ID_KEY);
+  if (gameId == null) return null;
+  sessionStorage.removeItem(RECAP_GAME_ID_KEY);
+  return parseInt(gameId);
+}
+
 // --- Cross-profile game reference (T5820) ---
 //
 // A reference game card in one profile's Games tab points at the REAL game owned

@@ -6,6 +6,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
+import { toast } from './shared/Toast';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
 import { compareGameTime } from '../utils/timeFormat';
@@ -26,6 +27,7 @@ import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProfileStore } from '../stores/profileStore';
 import {
+  consumePendingRecap,
   setPendingGameReference,
   peekPendingGameReference,
   consumePendingGameReference,
@@ -540,6 +542,21 @@ export function ProjectManager({
     }
   }, [showNewProjectModal, onFetchGames]);
 
+  // T5730: post-claim landing = the claimed game's recap (watching first), with a
+  // one-time "tag your athlete's plays" nudge toward Annotate. Consumed once the
+  // games list has loaded so the freshly-imported game is present; the breadcrumb
+  // is cleared on read so it fires exactly once (never on a later home visit).
+  useEffect(() => {
+    if (loading || games.length === 0) return;
+    const recapGameId = consumePendingRecap();
+    if (recapGameId == null) return;
+    const game = games.find(g => g.id === recapGameId);
+    if (!game) return;
+    setRecapGame({ game, initialTab: 'team' });
+    toast.info('Tag your athlete’s plays', {
+      message: 'This game is on your Team layer — open Annotate to tag your own athlete.',
+    });
+  }, [games, loading]);
   // T5820: clicking a reference card is a composite gesture — set the transient
   // cross-profile breadcrumb, hint the Games tab (the existing read-once
   // `projectManagerTab` mechanism, consumed by the effect above), then switch to

@@ -129,9 +129,9 @@ class TestTrackImports:
 
     def test_postgres_track(self):
         from app.migrations.postgres import MIGRATIONS, RUNNER
-        # T5770: v022 added (v020/v021 belong to unmerged sibling branches, not
-        # this track's list) -- 20 registered migrations, head at v022.
-        assert len(MIGRATIONS) == 20
+        # v020/v021 (Share the Game epic) merged alongside T5770's v022, so the
+        # track is contiguous again: 22 registered migrations, head at v022.
+        assert len(MIGRATIONS) == 22
         assert MIGRATIONS[0].version == 1
         assert RUNNER.latest_version == 22
 
