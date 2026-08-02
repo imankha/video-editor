@@ -100,7 +100,11 @@ class FakeR2:
             obj = self._objects.get(Key)
         if obj is None:
             raise _NoSuchKey(Key)
-        return {"Body": io.BytesIO(obj["data"])}
+        # T6340: get_object carries the object's Metadata alongside its Body
+        # (matches head_object + real boto3), so a caller can fetch the bytes AND
+        # their x-amz-meta-db-version sync version in ONE atomic round trip.
+        # Additive — existing callers that read only "Body" are unaffected.
+        return {"Body": io.BytesIO(obj["data"]), "Metadata": dict(obj["metadata"])}
 
     def _store(self, Key, data, ExtraArgs=None):
         meta = dict((ExtraArgs or {}).get("Metadata", {}))

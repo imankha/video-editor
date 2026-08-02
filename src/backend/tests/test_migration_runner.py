@@ -43,11 +43,16 @@ def _make_sqlite(path: Path, user_version: int) -> None:
 
 
 def _fake_download_writes_version(version: int):
-    """Returns a side_effect for _download_profile_db that writes a SQLite at `version`."""
+    """Returns a side_effect for _download_profile_db that writes a SQLite at `version`.
+
+    Returns the REAL production shape (found, sync_version) — _download_profile_db
+    fetches bytes + x-amz-meta-db-version in one get_object (T6340). The runner
+    unpacks this tuple directly; a bare bool no longer has a code path.
+    """
     def _download(user_id, profile_id, local_path):
         local_path = Path(local_path)
         _make_sqlite(local_path, version)
-        return True
+        return True, version
     return _download
 
 
