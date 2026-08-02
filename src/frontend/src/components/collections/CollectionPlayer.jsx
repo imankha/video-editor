@@ -4,6 +4,7 @@ import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
+import { ProgressTrack } from '../shared/ProgressTrack';
 
 const SWIPE_THRESHOLD_PX = 48;
 
@@ -216,16 +217,15 @@ export function CollectionPlayer({
               onMouseLeave={() => setHoverIndex((h) => (h === i ? null : h))}
               className="group relative flex-1 py-2 cursor-pointer"
             >
-              <div className="h-1 rounded-full bg-white/25 overflow-hidden">
-                <div
-                  className="h-full bg-white rounded-full"
-                  style={{
-                    width: i < activeIndex ? '100%'
-                      : i === activeIndex ? `${segmentProgress * 100}%`
-                      : '0%',
-                  }}
-                />
-              </div>
+              <ProgressTrack
+                trackClassName="h-1 rounded-full bg-white/25 overflow-hidden"
+                fillClassName="h-full bg-white rounded-full"
+                progress={
+                  i < activeIndex ? 100
+                    : i === activeIndex ? segmentProgress * 100
+                    : 0
+                }
+              />
               {hoverIndex === i && label && (
                 <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 max-w-[80vw] -translate-x-1/2 truncate rounded bg-black/80 px-2 py-1 text-xs text-white shadow">
                   {label}
