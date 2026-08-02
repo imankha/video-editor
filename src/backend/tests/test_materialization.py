@@ -167,16 +167,22 @@ def _insert_game_video(conn, game_id, blake3_hash, sequence=0, **kwargs):
 
 
 def _insert_clip(conn, game_id, start_time, end_time, tagged_teammates=None,
-                 name=None, rating=3, notes=None, video_sequence=None):
-    """Insert a raw_clip row and return its id."""
+                 name=None, rating=3, notes=None, video_sequence=None,
+                 my_athlete=1):
+    """Insert a raw_clip row and return its id.
+
+    my_athlete defaults to 1 (My Athlete layer) -- the recipient's own clips.
+    Pass my_athlete=0 to model an existing Team-layer clip (T5745: an incoming
+    Team share clip merges only with an existing Team clip).
+    """
     tt_encoded = encode_data(tagged_teammates) if tagged_teammates else None
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO raw_clips (filename, rating, name, notes, start_time,
            end_time, game_id, video_sequence, tagged_teammates, my_athlete)
-           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (rating, name, notes, start_time, end_time, game_id, video_sequence,
-         tt_encoded),
+         tt_encoded, my_athlete),
     )
     clip_id = cur.lastrowid
     if tagged_teammates:
@@ -451,9 +457,10 @@ class TestMaterializeClips:
         conn = _create_profile_db(db_path)
         game_id = _insert_game(conn)
 
-        # Existing clip
+        # Existing clip on the Team layer (T5745: only a same-layer existing
+        # clip merges with an incoming Team share clip).
         _insert_clip(conn, game_id, 0, 5, name="Existing", notes="Note A",
-                     video_sequence=0)
+                     video_sequence=0, my_athlete=0)
 
         # Incoming overlapping clip
         incoming = [
@@ -484,7 +491,9 @@ class TestMaterializeClips:
         conn = _create_profile_db(db_path)
         game_id = _insert_game(conn)
 
-        _insert_clip(conn, game_id, 0, 5, name="Existing", video_sequence=0)
+        # Team-layer existing clip so the incoming Team clip can merge (T5745).
+        _insert_clip(conn, game_id, 0, 5, name="Existing", video_sequence=0,
+                     my_athlete=0)
 
         incoming = [
             {"rating": 3, "name": "Overlap", "notes": None, "start_time": 3,
@@ -955,9 +964,12 @@ class TestMaterializeGameShare:
         _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"], name="Goal 1")
         _insert_clip(s_conn, s_game_id, 10, 15, tagged_teammates=["Jake"], name="Goal 2")
 
-        # Recipient already has the same game (dedup by hash)
+        # Recipient already has the same game (dedup by hash). The existing clip
+        # is Team-layer so the overlapping shared clip still merges (T5745:
+        # a My Athlete clip would instead be preserved as a separate row).
         r_game_id = _insert_game(r_conn, name="Match", blake3_hash="same_hash")
-        _insert_clip(r_conn, r_game_id, 3, 8, name="Existing clip", video_sequence=None)
+        _insert_clip(r_conn, r_game_id, 3, 8, name="Existing clip", video_sequence=None,
+                     my_athlete=0)
         r_conn.commit()
 
         mock_get_ref.return_value = {
