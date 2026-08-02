@@ -131,7 +131,7 @@ async def list_users(
 
         cur.execute(f"""
             SELECT
-                u.user_id, u.email,
+                u.user_id, u.email, u.created_at,
                 s.origin, s.acquired_at,
                 s.total_spent_cents, s.last_active_at,
                 s.total_usage_seconds, s.current_session_start
@@ -153,8 +153,22 @@ async def list_users(
                 GROUP BY user_id, action
             """, (page_user_ids,))
             action_rows = cur.fetchall()
+
+            # T5770: trailing-7-day engaged usage per user — ONE grouped query
+            # keyed by the page's user ids (no per-user N+1). day >= CURRENT_DATE
+            # - 6 covers today..today-6 = 7 distinct days. Shows real recorded
+            # buckets only (history is never backfilled).
+            cur.execute("""
+                SELECT user_id, COALESCE(SUM(seconds), 0) AS last_7d
+                FROM user_usage_daily
+                WHERE user_id = ANY(%s)
+                  AND day >= CURRENT_DATE - INTERVAL '6 days'
+                GROUP BY user_id
+            """, (page_user_ids,))
+            last_7d_by_user = {r["user_id"]: r["last_7d"] for r in cur.fetchall()}
         else:
             action_rows = []
+            last_7d_by_user = {}
 
         actions_by_user: dict[str, dict[str, int]] = {}
         for ar in action_rows:
@@ -200,6 +214,24 @@ async def list_users(
                 row["current_session_start"], row["last_active_at"], datetime.now(UTC)
             )
 
+        # T5770: average weekly usage — DERIVED at read time, stored NOWHERE
+        # (no-redundant-state rule). Numerator is the same effective usage the
+        # Usage column shows (all-time total + any still-open session). Weeks
+        # since signup use the segment signup date (acquired_at), falling back to
+        # users.created_at when there is no segment row (LEFT JOIN NULL); clamped
+        # to a minimum of 1 week so a brand-new signup neither divides by zero nor
+        # yields an absurd average. (The task named user_segments.signup_completed_at,
+        # which does not exist on that table; acquired_at is its signup-date column.)
+        signup_date = row["acquired_at"]
+        if signup_date is None and row["created_at"] is not None:
+            signup_date = row["created_at"].date()
+        if signup_date is not None:
+            days_since_signup = (datetime.now(UTC).date() - signup_date).days
+            weeks_since_signup = max(1.0, days_since_signup / 7.0)
+        else:
+            weeks_since_signup = 1.0
+        avg_weekly_seconds = round(effective_usage / weeks_since_signup)
+
         users.append({
             "user_id": user_id,
             "email": row["email"],
@@ -220,6 +252,8 @@ async def list_users(
             "last_step": last_step,
             "action_count": action_count,
             "total_usage_seconds": effective_usage,
+            "avg_weekly_seconds": avg_weekly_seconds,
+            "last_7d_seconds": last_7d_by_user.get(user_id, 0),
         })
 
     return {

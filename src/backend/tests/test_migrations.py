@@ -129,9 +129,11 @@ class TestTrackImports:
 
     def test_postgres_track(self):
         from app.migrations.postgres import MIGRATIONS, RUNNER
-        assert len(MIGRATIONS) == 19
+        # T5770: v022 added (v020/v021 belong to unmerged sibling branches, not
+        # this track's list) -- 20 registered migrations, head at v022.
+        assert len(MIGRATIONS) == 20
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 19
+        assert RUNNER.latest_version == 22
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status

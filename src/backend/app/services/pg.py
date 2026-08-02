@@ -230,6 +230,17 @@ CREATE INDEX IF NOT EXISTS idx_segments_referrer ON user_segments(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_segments_last_active ON user_segments(last_active_at DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_segments_acquired_origin ON user_segments(acquired_at, origin);
 
+-- T5770: per-user per-day engaged-usage buckets. Complements the all-time
+-- running total on user_segments.total_usage_seconds; summed over a trailing
+-- window (e.g. last 7 days) for the admin dashboard. Written ONLY via
+-- analytics.add_usage_seconds (single write path), same txn as the total.
+CREATE TABLE IF NOT EXISTS user_usage_daily (
+    user_id TEXT NOT NULL,
+    day DATE NOT NULL,
+    seconds INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+);
+
 CREATE TABLE IF NOT EXISTS user_actions (
     user_id TEXT NOT NULL REFERENCES users(user_id),
     action TEXT NOT NULL,

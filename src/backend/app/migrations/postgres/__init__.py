@@ -18,6 +18,7 @@ from .v016_collection_shares import V016CollectionShares
 from .v017_referral_inherited_sport import V017ReferralInheritedSport
 from .v018_share_sharer_sport import V018ShareSharerSport
 from .v019_credits import V019Credits
+from .v022_user_usage_daily import V022UserUsageDaily
 
 MIGRATIONS = [
     V001Baseline(),
@@ -39,6 +40,7 @@ MIGRATIONS = [
     V017ReferralInheritedSport(),
     V018ShareSharerSport(),
     V019Credits(),
+    V022UserUsageDaily(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
