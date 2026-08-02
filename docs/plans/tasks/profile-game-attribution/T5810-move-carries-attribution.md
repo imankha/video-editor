@@ -67,8 +67,9 @@ In the move flow, before inserting target `final_videos` rows:
 1. [x] Remap logic + `_build_moved_reel_row` changes
 2. [x] Orphan-reference cleanup in move phase 2 + reel delete
 3. [x] Tests (see criteria)
-4. [ ] Real-flow verification on staging: move 2 reels from one game into a kid profile, check
-       Gallery grouping — **pending merge + deploy; this is the step that closes the unverified gap below**
+4. [x] Real-flow verification on staging: move 2 reels from one game into a kid profile, check
+       Gallery grouping — **DONE 2026-08-02, see Progress Log. The attribution logic is CONFIRMED
+       over real HTTP; the run also surfaced an unrelated failure-path bug, filed as T6350.**
 
 ### Progress Log
 
@@ -123,3 +124,29 @@ than mocked. Step 4 above closes this on staging.
       deleted by cleanup (test)
 - [ ] Source game missing → reel moves with that id dropped + warning, no crash (test)
 - [ ] Existing T4850 move tests still green (media copy, all-or-nothing, durable sync ordering)
+
+**2026-08-02 — staging verification (step 4) DONE. The attribution logic is confirmed on real
+infrastructure; a separate failure-path bug was found and filed.**
+
+Ran the real flow against staging (`reel-ballers-api-staging.fly.dev`) as `imankh@gmail.com`
+(profile `9fa7378c`, 6 games / 35 single-clip published reels), moving **two reels from the SAME
+game** (ids 8 and 7, both `game_ids=[2]`) into a freshly created sibling profile `a243df17`.
+
+Confirmed over real HTTP + a direct read of staging R2:
+- **v030 is live on staging** — `GET /api/games` serves `is_reference` / `source_profile_id` /
+  `source_game_id` / `source_profile_name` on real rows.
+- **Attribution carried**: both moved reels came out with `game_ids=[1]` pointing at the target's
+  new game.
+- **Reference row correct**: `is_reference=true`, `source_profile_id=9fa7378c`, `source_game_id=2`,
+  frozen name "Vs LA Rebels May 2", `storage_expires_at=None` (no expiry on a reference).
+- **Dedup proven on real data**: two reels from one game produced exactly **one** reference row —
+  the acceptance criterion that previously had only fixture-level evidence.
+
+**Unrelated bug found in the same run → [T6350](../T6350-move-reels-half-apply-on-sync-failure.md).**
+The call returned 503 `sync_failed` ("Your reel was not moved") *after* the target had already
+committed durably (staging R2 held the reference game + both reels), while the source kept its
+copies — so the reels were in both profiles and the message was false. Phase 1 (target write +
+sync) succeeded; phase-2 (source-side `durable_sync`) failure has no compensating action. This is
+T4850 phase-handling, not attribution logic — T5810 only rides the existing phase-1 write. Staging
+was restored by deleting the test profile (source verified back at 35 reels / 6 games / 0
+references).
