@@ -222,9 +222,25 @@ often. A deferral is benign (marks `.sync_pending`, healed by the re-drain or th
 false conflict was not. Checkpoint-then-PUT is now atomic w.r.t. other syncs, which is
 independently correct.
 
-**Known residual (pre-existing, NOT introduced here).** R2 has no compare-and-swap primitive, so
-two MACHINES can still both compute `r2+1` and PUT the same version number. That collision
-predates T6400 and is unchanged by it.
+**Known residual (pre-existing, NOT introduced here) — and the two assumptions that make it
+unreachable today.** R2 has no compare-and-swap primitive, so two independent WRITERS can still
+both compute `r2+1` and PUT the same version number. That collision predates T6400 and is
+unchanged by it. It is currently UNREACHABLE, because both halves of "one writer" hold:
+
+1. **One machine.** `flyctl machines list` 2026-08-03: prod = 1 (`843e15c2d26718`), staging = 1
+   (`d8933d5f417308`). `min_machines_running` is 1 (prod) / 0 (staging) and nothing autoscales
+   the machine COUNT.
+2. **One process per machine.** `Dockerfile`: `CMD ["uvicorn", "app.main:app", ...]` — no
+   `--workers`. The whole sync design already depends on this (the in-memory
+   `_user_db_versions` / `_initialized_user_dbs` / `_db_versions` caches and machine pinning are
+   all per-process and would be incoherent across workers).
+
+**So `get_upload_lock` (a `threading.Lock`, per-PROCESS) covers every writer that exists.**
+Decision + checkpoint + PUT are serialised for all of them, so no two writers can compute the
+same `r2+1`. **Scaling to 2+ machines, OR adding `--workers` to uvicorn, makes this live again
+immediately and silently** — same for `_OWN_UPLOAD_VERSIONS`, which is also per-process. Either
+change needs a real distributed guard (conditional PUT / lease), not this lock. Decision
+2026-08-03 (user): not worth tasking while single-machine holds.
 
 **Tests:** `tests/test_t6400_cas_self_race.py` — the self-conflict reproduced RED-first
 deterministically (no threads: pass the baseline the loser captured before the winner advanced
