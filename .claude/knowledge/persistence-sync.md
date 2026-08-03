@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-08-03 (T6400: **a machine could CAS-conflict with its OWN write.** The version decision (baseline read -> HEAD -> refuse) ran entirely OUTSIDE the upload lock that serialises the PUT, so two concurrent syncs of the SAME db in ONE process interleaved: A reads baseline v2734; B reads v2734, HEADs v2734, takes the lock, PUTs v2735, advances the baseline; A's HEAD then sees v2735 > v2734 and refuses. Both upload the SAME file on disk, so A's "stale" copy already contained B's data -- a false conflict against ITSELF. Concurrency per user is BY DESIGN (`db_sync.py`: "fire-and-forget `_background_sync` tasks are not serialised per user"); T5870 round 2 gave the RE-DRAIN a non-blocking lock probe but the PRIMARY sync path never got the equivalent guard for its decision. Cost: false "edits aren't saving" banner + `schedule_profile_db_reheal` forcing a FULL profile.sqlite re-download on the next request (the "My Reels took forever to load" symptom), plus a narrow silent-loss window -- rows COMMITTED after the winner's PUT but before the loser's HEAD are refused and then DISCARDED by the re-heal (T6160 decision 2). FIX, two halves: (1) the decision + WAL checkpoint + PUT now all run INSIDE the upload lock (also closes the reverse interleave where both syncs HEAD the same version and PUT the same new_version = a version collision other machines' CAS relies on); (2) `_OWN_UPLOAD_VERSIONS` records the version THIS PROCESS last PUT per R2 key, written under the lock BEFORE releasing, and the refusal is skipped when `r2_version == our own recorded version`. EQUALITY, not a range -- a foreign writer always lands strictly ABOVE our own version and still refuses; an unconfirmed (None) baseline is never rescued; the BASELINE IS NEVER MUTATED so `new_version` arithmetic is unchanged for every caller (mutating it broke 11 existing tests -- that approach was rejected). The caller's `set_local_db_version` happens AFTER the primitive returns, i.e. OUTSIDE the lock, which is exactly why re-reading the baseline under the lock does NOT close this race and the own-upload record is required. Accepted trade-off: the lock is now held across the HEAD (~50-100ms) and the checkpoint (<=2s busy timeout), so the middleware's `lock_timeout=0.5s` deferral may fire slightly more often -- a deferral is benign (marks pending, healed by the re-drain), a false conflict was not. See T6400 section.)
 updated: 2026-08-03 (T6390: the `.sync_conflict`/`.sync_failed` markers are now PER-SCOPE files (`.sync_{kind}.{scope}`, scope = `USER_DB_SCOPE="user"` or the profile_id) carrying a JSON DIAG payload, not per-USER files with a bare `str(time.time())`. Fixes a real defect: a success on ONE db (`clear_sync_conflict(user_id)`) silently ERASED a live conflict on ANOTHER — incl. `retry_pending_sync`'s deterministic SELF-STOMP (profile marks conflict, user-branch success cleared it → a non-retryable CAS conflict was blind-retried by `_redrain` to exhaustion and mislabelled `failed`). Now cleared PER SCOPE; `has_sync_conflict` = ANY scope; the T4310 post-gather reassertion is DELETED (scoping makes the race impossible). `retry_pending_sync` returns an aggregate `SyncResult` (not bool) and `_redrain_failed_sync` decides "stop, CAS conflict" from that RETURN VALUE, not a marker file. DIAGNOSTICS: markers carry `reason`(stale_baseline|unconfirmed_baseline|upload_failed|checkpoint_busy|legacy) + db/profile_id/loaded/r2/machine/req_id/method/path/writer/written_at; storage.py stamps `db-writer`(machine/req_id)+`db-written-at` on every upload and reads them from the conflict HEAD (get_db_version_from_r2 return_metadata=True — ZERO extra R2 calls); the `[SYNC_CONFLICT]` CRITICAL now names req_id/method/path/writer/reason (method/path via new `_current_method`/`_current_path` ContextVars set in dispatch); `read_sync_diag` renders the winning marker into the `X-Sync-Diag` header (ADDED to main.py:217 `expose_headers` — invisible cross-origin otherwise); client `checkSyncStatus` logs a console.error on the TRANSITION into conflict/failed (no spam) and `retrySyncToR2` logs all 3 outcomes. Reader/legacy tolerance: `has_/read_` never raise on a legacy bare float marker. CAS guard BYTE-IDENTICAL — diagnostics only. Readers TOLERATE the legacy format. See T6390 section.)
 updated: 2026-08-02 (T6340: the profile_db MIGRATION RUNNER is now a baseline-establishing caller. `_migrate_profile_db` force-downloads the canonical R2 profile.sqlite and `shutil.move`s it over the local file; the R2 sync version lives in object metadata, NOT in the bytes, so the swapped-in file had NO db_version row → get_local_db_version()==None → CAS BLOCKING-2 refused the post-migration upload UNCONDITIONALLY → NO profile_db migration ever reached R2 on staging/prod (v030/v031 stuck). FIX: after the swap, record the DOWNLOADED copy's sync version as the confirmed baseline via set_local_db_version, atomically — `_download_profile_db` now fetches bytes+metadata in ONE get_object so no separate HEAD can observe a moved version (recording a moved version would force-push older bytes at a bumped version = clobber). CAS guard UNCHANGED (fix the caller, not the guard). r2_version now populated in error rows (was always null) via one HEAD on the FAILURE path only. `_migrate_user_db` (user.sqlite) does NOT share the defect — ensure_user_database's restore records the baseline from the same download. See T6340 section.)
 updated: 2026-07-28 (T6160: a CAS conflict now SELF-HEALS — restore is first-access-only, so a running machine never noticed R2 moving ahead and every write refused forever (Retry futile until restart). On conflict the loaded-from version is now invalidated (profile: memory + persisted db_version file row + cooldown; user.sqlite: memory version + `_initialized_user_dbs` init flag + cooldown) so the NEXT request's first-access restore re-pulls R2's newer copy. CAS refusal UNCHANGED (baseline never advanced; a None baseline still refuses via BLOCKING-2). The refused in-flight edit is DISCARDED by the re-pull (decision 2, never merged/force-pushed). ensure_database/ensure_user_database first-access restore gained the T4315 WAL guard (before_download + clear_stale_wal_sidecars) since the re-pull can now fire on a running machine. See T6160 section.)
@@ -158,6 +159,103 @@ scenarios unchanged and green (its download double now returns the real `(found,
 the bare-bool normalization shim in `_migrate_profile_db` was deleted — no production caller returned
 a bare bool). **Out of the container's reach (post-deploy):** staging reaching v031 in R2, and the
 prod below-head audit.
+
+## T6400 — a process must not CAS-conflict with its own write
+
+**Live staging incident 2026-08-03, root-caused in one pass from T6390's diag payload** (its
+first real use — the `db-writer` stamp is what made it solvable):
+
+```
+[sync] state -> conflict  db=profile  reason=stale_baseline  loaded=2734  r2=2735
+machine=d8933d5f417308  writer=d8933d5f417308/dcce51f3
+```
+
+`machine == writer machine`, and staging runs ONE machine (`min_machines_running = 0`,
+`auto_stop_machines = "suspend"`), so a cross-machine race was structurally impossible.
+
+**The race.** In `storage.py` the CAS decision ran entirely outside the lock that serialises
+the PUT: caller reads the baseline (`database.py: sync_db_to_r2_explicit`) → HEAD → refuse →
+*then* `get_upload_lock`. Two concurrent syncs of the same db in one process therefore
+interleave, and **both upload the same file on disk**, so the loser's "stale" copy already
+contains the winner's data. Per-user concurrency is by design — `_redrain_failed_sync`'s own
+comment says fire-and-forget `_background_sync` tasks are not serialised per user. The trigger
+was the "Move to My Reels" click: the durable publish sync plus
+`recordAchievement('moved_to_my_reels')` (fire-and-forget), with an export-worker sync possibly
+still draining.
+
+**Why it was expensive, not cosmetic.** The refusal marks the conflict banner AND calls
+`schedule_profile_db_reheal`, which nulls the local baseline so the next request performs a
+first-access restore of the **entire** profile.sqlite from R2 (v2735 is not a small file) — the
+reported "My Reels took forever to load". It also opens a narrow silent-loss window: rows
+committed AFTER the winner's PUT but before the loser's HEAD are not in R2, the loser is
+refused, and the re-heal then DISCARDS them (T6160 decision 2 — refused edits are dropped,
+never merged). Here that was a quest achievement; on a keyframe `POST /actions` write it would
+be a real user edit.
+
+**The fix — two halves, guard never weakened.**
+1. **The decision moved inside the lock.** `sync_database_to_r2_with_version` /
+   `sync_user_db_to_r2_with_version` now acquire the upload lock first and run
+   baseline-check → HEAD → refuse → WAL checkpoint → PUT inside it (extracted as
+   `_sync_profile_db_locked` / `_sync_user_db_locked` purely so the locked region reads as one
+   unit). This also closes the reverse interleave, where both syncs HEAD the same version and
+   PUT the same `new_version` — a version collision that other machines' CAS relies on.
+   The `lock_timeout` bail-out stays ORDERED BEFORE the HEAD, so a deferred sync still costs
+   zero R2 calls.
+2. **`_OWN_UPLOAD_VERSIONS`** — the version this process last PUT per R2 key, recorded under
+   the lock BEFORE releasing it. The refusal is skipped when `r2_version` EQUALS our own
+   recorded version. **Equality, not a range**: a foreign writer always lands strictly above our
+   own version and still refuses; `_is_own_upload_version` never rescues an unconfirmed (None)
+   baseline; and the **baseline is never mutated**, so `new_version` arithmetic is byte-identical
+   for every caller.
+
+**Landmine — why half 2 is not optional.** The caller's `set_local_db_version` runs AFTER the
+primitive returns, i.e. OUTSIDE the lock. So a sync that waited on the lock still re-reads the
+OLD baseline; re-reading `get_local_db_version` under the lock does NOT close the race. The
+own-upload record is the only in-lock evidence that R2's current version is ours.
+**Rejected approach (pinned by tests):** raising `current_version` to the process's high-water
+mark. It changes `new_version` for every caller and broke 11 existing tests in
+`test_version_conflict` / `test_t6160` / `test_t6340`.
+
+**Accepted trade-off.** The lock is now held across the HEAD (~50-100ms) and the WAL checkpoint
+(≤2s busy timeout), so the middleware's `lock_timeout = 0.5s` deferral may fire slightly more
+often. A deferral is benign (marks `.sync_pending`, healed by the re-drain or the next write); a
+false conflict was not. Checkpoint-then-PUT is now atomic w.r.t. other syncs, which is
+independently correct.
+
+**Known residual (pre-existing, NOT introduced here) — and the two assumptions that make it
+unreachable today.** R2 has no compare-and-swap primitive, so two independent WRITERS can still
+both compute `r2+1` and PUT the same version number. That collision predates T6400 and is
+unchanged by it. It is currently UNREACHABLE, because both halves of "one writer" hold:
+
+1. **One machine.** `flyctl machines list` 2026-08-03: prod = 1 (`843e15c2d26718`), staging = 1
+   (`d8933d5f417308`). `min_machines_running` is 1 (prod) / 0 (staging) and nothing autoscales
+   the machine COUNT.
+2. **One process per machine.** `Dockerfile`: `CMD ["uvicorn", "app.main:app", ...]` — no
+   `--workers`. The whole sync design already depends on this (the in-memory
+   `_user_db_versions` / `_initialized_user_dbs` / `_db_versions` caches and machine pinning are
+   all per-process and would be incoherent across workers).
+
+**So `get_upload_lock` (a `threading.Lock`, per-PROCESS) covers every writer that exists.**
+Decision + checkpoint + PUT are serialised for all of them, so no two writers can compute the
+same `r2+1`. **Scaling to 2+ machines, OR adding `--workers` to uvicorn, makes this live again
+immediately and silently** — same for `_OWN_UPLOAD_VERSIONS`, which is also per-process. Either
+change needs a real distributed guard (conditional PUT / lease), not this lock. Decision
+2026-08-03 (user): not worth tasking while single-machine holds.
+
+**Tests:** `tests/test_t6400_cas_self_race.py` — the self-conflict reproduced RED-first
+deterministically (no threads: pass the baseline the loser captured before the winner advanced
+it), the post-winner-PUT row proven to reach R2, the wrapper path proven to return
+`SyncResult.OK` with no `.sync_conflict` marker, plus the guard half: a foreign writer ahead
+still refuses, a foreign writer ahead OF OUR OWN UPLOAD still refuses (the forgiveness is not a
+blanket amnesty), an unconfirmed baseline still refuses, exactly one HEAD per sync, zero on
+`skip_version_check`, and zero on the `lock_timeout` bail-out. Existing suites green:
+t4310 / t4315 / t5340 / t5870 / t5920 / t6160 / t6340 / t6390 / version_conflict / upload_lock
+(120 passed), plus background_sync / sync_pending / sync_retry / sync_status /
+export_worker_sync / t4050_durable_sync / performance.
+**Unrelated pre-existing bug fixed in passing:** `test_t6340_migration_sync_baseline.py`'s
+`_r2_bytes_user_version` / `_r2_games_count` helpers left a sqlite connection open before
+`p.unlink()`, which raises `PermissionError` on Windows (WinError 32) and failed 5 tests whose
+assertions had already passed. Confirmed identical on clean master; Linux CI hid it.
 
 ## T6390 — per-DB marker scoping + sync-conflict diagnostics
 
