@@ -851,7 +851,7 @@ export function AnnotateContainer({
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects]);
+  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects, setNewClipLayerIsMine]);
 
   /**
    * Update a clip region - syncs to backend
@@ -987,7 +987,7 @@ export function AnnotateContainer({
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects, setNewClipLayerIsMine]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
