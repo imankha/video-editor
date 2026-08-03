@@ -1,8 +1,11 @@
 # T6390: The sync-conflict banner is undiagnosable — log the "why" on both client and server
 
-**Status:** WAITING ON USER (branch `feature/T6390-sync-conflict-diagnostics` pushed,
-Branch CI green; awaiting your staging test + merge. Owed: the real-R2 banner live-drive,
-which the container could not do — see Notes.)
+**Status:** STAGING (merged to master 2026-08-02, `1d32f37e`, Branch CI green).
+**Owed on staging:** the real-R2 live-drive — the container has `R2_ENABLED` empty, so a
+genuine CAS conflict against real R2 content was never reached. Confirm on staging that
+(a) the banner still appears for a real conflict, (b) the browser console alone names
+state/reason/db/loaded/r2/writer/req_id, and (c) `X-Sync-Diag` is readable **cross-origin**
+(local dev is same-origin and cannot validate this).
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-02
