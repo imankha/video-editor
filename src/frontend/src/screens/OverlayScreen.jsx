@@ -588,7 +588,13 @@ export function OverlayScreen({
           // slow-mo section (feeds the client-side default-preview midpoint).
           setPosterMarkerTime(data.poster_marker_time ?? null);
           setPosterSlowmoSection(data.poster_slowmo_section ?? null);
-          setPosterUploadedFilename(null);
+          // T6380: hydrate the uploaded-cover state from poster_source so a
+          // reload restores "Custom image in use" when the served cover is an
+          // upload (bug 2 -- this was previously hardcoded null and only ever
+          // set from the upload response, so the state was session-local).
+          setPosterUploadedFilename(
+            data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
+          );
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -669,7 +675,10 @@ export function OverlayScreen({
           // slow-mo section (feeds the client-side default-preview midpoint).
           setPosterMarkerTime(data.poster_marker_time ?? null);
           setPosterSlowmoSection(data.poster_slowmo_section ?? null);
-          setPosterUploadedFilename(null);
+          // T6380: hydrate the uploaded-cover state from poster_source (bug 2).
+          setPosterUploadedFilename(
+            data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
+          );
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -901,13 +910,22 @@ export function OverlayScreen({
     }
   }, [projectId, canSyncActions, setPosterUploadedFilename]);
 
-  // Wrapped handler: "Remove" the uploaded cover, reactivating the marker in
-  // the UI. Known limitation: this only clears local UI state -- the uploaded
-  // R2 object stays until the next export overwrites the deterministic poster
-  // key with the marker/auto frame (generate_poster_at_export always runs).
-  const wrappedRemoveUpload = useCallback(() => {
-    setPosterUploadedFilename(null);
-  }, [setPosterUploadedFilename]);
+  // Wrapped handler: "Remove" the uploaded cover, reverting to the auto/marker
+  // cover (T6380). Gesture-triggered (the Remove click) -- awaited, never a
+  // useEffect. The backend regenerates the frame and OVERWRITES the
+  // deterministic R2 poster key (so shares/og:image reflect the removal), then
+  // returns the resulting state; we clear the uploaded filename from that
+  // response, not optimistically, so the marker/auto state reactivates only
+  // once the write actually lands.
+  const wrappedRemoveUpload = useCallback(async () => {
+    if (!canSyncActions) return;
+    const result = await overlayActions.revertPoster(projectId);
+    if (result?.success) {
+      setPosterUploadedFilename(null);
+    } else {
+      console.error('[OverlayScreen] Poster revert failed:', result?.error);
+    }
+  }, [projectId, canSyncActions, setPosterUploadedFilename]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights

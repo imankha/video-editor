@@ -62,6 +62,7 @@ from ...services.poster import (
     get_project_poster_marker_time,
     load_project_clip_segments,
     read_clip_segments_for_project,
+    revert_to_auto_poster,
     set_project_poster_marker_time,
     store_override_poster,
 )
@@ -1824,6 +1825,30 @@ async def get_overlay_data(project_id: int):
         poster_marker_time = get_project_poster_marker_time(project_id)
         poster_slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
 
+        # T6380: hydrate the overlay cover state. poster_source on the project's
+        # CURRENT final video tells the client whether a custom upload is the
+        # cover actually served, so a reload restores "Custom image in use"
+        # instead of falsely showing the auto/marker state (bug 2 -- the
+        # uploaded state was previously written only from the upload response
+        # and never read back). Read-only: no write-back (CLAUDE.md restore
+        # rule 4). poster_source is a v032 column on this HOT read path, so it
+        # is column-guarded -- a below-head profile must not 500 the whole
+        # overlay screen (mirrors the poster_marker_time guard at :181 and the
+        # detections_data guard above; the T5630 _has_stage_columns landmine).
+        poster_source = None
+        poster_filename = None
+        if column_exists(cursor, "final_videos", "poster_source"):
+            cursor.execute("""
+                SELECT fv.poster_source AS poster_source,
+                       fv.poster_filename AS poster_filename
+                FROM projects p JOIN final_videos fv ON fv.id = p.final_video_id
+                WHERE p.id = ?
+            """, (project_id,))
+            poster_row = cursor.fetchone()
+            if poster_row:
+                poster_source = poster_row["poster_source"]
+                poster_filename = poster_row["poster_filename"]
+
         return JSONResponse({
             'highlights_data': highlights,
             'detections_data': video_detections,
@@ -1840,6 +1865,8 @@ async def get_overlay_data(project_id: int):
             'dim_strength': dim_strength,
             'poster_marker_time': poster_marker_time,
             'poster_slowmo_section': list(poster_slowmo_section) if poster_slowmo_section else None,
+            'poster_source': poster_source,
+            'poster_filename': poster_filename,
         })
 
 
@@ -1972,6 +1999,61 @@ async def upload_poster_image(project_id: int, image: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Failed to store the uploaded cover image")
 
     return JSONResponse({"success": True, "poster_filename": stored})
+
+
+@router.post("/projects/{project_id}/poster/revert")
+async def revert_poster_image(project_id: int):
+    """Revert a custom cover (uploaded image or overlay marker) back to the
+    auto/marker cover (T6380). Mirrors the poster/upload shape.
+
+    Regenerates the open-play frame the export-time selector picks and
+    OVERWRITES the deterministic poster key, so shares / og:image / the share
+    email need zero changes; resets poster_source to 'overlay' (marker still
+    set) or 'auto', and poster_frame_time to the regenerated frame's time.
+    Reuses the SINGLE poster-selection path (`generate_poster_at_export` via
+    `revert_to_auto_poster`) -- no forked re-derivation.
+
+    Gesture-only (the Remove click). Requires an exported final video (same
+    precondition as upload) -- with no final video there is nothing to revert
+    to, so this fails loudly (400) rather than the silent local-only no-op the
+    T5410 controls shipped with (the bug this fixes)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT p.final_video_id AS final_video_id, fv.filename AS filename "
+            "FROM projects p LEFT JOIN final_videos fv ON fv.id = p.final_video_id "
+            "WHERE p.id = ?",
+            (project_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Project not found")
+        final_video_id = row["final_video_id"]
+        final_filename = row["filename"]
+        if not final_video_id or not final_filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Project has no exported final video yet -- nothing to revert",
+            )
+
+    user_id = get_current_user_id()
+    stored = await revert_to_auto_poster(
+        user_id, project_id, final_video_id, final_filename,
+    )
+    if not stored:
+        raise HTTPException(
+            status_code=500, detail="Failed to regenerate the auto/marker cover image"
+        )
+
+    # Report the resulting source so the client updates from the response (not
+    # optimistically): 'overlay' when the project still carries a marker, else
+    # 'auto'. Mirrors generate_poster_at_export's own source decision.
+    poster_source = (
+        "overlay" if get_project_poster_marker_time(project_id) is not None else "auto"
+    )
+    return JSONResponse(
+        {"success": True, "poster_filename": stored, "poster_source": poster_source}
+    )
 
 
 # =============================================================================

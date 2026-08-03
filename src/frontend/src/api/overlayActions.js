@@ -236,6 +236,31 @@ export async function uploadPoster(projectId, file) {
   }
 }
 
+/**
+ * T6380: revert a custom cover (uploaded image or overlay marker) back to the
+ * auto/marker cover. Regenerates the frame the export-time selector picks and
+ * overwrites the deterministic poster key server-side (the R2 object actually
+ * changes -- not a local-only reset like the shipped T5410 Remove).
+ * @param {number} projectId
+ * @returns {Promise<{success: boolean, poster_filename?: string, poster_source?: string, error?: string}>}
+ */
+export async function revertPoster(projectId) {
+  try {
+    const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/poster/revert`, {
+      method: 'POST',
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      console.error('[overlayActions] revertPoster failed:', result.detail || result.error);
+      return { success: false, error: result.detail || result.error, status: response.status };
+    }
+    return result;
+  } catch (err) {
+    console.error('[overlayActions] revertPoster network error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 export default {
   createRegion,
   deleteRegion,
@@ -253,4 +278,5 @@ export default {
   setHighlightShape,
   setPosterTime,
   uploadPoster,
+  revertPoster,
 };
