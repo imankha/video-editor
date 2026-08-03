@@ -165,6 +165,17 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   conveyed by color alone (WCAG 1.4.1). Consequence for tests/e2e: the row marker is no longer
   selectable by `title` — use `[data-testid="clip-row"] [aria-label="Team layer"]` (scoping to the
   row excludes the per-clip `LayerSegmentedControl` radio, which shares that accessible name).
+  **The same rule now applies to the TIMELINE marker** (`ClipRegionLayer`): T6400 removed the
+  ` · My Athlete` / ` · Team` suffix from its hover tooltip and replaced it with a 3px colored
+  LEFT ACCENT BAR (cyan `#06b6d4` = My Athlete, amber `#f59e0b` = Team — the same two colors as
+  the marker underline and the lane headers, so all three agree). The layer survives as the
+  marker's `aria-label` (`"{clip name} - {layer} layer"`). Do NOT delete
+  `layerColorFor`/`LAYER_COLORS` — they are the only remaining VISIBLE layer cue.
+  **That tooltip is PORTALLED to `document.body`** (`position: fixed`, `z-index: 2147483000`,
+  `data-testid="clip-marker-tooltip"`): as a child of the lane it was out-stacked by the lane's own
+  label column, and raising its z-index could never fix that — a z-index cannot escape an
+  ancestor's stacking context. One tooltip is rendered for the ACTIVE marker (hover wins over
+  selection), positioned from that marker's `getBoundingClientRect()`.
   There is no My-Athlete marker to count — count
   `data-testid="clip-row"` rows minus Team markers instead —
   `ClipRegionLayer`'s `layerColorFor`/`layerLabelFor`,

@@ -40,10 +40,42 @@ describe('ClipRegionLayer — layer tint (T5700)', () => {
     expect(badge.style.borderBottom).toContain('rgb(6, 182, 212)');
   });
 
-  it('the hover/select tooltip names the layer', () => {
+  // T6400: the tooltip no longer names the layer (user: "we should rely on coloring
+  // to signal this"). The tint underline above + the two-lane split carry it visually.
+  it('the hover/select tooltip shows the clip name but NOT the layer name', () => {
     const regions = [{ id: 'team', startTime: 0, endTime: 5, rating: 4, name: 'Great press', my_athlete: false }];
     render(<ClipRegionLayer regions={regions} duration={100} selectedRegionId="team" onSelectRegion={() => {}} />);
-    expect(screen.getByText('Team', { exact: false })).toBeTruthy();
+    expect(screen.getByText('Great press', { exact: false })).toBeTruthy();
+    expect(screen.queryByText('Team', { exact: false })).toBeNull();
+    expect(screen.queryByText('My Athlete', { exact: false })).toBeNull();
+  });
+
+  // T6400: the tooltip carries the layer as a colored left accent instead of text.
+  it('accents the tooltip with the layer color (amber Team / cyan My Athlete)', () => {
+    const team = [{ id: 'team', startTime: 0, endTime: 5, rating: 4, name: 'Great press', my_athlete: false }];
+    const { unmount } = render(
+      <ClipRegionLayer regions={team} duration={100} selectedRegionId="team" onSelectRegion={() => {}} />
+    );
+    expect(screen.getByText('Great press', { exact: false }).closest('div').style.borderLeft)
+      .toContain('rgb(245, 158, 11)'); // amber-500
+    unmount();
+
+    const mine = [{ id: 'mine', startTime: 0, endTime: 5, rating: 4, name: 'Solo run', my_athlete: true }];
+    render(<ClipRegionLayer regions={mine} duration={100} selectedRegionId="mine" onSelectRegion={() => {}} />);
+    expect(screen.getByText('Solo run', { exact: false }).closest('div').style.borderLeft)
+      .toContain('rgb(6, 182, 212)'); // cyan-500
+  });
+
+  // T6400: removing the visible label must NOT leave the layer conveyed by color
+  // alone (WCAG 1.4.1) — the marker keeps it as its accessible name.
+  it('the marker still exposes the layer as its accessible name', () => {
+    const regions = [
+      { id: 'team', startTime: 0, endTime: 5, rating: 4, name: 'Great press', my_athlete: false },
+      { id: 'mine', startTime: 10, endTime: 15, rating: 4, name: 'Solo run', my_athlete: true },
+    ];
+    render(<ClipRegionLayer regions={regions} duration={100} selectedRegionId={null} onSelectRegion={() => {}} />);
+    expect(screen.getByLabelText('Great press - Team layer')).toBeTruthy();
+    expect(screen.getByLabelText('Solo run - My Athlete layer')).toBeTruthy();
   });
 
   // T5700 follow-up: an empty per-layer lane (Annotate's two-lane desktop split) still
