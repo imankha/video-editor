@@ -105,10 +105,14 @@ class TestSyncPendingMarker:
 class TestRetryPendingSync:
     """Tests for retry_pending_sync in the middleware."""
 
-    @patch("app.storage.sync_user_db_to_r2_with_version", return_value=(True, 2))
-    @patch("app.storage.sync_database_to_r2_with_version", return_value=(True, 2))
+    # T6390: the primitives now return a 3-tuple when called with with_diag=True
+    # (retry_pending_sync passes it), and retry_pending_sync returns an aggregate
+    # SyncResult instead of a bare bool (truthy only for OK).
+    @patch("app.storage.sync_user_db_to_r2_with_version", return_value=(True, 2, None))
+    @patch("app.storage.sync_database_to_r2_with_version", return_value=(True, 2, None))
     @patch("app.storage.R2_ENABLED", True)
     def test_retry_success(self, mock_db_sync, mock_user_sync, tmp_user):
+        from app.database import SyncResult
         from app.middleware.db_sync import retry_pending_sync
         user_id, base = tmp_user
 
@@ -127,13 +131,15 @@ class TestRetryPendingSync:
              patch("app.database.USER_DATA_BASE", base):
             result = retry_pending_sync(user_id, profile_id="abcd1234")
 
-        assert result is True
+        assert result is SyncResult.OK
+        assert result  # truthy-only-on-OK
         mock_set_ver.assert_called_once_with(user_id, "abcd1234", 2)
         mock_set_user_ver.assert_called_once_with(user_id, 2)
 
-    @patch("app.storage.sync_database_to_r2_with_version", return_value=(False, None))
+    @patch("app.storage.sync_database_to_r2_with_version", return_value=(False, None, {"reason": "upload_failed"}))
     @patch("app.storage.R2_ENABLED", True)
     def test_retry_failure(self, mock_db_sync, tmp_user):
+        from app.database import SyncResult
         from app.middleware.db_sync import retry_pending_sync
         user_id, base = tmp_user
 
@@ -149,4 +155,5 @@ class TestRetryPendingSync:
              patch("app.database.USER_DATA_BASE", base):
             result = retry_pending_sync(user_id, profile_id="abcd1234")
 
-        assert result is False
+        assert result is SyncResult.FAILED
+        assert not result

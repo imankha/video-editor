@@ -40,7 +40,7 @@ class TestSyncDbToR2Explicit:
         """sync_db_to_r2_explicit passes user_id, db_path, and current version."""
         from app.database import sync_db_to_r2_explicit
 
-        mock_sync.return_value = (True, 6)
+        mock_sync.return_value = (True, 6, None)
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
@@ -52,7 +52,7 @@ class TestSyncDbToR2Explicit:
         # from the ARG (profile_r2_key), never get_current_profile_id().
         # T4310: CAS is ON by default for background-worker callers.
         mock_sync.assert_called_once_with(
-            "u1", db_path, 5, skip_version_check=False, lock_timeout=None, profile_id="p1")
+            "u1", db_path, 5, skip_version_check=False, lock_timeout=None, profile_id="p1", with_diag=True)
         assert result is SyncResult.OK
 
     @patch("app.database.R2_ENABLED", True)
@@ -63,7 +63,7 @@ class TestSyncDbToR2Explicit:
         """On success, returns True and updates the local version cache."""
         from app.database import sync_db_to_r2_explicit
 
-        mock_sync.return_value = (True, 4)
+        mock_sync.return_value = (True, 4, None)
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
@@ -105,7 +105,7 @@ class TestSyncDbToR2Explicit:
         process restart)."""
         from app.database import sync_db_to_r2_explicit
 
-        mock_sync.return_value = (False, 9)  # conflict: refused, R2 is at v9
+        mock_sync.return_value = (False, 9, {"reason": "stale_baseline"})  # conflict: refused, R2 is at v9
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
@@ -133,7 +133,7 @@ class TestSyncDbToR2Explicit:
         """On failure, returns False and does NOT update the local version."""
         from app.database import sync_db_to_r2_explicit
 
-        mock_sync.return_value = (False, None)
+        mock_sync.return_value = (False, None, {"reason": "upload_failed"})
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
@@ -175,11 +175,11 @@ class TestSyncUserDbToR2Explicit:
              patch("app.database.USER_DATA_BASE", fake_base), \
              _patch_path_exists(db_path), \
              patch("app.storage.sync_user_db_to_r2_with_version") as mock_sync:
-            mock_sync.return_value = (True, 3)
+            mock_sync.return_value = (True, 3, None)
             result = sync_user_db_to_r2_explicit("u1")
 
         # T4310: CAS is ON by default for background-worker callers.
-        mock_sync.assert_called_once_with("u1", db_path, 2, skip_version_check=False, lock_timeout=None)
+        mock_sync.assert_called_once_with("u1", db_path, 2, skip_version_check=False, lock_timeout=None, with_diag=True)
         assert result is SyncResult.OK
 
     @patch("app.database.get_local_user_db_version", return_value=2)
@@ -193,7 +193,7 @@ class TestSyncUserDbToR2Explicit:
         with patch("app.database.R2_ENABLED", True), \
              patch("app.database.USER_DATA_BASE", fake_base), \
              _patch_path_exists(db_path), \
-             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(True, 3)), \
+             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(True, 3, None)), \
              patch("app.database.set_local_user_db_version") as mock_set_ver:
             result = sync_user_db_to_r2_explicit("u1")
 
@@ -222,7 +222,7 @@ class TestSyncUserDbToR2Explicit:
         with patch("app.database.R2_ENABLED", True), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
              _patch_path_exists(db_path), \
-             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(False, 9)), \
+             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(False, 9, {"reason": "stale_baseline"})), \
              patch("app.database.set_local_user_db_version") as mock_set_ver:
             result = sync_user_db_to_r2_explicit("u1")
 
@@ -242,7 +242,7 @@ class TestSyncUserDbToR2Explicit:
         with patch("app.database.R2_ENABLED", True), \
              patch("app.database.USER_DATA_BASE", fake_base), \
              _patch_path_exists(db_path), \
-             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(False, None)), \
+             patch("app.storage.sync_user_db_to_r2_with_version", return_value=(False, None, {"reason": "upload_failed"})), \
              patch("app.database.set_local_user_db_version") as mock_set_ver:
             result = sync_user_db_to_r2_explicit("u1")
 

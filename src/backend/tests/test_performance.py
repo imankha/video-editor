@@ -256,7 +256,7 @@ class TestR2SyncSkipHead:
 
         with patch("app.storage.R2_ENABLED", True), \
              patch("app.storage.get_r2_sync_client", return_value=mock_client), \
-             patch("app.storage.get_db_version_from_r2", return_value=5) as mock_head, \
+             patch("app.storage.get_db_version_from_r2", return_value=(5, {})) as mock_head, \
              patch("app.storage.r2_key", return_value="test/key"):
 
             success, version = sync_database_to_r2_with_version(

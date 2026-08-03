@@ -214,7 +214,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Sync-Status", "X-App-Version", "X-App-Build"],
+    # T6390: X-Sync-Diag rides alongside X-Sync-Status. It MUST be exposed or the
+    # cross-origin staging/prod client cannot read it (same-origin dev hides this).
+    expose_headers=["X-Sync-Status", "X-Sync-Diag", "X-App-Version", "X-App-Build"],
     max_age=86400,
 )
 
