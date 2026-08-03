@@ -1,10 +1,20 @@
-# T6400: A machine CAS-conflicts with itself - the baseline/HEAD decision runs outside the upload lock
+# T6402: A machine CAS-conflicts with itself - the baseline/HEAD decision runs outside the upload lock
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-08-03
 **Updated:** 2026-08-03
+
+> **ID NOTE — this task's implementation commits are labelled `T6400`, not `T6402`.**
+> It was filed as T6400 after a check showed that id free, but a CONCURRENT session in this
+> shared checkout was already using T6400 for "inherit the last clip's layer"
+> (`T6400-inherit-last-clip-layer.md`, 53d1078f) and its work reached master before this
+> branch was cut. The collision was caught at merge time; this task was renumbered to T6402
+> so the older T6400 keeps its identity and board branch-attribution. The already-merged
+> commits (`4335d73d`, `e0b7bf1e`, merge `77b27bf8`) and the branch name
+> `feature/T6400-cas-self-race` still say T6400 and were NOT rewritten (master is shared).
+> Search BOTH ids when tracing this work.
 
 ## Problem
 
@@ -134,7 +144,7 @@ Design notes:
   baseline reads; `schedule_profile_db_reheal` (:644)
 - `src/backend/app/middleware/db_sync.py` - `retry_pending_sync` (:372) baseline read,
   `_background_sync` (:983), `_redrain_failed_sync` (:1259) lock probe
-- `src/backend/tests/test_t6400_cas_self_race.py` - NEW, red-first
+- `src/backend/tests/test_t6402_cas_self_race.py` - NEW, red-first
 - Existing CAS tests that pin the current contract and must stay green:
   `test_t4310_*.py`, `test_t4315_*.py`, `test_version_conflict.py`, `test_t6160*.py`,
   `test_t6340_migration_sync_baseline.py`, `test_t6390_marker_scoping.py`, `test_sync_retry.py`,
@@ -176,7 +186,7 @@ T6390 diag payload; incident logs already rotated out (`flyctl logs --no-tail` r
 19:53:57-19:56:19Z and ended with the machine autosuspending, so the incident window was gone
 - it did confirm user `3ed03fb5...` / profile `9fa7378c` / machine `d8933d5f417308`).
 
-IMPLEMENTED on `feature/T6400-cas-self-race`. Red-first test reproduced all 4 self-conflict
+IMPLEMENTED on `feature/T6402-cas-self-race`. Red-first test reproduced all 4 self-conflict
 shapes; fix landed in two halves (decision moved inside the upload lock + `_OWN_UPLOAD_VERSIONS`
 equality exemption). **A first attempt that RAISED `current_version` to the process high-water
 mark was rejected** - it changes `new_version` for every caller and broke 11 existing tests

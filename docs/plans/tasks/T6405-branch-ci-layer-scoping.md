@@ -1,6 +1,6 @@
 # T6405: Branch CI runs both layers on every push, including the one the diff cannot reach
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-03
@@ -8,7 +8,7 @@
 
 ## Problem
 
-**User direction 2026-08-03**, while reviewing T6400: *"only run ci tests that may have actually
+**User direction 2026-08-03**, while reviewing T6402: *"only run ci tests that may have actually
 been effected by the code change and not all tests."*
 
 `branch-ci.yml` runs BOTH jobs unconditionally on every push to `feature/**`, `integration/**`,
@@ -16,9 +16,9 @@ been effected by the code change and not all tests."*
 - frontend: `npm ci` + 4 lint/architecture gates + `npx vitest run --retry=2` (full suite)
 - backend: postgres service + ffmpeg + `pip install` + ruff gates + `pytest tests/test_*.py` (full suite)
 
-T6400's diff touched `src/backend/**` and docs only, yet the entire frontend job ran — install,
+T6402's diff touched `src/backend/**` and docs only, yet the entire frontend job ran — install,
 ESLint, viewport-unit gate, media-api-base gate and ~1,400 vitest tests, none of which a
-backend-only change can break. Measured: the T6400 run took 5m07s with both jobs.
+backend-only change can break. Measured: the T6402 run took 5m07s with both jobs.
 
 ## Solution
 
@@ -64,7 +64,7 @@ Design rules:
 - `.github/workflows/master-ci.yml` - deliberately untouched (the full sweep)
 
 ### Related Tasks
-- Triggered while reviewing T6400 (backend-only diff that paid for the full frontend job)
+- Triggered while reviewing T6402 (backend-only diff that paid for the full frontend job)
 - Policy origin: the changed-code test-scope rule in CLAUDE.md
 
 ### Technical Notes

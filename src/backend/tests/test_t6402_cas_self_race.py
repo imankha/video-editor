@@ -1,4 +1,4 @@
-"""T6400 — a machine must not CAS-conflict with its OWN write.
+"""T6402 — a machine must not CAS-conflict with its OWN write.
 
 Live staging incident 2026-08-03 (diagnosed from T6390's diag payload):
 
@@ -43,7 +43,7 @@ from app.database import SyncResult
 from app.storage import profile_r2_key, sync_database_to_r2_with_version
 from tests.test_t4050_durable_sync import FakeR2, _r2_patched
 
-USER = "u_t6400"
+USER = "u_t6402"
 PROFILE = "cafe6400"
 BASE_VERSION = 2734  # the versions from the real incident
 
