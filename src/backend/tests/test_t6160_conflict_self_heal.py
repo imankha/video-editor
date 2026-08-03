@@ -163,7 +163,10 @@ class TestProfileSelfHeal:
             key = profile_r2_key(USER, PROFILE, "profile.sqlite")
             fake._objects[key] = {"data": _newer_r2_bytes(tmp_path), "metadata": {"db-version": "9"}}
 
-            assert retry_pending_sync(USER, PROFILE) is False  # conflict → not ok
+            # T6390: retry_pending_sync returns the aggregate SyncResult (CONFLICT),
+            # still falsy so "not ok" callers are unaffected.
+            from app.database import SyncResult
+            assert retry_pending_sync(USER, PROFILE) is SyncResult.CONFLICT
             assert get_local_db_version(USER, PROFILE) is None  # invalidated for re-pull
 
 

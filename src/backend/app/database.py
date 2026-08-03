@@ -13,6 +13,7 @@ in tests). Every visitor gets a UUID via /api/auth/init-guest. If no user
 context is set, get_current_user_id() raises RuntimeError.
 """
 
+import json
 import logging
 import sqlite3
 import threading
@@ -80,68 +81,191 @@ def has_sync_pending(user_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# T4310: CAS conflict marker (distinguishes a real version conflict from a
-# transient sync failure for ops visibility — both still leave .sync_pending
-# set, so the existing sync_failed/X-Sync-Status/retry UX is unchanged).
+# T4310/T5870/T6390: CAS-conflict and genuine-failure markers.
+#
+# T4310 introduced .sync_conflict; T5870 added .sync_failed (a definitively-failed
+# sync the bounded re-drain could not heal, distinct from a merely-PENDING one).
+# Both drive the "Could not save to the cloud" banner and both LEAVE .sync_pending
+# set, so the existing retry UX is unchanged.
+#
+# T6390 fixes a correctness defect AND adds diagnostics:
+#   * SCOPING — the markers were per-USER files (USER_DATA_BASE/{user_id}/.sync_*)
+#     but describe per-DB, per-PROFILE state. One user has user.sqlite plus a
+#     profile.sqlite per profile; a single file spoke for all of them, so a success
+#     on ONE db erased a live conflict on ANOTHER (silent-stale-data, T6040 class).
+#     Now each marker is a PER-SCOPE file — `.sync_{kind}.{scope}` where scope is
+#     USER_DB_SCOPE for user.sqlite or the profile_id for a profile DB — cleared
+#     only for the scope that succeeded. `has_sync_*` reports a conflict if ANY
+#     scope is conflicted (header priority conflict > failed > pending unchanged).
+#     Separate files (not one shared JSON set) because profile+user syncs run in
+#     PARALLEL threads; per-scope files mean each thread writes only its own scope,
+#     so the race the old post-gather reassertion papered over cannot happen.
+#   * DIAGNOSIS — each marker now holds a JSON payload (reason, db, profile_id,
+#     loaded, r2, machine, req_id, method, path, writer, written_at, ts), surfaced
+#     via read_sync_diag() and the X-Sync-Diag header, instead of a bare timestamp.
+#     Readers TOLERATE the legacy bare `str(time.time())` body (a marker written by
+#     the running deploy) and the legacy unscoped path — never raise on them.
+#
+# Backward-compatible signatures: `scope=None` on mark_* writes the legacy bare
+# file and on clear_* clears ALL scopes + the legacy file (reserved for genuine
+# full-recovery callers and legacy tolerance — NOT a single-DB success path).
 # ---------------------------------------------------------------------------
 
-def _sync_conflict_path(user_id: str) -> Path:
-    """Path to marker file indicating the last sync attempt hit a CAS conflict."""
-    return USER_DATA_BASE / user_id / ".sync_conflict"
+USER_DB_SCOPE = "user"  # marker scope for user.sqlite (profile DBs use their profile_id)
+_CONFLICT_KIND = "conflict"
+_FAILED_KIND = "failed"
 
 
-def mark_sync_conflict(user_id: str) -> None:
-    """Write marker file indicating the last upload was refused by CAS."""
-    path = _sync_conflict_path(user_id)
+def _marker_dir(user_id: str) -> Path:
+    return USER_DATA_BASE / user_id
+
+
+def _scoped_marker_path(user_id: str, kind: str, scope: str) -> Path:
+    return _marker_dir(user_id) / f".sync_{kind}.{scope}"
+
+
+def _legacy_marker_path(user_id: str, kind: str) -> Path:
+    return _marker_dir(user_id) / f".sync_{kind}"
+
+
+def _write_marker(path: Path, diag: dict | None) -> None:
+    payload = dict(diag or {})
+    payload.setdefault("ts", time.time())
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(str(time.time()))
+    path.write_text(json.dumps(payload))
 
 
-def clear_sync_conflict(user_id: str) -> None:
-    """Remove the conflict marker after a subsequent sync succeeds."""
-    path = _sync_conflict_path(user_id)
-    path.unlink(missing_ok=True)
+def _mark(user_id: str, kind: str, scope: str | None, diag: dict | None) -> None:
+    if scope is None:
+        # Legacy/compat call shape (mark_sync_*(user_id)): bare unscoped file.
+        _write_marker(_legacy_marker_path(user_id, kind), diag)
+    else:
+        _write_marker(_scoped_marker_path(user_id, kind, scope), {**(diag or {}), "scope": scope})
+
+
+def _clear(user_id: str, kind: str, scope: str | None) -> None:
+    if scope is None:
+        # Full recovery: clear every scope AND the legacy bare file.
+        _legacy_marker_path(user_id, kind).unlink(missing_ok=True)
+        try:
+            for p in _marker_dir(user_id).glob(f".sync_{kind}.*"):
+                p.unlink(missing_ok=True)
+        except OSError:
+            pass
+    else:
+        _scoped_marker_path(user_id, kind, scope).unlink(missing_ok=True)
+        # A legacy bare marker cannot be attributed to a scope (old deploy); clear it
+        # opportunistically on any scoped success so it can't strand the banner past
+        # the deploy window. Self-limiting: new code never writes a bare marker.
+        _legacy_marker_path(user_id, kind).unlink(missing_ok=True)
+
+
+def _has(user_id: str, kind: str) -> bool:
+    if _legacy_marker_path(user_id, kind).exists():
+        return True
+    try:
+        return any(_marker_dir(user_id).glob(f".sync_{kind}.*"))
+    except OSError:
+        return False
+
+
+def _read_marker_diag(user_id: str, kind: str) -> dict | None:
+    """Return ONE scope's diag payload for `kind` (the first by filename among the
+    scopes conflicted for this kind), or None. `read_sync_diag` applies the real
+    cross-KIND priority (conflict > failed); WITHIN a kind the diag header is a
+    single-incident hint, so first-by-name is sufficient (`has_sync_conflict` still
+    reports the aggregate correctly regardless of which scope's diag is surfaced).
+
+    Tolerates the legacy bare float body (returns a minimal {'reason': 'legacy'})
+    and any unparseable/partial file — the reader must never raise on a marker
+    written by the previous deploy.
+    """
+    d = _marker_dir(user_id)
+    try:
+        candidates = sorted(d.glob(f".sync_{kind}.*")) if d.exists() else []
+    except OSError:
+        candidates = []
+    for p in candidates:
+        try:
+            body = json.loads(p.read_text())
+            if isinstance(body, dict):
+                return body
+        except (json.JSONDecodeError, OSError, ValueError):
+            continue
+    if _legacy_marker_path(user_id, kind).exists():
+        return {"reason": "legacy"}
+    return None
+
+
+def build_marker_diag(*, db: str, profile_id: str | None, loaded: int | None,
+                      r2: int | None = None, r2_diag: dict | None = None) -> dict:
+    """Assemble the marker payload — the R2-side facts from the storage primitive
+    (reason + writer/written_at of whoever moved R2 ahead) merged with the
+    request-side facts known here (db, profile_id, loaded, machine, req_id,
+    method, path). Absent request context (a background worker) leaves those None
+    — honest, never a fabricated value."""
+    from .storage import FLY_MACHINE_ID
+    from .user_context import get_current_method, get_current_path, get_current_req_id
+    merged = dict(r2_diag or {})
+    merged.update({
+        "db": db,
+        "profile_id": profile_id,
+        "loaded": loaded,
+        "r2": r2,
+        "machine": FLY_MACHINE_ID or None,
+        "req_id": get_current_req_id() or None,
+        "method": get_current_method() or None,
+        "path": get_current_path() or None,
+    })
+    return merged
+
+
+def mark_sync_conflict(user_id: str, scope: str | None = None, diag: dict | None = None) -> None:
+    """Write the CAS-conflict marker for `scope` (USER_DB_SCOPE or a profile_id).
+    `scope=None` writes the legacy bare marker (compat)."""
+    _mark(user_id, _CONFLICT_KIND, scope, diag)
+
+
+def clear_sync_conflict(user_id: str, scope: str | None = None) -> None:
+    """Clear the conflict marker for `scope`. `scope=None` clears ALL scopes + the
+    legacy file (full recovery only — never a single-DB success)."""
+    _clear(user_id, _CONFLICT_KIND, scope)
 
 
 def has_sync_conflict(user_id: str) -> bool:
-    """Check if this user's last sync attempt was refused by CAS."""
-    return _sync_conflict_path(user_id).exists()
+    """True if ANY scope (or a legacy bare marker) records a CAS conflict."""
+    return _has(user_id, _CONFLICT_KIND)
 
 
-# ---------------------------------------------------------------------------
-# T5870: genuine-failure marker. Distinguishes a sync that DEFINITIVELY failed
-# (a transient R2 error / checkpoint-busy that the bounded re-drain could not
-# heal) from a merely PENDING/deferred/in-flight sync. Before T5870 the header
-# read `is_sync_failed := has_sync_pending`, so a 0.5s upload-lock DEFER — a
-# queued-retry state, not a failure — surfaced to the user as "not saving".
-# `.sync_pending` (set BEFORE every attempt, crash-safe) stays what it was; this
-# marker is set ONLY when an attempt terminates in a real, unrecovered failure,
-# so the header can say "pending" (quiet) vs "failed" (alarm) vs "conflict".
-# Mirrors the .sync_conflict idiom above.
-# ---------------------------------------------------------------------------
-
-def _sync_failed_path(user_id: str) -> Path:
-    """Path to marker file indicating the last sync attempt genuinely failed."""
-    return USER_DATA_BASE / user_id / ".sync_failed"
+def mark_sync_failed(user_id: str, scope: str | None = None, diag: dict | None = None) -> None:
+    """Write the genuine-failure marker for `scope` (a real, unrecovered failure
+    the bounded re-drain could not heal). `scope=None` writes the legacy bare file."""
+    _mark(user_id, _FAILED_KIND, scope, diag)
 
 
-def mark_sync_failed(user_id: str) -> None:
-    """Write marker file indicating a sync attempt definitively failed (after
-    the bounded re-drain gave up). Distinct from .sync_pending (queued)."""
-    path = _sync_failed_path(user_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(str(time.time()))
-
-
-def clear_sync_failed(user_id: str) -> None:
-    """Remove the genuine-failure marker after a subsequent sync succeeds."""
-    path = _sync_failed_path(user_id)
-    path.unlink(missing_ok=True)
+def clear_sync_failed(user_id: str, scope: str | None = None) -> None:
+    """Clear the failure marker for `scope`. `scope=None` clears ALL scopes."""
+    _clear(user_id, _FAILED_KIND, scope)
 
 
 def has_sync_failed(user_id: str) -> bool:
-    """Check if this user's last sync attempt definitively failed."""
-    return _sync_failed_path(user_id).exists()
+    """True if ANY scope (or a legacy bare marker) records a genuine failure."""
+    return _has(user_id, _FAILED_KIND)
+
+
+def read_sync_diag(user_id: str) -> dict | None:
+    """The diag payload of the WINNING marker for the X-Sync-Diag header, following
+    the same priority as X-Sync-Status: conflict outranks failed. None if neither.
+    Tolerates legacy-format markers."""
+    diag = _read_marker_diag(user_id, _CONFLICT_KIND)
+    if diag is not None:
+        diag.setdefault("state", "conflict")
+        return diag
+    diag = _read_marker_diag(user_id, _FAILED_KIND)
+    if diag is not None:
+        diag.setdefault("state", "failed")
+        return diag
+    return None
 
 
 class SyncResult(str, Enum):
@@ -1515,17 +1639,19 @@ def sync_db_to_r2_explicit(
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
-    success, new_version = sync_database_to_r2_with_version(
+    success, new_version, r2_diag = sync_database_to_r2_with_version(
         user_id, db_path, current_version, skip_version_check=skip_version_check,
-        lock_timeout=lock_timeout, profile_id=profile_id,
+        lock_timeout=lock_timeout, profile_id=profile_id, with_diag=True,
     )
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
-        clear_sync_conflict(user_id)
-        clear_sync_failed(user_id)  # T5870 round 2 MINOR-1: an out-of-band success
-        # (export worker etc.) heals a stale .sync_failed so an idle user's red
-        # alarm clears instead of sticking indefinitely.
+        # T6390: clear ONLY this profile's scope — never a blanket clear that would
+        # stomp a live conflict on user.sqlite or another profile.
+        clear_sync_conflict(user_id, scope=profile_id)
+        clear_sync_failed(user_id, scope=profile_id)  # T5870 round 2 MINOR-1: an
+        # out-of-band success (export worker etc.) heals a stale .sync_failed so an
+        # idle user's red alarm clears instead of sticking indefinitely.
         logger.debug(f"[ExportWorker] Database synced to R2: user={user_id}, profile={profile_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:
@@ -1537,7 +1663,10 @@ def sync_db_to_r2_explicit(
         # copy against "confirmed" data and silently force-push it. A frozen
         # baseline means this conflict is detected and refused again on every
         # retry (safe) until T4315's restore path heals the local copy.
-        mark_sync_conflict(user_id)
+        # T6390: scope the marker to THIS profile and carry the diag payload.
+        mark_sync_conflict(user_id, scope=profile_id, diag=build_marker_diag(
+            db="profile", profile_id=profile_id, loaded=current_version,
+            r2=new_version, r2_diag=r2_diag))
         # T6160: invalidate the loaded-from version so the NEXT request re-pulls
         # R2's newer copy (self-heal) — the baseline is NOT advanced here (that
         # would disarm CAS); the frozen-baseline guarantee above is unchanged.
@@ -1586,21 +1715,25 @@ def sync_user_db_to_r2_explicit(
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
-    success, new_version = sync_user_db_to_r2_with_version(
+    success, new_version, r2_diag = sync_user_db_to_r2_with_version(
         user_id, db_path, local_version, skip_version_check=skip_version_check,
-        lock_timeout=lock_timeout,
+        lock_timeout=lock_timeout, with_diag=True,
     )
 
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
-        clear_sync_conflict(user_id)
-        clear_sync_failed(user_id)  # T5870 round 2 MINOR-1: see profile sync above.
+        # T6390: clear ONLY the user.sqlite scope — never a live profile conflict.
+        clear_sync_conflict(user_id, scope=USER_DB_SCOPE)
+        clear_sync_failed(user_id, scope=USER_DB_SCOPE)  # T5870 round 2 MINOR-1: see profile sync above.
         logger.debug(f"[ExportWorker] user.sqlite synced to R2: user={user_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:
         # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see
         # sync_db_to_r2_explicit for the rationale.
-        mark_sync_conflict(user_id)
+        # T6390: scope the marker to user.sqlite and carry the diag payload.
+        mark_sync_conflict(user_id, scope=USER_DB_SCOPE, diag=build_marker_diag(
+            db="user", profile_id=None, loaded=local_version,
+            r2=new_version, r2_diag=r2_diag))
         # T6160: invalidate so the next ensure_user_database re-pulls (decision 4).
         # Lives in user_db.py because it must also drop the _initialized_user_dbs
         # flag ensure_user_database early-returns on. Baseline NOT advanced.

@@ -27,6 +27,14 @@ _current_req_id: ContextVar[str] = ContextVar('current_req_id', default='')
 
 _current_platform: ContextVar[str] = ContextVar('current_platform', default='unknown')
 
+# T6390: the request method + path, set by middleware alongside req_id, so the
+# sync-conflict diagnostics (marker payload + the storage.py [SYNC_CONFLICT] CRITICAL)
+# can name the gesture that hit a CAS refusal without threading them through the
+# background-sync call chain. Background workers leave these empty (honest — there is
+# no request), never a fabricated value.
+_current_method: ContextVar[str] = ContextVar('current_method', default='')
+_current_path: ContextVar[str] = ContextVar('current_path', default='')
+
 # T1515: when an admin is impersonating a user ("Login as User"), this holds the
 # admin's user_id for the request. Analytics writers check it to skip recording so
 # impersonation leaves no footprint on the impersonated user's activity data.
@@ -59,6 +67,24 @@ def get_current_platform() -> str:
     return _current_platform.get()
 
 
+def get_current_method() -> str:
+    """Request method for the current context, or '' outside a request (T6390)."""
+    return _current_method.get()
+
+
+def set_current_method(method: str) -> None:
+    _current_method.set(method or '')
+
+
+def get_current_path() -> str:
+    """Request path for the current context, or '' outside a request (T6390)."""
+    return _current_path.get()
+
+
+def set_current_path(path: str) -> None:
+    _current_path.set(path or '')
+
+
 _VALID_PLATFORMS = {'pwa-mobile', 'pwa-desktop', 'webapp-mobile', 'webapp-desktop'}
 
 
@@ -76,11 +102,13 @@ def get_current_user_id() -> str:
     try:
         return _current_user_id.get()
     except LookupError:
+        # `from None`: the unset ContextVar is the EXPECTED signal here, not an
+        # error in exception handling — surface the RuntimeError cleanly (B904).
         raise RuntimeError(
             "No user context set. All requests must go through auth middleware "
             "which sets user context from session cookie. If you're in a test, "
             "call set_current_user_id() first."
-        )
+        ) from None
 
 
 def set_current_user_id(user_id: str) -> None:

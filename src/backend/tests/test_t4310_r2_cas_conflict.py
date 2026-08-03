@@ -150,8 +150,12 @@ class TestProfileDbCasConflict:
         from app.storage import R2VersionResult
 
         fake = FakeR2()
+        # T6390: the primitive now reads the object Metadata from the SAME HEAD
+        # (return_metadata=True) so a conflict can name the writer — the mock
+        # returns the (result, metadata) tuple that contract now expects.
         with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake), \
-             patch("app.storage.get_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND) as mock_head:
+             patch("app.storage.get_db_version_from_r2",
+                   return_value=(R2VersionResult.NOT_FOUND, {})) as mock_head:
             _make_profile_db(tmp_path)
             set_local_db_version(USER, PROFILE, 0)
 
@@ -356,70 +360,95 @@ class TestParallelSyncMarkerRaceFixed:
         monkeypatch.setattr(m, "_USER_WRITE_LOCKS", {})
         monkeypatch.setattr(m, "_SYNC_IN_PROGRESS", {})
 
-    def test_profile_ok_user_conflict_marks_conflict_even_if_profile_clears_first(self):
-        """Simulates the race: profile sync succeeds (would clear_sync_conflict)
-        while user.sqlite sync hits a genuine conflict (marks it) -- regardless
-        of which of the two threads' own mark/clear runs last, the reassertion
-        after asyncio.gather must leave the marker set, so the header reports
-        "conflict" and not a demoted "failed"."""
-        from app.database import has_sync_conflict, mark_sync_pending
+    # T6390: the post-gather REASSERTION these tests originally pinned is DELETED.
+    # It existed to survive the profile/user threads racing on ONE shared per-user
+    # marker file; markers are now PER SCOPE (each thread writes only its own db's
+    # scope) so the race is structurally impossible and reasserting from this
+    # request's two statuses would re-introduce the cross-DB clear the task removes.
+    # These tests now drive the REAL scoped sync_*_explicit against FakeR2 (no mock
+    # of the marker-writing functions) so they exercise the scoping directly.
+
+    def test_profile_ok_user_conflict_keeps_user_scope_conflict(self, tmp_path):
+        """profile.sqlite syncs cleanly while user.sqlite hits a CAS conflict: the
+        profile success must NOT clear the user's conflict (the cross-DB stomp), the
+        header still reports "conflict", and the user-scope marker survives."""
+        from app.database import (
+            has_sync_conflict,
+            mark_sync_pending,
+            set_local_db_version,
+            set_local_user_db_version,
+        )
         from app.middleware.db_sync import RequestContextMiddleware, _begin_sync_attempt
+        from app.storage import _user_db_r2_key, profile_r2_key
 
-        user_id = "test-t4310-marker-race"
-        mark_sync_pending(user_id)
-        _begin_sync_attempt(user_id)
-        middleware = RequestContextMiddleware(app=None)
+        user_id, profile_id = "t4310-scope-race", "prof1race"
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            _make_profile_db(tmp_path, user_id=user_id, profile_id=profile_id)
+            _make_user_db(tmp_path, user_id=user_id)
+            # profile: local == R2 → clean upload. user: local behind R2 → conflict.
+            fake._objects[profile_r2_key(user_id, profile_id, "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "2"}}
+            set_local_db_version(user_id, profile_id, 2)
+            fake._objects[_user_db_r2_key(user_id)] = {
+                "data": b"U_NEWER", "metadata": {"db-version": "9"}}
+            set_local_user_db_version(user_id, 3)
 
-        async def runner():
-            with patch(
-                "app.middleware.db_sync.sync_db_to_r2_explicit",
-                return_value=SyncResult.OK,
-            ), patch(
-                "app.middleware.db_sync.sync_user_db_to_r2_explicit",
-                return_value=SyncResult.CONFLICT,
-            ):
-                return await middleware._background_sync(
-                    user_id, "prof1", "rid1", "POST", "/api/test",
-                    had_writes=True, had_user_db_writes=True,
-                    do_profile=False, force_profile=False,
-                )
+            mark_sync_pending(user_id)
+            _begin_sync_attempt(user_id)
+            middleware = RequestContextMiddleware(app=None)
 
-        status = asyncio.run(runner())
+            status = asyncio.run(middleware._background_sync(
+                user_id, profile_id, "rid1", "POST", "/api/test",
+                had_writes=True, had_user_db_writes=True,
+                do_profile=False, force_profile=False,
+            ))
 
-        assert status == "conflict"
-        assert has_sync_conflict(user_id), \
-            "the reassertion after gather must leave the conflict marker set, race or not"
+            assert status == "conflict"
+            assert has_sync_conflict(user_id), \
+                "profile success must not stomp the user.sqlite conflict"
 
-    def test_both_ok_clears_conflict_marker(self):
-        """Both DBs succeed: the reassertion after gather must clear a
-        leftover conflict marker from a prior attempt."""
-        from app.database import has_sync_conflict, mark_sync_conflict, mark_sync_pending
+    def test_both_ok_clears_the_scope_conflict(self, tmp_path):
+        """Both DBs sync cleanly: each scope's own success clears its own conflict
+        marker (and the opportunistic legacy clear), so no stale conflict remains."""
+        from app.database import (
+            USER_DB_SCOPE,
+            has_sync_conflict,
+            mark_sync_conflict,
+            mark_sync_pending,
+            set_local_db_version,
+            set_local_user_db_version,
+        )
         from app.middleware.db_sync import RequestContextMiddleware, _begin_sync_attempt
+        from app.storage import _user_db_r2_key, profile_r2_key
 
-        user_id = "test-t4310-marker-race-recover"
-        mark_sync_pending(user_id)
-        mark_sync_conflict(user_id)
-        _begin_sync_attempt(user_id)
-        middleware = RequestContextMiddleware(app=None)
+        user_id, profile_id = "t4310-scope-recover", "prof1rec"
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            _make_profile_db(tmp_path, user_id=user_id, profile_id=profile_id)
+            _make_user_db(tmp_path, user_id=user_id)
+            fake._objects[profile_r2_key(user_id, profile_id, "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "2"}}
+            set_local_db_version(user_id, profile_id, 2)
+            fake._objects[_user_db_r2_key(user_id)] = {
+                "data": b"U", "metadata": {"db-version": "2"}}
+            set_local_user_db_version(user_id, 2)
 
-        async def runner():
-            with patch(
-                "app.middleware.db_sync.sync_db_to_r2_explicit",
-                return_value=SyncResult.OK,
-            ), patch(
-                "app.middleware.db_sync.sync_user_db_to_r2_explicit",
-                return_value=SyncResult.OK,
-            ):
-                return await middleware._background_sync(
-                    user_id, "prof1", "rid1", "POST", "/api/test",
-                    had_writes=True, had_user_db_writes=True,
-                    do_profile=False, force_profile=False,
-                )
+            # Leftover conflicts on BOTH scopes from a prior attempt.
+            mark_sync_conflict(user_id, scope=profile_id, diag={"reason": "stale_baseline"})
+            mark_sync_conflict(user_id, scope=USER_DB_SCOPE, diag={"reason": "stale_baseline"})
+            mark_sync_pending(user_id)
+            _begin_sync_attempt(user_id)
+            middleware = RequestContextMiddleware(app=None)
 
-        status = asyncio.run(runner())
+            status = asyncio.run(middleware._background_sync(
+                user_id, profile_id, "rid1", "POST", "/api/test",
+                had_writes=True, had_user_db_writes=True,
+                do_profile=False, force_profile=False,
+            ))
 
-        assert status == "ok"
-        assert not has_sync_conflict(user_id)
+            assert status == "ok"
+            assert not has_sync_conflict(user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -441,7 +470,7 @@ class TestRetryPendingSyncConflict:
         (profile_dir / "profile.sqlite").write_text("fake")
 
         with patch("app.storage.sync_database_to_r2_with_version",
-                   return_value=(False, 9)) as mock_sync, \
+                   return_value=(False, 9, {"reason": "stale_baseline"})) as mock_sync, \
              patch("app.database.get_local_db_version", return_value=3), \
              patch("app.database.set_local_db_version") as mock_set_ver, \
              patch("app.database.get_local_user_db_version", return_value=None), \
@@ -450,12 +479,18 @@ class TestRetryPendingSyncConflict:
              patch("app.database.USER_DATA_BASE", tmp_path):
             result = retry_pending_sync(USER, profile_id=PROFILE)
 
-        assert result is False, "a conflict is not a successful retry"
+        # T6390: retry_pending_sync now returns the aggregate SyncResult (CONFLICT),
+        # still falsy so legacy `if not result` callers are unaffected.
+        assert result is SyncResult.CONFLICT
+        assert not result, "a conflict is not a successful retry"
         # CAS is on (skip_version_check=False) for this always-off-thread path.
         assert mock_sync.call_args.kwargs["skip_version_check"] is False
         # T6160: the baseline is INVALIDATED (None), never ADVANCED to R2's v9.
         mock_set_ver.assert_called_once_with(USER, PROFILE, None)
-        mock_mark_conflict.assert_called_once_with(USER)
+        # T6390: the conflict marker is scoped to this profile and carries the diag.
+        mock_mark_conflict.assert_called_once()
+        assert mock_mark_conflict.call_args.args[0] == USER
+        assert mock_mark_conflict.call_args.kwargs["scope"] == PROFILE
 
 
 # ---------------------------------------------------------------------------

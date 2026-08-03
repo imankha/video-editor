@@ -78,16 +78,28 @@ export const useSyncStore = create((set, get) => ({
         // disk. NEVER silently flip to 'ok' (the browser still renders the discarded
         // edit, and the next gesture would write into a DB that no longer has it).
         // Tell the user and reload so in-memory state matches the restored DB.
+        // T6390: log the outcome (retrySyncToR2 used to reload/return with no trace).
+        console.error(
+          `[sync] retry RESTORED: R2's newer copy replaced the local ${wasWriter ? 'edit' : 'copy'}; reloading`
+        );
         stashRestoredNotice(wasWriter);
         reloadPage();
         return true;
       }
       if (data.success) {
         // A plain transient recovery. The next response's header confirms 'ok' too.
+        console.info('[sync] retry SUCCEEDED: pending sync drained to R2');
         set({ syncState: 'ok' });
+      } else {
+        // T6390: a retry that did not land is no longer swallowed silently.
+        console.error(
+          `[sync] retry FAILED: ${data.message || 'sync still not landing'}`
+        );
       }
       return data.success;
-    } catch {
+    } catch (err) {
+      // T6390: was `catch { return false }` — a network/parse failure vanished.
+      console.error('[sync] retry request errored', err);
       return false;
     } finally {
       set({ isRetrying: false });
@@ -147,11 +159,45 @@ window.addEventListener('online', () => {
 });
 
 /**
- * Map the X-Sync-Status header onto the store's syncState.
+ * T6390: parse the compact `X-Sync-Diag` header (`k=v;k=v`) into an object so the
+ * console log can name the reason / which db / loaded-vs-r2 / who moved R2 ahead /
+ * req_id. Returns null when the header is absent or empty — the caller logs the gap
+ * loudly rather than substituting a fake default (No silent fallbacks).
+ *
+ * @param {string|null} header
+ * @returns {Object|null}
+ */
+export function parseSyncDiag(header) {
+  if (!header) return null;
+  const out = {};
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    out[part.slice(0, eq)] = part.slice(eq + 1);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function requestMethodOf(input, init) {
+  return (
+    init?.method ??
+    (input instanceof Request ? input.method : undefined) ??
+    'GET'
+  ).toUpperCase();
+}
+
+/**
+ * Map the X-Sync-Status header onto the store's syncState, and — T6390 — emit a
+ * single `console.error` on the TRANSITION into `conflict`/`failed` so the browser
+ * console alone can classify the incident (the banner used to render with zero
+ * output). Logging is gated on the state CHANGE, so repeat responses in the same
+ * state do NOT spam the console.
  *
  * @param {Response} response - The fetch Response object
+ * @param {RequestInfo|URL} [input] - fetch's first arg (for method/url in the log)
+ * @param {RequestInit} [init] - fetch's second arg
  */
-export function checkSyncStatus(response) {
+export function checkSyncStatus(response, input, init) {
   if (!response || !response.headers) return;
 
   const header = response.headers.get('X-Sync-Status');
@@ -161,8 +207,32 @@ export function checkSyncStatus(response) {
       : 'ok';
 
   const store = useSyncStore.getState();
-  if (store.syncState !== next) {
-    store.setSyncState(next);
+  if (store.syncState === next) return; // no transition → no state write, no log spam
+  store.setSyncState(next);
+
+  if (next === 'conflict' || next === 'failed') {
+    const diag = parseSyncDiag(response.headers.get('X-Sync-Diag'));
+    const method = requestMethodOf(input, init);
+    const url =
+      (response && response.url) ||
+      (input instanceof Request ? input.url : String(input ?? ''));
+    // req_id comes from the diag payload (the SERVER stamped it on the marker for
+    // the request that actually hit the conflict) — not this response's request.
+    console.error(
+      `[sync] state -> ${next}`,
+      {
+        reason: diag?.reason ?? '(no X-Sync-Diag header — check expose_headers/CORS)',
+        db: diag?.db,
+        profile_id: diag?.profile_id,
+        loaded: diag?.loaded,
+        r2: diag?.r2,
+        machine: diag?.machine,
+        writer: diag?.writer,
+        req_id: diag?.req_id,
+        gesture: `${method} ${url}`,
+        hasAttemptedWrite: store.hasAttemptedWrite,
+      }
+    );
   }
 }
 
@@ -273,6 +343,8 @@ window.fetch = async function (...args) {
     if (!store.hasAttemptedWrite) store.markWriteAttempted();
   }
   const response = await _originalFetch(...args);
-  checkSyncStatus(response);
+  // T6390: pass the request args so a conflict/failed transition can name the
+  // gesture (method + URL) alongside the server-provided diag.
+  checkSyncStatus(response, args[0], args[1]);
   return response;
 };

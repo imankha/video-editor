@@ -40,7 +40,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from ..database import (
+    USER_DB_SCOPE,
     SyncResult,
+    build_marker_diag,
     clear_request_context,
     clear_sync_conflict,
     clear_sync_failed,
@@ -56,6 +58,7 @@ from ..database import (
     mark_sync_conflict,
     mark_sync_failed,
     mark_sync_pending,
+    read_sync_diag,
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
 )
@@ -70,6 +73,8 @@ from ..session_init import user_session_init
 from ..storage import APP_ENV, R2_ENABLED
 from ..user_context import (
     set_current_impersonator_id,
+    set_current_method,
+    set_current_path,
     set_current_platform,
     set_current_req_id,
     set_current_user_id,
@@ -276,22 +281,30 @@ def is_sync_failed(user_id: str) -> bool:
     return has_sync_failed(user_id) or has_sync_conflict(user_id)
 
 
-def set_sync_failed(user_id: str, failed: bool) -> None:
+def set_sync_failed(user_id: str, failed: bool, profile_id: str | None = None) -> None:
     """Set or clear the GENUINE sync-failure state for a user.
 
     T5870: operates on the .sync_failed marker (not .sync_pending). Clearing sets
     the user fully recovered — .sync_pending, .sync_failed AND .sync_conflict all
     go — so a manual /api/retry-sync success or an error-path recovery returns the
     user to a clean state with no stale marker mislabeling a later attempt.
+
+    T6390: markers are per-scope. On FAILURE (the request error path) this attributes
+    to the session's own scopes — user.sqlite plus the request profile — both of
+    which may be at risk when a request errors mid-flight. On RECOVERY it does the
+    genuine FULL clear (scope=None wipes every scope), which is the intended
+    semantic for a manual /api/retry-sync success.
     """
     was_failed = is_sync_failed(user_id)
     if failed:
-        mark_sync_failed(user_id)
+        mark_sync_failed(user_id, scope=USER_DB_SCOPE)
+        if profile_id:
+            mark_sync_failed(user_id, scope=profile_id)
         if not was_failed:
             logger.warning(f"[SYNC] User {user_id} entered degraded state - R2 sync failed")
     else:
         clear_sync_pending(user_id)
-        clear_sync_failed(user_id)
+        clear_sync_failed(user_id)  # scope=None → every scope (full recovery)
         # T4310 reviewer round 2 (BLOCKING-2/MINOR): a real sync success clears
         # ALL markers. Without this, a stale .sync_conflict marker sticks around
         # and mislabels every later transient failure as "conflict".
@@ -330,7 +343,33 @@ def sync_status_header(user_id: str) -> str | None:
     return None
 
 
-def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
+# T6390: the compact fields of the X-Sync-Diag header, in a fixed order so the
+# client parser and a human reading the header see the same layout. Rendered as
+# `k=v;k=v` (None values skipped). Kept small — `writer` is machine/req_id, never
+# a URL — so it stays well under any header-size limit.
+_DIAG_HEADER_FIELDS = (
+    "state", "reason", "db", "profile_id", "loaded", "r2",
+    "machine", "req_id", "method", "path", "writer", "written_at",
+)
+
+
+def _render_sync_diag(diag: dict | None) -> str:
+    """Render a marker diag payload as a compact `k=v;` header value. Values are
+    sanitised (no `;`/newlines) so the header stays well-formed; a None field is
+    omitted rather than rendered as a fake default (No silent fallbacks)."""
+    if not diag:
+        return ""
+    parts = []
+    for key in _DIAG_HEADER_FIELDS:
+        value = diag.get(key)
+        if value is None:
+            continue
+        safe = str(value).replace(";", ",").replace("\r", " ").replace("\n", " ")
+        parts.append(f"{key}={safe}")
+    return ";".join(parts)
+
+
+def retry_pending_sync(user_id: str, profile_id: str | None = None) -> SyncResult:
     """
     Retry a previously-failed R2 sync using explicit sync functions.
 
@@ -346,64 +385,80 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     version (schedule_*_db_reheal) so the NEXT request re-pulls R2's newer copy —
     a refusal here is never a blind overwrite and no longer a permanent dead-end.
 
-    Returns True iff both profile.sqlite and user.sqlite synced successfully
-    (False for either a conflict or a genuine failure).
+    T6390: returns the AGGREGATE outcome as a SyncResult rather than a bare bool —
+    CONFLICT if EITHER db conflicted, else FAILED if either genuinely failed, else
+    OK. `_redrain_failed_sync` uses this to decide "stop, this is a CAS conflict,
+    do not blind-retry" from the RETURN VALUE instead of re-reading a marker file
+    the old per-user self-stomp could defeat. Markers are cleared/marked PER SCOPE
+    (profile_id vs USER_DB_SCOPE) so a healthy db's success never stomps the other
+    db's live conflict (the deterministic self-stomp bug). SyncResult is truthy
+    only for OK, so the existing `if ok:` caller is unaffected.
     """
     from app import database as db_module
     from app import storage as storage_module
 
-    profile_ok = True
+    profile_result = SyncResult.OK
     # T5340: key the local file AND the R2 upload off the profile_id ARG, not the
     # ContextVar (get_database_path()/r2_key()), so the docstring's "works in any
     # calling context" claim is actually true.
     db_path = db_module.get_user_data_path_explicit(user_id, profile_id) / "profile.sqlite" if profile_id else None
     if db_path is not None and db_path.exists():
         current_version = db_module.get_local_db_version(user_id, profile_id)
-        success, new_version = storage_module.sync_database_to_r2_with_version(
-            user_id, db_path, current_version, skip_version_check=False, profile_id=profile_id,
+        success, new_version, r2_diag = storage_module.sync_database_to_r2_with_version(
+            user_id, db_path, current_version, skip_version_check=False,
+            profile_id=profile_id, with_diag=True,
         )
         if success and new_version is not None:
             db_module.set_local_db_version(user_id, profile_id, new_version)
-            db_module.clear_sync_conflict(user_id)
-            profile_ok = True
+            db_module.clear_sync_conflict(user_id, scope=profile_id)  # T6390: scope-only
         elif not success and new_version is not None:
             # T4310 reviewer round 2 (MAJOR-2): conflict — baseline stays frozen
             # (storage.py no longer re-downloads; see storage.py for why the
             # swap is WAL-unsafe). Advancing it without a confirmed refresh
             # would let the NEXT retry compare stale local data against
             # "confirmed" R2 data and silently force-push it.
-            mark_sync_conflict(user_id)
+            mark_sync_conflict(user_id, scope=profile_id, diag=build_marker_diag(
+                db="profile", profile_id=profile_id, loaded=current_version,
+                r2=new_version, r2_diag=r2_diag))
             # T6160: retry_pending_sync uses the lower-level primitive directly,
             # so the self-heal invalidation must be requested explicitly here (it
             # is NOT routed through sync_db_to_r2_explicit). Baseline stays frozen.
             db_module.schedule_profile_db_reheal(user_id, profile_id)
-            profile_ok = False
+            profile_result = SyncResult.CONFLICT
         else:
-            profile_ok = False
+            profile_result = SyncResult.FAILED
 
-    user_ok = True
+    user_result = SyncResult.OK
     user_db_path = db_module.USER_DATA_BASE / user_id / "user.sqlite"
     if user_db_path.exists():
         local_version = db_module.get_local_user_db_version(user_id)
-        success, new_version = storage_module.sync_user_db_to_r2_with_version(
-            user_id, user_db_path, local_version, skip_version_check=False,
+        success, new_version, r2_diag = storage_module.sync_user_db_to_r2_with_version(
+            user_id, user_db_path, local_version, skip_version_check=False, with_diag=True,
         )
         if success and new_version is not None:
             db_module.set_local_user_db_version(user_id, new_version)
-            db_module.clear_sync_conflict(user_id)
-            user_ok = True
+            db_module.clear_sync_conflict(user_id, scope=USER_DB_SCOPE)  # T6390: scope-only
         elif not success and new_version is not None:
             # T4310 reviewer round 2 (MAJOR-2): baseline stays frozen — see the
-            # profile branch above.
-            mark_sync_conflict(user_id)
+            # profile branch above. T6390: scope the marker to user.sqlite so it
+            # cannot stomp (or be stomped by) the profile branch above.
+            mark_sync_conflict(user_id, scope=USER_DB_SCOPE, diag=build_marker_diag(
+                db="user", profile_id=None, loaded=local_version,
+                r2=new_version, r2_diag=r2_diag))
             # T6160: same self-heal for user.sqlite (decision 4).
             from app.services.user_db import schedule_user_db_reheal
             schedule_user_db_reheal(user_id)
-            user_ok = False
+            user_result = SyncResult.CONFLICT
         else:
-            user_ok = False
+            user_result = SyncResult.FAILED
 
-    return profile_ok and user_ok
+    # Aggregate: a conflict on EITHER db is not blind-retryable and outranks a
+    # generic failure (same priority as the X-Sync-Status header).
+    if SyncResult.CONFLICT in (profile_result, user_result):
+        return SyncResult.CONFLICT
+    if SyncResult.FAILED in (profile_result, user_result):
+        return SyncResult.FAILED
+    return SyncResult.OK
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -491,6 +546,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # explicitly. Safe to set before user_id is resolved — the ContextVar
         # is request-scoped by Starlette.
         set_current_req_id(req_id)
+        # T6390: publish method/path so the sync-conflict diagnostics (marker payload
+        # + storage.py [SYNC_CONFLICT] CRITICAL) can name the gesture that hit a CAS
+        # refusal, without threading them through the background-sync call chain.
+        set_current_method(method)
+        set_current_path(path)
 
         set_current_platform(request.headers.get("X-Platform", ""))
 
@@ -872,6 +932,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             header_status = sync_status_header(user_id)
             if header_status is not None:
                 response.headers["X-Sync-Status"] = header_status
+                # T6390: alongside the status, a compact diag the browser console can
+                # classify the incident from (reason / which db / loaded-vs-r2 / who
+                # moved R2 ahead / req_id). Only for the alarm states — 'pending' has
+                # no diagnosis to carry. MUST be in expose_headers (main.py) or it is
+                # invisible to the cross-origin (staging/prod) client.
+                if header_status in ("conflict", "failed"):
+                    diag_header = _render_sync_diag(read_sync_diag(user_id))
+                    if diag_header:
+                        response.headers["X-Sync-Diag"] = diag_header
 
             # Default Cache-Control for GET JSON responses that don't set their own.
             if (
@@ -951,6 +1020,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # defined for the finalisation gate. Overwritten with the real value once
         # the session's own sync completes; forced to "failed" in the except.
         own_status = "ok"
+        # T6390: initialised before the try so the failed-marker scoping below (and
+        # an early-exception except path) can tell which db failed without a NameError.
+        db_status = "ok"
+        user_status = "ok"
         try:
             if had_writes and had_user_db_writes:
                 _user_id = user_id
@@ -1013,18 +1086,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 user_status = _status_for_result(user_ok)
                 user_sync_success = bool(user_ok)
 
-                # T4310 reviewer round 2 (MINOR): _sync_profile/_sync_user just ran
-                # CONCURRENTLY in separate threads, and each independently calls
-                # mark_sync_conflict/clear_sync_conflict (via sync_db_to_r2_explicit/
-                # sync_user_db_to_r2_explicit) for the SAME per-user marker file --
-                # one thread's clear can race and stomp the other's concurrent mark,
-                # degrading a real conflict to a plain "failed" on the header.
-                # asyncio.gather has now joined both threads, so this reassertion
-                # runs strictly after any race and is the authoritative last write.
-                if "conflict" in (db_status, user_status):
-                    mark_sync_conflict(user_id)
-                elif db_status == "ok" and user_status == "ok":
-                    clear_sync_conflict(user_id)
+                # T6390: the T4310 post-gather reassertion is DELETED. It existed
+                # because _sync_profile/_sync_user ran concurrently and both wrote the
+                # SAME per-user marker file, so one thread's clear could stomp the
+                # other's mark. Markers are now PER SCOPE (profile_id vs
+                # USER_DB_SCOPE) and each thread's sync_*_explicit touches only its
+                # own scope, so the race is structurally impossible — reasserting from
+                # THIS request's two statuses would also (re)introduce the cross-DB
+                # clear the task exists to remove. Scope the marker, don't reassert.
 
                 if PROFILING_ENABLED:
                     parallel_ms = (time.perf_counter() - sync_start) * 1000
@@ -1081,15 +1150,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     mark_sync_pending(foreign_uid)
                     foreign_unsynced = True
                     if result == SyncResult.CONFLICT:
-                        mark_sync_conflict(foreign_uid)
+                        # T6390: sync_user_db_to_r2_explicit ALREADY marked the
+                        # foreign owner's user-scope conflict WITH its diag — do not
+                        # re-mark here (that would clobber the diag with an empty one).
                         if sync_status == "ok":
                             sync_status = "conflict"
                     else:
                         # round 2 MAJOR-1: the FOREIGN owner's write genuinely did
                         # not land — give THEM the alarm + Retry (.sync_failed), not
                         # just quiet .sync_pending. (The session's alarm is gated on
-                        # its OWN status below.)
-                        mark_sync_failed(foreign_uid)
+                        # its OWN status below.) T6390: scope to their user.sqlite.
+                        mark_sync_failed(foreign_uid, scope=USER_DB_SCOPE, diag=build_marker_diag(
+                            db="user", profile_id=None, loaded=None))
                         sync_status = "failed"
                     logger.error(
                         f"[SYNC] {method} {path} -> FAILED to sync foreign user.sqlite "
@@ -1108,12 +1180,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     mark_sync_pending(foreign_uid)
                     foreign_unsynced = True
                     if result == SyncResult.CONFLICT:
-                        mark_sync_conflict(foreign_uid)
+                        # T6390: sync_db_to_r2_explicit already marked the foreign
+                        # owner's profile-scope conflict with its diag — don't clobber.
                         if sync_status == "ok":
                             sync_status = "conflict"
                     else:
                         # round 2 MAJOR-1: alarm the FOREIGN owner (see loop above).
-                        mark_sync_failed(foreign_uid)
+                        # T6390: scope to their profile.
+                        mark_sync_failed(foreign_uid, scope=foreign_pid, diag=build_marker_diag(
+                            db="profile", profile_id=foreign_pid, loaded=None))
                         sync_status = "failed"
                     logger.error(
                         f"[SYNC] {method} {path} -> FAILED to sync foreign profile.sqlite "
@@ -1166,11 +1241,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # session's own data reached R2; the foreign owner already got its own
             # .sync_failed in the loops above.
             if own_status == "failed" and not durable and not is_error_path:
-                mark_sync_failed(user_id)
+                # T6390: mark ONLY the scope(s) that actually failed, so this never
+                # stomps a live conflict on the other db.
+                if db_status == "failed" and profile_id:
+                    mark_sync_failed(user_id, scope=profile_id, diag=build_marker_diag(
+                        db="profile", profile_id=profile_id, loaded=None))
+                if user_status == "failed":
+                    mark_sync_failed(user_id, scope=USER_DB_SCOPE, diag=build_marker_diag(
+                        db="user", profile_id=None, loaded=None))
             logger.warning(f"[SYNC] {method} {path} -> R2 sync FAILED ({sync_duration:.2f}s)")
 
         if is_error_path:
-            set_sync_failed(user_id, sync_status != "ok")
+            set_sync_failed(user_id, sync_status != "ok", profile_id=profile_id)
 
         return sync_status
 
@@ -1189,8 +1271,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         exist — here the gesture is the user edit that opened this request.
 
         Returns True iff a retry landed the write. Bails immediately on a CAS
-        conflict (retry_pending_sync marks .sync_conflict) — a conflict is not
-        blind-retryable; it needs restore-if-newer via the manual /api/retry-sync.
+        conflict — a conflict is not blind-retryable; it needs restore-if-newer via
+        the manual /api/retry-sync. T6390: the conflict decision comes from
+        retry_pending_sync's RETURN VALUE (SyncResult.CONFLICT), not from re-reading
+        the .sync_conflict marker file — the old per-user marker read could be
+        defeated by the self-stomp this task fixes, so a genuinely-conflicted retry
+        was blind-retried to exhaustion and mislabelled "failed".
 
         round 2 MAJOR-2: each attempt NON-BLOCKING-probes the per-user upload lock
         BEFORE re-uploading (mirrors the T1539 write-triggered retry). Fire-and-
@@ -1208,8 +1294,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         for attempt in range(_REDRAIN_MAX_ATTEMPTS):
             await asyncio.sleep(_REDRAIN_BASE_BACKOFF_S * (2 ** attempt))
-            if has_sync_conflict(user_id):
-                return False
             probe = get_upload_lock(user_id, "profile")
             if not probe.acquire(blocking=False):
                 logger.info(
@@ -1219,13 +1303,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 continue
             probe.release()
             try:
-                ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
+                outcome = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
             except Exception as e:
                 logger.warning(
                     f"[SYNC_REDRAIN] user={user_id} attempt={attempt + 1} raised: {e}"
                 )
                 continue
-            if ok:
+            if outcome == SyncResult.CONFLICT:
+                # T6390: a CAS conflict is not blind-retryable — stop NOW, decided
+                # from the return value, not a marker file.
+                logger.warning(
+                    f"[SYNC_REDRAIN] user={user_id} attempt={attempt + 1} hit a CAS "
+                    f"conflict — stopping (needs restore-if-newer, not blind retry)"
+                )
+                return False
+            if outcome:  # SyncResult.OK (truthy only for OK)
                 logger.info(
                     f"[SYNC_REDRAIN] user={user_id} healed on attempt {attempt + 1}"
                 )
