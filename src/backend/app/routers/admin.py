@@ -821,15 +821,27 @@ _POSTER_BACKFILL_STATE: dict = {"running": False, "last_result": None, "task": N
 async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
                                  dry_run: bool = Query(False),
                                  force: bool = Query(False)):
-    """Generate first-frame posters for PUBLISHED reels that have none (T4890).
+    """Generate posters for PUBLISHED reels that have none (T4890).
 
     Reels published before the poster feature carry no og:image, so their share
-    links unfurl text-only until backfilled. Per-video ffmpeg first-frame grab, so
-    it is throttled/batched by `limit` and NOT run on startup. Only reels whose
-    video object still exists are processed; reels whose poster already exists are
-    healed (no re-encode). Pass `dry_run=true` for a synchronous candidate count.
-    The real run returns immediately and executes in the background -- GET this
-    same path to poll `running`/`last_result`.
+    links unfurl text-only until backfilled. Per-video ffmpeg frame grab, so it is
+    throttled/batched by `limit` and NOT run on startup. Only reels whose video
+    object still exists are processed; reels whose poster already exists are healed
+    (no re-encode). Pass `dry_run=true` for a synchronous candidate count. The real
+    run returns immediately and executes in the background -- GET this same path to
+    poll `running`/`last_result`.
+
+    The frame is chosen by `select_poster_frame` -- the open-play window midpoint,
+    or the user's pre-export marker (T5410). It is NOT the first frame; that was
+    the pre-T5410 behaviour.
+
+    `force=true` REGENERATES posters for ALL published reels, not just ones missing
+    a poster -- this is how legacy posters are upgraded to the current selection.
+    **Without it the candidate set is usually 0**, because existing reels already
+    have a poster (just an older one). Rows with `poster_source IN ('overlay',
+    'upload')` are ALWAYS skipped (`skipped_override`), even under force -- a user's
+    manual cover choice is never clobbered by a sweep. See `backfill_posters` for
+    the full per-row contract.
     """
     _require_admin()
     from ..services.poster import backfill_posters as _backfill
