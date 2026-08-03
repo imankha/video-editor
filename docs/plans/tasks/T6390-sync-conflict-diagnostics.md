@@ -1,6 +1,8 @@
 # T6390: The sync-conflict banner is undiagnosable — log the "why" on both client and server
 
-**Status:** TODO
+**Status:** WAITING ON USER (branch `feature/T6390-sync-conflict-diagnostics` pushed,
+Branch CI green; awaiting your staging test + merge. Owed: the real-R2 banner live-drive,
+which the container could not do — see Notes.)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-02
