@@ -109,6 +109,52 @@ run** and `get_db_version_from_r2` already receives the full `Metadata` dict
 is the one currently-unobtainable fact, and it is what turns "R2 moved" into "R2 was
 moved by X at T".
 
+## Part B — a real defect found while scoping this (fix it, don't just log it)
+
+**`.sync_conflict` / `.sync_failed` are per-USER markers describing per-DB, per-PROFILE
+state.** One user has `user.sqlite` plus a `profile.sqlite` per profile, but a single
+marker file at `USER_DATA_BASE/{user_id}/.sync_conflict` (`database.py:88`) speaks for
+all of them. Every success path clears it unconditionally, so **a success on one DB
+erases a live conflict on another**. Verified call sites:
+
+- `sync_user_db_to_r2_explicit` success → `clear_sync_conflict(user_id)`
+  (`database.py:1596`). Reached from `_background_sync`'s `else:` branch
+  (`db_sync.py:1045-1051`) whenever a request wrote `user.sqlite` but **not** the profile
+  DB. A profile conflict marked moments earlier is wiped, `X-Sync-Status` returns to
+  `ok`, and the banner vanishes **while the profile DB is still stale/conflicted** — the
+  user keeps editing on a DB whose writes are being refused, with no signal. That is
+  the silent-stale-data shape T6040 exists to prevent.
+- `sync_db_to_r2_explicit` success → `clear_sync_conflict(user_id)`
+  (`database.py:1525`), symmetric via the `elif had_writes:` branch (`:1038-1044`).
+- `retry_pending_sync` (`db_sync.py:333-406`) does it **within a single call**: the
+  profile branch marks the conflict (`:375`), then the `user.sqlite` success branch
+  calls `clear_sync_conflict` (`:393`) and stomps the mark it just set. Consequences:
+  the function returns `False`, but `_redrain_sync`'s bail-out test
+  `if has_sync_conflict(user_id): return False` (`:1211`) now reads a cleared marker, so
+  a **CAS conflict — explicitly documented as not blind-retryable (`:1191-1193`) — is
+  blind-retried to exhaustion** and then reported as generic `failed`. The user gets the
+  wrong banner and a Retry that takes the blind re-upload path instead of
+  restore-if-newer.
+
+The authors knew about this stomp on the *concurrent* path — `db_sync.py:1016-1027`
+adds an explicit post-`gather` reassertion because "one thread's clear can race and stomp
+the other's concurrent mark". That patch fixes only the both-DBs-written branch, and it
+reasserts from **this request's** two statuses, so it too clears a conflict belonging to
+a DB this request never touched. The sequential paths above were never covered.
+
+**Fix:** scope the marker to what it actually describes rather than adding more
+reassertions. The Part 1 diag payload already carries a `db` field, so the two halves
+converge: make the marker (or its payload) per-DB/per-profile, have `sync_status_header`
+report a conflict if **any** scope is conflicted, and clear only the scope that
+succeeded. Preserve the current header priority (`conflict` > `failed` > `pending`) and
+every existing behaviour test. Reproduce each stomp with a failing test first
+(`bug-reproduction` skill) — especially the `retry_pending_sync` self-stomp, which is
+deterministic and needs no concurrency to trigger.
+
+**Also strengthen while in here:** `_redrain_sync` should not depend on a marker file to
+decide whether the previous attempt hit a conflict — `retry_pending_sync` already knows
+and can return the outcome instead of a bare bool.
+
 ## Acceptance
 
 - Reproduce a CAS conflict (force a stale/absent baseline against real R2 content) and
@@ -122,9 +168,15 @@ moved by X at T".
   (deploy-window compatibility).
 - `X-Sync-Diag` is present in `expose_headers` and readable **cross-origin** (verify
   against staging, not just localhost — same-origin dev hides this class).
-- No change to when a conflict is refused, marked, cleared, or re-drained: the existing
-  `test_t4310_r2_cas_conflict.py` / `test_sync_status.py` behaviour tests stay green
-  untouched.
+- No change to when a conflict is **refused** (the CAS guard itself): the existing
+  `test_t4310_r2_cas_conflict.py` / `test_sync_status.py` behaviour tests stay green.
+  Part B deliberately changes when a marker is *cleared*; any test pinning the
+  cross-DB clear must be updated with an explicit note, not silently deleted.
+- Part B: a failing test per stomp, written first — (a) `retry_pending_sync` with a
+  conflicting profile + healthy `user.sqlite` leaves the conflict marker SET, (b) a
+  `user.sqlite`-only request does not clear a live profile conflict, (c) a conflict that
+  survives is not blind-retried by `_redrain_sync` to exhaustion and is reported as
+  `conflict`, not `failed`.
 
 ## Notes
 
