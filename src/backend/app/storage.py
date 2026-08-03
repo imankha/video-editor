@@ -56,6 +56,39 @@ def get_upload_lock(user_id: str, db_type: str) -> threading.Lock:
         return lock
 
 
+# T6400: the highest sync version THIS PROCESS has successfully PUT for each R2
+# key. A version we uploaded ourselves can never be the "another writer moved R2
+# ahead" case CAS exists to catch — those bytes came from this same local file —
+# so a caller still holding a pre-upload baseline must not be refused against it.
+# Written under the same upload lock as the PUT, so a sync that waited on the lock
+# observes its predecessor's version (the caller's set_local_db_version happens
+# AFTER the primitive returns, i.e. outside the lock — which is exactly why the
+# baseline alone cannot close this race). Grows one entry per R2 key, same
+# unbounded-by-user shape as _USER_UPLOAD_LOCKS above.
+_OWN_UPLOAD_VERSIONS: dict[str, int] = {}
+_OWN_UPLOAD_VERSIONS_GUARD = threading.Lock()
+
+
+def _is_own_upload_version(key: str, r2_version: int) -> bool:
+    """True iff R2 currently sits at the exact version THIS PROCESS last PUT there.
+
+    Deliberately an equality test, not a range: it forgives only "R2 is where we
+    ourselves put it", never "R2 is somewhere at or below our high-water mark".
+    Any foreign write lands strictly ABOVE our own version and so still conflicts.
+    The baseline is NOT modified — new_version arithmetic is unchanged for every
+    caller — and an unconfirmed (None) baseline is never rescued by this.
+    """
+    with _OWN_UPLOAD_VERSIONS_GUARD:
+        return _OWN_UPLOAD_VERSIONS.get(key) == r2_version
+
+
+def _record_own_upload(key: str, version: int) -> None:
+    """Remember a version we just PUT. Call while holding the upload lock."""
+    with _OWN_UPLOAD_VERSIONS_GUARD:
+        if version > _OWN_UPLOAD_VERSIONS.get(key, -1):
+            _OWN_UPLOAD_VERSIONS[key] = version
+
+
 class R2VersionResult(Enum):
     """Distinguishes 'not found' (genuinely new user) from 'error' (transient failure)."""
     NOT_FOUND = "not_found"
@@ -1199,6 +1232,63 @@ def sync_database_to_r2_with_version(
     t_total = time.perf_counter() if PROFILING_ENABLED else 0
     head_ms = 0.0
 
+    # T5340: explicit profile_id → key off the arg; else fall back to the ContextVar
+    # (request path). Background/cross-profile callers MUST pass profile_id.
+    key = profile_r2_key(user_id, profile_id, "profile.sqlite") if profile_id else r2_key(user_id, "profile.sqlite")
+
+    # T6400: the CAS decision (baseline → HEAD → refuse) now runs INSIDE the same
+    # per-user lock that serialises the PUT. It used to run entirely OUTSIDE it, so
+    # two concurrent syncs of the SAME profile in one process interleaved:
+    #     A: read baseline 2734 ......................... HEAD → 2735  REFUSE
+    #     B: read baseline 2734 → HEAD 2734 → PUT 2735 → advance baseline
+    # Both upload the SAME local file, so A's "stale" copy already contained B's
+    # data — a false conflict against ITSELF that raised the "edits aren't saving"
+    # banner and, via schedule_profile_db_reheal, forced a full profile.sqlite
+    # re-download on the next request (staging 2026-08-03: machine == writer
+    # machine, on a single-machine app). Holding the lock across the decision also
+    # closes the other interleave, where both syncs HEAD the same version and PUT
+    # the same new_version — a version collision other machines' CAS relies on.
+    # T1539's per-key serialisation is unchanged: same lock, held a little longer.
+    upload_lock = get_upload_lock(user_id, "profile")
+    lock_wait_start = time.perf_counter()
+    # T2720: optional timeout so middleware can bail out instead of blocking ~14s
+    # behind the export worker's upload. Deliberately still ordered BEFORE the
+    # HEAD, so a deferred sync costs zero R2 calls.
+    if lock_timeout is not None:
+        acquired = upload_lock.acquire(timeout=lock_timeout)
+        if not acquired:
+            logger.info(
+                f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
+                f"user={user_id} db=profile"
+            )
+            return _out(False, None, {"reason": "upload_failed"})
+    else:
+        upload_lock.acquire()
+    try:
+        lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
+        if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
+            logger.info(
+                f"[UPLOAD_LOCK_WAIT] user={user_id} db=profile "
+                f"waited_ms={int(lock_wait_ms)}"
+            )
+        return _sync_profile_db_locked(
+            user_id, local_db_path, current_version, skip_version_check,
+            profile_id, key, client, t_total, head_ms, _out,
+        )
+    finally:
+        upload_lock.release()
+
+
+def _sync_profile_db_locked(
+    user_id, local_db_path, current_version, skip_version_check,
+    profile_id, key, client, t_total, head_ms, _out,
+):
+    """The version decision + checkpoint + PUT, run while holding the upload lock.
+
+    Split out only so the locked region reads as one unit (T6400); every branch
+    below is byte-for-byte the pre-T6400 logic apart from the self-upload
+    exemption in the conflict condition.
+    """
     r2_metadata: dict = {}
     if skip_version_check:
         # Skip HEAD call — use in-memory version as base
@@ -1243,7 +1333,15 @@ def sync_database_to_r2_with_version(
         # pushed over the user's real data with zero conflict signal (the
         # catastrophic variant CAS exists to prevent). Treat an unconfirmed
         # baseline against real R2 content the same as a stale one: refuse.
-        if r2_version > 0 and (current_version is None or r2_version > current_version):
+        # T6400: ...unless R2 sits at the exact version THIS PROCESS put there. Then
+        # the writer that "moved R2 ahead" is us: those bytes came from this same
+        # local file, so our copy cannot be behind them. Refusing here was a false
+        # conflict against ourselves (staging 2026-08-03, machine == writer machine)
+        # and cost a full profile.sqlite re-download via schedule_profile_db_reheal.
+        # Bounded to equality, so a foreign writer — always strictly above our own
+        # version — still refuses. An unconfirmed (None) baseline is never rescued.
+        if (r2_version > 0 and (current_version is None or r2_version > current_version)
+                and not (current_version is not None and _is_own_upload_version(key, r2_version))):
             # T6390: unconfirmed baseline (loaded=None, the T6340/T4315 class) vs a
             # genuinely stale one (loaded=vN, the T6160 class) are DIFFERENT bugs with
             # the same banner — discriminate here so the diag + log name which.
@@ -1274,56 +1372,34 @@ def sync_database_to_r2_with_version(
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return _out(False, None, {"reason": "checkpoint_busy"})
 
-    # T5340: explicit profile_id → key off the arg; else fall back to the ContextVar
-    # (request path). Background/cross-profile callers MUST pass profile_id.
-    key = profile_r2_key(user_id, profile_id, "profile.sqlite") if profile_id else r2_key(user_id, "profile.sqlite")
+    # T1539: the PutObject is serialized per user+key by the upload lock the
+    # caller already holds around this whole region (T6400).
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import TIER_1, retry_r2_call
-        # T1539: serialize PutObject per user+key to prevent R2 429s
-        upload_lock = get_upload_lock(user_id, "profile")
-        lock_wait_start = time.perf_counter()
-        # T2720: optional timeout so middleware can bail out instead of
-        # blocking ~14s behind the export worker's upload
-        if lock_timeout is not None:
-            acquired = upload_lock.acquire(timeout=lock_timeout)
-            if not acquired:
-                logger.info(
-                    f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
-                    f"user={user_id} db=profile"
-                )
-                return _out(False, None, {"reason": "upload_failed"})
-        else:
-            upload_lock.acquire()
-        try:
-            lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
-            if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
-                logger.info(
-                    f"[UPLOAD_LOCK_WAIT] user={user_id} db=profile "
-                    f"waited_ms={int(lock_wait_ms)}"
-                )
-            retry_r2_call(
-                client.upload_file,
-                str(local_db_path), R2_BUCKET, key,
-                # T6390: stamp the writer identity next to db-version so a future
-                # conflict can name who moved R2 ahead (read from the conflict HEAD).
-                ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
-                operation=f"db_sync_upload {user_id}", **TIER_1,
-            )
-        finally:
-            upload_lock.release()
-        if PROFILING_ENABLED:
-            upload_ms = (time.perf_counter() - t_upload) * 1000
-            total_ms = (time.perf_counter() - t_total) * 1000
-            logger.info(
-                f"[PROFILE] sync_database_to_r2_with_version: {total_ms:.0f}ms "
-                f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
-            )
-        logger.debug(f"Uploaded DB to R2: {user_id} version {new_version}")
-        return _out(True, new_version, None)
+        retry_r2_call(
+            client.upload_file,
+            str(local_db_path), R2_BUCKET, key,
+            # T6390: stamp the writer identity next to db-version so a future
+            # conflict can name who moved R2 ahead (read from the conflict HEAD).
+            ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
+            operation=f"db_sync_upload {user_id}", **TIER_1,
+        )
     except Exception as e:
         logger.error(f"Failed to upload DB to R2: {e}")
         return _out(False, None, {"reason": "upload_failed"})
+    # T6400: record BEFORE releasing the lock, so a sync that waited on it sees
+    # this version and does not mistake our own write for a foreign one.
+    _record_own_upload(key, new_version)
+    if PROFILING_ENABLED:
+        upload_ms = (time.perf_counter() - t_upload) * 1000
+        total_ms = (time.perf_counter() - t_total) * 1000
+        logger.info(
+            f"[PROFILE] sync_database_to_r2_with_version: {total_ms:.0f}ms "
+            f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
+        )
+    logger.debug(f"Uploaded DB to R2: {user_id} version {new_version}")
+    return _out(True, new_version, None)
 
 
 # Legacy functions for backward compatibility
@@ -1512,6 +1588,44 @@ def sync_user_db_to_r2_with_version(
     t_total = time.perf_counter() if PROFILING_ENABLED else 0
     head_ms = 0.0
 
+    key = _user_db_r2_key(user_id)
+
+    # T6400: same restructure as sync_database_to_r2_with_version — the version
+    # decision runs INSIDE the upload lock and the lock_timeout bail-out stays
+    # ahead of the HEAD. See that function for the race this closes.
+    upload_lock = get_upload_lock(user_id, "user")
+    lock_wait_start = time.perf_counter()
+    # T2720: optional timeout (same pattern as profile DB above)
+    if lock_timeout is not None:
+        acquired = upload_lock.acquire(timeout=lock_timeout)
+        if not acquired:
+            logger.info(
+                f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
+                f"user={user_id} db=user"
+            )
+            return _out(False, None, {"reason": "upload_failed"})
+    else:
+        upload_lock.acquire()
+    try:
+        lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
+        if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
+            logger.info(
+                f"[UPLOAD_LOCK_WAIT] user={user_id} db=user "
+                f"waited_ms={int(lock_wait_ms)}"
+            )
+        return _sync_user_db_locked(
+            user_id, local_db_path, current_version, skip_version_check,
+            key, client, t_total, head_ms, _out,
+        )
+    finally:
+        upload_lock.release()
+
+
+def _sync_user_db_locked(
+    user_id, local_db_path, current_version, skip_version_check,
+    key, client, t_total, head_ms, _out,
+):
+    """user.sqlite twin of _sync_profile_db_locked (T6400)."""
     r2_metadata: dict = {}
     if skip_version_check:
         # Skip HEAD call — use in-memory version as base
@@ -1540,7 +1654,9 @@ def sync_user_db_to_r2_with_version(
         # ERROR (empty schema'd user.sqlite created, no version learned) would
         # force-push over the user's real credits/profiles/quests with zero
         # conflict signal.
-        if r2_version > 0 and (current_version is None or r2_version > current_version):
+        # T6400: same self-conflict exemption as the profile twin — see there.
+        if (r2_version > 0 and (current_version is None or r2_version > current_version)
+                and not (current_version is not None and _is_own_upload_version(key, r2_version))):
             reason = "unconfirmed_baseline" if current_version is None else "stale_baseline"
             from .user_context import get_current_method, get_current_path, get_current_req_id
             logger.critical(
@@ -1561,52 +1677,30 @@ def sync_user_db_to_r2_with_version(
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return _out(False, None, {"reason": "checkpoint_busy"})
 
-    key = _user_db_r2_key(user_id)
+    # T1539: serialized per user+key by the upload lock held around this region (T6400).
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import TIER_1, retry_r2_call
-        # T1539: serialize PutObject per user+key to prevent R2 429s
-        upload_lock = get_upload_lock(user_id, "user")
-        lock_wait_start = time.perf_counter()
-        # T2720: optional timeout (same pattern as profile DB above)
-        if lock_timeout is not None:
-            acquired = upload_lock.acquire(timeout=lock_timeout)
-            if not acquired:
-                logger.info(
-                    f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
-                    f"user={user_id} db=user"
-                )
-                return _out(False, None, {"reason": "upload_failed"})
-        else:
-            upload_lock.acquire()
-        try:
-            lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
-            if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
-                logger.info(
-                    f"[UPLOAD_LOCK_WAIT] user={user_id} db=user "
-                    f"waited_ms={int(lock_wait_ms)}"
-                )
-            retry_r2_call(
-                client.upload_file,
-                str(local_db_path), R2_BUCKET, key,
-                # T6390: stamp writer identity next to db-version (see profile primitive).
-                ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
-                operation=f"user_db_sync_upload {user_id}", **TIER_1,
-            )
-        finally:
-            upload_lock.release()
-        if PROFILING_ENABLED:
-            upload_ms = (time.perf_counter() - t_upload) * 1000
-            total_ms = (time.perf_counter() - t_total) * 1000
-            logger.info(
-                f"[PROFILE] sync_user_db_to_r2_with_version: {total_ms:.0f}ms "
-                f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
-            )
-        logger.debug(f"Uploaded user.sqlite to R2: {user_id} version {new_version}")
-        return _out(True, new_version, None)
+        retry_r2_call(
+            client.upload_file,
+            str(local_db_path), R2_BUCKET, key,
+            # T6390: stamp writer identity next to db-version (see profile primitive).
+            ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
+            operation=f"user_db_sync_upload {user_id}", **TIER_1,
+        )
     except Exception as e:
         logger.error(f"Failed to upload user.sqlite to R2: {e}")
         return _out(False, None, {"reason": "upload_failed"})
+    _record_own_upload(key, new_version)  # T6400: before the lock releases
+    if PROFILING_ENABLED:
+        upload_ms = (time.perf_counter() - t_upload) * 1000
+        total_ms = (time.perf_counter() - t_total) * 1000
+        logger.info(
+            f"[PROFILE] sync_user_db_to_r2_with_version: {total_ms:.0f}ms "
+            f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
+        )
+    logger.debug(f"Uploaded user.sqlite to R2: {user_id} version {new_version}")
+    return _out(True, new_version, None)
 
 
 def ensure_file_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool:

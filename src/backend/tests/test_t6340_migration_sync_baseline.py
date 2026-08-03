@@ -103,7 +103,14 @@ def _r2_bytes_user_version(fake: FakeR2, key: str, tmp_path: Path) -> int:
     data = fake._objects[key]["data"]
     p = tmp_path / "readback.sqlite"
     p.write_bytes(data)
-    v = sqlite3.connect(str(p)).execute("PRAGMA user_version").fetchone()[0]
+    # Close before unlink: on Windows an open handle makes unlink raise
+    # PermissionError (WinError 32), so the whole test fails in teardown even
+    # though its assertions passed. Linux CI hides this (T6400).
+    conn = sqlite3.connect(str(p))
+    try:
+        v = conn.execute("PRAGMA user_version").fetchone()[0]
+    finally:
+        conn.close()
     p.unlink()
     return v
 
@@ -116,7 +123,11 @@ def _r2_games_count(fake: FakeR2, key: str, tmp_path: Path) -> int:
     data = fake._objects[key]["data"]
     p = tmp_path / "readback_games.sqlite"
     p.write_bytes(data)
-    c = sqlite3.connect(str(p)).execute("SELECT COUNT(*) FROM games").fetchone()[0]
+    conn = sqlite3.connect(str(p))  # close before unlink — see _r2_bytes_user_version
+    try:
+        c = conn.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+    finally:
+        conn.close()
     p.unlink()
     return c
 
