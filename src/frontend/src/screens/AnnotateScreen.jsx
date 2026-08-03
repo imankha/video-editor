@@ -224,9 +224,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateClipCount,
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
-    // T5700: layer mode toggle (new-clip default) + clip-list layer filter
+    // T5700/T6400: which layer a new clip inherits (no toggle) + clip-list layer filter
     newClipLayerIsMine,
-    setNewClipLayerIsMine,
     layerFilter,
     setLayerFilter,
     // Handlers
@@ -628,7 +627,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           teammateSuggestions={teammateSuggestions}
           boundaryOffsets={multiVideo?.boundaryOffsets}
           newClipLayerIsMine={newClipLayerIsMine}
-          onSetNewClipLayer={setNewClipLayerIsMine}
           layerFilter={layerFilter}
           onSetLayerFilter={setLayerFilter}
         />
@@ -657,7 +655,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               onSeek={effectiveSeek}
               videoController={videoController}
               newClipLayerIsMine={newClipLayerIsMine}
-              onSetNewClipLayer={setNewClipLayerIsMine}
               layerFilter={layerFilter}
               onSetLayerFilter={setLayerFilter}
               onJumpToClip={(regionId, endTime) => {

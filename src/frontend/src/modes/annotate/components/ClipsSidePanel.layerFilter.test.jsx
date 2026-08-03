@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// T5700: the mode toggle (surface a) sets which layer NEW clips default to
-// (via onSetNewClipLayer — never writes anything itself), and the filter pills
-// (surface e) filter the rendered list client-side only.
+// T6400: the "New clips go to" mode toggle was REMOVED — a new clip now inherits
+// the last layer the user assigned. The clip-list filter pills (surface e) remain
+// and filter the rendered list client-side only.
 vi.mock('./ClipListItem', () => ({
   default: ({ region }) => <div data-testid="row" data-id={region.id} data-mine={String(region.my_athlete ?? true)} />,
 }));
@@ -33,15 +33,13 @@ const clipRegions = [
   { id: 'legacy', startTime: 50, endTime: 60, videoSequence: 1, my_athlete: null },
 ];
 
-describe('ClipsSidePanel — mode toggle + layer filter (T5700)', () => {
-  it('mode toggle reflects newClipLayerIsMine and calls onSetNewClipLayer on click — never touches clip data', () => {
-    const onSetNewClipLayer = vi.fn();
-    render(
-      <ClipsSidePanel {...baseProps} clipRegions={clipRegions} boundaryOffsets={[]} newClipLayerIsMine={true} onSetNewClipLayer={onSetNewClipLayer} />
-    );
-    expect(screen.getByRole('radio', { name: 'My Athlete layer' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(screen.getByRole('radio', { name: 'Team layer' }));
-    expect(onSetNewClipLayer).toHaveBeenCalledWith(false);
+describe('ClipsSidePanel — layer filter (T5700) + no "New clips go to" toggle (T6400)', () => {
+  it('the "New clips go to" mode toggle is GONE (fails if someone reintroduces it)', () => {
+    render(<ClipsSidePanel {...baseProps} clipRegions={clipRegions} boundaryOffsets={[]} newClipLayerIsMine={true} />);
+    // Assert by the removed control's label AND its ariaLabel so the guard holds
+    // regardless of how it might be reintroduced.
+    expect(screen.queryByText('New clips go to:')).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'New clips go to' })).toBeNull();
   });
 
   it('filter pills default to All (every clip shown)', () => {

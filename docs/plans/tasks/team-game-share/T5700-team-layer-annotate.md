@@ -27,6 +27,11 @@ My Athlete on game open, never persisted.
    (placement per UI Designer; near the timeline or clip-list header). Sets which layer NEW
    clips land on (`addClipRegion` default in `useAnnotate.js` currently hardcodes
    `my_athlete: true`). Ephemeral React state owned by the Annotate screen/container.
+   > **SUPERSEDED by T6400 (2026-08-03):** this "New clips go to:" toggle was REMOVED — it cost
+   > sidebar space for little value. A new clip now INHERITS the last layer the user assigned
+   > (seeded on game open from the game's most recent own clip). The ephemeral `newClipLayerIsMine`
+   > state remains, but it is gesture-driven, not toggle-driven. See `.claude/knowledge/annotate.md`
+   > § "New-clip layer is INHERITED" and `docs/plans/tasks/T6400-inherit-last-clip-layer.md`.
 2. **Per-clip layer switch** — replace the on/off toggle in `ClipDetailsEditor.jsx`
    (`handleMyAthleteChange`, L165-168, toggle UI L282-300) with a two-value segmented control
    (My Athlete / Team). Add the same control to the mobile add/edit overlay

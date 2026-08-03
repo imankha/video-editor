@@ -24,10 +24,6 @@ async function gotoGame(page) {
   await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
 }
 
-function modeToggle(page) {
-  return page.getByText('New clips go to:').locator('..').getByRole('radiogroup');
-}
-
 async function ensureAddClipVisible(page, seekTime) {
   await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; if (!v.paused) v.pause(); }, seekTime);
   await page.waitForTimeout(500);
@@ -39,11 +35,19 @@ async function ensureAddClipVisible(page, seekTime) {
   return addBtn;
 }
 
-async function createClipViaUI(page, seekTime) {
+// T6400: the "New clips go to" mode toggle is gone — a clip's layer is chosen on
+// the clip itself. Set it directly in the add-clip form's Layer control before
+// saving (idempotent: skip the click if the inherited default already matches).
+async function createClipViaUI(page, seekTime, layerName) {
   const addBtn = await ensureAddClipVisible(page, seekTime);
   await addBtn.click();
   const form = page.locator('[data-add-clip-form]:visible');
   await expect(form).toBeVisible({ timeout: 5000 });
+  if (layerName) {
+    const radio = form.getByRole('radio', { name: layerName });
+    if ((await radio.getAttribute('aria-checked')) !== 'true') await radio.click();
+    await expect(radio).toHaveAttribute('aria-checked', 'true');
+  }
   const [saveResp] = await Promise.all([
     page.waitForResponse((res) => res.url().includes('/api/clips/raw/save') && res.request().method() === 'POST'),
     form.locator('button.bg-green-600:has-text("Save")').click(),
@@ -68,9 +72,8 @@ test.describe('T5700 follow-up — desktop two-lane split', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    mineId = await createClipViaUI(page, 1); // My Athlete default on fresh game open
-    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
-    teamId = await createClipViaUI(page, 60); // spaced apart so it's a distinct marker
+    mineId = await createClipViaUI(page, 1, 'My Athlete layer');
+    teamId = await createClipViaUI(page, 60, 'Team layer'); // spaced apart so it's a distinct marker
   });
 
   test.afterEach(async ({ context }) => {

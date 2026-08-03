@@ -38,10 +38,6 @@ async function gotoGame(page) {
   await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
 }
 
-function modeToggle(page) {
-  return page.getByText('New clips go to:').locator('..').getByRole('radiogroup');
-}
-
 /**
  * Seek to `seekTime` (a spot far from any real clip's [100s, 5200s] range AND
  * from any clip this test itself just created) and make sure "Add Clip" is
@@ -63,8 +59,17 @@ async function ensureAddClipVisible(page, seekTime) {
   return addBtn;
 }
 
-/** Click Add Clip, Save immediately (defaults only). Returns the created raw_clip_id. */
-async function createClipViaUI(page, seekTime) {
+/**
+ * Click Add Clip, optionally set the clip's layer in the add-clip form, Save.
+ * Returns the created raw_clip_id.
+ *
+ * T6400: the "New clips go to" mode toggle is gone — a clip's layer is chosen on
+ * the clip itself. Pass `layerName` ('My Athlete layer' | 'Team layer') to set
+ * it in the add-clip form's Layer control before saving (idempotent: skip the
+ * click if the inherited default already matches). Omit it to accept whatever
+ * the game seeded / the previous clip set.
+ */
+async function createClipViaUI(page, seekTime, layerName) {
   const addBtn = await ensureAddClipVisible(page, seekTime);
   await addBtn.click();
   // The desktop ClipsSidePanel stays mounted (`hidden sm:flex`) even on a
@@ -72,6 +77,12 @@ async function createClipViaUI(page, seekTime) {
   // the VISIBLE [data-add-clip-form] only (mobile's inline form, or desktop's).
   const form = page.locator('[data-add-clip-form]:visible');
   await expect(form).toBeVisible({ timeout: 5000 });
+
+  if (layerName) {
+    const radio = form.getByRole('radio', { name: layerName });
+    if ((await radio.getAttribute('aria-checked')) !== 'true') await radio.click();
+    await expect(radio).toHaveAttribute('aria-checked', 'true');
+  }
 
   const [saveResp] = await Promise.all([
     page.waitForResponse((res) => res.url().includes('/api/clips/raw/save') && res.request().method() === 'POST'),
@@ -90,7 +101,7 @@ async function deleteClip(context, rawClipId) {
   }
 }
 
-test.describe('T5700 — mode toggle: new clips land on the selected layer', () => {
+test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen layer', () => {
   let createdIds = [];
 
   test.beforeEach(async ({ context, page }) => {
@@ -103,26 +114,19 @@ test.describe('T5700 — mode toggle: new clips land on the selected layer', () 
     for (const id of createdIds) await deleteClip(context, id);
   });
 
-  test('Team layer selected -> new clip gets my_athlete=false, TEAM chip, amber marker foot', async ({ page }) => {
-    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
-    await expect(modeToggle(page).getByRole('radio', { name: 'Team layer' })).toHaveAttribute('aria-checked', 'true');
-
-    const id = await createClipViaUI(page, 1);
+  test('Team layer chosen -> new clip gets my_athlete=false, TEAM chip, amber marker foot', async ({ page }) => {
+    // T6400: layer is set in the add-clip form's own Layer control (no sidebar toggle).
+    const id = await createClipViaUI(page, 1, 'Team layer');
     createdIds.push(id);
 
-    await expect(page.getByTitle('Team layer').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').first()).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-new-clip-team-layer');
   });
 
-  test('My Athlete layer selected -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
-    // Explicitly select Team then back to My Athlete to prove the toggle drives it (not just the default).
-    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
-    await modeToggle(page).getByRole('radio', { name: 'My Athlete layer' }).click();
-    await expect(modeToggle(page).getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+  test('My Athlete layer chosen -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
+    const teamMarkersBefore = await page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count();
 
-    const teamMarkersBefore = await page.getByTitle('Team layer').count();
-
-    const id = await createClipViaUI(page, 1);
+    const id = await createClipViaUI(page, 1, 'My Athlete layer');
     createdIds.push(id);
 
     // Only Team rows are marked now, so the layer is proven via the per-clip
@@ -131,17 +135,17 @@ test.describe('T5700 — mode toggle: new clips land on the selected layer', () 
     await expect(
       page.locator('[data-clip-details]').getByRole('radio', { name: /^My Athlete layer/ })
     ).toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
-    expect(await page.getByTitle('Team layer').count()).toBe(teamMarkersBefore);
+    expect(await page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count()).toBe(teamMarkersBefore);
     await saveEvidence(page, 'criterion-new-clip-my-athlete-layer');
   });
 });
 
-test.describe('T5700 — toggle + filter reset on game open (ephemeral, never persisted)', () => {
+test.describe('T5700 — filter pill reset on game open (ephemeral, never persisted)', () => {
   test.beforeEach(async ({ context }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
   });
 
-  test('setting Team then reopening the SAME game resets to My Athlete / All, with zero writes from the toggle itself', async ({ page }) => {
+  test('flipping the filter pill writes nothing and resets to All on reopen', async ({ page }) => {
     await gotoGame(page);
 
     const writeRequests = [];
@@ -149,15 +153,14 @@ test.describe('T5700 — toggle + filter reset on game open (ephemeral, never pe
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method())) writeRequests.push(`${req.method()} ${req.url()}`);
     });
 
-    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
-    await expect(modeToggle(page).getByRole('radio', { name: 'Team layer' })).toHaveAttribute('aria-checked', 'true');
-    // Flip the filter pill too — same ephemeral rule.
+    // Flip the clip-list filter pill — an ephemeral view gesture.
     await page.getByRole('button', { name: 'Team', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Team', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
-    // Toggling + filtering must never write anything.
-    expect(writeRequests, `Unexpected write request(s) from toggling: ${writeRequests.join(', ')}`).toHaveLength(0);
+    // Filtering must never write anything.
+    expect(writeRequests, `Unexpected write request(s) from filtering: ${writeRequests.join(', ')}`).toHaveLength(0);
 
-    // No localStorage write for the layer state either.
+    // No localStorage write for the layer/filter state either.
     const layerKeysInStorage = await page.evaluate(() =>
       Object.keys(localStorage).filter((k) => /layer|myAthlete|my_athlete/i.test(k))
     );
@@ -167,9 +170,8 @@ test.describe('T5700 — toggle + filter reset on game open (ephemeral, never pe
     await page.goto('/');
     await gotoGame(page);
 
-    await expect(modeToggle(page).getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await saveEvidence(page, 'criterion-toggle-resets-on-reopen');
+    await saveEvidence(page, 'criterion-filter-resets-on-reopen');
   });
 });
 
@@ -212,9 +214,8 @@ test.describe('T5700 — filter pills', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    mineId = await createClipViaUI(page, 1); // My Athlete default on fresh open
-    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
-    teamId = await createClipViaUI(page, 60); // spaced 60s apart so it lands outside the first clip's [~-9,+3]s span
+    mineId = await createClipViaUI(page, 1, 'My Athlete layer');
+    teamId = await createClipViaUI(page, 60, 'Team layer'); // spaced 60s apart so it lands outside the first clip's [~-9,+3]s span
   });
 
   test.afterEach(async ({ context }) => {
@@ -226,7 +227,7 @@ test.describe('T5700 — filter pills', () => {
     // Only Team rows carry a marker now, so My Athlete rows are counted as
     // "rows without a Team marker" rather than by a marker of their own.
     const countRows = async () => page.getByTestId('clip-row').count();
-    const countTeam = async () => page.getByTitle('Team layer').count();
+    const countTeam = async () => page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count();
     const countMine = async () => (await countRows()) - (await countTeam());
 
     await page.getByRole('button', { name: 'My Athlete', exact: true }).click();
@@ -328,16 +329,11 @@ test.describe('T5700 — mobile (390px): create on both layers', () => {
     for (const id of createdIds) await deleteClip(context, id);
   });
 
-  test('mobile Add Clip flow shows the Layer control and saves on the toggled layer', async ({ page }) => {
-    // Below the `sm` breakpoint the desktop ClipsSidePanel is `hidden sm:flex`;
-    // the mode toggle only becomes reachable via the mobile sidebar drawer —
-    // and the drawer overlay must be closed again (its backdrop covers the
-    // whole screen) before "Add Clip" underneath is clickable.
-    await page.locator('button[title="Show clips"]').click();
-    await modeToggle(page).getByRole('radio', { name: 'Team layer' }).click();
-    await page.locator('.fixed.inset-0.z-50').locator('button:has(svg.lucide-x)').click(); // drawer's X close button
-
-    const id = await createClipViaUI(page, 1);
+  test('mobile Add Clip flow shows the Layer control and saves on the chosen layer', async ({ page }) => {
+    // T6400: no sidebar mode toggle. On mobile the add-clip form (the fullscreen
+    // overlay) carries its own Layer control, so the layer is chosen right there —
+    // createClipViaUI sets it in the visible [data-add-clip-form] before saving.
+    const id = await createClipViaUI(page, 1, 'Team layer');
     createdIds.push(id);
 
     // The clip-list chip lives in the mobile sidebar drawer, which is closed
@@ -345,7 +341,7 @@ test.describe('T5700 — mobile (390px): create on both layers', () => {
     await page.locator('button[title="Show clips"]').click();
     // The CSS-hidden desktop sidebar (`hidden sm:flex`) stays mounted and
     // renders its own chip too — scope to the :visible one.
-    await expect(page.locator('[title="Team layer"]:visible').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]:visible').first()).toBeVisible({ timeout: 5000 });
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'criterion-mobile-390-create-team-layer');
   });
@@ -397,7 +393,7 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
   }
 
   test('desktop (352px sidebar): chip + inline Shared-by pill stay fully visible; the NAME truncates', async ({ page }) => {
-    const chip = page.locator('[title="Team layer"]:visible').first();
+    const chip = page.locator('[data-testid="clip-row"] [aria-label="Team layer"]:visible').first();
     const sharedPill = page.locator('[title="Shared by Dana Smith"]:visible').first();
     await expect(chip).toBeVisible();
     await expect(sharedPill).toBeVisible();
@@ -413,7 +409,7 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
     await page.setViewportSize({ width: 390, height: 800 });
     await page.locator('button[title="Show clips"]').click();
 
-    const chip = page.locator('[title="Team layer"]:visible').first();
+    const chip = page.locator('[data-testid="clip-row"] [aria-label="Team layer"]:visible').first();
     await expect(chip).toBeVisible();
     // The desktop inline PILL (rounded-full "Shared by" badge) is scoped
     // `!isMobile` in ClipListItem — it must NOT render on the mobile row.

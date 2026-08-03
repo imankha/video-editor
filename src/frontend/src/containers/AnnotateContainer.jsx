@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annotate';
+import { useAnnotateState, useAnnotate, useClipSelection, resolveInheritedNewClipLayer } from '../modes/annotate';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
@@ -575,10 +575,11 @@ export function AnnotateContainer({
     // game. Re-set authoritatively from storage_status in applyGameData.
     setAnnotateSourceExpired(false);
 
-    // T5700: the layer mode toggle + clip-list filter are ephemeral session view
-    // state, sticky WITHIN a game but reset every time a game is opened. Reset
-    // imperatively here (the game-open gesture), not via a state-watching effect.
-    setNewClipLayerIsMine(true);
+    // T5700/T6400: the clip-list filter is ephemeral session view state, reset
+    // every time a game is opened. Reset imperatively here (the game-open
+    // gesture), not via a state-watching effect. The new-clip layer default is
+    // ALSO reset per game open, but it is SEEDED from the game's clips once they
+    // load (resolveInheritedNewClipLayer, below), so it is set after /load, not here.
     setLayerFilter('all');
 
     // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
@@ -683,6 +684,13 @@ export function AnnotateContainer({
           pendingSelectSeekTimeRef.current = pendingClipSeekTime;
         }
       }
+
+      // T6400: seed the new-clip layer default from the game's most recently
+      // created OWN clip (case 2b), else My Athlete for an empty game (2c).
+      // Imperative on the game-open gesture — NOT a state-watching effect.
+      // Thereafter, layer-assignment gestures (creating a clip, changing a
+      // clip's layer) update it via handleFullscreenCreateClip / updateClipRegionWithSync.
+      setNewClipLayerIsMine(resolveInheritedNewClipLayer(gameData.annotations));
 
       setEditorMode(EDITOR_MODES.ANNOTATE);
     } catch (err) {
@@ -809,6 +817,10 @@ export function AnnotateContainer({
     );
     if (newRegion) {
       console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
+      // T6400: creating a clip is a layer-assignment gesture — remember its layer
+      // as the default for the NEXT new clip (case 2a). New clips are always own
+      // (never imported), so this always reflects user intent.
+      setNewClipLayerIsMine((newRegion.my_athlete ?? true) !== false);
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
       effectiveSeek(clipData.startTime);
 
@@ -851,6 +863,20 @@ export function AnnotateContainer({
     if (!region) {
       console.warn('[AnnotateContainer] Region not found for update:', regionId);
       return;
+    }
+
+    // T6400: changing a clip's layer via a per-clip control is a layer-assignment
+    // gesture — remember it as the default for the NEXT new clip (case 2a). Only
+    // when the layer ACTUALLY changes: the fullscreen-overlay edit path resends
+    // my_athlete on every Save (notes/rating/etc.), which must NOT move the
+    // default. Ignore imported clips (shared_by set): their Team layer is forced
+    // and expresses no intent (the control is disabled — a guard, not a live path).
+    if (updates.my_athlete !== undefined && !region.shared_by) {
+      const assignedIsMine = updates.my_athlete !== false;
+      const currentIsMine = (region.my_athlete ?? true) !== false;
+      if (assignedIsMine !== currentIsMine) {
+        setNewClipLayerIsMine(assignedIsMine);
+      }
     }
 
     if (updates.createProject != null) {
@@ -1341,10 +1367,11 @@ export function AnnotateContainer({
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
 
-    // T5700: layer mode toggle (new-clip default) + clip-list layer filter.
-    // Both ephemeral session view state, reset on game open (see handleLoadGame).
+    // T5700/T6400: which layer a new clip inherits (seeded on game open, updated
+    // by layer-assignment gestures — see handleLoadGame / create / switch) + the
+    // clip-list layer filter. Ephemeral session view state, never persisted. The
+    // setter stays internal to the container now (no external mode toggle).
     newClipLayerIsMine,
-    setNewClipLayerIsMine,
     layerFilter,
     setLayerFilter,
 

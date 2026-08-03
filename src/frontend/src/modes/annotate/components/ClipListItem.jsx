@@ -7,9 +7,13 @@ import { generateClipName } from '../../../utils/clipDisplayName';
  * LayerChip - icon-only amber "Team" marker for a clip-list row (T5700 follow-up).
  * ONLY the Team layer is marked: My Athlete is the default layer, so marking it
  * too was pure noise on almost every row (user decision after testing). An
- * unmarked row therefore means My Athlete. No visible text at any breakpoint —
- * the accessible name (title + aria-label) carries the layer name for
- * screen-reader and hover users.
+ * unmarked row therefore means My Athlete.
+ *
+ * T6400: deliberately NO `title` — the layer is signalled by color/icon alone on
+ * hover (user decision: the "Team" rollover tooltip was unwanted clutter). The
+ * `aria-label` is RETAINED (invisible, zero space) so the layer still has an
+ * accessible name for assistive tech and isn't conveyed by color alone
+ * (WCAG 1.4.1). Do not re-add a title or drop the aria-label.
  */
 function LayerChip({ isMine }) {
   if (isMine) return null;
@@ -17,7 +21,6 @@ function LayerChip({ isMine }) {
     <span
       className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
                  bg-amber-500 text-amber-950"
-      title="Team layer"
       aria-label="Team layer"
     >
       <Users size={12} />

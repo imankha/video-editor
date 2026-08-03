@@ -159,23 +159,41 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `region.my_athlete ?? true` must be applied at every read site (`LayerSegmentedControl`,
   `ClipListItem`'s `LayerChip` — **marks ONLY the Team layer** (amber `Users` icon, no visible
   text); My Athlete is the unmarked default, so an unmarked row MEANS My Athlete (follow-up UX
-  decision: marking both was noise on nearly every row). Accessible name carries the layer via
-  title/aria-label. Consequence for tests: there is no My-Athlete marker to count — count
+  decision: marking both was noise on nearly every row). **T6400: the chip has NO `title` (the
+  "Team" hover rollover was removed — color/icon alone signal the layer on hover, user decision);
+  its `aria-label="Team layer"` is RETAINED** so the layer keeps an accessible name and isn't
+  conveyed by color alone (WCAG 1.4.1). Consequence for tests/e2e: the row marker is no longer
+  selectable by `title` — use `[data-testid="clip-row"] [aria-label="Team layer"]` (scoping to the
+  row excludes the per-clip `LayerSegmentedControl` radio, which shares that accessible name).
+  There is no My-Athlete marker to count — count
   `data-testid="clip-row"` rows minus Team markers instead —
   `ClipRegionLayer`'s `layerColorFor`/`layerLabelFor`,
   `ClipsSidePanel`'s filter) — never read `region.my_athlete` bare. Shared component
-  `LayerSegmentedControl.jsx` (`value`/`onChange` boolean, `disabled`/`disabledReason`) is reused by
-  three call sites: `ClipsSidePanel` header (mode toggle, sets the default for NEW clips only —
-  does not retag existing clips), `ClipDetailsEditor` (desktop + mobile per-clip switch, replaced
-  the old on/off toggle), `AnnotateFullscreenOverlay` (mobile add/edit, seeded from the mode toggle
-  on create, from the clip on edit). Imported clips (`shared_by` NOT NULL) render the control
-  **disabled or locked to Team, read-only** — a recipient cannot re-tag someone else's shared clip
-  onto their own My Athlete layer (that layer feeds reels/rankings/collections, T5330 provenance).
-  Mode toggle (`newClipLayerIsMine`) and clip-list filter (`layerFilter`) are ephemeral,
-  screen-owned state in `useAnnotateState.js` — reset **imperatively** in
+  `LayerSegmentedControl.jsx` (`value`/`onChange` boolean, `disabled`/`disabledReason`) is now
+  reused by TWO per-clip call sites: `ClipDetailsEditor` (desktop + mobile per-clip switch, replaced
+  the old on/off toggle) and `AnnotateFullscreenOverlay` (mobile add/edit + the desktop inline
+  add-clip form, seeded from the inherited new-clip layer on create, from the clip on edit).
+  Imported clips (`shared_by` NOT NULL) render the control **disabled or locked to Team, read-only**
+  — a recipient cannot re-tag someone else's shared clip onto their own My Athlete layer (that layer
+  feeds reels/rankings/collections, T5330 provenance). The clip-list filter (`layerFilter`) is
+  ephemeral, screen-owned state in `useAnnotateState.js` — reset **imperatively** to `'all'` in
   `AnnotateContainer.handleLoadGame` (the game-open gesture), never via a state-watching effect, and
-  are never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
+  never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
   a secondary cue (colored border/underline), not a replacement for the rating-hue primary signal.
+- **New-clip layer is INHERITED, not toggled (T6400 — supersedes T5700's "Surface (a)").** The
+  "New clips go to:" mode toggle in the `ClipsSidePanel` header was REMOVED (it cost sidebar space
+  for little value). A new clip now defaults to the LAST layer the user assigned. `newClipLayerIsMine`
+  is still the ephemeral, screen-owned boolean in `useAnnotateState.js` (never persisted), but its
+  setter is now internal to `AnnotateContainer` and driven by GESTURES, never a control:
+  resolution order — (a) the last layer assigned this session (creating a clip via
+  `handleFullscreenCreateClip`, or changing a clip's layer via `updateClipRegionWithSync` — both
+  call `setNewClipLayerIsMine` imperatively; the switch path IGNORES imported clips, `shared_by`
+  set, whose Team layer is forced and expresses no intent); else (b) on game open, seeded from the
+  game's most recently created OWN clip (`resolveInheritedNewClipLayer(gameData.annotations)`,
+  exported from `useAnnotate.js` — highest raw_clip `id`, skipping `shared_by` clips, legacy-NULL
+  rule for the layer read); else (c) My Athlete for a game with no own clips. Still reset per game
+  open (via 2b) and NEVER via a state-watching effect (the banned reactive shape — it would also
+  fight the user mid-edit). No sessionStorage, no DB column, no backend change.
 - **Teammate tagging is Team-layer only (T5725).** Teammates <-> Team is now a hard invariant: the
   Teammates control (`ClipDetailsEditor.jsx`, `AnnotateFullscreenOverlay.jsx`) renders ONLY when the
   clip is on the Team layer (`(my_athlete ?? true) === false`), replacing the old `!isMobile` gate --

@@ -5,31 +5,43 @@ import { ClipListItem } from './ClipListItem';
 // T5700 follow-up: layer marker is icon-only (no visible text at any
 // breakpoint) + "Shared by" coexistence. The marker and the purple
 // attribution pill are BOTH shrink-0 so a long clip NAME truncates first —
-// never the layer identity or the provenance. Accessible name (title +
-// aria-label) carries the full layer name since there is no visible text.
+// never the layer identity or the provenance.
+// T6400: the marker has NO `title` (the "Team" hover rollover was unwanted —
+// color/icon signal the layer on hover) but KEEPS its `aria-label` so the layer
+// still has an accessible name and is not conveyed by color alone (WCAG 1.4.1).
 const LONG_NAME = 'Incredible give-and-go through the midfield ending in a screamer from outside the box';
 
 describe('ClipListItem — layer marker (T5700)', () => {
   it('renders NO marker when my_athlete is true (My Athlete is the unmarked default)', () => {
     render(<ClipListItem region={{ id: 'c1', rating: 4, name: 'Clip', my_athlete: true }} index={0} isSelected={false} />);
-    expect(screen.queryByTitle('My Athlete layer')).toBeNull();
-    expect(screen.queryByTitle('Team layer')).toBeNull();
+    expect(screen.queryByLabelText('My Athlete layer')).toBeNull();
+    expect(screen.queryByLabelText('Team layer')).toBeNull();
   });
 
   it('renders NO marker when my_athlete is undefined/null (legacy rule = My Athlete)', () => {
     render(<ClipListItem region={{ id: 'c1', rating: 4, name: 'Clip' }} index={0} isSelected={false} />);
     // The legacy-NULL rule must resolve to the UNMARKED default, never to Team —
     // a Team marker here would mislabel every pre-T5700 clip.
-    expect(screen.queryByTitle('Team layer')).toBeNull();
-    expect(screen.queryByTitle('My Athlete layer')).toBeNull();
+    expect(screen.queryByLabelText('Team layer')).toBeNull();
+    expect(screen.queryByLabelText('My Athlete layer')).toBeNull();
   });
 
   it('renders the Team marker (icon only, accessible name) when my_athlete is false', () => {
     render(<ClipListItem region={{ id: 'c1', rating: 4, name: 'Clip', my_athlete: false }} index={0} isSelected={false} />);
-    const marker = screen.getByTitle('Team layer');
+    const marker = screen.getByLabelText('Team layer');
     expect(marker).toBeTruthy();
     expect(marker.getAttribute('aria-label')).toBe('Team layer');
     expect(marker.textContent).toBe('');
+  });
+
+  it('T6400: the Team marker has NO title (no hover rollover) but keeps its accessible name', () => {
+    render(<ClipListItem region={{ id: 'c1', rating: 4, name: 'Clip', my_athlete: false }} index={0} isSelected={false} />);
+    // Accessible name still resolvable by assistive tech...
+    const marker = screen.getByLabelText('Team layer');
+    // ...but NO title attribute, so no "Team" tooltip appears on hover (guards
+    // against a future change silently reintroducing the rollover the user removed).
+    expect(marker.hasAttribute('title')).toBe(false);
+    expect(screen.queryByTitle('Team layer')).toBeNull();
   });
 
   describe('imported clip (shared_by) — marker + attribution coexistence', () => {
@@ -42,14 +54,14 @@ describe('ClipListItem — layer marker (T5700)', () => {
           isMobile={false}
         />
       );
-      const marker = screen.getByTitle('Team layer');
+      const marker = screen.getByLabelText('Team layer');
       expect(marker).toBeTruthy();
       expect(marker.textContent).toBe('');
       const sharedPill = screen.getByTitle('Shared by Dana Smith');
       expect(sharedPill).toBeTruthy();
       expect(sharedPill.className).toContain('shrink-0');
 
-      const chipWrapper = container.querySelector('[title="Team layer"]').parentElement;
+      const chipWrapper = container.querySelector('[aria-label="Team layer"]').parentElement;
       expect(chipWrapper.className).toContain('shrink-0');
 
       // The name lives in a min-w-0 flex-1 truncate span so it shrinks first.
@@ -67,7 +79,7 @@ describe('ClipListItem — layer marker (T5700)', () => {
           isMobile={true}
         />
       );
-      expect(screen.getByTitle('Team layer')).toBeTruthy();
+      expect(screen.getByLabelText('Team layer')).toBeTruthy();
       // The desktop inline pill is a rounded-full badge; mobile instead renders
       // a plain second-line block — same text, different (non-pill) markup.
       const attribution = screen.getByText(/Shared by Dana Smith/);

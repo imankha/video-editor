@@ -4,7 +4,6 @@ import { Button } from '../../../components/shared/Button';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
-import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 import { clipGameClock } from '../../../utils/timeFormat';
 
@@ -53,8 +52,10 @@ export function ClipsSidePanel({
   onOverlayClose,
   teammateSuggestions = [],
   boundaryOffsets,
+  // T6400: which layer a NEW clip lands on. No longer a toggle here — it is
+  // inherited from the last layer the user assigned (seeded on game open from
+  // the most recent own clip). Still threaded to the inline add-clip overlay below.
   newClipLayerIsMine = true,
-  onSetNewClipLayer,
   layerFilter = 'all',
   onSetLayerFilter,
 }) {
@@ -176,20 +177,10 @@ export function ClipsSidePanel({
             </div>
             <p className="text-xs text-gray-500 mb-2">Click timeline to add clip</p>
 
-            {/* Surface (a): tagging-mode toggle — which layer NEW clips land on.
-                Ephemeral, sticky within the game session, never persisted. */}
-            <div className="mb-3">
-              <span className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
-                New clips go to:
-              </span>
-              <LayerSegmentedControl
-                size="sm"
-                value={newClipLayerIsMine}
-                onChange={onSetNewClipLayer}
-                className="w-full"
-                ariaLabel="New clips go to"
-              />
-            </div>
+            {/* T6400: the "New clips go to" mode toggle was removed here. A new
+                clip now inherits the last layer the user assigned (see
+                resolveInheritedNewClipLayer + the create/switch gestures in
+                AnnotateContainer), so the control no longer costs sidebar space. */}
 
             {/* Surface (e): clip-list layer filter — client-side only, ephemeral. */}
             <div className="flex flex-wrap items-center gap-1.5 mb-3">
