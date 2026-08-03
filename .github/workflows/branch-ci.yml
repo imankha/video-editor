@@ -2,7 +2,9 @@ name: Branch CI
 
 # Independent verification of every feature branch: converts "the worker says
 # tests pass" into "GitHub says tests pass". Runs unit tests + changed-file
-# lint on both layers. Known pre-existing failures are catalogued in
+# lint on the layers the branch actually touched (T6405 -- see the `changes`
+# job; a layer the diff cannot reach is skipped, but a layer it CAN reach runs
+# its suite IN FULL). Known pre-existing failures are catalogued in
 # docs/testing/known-failures.md -- keep the deselect list below in sync.
 
 on:
@@ -15,7 +17,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # T6405: decide which layers this branch can possibly have broken, so a
+  # backend-only diff stops paying for the whole frontend job (and vice versa).
+  # Deliberately JOB-level only: within a job the suite still runs IN FULL.
+  # Selecting individual test files from the diff was considered and rejected --
+  # Python's import graph means a storage.py change is exercised by tests that
+  # never name storage (anything importing app.main), so file-name selection
+  # would silently skip real regressions. Sound selection needs coverage data
+  # (testmon), not path matching.
+  # Bias is toward RUNNING: anything shared (scripts/, this workflow) trips both.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect changed layers vs master
+        id: filter
+        run: |
+          git fetch origin master --quiet
+          CHANGED=$(git diff --name-only origin/master...HEAD)
+          echo "changed files:"; echo "$CHANGED"
+          FE=false; BE=false
+          # scripts/ holds the viewport-unit + media-api-base gates the frontend
+          # job runs; this workflow itself must re-validate both layers.
+          if echo "$CHANGED" | grep -qE '^(src/frontend/|scripts/|\.github/workflows/branch-ci\.yml)'; then FE=true; fi
+          if echo "$CHANGED" | grep -qE '^(src/backend/|\.github/workflows/branch-ci\.yml)'; then BE=true; fi
+          echo "frontend=$FE" >> "$GITHUB_OUTPUT"
+          echo "backend=$BE" >> "$GITHUB_OUTPUT"
+          echo "::notice::frontend=$FE backend=$BE"
+
   frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -67,6 +104,8 @@ jobs:
         run: npx vitest run --retry=2
 
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
