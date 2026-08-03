@@ -56,6 +56,36 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - **Failed:** reduce_log the output and report the failure; do **NOT** apply any promotions
      (nothing shipped to prod). Keep the analysis for after a fix + redeploy.
 
+6. **Post-deploy DATA steps — schema first, then data. Neither auto-runs.**
+
+   `deploy_production.sh` does **not** migrate and does **not** backfill. Run these in order after a
+   successful deploy, and report the result of each:
+
+   **6a. Migrations (schema).** `POST /api/admin/migrate` (admin session), or the fly-ssh fallback in
+   [migration.md](../../agents/migration.md). Verify per-user tracks landed **in R2**, not just on
+   the machine — that distinction is the entire T6340 bug:
+   ```
+   fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"
+   ```
+   A clean run reports `errors: []`. Then confirm profiles are at head with
+   `_read_r2_profile_user_version`.
+
+   **6b. Poster backfill (data) — ONLY if the deploy shipped poster-selection changes.**
+   Existing reels keep whatever poster they already have; nothing heals them automatically.
+   ```
+   POST /api/admin/backfill-share-posters?dry_run=true            # candidate count first
+   POST /api/admin/backfill-share-posters?limit=500&force=true    # backgrounded
+   GET  /api/admin/backfill-share-posters                         # poll running/last_result
+   ```
+   - **`force=true` is required** to move already-postered reels onto the current algorithm.
+     Without it the candidate set is usually **0**, because every reel already *has* a poster —
+     it is just an old one. (Measured on staging 2026-08-02: 0 candidates without force, 58 with.)
+   - **User covers are safe:** `poster_source IN ('overlay','upload')` is *always* skipped
+     (`skipped_override`), even under force.
+   - Expect some `skipped_gone` (video object reclaimed) and unpublished drafts to be untouched —
+     the backfill targets published reels. Neither is a failure.
+   - Post-T5410 this is arithmetic + one frame grab per reel — **no Modal, no GPU**.
+
 ## Post-Deploy: Plan Reconciliation
 
 Goal: keep PLAN.md, EPIC.md, and task files current automatically. A deploy ships work to prod, so it is the natural moment to reconcile what the commits *claim* against what the tasks *specify*.
