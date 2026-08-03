@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-08-03 (T6390: the `.sync_conflict`/`.sync_failed` markers are now PER-SCOPE files (`.sync_{kind}.{scope}`, scope = `USER_DB_SCOPE="user"` or the profile_id) carrying a JSON DIAG payload, not per-USER files with a bare `str(time.time())`. Fixes a real defect: a success on ONE db (`clear_sync_conflict(user_id)`) silently ERASED a live conflict on ANOTHER — incl. `retry_pending_sync`'s deterministic SELF-STOMP (profile marks conflict, user-branch success cleared it → a non-retryable CAS conflict was blind-retried by `_redrain` to exhaustion and mislabelled `failed`). Now cleared PER SCOPE; `has_sync_conflict` = ANY scope; the T4310 post-gather reassertion is DELETED (scoping makes the race impossible). `retry_pending_sync` returns an aggregate `SyncResult` (not bool) and `_redrain_failed_sync` decides "stop, CAS conflict" from that RETURN VALUE, not a marker file. DIAGNOSTICS: markers carry `reason`(stale_baseline|unconfirmed_baseline|upload_failed|checkpoint_busy|legacy) + db/profile_id/loaded/r2/machine/req_id/method/path/writer/written_at; storage.py stamps `db-writer`(machine/req_id)+`db-written-at` on every upload and reads them from the conflict HEAD (get_db_version_from_r2 return_metadata=True — ZERO extra R2 calls); the `[SYNC_CONFLICT]` CRITICAL now names req_id/method/path/writer/reason (method/path via new `_current_method`/`_current_path` ContextVars set in dispatch); `read_sync_diag` renders the winning marker into the `X-Sync-Diag` header (ADDED to main.py:217 `expose_headers` — invisible cross-origin otherwise); client `checkSyncStatus` logs a console.error on the TRANSITION into conflict/failed (no spam) and `retrySyncToR2` logs all 3 outcomes. Reader/legacy tolerance: `has_/read_` never raise on a legacy bare float marker. CAS guard BYTE-IDENTICAL — diagnostics only. Readers TOLERATE the legacy format. See T6390 section.)
 updated: 2026-08-02 (T6340: the profile_db MIGRATION RUNNER is now a baseline-establishing caller. `_migrate_profile_db` force-downloads the canonical R2 profile.sqlite and `shutil.move`s it over the local file; the R2 sync version lives in object metadata, NOT in the bytes, so the swapped-in file had NO db_version row → get_local_db_version()==None → CAS BLOCKING-2 refused the post-migration upload UNCONDITIONALLY → NO profile_db migration ever reached R2 on staging/prod (v030/v031 stuck). FIX: after the swap, record the DOWNLOADED copy's sync version as the confirmed baseline via set_local_db_version, atomically — `_download_profile_db` now fetches bytes+metadata in ONE get_object so no separate HEAD can observe a moved version (recording a moved version would force-push older bytes at a bumped version = clobber). CAS guard UNCHANGED (fix the caller, not the guard). r2_version now populated in error rows (was always null) via one HEAD on the FAILURE path only. `_migrate_user_db` (user.sqlite) does NOT share the defect — ensure_user_database's restore records the baseline from the same download. See T6340 section.)
 updated: 2026-07-28 (T6160: a CAS conflict now SELF-HEALS — restore is first-access-only, so a running machine never noticed R2 moving ahead and every write refused forever (Retry futile until restart). On conflict the loaded-from version is now invalidated (profile: memory + persisted db_version file row + cooldown; user.sqlite: memory version + `_initialized_user_dbs` init flag + cooldown) so the NEXT request's first-access restore re-pulls R2's newer copy. CAS refusal UNCHANGED (baseline never advanced; a None baseline still refuses via BLOCKING-2). The refused in-flight edit is DISCARDED by the re-pull (decision 2, never merged/force-pushed). ensure_database/ensure_user_database first-access restore gained the T4315 WAL guard (before_download + clear_stale_wal_sidecars) since the re-pull can now fire on a running machine. See T6160 section.)
 updated: 2026-07-27 (T6040: reader-vs-writer split on `conflict` — a no-write session now gets a quiet "newer version available" + Reload notice instead of total silence; `failed` stays silent for readers because the `conflict`/`failed` asymmetry (R2-ahead vs local-ahead) means only `conflict` readers are looking at stale data; frontend-only, backend untouched; see T5960/T6010/T6020/T6040 section)
@@ -157,6 +158,85 @@ scenarios unchanged and green (its download double now returns the real `(found,
 the bare-bool normalization shim in `_migrate_profile_db` was deleted — no production caller returned
 a bare bool). **Out of the container's reach (post-deploy):** staging reaching v031 in R2, and the
 prod below-head audit.
+
+## T6390 — per-DB marker scoping + sync-conflict diagnostics
+
+**Two problems, one task.** A CAS-refusal banner hit staging and could not be root-caused (browser
+console silent, the `[SYNC_CONFLICT]` CRITICAL already scrolled out of the ~90s `flyctl logs` window,
+and even when read it lacked req_id/method/path and *who moved R2 ahead*). Scoping the fix surfaced a
+real correctness defect: `.sync_conflict`/`.sync_failed` were per-USER files describing per-DB state.
+
+**Part B — the defect (fixed by SCOPING, not more reassertions).** One user has `user.sqlite` plus a
+`profile.sqlite` per profile, but a single `USER_DATA_BASE/{user_id}/.sync_conflict` spoke for all of
+them, and every success path called `clear_sync_conflict(user_id)` unconditionally, so **a success on
+one db erased a live conflict on another** (silent-stale-data, T6040 class). Three verified stomps: (a)
+`retry_pending_sync`'s DETERMINISTIC self-stomp — the profile branch marks a conflict (`:375`), the
+user branch's success clears it (`:393`) within one call → the function returned a bare `False` and
+`_redrain`'s `has_sync_conflict` bail-out read the cleared marker, so a **CAS conflict (documented
+not-blind-retryable) was blind-retried to exhaustion and reported as generic `failed`**; (b) a
+`user.sqlite`-only `_background_sync` success wiped a live profile conflict; (c) `sync_db_to_r2_explicit`
+success symmetric. The T4310 post-`gather` reassertion patched only the both-DBs-written path and
+reasserted from *this request's* two statuses (still cross-DB).
+
+**The scoping.** A marker is now a PER-SCOPE file `USER_DATA_BASE/{user_id}/.sync_{kind}.{scope}` where
+`scope` = `USER_DB_SCOPE = "user"` (user.sqlite) or the `profile_id` (a profile DB). `mark_sync_conflict
+(user_id, scope, diag)` / `clear_sync_conflict(user_id, scope)` touch only that scope; `scope=None`
+clears ALL scopes + the legacy bare file and is RESERVED for genuine full-recovery callers
+(`set_sync_failed(user_id, False)`, `/api/retry-sync` success) and legacy tolerance — NOT a single-DB
+success. `has_sync_conflict(user_id)` = legacy-bare-file OR any `.sync_conflict.*` scope (header
+priority `conflict > failed > pending` unchanged). **Separate files, NOT one shared JSON set**, because
+profile+user sync in PARALLEL threads (`_background_sync`'s `gather`) — each thread writes only its own
+scope, so the race the T4310 reassertion papered over is structurally impossible and **that reassertion
+is DELETED**. Backward-compatible signatures (`scope=None` → legacy bare file on mark, clear-all on
+clear) keep existing behaviour tests green; production call sites pass explicit scopes.
+
+**`retry_pending_sync` returns an aggregate `SyncResult`** (CONFLICT if either db conflicted, else
+FAILED, else OK; truthy only on OK so `if ok:` callers are unaffected). `_redrain_failed_sync` decides
+"stop — CAS conflict, not blind-retryable" from that RETURN VALUE, not by re-reading the marker file the
+self-stomp defeated. `set_sync_failed(user_id, failed, profile_id=None)` on the error path marks the
+session's OWN scopes (user + request profile); the FAILED marker in `_background_sync` is written only
+for the scope(s) whose status is actually `failed`.
+
+**Part A — diagnostics.** Markers carry a JSON payload (`ts, reason, db, profile_id, loaded, r2,
+machine, req_id, method, path, writer, written_at`); `reason ∈ {stale_baseline, unconfirmed_baseline,
+upload_failed, checkpoint_busy, legacy}`. `unconfirmed_baseline` (loaded=None, the T6340/T4315 class) vs
+`stale_baseline` (loaded=vN, the T6160 class) are the same banner but different bugs — now discriminated
+on BOTH sides. **Writer identity:** `storage.py` stamps `db-writer` (`{machine}/{req_id}`) +
+`db-written-at` (ISO) next to `db-version` on every upload (`_db_writer_metadata()`), and reads them on
+a conflict from the SAME HEAD via `get_db_version_from_r2(..., return_metadata=True)` — **zero extra R2
+calls** (T6160's constraint). Legacy R2 objects have no writer → `writer=None` (honest "unknown", NOT a
+fabricated default). The two `[SYNC_CONFLICT]` CRITICALs now include `reason writer req_id method path`
+(method/path via new `_current_method`/`_current_path` ContextVars set next to `req_id` in
+`db_sync.dispatch`; they propagate into `_background_sync`'s `to_thread` children via the copied
+context). **Return contract:** the two upload primitives take `with_diag=False` and append a third
+`diag` element only when True (the `*_explicit` wrappers + `retry_pending_sync` pass it) — default
+2-tuple preserves every other caller/test. **`X-Sync-Diag` header:** `read_sync_diag(user_id)` returns
+the winning marker's payload (conflict > failed; tolerates the legacy float body → `reason=legacy`),
+rendered `k=v;k=v` by `_render_sync_diag` and set alongside `X-Sync-Status` for conflict/failed only.
+**LANDMINE (fixed):** it is ADDED to `main.py:217` `expose_headers` — a new response header is invisible
+to cross-origin JS (staging/prod frontend is a different origin) otherwise; same-origin dev hides this.
+
+**Client (`syncStore.js`).** `checkSyncStatus(response, input, init)` emits ONE `console.error` on the
+TRANSITION into conflict/failed (gated on the state change → no console spam on repeat responses)
+naming reason/db/loaded/r2/machine/writer/req_id (parsed from `X-Sync-Diag` via `parseSyncDiag`) +
+method+URL + `hasAttemptedWrite`. A MISSING diag header logs a loud "check expose_headers/CORS" marker,
+never a fake default. `retrySyncToR2` now logs all three outcomes (restored / success / failure) +
+the catch, instead of `catch { return false }` swallowing everything.
+
+**Success path stays silent** (verbose logging on FAILURE/CONFLICT + one line per state TRANSITION
+only — protects T2880/T3380's hot path). **CAS guard BYTE-IDENTICAL** — no fallback, no auto-merge, no
+blind-retry, no weakening (T4310/T4315). No schema migration (markers are ephemeral filesystem state).
+
+**Tests:** `tests/test_t6390_marker_scoping.py` (the three stomps reproduced RED-first, legacy
+tolerance, diag payload, unconfirmed-vs-stale reason); `tests/test_t6390_qa_evidence.py` (real ASGI app
++ FakeR2: the CRITICAL names req_id/method/path/writer/reason, unconfirmed≠stale, and `X-Sync-Diag` is
+present AND in `access-control-expose-headers` cross-origin); `src/frontend/src/stores/syncStore.test.js`
+(parseSyncDiag, transition logging + no-spam + unconfirmed≠stale + missing-header-loud, retry three
+outcomes). Updated for the new contracts (with a note, never silently): `test_t4310`'s
+`TestParallelSyncMarkerRaceFixed` (rewritten to drive REAL scoped markers since the reassertion is
+gone), `test_sync_retry`/`test_export_worker_sync`/`test_version_conflict`/`test_performance`/`test_t6160`
+(3-tuple primitive returns + SyncResult aggregate). **Out of the container's reach (needs a browser +
+real R2 on staging):** the full live-drive banner screenshot per the QA phase.
 
 ## Overlay action failure visibility (T4900 / prod bug 31p)
 

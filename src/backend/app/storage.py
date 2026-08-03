@@ -22,7 +22,6 @@ import time
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Union
 
 from cachetools import TTLCache
 
@@ -72,6 +71,34 @@ R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
 
 # T4310: identifies which machine refused a CAS conflict, for the CRITICAL log.
 FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
+
+
+def _db_writer_metadata() -> dict:
+    """T6390: writer identity stamped next to db-version on EVERY DB upload, so a
+    later CAS conflict can name WHO moved R2 ahead — read from the HEAD that already
+    runs on the conflict path (zero extra R2 calls). `db-writer` = machine + req_id;
+    `db-written-at` = UTC ISO timestamp. A missing req_id renders as '-' (honest),
+    never a fabricated id."""
+    from datetime import UTC, datetime
+
+    from .user_context import get_current_req_id
+    return {
+        "db-writer": f"{FLY_MACHINE_ID or 'local'}/{get_current_req_id() or '-'}",
+        "db-written-at": datetime.now(UTC).isoformat(),
+    }
+
+
+def _conflict_diag(reason: str, r2_metadata: dict) -> dict:
+    """T6390: the R2-SIDE facts of a refused upload — the reason and the identity of
+    the writer that moved R2 ahead (from the conflict HEAD's metadata). The
+    request-side facts (db, profile_id, loaded, req_id, method, path) are merged in
+    by the marker writer (database.py). `writer`/`written_at` are None for a legacy
+    R2 object with no writer stamp — an honest 'unknown', NOT a fabricated default."""
+    return {
+        "reason": reason,
+        "writer": r2_metadata.get("db-writer"),
+        "written_at": r2_metadata.get("db-written-at"),
+    }
 
 # ---------------------------------------------------------------------------
 # T4120: durability test seams (gated; PROD AND STAGING inert)
@@ -915,7 +942,8 @@ _request_context = threading.local()
 
 
 def get_db_version_from_r2(user_id: str, client=None,
-                           profile_id: str | None = None) -> Union[int, R2VersionResult]:
+                           profile_id: str | None = None,
+                           return_metadata: bool = False):
     """
     Get the version number of the database in R2.
 
@@ -930,11 +958,19 @@ def get_db_version_from_r2(user_id: str, client=None,
         client: Optional boto3 client override (e.g. fast-timeout sync client)
         profile_id: If given, HEAD the object under THIS profile (arg, not the
             ContextVar) — see download_from_r2 (T5340). When None, uses r2_key().
+        return_metadata: T6390 — when True, return a (result, metadata) tuple so a
+            conflict path can read the WINNER's writer identity (db-writer /
+            db-written-at) from the SAME HEAD that decided the conflict, at zero
+            extra R2 calls. `metadata` is `{}` on any error/not-found. Default False
+            keeps the existing int|R2VersionResult return for every other caller.
     """
+    def _ret(result, metadata):
+        return (result, metadata) if return_metadata else result
+
     if client is None:
         client = get_r2_client()
     if not client:
-        return R2VersionResult.ERROR  # No client = can't check
+        return _ret(R2VersionResult.ERROR, {})  # No client = can't check
 
     key = profile_r2_key(user_id, profile_id, "profile.sqlite") if profile_id else r2_key(user_id, "profile.sqlite")
     t0 = time.perf_counter() if PROFILING_ENABLED else 0
@@ -950,21 +986,21 @@ def get_db_version_from_r2(user_id: str, client=None,
         if PROFILING_ENABLED:
             elapsed = (time.perf_counter() - t0) * 1000
             logger.info(f"[PROFILE] get_db_version_from_r2: {elapsed:.0f}ms")
-        return result
+        return _ret(result, metadata)
     except client.exceptions.ClientError as e:
         if PROFILING_ENABLED:
             elapsed = (time.perf_counter() - t0) * 1000
             logger.info(f"[PROFILE] get_db_version_from_r2: {elapsed:.0f}ms (error)")
         if e.response['Error']['Code'] == '404':
-            return R2VersionResult.NOT_FOUND
+            return _ret(R2VersionResult.NOT_FOUND, {})
         logger.error(f"Failed to get DB version from R2: {e}")
-        return R2VersionResult.ERROR
+        return _ret(R2VersionResult.ERROR, {})
     except Exception as e:
         if PROFILING_ENABLED:
             elapsed = (time.perf_counter() - t0) * 1000
             logger.info(f"[PROFILE] get_db_version_from_r2: {elapsed:.0f}ms (error)")
         logger.error(f"Failed to get DB version from R2: {e}")
-        return R2VersionResult.ERROR
+        return _ret(R2VersionResult.ERROR, {})
 
 
 def sync_database_from_r2_if_newer(
@@ -1107,7 +1143,8 @@ def sync_database_to_r2_with_version(
     skip_version_check: bool = False,
     lock_timeout: float | None = None,
     profile_id: str | None = None,
-) -> tuple[bool, int | None]:
+    with_diag: bool = False,
+):
     """
     Upload the user's database to R2 with version metadata.
 
@@ -1125,42 +1162,54 @@ def sync_database_to_r2_with_version(
             the ContextVar is dead or points at a different profile there, and keying off
             it uploads the right DB to the wrong profile's key (T5340). When None, the key
             comes from the request-scoped ContextVar via r2_key() (the request path only).
+        with_diag: T6390 — when True, append a third element to the return tuple: a
+            diag dict on a non-OK result (`reason` + the R2-side `writer`/`written_at`
+            of whoever moved R2 ahead), or None on success. Default False preserves the
+            2-tuple (success, new_version) every existing caller/test relies on.
 
     Returns:
-        Tuple of (success, new_version)
-        - (True, new_version) if upload succeeded
-        - (False, None) if conflict or error
+        (success, new_version) — or (success, new_version, diag) when with_diag=True.
+        - (True, new_version[, None]) if upload succeeded
+        - (False, r2_version[, diag]) on a CAS conflict (reason stale/unconfirmed)
+        - (False, None[, diag]) on any other failure (checkpoint_busy / upload_failed)
     """
+    def _out(success, new_version, diag=None):
+        return (success, new_version, diag) if with_diag else (success, new_version)
+
     # T4120/T5870: the FORCE_R2_SYNC_FAILURE seam faults the WHOLE process, so it
     # must also cover primitive-direct callers (retry_pending_sync's re-drain,
     # sync_db_to_cloud, the shutdown sync) — not only the *_explicit wrappers, or a
     # forced "R2 is down" test would see those paths quietly succeed against real R2.
     # Inert on prod/staging (gated by _seams_enabled()).
     if _force_r2_sync_failure():
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     if not R2_ENABLED:
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     if not local_db_path.exists():
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     # Use the fast-timeout sync client so network failures are detected
     # quickly (~3s) instead of blocking the HTTP response for 20s+
     client = get_r2_sync_client()
     if not client:
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     t_total = time.perf_counter() if PROFILING_ENABLED else 0
     head_ms = 0.0
 
+    r2_metadata: dict = {}
     if skip_version_check:
         # Skip HEAD call — use in-memory version as base
         new_version = (current_version or 0) + 1
     else:
         # Check for conflicts (another request may have written)
         t_head = time.perf_counter() if PROFILING_ENABLED else 0
-        r2_result = get_db_version_from_r2(user_id, client=client, profile_id=profile_id)
+        # T6390: read the object's Metadata from the SAME HEAD so a conflict below can
+        # name the writer that moved R2 ahead — no extra R2 call.
+        r2_result, r2_metadata = get_db_version_from_r2(
+            user_id, client=client, profile_id=profile_id, return_metadata=True)
         if PROFILING_ENABLED:
             head_ms = (time.perf_counter() - t_head) * 1000
 
@@ -1195,12 +1244,20 @@ def sync_database_to_r2_with_version(
         # catastrophic variant CAS exists to prevent). Treat an unconfirmed
         # baseline against real R2 content the same as a stale one: refuse.
         if r2_version > 0 and (current_version is None or r2_version > current_version):
+            # T6390: unconfirmed baseline (loaded=None, the T6340/T4315 class) vs a
+            # genuinely stale one (loaded=vN, the T6160 class) are DIFFERENT bugs with
+            # the same banner — discriminate here so the diag + log name which.
+            reason = "unconfirmed_baseline" if current_version is None else "stale_baseline"
+            from .user_context import get_current_method, get_current_path, get_current_req_id
             logger.critical(
                 f"[SYNC_CONFLICT] user={user_id} profile={profile_id} "
-                f"loaded=v{current_version} r2=v{r2_version} machine={FLY_MACHINE_ID} "
+                f"loaded=v{current_version} r2=v{r2_version} reason={reason} "
+                f"writer={r2_metadata.get('db-writer') or 'unknown'} "
+                f"machine={FLY_MACHINE_ID} req_id={get_current_req_id() or '-'} "
+                f"method={get_current_method() or '-'} path={get_current_path() or '-'} "
                 f"— NOT uploading, NOT re-downloading (WAL-unsafe swap off the write lock)"
             )
-            return False, r2_version
+            return _out(False, r2_version, _conflict_diag(reason, r2_metadata))
 
         # Calculate new version
         new_version = (max(r2_version, current_version or 0)) + 1
@@ -1215,7 +1272,7 @@ def sync_database_to_r2_with_version(
     # retries via the existing failed-sync/Retry UX. Placed after new_version so
     # it also covers the skip_version_check=True request-thread callers.
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
-        return False, None
+        return _out(False, None, {"reason": "checkpoint_busy"})
 
     # T5340: explicit profile_id → key off the arg; else fall back to the ContextVar
     # (request path). Background/cross-profile callers MUST pass profile_id.
@@ -1235,7 +1292,7 @@ def sync_database_to_r2_with_version(
                     f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
                     f"user={user_id} db=profile"
                 )
-                return False, None
+                return _out(False, None, {"reason": "upload_failed"})
         else:
             upload_lock.acquire()
         try:
@@ -1248,7 +1305,9 @@ def sync_database_to_r2_with_version(
             retry_r2_call(
                 client.upload_file,
                 str(local_db_path), R2_BUCKET, key,
-                ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+                # T6390: stamp the writer identity next to db-version so a future
+                # conflict can name who moved R2 ahead (read from the conflict HEAD).
+                ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
                 operation=f"db_sync_upload {user_id}", **TIER_1,
             )
         finally:
@@ -1261,10 +1320,10 @@ def sync_database_to_r2_with_version(
                 f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
             )
         logger.debug(f"Uploaded DB to R2: {user_id} version {new_version}")
-        return True, new_version
+        return _out(True, new_version, None)
     except Exception as e:
         logger.error(f"Failed to upload DB to R2: {e}")
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
 
 # Legacy functions for backward compatibility
@@ -1316,18 +1375,25 @@ def _user_db_r2_key(user_id: str) -> str:
     return f"{APP_ENV}/users/{user_id}/user.sqlite"
 
 
-def get_user_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionResult]:
+def get_user_db_version_from_r2(user_id: str, client=None,
+                                return_metadata: bool = False):
     """Get version number of user.sqlite in R2. Same pattern as get_db_version_from_r2.
 
     Returns:
         int: version number (0 for legacy uploads without metadata)
         R2VersionResult.NOT_FOUND: file doesn't exist (genuinely new user)
         R2VersionResult.ERROR: R2 disabled, unreachable, or other transient failure
+
+    return_metadata: T6390 — when True, return (result, metadata); see
+        get_db_version_from_r2. Default False keeps the plain return.
     """
+    def _ret(result, metadata):
+        return (result, metadata) if return_metadata else result
+
     if client is None:
         client = get_r2_client()
     if not client:
-        return R2VersionResult.ERROR
+        return _ret(R2VersionResult.ERROR, {})
 
     key = _user_db_r2_key(user_id)
     try:
@@ -1338,17 +1404,15 @@ def get_user_db_version_from_r2(user_id: str, client=None) -> Union[int, R2Versi
         )
         metadata = response.get("Metadata", {})
         version_str = metadata.get("db-version")
-        if version_str:
-            return int(version_str)
-        return 0
+        return _ret(int(version_str) if version_str else 0, metadata)
     except client.exceptions.ClientError as e:
         if e.response['Error']['Code'] == '404':
-            return R2VersionResult.NOT_FOUND
+            return _ret(R2VersionResult.NOT_FOUND, {})
         logger.error(f"Failed to get user.sqlite version from R2: {e}")
-        return R2VersionResult.ERROR
+        return _ret(R2VersionResult.ERROR, {})
     except Exception as e:
         logger.error(f"Failed to get user.sqlite version from R2: {e}")
-        return R2VersionResult.ERROR
+        return _ret(R2VersionResult.ERROR, {})
 
 
 def sync_user_db_from_r2_if_newer(
@@ -1418,36 +1482,45 @@ def sync_user_db_to_r2_with_version(
     current_version: int | None,
     skip_version_check: bool = False,
     lock_timeout: float | None = None,
-) -> tuple[bool, int | None]:
+    with_diag: bool = False,
+):
     """Upload user.sqlite to R2 with version metadata. Same pattern as profile DB.
 
     Args:
         skip_version_check: If True, skip the HEAD call and use current_version directly.
+        with_diag: T6390 — see sync_database_to_r2_with_version. Default False keeps
+            the 2-tuple return.
     """
+    def _out(success, new_version, diag=None):
+        return (success, new_version, diag) if with_diag else (success, new_version)
+
     # T4120/T5870: see sync_database_to_r2_with_version — the force-failure seam
     # must cover this primitive too (inert on prod/staging).
     if _force_r2_sync_failure():
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     if not R2_ENABLED:
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     if not local_db_path.exists():
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     client = get_r2_sync_client()
     if not client:
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
     t_total = time.perf_counter() if PROFILING_ENABLED else 0
     head_ms = 0.0
 
+    r2_metadata: dict = {}
     if skip_version_check:
         # Skip HEAD call — use in-memory version as base
         new_version = (current_version or 0) + 1
     else:
         t_head = time.perf_counter() if PROFILING_ENABLED else 0
-        r2_result = get_user_db_version_from_r2(user_id, client=client)
+        # T6390: read Metadata from the SAME HEAD (writer identity for a conflict).
+        r2_result, r2_metadata = get_user_db_version_from_r2(
+            user_id, client=client, return_metadata=True)
         if PROFILING_ENABLED:
             head_ms = (time.perf_counter() - t_head) * 1000
 
@@ -1468,12 +1541,17 @@ def sync_user_db_to_r2_with_version(
         # force-push over the user's real credits/profiles/quests with zero
         # conflict signal.
         if r2_version > 0 and (current_version is None or r2_version > current_version):
+            reason = "unconfirmed_baseline" if current_version is None else "stale_baseline"
+            from .user_context import get_current_method, get_current_path, get_current_req_id
             logger.critical(
                 f"[SYNC_CONFLICT] user={user_id} db=user.sqlite loaded=v{current_version} "
-                f"r2=v{r2_version} machine={FLY_MACHINE_ID} "
+                f"r2=v{r2_version} reason={reason} "
+                f"writer={r2_metadata.get('db-writer') or 'unknown'} "
+                f"machine={FLY_MACHINE_ID} req_id={get_current_req_id() or '-'} "
+                f"method={get_current_method() or '-'} path={get_current_path() or '-'} "
                 f"— NOT uploading, NOT re-downloading (WAL-unsafe swap off the write lock)"
             )
-            return False, r2_version
+            return _out(False, r2_version, _conflict_diag(reason, r2_metadata))
 
         new_version = (max(r2_version, current_version or 0)) + 1
 
@@ -1481,7 +1559,7 @@ def sync_user_db_to_r2_with_version(
     # sync_database_to_r2_with_version above. A busy checkpoint refuses loudly
     # (retryable FAILED, no upload, no version bump).
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
-        return False, None
+        return _out(False, None, {"reason": "checkpoint_busy"})
 
     key = _user_db_r2_key(user_id)
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
@@ -1498,7 +1576,7 @@ def sync_user_db_to_r2_with_version(
                     f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
                     f"user={user_id} db=user"
                 )
-                return False, None
+                return _out(False, None, {"reason": "upload_failed"})
         else:
             upload_lock.acquire()
         try:
@@ -1511,7 +1589,8 @@ def sync_user_db_to_r2_with_version(
             retry_r2_call(
                 client.upload_file,
                 str(local_db_path), R2_BUCKET, key,
-                ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+                # T6390: stamp writer identity next to db-version (see profile primitive).
+                ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
                 operation=f"user_db_sync_upload {user_id}", **TIER_1,
             )
         finally:
@@ -1524,10 +1603,10 @@ def sync_user_db_to_r2_with_version(
                 f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
             )
         logger.debug(f"Uploaded user.sqlite to R2: {user_id} version {new_version}")
-        return True, new_version
+        return _out(True, new_version, None)
     except Exception as e:
         logger.error(f"Failed to upload user.sqlite to R2: {e}")
-        return False, None
+        return _out(False, None, {"reason": "upload_failed"})
 
 
 def ensure_file_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool:

@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   useSyncStore,
   checkSyncStatus,
+  parseSyncDiag,
   surfaceRestoredNoticeIfPending,
   isMutatingApiRequest,
 } from './syncStore';
@@ -316,5 +317,157 @@ describe('conflict-restore notice (T5870 round 2 BLOCKING)', () => {
     expect(shown).toBe(false);
     expect(useToastStore.getState().toasts).toHaveLength(0);
     expect(sessionStorage.getItem(RESTORED_KEY)).toBeNull(); // still consumed
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T6390 — sync-conflict diagnostics: the browser console alone must classify the
+// incident. Before this task the banner rendered with ZERO console output.
+// ---------------------------------------------------------------------------
+
+describe('T6390 parseSyncDiag', () => {
+  it('parses a k=v;k=v header into an object', () => {
+    expect(
+      parseSyncDiag('reason=stale_baseline;db=profile;loaded=3;r2=9;req_id=ab12')
+    ).toEqual({ reason: 'stale_baseline', db: 'profile', loaded: '3', r2: '9', req_id: 'ab12' });
+  });
+
+  it('returns null for an absent/empty header (no fake default)', () => {
+    expect(parseSyncDiag(null)).toBeNull();
+    expect(parseSyncDiag('')).toBeNull();
+    expect(parseSyncDiag('garbage-no-equals')).toBeNull();
+  });
+});
+
+describe('T6390 checkSyncStatus logging', () => {
+  let errSpy;
+  const resp = (status, diag) => ({
+    url: 'https://api.example.com/api/clips/raw/save',
+    headers: new Headers({
+      'X-Sync-Status': status,
+      ...(diag ? { 'X-Sync-Diag': diag } : {}),
+    }),
+  });
+
+  beforeEach(() => {
+    useSyncStore.setState({ syncState: 'ok', hasAttemptedWrite: true });
+    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('logs one console.error on transition into conflict, naming reason/db/loaded/r2/req_id/gesture', () => {
+    checkSyncStatus(
+      resp('conflict',
+        'reason=stale_baseline;db=profile;loaded=3;r2=9;machine=m1;req_id=ab12;writer=m0/req9'),
+      'https://api.example.com/api/clips/raw/save', { method: 'POST' });
+
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    const [msg, payload] = errSpy.mock.calls[0];
+    expect(msg).toContain('conflict');
+    expect(payload).toMatchObject({
+      reason: 'stale_baseline', db: 'profile', loaded: '3', r2: '9',
+      machine: 'm1', req_id: 'ab12', writer: 'm0/req9', hasAttemptedWrite: true,
+    });
+    expect(payload.gesture).toContain('POST');
+  });
+
+  it('logs on transition into failed too', () => {
+    checkSyncStatus(resp('failed', 'reason=upload_failed;db=user'));
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy.mock.calls[0][1].reason).toBe('upload_failed');
+  });
+
+  it('does NOT log on repeat responses in the same state (no console spam)', () => {
+    checkSyncStatus(resp('conflict', 'reason=stale_baseline'));
+    checkSyncStatus(resp('conflict', 'reason=stale_baseline'));
+    checkSyncStatus(resp('conflict', 'reason=stale_baseline'));
+    expect(errSpy).toHaveBeenCalledTimes(1); // only the transition logged
+  });
+
+  it('renders loaded=None (unconfirmed) and loaded=vN (stale) as DIFFERENT reasons', () => {
+    checkSyncStatus(resp('conflict', 'reason=unconfirmed_baseline;loaded=None'));
+    expect(errSpy.mock.calls[0][1].reason).toBe('unconfirmed_baseline');
+    checkSyncStatus(resp('ok')); // back to ok
+    checkSyncStatus(resp('conflict', 'reason=stale_baseline;loaded=3'));
+    expect(errSpy.mock.calls.at(-1)[1].reason).toBe('stale_baseline');
+  });
+
+  it('flags a MISSING X-Sync-Diag header loudly instead of a fake default (CORS/expose_headers gap)', () => {
+    checkSyncStatus(resp('conflict')); // header set but no X-Sync-Diag
+    expect(errSpy.mock.calls[0][1].reason).toMatch(/no X-Sync-Diag/i);
+  });
+
+  it('does not log when returning to ok', () => {
+    useSyncStore.setState({ syncState: 'conflict' });
+    checkSyncStatus(resp('ok'));
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(useSyncStore.getState().syncState).toBe('ok');
+  });
+});
+
+describe('T6390 retrySyncToR2 logs all three outcomes', () => {
+  let errSpy, infoSpy, originalLocation;
+
+  beforeEach(() => {
+    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    if (originalLocation) {
+      Object.defineProperty(window, 'location', {
+        configurable: true, writable: true, value: originalLocation,
+      });
+      originalLocation = undefined;
+    }
+  });
+
+  async function freshStore(fetchImpl) {
+    vi.resetModules();
+    originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true, writable: true,
+      value: { ...originalLocation, reload: vi.fn() },
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+    return import('./syncStore');
+  }
+
+  it('logs the RESTORED outcome (and reloads)', async () => {
+    const store = await freshStore(vi.fn(async () => ({
+      json: async () => ({ success: true, restored: true }),
+    })));
+    store.useSyncStore.setState({ syncState: 'conflict', isRetrying: false, hasAttemptedWrite: true });
+    await store.useSyncStore.getState().retrySyncToR2();
+    expect(errSpy.mock.calls.some(c => String(c[0]).includes('RESTORED'))).toBe(true);
+  });
+
+  it('logs the SUCCESS (transient recovery) outcome', async () => {
+    const store = await freshStore(vi.fn(async () => ({
+      json: async () => ({ success: true }),
+    })));
+    store.useSyncStore.setState({ syncState: 'failed', isRetrying: false });
+    const ok = await store.useSyncStore.getState().retrySyncToR2();
+    expect(ok).toBe(true);
+    expect(infoSpy.mock.calls.some(c => String(c[0]).includes('SUCCEEDED'))).toBe(true);
+  });
+
+  it('logs the FAILED outcome instead of swallowing it', async () => {
+    const store = await freshStore(vi.fn(async () => ({
+      json: async () => ({ success: false, message: 'still not landing' }),
+    })));
+    store.useSyncStore.setState({ syncState: 'failed', isRetrying: false });
+    const ok = await store.useSyncStore.getState().retrySyncToR2();
+    expect(ok).toBe(false);
+    expect(errSpy.mock.calls.some(c => String(c[0]).includes('FAILED'))).toBe(true);
+  });
+
+  it('logs a network/parse error (was `catch { return false }`)', async () => {
+    const store = await freshStore(vi.fn(async () => { throw new Error('network down'); }));
+    store.useSyncStore.setState({ syncState: 'failed', isRetrying: false });
+    const ok = await store.useSyncStore.getState().retrySyncToR2();
+    expect(ok).toBe(false);
+    expect(errSpy.mock.calls.some(c => String(c[0]).includes('errored'))).toBe(true);
   });
 });

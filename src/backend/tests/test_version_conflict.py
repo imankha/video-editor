@@ -58,7 +58,7 @@ class TestSyncDatabaseToR2WithVersion:
 
     def test_no_conflict_same_version(self, local_db, mock_r2_enabled, mock_client):
         """R2 version == loaded version → upload succeeds, returns incremented version."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=5), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(5, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry:
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -69,7 +69,7 @@ class TestSyncDatabaseToR2WithVersion:
 
     def test_no_conflict_r2_older(self, local_db, mock_r2_enabled, mock_client):
         """R2 version < loaded version → upload succeeds."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=3), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(3, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -79,7 +79,7 @@ class TestSyncDatabaseToR2WithVersion:
 
     def test_conflict_r2_newer(self, local_db, mock_r2_enabled, mock_client):
         """R2 version > loaded version → conflict, returns (False, r2_version), no upload."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=8), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(8, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry, \
              patch(f"{MODULE}.download_from_r2", return_value=True):
             success, returned_version = sync_database_to_r2_with_version(
@@ -100,7 +100,7 @@ class TestSyncDatabaseToR2WithVersion:
         mixing. Refusing alone is safe -- the caller freezes the baseline
         instead of adopting R2's version, so the same conflict is refused
         again on every retry until T4315's restore path heals it."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=8), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(8, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry, \
              patch(f"{MODULE}.download_from_r2") as mock_dl:
             original_bytes = local_db.read_bytes()
@@ -134,7 +134,7 @@ class TestSyncDatabaseToR2WithVersion:
 
     def test_r2_not_found_treated_as_zero(self, local_db, mock_r2_enabled, mock_client):
         """R2VersionResult.NOT_FOUND → treated as version 0, upload succeeds."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(R2VersionResult.NOT_FOUND, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -144,7 +144,7 @@ class TestSyncDatabaseToR2WithVersion:
 
     def test_r2_error_treated_as_zero(self, local_db, mock_r2_enabled, mock_client):
         """R2VersionResult.ERROR → treated as version 0, upload succeeds."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=R2VersionResult.ERROR), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(R2VersionResult.ERROR, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -171,7 +171,7 @@ class TestSyncDatabaseToR2WithVersion:
         signal -- the catastrophic variant this task exists to prevent. An
         unconfirmed baseline against real R2 content (r2_version > 0) must now
         refuse exactly like a stale-but-known one."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=5), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(5, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=None
@@ -186,7 +186,7 @@ class TestSyncDatabaseToR2WithVersion:
         with R2 NOT_FOUND (no object at all -- treated as version 0) is not an
         "unconfirmed baseline against real content" situation, so the upload
         must still proceed normally."""
-        with patch(f"{MODULE}.get_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND), \
+        with patch(f"{MODULE}.get_db_version_from_r2", return_value=(R2VersionResult.NOT_FOUND, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_database_to_r2_with_version(
                 "user1", local_db, current_version=None
@@ -205,7 +205,7 @@ class TestSyncUserDbToR2WithVersion:
 
     def test_no_conflict_same_version(self, local_db, mock_r2_enabled, mock_client):
         """R2 version == loaded version → upload succeeds."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=5), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(5, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -215,7 +215,7 @@ class TestSyncUserDbToR2WithVersion:
 
     def test_no_conflict_r2_older(self, local_db, mock_r2_enabled, mock_client):
         """R2 version < loaded version → upload succeeds."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=3), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(3, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -225,7 +225,7 @@ class TestSyncUserDbToR2WithVersion:
 
     def test_conflict_r2_newer(self, local_db, mock_r2_enabled, mock_client):
         """R2 version > loaded version → conflict detected, no upload."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=8), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(8, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry:
             success, returned_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -243,7 +243,7 @@ class TestSyncUserDbToR2WithVersion:
         profile-DB twin above for the WAL-corruption rationale. retry_r2_call
         must not be invoked at all (the old code used it for the
         download_file re-fetch); the local file is left untouched."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=8), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(8, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call") as mock_retry:
             original_bytes = local_db.read_bytes()
             success, returned_version = sync_user_db_to_r2_with_version(
@@ -274,7 +274,7 @@ class TestSyncUserDbToR2WithVersion:
 
     def test_r2_not_found_treated_as_zero(self, local_db, mock_r2_enabled, mock_client):
         """R2VersionResult.NOT_FOUND → version 0, upload succeeds."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(R2VersionResult.NOT_FOUND, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=5
@@ -299,7 +299,7 @@ class TestSyncUserDbToR2WithVersion:
         created an empty schema'd user.sqlite anyway) must refuse to upload over
         REAL R2 content (credits/profiles/quests), never silently force-push an
         empty DB over a user's account with zero conflict signal."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=5), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(5, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=None
@@ -313,7 +313,7 @@ class TestSyncUserDbToR2WithVersion:
         """No regression for a genuinely brand-new user: NOT_FOUND (no R2
         object at all) is not "unconfirmed against real content", so the
         upload must still proceed."""
-        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=R2VersionResult.NOT_FOUND), \
+        with patch(f"{MODULE}.get_user_db_version_from_r2", return_value=(R2VersionResult.NOT_FOUND, {})), \
              patch(f"{RETRY_MODULE}.retry_r2_call"):
             success, new_version = sync_user_db_to_r2_with_version(
                 "user1", local_db, current_version=None
