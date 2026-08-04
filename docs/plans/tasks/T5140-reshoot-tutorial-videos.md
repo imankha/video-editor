@@ -88,37 +88,136 @@ don't have to demo intros (optional add-on flow).
 | Sport-ball playhead handle; segmented progress on ProgressTrack | T5130/T6320 | Cosmetic |
 | Animated branded outro + tagline on every export | T5240/T3950 | Optional half-line |
 
-## Part 3 — Recommended talk-track edits (edit `<quest>/talk_track.txt`, then renumber `mark(N)`s)
+## Part 3 — Recommended talk tracks (full drafts, per quest)
 
-Keep the chapter (`##`) structure; it survives re-wording. Suggested concrete edits — final
-wording is the user's call at shoot time:
+Full recommended replacement tracks below — one sentence per line, ready to paste into
+`<quest>/talk_track.txt` after the user's wording pass. Lines are flagged **[NEW]** /
+**[REWORDED]**; unflagged lines are unchanged from the current tracks (their anchors
+re-attach automatically). **Any added/removed line shifts every later `mark(N)` — renumber.**
 
-**annotate**
-- Line 5 (clips listed on left / match in center): unchanged.
-- REPLACE "The My Athlete toggle marks that this is your player." with two lines:
-  - "Every clip lives on one of two layers — My Athlete for your player's moments, and Team for everyone else's."
-  - "Leave this one on My Athlete — it's your player's play."
-- REWORK the teammate line (now Team-only): "For a teammate's play, put the clip on the Team layer — there you can tag them by name and share the play to their email later." (Demo option: flip the demo clip to Team, show the tag field appear, flip back — or annotate a second quick Team clip. Prefer the flip: cheaper, no extra data.)
-- Share chapter: keep "Share w/ Tagged Teammates", ADD one line for the new headline:
-  "You can also copy one public game link for the team chat — anyone can watch the team recap instantly, no signup needed." (ring the General-access section of the share modal)
-- Opening lines: re-word "click on the game under the games tab" to reference the game's poster tile ("tap your game's poster under the Games tab").
+### Narration principles (why these tracks read the way they do)
 
-**framing**
-- "Open the Reel Drafts list — each card shows that draft's framing and overlay progress." →
-  "Your drafts appear as poster cards under each game — the progress strip shows how far along each one is."
-- ADD before "click Export": "The Export button shows the finished length and the credit cost — one credit per second of finished video."
-- Keep Dim + watch-through beat unchanged. Skip Straighten (niche, hidden by default).
+1. **Outcome before mechanics** — each chapter opens with what the user GETS ("a spotlight
+   that follows your player"), then the click. Matches the advance-organizer approach the
+   Framing/Overlay Clarity epic (T3710) validated in-app.
+2. **One action per sentence**; the action verb is the `mark(N,'word')` target.
+3. **Name UI elements exactly as labeled** (Add Clip, Playback Annotations, Move to My Reels,
+   My Athlete / Team, Add Spotlight) — the ring and the noun must agree.
+4. **Every feature gets its payoff in the same breath** (tag a teammate → share to their
+   family; rank reels → best highlights lead the compilations). Features narrated without a
+   "so that" don't stick.
+5. **Don't compensate for the slower voice by cutting words** — the pace is the fix. Cut
+   ideas that aren't core instead (Straighten, kebab menus, smart-group mechanics).
 
-**overlay**
-- "Play it back a couple of times to make sure the spotlight stays locked on." →
-  "Press Play — it loops the spotlight section, so you can easily check the spotlight stays locked on." (spec: click the primary play button once; the loop does the replaying)
-- Everything else holds; re-verify the scroll beats against the new aspect-fit stage.
+### annotate
 
-**publish**
-- "Your reel is now available on its own under the game name." → "...appears as its own card under the game."
-- ADD after the play/download/share line: "Want a different cover image? Edit the preview to pick any frame or upload your own."
-- Compilations line: optionally extend — "...grouped into compilations like Top Plays and Game Highlights, and by tournament and month."
-- Ranking chapter unchanged (flow + "Rank reels" CTA intact; staging/reopen APIs unchanged).
+```
+## Find A Play
+To grab your first highlight, start on the home screen.
+First pick your sport — here, I'm selecting soccer.
+Under the Games tab, every game you've uploaded shows as a poster card, organized by month.   [REWORDED]
+Tap your game's card to open it in the Annotate view.                                          [REWORDED]
+Your clips are listed on the left, and the full match plays in the center.
+## Create A Clip
+Scrub through and find a play worth saving.
+When you find one, click Add Clip.
+This opens the clip editor.
+Drag the start and end handles to isolate just the moment you want.
+## Describe, Rate & Tag
+Describe the clip.
+Give it a star rating, add tags like goal or dribble, and provide a short note.
+Every clip lives on one of two layers — My Athlete for your player's moments, and Team for everyone else's.   [NEW — replaces the My Athlete toggle line]
+This is your player's play, so leave it on My Athlete.                                         [NEW]
+Switch a clip to Team and you can tag teammates by name — you'll share their plays with their families later.  [REWORDED — teammate tagging is Team-only now (T5725); demo = flip the layer control, show the tag field appear, flip back]
+The Create Reel toggle turns the clip into a reel you'll edit later and publish in high quality.
+## Save & Review
+When you're done, click Save.
+The clip is now saved and rated in your list.
+To review your annotated clips, click Playback Annotations.
+Your saved clips play back one after another, each with its title on the video.
+## Share The Game
+The Share button sends every tagged play to your teammates by email.                           [REWORDED]
+Or copy one public link for the team chat — anyone can watch the team's plays instantly, no signup needed.   [NEW — ring the General-access section of the share modal]
+```
+
+### framing
+
+```
+## Open A Draft
+Your best clips are now reel drafts.
+Before you can publish a draft, you first frame it.
+Framing crops the video down to the action, trims it, and adds slow motion.                    [REWORDED]
+Each draft shows as a poster card under its game — the progress strip shows how far along it is.   [REWORDED — carousel/DraftTile replaced the row list]
+Pick a draft.
+## Frame Your Player
+The white box is your reel's frame — everything inside it is what viewers will see.            [REWORDED — names the box's ROLE, not just its contents]
+Drag and resize the box to keep your player, the ball, and nearby players inside.
+If your player drifts out, reposition or resize the box.
+Each move sets a keyframe, so the frame follows the action across the whole clip.
+## Add Slow Motion
+To add slow motion, use the Split Segments track below.
+Mark the start and end of the key moment, then set that section to half speed.
+## Check & Export
+Before exporting, switch the background to Dim and watch it through once.
+The dimmed edges make it easy to see if your player ever drifts out of frame.
+The Export button shows your reel's finished length and its cost — one credit per second of finished video.   [NEW — T5780/T5790]
+When it looks right, click Export.
+The app upscales it to full HD, and you can frame another reel while you wait.
+```
+
+Skip Straighten (T5640) — hidden by default, niche; a tutorial line would send every viewer
+hunting for a tool most never need.
+
+### overlay
+
+```
+## Open In Overlay
+Next, add a spotlight that follows your player — so anyone watching instantly knows who to watch.   [REWORDED — adds the payoff]
+Open your reel in Overlay mode.
+It loads the working video and automatically detects the players on the field.
+## Assign Your Player
+Along the timeline, you'll see green markers — one for each moment players were detected.      [REWORDED — says what a marker IS]
+Click each marker and tap your player, so the spotlight learns who to follow.                  [REWORDED — adds the why]
+Sometimes the tracker misses your player or sits slightly off.
+## Place The Circle
+When it does, turn the player tracker off and place the circle on your player by hand.
+Press Play — it loops the spotlight section, so you can easily check the spotlight stays locked on.   [REWORDED — T5370 loop button; spec clicks Play once, the loop replays]
+## Style & Add Spotlight
+Next, set how the spotlight looks.
+Pick a highlight color that stands out.
+Then choose the shape.
+Body wraps the spotlight around the player; Ground puts a glow at their feet.
+When you're all set, click Add Spotlight — the app renders it into your reel.                  [REWORDED — says what the button DOES, not just its name]
+```
+
+### publish
+
+```
+## Preview & Publish
+Finally, it's time to publish your reel by adding it to My Reels.
+Your spotlight has finished rendering, and the draft is now marked Done.
+First, preview it to check that the framing, slow motion, and spotlight all look right.
+You can also change the cover image — pick any frame from the reel, or upload your own photo.  [NEW — T5410/T6380 editable preview]
+Then click the Move to My Reels button to publish.
+## In My Reels
+Your reel now appears as its own card under the game.                                          [REWORDED — tiles, not rows]
+From My Reels, you can play any reel, download it, and share it.
+On mobile, you can even upload directly to your favorite platform.
+It's also grouped into compilations, like Top Plays and Game Highlights, and by tournament and month.   [REWORDED — adds T5880 smart groups, half a breath]
+## Rank Your Reels
+To get the most out of compilations, rank your reels from time to time by clicking the first entry in My Reels.
+The app shows you two reels side by side and asks which is better.                             [REWORDED — trims "During Reel ranking"]
+Each choice sorts your best reels to the top, so your strongest highlights show first within their compilations.
+```
+
+**Structural notes for the shoot:**
+- publish's "On mobile…" line stays the **beacon-less prep window** (no `mark()`) — the spec
+  collapses the published game + scrolls/expands the Game Highlights target there. Keep a
+  no-mark line in that slot if the track is re-worded.
+- annotate's Team-layer beat adds ~2 lines mid-track: every `mark(N)` from the Create Reel
+  toggle onward shifts by +1 or +2 — renumber carefully (`##` lines don't count).
+- Chapter titles above are unchanged except annotate's new final chapter **"Share The Game"**
+  (was part of Save & Review) — 5–6 chapters per quest is within the 3–6 budget.
 
 ## Part 4 — Capture-spec triage (workflow/capture_specs/)
 

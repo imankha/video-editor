@@ -155,6 +155,7 @@ Always output a table of what shipped, marking which rows auto-promote vs. which
 
 On a successful deploy (exited 0):
 - **Promote all Auto-DONE rows to DONE** (prefix the description with `DONE (deployed {date} prod).`) — no approval needed.
+- **Move every promoted row OUT of PLAN.md into `docs/plans/PLAN-archive.md`** (user rule 2026-08-03: PLAN.md holds only live work). Place the row verbatim under the archive heading `## {PLAN.md section} — {subsection}` it came from — create the heading and copy the table's header/separator rows if that group doesn't exist yet. Same move applies to EPIC-row promotions. If a PLAN.md section is left with a header and no data rows, replace the empty table with: `*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*`
 - For the Ask-first rows, apply whatever the user chose: rewrite diverged descriptions + add a design note; create split task files; `git rm` dropped task files and remove their rows.
 - Fix collateral cross-references and epic completion criteria.
 - **Auto-commit** all of the above once the deploy has exited 0 (the deploy gesture + a successful deploy is the authorization — don't ask "should I commit?"). Use an ASCII commit message with the co-author line. **Pushing stays the user's call** (push auto-deploys staging), so commit but don't push unless asked.
