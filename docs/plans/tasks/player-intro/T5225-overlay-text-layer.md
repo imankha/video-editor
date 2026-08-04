@@ -24,7 +24,9 @@ text is wanted before the intro cards.
 |---|---|
 | `working_videos.text_overlays` BLOB exists (`database.py:985`), is already returned by `/overlay-data` (`overlay.py:1716/1765/1855`), and already counts toward `has_overlay_edits` (`projects.py:332`). Nothing writes it, nothing renders it. | **No migration.** This task fills an open socket. |
 | The `TextOverlay` model in `schemas.py:273` is a pixel-based placeholder. | T5180 replaces it with TextSpec. Do not extend the old one. |
-| `OverlayTimeline.jsx:103` and `:153` carry comments reserving a Text layer slot. | The component already expects this layer. |
+| ~~`OverlayTimeline.jsx:103`/`:153` reserve a Text layer slot.~~ **WRONG — corrected 2026-08-04.** The comments exist, but `OverlayTimeline` is **dead code: it is never rendered anywhere.** The live timeline host is `OverlayMode.jsx` (`OverlayScreen → OverlayContainer → OverlayModeView → OverlayMode → RegionLayer`). | Integrate into **`OverlayMode.jsx`** — new label, `<TextLayer>` as a sibling of `RegionLayer`, `getTotalLayerHeight` bump, props forwarded through both `<OverlayMode>` call sites. Deleting the dead component is OUT of scope here. |
+| **Clip boundaries do not exist client-side and are not on `/overlay-data`** (found 2026-08-04). | Snapping is impossible without them. Add a `clip_boundaries` read to `/overlay-data`, derived server-side by the SAME per-clip output-duration walk `poster.py` already uses — do not write a second walk. No migration. Must degrade to an empty list, never a 500, when boundaries cannot be reconstructed (a published reel has pruned `working_clips`). |
+| The **no-keyframes copy path** (`overlay.py:2354`) gates on highlight keyframes only. | It would **silently drop text**. The gate becomes `has_keyframes or has_text`. |
 | The overlay render is a **per-frame OpenCV/numpy loop** (`modal_functions/video_processing.py::_process_overlay`, `services/local_processors.py::_overlay_sync`), not an ffmpeg filter graph. | Text composites as an RGBA layer per frame, in **both** loops. |
 
 ## Scope

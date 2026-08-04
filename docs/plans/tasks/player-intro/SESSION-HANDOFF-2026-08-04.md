@@ -21,7 +21,18 @@ NOT duplicated here — they live in [EPIC.md](EPIC.md) § Decisions, which is t
 | Task | Container | Ports | State |
 |---|---|---|---|
 | **T5195** card library (schema/CRUD/default) | `reel-task-t5195` | fe 5174, be 8001 | implementing; design gate WAIVED (schema in task file is approved) |
-| **T5225** overlay text layer | `reel-task-t5225` | fe 5175, be 8002 | driven to a **design gate** — expect `docs/plans/tasks/T5225-design.md` + questions |
+| **T5225** overlay text layer | `reel-task-t5225` | fe 5175, be 8002 | **design gate PASSED + approved 2026-08-04**, now implementing. Design: `docs/plans/tasks/T5225-design.md` |
+
+**T5225 design answers already given (do not re-litigate):** integrate into the live
+`OverlayMode.jsx`, leave dead `OverlayTimeline.jsx` alone (separate cleanup task owed); add a
+`clip_boundaries` read to `/overlay-data` reusing `poster.py`'s per-clip walk, degrading to `[]`
+rather than 500; rasterise at the exact output resolution so neither render loop resizes (mismatch
+fails loudly); whole-TextSpec-per-block debounced updates; half-open `start <= t < end` (highlights
+stay closed — document the asymmetry, don't change it); pre-rasterise app-side so Modal only needs
+`cv2.imdecode` (keeps Pillow out of the Modal image); the no-keyframes copy path gate becomes
+`has_keyframes or has_text` (it would otherwise silently drop text — a real bug the worker found).
+**The Modal redeploy is the USER's step** — the worker will implement + verify the local path, then
+stop and report the deploy as pending. It must not deploy.
 
 Both cloned from master @ `6a7a2934`. Neither has pushed. Drive them with:
 ```
