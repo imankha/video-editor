@@ -34,10 +34,16 @@ generic silhouette placeholder** — the icon IS the fallback.
 
 - Circular crop, `object-fit: cover`. The uploaded photo is a full portrait, so a naive centre crop
   lands on the torso.
-- **Bias the crop toward the top of the frame** (a portrait's head is near the top). This is a fixed
-  arithmetic bias, NOT detection: face detection on a minor's photo is **forbidden**
-  (see [player-intro/EPIC.md](player-intro/EPIC.md) § Compliance — the 2025 COPPA amendment added
-  facial templates to "personal information"). Do not add a "smart crop" of any kind.
+- **Frame it with the profile's own focal point + zoom** (`focal_x`/`focal_y`/`zoom`, epic decisions
+  3b/3c — the same values the parent set by dragging their photo when they uploaded it). This is the
+  parent's explicit choice, so it beats any heuristic, and because the focal point is normalised it
+  crops correctly into a circle just as it does into 9:16 and 16:9.
+- **Fallback when no framing has been set:** bias toward the top of the frame (a portrait's head sits
+  near the top). Fixed arithmetic only.
+- **Never add detection of any kind.** Face detection on a minor's photo is **forbidden** (see
+  [player-intro/EPIC.md](player-intro/EPIC.md) § Compliance — the 2025 COPPA amendment added facial
+  templates to "personal information"). A user-chosen focal point is a preference, not a biometric
+  template, so it is fine; a "smart crop" that finds the face is not.
 - Keep the profile colour as a ring around the photo, so colour identity survives.
 - The cut-out photo ([T5200](player-intro/T5200-player-cutout.md)) would be the ideal source when it
   exists — use `image_cutout_key` in preference to the raw photo if both are present.
@@ -76,7 +82,9 @@ states (photo / no photo) are the evidence.
 ## Acceptance criteria
 - [ ] A profile with an intro photo shows that photo wherever its sport icon appeared.
 - [ ] A profile without one is visually unchanged.
-- [ ] The crop is top-biased and circular, with the profile colour retained as a ring.
+- [ ] The circular crop uses the profile's own focal point + zoom, with the profile colour retained
+      as a ring; top-bias applies only when no framing has been set.
+- [ ] Re-framing the photo in profile settings updates the identity mark everywhere.
 - [ ] The cut-out image is preferred when present.
 - [ ] The image is served cacheably — no per-render presign churn.
 - [ ] No shared/public surface renders the photo as a result of this change (explicitly verified).

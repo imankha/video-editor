@@ -31,9 +31,9 @@ CREATE TABLE IF NOT EXISTS intro_cards (
     title_text        TEXT,                 -- free-text title (title-only cards, or an override)
     image_key         TEXT,                 -- R2 key from T5190
     image_cutout_key  TEXT,                 -- nullable, set by T5200
-    focal_x           REAL NOT NULL DEFAULT 0.5,   -- 0..1 photo framing
-    focal_y           REAL NOT NULL DEFAULT 0.35,  -- 0..1, biased high (heads sit near the top)
-    zoom              REAL NOT NULL DEFAULT 1.0,
+    focal_x           REAL,                 -- NULL = inherit the profile's framing (decision 3b)
+    focal_y           REAL,                 -- NULL = inherit
+    zoom              REAL,                 -- NULL = inherit
     text_elements     BLOB,                 -- msgpack: { slot_name: TextSpec }  STYLING ONLY
     duration          REAL NOT NULL DEFAULT 4.0,
     is_default        INTEGER NOT NULL DEFAULT 0,
@@ -102,8 +102,11 @@ deploy window) even though [T5215](T5215-intro-attachment.md) owns its behaviour
   way in; an unknown font key or a malformed spec is a 400, never stored and never "fixed" silently.
 - `shown_fields` must be a subset of the known field names and `treatment` one of the known values —
   a typo must fail loudly, not render an empty card.
-- `focal_x`/`focal_y` are clamped to 0..1 and `zoom` to a sane range at the boundary; out-of-range
-  input is a 400, not a silent clamp of bad data.
+- `focal_x`/`focal_y` must be within 0..1 and `zoom` within a sane range; out-of-range input is a
+  400, not a silent clamp of bad data. **NULL is a distinct, valid value meaning "inherit the
+  profile's framing"** (decision 3b) — same NULL-vs-value discipline as `intro_card_id`; do not
+  collapse NULL to the default at write time, or a later change to the profile framing will stop
+  propagating to cards that never overrode it.
 - A card whose `shown_fields` names a field the profile has not filled in is a **user-visible warning
   in the editor**, not a silent drop — otherwise a card quietly loses a line when a profile field is
   cleared.
