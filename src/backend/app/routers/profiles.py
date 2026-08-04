@@ -14,25 +14,43 @@ Endpoints:
 """
 
 import logging
+from datetime import UTC, datetime
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import set_current_profile_id
+from app.services.intro_media import (
+    InvalidImageError,
+    delete_intro_image,
+    store_intro_image,
+)
+from app.services.user_db import (
+    INTRO_FACT_FIELDS,
+    clear_intro_consent,
+    clear_intro_fact,
+    clear_intro_photo_key,
+    get_all_intro_consents,
+    get_all_intro_facts,
+    get_all_intro_photo_keys,
+    get_intro_photo_key,
+    get_profiles,
+    get_selected_profile_id,
+    set_default_profile,
+    set_intro_consent,
+    set_intro_fact,
+    set_intro_photo_key,
+    set_selected_profile_id,
+)
 from app.services.user_db import (
     create_profile as db_create_profile,
 )
 from app.services.user_db import (
     delete_profile as db_delete_profile,
-)
-from app.services.user_db import (
-    get_profiles,
-    get_selected_profile_id,
-    set_default_profile,
-    set_selected_profile_id,
 )
 from app.services.user_db import (
     update_profile as db_update_profile,
@@ -41,6 +59,7 @@ from app.session_init import invalidate_user_cache
 from app.storage import (
     delete_local_profile_data,
     delete_profile_r2_data,
+    generate_presigned_url_global,
 )
 from app.user_context import get_current_user_id
 
@@ -69,6 +88,43 @@ class SwitchProfileRequest(BaseModel):
     profileId: str
 
 
+class DeleteIntroImageRequest(BaseModel):
+    key: str
+
+
+class UpdateIntroFactRequest(BaseModel):
+    field: Literal["position", "class", "team"]
+    value: str | None = None
+
+
+def _intro_photo_fields(key: str | None) -> dict:
+    """Presign a stored intro photo key at READ time (never store a presigned
+    URL — R2 presigned URLs expire, so caching one would go stale). Returns
+    {"introPhotoKey": None, "introPhotoUrl": None} when no photo is stored."""
+    if not key:
+        return {"introPhotoKey": None, "introPhotoUrl": None}
+    return {"introPhotoKey": key, "introPhotoUrl": generate_presigned_url_global(key)}
+
+
+def _intro_fact_fields(facts: dict) -> dict:
+    """{"position": ..., "class": ..., "team": ...}, None for any unset field.
+
+    `facts` is this profile's slice of get_all_intro_facts() -- {} when the
+    profile has never set any fact.
+    """
+    return {field: facts.get(field) for field in INTRO_FACT_FIELDS}
+
+
+def _require_owned_profile(user_id: str, profile_id: str) -> None:
+    """404 unless profile_id is one of the current user's profiles.
+
+    Keeps every intro endpoint scoped to the caller's own namespace — a user can
+    never read or write another user's (or a non-existent) profile prefix.
+    """
+    if profile_id not in {p["id"] for p in get_profiles(user_id)}:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -82,6 +138,15 @@ async def list_profiles():
     user_id = get_current_user_id()
     profiles = get_profiles(user_id)
     selected = get_selected_profile_id(user_id)
+    # Per-profile parental-consent attestation (T5190). Read once from the same
+    # user.sqlite that backs the profiles list, then exposed as introConsentAt
+    # so T5215 can gate intro attach on it (null = not consented / revoked).
+    consents = get_all_intro_consents(user_id)
+    photo_keys = get_all_intro_photo_keys(user_id)
+    # Structured intro facts (T5190 follow-up, epic decision 3 reversal): drive
+    # the card layout T5195/T5210 derive from field COUNT, so they must ride the
+    # same payload as consent/photo rather than a separate fetch.
+    facts = get_all_intro_facts(user_id)
 
     return {"profiles": [
         {
@@ -91,6 +156,9 @@ async def list_profiles():
             "sport": p["sport"],
             "isDefault": bool(p["is_default"]),
             "isCurrent": p["id"] == selected,
+            "introConsentAt": consents.get(p["id"]),
+            **_intro_photo_fields(photo_keys.get(p["id"])),
+            **_intro_fact_fields(facts.get(p["id"], {})),
         }
         for p in profiles
     ]}
@@ -218,6 +286,133 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
     logger.info(f"Updated profile {profile_id} for user {user_id}")
 
     return {"id": profile_id, "name": name, "color": color, "sport": sport}
+
+
+# ---------------------------------------------------------------------------
+# Player-intro: image upload + parental-consent attestation (T5190)
+# ---------------------------------------------------------------------------
+
+@router.post("/{profile_id}/intro/image")
+async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
+    """Upload a single still for a profile's intro card (gesture-only).
+
+    Decode-verifies the upload is a real image (rejects anything cv2 can't
+    decode -> 400, never trusting the extension or declared content type),
+    re-encodes it to a ~1440px long edge preserving alpha, and stores it under
+    the PER-PROFILE R2 prefix `.../profiles/{profile_id}/intro/{uuid}.{ext}`.
+
+    Persists the returned key onto this PROFILE (user.sqlite, same mechanism as
+    intro consent) so it survives a reload/new session/other device — this is
+    the fix for the bug where an upload was never recorded anywhere. A card row
+    (T5195) may later default its own image from this profile-level key, but
+    this endpoint remains the sole owner of the R2 object. Replacing an existing
+    photo deletes the previous object before persisting the new key.
+    """
+    user_id = get_current_user_id()
+    _require_owned_profile(user_id, profile_id)
+
+    raw = await image.read()
+    try:
+        stored = store_intro_image(user_id, profile_id, raw)
+    except InvalidImageError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if stored is None:
+        raise HTTPException(status_code=500, detail="Failed to store the intro image")
+
+    previous_key = get_intro_photo_key(user_id, profile_id)
+    if previous_key and previous_key != stored["key"]:
+        delete_intro_image(user_id, profile_id, previous_key)
+
+    set_intro_photo_key(user_id, profile_id, stored["key"])
+
+    return {
+        "success": True,
+        "key": stored["key"],
+        "previewUrl": stored["previewUrl"],
+    }
+
+
+@router.delete("/{profile_id}/intro/image")
+async def remove_intro_image(profile_id: str, request: DeleteIntroImageRequest):
+    """Remove a profile's intro image R2 object (gesture-only).
+
+    Delegates to the callable `delete_intro_image` service (the same function
+    T5230's compliance purge calls), which refuses a key that does not belong to
+    this profile's intro prefix. Also clears the persisted key so a reload does
+    not resurrect a preview pointing at a deleted object.
+    """
+    user_id = get_current_user_id()
+    _require_owned_profile(user_id, profile_id)
+
+    try:
+        deleted = delete_intro_image(user_id, profile_id, request.key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not deleted:
+        raise HTTPException(status_code=500, detail="Failed to delete the intro image")
+
+    if get_intro_photo_key(user_id, profile_id) == request.key:
+        clear_intro_photo_key(user_id, profile_id)
+
+    return {"success": True}
+
+
+@router.post("/{profile_id}/intro/consent")
+async def record_intro_consent(profile_id: str):
+    """Record parental-consent attestation for a profile (gesture-only).
+
+    Fired by the consent checkbox at first card creation. Gates intro use:
+    without it, T5215 refuses to attach any card to a reel or collection. The
+    write lands in user.sqlite (TrackedConnection -> synced to R2).
+    """
+    user_id = get_current_user_id()
+    _require_owned_profile(user_id, profile_id)
+
+    now = datetime.now(UTC).isoformat()
+    set_intro_consent(user_id, profile_id, now)
+    logger.info(f"Recorded intro consent for profile {profile_id} (user {user_id})")
+
+    return {"introConsentAt": now}
+
+
+@router.delete("/{profile_id}/intro/consent")
+async def revoke_intro_consent(profile_id: str):
+    """Revoke parental consent for a profile (gesture-only).
+
+    Re-shows the checkbox and re-gates intro use. Also the path T5230's purge
+    calls when erasing a minor's consent record.
+    """
+    user_id = get_current_user_id()
+    _require_owned_profile(user_id, profile_id)
+
+    clear_intro_consent(user_id, profile_id)
+    logger.info(f"Revoked intro consent for profile {profile_id} (user {user_id})")
+
+    return {"introConsentAt": None}
+
+
+@router.put("/{profile_id}/intro/facts")
+async def update_intro_fact(profile_id: str, request: UpdateIntroFactRequest):
+    """Set or clear one structured intro fact (position/class/team) for a
+    profile (gesture-only: ProfileIntroSection commits on blur, never per
+    keystroke and never a reactive effect).
+
+    Surgical by design -- one field per call, matching the photo/consent
+    endpoints above -- so committing "team" on blur can never clobber a
+    concurrently-typed "position". A blank/whitespace-only value clears the
+    field rather than storing an empty string: absence is the real state a
+    card composition reads (epic decision 2), not a stored placeholder.
+    """
+    user_id = get_current_user_id()
+    _require_owned_profile(user_id, profile_id)
+
+    trimmed = (request.value or "").strip()
+    if trimmed:
+        set_intro_fact(user_id, profile_id, request.field, trimmed)
+    else:
+        clear_intro_fact(user_id, profile_id, request.field)
+
+    return {"field": request.field, "value": trimmed or None}
 
 
 @router.delete("/{profile_id}")

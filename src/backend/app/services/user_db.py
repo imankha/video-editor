@@ -543,6 +543,191 @@ def set_selected_profile_id(user_id: str, profile_id: str) -> None:
         conn.commit()
 
 
+# Parental-consent attestation for player-intro cards (T5190). Stored per
+# profile in the user.sqlite settings KV (keyed by profile id) rather than a
+# profiles column: consent must appear on the GET /api/profiles payload, which
+# is built entirely from user.sqlite, so keeping it here reads every profile's
+# consent in the same DB instead of opening each profile.sqlite. No migration.
+INTRO_CONSENT_PREFIX = "intro_consent_at."
+
+
+def _intro_consent_key(profile_id: str) -> str:
+    return f"{INTRO_CONSENT_PREFIX}{profile_id}"
+
+
+def get_intro_consent(user_id: str | None, profile_id: str) -> str | None:
+    """Return the ISO timestamp the parent/guardian consented for this profile,
+    or None if consent has never been recorded (or was revoked)."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_intro_consent_key(profile_id),),
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_intro_consent(user_id: str | None, profile_id: str, timestamp: str) -> None:
+    """Record parental-consent attestation for a profile (gesture-driven).
+
+    Recorded once per profile; a second tick simply refreshes the timestamp.
+    """
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_intro_consent_key(profile_id), timestamp),
+        )
+        conn.commit()
+
+
+def clear_intro_consent(user_id: str | None, profile_id: str) -> None:
+    """Revoke parental consent for a profile (T5230 purge / explicit revoke).
+
+    With the row gone, get_intro_consent returns None so the checkbox re-shows.
+    """
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "DELETE FROM user_settings WHERE key = ?",
+            (_intro_consent_key(profile_id),),
+        )
+        conn.commit()
+
+
+def get_all_intro_consents(user_id: str | None = None) -> dict[str, str]:
+    """Map of profile_id -> consent ISO timestamp for every consented profile.
+
+    Read alongside the profiles list so GET /api/profiles can expose consent
+    without opening any profile.sqlite.
+    """
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE key LIKE ?",
+            (f"{INTRO_CONSENT_PREFIX}%",),
+        ).fetchall()
+        return {row["key"][len(INTRO_CONSENT_PREFIX):]: row["value"] for row in rows}
+
+
+# Per-profile intro photo key, stored the same way as intro consent and for the
+# same reason (T5190 follow-up): the image upload endpoint returned a key that
+# nothing persisted, so a refresh lost the photo. T5195's intro_cards row was
+# never the right home for the PROFILE-level photo (a profile has no card row
+# until one is created) — this KV entry is the source of truth; a future card
+# may default its own image from it. No migration.
+INTRO_PHOTO_KEY_PREFIX = "intro_photo_key."
+
+
+def _intro_photo_key_setting(profile_id: str) -> str:
+    return f"{INTRO_PHOTO_KEY_PREFIX}{profile_id}"
+
+
+def get_intro_photo_key(user_id: str | None, profile_id: str) -> str | None:
+    """Return the stored R2 key for a profile's intro photo, or None."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_intro_photo_key_setting(profile_id),),
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_intro_photo_key(user_id: str | None, profile_id: str, key: str) -> None:
+    """Persist the R2 key for a profile's intro photo (gesture-driven: upload)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_intro_photo_key_setting(profile_id), key),
+        )
+        conn.commit()
+
+
+def clear_intro_photo_key(user_id: str | None, profile_id: str) -> None:
+    """Clear the stored intro photo key (gesture-driven: remove / purge)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "DELETE FROM user_settings WHERE key = ?",
+            (_intro_photo_key_setting(profile_id),),
+        )
+        conn.commit()
+
+
+def get_all_intro_photo_keys(user_id: str | None = None) -> dict[str, str]:
+    """Map of profile_id -> R2 key for every profile with a stored intro photo.
+
+    Read alongside the profiles list so GET /api/profiles and /api/bootstrap can
+    expose introPhotoKey/introPhotoUrl without opening any profile.sqlite.
+    """
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE key LIKE ?",
+            (f"{INTRO_PHOTO_KEY_PREFIX}%",),
+        ).fetchall()
+        return {row["key"][len(INTRO_PHOTO_KEY_PREFIX):]: row["value"] for row in rows}
+
+
+# Structured player-intro facts (T5190 follow-up, epic decision 3 REVERSED
+# 2026-08-04): position, class (grad year) and team are named profile fields so
+# the card layout (epic decision 2) can be DERIVED from how many are set --
+# free text has no field count to derive from. Same per-profile user_settings
+# KV mechanism as consent/photo, keyed by field so each is independently
+# readable/writable/clearable. No migration. All three optional: an absent
+# value is a real state (fewer facts -> a plainer composition), never a
+# substituted placeholder -- that judgment belongs to the card editor (T5205).
+INTRO_FACT_FIELDS = ("position", "class", "team")
+_INTRO_FACT_PREFIXES = {field: f"intro_{field}." for field in INTRO_FACT_FIELDS}
+
+
+def _intro_fact_setting(field: str, profile_id: str) -> str:
+    return f"{_INTRO_FACT_PREFIXES[field]}{profile_id}"
+
+
+def get_intro_fact(user_id: str | None, profile_id: str, field: str) -> str | None:
+    """Return the stored value for one intro fact field, or None if unset."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_intro_fact_setting(field, profile_id),),
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_intro_fact(user_id: str | None, profile_id: str, field: str, value: str) -> None:
+    """Persist one intro fact field for a profile (gesture-driven: blur/save)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_intro_fact_setting(field, profile_id), value),
+        )
+        conn.commit()
+
+
+def clear_intro_fact(user_id: str | None, profile_id: str, field: str) -> None:
+    """Clear one intro fact field (gesture-driven: emptied on blur, or T5230 purge)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "DELETE FROM user_settings WHERE key = ?",
+            (_intro_fact_setting(field, profile_id),),
+        )
+        conn.commit()
+
+
+def get_all_intro_facts(user_id: str | None = None) -> dict[str, dict[str, str]]:
+    """Map of profile_id -> {field: value} for every stored intro fact.
+
+    Read alongside the profiles list so GET /api/profiles and /api/bootstrap can
+    expose position/class/team without opening any profile.sqlite.
+    """
+    result: dict[str, dict[str, str]] = {}
+    with get_user_db_connection(user_id) as conn:
+        for field, prefix in _INTRO_FACT_PREFIXES.items():
+            rows = conn.execute(
+                "SELECT key, value FROM user_settings WHERE key LIKE ?",
+                (f"{prefix}%",),
+            ).fetchall()
+            for row in rows:
+                profile_id = row["key"][len(prefix):]
+                result.setdefault(profile_id, {})[field] = row["value"]
+    return result
+
+
 PREF_PREFIX = "pref."
 
 

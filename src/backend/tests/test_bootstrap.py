@@ -125,6 +125,31 @@ class TestBootstrapContract:
         names = [g.get("name") for g in data["games"]["games"]]
         assert "Bootstrap Test Game" in names
 
+    def test_profiles_carry_intro_consent_field(self):
+        """T5190: every profile in the bootstrap payload exposes introConsentAt
+        (null until recorded) so the consent checkbox is correct on first paint —
+        the reload-persistence gap when only GET /api/profiles carried it."""
+        from app.services.user_db import create_profile, get_profiles
+        if not get_profiles(TEST_USER_ID):
+            create_profile(TEST_USER_ID, TEST_PROFILE_ID, "Boot", "#3B82F6", is_default=True)
+        data = _run_bootstrap()
+        assert data["profiles"], "bootstrap should list the seeded profile"
+        for p in data["profiles"]:
+            assert "introConsentAt" in p
+
+    def test_profiles_carry_intro_photo_fields(self):
+        """T5190 follow-up: every profile in the bootstrap payload exposes
+        introPhotoKey/introPhotoUrl (null until an image is uploaded) — the
+        upload previously persisted nowhere, so a reload showed no preview."""
+        from app.services.user_db import create_profile, get_profiles
+        if not get_profiles(TEST_USER_ID):
+            create_profile(TEST_USER_ID, TEST_PROFILE_ID, "Boot", "#3B82F6", is_default=True)
+        data = _run_bootstrap()
+        assert data["profiles"], "bootstrap should list the seeded profile"
+        for p in data["profiles"]:
+            assert "introPhotoKey" in p
+            assert "introPhotoUrl" in p
+
     def test_repeated_calls_are_stable(self):
         """Concurrency sanity: the two-group parallel read yields identical
         top-level keys across repeated calls (no torn/missing group)."""

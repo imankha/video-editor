@@ -193,6 +193,120 @@ export const useProfileStore = create((set, get) => ({
     }
   },
 
+  // --- Player intro (T5190) ---------------------------------------------
+  // All are explicit gesture handlers (file pick, remove click, consent tick)
+  // — never reactive effects. The image endpoint owns the R2 object AND
+  // persists the key onto this profile (user.sqlite, same mechanism as
+  // consent), so introPhotoKey/introPhotoUrl arrive on every profile from
+  // fetchProfiles/bootstrap and survive a reload. A future card row (T5195)
+  // may default its own image from this profile-level key.
+
+  uploadIntroImage: async (profileId, file) => {
+    set({ error: null });
+    // multipart: do NOT set Content-Type — the browser adds the boundary.
+    const form = new FormData();
+    form.append('image', file);
+    const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}/intro/image`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!response.ok) {
+      let detail = `Failed to upload intro image: ${response.status}`;
+      try { detail = (await response.json()).detail || detail; } catch { /* non-JSON */ }
+      set({ error: detail });
+      throw new Error(detail);
+    }
+    const result = await response.json(); // { success, key, previewUrl }
+    // Reflect the persisted key on the local profile so the preview stays up
+    // without a refetch (same pattern as setIntroConsent below).
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId
+          ? { ...p, introPhotoKey: result.key, introPhotoUrl: result.previewUrl }
+          : p
+      ),
+    }));
+    return result;
+  },
+
+  deleteIntroImage: async (profileId, key) => {
+    set({ error: null });
+    const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}/intro/image`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete intro image: ${response.status}`);
+    }
+    const result = await response.json();
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, introPhotoKey: null, introPhotoUrl: null } : p
+      ),
+    }));
+    return result;
+  },
+
+  setIntroConsent: async (profileId) => {
+    set({ error: null });
+    const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}/intro/consent`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to record consent: ${response.status}`);
+    }
+    const { introConsentAt } = await response.json();
+    // Reflect the server's timestamp on the local profile so the checkbox stays
+    // ticked without a refetch.
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, introConsentAt } : p
+      ),
+    }));
+    return introConsentAt;
+  },
+
+  revokeIntroConsent: async (profileId) => {
+    set({ error: null });
+    const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}/intro/consent`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to revoke consent: ${response.status}`);
+    }
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, introConsentAt: null } : p
+      ),
+    }));
+  },
+
+  // Structured intro facts (T5190 follow-up, epic decision 3 reversal
+  // 2026-08-04): position/class/team, typed once on the profile so every card
+  // auto-fills. Surgical -- one field per call -- committed by
+  // ProfileIntroSection on blur, never per keystroke. An empty value clears
+  // the field (a real, independent state); the backend returns value: null
+  // in that case, which is what gets written back onto the profile.
+  setIntroFact: async (profileId, field, value) => {
+    set({ error: null });
+    const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}/intro/facts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update ${field}: ${response.status}`);
+    }
+    const result = await response.json(); // { field, value }
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, [result.field]: result.value } : p
+      ),
+    }));
+    return result.value;
+  },
+
   // Computed helpers
   hasMultipleProfiles: () => get().profiles.length >= 2,
   currentProfile: () => get().profiles.find(p => p.id === get().currentProfileId) || null,

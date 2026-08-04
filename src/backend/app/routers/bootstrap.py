@@ -16,7 +16,15 @@ from fastapi import APIRouter
 from ..database import get_db_connection
 from ..queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
-from ..services.user_db import get_profiles, get_selected_profile_id
+from ..services.user_db import (
+    INTRO_FACT_FIELDS,
+    get_all_intro_consents,
+    get_all_intro_facts,
+    get_all_intro_photo_keys,
+    get_profiles,
+    get_selected_profile_id,
+)
+from ..storage import generate_presigned_url_global
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -34,6 +42,17 @@ def _read_user_scoped(user_id: str) -> dict:
 
     profiles_raw = get_profiles(user_id)
     selected_profile = get_selected_profile_id(user_id)
+    # T5190: per-profile parental-consent attestation, so the intro consent
+    # checkbox is correct on first paint (same shape as GET /api/profiles).
+    consents = get_all_intro_consents(user_id)
+    # T5190 follow-up: the intro photo key persisted per profile (same KV
+    # mechanism as consent). Presigned at READ time -- never store a presigned
+    # URL, they expire -- so the photo preview is correct on first paint too.
+    photo_keys = get_all_intro_photo_keys(user_id)
+    # T5190 follow-up (epic decision 3 reversal): structured position/class/team,
+    # same KV mechanism, read once so the derived card layout (epic decision 2)
+    # has correct data on first paint too.
+    facts = get_all_intro_facts(user_id)
     profiles = [
         {
             "id": p["id"],
@@ -42,6 +61,13 @@ def _read_user_scoped(user_id: str) -> dict:
             "sport": p["sport"],
             "isDefault": bool(p["is_default"]),
             "isCurrent": p["id"] == selected_profile,
+            "introConsentAt": consents.get(p["id"]),
+            "introPhotoKey": photo_keys.get(p["id"]),
+            "introPhotoUrl": (
+                generate_presigned_url_global(photo_keys[p["id"]])
+                if p["id"] in photo_keys else None
+            ),
+            **{field: facts.get(p["id"], {}).get(field) for field in INTRO_FACT_FIELDS},
         }
         for p in profiles_raw
     ]

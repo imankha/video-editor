@@ -283,6 +283,129 @@ describe('profileStore', () => {
     });
   });
 
+  describe('player intro (T5190)', () => {
+    it('uploadIntroImage posts multipart FormData and returns key + preview', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, key: 'dev/users/u/profiles/abc12345/intro/x.jpg', previewUrl: 'https://r2/x' }),
+      });
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'p.jpg', { type: 'image/jpeg' });
+      const result = await useProfileStore.getState().uploadIntroImage('abc12345', file);
+
+      expect(result.key).toContain('/profiles/abc12345/intro/');
+      const [url, opts] = mockFetch.mock.calls[0];
+      expect(url).toBe('/api/profiles/abc12345/intro/image');
+      expect(opts.method).toBe('POST');
+      expect(opts.body).toBeInstanceOf(FormData);
+      // multipart: must NOT hand-set Content-Type (browser adds the boundary).
+      expect(opts.headers?.['Content-Type']).toBeUndefined();
+    });
+
+    it('uploadIntroImage persists the key/url onto the local profile (reload-survival regression)', async () => {
+      // Bug: the upload response was never stored anywhere, so after a reload
+      // there was no record and no preview. The store must reflect the
+      // persisted key/url on the profile immediately, the same way
+      // setIntroConsent reflects introConsentAt below.
+      useProfileStore.setState({
+        profiles: [{ id: 'abc12345', name: 'Marcus', introPhotoKey: null, introPhotoUrl: null }],
+        currentProfileId: 'abc12345',
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          key: 'dev/users/u/profiles/abc12345/intro/x.jpg',
+          previewUrl: 'https://r2/x',
+        }),
+      });
+
+      await useProfileStore.getState().uploadIntroImage('abc12345', new File([new Uint8Array([1])], 'p.jpg'));
+
+      const profile = useProfileStore.getState().profiles[0];
+      expect(profile.introPhotoKey).toBe('dev/users/u/profiles/abc12345/intro/x.jpg');
+      expect(profile.introPhotoUrl).toBe('https://r2/x');
+    });
+
+    it('deleteIntroImage clears the persisted key/url on the local profile', async () => {
+      useProfileStore.setState({
+        profiles: [{ id: 'abc12345', name: 'Marcus', introPhotoKey: 'some/key.jpg', introPhotoUrl: 'https://r2/key.jpg' }],
+        currentProfileId: 'abc12345',
+      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+      await useProfileStore.getState().deleteIntroImage('abc12345', 'some/key.jpg');
+
+      const profile = useProfileStore.getState().profiles[0];
+      expect(profile.introPhotoKey).toBeNull();
+      expect(profile.introPhotoUrl).toBeNull();
+    });
+
+    it('uploadIntroImage surfaces the backend detail on 400', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ detail: 'Uploaded file is not a valid image' }),
+      });
+      const file = new File([new Uint8Array([0])], 'bad.jpg', { type: 'image/jpeg' });
+      await expect(
+        useProfileStore.getState().uploadIntroImage('abc12345', file)
+      ).rejects.toThrow(/not a valid image/);
+      expect(useProfileStore.getState().error).toMatch(/not a valid image/);
+    });
+
+    it('deleteIntroImage sends the key in the DELETE body', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
+      await useProfileStore.getState().deleteIntroImage('abc12345', 'some/key.jpg');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/profiles/abc12345/intro/image',
+        expect.objectContaining({
+          method: 'DELETE',
+          body: JSON.stringify({ key: 'some/key.jpg' }),
+        }),
+      );
+    });
+
+    it('setIntroConsent posts and reflects the server timestamp on the local profile', async () => {
+      useProfileStore.setState({
+        profiles: [{ id: 'abc12345', name: 'Marcus', introConsentAt: null }],
+        currentProfileId: 'abc12345',
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ introConsentAt: '2026-08-04T00:00:00+00:00' }),
+      });
+
+      const ts = await useProfileStore.getState().setIntroConsent('abc12345');
+
+      expect(ts).toBe('2026-08-04T00:00:00+00:00');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/profiles/abc12345/intro/consent',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(useProfileStore.getState().profiles[0].introConsentAt).toBe('2026-08-04T00:00:00+00:00');
+    });
+
+    it('revokeIntroConsent clears the local timestamp', async () => {
+      useProfileStore.setState({
+        profiles: [{ id: 'abc12345', name: 'Marcus', introConsentAt: '2026-08-04T00:00:00+00:00' }],
+        currentProfileId: 'abc12345',
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ introConsentAt: null }),
+      });
+
+      await useProfileStore.getState().revokeIntroConsent('abc12345');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/profiles/abc12345/intro/consent',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+      expect(useProfileStore.getState().profiles[0].introConsentAt).toBeNull();
+    });
+  });
+
   describe('computed helpers', () => {
     it('hasMultipleProfiles returns false for single profile', () => {
       useProfileStore.setState({
