@@ -29,9 +29,23 @@ Build `app/services/player_intro.py`, mirroring `branded_outro.py`'s structure a
 - **Text is a pre-rendered RGBA PNG layer per element**, produced by
   `text_render.render_text_layer` (T5180). ffmpeg composites and animates the PNGs; it never draws
   a glyph. This is what makes the export match the editor preview.
-- Templates: `hero-left`, `full-bleed`, `title-only` — background treatment, photo placement and
-  slot geometry per template, defined in ONE place shared with the frontend's stage geometry.
+- **Composition is DERIVED, never read from a column** (epic decision 2): resolve it from
+  `(has_photo, len(shown_fields))` via the SAME shared helper the editor uses —
+  `no photo -> title-only`, `+1 -> hero`, `+2 -> broadcast`, `+3 -> recruiting`. Four compositions,
+  each defining slot geometry and photo placement, in ONE place shared with the frontend stage
+  geometry.
+- **Treatment is an independent axis** (`gold` / `dark` / `photo-forward`, decision 2b): it selects
+  the background/accent treatment and must compose with any of the four compositions. That is 4x3,
+  so build it as composition x treatment, not 12 hand-authored layouts.
+- **Field values come from the PROFILE** (decision 3), not the card: the card's `shown_fields` says
+  which of position / class / team to draw, and the renderer reads the values from the profile.
+  A named-but-unfilled field is **omitted and logged**, never rendered as a blank line or a
+  placeholder string.
 - Photo: use `image_cutout_key` when present ([T5200](T5200-player-cutout.md)), else `image_key`.
+- **Photo framing uses the card's normalised `focal_x`/`focal_y`/`zoom`** (decision 3b), applied
+  relative to the OUTPUT frame — the same stored values must frame correctly at 9:16 and 16:9, which
+  is the entire reason it is a focal point rather than a crop rectangle. The Ken Burns move in
+  section B starts from this framing rather than replacing it.
 
 ### B. Motion (the deliverable, not a nicety — epic decision 10)
 
@@ -82,7 +96,13 @@ with the frontend stage). Reviewer required. A visual pass on the motion is part
 ## Acceptance criteria
 - [ ] `build_intro_card` renders any library card into an MP4 that matches the editor preview's
       layout, fonts and colours.
-- [ ] All 3 templates render correctly at 9:16 and 16:9.
+- [ ] All 4 compositions x 3 treatments render correctly at 9:16 and 16:9, built as an axis product
+      rather than 12 hand-authored layouts.
+- [ ] Composition is derived through the shared helper — there is no layout column and no second
+      copy of the mapping.
+- [ ] The card's focal point + zoom frame the photo correctly at BOTH aspect ratios from one stored
+      setting.
+- [ ] A shown field the profile has not filled is omitted and logged, never drawn blank.
 - [ ] The card is animated (photo push-in + staggered text + white flash), reviewed as professional.
 - [ ] Prepend concat is probe-matched and validated; stream-copy is used when profiles match.
 - [ ] Cache key covers every pixel-affecting field; editing a card invalidates it.

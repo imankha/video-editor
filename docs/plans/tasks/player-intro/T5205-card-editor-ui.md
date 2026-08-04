@@ -30,10 +30,24 @@ is the surface where a user creates a card, puts their kid's photo on it, types 
 Two panes: the **stage** (the card at its real aspect ratio) and a **right rail** for the selected
 element.
 
-- **Template picker** — 3 layouts (`hero-left`, `full-bleed`, `title-only`), each with named text
-  slots. Switching template keeps the text and re-places it into the new template's slots; it never
-  silently drops content the user typed.
-- **Stage** composes the template background + the image + one
+- **NO template picker** (epic decision 2, revised 2026-08-04). The user ticks **which facts to
+  show** — position, class, team — and the composition is derived:
+  `no photo -> title-only`, `photo + 1 -> hero`, `photo + 2 -> broadcast`, `photo + 3 -> recruiting`.
+  Read the mapping from the ONE shared helper T5195 defines; never re-implement it here.
+  - The stage re-composes live as facts are ticked, so the rule is visible rather than explained.
+  - Name the current composition somewhere quiet on the stage so the change is legible, not magic.
+  - Field VALUES come from the profile and are auto-filled; the editor chooses *whether* each
+    appears. A ticked field the profile hasn't filled shows an inline prompt to fill it (with a link),
+    never a silently missing line.
+- **Treatment toggle** — `gold` / `dark` / `photo-forward`, an independent 3-way control
+  (epic decision 2b). This is what stops a third fact from silently restyling the card.
+- **Photo reposition + zoom** (epic decision 3b) — drag the photo directly on the stage to
+  reposition, plus a zoom slider. Stored as normalised `focal_x`/`focal_y`/`zoom`, NOT a crop
+  rectangle, so one setting serves both 9:16 and 16:9 output. Commit on drag-end / slider-release
+  (one gesture, one surgical PATCH — not per pointer-move).
+  - Provide an aspect preview toggle (9:16 / 16:9) so the user can confirm framing for both before
+    saving. This is the whole reason a focal point beats a crop; make it visible.
+- **Stage** composes the treatment background + the image + one
   [`RichText`](T5180-rich-text-engine.md) component per slot. Clicking a slot selects it.
 - **Right rail** edits the selected slot's TextSpec: text, font (the 6-face catalogue with each name
   set in its own face), size (S/M/L/XL mapping to normalised values — not a raw number field),
@@ -75,10 +89,16 @@ pickers and the motion preview are pointer/visual behaviour that jsdom will pass
 
 ## Acceptance criteria
 - [ ] A user can create, name, duplicate, edit, delete cards and set the default from the grid.
-- [ ] All 3 templates render on the stage with their named slots.
+- [ ] **No template picker exists.** Ticking facts re-composes the stage live through all four
+      compositions (title-only / hero / broadcast / recruiting), driven by the shared helper.
+- [ ] The treatment toggle changes the look **without** changing the composition, and ticking a
+      third fact changes the composition **without** changing the look.
+- [ ] Removing the photo falls back to `title-only`; re-adding it restores the fact-driven composition.
+- [ ] A ticked fact the profile hasn't filled prompts the user inline — the line is never silently absent.
+- [ ] The photo can be dragged and zoomed on the stage, and the SAME setting frames correctly in
+      both the 9:16 and 16:9 previews.
 - [ ] Selecting a slot and changing text / font / size / colour / alignment updates the stage live.
 - [ ] The image can be added and replaced; consent is required before a card can be saved.
 - [ ] Motion preview plays in the browser with the same timings the renderer uses.
-- [ ] Every save is a gesture-driven surgical PATCH; no reactive persistence anywhere.
-- [ ] Switching template preserves typed text.
+- [ ] Every save is a gesture-driven surgical PATCH; drag/zoom commits once on release, not per move.
 - [ ] Verified in a real browser with screenshots, not only unit tests.

@@ -26,16 +26,39 @@ live under the per-profile R2 prefix; keeping the row beside the media removes t
 CREATE TABLE IF NOT EXISTS intro_cards (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     name              TEXT NOT NULL,        -- library label; NEVER rendered into the video
-    template          TEXT NOT NULL,        -- 'hero-left' | 'full-bleed' | 'title-only'
+    shown_fields      TEXT NOT NULL,        -- JSON list, subset of ['position','class','team']
+    treatment         TEXT NOT NULL,        -- 'gold' | 'dark' | 'photo-forward'
+    title_text        TEXT,                 -- free-text title (title-only cards, or an override)
     image_key         TEXT,                 -- R2 key from T5190
     image_cutout_key  TEXT,                 -- nullable, set by T5200
-    text_elements     BLOB,                 -- msgpack: { slot_name: TextSpec }
+    focal_x           REAL NOT NULL DEFAULT 0.5,   -- 0..1 photo framing
+    focal_y           REAL NOT NULL DEFAULT 0.35,  -- 0..1, biased high (heads sit near the top)
+    zoom              REAL NOT NULL DEFAULT 1.0,
+    text_elements     BLOB,                 -- msgpack: { slot_name: TextSpec }  STYLING ONLY
     duration          REAL NOT NULL DEFAULT 4.0,
     is_default        INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT DEFAULT (datetime('now')),
     updated_at        TEXT DEFAULT (datetime('now'))
 );
 ```
+
+**There is deliberately NO `template`/`layout` column.** The composition is **derived** from
+`(has_photo, len(shown_fields))` per epic decision 2 — storing it too would be redundant state the
+project rules forbid, and the two copies would drift the first time a user removes the photo:
+
+```
+no photo            -> title-only
+photo + 1 field     -> hero
+photo + 2 fields    -> broadcast
+photo + 3 fields    -> recruiting
+```
+
+Put that mapping in **one** shared helper (backend + frontend read the same rule); do not inline it
+in the renderer and again in the editor.
+
+**Field VALUES are not stored here.** `position`, `class` and `team` live on the **profile**
+(epic decision 3, added by [T5190](T5190-card-image-upload-consent.md)); `shown_fields` records only
+*which* of them this card displays. One team change edits one place and every card follows.
 
 Plus `ALTER TABLE final_videos ADD COLUMN intro_card_id INTEGER` — added here (one migration, one
 deploy window) even though [T5215](T5215-intro-attachment.md) owns its behaviour.
@@ -77,7 +100,13 @@ deploy window) even though [T5215](T5215-intro-attachment.md) owns its behaviour
 
 - `text_elements` values are validated as **TextSpec** ([T5180](T5180-rich-text-engine.md)) on the
   way in; an unknown font key or a malformed spec is a 400, never stored and never "fixed" silently.
-- `template` is validated against the known set — a typo must fail loudly, not render an empty card.
+- `shown_fields` must be a subset of the known field names and `treatment` one of the known values —
+  a typo must fail loudly, not render an empty card.
+- `focal_x`/`focal_y` are clamped to 0..1 and `zoom` to a sane range at the boundary; out-of-range
+  input is a 400, not a silent clamp of bad data.
+- A card whose `shown_fields` names a field the profile has not filled in is a **user-visible warning
+  in the editor**, not a silent drop — otherwise a card quietly loses a line when a profile field is
+  cleared.
 
 ## Relevant files
 - `src/backend/app/database.py:1007` — `final_videos` DDL, `ensure_database()`
