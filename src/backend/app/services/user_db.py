@@ -606,6 +606,63 @@ def get_all_intro_consents(user_id: str | None = None) -> dict[str, str]:
         return {row["key"][len(INTRO_CONSENT_PREFIX):]: row["value"] for row in rows}
 
 
+# Per-profile intro photo key, stored the same way as intro consent and for the
+# same reason (T5190 follow-up): the image upload endpoint returned a key that
+# nothing persisted, so a refresh lost the photo. T5195's intro_cards row was
+# never the right home for the PROFILE-level photo (a profile has no card row
+# until one is created) — this KV entry is the source of truth; a future card
+# may default its own image from it. No migration.
+INTRO_PHOTO_KEY_PREFIX = "intro_photo_key."
+
+
+def _intro_photo_key_setting(profile_id: str) -> str:
+    return f"{INTRO_PHOTO_KEY_PREFIX}{profile_id}"
+
+
+def get_intro_photo_key(user_id: str | None, profile_id: str) -> str | None:
+    """Return the stored R2 key for a profile's intro photo, or None."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_intro_photo_key_setting(profile_id),),
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_intro_photo_key(user_id: str | None, profile_id: str, key: str) -> None:
+    """Persist the R2 key for a profile's intro photo (gesture-driven: upload)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_intro_photo_key_setting(profile_id), key),
+        )
+        conn.commit()
+
+
+def clear_intro_photo_key(user_id: str | None, profile_id: str) -> None:
+    """Clear the stored intro photo key (gesture-driven: remove / purge)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "DELETE FROM user_settings WHERE key = ?",
+            (_intro_photo_key_setting(profile_id),),
+        )
+        conn.commit()
+
+
+def get_all_intro_photo_keys(user_id: str | None = None) -> dict[str, str]:
+    """Map of profile_id -> R2 key for every profile with a stored intro photo.
+
+    Read alongside the profiles list so GET /api/profiles and /api/bootstrap can
+    expose introPhotoKey/introPhotoUrl without opening any profile.sqlite.
+    """
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE key LIKE ?",
+            (f"{INTRO_PHOTO_KEY_PREFIX}%",),
+        ).fetchall()
+        return {row["key"][len(INTRO_PHOTO_KEY_PREFIX):]: row["value"] for row in rows}
+
+
 PREF_PREFIX = "pref."
 
 

@@ -194,10 +194,12 @@ export const useProfileStore = create((set, get) => ({
   },
 
   // --- Player intro (T5190) ---------------------------------------------
-  // All three are explicit gesture handlers (file pick, remove click, consent
-  // tick) — never reactive effects. The image endpoint owns the R2 object only;
-  // its key is persisted onto a card row by T5195, so the returned preview is
-  // held in the caller for the session, not in this store's profile list.
+  // All are explicit gesture handlers (file pick, remove click, consent tick)
+  // — never reactive effects. The image endpoint owns the R2 object AND
+  // persists the key onto this profile (user.sqlite, same mechanism as
+  // consent), so introPhotoKey/introPhotoUrl arrive on every profile from
+  // fetchProfiles/bootstrap and survive a reload. A future card row (T5195)
+  // may default its own image from this profile-level key.
 
   uploadIntroImage: async (profileId, file) => {
     set({ error: null });
@@ -214,7 +216,17 @@ export const useProfileStore = create((set, get) => ({
       set({ error: detail });
       throw new Error(detail);
     }
-    return response.json(); // { success, key, previewUrl }
+    const result = await response.json(); // { success, key, previewUrl }
+    // Reflect the persisted key on the local profile so the preview stays up
+    // without a refetch (same pattern as setIntroConsent below).
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId
+          ? { ...p, introPhotoKey: result.key, introPhotoUrl: result.previewUrl }
+          : p
+      ),
+    }));
+    return result;
   },
 
   deleteIntroImage: async (profileId, key) => {
@@ -227,7 +239,13 @@ export const useProfileStore = create((set, get) => ({
     if (!response.ok) {
       throw new Error(`Failed to delete intro image: ${response.status}`);
     }
-    return response.json();
+    const result = await response.json();
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, introPhotoKey: null, introPhotoUrl: null } : p
+      ),
+    }));
+    return result;
   },
 
   setIntroConsent: async (profileId) => {

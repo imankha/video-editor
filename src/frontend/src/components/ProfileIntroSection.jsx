@@ -7,14 +7,15 @@ import { useProfileStore } from '../stores';
  * card's photo + the parental-consent attestation.
  *
  * Foundation for the Player Intro epic: the image upload proves the R2 object
- * round-trip (T5195 will persist the returned key onto a card row), and the
- * consent tick is the compliance gate T5215 reads before letting a card attach
- * to a reel or collection.
+ * round-trip, and the consent tick is the compliance gate T5215 reads before
+ * letting a card attach to a reel or collection. A future card (T5195) may
+ * default its own image from this profile-level photo.
  *
  * Every write here is an explicit gesture (file pick, remove click, consent
- * toggle) — no reactive persistence. The uploaded preview is session-only
- * because no card row exists yet to persist the key against (T5195); consent
- * DOES persist (user.sqlite) and arrives on the profile via introConsentAt.
+ * toggle) — no reactive persistence. Both the photo (introPhotoKey/
+ * introPhotoUrl) and consent (introConsentAt) persist in user.sqlite and are
+ * derived LIVE from the profile prop (store), never held in local useState —
+ * so a reload, new session, or another device all hydrate the same preview.
  */
 export function ProfileIntroSection({ profile }) {
   const uploadIntroImage = useProfileStore(state => state.uploadIntroImage);
@@ -24,11 +25,12 @@ export function ProfileIntroSection({ profile }) {
 
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState(null); // { key, previewUrl }
   const [error, setError] = useState(null);
   const [consentBusy, setConsentBusy] = useState(false);
 
   const hasConsent = !!profile.introConsentAt;
+  const photoKey = profile.introPhotoKey;
+  const photoUrl = profile.introPhotoUrl;
 
   const handleFilePick = async (e) => {
     const file = e.target.files?.[0];
@@ -38,8 +40,7 @@ export function ProfileIntroSection({ profile }) {
     setError(null);
     setUploading(true);
     try {
-      const result = await uploadIntroImage(profile.id, file);
-      setUploaded({ key: result.key, previewUrl: result.previewUrl });
+      await uploadIntroImage(profile.id, file);
     } catch (err) {
       setError(err.message || 'Upload failed');
     } finally {
@@ -48,11 +49,10 @@ export function ProfileIntroSection({ profile }) {
   };
 
   const handleRemove = async () => {
-    if (!uploaded) return;
+    if (!photoKey) return;
     setError(null);
     try {
-      await deleteIntroImage(profile.id, uploaded.key);
-      setUploaded(null);
+      await deleteIntroImage(profile.id, photoKey);
     } catch (err) {
       setError(err.message || 'Could not remove the image');
     }
@@ -82,10 +82,10 @@ export function ProfileIntroSection({ profile }) {
       {/* Image upload + preview */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">Photo</label>
-        {uploaded ? (
+        {photoUrl ? (
           <div className="flex items-center gap-3">
             <img
-              src={uploaded.previewUrl}
+              src={photoUrl}
               alt="Intro card"
               className="w-20 h-20 rounded-lg object-cover border border-gray-600 bg-gray-900"
             />

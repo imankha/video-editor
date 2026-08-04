@@ -302,6 +302,45 @@ describe('profileStore', () => {
       expect(opts.headers?.['Content-Type']).toBeUndefined();
     });
 
+    it('uploadIntroImage persists the key/url onto the local profile (reload-survival regression)', async () => {
+      // Bug: the upload response was never stored anywhere, so after a reload
+      // there was no record and no preview. The store must reflect the
+      // persisted key/url on the profile immediately, the same way
+      // setIntroConsent reflects introConsentAt below.
+      useProfileStore.setState({
+        profiles: [{ id: 'abc12345', name: 'Marcus', introPhotoKey: null, introPhotoUrl: null }],
+        currentProfileId: 'abc12345',
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          key: 'dev/users/u/profiles/abc12345/intro/x.jpg',
+          previewUrl: 'https://r2/x',
+        }),
+      });
+
+      await useProfileStore.getState().uploadIntroImage('abc12345', new File([new Uint8Array([1])], 'p.jpg'));
+
+      const profile = useProfileStore.getState().profiles[0];
+      expect(profile.introPhotoKey).toBe('dev/users/u/profiles/abc12345/intro/x.jpg');
+      expect(profile.introPhotoUrl).toBe('https://r2/x');
+    });
+
+    it('deleteIntroImage clears the persisted key/url on the local profile', async () => {
+      useProfileStore.setState({
+        profiles: [{ id: 'abc12345', name: 'Marcus', introPhotoKey: 'some/key.jpg', introPhotoUrl: 'https://r2/key.jpg' }],
+        currentProfileId: 'abc12345',
+      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+      await useProfileStore.getState().deleteIntroImage('abc12345', 'some/key.jpg');
+
+      const profile = useProfileStore.getState().profiles[0];
+      expect(profile.introPhotoKey).toBeNull();
+      expect(profile.introPhotoUrl).toBeNull();
+    });
+
     it('uploadIntroImage surfaces the backend detail on 400', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

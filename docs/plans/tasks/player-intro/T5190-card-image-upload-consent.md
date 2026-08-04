@@ -34,8 +34,14 @@ If a future feature genuinely needs structured athlete facts, file it fresh agai
 - Store under the **per-profile** prefix `{APP_ENV}/users/{uid}/profiles/{pid}/intro/{uuid}.{ext}`
   via `storage.py` helpers. **Per-profile is mandatory** — an intro asset under any other prefix
   404s cross-profile (epic decision 7).
-- Return the stored key + a presigned preview URL. The key is written onto a card row by
-  [T5195](T5195-intro-card-library.md); this endpoint owns the object, not the row.
+- Return the stored key + a presigned preview URL. **Follow-up (2026-08-04):** the original plan
+  ("the key is written onto a card row by T5195") was a spec error — nothing persisted it, so an
+  uploaded photo did not survive a reload. The photo is now owned at the **profile** level: the
+  key is stored in the same per-profile `user_settings` KV as consent (`intro_photo_key.{profile_id}`,
+  no migration) and exposed as `introPhotoKey` + a freshly presigned `introPhotoUrl` on both
+  `GET /api/profiles` and `GET /api/bootstrap`. This is also the correct home regardless of the
+  card row: a profile has no card until one is created, and a future card (T5195) may default its
+  own image from this profile-level photo instead of requiring a fresh upload per card.
 - Do NOT reuse the blake3/faststart multipart `uploadManager.js` flow — that is video-specific
   overkill for a single still.
 - Gesture-based: the upload is its own explicit user gesture, never a reactive effect.

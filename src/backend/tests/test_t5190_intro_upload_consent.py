@@ -80,9 +80,13 @@ class _FakeR2:
 @pytest.fixture
 def fake_r2():
     fake = _FakeR2()
+    from app.routers import bootstrap as bootstrap_router
+    from app.routers import profiles as profiles_router
     with patch.object(intro_media, "upload_bytes_to_r2_global", side_effect=fake.upload), \
          patch.object(intro_media, "generate_presigned_url_global", side_effect=fake.presign), \
-         patch.object(intro_media, "delete_profile_object", side_effect=fake.delete_profile):
+         patch.object(intro_media, "delete_profile_object", side_effect=fake.delete_profile), \
+         patch.object(profiles_router, "generate_presigned_url_global", side_effect=fake.presign), \
+         patch.object(bootstrap_router, "generate_presigned_url_global", side_effect=fake.presign):
         yield fake
 
 
@@ -295,3 +299,108 @@ class TestConsent:
         client = TestClient(app)
         resp = client.post("/api/profiles/deadbeef/intro/consent", headers=_headers(uid, p1))
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# T5190 follow-up: the photo key must PERSIST (bug fix). An upload that only
+# returns {key, previewUrl, ext} with nothing storing it does not survive a
+# reload -- this is the regression the original T5190 tests missed.
+# ---------------------------------------------------------------------------
+
+class TestPhotoPersistence:
+    def test_key_persisted_after_upload(self, fake_r2, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        key = client.post(
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            files={"image": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+        ).json()["key"]
+
+        from app.services.user_db import get_intro_photo_key
+        assert get_intro_photo_key(uid, p1) == key
+
+    def test_photo_key_and_url_exposed_on_profiles_list(self, fake_r2, user_with_two_profiles):
+        uid, p1, p2 = user_with_two_profiles
+        client = TestClient(app)
+        key = client.post(
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            files={"image": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+        ).json()["key"]
+
+        profiles = {
+            p["id"]: p
+            for p in client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        }
+        assert profiles[p1]["introPhotoKey"] == key
+        assert profiles[p1]["introPhotoUrl"] == f"https://fake-r2/{key}"
+        # Per-profile isolation: the OTHER profile has no photo.
+        assert profiles[p2]["introPhotoKey"] is None
+        assert profiles[p2]["introPhotoUrl"] is None
+
+    def test_photo_key_and_url_exposed_on_bootstrap(self, fake_r2, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        key = client.post(
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            files={"image": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+        ).json()["key"]
+
+        boot = client.get("/api/bootstrap", headers=_headers(uid, p1)).json()
+        me = next(p for p in boot["profiles"] if p["id"] == p1)
+        assert me["introPhotoKey"] == key
+        assert me["introPhotoUrl"] == f"https://fake-r2/{key}"
+
+    def test_replacing_photo_overwrites_key_and_deletes_previous_object(
+        self, fake_r2, user_with_two_profiles
+    ):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        first_key = client.post(
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            files={"image": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+        ).json()["key"]
+        assert first_key in fake_r2.objects
+
+        second_key = client.post(
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            files={"image": ("b.jpg", _jpeg_bytes(), "image/jpeg")},
+        ).json()["key"]
+
+        assert second_key != first_key
+        assert first_key not in fake_r2.objects, "replacing must delete the previous object"
+        assert second_key in fake_r2.objects
+
+        from app.services.user_db import get_intro_photo_key
+        assert get_intro_photo_key(uid, p1) == second_key
+
+    def test_removing_photo_clears_key_and_deletes_object(self, fake_r2, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        key = client.post(
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            files={"image": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+        ).json()["key"]
+
+        resp = client.request(
+            "DELETE",
+            f"/api/profiles/{p1}/intro/image",
+            headers=_headers(uid, p1),
+            json={"key": key},
+        )
+        assert resp.status_code == 200, resp.text
+        assert key not in fake_r2.objects
+
+        from app.services.user_db import get_intro_photo_key
+        assert get_intro_photo_key(uid, p1) is None
+
+        profiles = {
+            p["id"]: p
+            for p in client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        }
+        assert profiles[p1]["introPhotoKey"] is None

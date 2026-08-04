@@ -30,11 +30,15 @@ from app.services.intro_media import (
 )
 from app.services.user_db import (
     clear_intro_consent,
+    clear_intro_photo_key,
     get_all_intro_consents,
+    get_all_intro_photo_keys,
+    get_intro_photo_key,
     get_profiles,
     get_selected_profile_id,
     set_default_profile,
     set_intro_consent,
+    set_intro_photo_key,
     set_selected_profile_id,
 )
 from app.services.user_db import (
@@ -50,6 +54,7 @@ from app.session_init import invalidate_user_cache
 from app.storage import (
     delete_local_profile_data,
     delete_profile_r2_data,
+    generate_presigned_url_global,
 )
 from app.user_context import get_current_user_id
 
@@ -82,6 +87,15 @@ class DeleteIntroImageRequest(BaseModel):
     key: str
 
 
+def _intro_photo_fields(key: str | None) -> dict:
+    """Presign a stored intro photo key at READ time (never store a presigned
+    URL — R2 presigned URLs expire, so caching one would go stale). Returns
+    {"introPhotoKey": None, "introPhotoUrl": None} when no photo is stored."""
+    if not key:
+        return {"introPhotoKey": None, "introPhotoUrl": None}
+    return {"introPhotoKey": key, "introPhotoUrl": generate_presigned_url_global(key)}
+
+
 def _require_owned_profile(user_id: str, profile_id: str) -> None:
     """404 unless profile_id is one of the current user's profiles.
 
@@ -109,6 +123,7 @@ async def list_profiles():
     # user.sqlite that backs the profiles list, then exposed as introConsentAt
     # so T5215 can gate intro attach on it (null = not consented / revoked).
     consents = get_all_intro_consents(user_id)
+    photo_keys = get_all_intro_photo_keys(user_id)
 
     return {"profiles": [
         {
@@ -119,6 +134,7 @@ async def list_profiles():
             "isDefault": bool(p["is_default"]),
             "isCurrent": p["id"] == selected,
             "introConsentAt": consents.get(p["id"]),
+            **_intro_photo_fields(photo_keys.get(p["id"])),
         }
         for p in profiles
     ]}
@@ -261,10 +277,12 @@ async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
     re-encodes it to a ~1440px long edge preserving alpha, and stores it under
     the PER-PROFILE R2 prefix `.../profiles/{profile_id}/intro/{uuid}.{ext}`.
 
-    Owns the R2 OBJECT only: the returned key is written onto an intro_cards row
-    by T5195, so this endpoint never touches a DB row. Returns the full
-    per-profile key (includes the profile id — the cross-profile 404 guard) plus
-    a presigned preview URL.
+    Persists the returned key onto this PROFILE (user.sqlite, same mechanism as
+    intro consent) so it survives a reload/new session/other device — this is
+    the fix for the bug where an upload was never recorded anywhere. A card row
+    (T5195) may later default its own image from this profile-level key, but
+    this endpoint remains the sole owner of the R2 object. Replacing an existing
+    photo deletes the previous object before persisting the new key.
     """
     user_id = get_current_user_id()
     _require_owned_profile(user_id, profile_id)
@@ -276,6 +294,12 @@ async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(e)) from e
     if stored is None:
         raise HTTPException(status_code=500, detail="Failed to store the intro image")
+
+    previous_key = get_intro_photo_key(user_id, profile_id)
+    if previous_key and previous_key != stored["key"]:
+        delete_intro_image(user_id, profile_id, previous_key)
+
+    set_intro_photo_key(user_id, profile_id, stored["key"])
 
     return {
         "success": True,
@@ -290,7 +314,8 @@ async def remove_intro_image(profile_id: str, request: DeleteIntroImageRequest):
 
     Delegates to the callable `delete_intro_image` service (the same function
     T5230's compliance purge calls), which refuses a key that does not belong to
-    this profile's intro prefix.
+    this profile's intro prefix. Also clears the persisted key so a reload does
+    not resurrect a preview pointing at a deleted object.
     """
     user_id = get_current_user_id()
     _require_owned_profile(user_id, profile_id)
@@ -301,6 +326,9 @@ async def remove_intro_image(profile_id: str, request: DeleteIntroImageRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
     if not deleted:
         raise HTTPException(status_code=500, detail="Failed to delete the intro image")
+
+    if get_intro_photo_key(user_id, profile_id) == request.key:
+        clear_intro_photo_key(user_id, profile_id)
 
     return {"success": True}
 

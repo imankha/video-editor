@@ -61,6 +61,16 @@ test('T5190 API: upload -> per-profile key + fetchable preview; consent record/e
   expect(preview.ok(), `preview URL fetches the object (${preview.status()})`).toBeTruthy();
   expect((await preview.body()).length, 'preview object has bytes').toBeGreaterThan(0);
 
+  // --- reload-persistence regression: the upload response alone is not proof
+  // of persistence -- a FRESH GET (simulating a reload/new session) must carry
+  // the key + a freshly presigned URL that also fetches the object. ---
+  const reloaded = await currentProfileId(context);
+  const meAfterUpload = reloaded.profiles.find((p) => p.id === pid);
+  expect(meAfterUpload.introPhotoKey, 'photo key SURVIVES a reload').toBe(key);
+  expect(meAfterUpload.introPhotoUrl, 'a freshly presigned URL is exposed on reload').toBeTruthy();
+  const reloadedPreview = await context.request.get(meAfterUpload.introPhotoUrl);
+  expect(reloadedPreview.ok(), 'the reload-fetched URL fetches the object').toBeTruthy();
+
   // --- criterion 2: a non-image (text renamed .jpg) is rejected by decoding ---
   const bad = await context.request.post(`${API_BASE}/profiles/${pid}/intro/image`, {
     multipart: { image: { name: 'evil.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('not an image') } },
@@ -89,6 +99,8 @@ test('T5190 API: upload -> per-profile key + fetchable preview; consent record/e
   expect(del.ok(), `delete image (${del.status()})`).toBeTruthy();
   const gone = await context.request.get(previewUrl);
   expect(gone.ok(), 'preview URL 404/403s after delete').toBeFalsy();
+  const afterDelete = await currentProfileId(context);
+  expect(afterDelete.profiles.find((p) => p.id === pid).introPhotoKey, 'photo key cleared on delete').toBeNull();
 
   // Clean up consent so the account is left as found (re-shown if revoked).
   const revoke = await context.request.delete(`${API_BASE}/profiles/${pid}/intro/consent`);
@@ -133,18 +145,27 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   await expect(consent, 'consent reflects after the write (live store)').toBeChecked();
   await saveEvidence(page, 'criterion-4-consent-ticked');
 
-  // --- criterion 5 (persistence): reload, reopen, confirm consent stuck ---
+  // --- criterion 5 (persistence): reload, reopen, confirm consent AND the
+  // photo preview both survived -- this is the bug fix. The original T5190
+  // e2e only reloaded to check consent, which is exactly why the missing
+  // photo-key persistence slipped through.
   await page.reload();
   await page.getByRole('button', { name: /switch sport or profile/i }).click();
   await page.getByTitle(/Edit name, color/i).first().click();
   await expect(page.getByText('Player intro card')).toBeVisible();
   await expect(page.getByRole('checkbox'), 'consent PERSISTED across reload').toBeChecked();
+  const previewAfterReload = page.getByAltText('Intro card');
+  await expect(previewAfterReload, 'photo preview PERSISTED across reload').toBeVisible({ timeout: 30000 });
+  await expect(previewAfterReload).toHaveJSProperty('complete', true);
+  await saveEvidence(page, 'criterion-1-photo-persisted-after-reload');
   await saveEvidence(page, 'criterion-4-consent-persisted-after-reload');
 
   // Responsive sweep of the changed screen (375px + desktop, no h-overflow).
   await responsiveSweep(page);
 
-  // Leave the account as found: untick consent (revoke).
+  // Leave the account as found: remove the photo, untick consent (revoke).
+  await page.getByRole('button', { name: /remove/i }).click();
+  await expect(page.getByAltText('Intro card')).not.toBeVisible();
   await page.getByRole('checkbox').click();
   await expect(page.getByRole('checkbox')).not.toBeChecked();
 });
