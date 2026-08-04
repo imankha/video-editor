@@ -543,6 +543,69 @@ def set_selected_profile_id(user_id: str, profile_id: str) -> None:
         conn.commit()
 
 
+# Parental-consent attestation for player-intro cards (T5190). Stored per
+# profile in the user.sqlite settings KV (keyed by profile id) rather than a
+# profiles column: consent must appear on the GET /api/profiles payload, which
+# is built entirely from user.sqlite, so keeping it here reads every profile's
+# consent in the same DB instead of opening each profile.sqlite. No migration.
+INTRO_CONSENT_PREFIX = "intro_consent_at."
+
+
+def _intro_consent_key(profile_id: str) -> str:
+    return f"{INTRO_CONSENT_PREFIX}{profile_id}"
+
+
+def get_intro_consent(user_id: str | None, profile_id: str) -> str | None:
+    """Return the ISO timestamp the parent/guardian consented for this profile,
+    or None if consent has never been recorded (or was revoked)."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_intro_consent_key(profile_id),),
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_intro_consent(user_id: str | None, profile_id: str, timestamp: str) -> None:
+    """Record parental-consent attestation for a profile (gesture-driven).
+
+    Recorded once per profile; a second tick simply refreshes the timestamp.
+    """
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_intro_consent_key(profile_id), timestamp),
+        )
+        conn.commit()
+
+
+def clear_intro_consent(user_id: str | None, profile_id: str) -> None:
+    """Revoke parental consent for a profile (T5230 purge / explicit revoke).
+
+    With the row gone, get_intro_consent returns None so the checkbox re-shows.
+    """
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "DELETE FROM user_settings WHERE key = ?",
+            (_intro_consent_key(profile_id),),
+        )
+        conn.commit()
+
+
+def get_all_intro_consents(user_id: str | None = None) -> dict[str, str]:
+    """Map of profile_id -> consent ISO timestamp for every consented profile.
+
+    Read alongside the profiles list so GET /api/profiles can expose consent
+    without opening any profile.sqlite.
+    """
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE key LIKE ?",
+            (f"{INTRO_CONSENT_PREFIX}%",),
+        ).fetchall()
+        return {row["key"][len(INTRO_CONSENT_PREFIX):]: row["value"] for row in rows}
+
+
 PREF_PREFIX = "pref."
 
 

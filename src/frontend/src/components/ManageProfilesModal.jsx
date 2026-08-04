@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Pencil, Trash2, ArrowLeft, Check, ChevronDown } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { useProfileStore } from '../stores';
+import { ProfileIntroSection } from './ProfileIntroSection';
 import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
@@ -222,7 +223,11 @@ export function ManageProfilesModal({ isOpen, onClose }) {
   const switchProfile = useProfileStore(state => state.switchProfile);
 
   const [mode, setMode] = useState('list');
-  const [editingProfile, setEditingProfile] = useState(null);
+  // Track only the id; derive the profile object LIVE from the store so store
+  // updates (e.g. an intro-consent tick) flow straight into the edit view
+  // instead of rendering a frozen snapshot captured at edit-open time.
+  const [editingProfileId, setEditingProfileId] = useState(null);
+  const editingProfile = profiles.find(p => p.id === editingProfileId) || null;
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   // Reset mode when modal opens
@@ -256,7 +261,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     if (editingProfile) {
       await updateProfile(editingProfile.id, { name, color, sport });
     }
-    setEditingProfile(null);
+    setEditingProfileId(null);
     setMode('list');
   }, [editingProfile, updateProfile]);
 
@@ -350,13 +355,13 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                   <InlineSportSelect
                     sport={p.sport}
                     onChange={(sportValue) => updateProfile(p.id, { sport: sportValue })}
-                    onPickOther={() => { setEditingProfile(p); setMode('edit'); }}
+                    onPickOther={() => { setEditingProfileId(p.id); setMode('edit'); }}
                   />
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
-                      onClick={() => { setEditingProfile(p); setMode('edit'); }}
+                      onClick={() => { setEditingProfileId(p.id); setMode('edit'); }}
                       className="p-1.5 text-gray-400 hover:text-white transition-colors rounded"
                       title="Edit name, color &amp; sport"
                     >
@@ -404,18 +409,22 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
         {/* Edit profile */}
         {mode === 'edit' && editingProfile && (
-          <ProfileForm
-            title="Edit Profile"
-            initialName={editingProfile.name || ''}
-            initialColor={editingProfile.color}
-            initialSport={editingProfile.sport || 'soccer'}
-            usedColors={usedColors.filter(c => c !== editingProfile.color)}
-            existingNames={existingNamesForEdit}
-            submitLabel="Save"
-            nameRequired={false}
-            onSubmit={handleEditProfile}
-            onCancel={() => { setEditingProfile(null); setMode('list'); }}
-          />
+          <div className="overflow-y-auto">
+            <ProfileForm
+              title="Edit Profile"
+              initialName={editingProfile.name || ''}
+              initialColor={editingProfile.color}
+              initialSport={editingProfile.sport || 'soccer'}
+              usedColors={usedColors.filter(c => c !== editingProfile.color)}
+              existingNames={existingNamesForEdit}
+              submitLabel="Save"
+              nameRequired={false}
+              onSubmit={handleEditProfile}
+              onCancel={() => { setEditingProfileId(null); setMode('list'); }}
+            />
+            {/* Per-profile intro photo + parental-consent attestation (T5190) */}
+            <ProfileIntroSection profile={editingProfile} />
+          </div>
         )}
       </div>
 

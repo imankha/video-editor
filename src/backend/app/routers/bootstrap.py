@@ -16,7 +16,7 @@ from fastapi import APIRouter
 from ..database import get_db_connection
 from ..queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
-from ..services.user_db import get_profiles, get_selected_profile_id
+from ..services.user_db import get_all_intro_consents, get_profiles, get_selected_profile_id
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,9 @@ def _read_user_scoped(user_id: str) -> dict:
 
     profiles_raw = get_profiles(user_id)
     selected_profile = get_selected_profile_id(user_id)
+    # T5190: per-profile parental-consent attestation, so the intro consent
+    # checkbox is correct on first paint (same shape as GET /api/profiles).
+    consents = get_all_intro_consents(user_id)
     profiles = [
         {
             "id": p["id"],
@@ -42,6 +45,7 @@ def _read_user_scoped(user_id: str) -> dict:
             "sport": p["sport"],
             "isDefault": bool(p["is_default"]),
             "isCurrent": p["id"] == selected_profile,
+            "introConsentAt": consents.get(p["id"]),
         }
         for p in profiles_raw
     ]
