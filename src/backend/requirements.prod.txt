@@ -76,6 +76,13 @@ Jinja2==3.1.6
 # Numpy (required by opencv)
 numpy==1.26.4
 
+# Pillow (required by app/services/text_render.py -- T5180 rich-text engine).
+# The intro card and the Overlay text layer both rasterise TextSpec to an RGBA
+# PNG via Pillow; OpenCV cannot render TTF text at all. Present in the dev
+# requirements.txt since long before T5180, but NOT here, so it was missing from
+# CI and would have been missing in production.
+pillow==11.3.0
+
 # Date/time
 python-dateutil==2.9.0.post0
 pytz==2025.2
