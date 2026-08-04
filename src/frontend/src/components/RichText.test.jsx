@@ -119,7 +119,7 @@ describe('RichText', () => {
   });
 
   it('wires font-family to the spec.font key (for @font-face resolution from fonts.json)', () => {
-    const spec = baseSpec({ text: 'FONTED', font: FontKey.KANIT_ITALIC });
+    const spec = baseSpec({ text: 'FONTED', font: FontKey.PLAYFAIR });
     render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
     const el = screen.getByText('FONTED');
     let node = el;
@@ -128,7 +128,7 @@ describe('RichText', () => {
       if (node.style && node.style.fontFamily) fontFamily = node.style.fontFamily;
       node = node.parentElement;
     }
-    expect(fontFamily).toContain(FontKey.KANIT_ITALIC);
+    expect(fontFamily).toContain(FontKey.PLAYFAIR);
   });
 
   it('resolves blurPx from fontPx (em-relative), not from boxHeight directly', () => {

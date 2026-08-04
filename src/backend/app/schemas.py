@@ -323,9 +323,7 @@ class FontKey(str, Enum):
     ANTON = "anton"
     OSWALD = "oswald"
     GRADUATE = "graduate"
-    ALFA_SLAB = "alfa-slab"
     PLAYFAIR = "playfair"
-    KANIT_ITALIC = "kanit-italic"
 
 
 class Position(BaseModel):

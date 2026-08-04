@@ -25,14 +25,6 @@
     "isVariable": false,
     "fallback": ["Helvetica", "sans-serif"]
   },
-  "alfa-slab": {
-    "displayName": "Alfa Slab One",
-    "file": "AlfaSlabOne-Regular.ttf",
-    "weight": 400,
-    "style": "normal",
-    "isVariable": false,
-    "fallback": ["Georgia", "serif"]
-  },
   "playfair": {
     "displayName": "Playfair Display",
     "file": "PlayfairDisplay-Variable.ttf",
@@ -41,14 +33,6 @@
     "isVariable": true,
     "variationAxis": "wght",
     "variationRange": [400, 900],
-    "fallback": ["Georgia", "serif"]
-  },
-  "kanit-italic": {
-    "displayName": "Kanit Italic",
-    "file": "Kanit-Italic.ttf",
-    "weight": 800,
-    "style": "italic",
-    "isVariable": false,
     "fallback": ["Georgia", "serif"]
   }
 }

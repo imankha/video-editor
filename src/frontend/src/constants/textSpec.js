@@ -32,9 +32,7 @@ export const FontKey = {
   ANTON: 'anton',
   OSWALD: 'oswald',
   GRADUATE: 'graduate',
-  ALFA_SLAB: 'alfa-slab',
   PLAYFAIR: 'playfair',
-  KANIT_ITALIC: 'kanit-italic',
 };
 
 /**

@@ -57,7 +57,7 @@ skipOnDeployedTarget(test, 'uses /api/test/render-text-bbox (dev/local-only seam
 const TOL_BOX_FRACTION = 0.015; // 1.5% of the relevant frame dimension
 const TOL_BASELINE_FRACTION = 0.005; // 0.5% of frame HEIGHT
 
-const FONT_KEYS = ['anton', 'oswald', 'graduate', 'alfa-slab', 'playfair', 'kanit-italic'];
+const FONT_KEYS = ['anton', 'oswald', 'graduate', 'playfair'];
 
 const RESOLUTIONS = [
   { w: 1080, h: 1920 },
@@ -151,7 +151,7 @@ async function backendRenderBbox(page, spec, w, h) {
 // report the FULL, untruncated geometry regardless of RichText.jsx's own
 // `overflow: hidden` stage (that clips PAINTING, not layout/geometry
 // queries) — so this measurement has to clip itself the same way, or an
-// overflowing word (e.g. alfa-slab/playfair's "MIDFIELDER" at 1080x1920, an
+// overflowing word (e.g. playfair's "MIDFIELDER" at 1080x1920, an
 // 1100+px word inside a 1080px frame) reports a much wider box than the
 // backend ever could. Diagnosed via T5180 parity.
 async function measureTightInkBBox(page, w, h) {

@@ -284,7 +284,7 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   // is simply outside the buffer). Without this, an overflowing WORD (no
   // mid-word break in v1, same on both sides — design §6 step 3) is clipped
   // on the backend but rendered in full by the browser, which has no
-  // implicit bound; diagnosed via T5180 parity (alfa-slab/playfair @
+  // implicit bound; diagnosed via T5180 parity (playfair @
   // 1080x1920, where "MIDFIELDER" alone is wider than the frame) as a
   // genuine renderer mismatch, not a measurement issue.
   const stageStyle = {

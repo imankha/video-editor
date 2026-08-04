@@ -13,7 +13,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 skipOnDeployedTarget(test, 'uses /debug/rich-text (dev/local-only seam, T5180)');
 
-const FONT_KEYS = ['anton', 'oswald', 'graduate', 'alfa-slab', 'playfair', 'kanit-italic'];
+const FONT_KEYS = ['anton', 'oswald', 'graduate', 'playfair'];
 
 async function authenticateForSeams(page) {
   await page.setExtraHTTPHeaders({ 'X-Test-Mode': 'true' });
@@ -107,7 +107,7 @@ test.describe('T5180 QA evidence', () => {
     await authenticateForSeams(page);
     const wrapShadowStroke = {
       text: 'MIDFIELDER  6 - 8 - 10',
-      font: 'kanit-italic',
+      font: 'playfair',
       size: 0.06,
       color: '#FFD66B',
       align: 'right',

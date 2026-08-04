@@ -10,8 +10,8 @@ so the Implementor (Stage 4) builds to it, not around it:
   - `render_text_layer(spec: TextSpec, frame_w: int, frame_h: int) -> PIL.Image` lives in
     `app.services.text_render`. RGBA, transparent background, Pillow only (no ffmpeg drawtext
     anywhere — decision 5).
-  - Six fonts ship in `app/assets/fonts/` (`anton`, `oswald`, `graduate`, `alfa-slab`,
-    `playfair`, `kanit-italic`) — TTFs + licences already committed; `fonts.json` (the ONE
+  - Four fonts ship in `app/assets/fonts/` (`anton`, `oswald`, `graduate`,
+    `playfair`) — TTFs + licences already committed; `fonts.json` (the ONE
     manifest, §4) does not exist yet, that's Stage 4's job. `oswald`/`playfair` are
     `wght`-axis VARIABLE TTFs (no static instance ships upstream) — pinned per-render via
     `fonts.py::load_font_for_render` using the manifest's `weight` field.
@@ -56,9 +56,7 @@ ALL_FONT_KEYS = [
     FontKey.ANTON,
     FontKey.OSWALD,
     FontKey.GRADUATE,
-    FontKey.ALFA_SLAB,
     FontKey.PLAYFAIR,
-    FontKey.KANIT_ITALIC,
 ]
 
 FRAME_W, FRAME_H = 1080, 1920
@@ -115,15 +113,13 @@ class TestFontCatalogueRenders:
         img = render_text_layer(spec, FRAME_W, FRAME_H)
         assert _alpha(img).sum() > 0, f"{font_key} produced a fully transparent layer"
 
-    def test_all_six_fonts_present_on_disk(self):
+    def test_all_four_fonts_present_on_disk(self):
         # Sanity: the assets this test suite depends on are already sourced (per task brief).
         expected_files = {
             "anton": "Anton-Regular.ttf",
             "oswald": "Oswald-Variable.ttf",
             "graduate": "Graduate-Regular.ttf",
-            "alfa-slab": "AlfaSlabOne-Regular.ttf",
             "playfair": "PlayfairDisplay-Variable.ttf",
-            "kanit-italic": "Kanit-Italic.ttf",
         }
         for _key, filename in expected_files.items():
             assert (FONT_ASSETS_DIR / filename).exists(), f"missing font asset {filename}"
