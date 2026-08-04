@@ -2,12 +2,18 @@
 
 **Status:** TODO
 **Impact:** 6 | **Complexity:** 5
-**Epic:** [Player Intro](EPIC.md) — child 2 of 5
+**Epic:** [Player Intro + Rich Text](EPIC.md) — optional enhancement, blocks nothing
 **Requested:** user 2026-07-15 ("offer the option to make the player outline like the one in the video")
 
 > Read [EPIC.md](EPIC.md) for context. This is the OPTIONAL cut-out treatment that makes the
 > uploaded photo look like the reference card, where the player is segmented out of their original
 > background and composited onto the gold card.
+
+> **Deprioritised 2026-08-03 (epic decision 11).** The redesigned card engine
+> ([T5210](T5210-intro-card-generation.md)) works with a plain photo, so this no longer gates
+> anything — it ships whenever it comes up. The photo it operates on now comes from
+> [T5190](T5190-card-image-upload-consent.md) and the cut-out key is stored on the
+> `intro_cards` row (`image_cutout_key`, [T5195](T5195-intro-card-library.md)), NOT on the profile.
 
 ## Problem
 

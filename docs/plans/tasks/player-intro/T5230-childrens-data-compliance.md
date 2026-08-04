@@ -2,10 +2,22 @@
 
 **Status:** TODO
 **Impact:** 7 | **Complexity:** 4
-**Epic:** [Player Intro](EPIC.md) — child 5 of 5 (gates public launch)
+**Epic:** [Player Intro + Rich Text](EPIC.md) — gates public launch
 
-> Read [EPIC.md](EPIC.md) decision #4 for the summary. This task implements the guardrails and
-> records the compliance analysis. Threads through T5190 (data model) and T5220 (public exposure).
+> Read [EPIC.md](EPIC.md) § Compliance posture for the summary. This task implements the guardrails
+> and records the compliance analysis. Threads through [T5190](T5190-card-image-upload-consent.md)
+> (consent + image storage), [T5215](T5215-intro-attachment.md) and
+> [T5220](T5220-add-intro-integration.md) (public exposure).
+
+> **Retargeted 2026-08-03.** The risk is unchanged in kind and slightly REDUCED in degree: epic
+> decision 3 dropped the structured athlete field set entirely, so there is no birthdate, no
+> height, no high school and no grad year in the database. What a card holds is **a minor's photo
+> plus free text the parent typed**, publicly visible when shared. Everything below about DOB
+> encryption is therefore contingent — if no DOB is collected, that clause is satisfied by not
+> collecting it, and the retention/deletion, consent, public-exposure and no-face-recognition
+> clauses carry the full weight. Retention/purge must cover: the `intro_cards` rows, their
+> `text_elements` (free text can contain anything), and the R2 images under the per-profile
+> `intro/` prefix.
 
 ## Compliance analysis (research 2026-07-15, with cites)
 
