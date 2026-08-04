@@ -98,6 +98,7 @@ from app.routers import (
     games_router,
     games_upload_router,
     health_router,
+    intro_cards_router,
     payments_router,
     profiles_router,
     projects_router,
@@ -253,6 +254,7 @@ app.include_router(auth_router)
 app.include_router(storage_router)
 app.include_router(settings_router)
 app.include_router(profiles_router)
+app.include_router(intro_cards_router)
 app.include_router(credits_router, prefix="/api")
 app.include_router(quests_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
