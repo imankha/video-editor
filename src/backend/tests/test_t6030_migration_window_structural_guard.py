@@ -57,8 +57,11 @@ POST_V023_COLUMNS = {
     "projects": ["poster_marker_time"],                                                  # v032
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
+    # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
+    #   It rewrites final_videos.game_ids and inserts reference games rows via
+    #   ensure_game_reference; every column it touches predates v024.
 }
-HEAD_VERSION_AUDITED = 32
+HEAD_VERSION_AUDITED = 33
 
 
 def _cleanup(user_id: str) -> None:

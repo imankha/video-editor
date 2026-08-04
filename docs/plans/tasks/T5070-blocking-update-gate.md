@@ -1,6 +1,6 @@
 # T5070: Blocking update gate + guaranteed cache flush + state sync flow
 
-> Split 2026-07-13: JIT migration moved to its own task [T5080](T5080-jit-migration.md), designed against the sync/flush/resync paths this task builds. This task = modal gate + cache flush + frontend state sync.
+> Split 2026-07-13: JIT migration moved to its own task [T5080 -> now the JIT Migration epic](jit-migration/EPIC.md), designed against the sync/flush/resync paths this task builds. This task = modal gate + cache flush + frontend state sync.
 >
 > (Renumbered from T4950 -> T5070 on 2026-07-13: a concurrent session had already claimed T4950-T5060.)
 
@@ -76,7 +76,7 @@ Build the client + backend paths for the ordered flow above: the update-click fl
 - The resync is the existing session-init load; verify it fully repopulates from R2 post-reload.
 - **During T5070, migration still happens the current way** (admin/bulk `run_all_migrations`). Step 5 of the flow is where per-user JIT will slot in — T5070 leaves that seam clean and documented; it does NOT change how migrations run.
 
-> **JIT migration is spun out to [T5080](T5080-jit-migration.md)** (user decision 2026-07-13: two tasks). Rationale: JIT should be designed against the concrete sync/flush/resync paths T5070 establishes, not speculatively. T5070 is the modal + cache-flush + state-sync task; T5080 is the migration-model change. T5080 depends on T5070.
+> **JIT migration is spun out to [T5080 -> now the JIT Migration epic](jit-migration/EPIC.md)** (user decision 2026-07-13: two tasks). Rationale: JIT should be designed against the concrete sync/flush/resync paths T5070 establishes, not speculatively. T5070 is the modal + cache-flush + state-sync task; T5080 is the migration-model change. T5080 depends on T5070.
 
 ## Context
 
