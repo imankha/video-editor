@@ -31,6 +31,7 @@ from .v029_working_clips_rotation import V029WorkingClipsRotation
 from .v030_games_source_reference import V030GamesSourceReference
 from .v031_reclassify_teammate_clips_to_team import V031ReclassifyTeammateClipsToTeam
 from .v032_add_poster_marker_fields import V032AddPosterMarkerFields
+from .v033_heal_moved_reel_attribution import V033HealMovedReelAttribution
 
 MIGRATIONS = [
     V001Baseline(),
@@ -65,6 +66,7 @@ MIGRATIONS = [
     V030GamesSourceReference(),
     V031ReclassifyTeammateClipsToTeam(),
     V032AddPosterMarkerFields(),
+    V033HealMovedReelAttribution(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

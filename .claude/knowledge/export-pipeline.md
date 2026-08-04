@@ -153,6 +153,25 @@ graph LR
   references are cleaned gesture-driven (move-away Phase 2 + reel-delete), never a sweep. Sync
   ordering unchanged (rides the existing Phase-1 target `sync_db_to_r2_explicit`; persistence-sync.md
   § 6b-T5810).
+- **Versioned heal for PRE-T5810 moved reels (T5830, profile_db v033).** Reels moved BEFORE T5810
+  had `game_ids` nulled by the old move flow and their source reels deleted, so attribution can't be
+  auto-derived. `v033_heal_moved_reel_attribution.py` restores it by REUSING `ensure_game_reference`
+  (so every reference invariant above holds identically — same dedup, same `source_profile_id`/
+  `source_game_id`, same "no storage/refcount participation", `video_filename NULL`) + setting
+  `game_ids` to a msgpack single-id list; `game_id` stays NULL (the moved rows had it NULL and T5810
+  only remaps a scalar that was already set). It applies a signed-off account-specific mapping
+  (arshia's 14 reels → 6 references across 2 kid profiles), **gated on DATA SHAPE not user id**: a
+  profile DB is touched only when it holds a `final_videos` row whose `(filename, clip_game_start_time)`
+  matches the frozen mapping with `clip_count=1` and empty `game_ids` — filenames carry a unique random
+  hex suffix and `clip_game_start_time` is compared at full REAL precision (`abs(a-b) < 1e-6`, never
+  `==`/truncated), so it is a provable no-op for every other user and idempotent on re-run (a healed
+  reel's `game_ids` is no longer empty). The source `games`/`game_videos` live in the DEFAULT profile
+  (`b95eb93b`), opened read-only cross-profile via `open_profile_db_readonly` (the default sorts AFTER
+  the kids so it may not be locally cached when a kid profile is migrated — R2-download is required, not
+  a local-only open). Landmine: the runner hands `up(conn)` a TUPLE row factory, so gating reads index
+  positionally, but `ensure_game_reference` needs a `sqlite3.Row` target conn — flip `conn.row_factory`
+  to Row only around the primitive and restore it in a finally (v017 crashed on the tuple factory for 4
+  prod users). Precedent gating style: v012/v018/v019 account/data-shape heals.
 
 ## Invariants & rules
 1. **Sync-then-announce (T4110 + T4200, DONE 2026-07-11):** the R2 DB sync must succeed BEFORE the export is announced complete. **ALL THREE overlay completion paths gate COMPLETE on `sync_export_db_to_r2`** (T5300 verified): the no-keyframes copy path (`overlay.py:2043`) and the test-mode copy path (`:2110`) run inline and return **503** + a retryable `sync_failed` progress event on failure; the real-render **background** path (`_run_overlay_export_background:1817-1833`, the one that returns **202** and finishes async) gates the same way but — having already returned 202 — emits the retryable `_export_sync_failed_data` event over the WS/`export_progress` dict INSTEAD of a 503 (there is no live HTTP response to fail). Also gated: framing (`framing.py:718-722`) and multi-clip (`multi_clip.py:2298-2301` + COMPLETE sites `:1440-1448/:1737`). DB-save failure is terminal — no phantom export announces success. The `export_sync_failed_data` helper lives in `export_helpers.py:379` (no router→router imports); it sets `code='sync_failed'`, `retryable=True`, `phase='error'`.
