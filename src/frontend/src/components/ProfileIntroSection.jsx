@@ -2,26 +2,34 @@ import { useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
 
+const INTRO_FACT_FIELDS = [
+  { key: 'position', label: 'Position', placeholder: 'e.g. Midfielder 6-8-10' },
+  { key: 'class', label: 'Class', placeholder: 'e.g. 2029' },
+  { key: 'team', label: 'Team', placeholder: 'e.g. Riverside FC' },
+];
+
 /**
  * ProfileIntroSection (T5190) — the per-profile surface for a player-intro
- * card's photo + the parental-consent attestation.
+ * card's photo, structured facts and the parental-consent attestation.
  *
  * Foundation for the Player Intro epic: the image upload proves the R2 object
- * round-trip, and the consent tick is the compliance gate T5215 reads before
- * letting a card attach to a reel or collection. A future card (T5195) may
- * default its own image from this profile-level photo.
+ * round-trip, position/class/team (epic decision 3 reversal, 2026-08-04) are
+ * the named fields the card layout is DERIVED from (epic decision 2), and the
+ * consent tick is the compliance gate T5215 reads before letting a card
+ * attach to a reel or collection.
  *
  * Every write here is an explicit gesture (file pick, remove click, consent
- * toggle) — no reactive persistence. Both the photo (introPhotoKey/
- * introPhotoUrl) and consent (introConsentAt) persist in user.sqlite and are
- * derived LIVE from the profile prop (store), never held in local useState —
- * so a reload, new session, or another device all hydrate the same preview.
+ * toggle, field blur) — no reactive persistence. The photo, facts and consent
+ * all persist in user.sqlite and are derived LIVE from the profile prop
+ * (store), never held in local useState as the source of truth — so a
+ * reload, new session, or another device all hydrate the same values.
  */
 export function ProfileIntroSection({ profile }) {
   const uploadIntroImage = useProfileStore(state => state.uploadIntroImage);
   const deleteIntroImage = useProfileStore(state => state.deleteIntroImage);
   const setIntroConsent = useProfileStore(state => state.setIntroConsent);
   const revokeIntroConsent = useProfileStore(state => state.revokeIntroConsent);
+  const setIntroFact = useProfileStore(state => state.setIntroFact);
 
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -118,6 +126,24 @@ export function ProfileIntroSection({ profile }) {
         />
       </div>
 
+      {/* Structured intro facts — position/class/team. The card layout T5195/
+          T5210 render is DERIVED from how many of these are set (epic
+          decision 2), so each is independently editable and clearable. */}
+      <div className="grid grid-cols-3 gap-3">
+        {INTRO_FACT_FIELDS.map(({ key, label, placeholder }) => (
+          <IntroFactInput
+            key={key}
+            profileId={profile.id}
+            field={key}
+            label={label}
+            placeholder={placeholder}
+            value={profile[key]}
+            onCommit={setIntroFact}
+            onError={setError}
+          />
+        ))}
+      </div>
+
       {/* Parental-consent attestation */}
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input
@@ -133,8 +159,57 @@ export function ProfileIntroSection({ profile }) {
         </span>
       </label>
 
-      {/* Shared failure surface for both the image and consent gestures. */}
+      {/* Shared failure surface for the image, fact and consent gestures. */}
       {error && <p className="text-red-400 text-xs">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * One position/class/team field. Local `draft` state holds keystrokes so
+ * typing never fires a request; the gesture is blur (or Enter) only, and it
+ * skips the write entirely when the value didn't change. `draft` re-hydrates
+ * from the store's value whenever it moves out from under an untouched
+ * input (profile switch, or another device's write arriving via refetch) —
+ * never while the field the user is actively editing.
+ */
+function IntroFactInput({ profileId, field, label, placeholder, value, onCommit, onError }) {
+  const [draft, setDraft] = useState(value || '');
+  const [dirty, setDirty] = useState(false);
+  const [lastProfileId, setLastProfileId] = useState(profileId);
+
+  if (profileId !== lastProfileId) {
+    // Render-time re-sync on profile switch (React's documented pattern for
+    // "adjusting state when a prop changes"), not a persisting effect.
+    setLastProfileId(profileId);
+    setDraft(value || '');
+    setDirty(false);
+  }
+
+  const commit = async () => {
+    if (!dirty) return;
+    setDirty(false);
+    const trimmed = draft.trim();
+    if (trimmed === (value || '')) return;
+    try {
+      await onCommit(profileId, field, trimmed);
+    } catch (err) {
+      onError(err.message || `Could not update ${label.toLowerCase()}`);
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
+      <input
+        type="text"
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+        className="w-full px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+      />
     </div>
   );
 }

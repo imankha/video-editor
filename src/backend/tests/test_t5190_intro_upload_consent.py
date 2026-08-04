@@ -7,7 +7,10 @@ Covers the backend halves:
 - upload / replace / delete of the intro object, and delete refusing a foreign
   key (the callable T5230 will reuse);
 - consent recorded once per profile, exposed on GET /api/profiles, gating (null
-  when absent), revoked, and isolated between profiles.
+  when absent), revoked, and isolated between profiles;
+- structured intro facts (position/class/team, epic decision 3 reversal
+  2026-08-04): persistence, exposure on GET /api/profiles AND GET /api/bootstrap,
+  independent clearing, and isolation between profiles.
 
 R2 is stubbed with an in-memory dict so the object round-trip is asserted
 without a live bucket (mirrors test_t5410_poster_selection.py's patch pattern).
@@ -404,3 +407,153 @@ class TestPhotoPersistence:
             for p in client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
         }
         assert profiles[p1]["introPhotoKey"] is None
+
+
+# ---------------------------------------------------------------------------
+# Structured intro facts (T5190 follow-up, epic decision 3 REVERSED
+# 2026-08-04): position/class/team persist per profile, expose on both
+# GET /api/profiles and GET /api/bootstrap, clear independently of one
+# another, and never leak across profiles.
+# ---------------------------------------------------------------------------
+
+class TestIntroFacts:
+    def test_absent_by_default(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        profiles = client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        me = next(p for p in profiles if p["id"] == p1)
+        assert me["position"] is None
+        assert me["class"] is None
+        assert me["team"] is None
+
+    def test_set_field_persists_and_is_returned(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        resp = client.put(
+            f"/api/profiles/{p1}/intro/facts",
+            headers=_headers(uid, p1),
+            json={"field": "position", "value": "Midfielder 6-8-10"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"field": "position", "value": "Midfielder 6-8-10"}
+
+        from app.services.user_db import get_intro_fact
+        assert get_intro_fact(uid, p1, "position") == "Midfielder 6-8-10"
+
+    def test_all_three_fields_independent(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "position", "value": "Forward"})
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "class", "value": "2029"})
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "team", "value": "Riverside FC"})
+
+        profiles = {
+            p["id"]: p
+            for p in client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        }
+        assert profiles[p1]["position"] == "Forward"
+        assert profiles[p1]["class"] == "2029"
+        assert profiles[p1]["team"] == "Riverside FC"
+
+    def test_exposed_on_bootstrap(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "team", "value": "Riverside FC"})
+
+        boot = client.get("/api/bootstrap", headers=_headers(uid, p1)).json()
+        me = next(p for p in boot["profiles"] if p["id"] == p1)
+        assert me["team"] == "Riverside FC"
+        assert me["position"] is None
+        assert me["class"] is None
+
+    def test_clearing_one_field_leaves_the_others(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "position", "value": "Forward"})
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "team", "value": "Riverside FC"})
+
+        # Clear position with an empty string -- a real, independent state.
+        resp = client.put(
+            f"/api/profiles/{p1}/intro/facts",
+            headers=_headers(uid, p1),
+            json={"field": "position", "value": ""},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"field": "position", "value": None}
+
+        profiles = {
+            p["id"]: p
+            for p in client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        }
+        assert profiles[p1]["position"] is None
+        assert profiles[p1]["team"] == "Riverside FC", "clearing one field must not touch another"
+
+    def test_whitespace_only_value_clears(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "class", "value": "2029"})
+        resp = client.put(
+            f"/api/profiles/{p1}/intro/facts",
+            headers=_headers(uid, p1),
+            json={"field": "class", "value": "   "},
+        )
+        assert resp.json()["value"] is None
+
+        from app.services.user_db import get_intro_fact
+        assert get_intro_fact(uid, p1, "class") is None
+
+    def test_isolated_between_profiles(self, user_with_two_profiles):
+        uid, p1, p2 = user_with_two_profiles
+        client = TestClient(app)
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "team", "value": "Riverside FC"})
+
+        profiles = {
+            p["id"]: p
+            for p in client.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        }
+        assert profiles[p1]["team"] == "Riverside FC"
+        assert profiles[p2]["team"] is None
+
+    def test_unknown_profile_404(self, user_with_two_profiles):
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        resp = client.put(
+            "/api/profiles/deadbeef/intro/facts",
+            headers=_headers(uid, p1),
+            json={"field": "team", "value": "Riverside FC"},
+        )
+        assert resp.status_code == 404
+
+    def test_reload_persistence(self, user_with_two_profiles):
+        """The exact gap that bit the photo key before: assert a FRESH GET
+        (simulating a reload/new session), not just the write response."""
+        uid, p1, _ = user_with_two_profiles
+        client = TestClient(app)
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "position", "value": "Midfielder 6-8-10"})
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "class", "value": "2029"})
+        client.put(f"/api/profiles/{p1}/intro/facts", headers=_headers(uid, p1),
+                   json={"field": "team", "value": "Riverside FC"})
+
+        # Simulate a reload: a brand-new client, fresh GETs only.
+        fresh = TestClient(app)
+        profiles = fresh.get("/api/profiles", headers=_headers(uid, p1)).json()["profiles"]
+        me = next(p for p in profiles if p["id"] == p1)
+        assert me["position"] == "Midfielder 6-8-10"
+        assert me["class"] == "2029"
+        assert me["team"] == "Riverside FC"
+
+        boot = fresh.get("/api/bootstrap", headers=_headers(uid, p1)).json()
+        me_boot = next(p for p in boot["profiles"] if p["id"] == p1)
+        assert me_boot["position"] == "Midfielder 6-8-10"
+        assert me_boot["class"] == "2029"
+        assert me_boot["team"] == "Riverside FC"

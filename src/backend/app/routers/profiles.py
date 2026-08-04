@@ -15,6 +15,7 @@ Endpoints:
 
 import logging
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -29,15 +30,19 @@ from app.services.intro_media import (
     store_intro_image,
 )
 from app.services.user_db import (
+    INTRO_FACT_FIELDS,
     clear_intro_consent,
+    clear_intro_fact,
     clear_intro_photo_key,
     get_all_intro_consents,
+    get_all_intro_facts,
     get_all_intro_photo_keys,
     get_intro_photo_key,
     get_profiles,
     get_selected_profile_id,
     set_default_profile,
     set_intro_consent,
+    set_intro_fact,
     set_intro_photo_key,
     set_selected_profile_id,
 )
@@ -87,6 +92,11 @@ class DeleteIntroImageRequest(BaseModel):
     key: str
 
 
+class UpdateIntroFactRequest(BaseModel):
+    field: Literal["position", "class", "team"]
+    value: str | None = None
+
+
 def _intro_photo_fields(key: str | None) -> dict:
     """Presign a stored intro photo key at READ time (never store a presigned
     URL — R2 presigned URLs expire, so caching one would go stale). Returns
@@ -94,6 +104,15 @@ def _intro_photo_fields(key: str | None) -> dict:
     if not key:
         return {"introPhotoKey": None, "introPhotoUrl": None}
     return {"introPhotoKey": key, "introPhotoUrl": generate_presigned_url_global(key)}
+
+
+def _intro_fact_fields(facts: dict) -> dict:
+    """{"position": ..., "class": ..., "team": ...}, None for any unset field.
+
+    `facts` is this profile's slice of get_all_intro_facts() -- {} when the
+    profile has never set any fact.
+    """
+    return {field: facts.get(field) for field in INTRO_FACT_FIELDS}
 
 
 def _require_owned_profile(user_id: str, profile_id: str) -> None:
@@ -124,6 +143,10 @@ async def list_profiles():
     # so T5215 can gate intro attach on it (null = not consented / revoked).
     consents = get_all_intro_consents(user_id)
     photo_keys = get_all_intro_photo_keys(user_id)
+    # Structured intro facts (T5190 follow-up, epic decision 3 reversal): drive
+    # the card layout T5195/T5210 derive from field COUNT, so they must ride the
+    # same payload as consent/photo rather than a separate fetch.
+    facts = get_all_intro_facts(user_id)
 
     return {"profiles": [
         {
@@ -135,6 +158,7 @@ async def list_profiles():
             "isCurrent": p["id"] == selected,
             "introConsentAt": consents.get(p["id"]),
             **_intro_photo_fields(photo_keys.get(p["id"])),
+            **_intro_fact_fields(facts.get(p["id"], {})),
         }
         for p in profiles
     ]}
@@ -365,6 +389,30 @@ async def revoke_intro_consent(profile_id: str):
     logger.info(f"Revoked intro consent for profile {profile_id} (user {user_id})")
 
     return {"introConsentAt": None}
+
+
+@router.put("/{profile_id}/intro/facts")
+async def update_intro_fact(profile_id: str, request: UpdateIntroFactRequest):
+    """Set or clear one structured intro fact (position/class/team) for a
+    profile (gesture-only: ProfileIntroSection commits on blur, never per
+    keystroke and never a reactive effect).
+
+    Surgical by design -- one field per call, matching the photo/consent
+    endpoints above -- so committing "team" on blur can never clobber a
+    concurrently-typed "position". A blank/whitespace-only value clears the
+    field rather than storing an empty string: absence is the real state a
+    card composition reads (epic decision 2), not a stored placeholder.
+    """
+    user_id = get_current_user_id()
+    _require_owned_profile(user_id, profile_id)
+
+    trimmed = (request.value or "").strip()
+    if trimmed:
+        set_intro_fact(user_id, profile_id, request.field, trimmed)
+    else:
+        clear_intro_fact(user_id, profile_id, request.field)
+
+    return {"field": request.field, "value": trimmed or None}
 
 
 @router.delete("/{profile_id}")

@@ -663,6 +663,71 @@ def get_all_intro_photo_keys(user_id: str | None = None) -> dict[str, str]:
         return {row["key"][len(INTRO_PHOTO_KEY_PREFIX):]: row["value"] for row in rows}
 
 
+# Structured player-intro facts (T5190 follow-up, epic decision 3 REVERSED
+# 2026-08-04): position, class (grad year) and team are named profile fields so
+# the card layout (epic decision 2) can be DERIVED from how many are set --
+# free text has no field count to derive from. Same per-profile user_settings
+# KV mechanism as consent/photo, keyed by field so each is independently
+# readable/writable/clearable. No migration. All three optional: an absent
+# value is a real state (fewer facts -> a plainer composition), never a
+# substituted placeholder -- that judgment belongs to the card editor (T5205).
+INTRO_FACT_FIELDS = ("position", "class", "team")
+_INTRO_FACT_PREFIXES = {field: f"intro_{field}." for field in INTRO_FACT_FIELDS}
+
+
+def _intro_fact_setting(field: str, profile_id: str) -> str:
+    return f"{_INTRO_FACT_PREFIXES[field]}{profile_id}"
+
+
+def get_intro_fact(user_id: str | None, profile_id: str, field: str) -> str | None:
+    """Return the stored value for one intro fact field, or None if unset."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_intro_fact_setting(field, profile_id),),
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_intro_fact(user_id: str | None, profile_id: str, field: str, value: str) -> None:
+    """Persist one intro fact field for a profile (gesture-driven: blur/save)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_intro_fact_setting(field, profile_id), value),
+        )
+        conn.commit()
+
+
+def clear_intro_fact(user_id: str | None, profile_id: str, field: str) -> None:
+    """Clear one intro fact field (gesture-driven: emptied on blur, or T5230 purge)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "DELETE FROM user_settings WHERE key = ?",
+            (_intro_fact_setting(field, profile_id),),
+        )
+        conn.commit()
+
+
+def get_all_intro_facts(user_id: str | None = None) -> dict[str, dict[str, str]]:
+    """Map of profile_id -> {field: value} for every stored intro fact.
+
+    Read alongside the profiles list so GET /api/profiles and /api/bootstrap can
+    expose position/class/team without opening any profile.sqlite.
+    """
+    result: dict[str, dict[str, str]] = {}
+    with get_user_db_connection(user_id) as conn:
+        for field, prefix in _INTRO_FACT_PREFIXES.items():
+            rows = conn.execute(
+                "SELECT key, value FROM user_settings WHERE key LIKE ?",
+                (f"{prefix}%",),
+            ).fetchall()
+            for row in rows:
+                profile_id = row["key"][len(prefix):]
+                result.setdefault(profile_id, {})[field] = row["value"]
+    return result
+
+
 PREF_PREFIX = "pref."
 
 

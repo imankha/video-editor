@@ -282,6 +282,31 @@ export const useProfileStore = create((set, get) => ({
     }));
   },
 
+  // Structured intro facts (T5190 follow-up, epic decision 3 reversal
+  // 2026-08-04): position/class/team, typed once on the profile so every card
+  // auto-fills. Surgical -- one field per call -- committed by
+  // ProfileIntroSection on blur, never per keystroke. An empty value clears
+  // the field (a real, independent state); the backend returns value: null
+  // in that case, which is what gets written back onto the profile.
+  setIntroFact: async (profileId, field, value) => {
+    set({ error: null });
+    const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}/intro/facts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update ${field}: ${response.status}`);
+    }
+    const result = await response.json(); // { field, value }
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, [result.field]: result.value } : p
+      ),
+    }));
+    return result.value;
+  },
+
   // Computed helpers
   hasMultipleProfiles: () => get().profiles.length >= 2,
   currentProfile: () => get().profiles.find(p => p.id === get().currentProfileId) || null,

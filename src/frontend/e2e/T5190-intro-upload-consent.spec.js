@@ -5,15 +5,20 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 /**
  * T5190 — Card image upload + parental-consent attestation (QA live-drive).
  *
- * Two tests:
+ * Three tests:
  *  1. API round-trip as the real account: upload a real image -> per-profile key
  *     (SHAPE includes the profile id, the 404 landmine) + a preview URL that
  *     actually fetches the stored object; consent recorded, exposed on the
  *     profiles payload, isolated per profile, and gone after revoke/delete.
- *  2. UI live-drive of the profile surface: open Manage Profiles -> Edit ->
- *     upload a photo (preview renders) -> tick consent -> reload -> reopen and
- *     confirm consent PERSISTED. Evidence per acceptance criterion + a 375px +
- *     desktop responsive sweep of the changed screen.
+ *  2. API round-trip for structured facts (position/class/team, epic decision 3
+ *     reversal 2026-08-04): persistence, exposure on BOTH GET /api/profiles and
+ *     GET /api/bootstrap, independent clearing, isolation between profiles, and
+ *     a FRESH-request reload-persistence check -- the exact gap that missed the
+ *     photo-key regression before (see TestPhotoPersistence in the pytest file).
+ *  3. UI live-drive of the profile surface: open Manage Profiles -> Edit ->
+ *     upload a photo (preview renders) -> tick consent -> fill position/class/
+ *     team, blur each -> reload -> reopen and confirm ALL of it PERSISTED.
+ *     Evidence per acceptance criterion + a 375px + desktop responsive sweep.
  *
  * Run (from a /dotask container):
  *   bash scripts/dev-verify.sh e2e/T5190-intro-upload-consent.spec.js
@@ -109,6 +114,73 @@ test('T5190 API: upload -> per-profile key + fetchable preview; consent record/e
   expect(reverted.profiles.find((p) => p.id === pid).introConsentAt, 'consent revoked').toBeNull();
 });
 
+test('T5190 API: intro facts (position/class/team) persist, expose on profiles + bootstrap, clear independently', async ({ context }) => {
+  test.setTimeout(120000);
+  await loginAsRealUser(context, REAL_EMAIL);
+
+  const { pid } = await currentProfileId(context);
+
+  async function setFact(field, value) {
+    const res = await context.request.put(`${API_BASE}/profiles/${pid}/intro/facts`, {
+      data: { field, value },
+    });
+    expect(res.ok(), `set ${field} (${res.status()})`).toBeTruthy();
+    return res.json();
+  }
+
+  // --- persistence: set all three fields ---
+  const posResult = await setFact('position', 'Midfielder 6-8-10');
+  expect(posResult).toEqual({ field: 'position', value: 'Midfielder 6-8-10' });
+  await setFact('class', '2029');
+  await setFact('team', 'Riverside FC');
+
+  // --- exposure on BOTH payloads ---
+  const { profiles } = await currentProfileId(context);
+  const me = profiles.find((p) => p.id === pid);
+  expect(me.position, 'position exposed on GET /api/profiles').toBe('Midfielder 6-8-10');
+  expect(me.class, 'class exposed on GET /api/profiles').toBe('2029');
+  expect(me.team, 'team exposed on GET /api/profiles').toBe('Riverside FC');
+
+  const boot = await context.request.get(`${API_BASE}/bootstrap`);
+  expect(boot.ok()).toBeTruthy();
+  const bootMe = (await boot.json()).profiles.find((p) => p.id === pid);
+  expect(bootMe.position, 'position exposed on GET /api/bootstrap').toBe('Midfielder 6-8-10');
+  expect(bootMe.class, 'class exposed on GET /api/bootstrap').toBe('2029');
+  expect(bootMe.team, 'team exposed on GET /api/bootstrap').toBe('Riverside FC');
+
+  // --- independent clearing: clearing "class" must not touch position/team ---
+  const clearResult = await setFact('class', '');
+  expect(clearResult).toEqual({ field: 'class', value: null });
+  const afterClear = await currentProfileId(context);
+  const meAfterClear = afterClear.profiles.find((p) => p.id === pid);
+  expect(meAfterClear.class, 'class cleared').toBeNull();
+  expect(meAfterClear.position, 'position untouched by clearing class').toBe('Midfielder 6-8-10');
+  expect(meAfterClear.team, 'team untouched by clearing class').toBe('Riverside FC');
+
+  // --- reload-persistence regression: a FRESH GET, not just the write
+  // response. NOTE: a real browser reload keeps the SAME session cookie (it
+  // does not re-login), so the correct simulation is another request on this
+  // SAME context, exactly like currentProfileId() above and exactly like the
+  // photo/consent test's reload check. A second loginAsRealUser() would
+  // re-issue rb_session for this user and invalidate THIS context's cookie
+  // (single-active-session model in _issue_session_cookie -- see
+  // routers/auth.py), which would make every call after it 401. ---
+  const reloaded = await currentProfileId(context);
+  const meAfterReload = reloaded.profiles.find((p) => p.id === pid);
+  expect(meAfterReload.position, 'position SURVIVES a reload').toBe('Midfielder 6-8-10');
+  expect(meAfterReload.class, 'cleared class stays cleared across reload').toBeNull();
+  expect(meAfterReload.team, 'team SURVIVES a reload').toBe('Riverside FC');
+
+  const bootReloaded = await context.request.get(`${API_BASE}/bootstrap`);
+  const bootMeReloaded = (await bootReloaded.json()).profiles.find((p) => p.id === pid);
+  expect(bootMeReloaded.position, 'position SURVIVES a reload (bootstrap)').toBe('Midfielder 6-8-10');
+  expect(bootMeReloaded.team, 'team SURVIVES a reload (bootstrap)').toBe('Riverside FC');
+
+  // Clean up: leave the account as found.
+  await setFact('position', '');
+  await setFact('team', '');
+});
+
 test('T5190 UI: profile surface uploads a photo, ticks consent, and consent persists across reload', async ({ context, page }) => {
   test.setTimeout(120000);
   await loginAsRealUser(context, REAL_EMAIL);
@@ -145,10 +217,37 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   await expect(consent, 'consent reflects after the write (live store)').toBeChecked();
   await saveEvidence(page, 'criterion-4-consent-ticked');
 
-  // --- criterion 5 (persistence): reload, reopen, confirm consent AND the
-  // photo preview both survived -- this is the bug fix. The original T5190
-  // e2e only reloaded to check consent, which is exactly why the missing
-  // photo-key persistence slipped through.
+  // --- structured facts: fill position/class/team, blur each (gesture
+  // commit, never per-keystroke -- typing must not fire a request per char).
+  // Each PUT /intro/facts is explicitly awaited before moving to the next
+  // field: the app serializes per-user writes behind a write lock (see
+  // db_sync middleware), so firing three blurs back-to-back can leave the
+  // LAST one still in flight when the reload below fires -- a real race that
+  // cost a full diagnosis pass (see T5190 task file 2026-08-04 follow-up).
+  // blur() only dispatches the DOM event; it does not wait for the async
+  // onBlur handler's fetch, so the response wait must be explicit.
+  async function fillFact(input, value) {
+    const responsePromise = page.waitForResponse(
+      (res) => res.url().includes('/intro/facts') && res.request().method() === 'PUT'
+    );
+    await input.fill(value);
+    await input.blur();
+    const response = await responsePromise;
+    expect(response.ok(), `PUT /intro/facts for "${value}" (${response.status()})`).toBeTruthy();
+  }
+
+  const positionInput = page.getByPlaceholder('e.g. Midfielder 6-8-10');
+  const classInput = page.getByPlaceholder('e.g. 2029');
+  const teamInput = page.getByPlaceholder('e.g. Riverside FC');
+  await fillFact(positionInput, 'Midfielder 6-8-10');
+  await fillFact(classInput, '2029');
+  await fillFact(teamInput, 'Riverside FC');
+  await saveEvidence(page, 'criterion-facts-filled');
+
+  // --- criterion 5 (persistence): reload, reopen, confirm consent, photo AND
+  // the three facts all survived -- this is the exact bug fix this task
+  // guards against. The original T5190 e2e only reloaded to check consent,
+  // which is exactly why the missing photo-key persistence slipped through.
   await page.reload();
   await page.getByRole('button', { name: /switch sport or profile/i }).click();
   await page.getByTitle(/Edit name, color/i).first().click();
@@ -157,13 +256,25 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   const previewAfterReload = page.getByAltText('Intro card');
   await expect(previewAfterReload, 'photo preview PERSISTED across reload').toBeVisible({ timeout: 30000 });
   await expect(previewAfterReload).toHaveJSProperty('complete', true);
+  await expect(page.getByPlaceholder('e.g. Midfielder 6-8-10'), 'position PERSISTED across reload').toHaveValue('Midfielder 6-8-10');
+  await expect(page.getByPlaceholder('e.g. 2029'), 'class PERSISTED across reload').toHaveValue('2029');
+  await expect(page.getByPlaceholder('e.g. Riverside FC'), 'team PERSISTED across reload').toHaveValue('Riverside FC');
   await saveEvidence(page, 'criterion-1-photo-persisted-after-reload');
   await saveEvidence(page, 'criterion-4-consent-persisted-after-reload');
+  await saveEvidence(page, 'criterion-facts-persisted-after-reload');
 
   // Responsive sweep of the changed screen (375px + desktop, no h-overflow).
   await responsiveSweep(page);
 
-  // Leave the account as found: remove the photo, untick consent (revoke).
+  // Leave the account as found: clear the facts, remove the photo, untick
+  // consent (revoke). Clearing via blur-with-empty-value exercises the
+  // independent-clear path through the real UI, not just the API. Same
+  // wait-for-response helper as above -- the write-lock serialization race
+  // is just as real here even though nothing downstream re-asserts on it.
+  await fillFact(page.getByPlaceholder('e.g. Midfielder 6-8-10'), '');
+  await fillFact(page.getByPlaceholder('e.g. 2029'), '');
+  await fillFact(page.getByPlaceholder('e.g. Riverside FC'), '');
+  await expect(page.getByPlaceholder('e.g. Midfielder 6-8-10')).toHaveValue('');
   await page.getByRole('button', { name: /remove/i }).click();
   await expect(page.getByAltText('Intro card')).not.toBeVisible();
   await page.getByRole('checkbox').click();
