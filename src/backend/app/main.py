@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.version import APP_BUILD, APP_VERSION
@@ -279,6 +280,30 @@ if _test_seams_enabled():
     from app.routers.test_seams import router as test_seams_router
     app.include_router(test_seams_router)
     logging.getLogger(__name__).warning("[T4120] test seams mounted (/api/test/*) — non-prod env")
+
+
+# T5180: rich text engine font delivery (design §5, gate decision Q3). ONE
+# physical copy of each TTF (in app/assets/fonts/), served here to the
+# browser for @font-face AND resolved by absolute path in
+# app/services/text_render.py for Pillow rendering — same bytes both sides,
+# the precondition for the parity test to mean anything. This mount serves
+# ONLY assets/fonts/ (not the broader assets/ tree, so it never exposes
+# assets/branding/ used by branded_outro.py).
+class _LongCacheTTFStaticFiles(StaticFiles):
+    """Long, immutable Cache-Control for .ttf responses; manifest.json/fonts.json
+    stays at StaticFiles' default (short/no special caching) so a future
+    catalogue change is picked up without a cache-bust scheme."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        full_path = args[0] if args else kwargs.get("full_path")
+        if full_path and str(full_path).endswith(".ttf"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
+_FONTS_ASSETS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
+app.mount("/api/fonts", _LongCacheTTFStaticFiles(directory=_FONTS_ASSETS_DIR), name="fonts")
 
 
 # WebSocket endpoint for export progress

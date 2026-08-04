@@ -1,0 +1,38 @@
+{
+  "anton": {
+    "displayName": "Anton",
+    "file": "Anton-Regular.ttf",
+    "weight": 400,
+    "style": "normal",
+    "isVariable": false,
+    "fallback": ["Impact", "sans-serif"]
+  },
+  "oswald": {
+    "displayName": "Oswald",
+    "file": "Oswald-Variable.ttf",
+    "weight": 600,
+    "style": "normal",
+    "isVariable": true,
+    "variationAxis": "wght",
+    "variationRange": [200, 700],
+    "fallback": ["Arial Narrow", "sans-serif"]
+  },
+  "graduate": {
+    "displayName": "Graduate",
+    "file": "Graduate-Regular.ttf",
+    "weight": 400,
+    "style": "normal",
+    "isVariable": false,
+    "fallback": ["Helvetica", "sans-serif"]
+  },
+  "playfair": {
+    "displayName": "Playfair Display",
+    "file": "PlayfairDisplay-Variable.ttf",
+    "weight": 900,
+    "style": "normal",
+    "isVariable": true,
+    "variationAxis": "wght",
+    "variationRange": [400, 900],
+    "fallback": ["Georgia", "serif"]
+  }
+}

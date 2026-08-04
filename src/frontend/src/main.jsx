@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import { RichText } from './components/RichText.jsx'
 import { AuthGateModal } from './components/AuthGateModal.jsx'
 import { UpdateGateModal } from './components/UpdateGateModal.jsx'
 import { AuthErrorBanner } from './components/AuthErrorBanner.jsx'
@@ -56,19 +57,48 @@ function GlobalReportButton() {
 }
 
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-    <AuthGateModal />
-    {/* T5070: mounted AFTER AuthGateModal so its z-[60] paints above the
-        auth/login surface -- an un-updated client can't log in either. */}
-    <UpdateGateModal />
-    <AuthErrorBanner />
-    {/* Single global mount — renders toasts on every screen, incl. sign-in and shared views */}
-    <ToastContainer />
-    {/* T1650/T5674: Global report trigger — visible on every screen. Hidden on
-        mobile (shown on Home screen instead). Text pill on Home, compact icon on
-        the editor screens (see GlobalReportButton). */}
-    <GlobalReportButton />
-  </React.StrictMode>,
-)
+// T5180: dev/test-only debug mount for the rich-text parity Playwright spec
+// (T5180-text-parity.spec.js). This app has NO react-router (a custom
+// screen-switching SPA driven by editorStore's EDITOR_MODES/APP_SCREENS
+// state machine — see App.jsx), so rather than add a routing dependency,
+// this checks the raw pathname BEFORE mounting <App/> and renders a bare
+// <RichText/> with no chrome/providers instead. Mirrors the backend seam's
+// prod-gating spirit (test_seams.py's _require_seams_enabled(), gated on
+// dev/development/local/test): import.meta.env.DEV is Vite's build-time
+// flag, true only for `npm run dev` / the local Playwright dev server,
+// always false in a deployed CF Pages production build — so this route
+// 404s/blank-renders (falls through to the normal <App/> mount, which does
+// not recognise the path) on any deployed target.
+function renderDebugRichTextRouteIfRequested() {
+  if (!import.meta.env.DEV) return false;
+  if (window.location.pathname !== '/debug/rich-text') return false;
+
+  const params = new URLSearchParams(window.location.search);
+  const spec = JSON.parse(decodeURIComponent(params.get('spec') || 'null'));
+  const boxWidth = Number(params.get('boxWidth'));
+  const boxHeight = Number(params.get('boxHeight'));
+
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <RichText spec={spec} boxWidth={boxWidth} boxHeight={boxHeight} />
+  );
+  return true;
+}
+
+if (!renderDebugRichTextRouteIfRequested()) {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <App />
+      <AuthGateModal />
+      {/* T5070: mounted AFTER AuthGateModal so its z-[60] paints above the
+          auth/login surface -- an un-updated client can't log in either. */}
+      <UpdateGateModal />
+      <AuthErrorBanner />
+      {/* Single global mount — renders toasts on every screen, incl. sign-in and shared views */}
+      <ToastContainer />
+      {/* T1650/T5674: Global report trigger — visible on every screen. Hidden on
+          mobile (shown on Home screen instead). Text pill on Home, compact icon on
+          the editor screens (see GlobalReportButton). */}
+      <GlobalReportButton />
+    </React.StrictMode>,
+  )
+}

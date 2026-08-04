@@ -16,8 +16,6 @@ from app.schemas import (
     SegmentsData,
     # Highlights models
     HighlightKeyframe, HighlightRegion, HighlightsData,
-    # Text overlay models
-    TextOverlay, TextOverlaysData,
     # Helper functions
     parse_crop_data, parse_timing_data, parse_segments_data, parse_highlights_data,
 )

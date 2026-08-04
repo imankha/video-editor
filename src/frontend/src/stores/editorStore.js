@@ -53,7 +53,11 @@ export function modeFromPath(pathname = window.location.pathname) {
 // must never normalize/rewrite their URL — doing so at module load clobbers the
 // deep link before App reads it, so e.g. /shared/collection/{token} would bounce
 // to /framing and force a sign-in. App.jsx owns these routes.
-const PUBLIC_ROUTE_PREFIXES = ['/shared/', '/privacy', '/terms', '/legal'];
+// T5180: /debug/ is the same class of route (main.jsx mounts a bare component
+// with no chrome, bypassing App entirely) — without this exclusion, importing
+// useEditorStore at main.jsx module scope (for GlobalReportButton) clobbers
+// /debug/rich-text back to /home before main.jsx's own code ever reads the path.
+const PUBLIC_ROUTE_PREFIXES = ['/shared/', '/privacy', '/terms', '/legal', '/debug/'];
 export function isPublicRoute(pathname = window.location.pathname) {
   return PUBLIC_ROUTE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
 }

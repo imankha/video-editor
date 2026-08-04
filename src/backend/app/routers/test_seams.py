@@ -442,3 +442,111 @@ async def loop_probe(mode: str = "block", ms: int = 200):
         time.sleep(seconds)
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
     return {"mode": mode, "requested_ms": ms, "worked_ms": elapsed_ms}
+
+
+# --- T5180: rich-text engine PARITY seam (test seam) --------------------------
+# Bridges the Playwright parity spec (T5180-text-parity.spec.js) to the SAME
+# render_text_layer() the backend pytest suite (test_t5180_text_render.py)
+# exercises directly, so the two suites can't drift on "what counts as the
+# bbox." Design: docs/plans/tasks/T5180-design.md §8. Gated exactly like every
+# other /api/test/* seam (mounted only when _test_seams_enabled(); 404 on
+# prod/staging).
+
+class RenderTextBboxRequest(BaseModel):
+    spec: dict
+    frame_w: int
+    frame_h: int
+
+
+def _tight_alpha_bbox(img):
+    """(min_x, min_y, max_x, max_y) of non-transparent pixels, or None if fully
+    transparent. Computed the SAME way tests/test_t5180_text_render.py's
+    _tight_alpha_bbox does (numpy min/max of nonzero alpha), so this seam and
+    the backend pytest suite can't drift on the bbox definition."""
+    import numpy as np
+
+    alpha = np.array(img)[:, :, 3]
+    ys, xs = np.nonzero(alpha > 0)
+    if len(xs) == 0:
+        return None
+    return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+
+
+@router.post("/render-text-bbox")
+async def render_text_bbox(req: RenderTextBboxRequest):
+    """Render a TextSpec through the real backend renderer and return the
+    measurements the Playwright parity spec compares against RichText.jsx's
+    DOM measurements (test seam, T5180).
+
+    The given spec is rendered AS GIVEN, and its tight alpha bbox + baseline
+    are always returned. The parity spec sends either a pure fill-only spec,
+    a shadow-only spec, or a stroke-only spec (never a mix) — so:
+      - when spec.shadow.blur > 0: also render a fill-only variant (shadow
+        zeroed) and return shadow_halo_bbox = the given (shadow-inclusive)
+        render's bbox, which is larger due to the halo.
+      - when spec.stroke.width > 0: also render a fill-only variant (stroke
+        zeroed) and return stroke_extent_px = given bbox width - fill-only
+        bbox width.
+      - otherwise both are null.
+    """
+    _require_seams_enabled()
+
+    from ..schemas import TextSpec
+    from ..services.text_render import render_text_layer
+
+    spec = TextSpec(**req.spec)
+    img = render_text_layer(spec, req.frame_w, req.frame_h)
+    given_bbox = _tight_alpha_bbox(img)
+    if given_bbox is None:
+        raise HTTPException(status_code=422, detail="render produced a fully transparent layer")
+    # `bbox` returned to the caller is always the FILL-ONLY box (design §8 — box/
+    # baseline parity must never be inflated by a shadow halo). When the given spec
+    # carries a shadow/stroke, it is recomputed below from a zeroed variant;
+    # otherwise the given render already IS the fill-only one.
+    bbox = given_bbox
+
+    # Baseline = block top (position.y * frame_h) + the resolved font's ascent,
+    # in pixels — computed the same way TestLineHeightFromFaceMetrics /
+    # TestAlignment in test_t5180_text_render.py reason about line placement
+    # (font.getmetrics() ascent, never a hard-coded multiplier). Uses the same
+    # variable-axis-pinning loader as the real renderer (load_font_for_render)
+    # so a variable face's ascent is measured at its PINNED weight, not the
+    # font's own default instance.
+    from ..services.fonts import load_font_for_render
+
+    px = max(round(spec.size * req.frame_h), 1)
+    font = load_font_for_render(spec.font.value, px)
+    ascent, _descent = font.getmetrics()
+    baseline_y = spec.position.y * req.frame_h + ascent
+
+    shadow_halo_bbox = None
+    stroke_extent_px = None
+
+    if spec.shadow.blur > 0:
+        fill_variant = spec.model_copy(
+            update={"shadow": spec.shadow.model_copy(update={"blur": 0, "opacity": 0})}
+        )
+        fill_img = render_text_layer(fill_variant, req.frame_w, req.frame_h)
+        fill_bbox = _tight_alpha_bbox(fill_img)
+        if fill_bbox is not None:
+            shadow_halo_bbox = list(given_bbox)
+            bbox = fill_bbox
+
+    if spec.stroke.width > 0:
+        fill_variant = spec.model_copy(
+            update={"stroke": spec.stroke.model_copy(update={"width": 0})}
+        )
+        fill_img = render_text_layer(fill_variant, req.frame_w, req.frame_h)
+        fill_bbox = _tight_alpha_bbox(fill_img)
+        if fill_bbox is not None:
+            given_width = given_bbox[2] - given_bbox[0]
+            fill_width = fill_bbox[2] - fill_bbox[0]
+            stroke_extent_px = given_width - fill_width
+            bbox = fill_bbox
+
+    return {
+        "bbox": list(bbox),
+        "baseline_y": baseline_y,
+        "shadow_halo_bbox": shadow_halo_bbox,
+        "stroke_extent_px": stroke_extent_px,
+    }

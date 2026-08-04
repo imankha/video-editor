@@ -18,9 +18,14 @@ USAGE:
         print(kf.x, kf.y, kf.width, kf.height)
 """
 
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+# Shared hex-color validation pattern (project rule: no silent fallback/clamp for
+# internal data — an invalid hex must raise, never be coerced or defaulted).
+_HEX_COLOR_PATTERN = r"^#[0-9A-Fa-f]{6}$"
 
 # =============================================================================
 # CROP DATA SCHEMA
@@ -266,44 +271,125 @@ class HighlightsData(BaseModel):
 
 
 # =============================================================================
-# TEXT OVERLAYS SCHEMA (placeholder for future use)
-# Used in: working_videos.text_overlays
+# TEXT SPEC SCHEMA (T5180 rich text engine)
+# Used by: app.services.text_render.render_text_layer, RichText.jsx (frontend
+# mirror in src/frontend/src/constants/textSpec.js), future consumers T5210
+# (intro card) and T5225 (Overlay text layer).
+#
+# Replaces the vestigial pixel-based TextOverlay/TextOverlaysData (deleted, no
+# writer ever existed) — TextSpec is normalised (fractions of the frame), so
+# one spec renders identically-in-relative-terms at any resolution and in any
+# preview box. See docs/plans/tasks/T5180-design.md §3 for the full invariant.
+#
+# UNIT INVARIANT (design §3, gate decision Q1 — documented ONCE here, every
+# other docstring/comment points back to this block instead of restating it):
+#   - `size` and `position.y` are FRAME-RELATIVE: fractions of frame HEIGHT.
+#   - `maxWidth` and `position.x` are FRAME-RELATIVE: fractions of frame WIDTH.
+#   - `position` is the anchor, interpreted per `align` (left/center/right);
+#     `position.y` is the text block's TOP edge.
+#   - `shadow.blur` and `stroke.width` are EM-RELATIVE: fractions of the
+#     element's OWN `size`, NOT of the frame directly. Resolve as
+#     `blur_px = spec.shadow.blur * spec.size * frame_h` and
+#     `stroke_px = spec.stroke.width * spec.size * frame_h` (the `* frame_h`
+#     term converts `size`'s own frame-height fraction to pixels; the
+#     em-relative field is a fraction OF that resolved pixel size, not a
+#     second fraction of the frame). A frame-relative stroke/blur would give a
+#     small caption and a huge title the SAME absolute stroke/blur width —
+#     wrong the moment a card mixes two text sizes.
 # =============================================================================
 
-class TextOverlay(BaseModel):
-    """
-    A text overlay configuration.
-
-    Currently a placeholder - text overlays are not fully implemented.
-    """
-    text: str = Field(..., description="Text content to display")
-    x: float = Field(..., description="X position in pixels")
-    y: float = Field(..., description="Y position in pixels")
-    fontSize: int = Field(default=24, description="Font size in pixels")
-    color: str = Field(default='#FFFFFF', description="Text color as hex")
-    startTime: float = Field(..., description="When to show the text (seconds)")
-    endTime: float = Field(..., description="When to hide the text (seconds)")
+class Align(str, Enum):
+    """Text block horizontal alignment, interpreted relative to TextSpec.position."""
+    LEFT = "left"
+    CENTER = "center"
+    RIGHT = "right"
 
 
-class TextOverlaysData(BaseModel):
-    """
-    Text overlay configuration for overlay mode.
+class Animation(str, Enum):
+    """Card-only entrance animation (T5210). The Overlay text layer (T5225)
+    ignores this in v1 — it lives on the shared spec so one model serves both
+    consumers without a second field set."""
+    NONE = "none"
+    FADE = "fade"
+    FADE_UP = "fade-up"
+    WIPE = "wipe"
 
-    Stored as JSON array in working_videos.text_overlays.
-    """
-    overlays: list[TextOverlay] = Field(
-        default_factory=list,
-        description="Array of text overlay configurations"
-    )
 
+class FontKey(str, Enum):
+    """Greppable font catalogue keys — mirror app/assets/fonts/fonts.json keys
+    exactly (design §4, final keys after the static-file swap). Unknown font
+    keys fail loudly at this enum boundary (ValidationError), never silently
+    default to a fallback face."""
+    ANTON = "anton"
+    OSWALD = "oswald"
+    GRADUATE = "graduate"
+    PLAYFAIR = "playfair"
+
+
+class Position(BaseModel):
+    """Frame-relative anchor point. x = fraction of frame WIDTH, y = fraction
+    of frame HEIGHT. Interpreted per TextSpec.align; y is the block's TOP edge."""
+    x: float = Field(..., ge=0, le=1)
+    y: float = Field(..., ge=0, le=1)
+
+
+class Shadow(BaseModel):
+    """blur is EM-RELATIVE (fraction of the spec's own `size`, resolved as
+    spec.size * frame_h) — see the unit invariant block above. Zero magnitude
+    (blur=0) means no shadow; this is the default."""
+    blur: float = Field(default=0, ge=0, le=0.5)
+    color: str = Field(default="#000000")
+    opacity: float = Field(default=0, ge=0, le=1)
+
+    @field_validator("color")
     @classmethod
-    def from_json_list(cls, json_list: list[dict]) -> 'TextOverlaysData':
-        """Create TextOverlaysData from a raw JSON list."""
-        return cls(overlays=[TextOverlay(**t) for t in json_list])
+    def _validate_hex(cls, v: str) -> str:
+        import re
+        if not re.match(_HEX_COLOR_PATTERN, v):
+            raise ValueError(f"color must be a #RRGGBB hex string, got {v!r}")
+        return v
 
-    def to_json_list(self) -> list[dict]:
-        """Convert to raw JSON list format for DB storage."""
-        return [o.model_dump() for o in self.overlays]
+
+class Stroke(BaseModel):
+    """width is EM-RELATIVE (fraction of the spec's own `size`, resolved as
+    spec.size * frame_h) — see the unit invariant block above. Zero magnitude
+    (width=0) means no stroke; this is the default."""
+    width: float = Field(default=0, ge=0, le=0.15)
+    color: str = Field(default="#000000")
+
+    @field_validator("color")
+    @classmethod
+    def _validate_hex(cls, v: str) -> str:
+        import re
+        if not re.match(_HEX_COLOR_PATTERN, v):
+            raise ValueError(f"color must be a #RRGGBB hex string, got {v!r}")
+        return v
+
+
+class TextSpec(BaseModel):
+    """The shared text contract (design §3). Every dimension is normalised —
+    never a pixel — so one spec renders identically-in-relative-terms at
+    1080x1920, 1920x1080, and in a 150px preview box. Out-of-range values
+    RAISE (ValidationError), never silently clamp (project rule: no silent
+    fallback/clamp for internal data)."""
+    text: str
+    font: FontKey
+    size: float = Field(..., gt=0, le=0.5)
+    color: str
+    align: Align = Align.LEFT
+    position: Position
+    maxWidth: float = Field(..., gt=0, le=1)
+    shadow: Shadow = Field(default_factory=Shadow)
+    stroke: Stroke = Field(default_factory=Stroke)
+    animation: Animation = Animation.NONE
+
+    @field_validator("color")
+    @classmethod
+    def _validate_hex(cls, v: str) -> str:
+        import re
+        if not re.match(_HEX_COLOR_PATTERN, v):
+            raise ValueError(f"color must be a #RRGGBB hex string, got {v!r}")
+        return v
 
 
 # =============================================================================
