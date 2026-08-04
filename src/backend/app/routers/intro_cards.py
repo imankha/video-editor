@@ -1,0 +1,321 @@
+"""Intro card library CRUD (T5195).
+
+Session + profile scoped: every route operates on the CURRENT profile's
+`profile.sqlite` (resolved from the `X-Profile-ID` header via
+`get_db_connection`), so there is no profile id in the path. Writes ride the
+normal per-profile R2 DB sync (TrackedConnection → middleware), and each traces
+to a named editor gesture (create card, rename, set default, delete).
+
+Storage-layer only — no editor UI (T5205) and no rendering (T5210). The shared
+composition/validation rules live in `app/services/intro_cards.py`; this router
+never inlines them.
+"""
+
+import json
+import logging
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.database import column_exists, get_db_connection
+from app.profile_context import get_current_profile_id
+from app.services.intro_cards import (
+    derive_composition,
+    validate_duration,
+    validate_focal,
+    validate_shown_fields,
+    validate_text_elements,
+    validate_treatment,
+    validate_zoom,
+)
+from app.services.intro_media import delete_intro_image
+from app.storage import generate_presigned_url_global
+from app.user_context import get_current_user_id
+from app.utils.encoding import decode_data, encode_data
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/intro-cards", tags=["intro-cards"])
+
+
+# ---------------------------------------------------------------------------
+# Request bodies
+# ---------------------------------------------------------------------------
+
+class CreateIntroCardRequest(BaseModel):
+    name: str
+    treatment: str
+    shown_fields: list[str] = []
+    title_text: str | None = None
+    image_key: str | None = None
+    image_cutout_key: str | None = None
+    focal_x: float | None = None
+    focal_y: float | None = None
+    zoom: float | None = None
+    # {slot_name: TextSpec}; validated as TextSpec on the way in (400 on bad spec).
+    text_elements: dict[str, Any] | None = None
+    duration: float = 4.0
+
+
+class UpdateIntroCardRequest(BaseModel):
+    """Surgical update — the client sends ONLY the changed field(s). Every field
+    is optional; `model_fields_set` distinguishes "not sent" (leave untouched)
+    from an explicit `null` (set to NULL = inherit), so the NULL-vs-value
+    discipline on focal_x/focal_y/zoom is preserved."""
+    name: str | None = None
+    treatment: str | None = None
+    shown_fields: list[str] | None = None
+    title_text: str | None = None
+    image_key: str | None = None
+    image_cutout_key: str | None = None
+    focal_x: float | None = None
+    focal_y: float | None = None
+    zoom: float | None = None
+    text_elements: dict[str, Any] | None = None
+    duration: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# Serialisation
+# ---------------------------------------------------------------------------
+
+def _table_missing(cursor) -> bool:
+    """True when `intro_cards` does not exist yet (below-head profile DB in the
+    deploy→migrate window). A hot read must return empty, never 500."""
+    cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='intro_cards'"
+    )
+    return cursor.fetchone() is None
+
+
+def _serialize(row) -> dict:
+    """Map a DB row to an API payload. `composition` is DERIVED here (never
+    stored); `previewUrl` is presigned at read time (never stored presigned)."""
+    shown_fields = json.loads(row["shown_fields"]) if row["shown_fields"] else []
+    image_key = row["image_key"]
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "shown_fields": shown_fields,
+        "treatment": row["treatment"],
+        "title_text": row["title_text"],
+        "image_key": image_key,
+        "image_cutout_key": row["image_cutout_key"],
+        "focal_x": row["focal_x"],
+        "focal_y": row["focal_y"],
+        "zoom": row["zoom"],
+        "text_elements": decode_data(row["text_elements"]) or {},
+        "duration": row["duration"],
+        "is_default": bool(row["is_default"]),
+        # Derived, computed on every read (epic decision 2). Not a stored column.
+        "composition": derive_composition(bool(image_key), shown_fields),
+        "previewUrl": generate_presigned_url_global(image_key) if image_key else None,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _fetch_card(cursor, card_id: int):
+    cursor.execute("SELECT * FROM intro_cards WHERE id = ?", (card_id,))
+    return cursor.fetchone()
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@router.get("")
+async def list_intro_cards():
+    """List the current profile's intro cards (raw rows + derived composition +
+    a freshly presigned preview URL)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if _table_missing(cursor):
+            # Below-head DB (migration not yet run): no cards exist. Empty, not 500.
+            return {"cards": []}
+        cursor.execute("SELECT * FROM intro_cards ORDER BY created_at DESC, id DESC")
+        rows = cursor.fetchall()
+    return {"cards": [_serialize(r) for r in rows]}
+
+
+@router.post("")
+async def create_intro_card(request: CreateIntroCardRequest):
+    """Create a card and return the stored row. Never sets `is_default` — the
+    first card is not auto-promoted (symmetric with delete-leaves-no-default);
+    the user picks the default explicitly via POST /{id}/default."""
+    try:
+        shown_fields = validate_shown_fields(request.shown_fields)
+        treatment = validate_treatment(request.treatment)
+        text_elements = validate_text_elements(request.text_elements)
+        focal_x = validate_focal(request.focal_x, "focal_x")
+        focal_y = validate_focal(request.focal_y, "focal_y")
+        zoom = validate_zoom(request.zoom)
+        duration = validate_duration(request.duration)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if not request.name or not request.name.strip():
+        raise HTTPException(status_code=400, detail="name is required")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO intro_cards
+                (name, shown_fields, treatment, title_text, image_key,
+                 image_cutout_key, focal_x, focal_y, zoom, text_elements, duration)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                request.name.strip(),
+                json.dumps(shown_fields),
+                treatment,
+                request.title_text,
+                request.image_key,
+                request.image_cutout_key,
+                focal_x,
+                focal_y,
+                zoom,
+                encode_data(text_elements),
+                duration,
+            ),
+        )
+        card_id = cursor.lastrowid
+        conn.commit()
+        row = _fetch_card(cursor, card_id)
+
+    logger.info(
+        f"Created intro card {card_id} for profile {get_current_profile_id()}"
+    )
+    return _serialize(row)
+
+
+# Which request fields map to which validated column value. Each entry is a
+# (column, validator) pair; the validator raises ValueError -> 400 on bad input.
+_UPDATABLE_FIELDS = {
+    "name": ("name", lambda v: v if (v and v.strip()) else _raise("name cannot be empty")),
+    "treatment": ("treatment", validate_treatment),
+    "shown_fields": ("shown_fields", lambda v: json.dumps(validate_shown_fields(v))),
+    "title_text": ("title_text", lambda v: v),
+    "image_key": ("image_key", lambda v: v),
+    "image_cutout_key": ("image_cutout_key", lambda v: v),
+    "focal_x": ("focal_x", lambda v: validate_focal(v, "focal_x")),
+    "focal_y": ("focal_y", lambda v: validate_focal(v, "focal_y")),
+    "zoom": ("zoom", validate_zoom),
+    "text_elements": ("text_elements", lambda v: encode_data(validate_text_elements(v))),
+    "duration": ("duration", validate_duration),
+}
+
+
+def _raise(msg: str):
+    raise ValueError(msg)
+
+
+@router.patch("/{card_id}")
+async def update_intro_card(card_id: int, request: UpdateIntroCardRequest):
+    """Surgical update: build the SET clause from ONLY the fields the client
+    actually sent (`model_fields_set`), so the write touches one changed field
+    and an explicit `null` is honoured (focal/zoom NULL = inherit) while an
+    absent field is left untouched."""
+    provided = request.model_fields_set
+    if not provided:
+        raise HTTPException(status_code=400, detail="no fields to update")
+
+    set_columns: list[str] = []
+    values: list[Any] = []
+    try:
+        for field in provided:
+            column, validator = _UPDATABLE_FIELDS[field]
+            set_columns.append(f"{column} = ?")
+            values.append(validator(getattr(request, field)))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    set_columns.append("updated_at = datetime('now')")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if _table_missing(cursor) or _fetch_card(cursor, card_id) is None:
+            raise HTTPException(status_code=404, detail="intro card not found")
+        cursor.execute(
+            f"UPDATE intro_cards SET {', '.join(set_columns)} WHERE id = ?",
+            (*values, card_id),
+        )
+        conn.commit()
+        row = _fetch_card(cursor, card_id)
+
+    return _serialize(row)
+
+
+@router.post("/{card_id}/default")
+async def set_default_intro_card(card_id: int):
+    """Mark a card as the profile default. Single-default is enforced
+    server-side and ATOMICALLY: the previous default is cleared in the SAME
+    transaction (never trusting the client to send two calls)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if _table_missing(cursor) or _fetch_card(cursor, card_id) is None:
+            raise HTTPException(status_code=404, detail="intro card not found")
+        # One transaction: demote every current default, promote this card.
+        cursor.execute("UPDATE intro_cards SET is_default = 0 WHERE is_default = 1")
+        cursor.execute("UPDATE intro_cards SET is_default = 1 WHERE id = ?", (card_id,))
+        conn.commit()
+        row = _fetch_card(cursor, card_id)
+
+    logger.info(f"Set intro card {card_id} as default for profile {get_current_profile_id()}")
+    return _serialize(row)
+
+
+@router.delete("/{card_id}")
+async def delete_intro_card(card_id: int):
+    """Delete a card, its R2 image, and clear any reels pointing at it.
+
+    In ONE transaction: null out `final_videos.intro_card_id` for reels that
+    reference this card (so they fall back to the default rather than a ghost
+    id) and delete the row. Deleting the default leaves the profile with NO
+    default — correct, not auto-repaired. The R2 image is removed after the DB
+    commit (a leaked object is a lesser evil than a row pointing at a 404, and
+    T5230's purge is a backstop).
+
+    The UPDATE naming `intro_card_id` is column_exists-guarded (deploy→migrate
+    window discipline), and the guard is LOAD-BEARING: `ensure_database()`
+    creates the `intro_cards` table independently of the v034 migration, so an
+    existing below-head profile can hold intro_cards rows (created via this API)
+    while `final_videos.intro_card_id` is still absent until v034 runs. Naming
+    the column unguarded there would 500 the delete.
+    """
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if _table_missing(cursor):
+            raise HTTPException(status_code=404, detail="intro card not found")
+        row = _fetch_card(cursor, card_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="intro card not found")
+        image_key = row["image_key"]
+
+        # Same transaction: detach referencing reels, then delete the card.
+        if column_exists(cursor, "final_videos", "intro_card_id"):
+            cursor.execute(
+                "UPDATE final_videos SET intro_card_id = NULL WHERE intro_card_id = ?",
+                (card_id,),
+            )
+        cursor.execute("DELETE FROM intro_cards WHERE id = ?", (card_id,))
+        conn.commit()
+
+    # R2 image removal is a best-effort side effect after the row is gone.
+    if image_key:
+        try:
+            delete_intro_image(user_id, profile_id, image_key)
+        except ValueError:
+            # Key not under this profile's intro/ prefix (e.g. a legacy/foreign
+            # key). Log and move on — the row is already deleted.
+            logger.warning(
+                f"Intro card {card_id} image_key not deletable (foreign prefix): {image_key}"
+            )
+
+    logger.info(f"Deleted intro card {card_id} for profile {profile_id}")
+    return {"success": True}

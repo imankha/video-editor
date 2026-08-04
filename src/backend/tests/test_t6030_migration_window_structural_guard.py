@@ -49,6 +49,7 @@ POST_V023_COLUMNS = {
     "final_videos": [
         "poster_filename", "slowmo_section_start", "slowmo_section_end",  # v024, v025
         "poster_frame_time", "poster_source",                             # v032
+        "intro_card_id",                                                  # v034
     ],
     "games": ["shared_by", "source_profile_id", "source_game_id"],                       # v026, v030
     "working_videos": ["detections_data"],                                              # v027
@@ -60,8 +61,12 @@ POST_V023_COLUMNS = {
     # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
     #   It rewrites final_videos.game_ids and inserts reference games rows via
     #   ensure_game_reference; every column it touches predates v024.
+    # v034 (T5195 intro card library) adds final_videos.intro_card_id (above) AND a new
+    #   intro_cards TABLE. No EXISTING hot read names intro_card_id (T5215 adds the reads);
+    #   the intro-cards list route guards the whole missing TABLE itself (returns []), a case
+    #   this column-drop harness does not synthesise, so it is covered by test_t5195 directly.
 }
-HEAD_VERSION_AUDITED = 33
+HEAD_VERSION_AUDITED = 34
 
 
 def _cleanup(user_id: str) -> None:

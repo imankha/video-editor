@@ -1033,6 +1033,7 @@ def ensure_database():
                 slowmo_section_end REAL,
                 poster_frame_time REAL,
                 poster_source TEXT,
+                intro_card_id INTEGER,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)
@@ -1040,6 +1041,33 @@ def ensure_database():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_final_videos_published_ratio
             ON final_videos(published_at, aspect_ratio)
+        """)
+
+        # Intro card library (T5195, profile_db v034). Per-profile (epic decision
+        # 7). Composition is DERIVED from (has_photo, len(shown_fields)) in
+        # app/services/intro_cards.derive_composition — there is deliberately NO
+        # template/layout column (no redundant state). focal_x/focal_y/zoom are
+        # NULLABLE = inherit the profile's framing (decision 3b), never defaulted.
+        # Kept in step with migrations/profile_db/v034_intro_card_library.py so a
+        # fresh profile gets the table here and an existing one gets it there.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS intro_cards (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                name              TEXT NOT NULL,
+                shown_fields      TEXT NOT NULL,
+                treatment         TEXT NOT NULL,
+                title_text        TEXT,
+                image_key         TEXT,
+                image_cutout_key  TEXT,
+                focal_x           REAL,
+                focal_y           REAL,
+                zoom              REAL,
+                text_elements     BLOB,
+                duration          REAL NOT NULL DEFAULT 4.0,
+                is_default        INTEGER NOT NULL DEFAULT 0,
+                created_at        TEXT DEFAULT (datetime('now')),
+                updated_at        TEXT DEFAULT (datetime('now'))
+            )
         """)
 
         # Games - store annotated game footage
