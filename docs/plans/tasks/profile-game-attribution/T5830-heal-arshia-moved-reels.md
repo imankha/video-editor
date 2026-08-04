@@ -1,6 +1,6 @@
 # T5830: Heal arshia's already-moved reels (restore game attribution)
 
-**Status:** WIP — dry run done + user sign-off obtained 2026-08-02; migration v033 in a container worker
+**Status:** DONE — v033 shipped and executed on prod 2026-08-03; verified in prod R2
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-07-24
@@ -70,8 +70,8 @@ set `game_ids` (msgpack single-id list) — i.e. exactly the state T5810 would h
 ### Steps
 1. [x] Download his profile DBs from prod R2; dry-run matcher; produce mapping table
 2. [x] User sign-off on the exact mapping (which reel → which game) — approved 2026-08-02, all 14
-3. [ ] Write migration (gated: only acts on rows matching the signed-off shape) + fixture test
-4. [ ] Deploy, run migration on prod, verify in his account's gallery + Games tab
+3. [x] Write migration (gated: only acts on rows matching the signed-off shape) + fixture test
+4. [x] Deploy, run migration on prod, verify — prod R2 confirms 6 references / 14 attributed
 5. [ ] Report to the user; user tells arshia / resolves bug 37p
 
 ### Progress Log
@@ -146,3 +146,39 @@ separate restoration is needed.
 
 **Migration is v033**, not v031 as previously noted — head moved to v032
 (`add_poster_marker_fields`) while this task sat blocked.
+
+**2026-08-03 — SHIPPED AND EXECUTED ON PROD. Bug 37p's historical half is closed.**
+
+Rehearsed on staging first (his prod account re-copied there with the backend stopped so the live
+machine could not revert it), then deployed and run on prod.
+
+Prod result, read from **R2 objects** rather than the API, so this is the durable state:
+
+| Profile | References | Attributed | Schema |
+|---|---|---|---|
+| Maddie U13 `b0a81fe1` | 3 | 6 / 9 | v33 |
+| Ella U13 `6ff007e6` | 3 | 8 / 12 | v33 |
+| Maddie 12U `7d9f31c7` | 0 | 1 / 1 (untouched) | v33 |
+| Ella 12U `22c7616a` | 0 | 0 (untouched) | v33 |
+| default `b95eb93b` (owning) | **0** | 12 / 12 | v33 |
+
+**6 reference rows, 14 reels healed — exactly the signed-off mapping.** The owning profile correctly
+received no self-reference, and the two profiles outside the mapping were not touched.
+
+Migration run: `run_all_migrations()` via fly ssh, **11/11 users, `errors: []`**. (One pre-existing
+orphan was skipped — profile `b95eb93b` registered under imankh's user id, unrelated to this heal.)
+
+Staging rehearsal additionally proved things prod can't cheaply re-prove:
+- **Gallery grouping works end-to-end** — per-game groups of 1+1+4 and 4+3+1 matching the mapping,
+  with the correct frozen header text (e.g. "Pats Cup: Vs DPL vs City SC GA Aspire Jul 18"), and the
+  unmatched reels correctly remaining in Mixes. T5880's tournament/month axes populate off it too.
+- **Idempotent in the real runner** — a second `POST /api/admin/migrate` reported
+  `migrated=0, skipped=3` and left every count identical.
+
+**Not separately re-verified through a prod UI session**: prod has no dev-login (correct — it is
+dev/staging only), so the gallery render was proven on staging against identical data and identical
+read-path code, while prod was verified at the data layer in R2.
+
+**The 7 unmatched reels remain unattributed permanently** and that is the intended outcome: 6 have
+no surviving source clip in the default profile, 1 has a NULL `clip_game_start_time`. Attributing
+them would require a guess that could file a reel under the wrong game.

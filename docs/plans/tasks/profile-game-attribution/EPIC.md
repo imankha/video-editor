@@ -1,6 +1,6 @@
 # Cross-Profile Game Attribution
 
-**Status:** WIP — T5800-T5820 on staging; T5830 remains blocked
+**Status:** DONE — all 4 tasks shipped to prod; T5830's heal executed 2026-08-03
 **Started:** 2026-07-31
 **Source:** Prod bug 37p (arshia.kalantari@gmail.com, 2026-07-24) — filed as a bug, actually a feature request.
 
@@ -75,7 +75,7 @@ Moving the game itself can't fix this — one game, two destination profiles.
 | T5800 | [Game-reference primitive + schema (profile_db v030)](T5800-game-reference-primitive.md) | STAGING |
 | T5810 | [Move-reels carries game attribution](T5810-move-carries-attribution.md) | STAGING |
 | T5820 | [Games tab: reference game link cards](T5820-reference-game-link-cards.md) | STAGING |
-| T5830 | [Heal arshia's already-moved reels](T5830-heal-arshia-moved-reels.md) | TODO — hard-blocked on 1-3 reaching prod + user sign-off on the dry-run mapping |
+| T5830 | [Heal arshia's already-moved reels](T5830-heal-arshia-moved-reels.md) | DONE — v033 executed on prod 2026-08-03 |
 
 Order is dependency order: schema/primitive → move flow → UI → heal (heal reuses the primitive
 and the remap logic, and must land after both are on prod).
@@ -102,18 +102,18 @@ query is not a field that exists in the API, and the consuming task is where tha
 
 ## Completion Criteria
 
-- [ ] Moving reels to a sibling profile groups them under the correct game header in the
+- [x] Moving reels to a sibling profile groups them under the correct game header in the
       target Gallery (single-clip reels), with the same header text as the source profile.
-- [ ] Moving reels from the same game twice (or for two kids into two profiles) creates exactly
+- [x] Moving reels from the same game twice (or for two kids into two profiles) creates exactly
       one reference row per target profile (dedup proven by test).
-- [ ] Target Games tab shows the reference as a link card; clicking navigates to the game in
+- [x] Target Games tab shows the reference as a link card; clicking navigates to the game in
       the owning profile; no storage/expiry chips or edit actions on reference cards.
-- [ ] Moving a reel back to the owning profile re-points `game_ids` at the real game; no
+- [x] Moving a reel back to the owning profile re-points `game_ids` at the real game; no
       reference row is created in the owning profile.
-- [ ] Orphaned references are cleaned up by the gestures that orphan them (reel delete /
+- [x] Orphaned references are cleaned up by the gestures that orphan them (reel delete /
       move-away), never by a reactive sweep.
-- [ ] Arshia's moved reels on prod are re-attributed (T5830 executed, verified in his gallery).
-- [ ] Knowledge docs updated (persistence-sync.md cross-profile section + a new note in the
+- [x] Arshia's moved reels on prod are re-attributed (T5830 executed 2026-08-03; verified in prod R2 — 6 references, 14 reels; 7 unmatchable left honest).
+- [x] Knowledge docs updated (persistence-sync.md cross-profile section + a new note in the
       export-pipeline/collections area touched).
 
 ## Feedback re-review (2026-07-25) — design stands
