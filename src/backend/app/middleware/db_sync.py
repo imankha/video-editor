@@ -483,6 +483,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth',
         '/api/quests/achievements',
         '/api/shared/',
+        '/api/fonts',        # T5180: StaticFiles mount, no user data
         '/static',
     )
 
@@ -497,6 +498,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/shared/',             # T1750: public share links work without auth
         '/api/payments/webhook',    # T4940: Stripe server-to-server calls carry no session; signature verification IS the auth
         '/api/client-errors/',      # T5641: video-error beacon must land even when the session is dead
+        '/api/fonts',                # T5180: font manifest + TTFs are a static public asset (no user data), needed for @font-face before/without a session
         '/storage/warmup',          # T3310: unauthenticated warmup wakes Fly.io machine
         '/docs',                    # API docs
         '/redoc',                   # API docs

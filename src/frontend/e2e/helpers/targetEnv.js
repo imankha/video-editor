@@ -152,6 +152,24 @@ export const STAGING_GATE_SPECS = [
 
 export const LOCAL_ONLY_SPECS = [
   {
+    file: 'T5180-text-parity.spec.js',
+    category: 'seam',
+    depends: ['/api/test/render-text-bbox', '/debug/rich-text (dev-only route, main.jsx)'],
+    reason:
+      'rich-text engine parity test bridges the backend renderer to RichText.jsx via ' +
+      'the dev/local-only /api/test/render-text-bbox seam and a dev-only /debug/rich-text ' +
+      'mount (gated on import.meta.env.DEV, never present in a deployed BUILD) — neither ' +
+      'exists on staging/prod.',
+  },
+  {
+    file: 'T5180-qa-evidence.spec.js',
+    category: 'seam',
+    depends: ['/debug/rich-text (dev-only route, main.jsx)'],
+    reason:
+      'QA evidence capture for T5180 mounts RichText.jsx via the same dev-only ' +
+      '/debug/rich-text route as the parity spec — not present in a deployed build.',
+  },
+  {
     file: 'T4120-self-verify-durability.spec.js',
     category: 'seam',
     depends: ['/api/test/sync-fault', '/api/test/simulate-machine-cycle', '/api/test/migrate-current-profile'],
