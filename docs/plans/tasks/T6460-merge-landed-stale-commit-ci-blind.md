@@ -72,15 +72,21 @@ Three defects, in priority order. Design should confirm each before building.
 - Cheapest credible fix: a notification step on `master-ci.yml` failure. Decide the channel with the
   user (the repo already has an email service; a GitHub notification setting may be enough).
 
-### 3. Decide whether deploy gates on Master CI
+### 3. Deploy gating — **DECIDED 2026-08-04 (user): alert, do NOT gate**
+
 - Today `Deploy Backend`/`Deploy Frontend` fire on push to master with zero CI dependency, so
   staging can ship from a known-broken master — and did, twice.
-- **This is a genuine trade-off, not an obvious bug**: gating deploys on the full suite adds latency
-  to every staging push, and the T6220 lockstep invariant ("bundle build == backend build") must not
-  be broken by a gate that lets one half through and blocks the other.
-- Options to weigh in design: (a) gate both deploys on Master CI success; (b) deploy as now but
-  alert loudly when the deployed SHA's Master CI is red; (c) gate only the backend. **Ask the user
-  before choosing** — this changes their deploy cadence.
+- **User decision: keep deploying, but make a failure impossible to miss.** Staging stays fast;
+  a red Master CI raises a loud alert instead of passing silently.
+- **Rationale (record it, don't re-litigate):** the failure that actually hurt was *nobody knew*,
+  not *staging briefly held bad code*. The real protection against untested code reaching master is
+  defect 1 above (a merge must land a SHA that is itself CI-green) — with that in place, gating every
+  deploy buys little and taxes every single push with a full-suite wait, and a flaky unrelated test
+  would block an urgent fix.
+- **Revisit trigger:** if broken staging bites during real testing even once after this ships, gating
+  becomes the answer. Note that in the implementation so the next reader knows the door is open.
+- Whatever ships must not break the **T6220 lockstep invariant** ("bundle build == backend build") —
+  the alert path is inert on that front, which is a further point in its favour.
 
 ## Explicitly out of scope
 
@@ -105,7 +111,7 @@ M/L-tier. CI/infra + a hook + a skill edit. No app code, no schema. **Architect 
       SHA**, is refused with a clear message.
 - [ ] The `/dotask` supervisor CI-verdict step resolves the run **by SHA**, not by branch name.
 - [ ] A red Master CI produces a notification the user actually receives.
-- [ ] The deploy-gating decision is made WITH the user and implemented; the T6220 lockstep invariant
-      still holds afterwards.
+- [ ] Deploys still fire on push (per the 2026-08-04 decision) and are NOT gated; the T6220 lockstep
+      invariant still holds. The revisit trigger is recorded in the implementation.
 - [ ] A regression test or a documented drill proves the stale-merge case is now caught.
 - [ ] The incident is recorded in `.claude/knowledge/` so the next reader does not re-derive it.
