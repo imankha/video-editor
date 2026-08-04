@@ -1,6 +1,6 @@
 # T5830: Heal arshia's already-moved reels (restore game attribution)
 
-**Status:** TODO — hard-blocked (see Progress Log); deliberately not started
+**Status:** WIP — dry run done + user sign-off obtained 2026-08-02; migration v033 in a container worker
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-07-24
@@ -68,8 +68,8 @@ set `game_ids` (msgpack single-id list) — i.e. exactly the state T5810 would h
 ## Implementation
 
 ### Steps
-1. [ ] Download his profile DBs from prod R2; dry-run matcher; produce mapping table
-2. [ ] User sign-off on the exact mapping (which reel → which game)
+1. [x] Download his profile DBs from prod R2; dry-run matcher; produce mapping table
+2. [x] User sign-off on the exact mapping (which reel → which game) — approved 2026-08-02, all 14
 3. [ ] Write migration (gated: only acts on rows matching the signed-off shape) + fixture test
 4. [ ] Deploy, run migration on prod, verify in his account's gallery + Games tab
 5. [ ] Report to the user; user tells arshia / resolves bug 37p
@@ -108,3 +108,41 @@ during the dry-run and reported, not assumed.
 - [ ] Unmatched/ambiguous reels listed in the final report (left untouched)
 - [ ] No other user's data modified (migration no-ops elsewhere — test proves it)
 - [ ] Status of the 5 clobber-lost reels (final_videos rows) reported
+
+**2026-08-02 — dry run complete, user signed off, migration in progress.**
+
+Prod deploy + migrations landed (15/15 profiles at schema 31; his DBs read at v32), clearing gate 1.
+Gate 2 (dry run + sign-off before any write) is now also cleared. **Nothing has been written to his
+data yet.**
+
+Matcher run READ-ONLY against downloaded copies of his 5 prod profile DBs. Key =
+`final_videos.clip_game_start_time` == default-profile `raw_clips.start_time`, compared at full
+float precision (~15 significant digits).
+
+**Result: 14 matched · 0 ambiguous · 7 unmatched → 6 reference rows.**
+
+| Target profile | Source game (in `b95eb93b`) | Reels |
+|---|---|---|
+| Maddie U13 `b0a81fe1` | 1 Swallows Cup: Vs Culver City CCFC | 1, 2, 3, 4 |
+| Maddie U13 | 7 Pats Cup: Vs DPL vs Legends FC Black | 6 |
+| Maddie U13 | 8 Pats Cup: Vs DPL vs City SC GA Aspire | 7 |
+| Ella U13 `6ff007e6` | 1 Swallows Cup: Vs Culver City CCFC | 1 |
+| Ella U13 | 5 Pats Cup: Vs DPL vs Beach RL Behind Goal | 5, 7, 9, 11 |
+| Ella U13 | 6 Pats Cup: Vs DPL vs Beach RL Trace | 3, 4, 10 |
+
+Zero ambiguity: no `start_time` collided anywhere across the default profile's 87 raw clips, so no
+reel could be attributed to the wrong game.
+
+**The 7 unmatched stay untouched permanently** — 6 have no surviving source clip (deleted after
+publish), 1 has a NULL `clip_game_start_time`. Guessing them is forbidden by the correct-data rule.
+
+**Two matches flagged and accepted by the user**: Maddie reel 1 and Ella reel 1 differ from their
+clip by exactly one tag (Goal vs Assist). Read as post-publish re-tagging, not a mismatch — the
+start_times are exact and Maddie's reel name is character-identical to its clip name.
+
+**Open question from the task file — CLOSED.** The 5 clobber-lost `final_videos` rows were restored:
+all 21 reel rows across the two kid profiles have their mp4 present in prod R2 (0 missing). No
+separate restoration is needed.
+
+**Migration is v033**, not v031 as previously noted — head moved to v032
+(`add_poster_marker_fields`) while this task sat blocked.
