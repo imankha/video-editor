@@ -11,6 +11,7 @@ export { default as OverlayTimelineDefault } from './OverlayTimeline';
 export { default as useHighlightRegions } from './hooks/useHighlightRegions';
 export { default as usePlayerDetection } from './hooks/usePlayerDetection';
 export { default as useOverlayState } from './hooks/useOverlayState';
+export { default as useTextOverlays } from './hooks/useTextOverlays';
 
 // Layers
 export { default as HighlightLayer } from './layers/HighlightLayer';
@@ -18,6 +19,7 @@ export { default as HighlightLayer } from './layers/HighlightLayer';
 // Overlays
 export { default as HighlightOverlay } from './overlays/HighlightOverlay';
 export { default as PlayerDetectionOverlay } from './overlays/PlayerDetectionOverlay';
+export { default as TextOverlayPreview } from './overlays/TextOverlayPreview';
 
 // Contexts
 export { HighlightProvider, useHighlightContext } from './contexts/HighlightContext';

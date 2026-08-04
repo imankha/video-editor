@@ -10,9 +10,10 @@ import ExportButtonView from '../components/ExportButtonView';
 import OverlaySettingsCard from '../components/OverlaySettingsCard';
 import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
-import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
+import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
 import { Minimize, Maximize, RotateCcw } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
+import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -171,6 +172,18 @@ export function OverlayModeView({
   onFillEnabledChange,
   onFillOpacityChange,
   onDimStrengthChange,
+
+  // T5225: Overlay text blocks
+  textOverlays = [],
+  clipBoundaries = [],
+  selectedTextId = null,
+  onAddText,
+  onMoveTextStart,
+  onMoveTextEnd,
+  onSelectText,
+  onDeleteText,
+  onToggleText,
+  onUpdateTextSpec,
 
   // T5410: cover-photo (poster) marker
   posterMarkerTime = null,
@@ -430,6 +443,19 @@ export function OverlayModeView({
               isDisabled={!showPlayerBoxes}
             />
           ),
+          effectiveOverlayMetadata && textOverlays.length > 0 && (
+            <TextOverlayPreview
+              key="text-preview"
+              videoRef={videoRef}
+              videoMetadata={effectiveOverlayMetadata}
+              textOverlays={textOverlays}
+              currentTime={currentTime}
+              selectedTextId={selectedTextId}
+              zoom={zoom}
+              panOffset={panOffset}
+              isFullscreen={isFullscreen}
+            />
+          ),
         ].filter(Boolean)}
         zoom={zoom}
         panOffset={panOffset}
@@ -531,6 +557,32 @@ export function OverlayModeView({
       onRemoveUpload={onRemoveUpload}
     />
   );
+
+  // T5225: the shared TextSpec editor rail, shown when a text block is
+  // selected on the timeline. Same component T5205's card editor will reuse
+  // (design §4.1) -- this screen only supplies the host (spec in, surgical
+  // update_text_spec out via onUpdateTextSpec, debounced by the caller).
+  const selectedTextBlock = selectedTextId
+    ? textOverlays.find((b) => b.id === selectedTextId) || null
+    : null;
+
+  const textEditorCard = selectedTextBlock ? (
+    <div className="bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20 mt-3">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Edit Text</h3>
+        <button
+          onClick={() => onSelectText && onSelectText(null)}
+          className="text-gray-400 hover:text-white text-xs"
+        >
+          Done
+        </button>
+      </div>
+      <TextSpecEditor
+        spec={selectedTextBlock.spec}
+        onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedTextBlock.id, nextSpec)}
+      />
+    </div>
+  ) : null;
 
   return (
     <>
@@ -664,6 +716,7 @@ export function OverlayModeView({
                   renders its own copy above the Add Spotlight button (below). */}
               <div className="hidden lg:block lg:flex-1 lg:min-w-0">
                 {overlaySettingsCard}
+                {textEditorCard}
               </div>
             </div>
           )}
@@ -726,6 +779,15 @@ export function OverlayModeView({
             posterUploaded={posterUploaded}
             onPosterMarkerDragEnd={onPosterMarkerDragEnd}
             isExportInFlight={settingsDisabled}
+            textOverlays={textOverlays}
+            clipBoundaries={clipBoundaries}
+            selectedTextId={selectedTextId}
+            onAddText={onAddText}
+            onMoveTextStart={onMoveTextStart}
+            onMoveTextEnd={onMoveTextEnd}
+            onSelectText={onSelectText}
+            onDeleteText={onDeleteText}
+            onToggleText={onToggleText}
               />
             ) : isLoading ? (
               <div className="animate-pulse">
@@ -805,6 +867,15 @@ export function OverlayModeView({
                         posterUploaded={posterUploaded}
                         onPosterMarkerDragEnd={onPosterMarkerDragEnd}
                         isExportInFlight={settingsDisabled}
+                        textOverlays={textOverlays}
+                        clipBoundaries={clipBoundaries}
+                        selectedTextId={selectedTextId}
+                        onAddText={onAddText}
+                        onMoveTextStart={onMoveTextStart}
+                        onMoveTextEnd={onMoveTextEnd}
+                        onSelectText={onSelectText}
+                        onDeleteText={onDeleteText}
+                        onToggleText={onToggleText}
                       />
                     </div>
                   )}
@@ -855,6 +926,7 @@ export function OverlayModeView({
         {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
           <div className="lg:hidden mt-6">
             {overlaySettingsCard}
+            {textEditorCard}
           </div>
         )}
 

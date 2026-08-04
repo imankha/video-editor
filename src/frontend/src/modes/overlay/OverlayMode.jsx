@@ -1,7 +1,8 @@
 import React from 'react';
-import { Film, Circle, Crosshair } from 'lucide-react';
+import { Film, Circle, Crosshair, Type } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import RegionLayer from '../../components/timeline/RegionLayer';
+import TextLayer from '../../components/timeline/TextLayer';
 import DetectionMarkerLayer from './layers/DetectionMarkerLayer';
 import PosterMarkerLayer from './layers/PosterMarkerLayer';
 import { openPlayWindow, selectPosterFrame } from '../../utils/posterWindow';
@@ -48,6 +49,16 @@ export function OverlayMode({
   // Highlight interaction
   onHighlightChange,
   onHighlightComplete,
+  // T5225: Overlay text blocks (from useTextOverlays in OverlayScreen)
+  textOverlays = [],
+  clipBoundaries = [],
+  selectedTextId = null,
+  onAddText,
+  onMoveTextStart,
+  onMoveTextEnd,
+  onSelectText,
+  onDeleteText,
+  onToggleText,
   // Zoom state (from useZoom in App.jsx)
   zoom,
   panOffset,
@@ -84,12 +95,12 @@ export function OverlayMode({
   );
 
   // Calculate total layer height for playhead line
-  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem)
+  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-14=3.5rem)
   const getTotalLayerHeight = () => {
     if (hasDetectionData) {
-      return '10.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem)
+      return '14.25rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem) + Text (3.5rem)
     }
-    return '8.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + padding
+    return '12rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (3.5rem) + padding
   };
 
   // T5410: default marker position (no override yet) = midpoint of the
@@ -157,12 +168,22 @@ export function OverlayMode({
 
       {/* Highlight Region Layer Label */}
       <div
-        className={`mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
           selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('highlight')}
       >
         <Circle size={18} className={selectedLayer === 'highlight' ? 'text-orange-300' : 'text-orange-400'} />
+      </div>
+
+      {/* Text Layer Label (T5225) */}
+      <div
+        className={`mt-0.5 lg:mt-1 h-10 lg:h-14 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+          selectedLayer === 'text' ? 'bg-cyan-900/30' : 'bg-gray-900 hover:bg-gray-800'
+        }`}
+        onClick={() => onLayerSelect && onLayerSelect('text')}
+      >
+        <Type size={18} className={selectedLayer === 'text' ? 'text-cyan-300' : 'text-cyan-400'} />
       </div>
     </>
   );
@@ -236,6 +257,25 @@ export function OverlayMode({
                   lineHover: 'bg-orange-300'
                 }}
                 emptyMessage="Click to add a highlight region"
+                edgePadding={EDGE_PADDING}
+              />
+            </div>
+
+            {/* Text Layer (T5225) -- the shared TextSpec editing rail's range */}
+            <div className="mt-0.5 lg:mt-1">
+              <TextLayer
+                blocks={textOverlays}
+                duration={duration}
+                visualDuration={visualDuration || duration}
+                clipBoundaries={clipBoundaries}
+                selectedTextId={selectedTextId}
+                onAddText={onAddText}
+                onMoveTextStart={onMoveTextStart}
+                onMoveTextEnd={onMoveTextEnd}
+                onSelectText={onSelectText}
+                onDeleteText={onDeleteText}
+                onToggleText={onToggleText}
+                visualTimeToSourceTime={visualTimeToSourceTime}
                 edgePadding={EDGE_PADDING}
               />
             </div>

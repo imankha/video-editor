@@ -34,6 +34,7 @@ from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="overlay_")
 
 from ...constants import DEFAULT_HIGHLIGHT_EFFECT, ExportStatus, normalize_effect_type
+from ...schemas import TextSpec
 from ...database import (
     column_exists,
     get_db_connection,
@@ -57,6 +58,7 @@ from ...services.image_extractor import (
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.poster import (
+    clip_boundary_offsets,
     first_slowmo_section,
     generate_poster_at_export,
     get_project_poster_marker_time,
@@ -275,6 +277,7 @@ class OverlayActionTarget(BaseModel):
     """Target specifier for actions that modify existing items."""
     region_id: str | None = None
     keyframe_time: float | None = None  # Time in seconds
+    id: str | None = None  # T5225: text block id (add_text/move_text_edge/update_text_spec/toggle_text/delete_text)
 
 
 class OverlayKeyframePayload(BaseModel):
@@ -331,6 +334,15 @@ class OverlayActionData(BaseModel):
     stroke_width: float | None = None
     fill_enabled: bool | None = None
     fill_opacity: float | None = None
+
+    # T5225: overlay text block fields (add_text/update_text_spec). `id` here is
+    # the CLIENT-MINTED id for add_text (mirrors region_id's optimistic-create
+    # role); start_time/end_time/enabled above are reused verbatim (same names,
+    # same half-open-range semantics apply -- see the add_text/move_text_edge
+    # branches). `spec` is the raw TextSpec dict, re-validated via TextSpec(**spec)
+    # in the branch so it never gets stored malformed.
+    id: str | None = None
+    spec: dict | None = None
     dim_strength: float | None = None
 
 
@@ -410,6 +422,50 @@ def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_t
         SET highlights_data = ?, effect_type = ?, highlight_color = ?, overlay_version = ?
         WHERE id = ?
     """, (encode_data(highlights), effect_type, highlight_color, new_version, working_video_id))
+
+
+def _get_text_overlays(cursor, working_video_id: int) -> list:
+    """Read the current `text_overlays` blob for a working video (T5225).
+
+    Separate read/save pair from highlights -- `_get_overlay_data`/`_save_overlay_data`
+    never touch `text_overlays` (design SS1.2/SS5.2), so text and highlight actions
+    don't have to share a decode/encode path. NEVER falls back to [] on a decode
+    error: every text action does read-modify-write of the whole blob, so a
+    swallowed decode failure here would let the next gesture persist an empty
+    list and silently erase every text block (same rule as _get_overlay_data's
+    highlights read, T4210 / CLAUDE.md "No Silent Fallbacks for Internal Data").
+    """
+    cursor.execute("SELECT text_overlays FROM working_videos WHERE id = ?", (working_video_id,))
+    row = cursor.fetchone()
+    if not row or not row['text_overlays']:
+        return []
+    try:
+        return decode_data(row['text_overlays']) or []
+    except Exception as e:
+        logger.error(
+            f"[Overlay Action] Failed to decode text_overlays for working_video_id={working_video_id}: "
+            f"{e}. Refusing to overwrite with empty list.",
+            exc_info=True,
+        )
+        raise
+
+
+def _save_text_overlays(cursor, working_video_id: int, text_overlays: list, new_version: int):
+    """Save text_overlays back to working_videos, bumping the SAME shared
+    overlay_version counter highlight actions use (design SS5.2)."""
+    cursor.execute("""
+        UPDATE working_videos
+        SET text_overlays = ?, overlay_version = ?
+        WHERE id = ?
+    """, (encode_data(text_overlays), new_version, working_video_id))
+
+
+def _find_text_index(text_overlays: list, block_id: str) -> int:
+    """Find index of a text block by id. Returns -1 if not found."""
+    for i, block in enumerate(text_overlays):
+        if block.get('id') == block_id:
+            return i
+    return -1
 
 
 def _find_region_index(highlights: list, region_id: str) -> int:
@@ -793,6 +849,112 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 cursor.execute("UPDATE working_videos SET highlight_shape = ? WHERE id = ?", (val, working_video_id))
                 logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
+            elif action.action == "add_text":
+                # T5225: create a text block. Client-provided id (optimistic
+                # create, mirrors create_region); spec is re-validated as a
+                # WHOLE TextSpec (never stored malformed -- ValidationError is
+                # a ValueError subclass, so it 400s via the except below).
+                if not action.data or action.data.start_time is None:
+                    raise ValueError("add_text requires data.start_time")
+                if not action.data.id:
+                    raise ValueError("add_text requires data.id")
+                if not action.data.spec:
+                    raise ValueError("add_text requires data.spec")
+
+                validated_spec = TextSpec(**action.data.spec)
+                text_overlays = _get_text_overlays(cursor, working_video_id)
+                new_text_block = {
+                    "id": action.data.id,
+                    "spec": validated_spec.model_dump(mode="json"),
+                    "startTime": action.data.start_time,
+                    "endTime": action.data.end_time if action.data.end_time is not None else (action.data.start_time + 2.0),
+                    "enabled": True,
+                }
+                text_overlays.append(new_text_block)
+                _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
+                conn.commit()
+                logger.info(f"[Overlay Action] Added text block {action.data.id}")
+                return JSONResponse({"success": True, "version": new_version, "region_id": None})
+
+            elif action.action == "move_text_edge":
+                # Partial update of start_time and/or end_time (mirrors update_region).
+                if not action.target or not action.target.id:
+                    raise ValueError("move_text_edge requires target.id")
+
+                text_overlays = _get_text_overlays(cursor, working_video_id)
+                idx = _find_text_index(text_overlays, action.target.id)
+                if idx == -1:
+                    raise ValueError(f"Text block {action.target.id} not found")
+
+                block = text_overlays[idx]
+                if action.data:
+                    if action.data.start_time is not None:
+                        block['startTime'] = action.data.start_time
+                    if action.data.end_time is not None:
+                        block['endTime'] = action.data.end_time
+                _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
+                conn.commit()
+                logger.info(f"[Overlay Action] Moved text block {action.target.id} edge")
+                return JSONResponse({"success": True, "version": new_version, "region_id": None})
+
+            elif action.action == "update_text_spec":
+                # Whole-spec replace, debounced client-side (design SS4/O4):
+                # entity-surgical (one block per call), re-validated atomically.
+                if not action.target or not action.target.id:
+                    raise ValueError("update_text_spec requires target.id")
+                if not action.data or not action.data.spec:
+                    raise ValueError("update_text_spec requires data.spec")
+
+                validated_spec = TextSpec(**action.data.spec)
+                text_overlays = _get_text_overlays(cursor, working_video_id)
+                idx = _find_text_index(text_overlays, action.target.id)
+                if idx == -1:
+                    raise ValueError(f"Text block {action.target.id} not found")
+
+                text_overlays[idx]['spec'] = validated_spec.model_dump(mode="json")
+                _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
+                conn.commit()
+                logger.info(f"[Overlay Action] Updated text spec for {action.target.id}")
+                return JSONResponse({"success": True, "version": new_version, "region_id": None})
+
+            elif action.action == "toggle_text":
+                if not action.target or not action.target.id:
+                    raise ValueError("toggle_text requires target.id")
+                if not action.data or action.data.enabled is None:
+                    raise ValueError("toggle_text requires data.enabled")
+
+                text_overlays = _get_text_overlays(cursor, working_video_id)
+                idx = _find_text_index(text_overlays, action.target.id)
+                if idx == -1:
+                    raise ValueError(f"Text block {action.target.id} not found")
+
+                text_overlays[idx]['enabled'] = action.data.enabled
+                _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
+                conn.commit()
+                logger.info(f"[Overlay Action] Toggled text block {action.target.id} to {action.data.enabled}")
+                return JSONResponse({"success": True, "version": new_version, "region_id": None})
+
+            elif action.action == "delete_text":
+                if not action.target or not action.target.id:
+                    raise ValueError("delete_text requires target.id")
+
+                text_overlays = _get_text_overlays(cursor, working_video_id)
+                idx = _find_text_index(text_overlays, action.target.id)
+                if idx == -1:
+                    # Idempotent: mirrors delete_keyframe's no-op (overlay.py
+                    # ~line 780) -- the gesture's postcondition ("no block with
+                    # this id") already holds.
+                    logger.info(
+                        f"[Overlay Action] delete_text {action.target.id}: already "
+                        f"absent (no-op)"
+                    )
+                else:
+                    del text_overlays[idx]
+                    _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
+                    conn.commit()
+                    logger.info(f"[Overlay Action] Deleted text block {action.target.id}")
+                return JSONResponse({"success": True, "version": new_version, "region_id": None})
+
             else:
                 raise ValueError(f"Unknown action: {action.action}")
 
@@ -823,6 +985,62 @@ async def overlay_action(project_id: int, action: OverlayAction):
             })
 
 
+def _decode_text_layers(text_layers: list, frame_w: int, frame_h: int) -> list:
+    """Decode each pre-rasterised PNG text layer ONCE (T5225), splitting it into
+    a BGR float array + a normalised (0..1) alpha mask at the frame's own
+    dimensions.
+
+    O3 hard constraint: the rasterised layer's dims MUST equal the frame dims
+    this render loop is about to encode -- a mismatch RAISES rather than
+    silently `cv2.resize`-ing (a silent rescale would burn mis-scaled text into
+    a real export and mask a real upstream bug, e.g. a re-export at a different
+    aspect ratio than what was rasterised. CLAUDE.md: no silent fallback for
+    internal data).
+    """
+    import cv2
+    import numpy as np
+
+    decoded = []
+    for layer in text_layers:
+        arr = np.frombuffer(layer['png'], dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise ValueError("[Overlay Text] failed to decode a text layer PNG")
+        h, w = img.shape[:2]
+        if (w, h) != (frame_w, frame_h):
+            raise ValueError(
+                f"[Overlay Text] rasterised layer dims {w}x{h} != frame dims "
+                f"{frame_w}x{frame_h} -- refusing to silently rescale"
+            )
+        if img.ndim != 3 or img.shape[2] != 4:
+            raise ValueError("[Overlay Text] decoded text layer has no alpha channel")
+        decoded.append({
+            'startTime': layer['startTime'],
+            'endTime': layer['endTime'],
+            'bgr': img[:, :, :3].astype(np.float32),
+            'alpha': (img[:, :, 3:4].astype(np.float32)) / 255.0,
+        })
+    return decoded
+
+
+def _blend_text_layers(frame, decoded_layers: list, current_time: float):
+    """Alpha-blend every ACTIVE text layer onto `frame` (BGR uint8), in order.
+
+    ACTIVE = half-open ``startTime <= t < endTime`` (design O6 -- deliberately
+    asymmetric with highlight regions' closed ``[start, end]``; see the
+    export-pipeline knowledge doc). Purely a per-frame numpy blend -- the layer
+    itself was rasterised exactly ONCE, upstream (`_rasterize_text_layers`),
+    never here.
+    """
+    import numpy as np
+
+    for layer in decoded_layers:
+        if layer['startTime'] <= current_time < layer['endTime']:
+            alpha = layer['alpha']
+            frame = (frame.astype(np.float32) * (1 - alpha) + layer['bgr'] * alpha).astype(np.uint8)
+    return frame
+
+
 def _process_frames_to_ffmpeg(
     input_path: str,
     output_path: str,
@@ -830,6 +1048,7 @@ def _process_frames_to_ffmpeg(
     highlight_effect_type: str,
     progress_callback,
     overlay_settings: dict = None,
+    text_layers: list = None,
 ) -> int:
     """
     Process video frames with highlight overlays, piping directly to FFmpeg.
@@ -916,6 +1135,10 @@ def _process_frames_to_ffmpeg(
     # both camelCase (action-written) and snake_case (transform-written) blobs.
     sorted_regions = sorted(highlight_regions, key=lambda r: _region_bounds(r)[0])
 
+    # T5225: decode every text layer's PNG ONCE, before the frame loop -- never
+    # re-rasterised or re-decoded per frame.
+    decoded_text_layers = _decode_text_layers(text_layers or [], width, height)
+
     frame_idx = 0
     try:
         while True:
@@ -973,6 +1196,12 @@ def _process_frames_to_ffmpeg(
                         reveal_opacity=reveal_opacity,
                         reveal_scale=reveal_scale,
                     )
+
+            # T5225: alpha-blend any ACTIVE text layer AFTER the highlight but
+            # BEFORE the frame is written -- decoded once above, blended fresh
+            # every frame.
+            if decoded_text_layers:
+                frame = _blend_text_layers(frame, decoded_text_layers, current_time)
 
             # Write frame directly to FFmpeg's stdin (no disk I/O!)
             ffmpeg_proc.stdin.write(frame.tobytes())
@@ -1825,6 +2054,13 @@ async def get_overlay_data(project_id: int):
         poster_marker_time = get_project_poster_marker_time(project_id)
         poster_slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
 
+        # T5225: interior clip cut-points on the concatenated timeline, for the
+        # Overlay text layer's range-snapping. Read-only, additive, no migration
+        # (design SS2.2). Degrades to [] rather than 500 when clip data can't be
+        # resolved (e.g. a published reel whose working_clips were pruned) --
+        # clip_boundary_offsets never raises (O2, binding).
+        clip_boundaries = clip_boundary_offsets(project_id)
+
         # T6380: hydrate the overlay cover state. poster_source on the project's
         # CURRENT final video tells the client whether a custom upload is the
         # cover actually served, so a reload restores "Custom image in use"
@@ -1867,6 +2103,7 @@ async def get_overlay_data(project_id: int):
             'poster_slowmo_section': list(poster_slowmo_section) if poster_slowmo_section else None,
             'poster_source': poster_source,
             'poster_filename': poster_filename,
+            'clip_boundaries': clip_boundaries,
         })
 
 
@@ -2068,6 +2305,119 @@ class OverlayRenderRequest(BaseModel):
     effect_type: str = "dark_overlay"
 
 
+def _cv2_probe_local_dims(path) -> tuple[int, int] | None:
+    """cv2 probe of a LOCAL file path. Returns None (never raises) on any
+    failure so the caller can fall through to the R2 probe below."""
+    import cv2
+
+    if not path.exists():
+        return None
+    cap = cv2.VideoCapture(str(path))
+    try:
+        if not cap.isOpened():
+            return None
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    finally:
+        cap.release()
+    return (width, height) if width > 0 and height > 0 else None
+
+
+def _ffprobe_remote_dims(url: str) -> tuple[int, int] | None:
+    """ffprobe a video stream's width/height via HTTP range requests -- no
+    full download needed just to read the header. Mirrors the existing
+    `poster.py::_probe_duration` remote-probe pattern. Returns None (never
+    raises) on any failure."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=s=x:p=0",
+        url,
+    ]
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        width_str, height_str = out.stdout.strip().split("x")
+        width, height = int(width_str), int(height_str)
+        return (width, height) if width > 0 and height > 0 else None
+    except Exception as e:
+        logger.info(f"[Overlay Text] ffprobe remote dims probe failed: {e}")
+        return None
+
+
+def _probe_working_video_dims(user_id: str, working_filename: str) -> tuple[int, int]:
+    """Probe the EXACT frame dims of a working video (T5225 design O3).
+
+    Two-tier probe, NEVER a silent wrong default (CLAUDE.md: no silent
+    fallback for internal data -- a wrong dims value would burn mis-scaled
+    text into a real export):
+      1. Local on-disk copy (`get_working_videos_path()/filename`) via cv2 --
+         the fast, common-case path: the SAME pod that just finished framing
+         this working video still has it on disk (`storage.upload_to_r2`
+         always writes from a local_path before/alongside the R2 upload).
+      2. Fall back to the DURABLE R2 copy via a presigned URL + ffprobe (range
+         request, no full download) when the local copy is absent -- e.g. a
+         different or restarted pod serving this Overlay export request in a
+         multi-pod/ephemeral-disk deployment. This is the gap the local-only
+         probe missed: the local render loop's OWN cv2 probe is always safe
+         because it reads a copy it JUST downloaded itself; this producer runs
+         BEFORE either render loop's own download, so it cannot assume that.
+    Raises only when BOTH tiers fail -- never silently defaults.
+    """
+    from ...database import get_working_videos_path
+
+    wv_path = get_working_videos_path() / working_filename
+    dims = _cv2_probe_local_dims(wv_path)
+    if dims:
+        return dims
+
+    url = generate_presigned_url(user_id, f"working_videos/{working_filename}")
+    if url:
+        dims = _ffprobe_remote_dims(url)
+        if dims:
+            return dims
+
+    raise RuntimeError(
+        f"[Overlay Text] could not determine working video dims for "
+        f"{working_filename} -- no local copy and R2 probe failed/unavailable"
+    )
+
+
+def _rasterize_text_layers(user_id: str, text_overlays: list, working_filename: str) -> list:
+    """Rasterise each ENABLED text block ONCE at the working video's exact
+    frame dims (design SS6.1/SS6.2) and PNG-encode it, so both render loops
+    (Modal + local) blend IDENTICAL bytes -- never re-rasterising per frame.
+
+    Runs app-side (this process can import Pillow/text_render; the Modal image
+    cannot) so the Modal boundary only ever needs `cv2.imdecode` -- no Pillow
+    install, no inline-renderer mirror, no second parity surface (design SS6.1,
+    O5's precedent from spotlight_reveal).
+    """
+    from io import BytesIO
+
+    from ...schemas import TextSpec
+    from ...services.text_render import render_text_layer
+
+    enabled = [b for b in text_overlays if b.get('enabled', True)]
+    if not enabled:
+        return []
+
+    width, height = _probe_working_video_dims(user_id, working_filename)
+    layers = []
+    for block in enabled:
+        spec = TextSpec(**block['spec'])
+        img = render_text_layer(spec, width, height)  # RGBA PIL.Image, content-hash cached
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        layers.append({
+            'startTime': block['startTime'],
+            'endTime': block['endTime'],
+            'png': buf.getvalue(),
+        })
+    logger.info(f"[Overlay Text] Rasterised {len(layers)} text layer(s) at {width}x{height}")
+    return layers
+
+
 async def _run_overlay_export_background(
     export_id: str,
     project_id: int,
@@ -2079,6 +2429,7 @@ async def _run_overlay_export_background(
     effect_type: str,
     video_duration: float,
     overlay_settings: dict = None,
+    text_overlays: list = None,
 ):
     """
     Run overlay export in background via asyncio.create_task.
@@ -2106,6 +2457,13 @@ async def _run_overlay_export_background(
         def modal_call_id_callback(modal_call_id: str):
             store_call_id(export_id, modal_call_id)
 
+        # T5225: rasterise ONCE per spec here (app-side, Pillow-capable), before
+        # dispatching to either render loop. Runs in a thread so a slow Pillow
+        # render/word-wrap pass never blocks the event loop.
+        text_layers = await asyncio.to_thread(
+            _rasterize_text_layers, user_id, text_overlays or [], working_filename
+        )
+
         result = await call_modal_overlay_auto(
             job_id=export_id,
             user_id=user_id,
@@ -2118,6 +2476,7 @@ async def _run_overlay_export_background(
             call_id_callback=modal_call_id_callback,
             overlay_settings=overlay_settings,
             profile_id=profile_id,
+            text_layers=text_layers,
         )
 
         if result.get("status") != "success":
@@ -2254,7 +2613,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         cursor.execute("""
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
-                   wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration,
+                   wv.highlights_data, wv.text_overlays, wv.effect_type, wv.highlight_color, wv.duration,
                    wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
@@ -2313,6 +2672,17 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     else:
         logger.warning("[Overlay Render] DEBUG - highlights_data is empty/None!")
 
+    # T5225: text overlay blocks for this render. Read-only for render input (not
+    # a persist path -- a decode failure here can't destroy stored data), so this
+    # mirrors the existing highlights_data style in THIS function (log + continue)
+    # rather than the action handler's raise-never-erase rule (_get_text_overlays).
+    text_overlays = []
+    if project['text_overlays']:
+        try:
+            text_overlays = decode_data(project['text_overlays']) or []
+        except Exception as e:
+            logger.error(f"[Overlay Render] text_overlays decode error: {e}")
+
     # Apply global highlight_color to all keyframes if set
     # This allows users to change the highlight color without re-editing each keyframe
     global_highlight_color = project['highlight_color'] if 'highlight_color' in project.keys() else None
@@ -2338,6 +2708,12 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         region.get('keyframes') and len(region.get('keyframes', [])) > 0
         for region in highlight_regions
     )
+    # T5225: a project with text blocks but no highlight keyframes must NOT take
+    # the no-keyframes copy shortcut below -- that path R2-copies the working
+    # video verbatim and would silently drop the text (the bug the design's
+    # audit found, SS6.5). enabled=True is the default when the key is absent
+    # (matches the text-block shape written by add_text).
+    has_text = any(block.get('enabled', True) for block in text_overlays)
 
     # A region the user ENABLED but that carries no keyframes renders nothing,
     # so the export silently drops a spotlight the editor was showing. Regions
@@ -2351,9 +2727,9 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 f"nothing will be drawn for it (pre-fix create_region data)"
             )
 
-    if not has_keyframes:
+    if not has_keyframes and not has_text:
         # No overlays to render - just copy working video to final video
-        logger.info("[Overlay Render] Skipping GPU processing (no keyframes to render)")
+        logger.info("[Overlay Render] Skipping GPU processing (no keyframes or text to render)")
         logger.info("[Overlay Render] Copying working video to final video directly")
 
         progress_data = {
@@ -2522,6 +2898,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             effect_type=effect_type,
             video_duration=video_duration,
             overlay_settings=overlay_settings,
+            text_overlays=text_overlays,
         )
     )
     return JSONResponse(
