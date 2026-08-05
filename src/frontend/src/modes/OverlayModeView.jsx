@@ -14,6 +14,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
+import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -185,14 +186,13 @@ export function OverlayModeView({
   onToggleText,
   onUpdateTextSpec,
 
-  // T5410: cover-photo (poster) marker
+  // T5410 / T6510: preview-image (poster) marker
   posterMarkerTime = null,
   posterSlowmoSection = null,
   posterUploaded = false,
   posterMarkerTimeLabel = null,
   onPosterMarkerDragEnd,
   onUseCurrentFrameAsCover,
-  onUploadPoster,
   onRemoveUpload,
 
   // Player detection (auto-detected during framing export)
@@ -532,6 +532,17 @@ export function OverlayModeView({
 
   // T5676: Overlay tuning controls — beside the video on desktop, stacked above
   // the Add Spotlight button on mobile. Extracted from ExportButtonView.
+  // T6510: the SOURCE-time of the frame the preview image will use -- the user's
+  // marker if set, else the export-time window midpoint (openPlayWindow +
+  // selectPosterFrame mirror poster.py exactly, so the shown still matches what
+  // export picks). Feeds PosterFramePreview so the user SEES the actual frame.
+  const posterFrameSourceTime = useMemo(() => {
+    if (posterMarkerTime != null) return posterMarkerTime;
+    const dur = effectiveOverlayMetadata?.duration || duration || 0;
+    if (!dur) return 0;
+    return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null);
+  }, [posterMarkerTime, posterSlowmoSection, effectiveOverlayMetadata?.duration, duration]);
+
   const overlaySettingsCard = (
     <OverlaySettingsCard
       highlightColor={highlightColor}
@@ -552,8 +563,9 @@ export function OverlayModeView({
         !posterUploaded && posterMarkerTime != null ? formatTimeSimple(posterMarkerTime) : null
       }
       posterUploaded={posterUploaded}
+      posterPreviewVideoUrl={effectiveOverlayVideoUrl}
+      posterPreviewTime={posterFrameSourceTime}
       onUseCurrentFrameAsCover={() => onPosterMarkerDragEnd?.(currentTime)}
-      onUploadPoster={onUploadPoster}
       onRemoveUpload={onRemoveUpload}
     />
   );
