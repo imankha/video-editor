@@ -29,7 +29,7 @@ import { useIsCoarsePointer } from '../../hooks/useIsMobile';
  * useWebShare) misdetected touch-Windows as desktop, wiring long-press (the
  * hover replacement) only for "mobile" -> a functional dead end on that hardware.
  * Fixed by splitting into two independently-placed, ALWAYS-MOUNTED chips: a
- * persistent Play (bottom-left, never hover-gated - a published reel's natural
+ * persistent Play (tile-centered, never hover-gated - a published reel's natural
  * primary) and a corner kebab (top-right, DraftTile's exact visibility formula:
  * hover/focus-revealed on fine pointers, always opacity-100 on coarse pointers via
  * the live useIsCoarsePointer() matchMedia - no long-press, no dead end). The
@@ -224,7 +224,7 @@ export function ReelTile({
           onClick={(e) => onPlay(e, download)}
           title="Play video"
           aria-label="Play video"
-          className={`absolute bottom-1.5 left-1.5 z-30 ${actionBtnClass}`}
+          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 ${actionBtnClass}`}
         >
           <Play size={16} className={REEL.accent} />
         </button>
