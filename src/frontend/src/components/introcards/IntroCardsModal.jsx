@@ -79,8 +79,13 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     }
   };
 
+  // T6540 item 6: the reel card a user saw "inside the modal" is the page BEHIND
+  // (My Reels) showing through this backdrop in the margin around the opaque
+  // panel — not leaked content (the panel is opaque bg-gray-900, so nothing
+  // renders through its interior). Deepened /70 -> /80 so the dimmed page reads
+  // clearly as background, not as part of the editor.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-5xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Intro cards</h2>

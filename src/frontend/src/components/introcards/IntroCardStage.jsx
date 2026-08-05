@@ -8,22 +8,25 @@
 // contract (via IntroCardPreview / introCardGeometry / MotionPreview) — this stage
 // hard-codes none of them.
 
-import { useRef, useState } from 'react';
-import { Play, Square } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play, Square, LayoutTemplate } from 'lucide-react';
 import { IntroCardPreview, resolveFraming } from './IntroCardPreview';
 import { MotionPreview } from './MotionPreview';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor } from '../../utils/introCardGeometry';
 import { buildPreviewElements } from './introCardPreviewElements';
-import { ASPECT_OPTIONS } from './introCardEditorConstants';
+import { ASPECT_OPTIONS, COMPOSITION_LABELS } from './introCardEditorConstants';
 
 const STAGE_MAX_H = 420;
 const STAGE_MAX_W = 480;
 
-function boxFor(aspect) {
-  const byHeight = { h: STAGE_MAX_H, w: (STAGE_MAX_H * aspect.w) / aspect.h };
-  if (byHeight.w <= STAGE_MAX_W) return { w: Math.round(byHeight.w), h: STAGE_MAX_H };
-  return { w: STAGE_MAX_W, h: Math.round((STAGE_MAX_W * aspect.h) / aspect.w) };
+// The stage box is capped by BOTH a max height and the width actually available
+// (measured), so a 16:9 card (which is wide) never overflows a 375px phone — the
+// old fixed 480px width scrolled the whole editor sideways on mobile.
+function boxFor(aspect, maxW, maxH) {
+  const byHeight = { h: maxH, w: (maxH * aspect.w) / aspect.h };
+  if (byHeight.w <= maxW) return { w: Math.round(byHeight.w), h: maxH };
+  return { w: maxW, h: Math.round((maxW * aspect.h) / aspect.w) };
 }
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -49,14 +52,27 @@ export function IntroCardStage({
   zoomDraft,
   onPhotoDragMove,
   onPhotoDragEnd,
-  onZoomInput,
-  onZoomRelease,
   selectedSlot,
   onSelectSlot,
 }) {
   const aspectOpt = ASPECT_OPTIONS.find((a) => a.key === aspectRatio) || ASPECT_OPTIONS[0];
   const aspect = aspectOpt.key; // === CARD_ASPECTS key ('9:16' / '16:9')
-  const box = boxFor(aspectOpt);
+
+  // Measure the width the stage column actually gives us and cap the box to it,
+  // so the card fits any viewport (mobile especially) instead of a fixed 480px.
+  const wrapRef = useRef(null);
+  const [availW, setAvailW] = useState(STAGE_MAX_W);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width;
+      if (w) setAvailW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const box = boxFor(aspectOpt, Math.min(STAGE_MAX_W, availW), STAGE_MAX_H);
 
   const persisted = resolveFraming(card, profile);
   const focalX = dragFocal ? dragFocal.x : persisted.focalX;
@@ -111,7 +127,7 @@ export function IntroCardStage({
   };
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div ref={wrapRef} className="w-full lg:flex-1 lg:min-w-0 flex flex-col items-center gap-3">
       {/* Aspect preview toggle — one framing must read correctly in BOTH. */}
       <div className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded p-0.5" role="group" aria-label="Aspect preview">
         {ASPECT_OPTIONS.map((opt) => {
@@ -165,9 +181,18 @@ export function IntroCardStage({
           );
         })}
 
-        {/* Composition name — quiet, legible not magic. */}
-        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-[11px] text-gray-200 pointer-events-none" data-testid="composition-label">
-          {composition}
+        {/* Composition readout — PRODUCT FEEDBACK, not a debug slug. A human,
+            title-cased layout name with a layout icon, so a first-timer connects
+            "I ticked a fact" to "the layout changed" (the epic has no template
+            picker — this caption is the only surface that explains it). The raw
+            key stays on data-composition-key for tests. */}
+        <span
+          className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/70 backdrop-blur-sm text-[11px] font-medium text-gray-100 pointer-events-none"
+          data-testid="composition-label"
+          data-composition-key={composition}
+        >
+          <LayoutTemplate size={12} className="text-gray-400" />
+          {COMPOSITION_LABELS[composition] || composition} layout
         </span>
 
         {playing && (
@@ -182,26 +207,9 @@ export function IntroCardStage({
         )}
       </div>
 
-      {/* Zoom — commits on release, not per input event. */}
-      {hasPhoto && (
-        <label className="flex items-center gap-2 w-full max-w-xs text-xs text-gray-400">
-          <span className="uppercase tracking-wide">Zoom</span>
-          <input
-            type="range"
-            aria-label="Zoom"
-            min={1}
-            max={4}
-            step={0.05}
-            value={zoom}
-            onChange={(e) => onZoomInput(parseFloat(e.target.value))}
-            onPointerUp={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
-            onBlur={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
-            className="flex-1"
-          />
-        </label>
-      )}
-
-      {/* Motion preview — animates from the shared timing constants. */}
+      {/* Motion preview — animates from the shared timing constants. Zoom moved
+          to the rail's Photo group (all indirect photo controls live together;
+          direct-manipulation drag stays here on the image). */}
       <button
         type="button"
         onClick={() => setPlaying((p) => !p)}

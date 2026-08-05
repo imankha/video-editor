@@ -57,6 +57,16 @@ export const SLOT_META = {
   team: { label: 'Team', kind: 'fact', profileField: 'team' },
 };
 
+// Human-readable names for the derived composition (deriveComposition keys). The
+// composition is product feedback ("what layout are you looking at"), so the UI
+// shows a title-cased name, never the raw slug. Keep in step with COMPOSITION.
+export const COMPOSITION_LABELS = {
+  'title-only': 'Title only',
+  hero: 'Hero',
+  broadcast: 'Broadcast',
+  recruiting: 'Recruiting',
+};
+
 // Aspect-preview options. ONE stored focal point serves BOTH (epic decision 3b),
 // so the editor must let the user flip between them. Values match CARD_ASPECTS in
 // the shared contract (RATIO.PORTRAIT === '9:16', RATIO.LANDSCAPE === '16:9').
