@@ -1,61 +1,49 @@
 // T5205 — factories for a new card and a slot's default STYLING spec.
 //
-// A stored `text_elements[slot]` is a STYLING-ONLY TextSpec (epic data model):
-// its `.text` is not authoritative (the title's text is `card.title_text`, a
-// fact's text is the profile field) and its `.position`/`.maxWidth` are neutral
-// placeholders that T5210's composition geometry overrides at render/preview
-// time. What the editor DOES own here is font / size / colour / align / shadow /
-// stroke — the styling the right rail edits.
+// A stored `text_elements[slot]` is a STYLING-ONLY TextSpec (epic data model,
+// T5210 contract): its `.text` is not authoritative (the title's text is
+// `card.title_text`, a fact's text is the profile field), and its
+// `.size`/`.align`/`.position`/`.maxWidth` are neutral placeholders that the
+// composition geometry OVERRIDES at render/preview time. What the editor owns
+// here is font / colour / shadow / stroke — the styling the rail edits.
 
-import { FontKey, Align, Animation } from '../../constants/textSpec';
-import {
-  DEFAULT_TREATMENT,
-  DEFAULT_TITLE_FONT,
-  DEFAULT_ALIGN,
-  DEFAULT_SIZE,
-  DEFAULT_DURATION,
-  PLACEHOLDER_SLOT_GEOMETRY,
-  TITLE_SLOT,
-} from './introCardEditorConstants';
+import { Animation } from '../../constants/textSpec';
+import { defaultStyling } from './introCardPreviewElements';
+import { SLOT_META, PLACEHOLDER_SLOT_GEOMETRY, DEFAULT_SIZE, DEFAULT_ALIGN, DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEditorConstants';
+import { treatmentAccent } from './introCardVisual';
 
 /**
- * A default styling spec for a slot. `size` differs by slot kind so a fresh card
- * reads as a hierarchy (title larger than facts) before the user touches
- * anything — this is styling, not slot geometry.
- * @param {string} slot - one of ALL_SLOTS
+ * A default styling spec for a slot — the SAME font/colour/shadow the renderer
+ * applies to an unstyled slot (introCardPreviewElements.defaultStyling), so the
+ * rail shows the true defaults and persisting them changes nothing visible.
+ * Size/align/position are placeholders (layout-owned by the composition).
+ * @param {string} slot one of ALL_SLOTS
+ * @param {string} [accent] treatment accent (the title's default colour)
  */
-export function defaultSlotSpec(slot) {
-  const isTitle = slot === TITLE_SLOT;
+export function defaultSlotSpec(slot, accent = treatmentAccent(DEFAULT_TREATMENT)) {
+  const kind = SLOT_META[slot]?.kind || 'fact';
+  const styling = defaultStyling(kind, accent);
   return {
     text: '', // styling-only: real text is title_text / the profile fact
-    font: isTitle ? DEFAULT_TITLE_FONT : FontKey.OSWALD,
-    size: isTitle ? 0.08 : DEFAULT_SIZE,
-    color: '#FFFFFF',
+    font: styling.font,
+    color: styling.color,
+    size: DEFAULT_SIZE,
     align: DEFAULT_ALIGN,
     position: { ...PLACEHOLDER_SLOT_GEOMETRY.position },
     maxWidth: PLACEHOLDER_SLOT_GEOMETRY.maxWidth,
-    shadow: { blur: 0, color: '#000000', opacity: 0 },
+    shadow: styling.shadow ? { ...styling.shadow } : { blur: 0, color: '#000000', opacity: 0 },
     stroke: { width: 0, color: '#000000' },
     animation: Animation.NONE,
   };
 }
 
 /**
- * Ensure a text_elements map has a styling spec for `slot`, returning the
- * (possibly new) full map. Pure — never mutates the input.
- */
-export function withSlotSpec(textElements, slot) {
-  const map = textElements || {};
-  if (map[slot]) return map;
-  return { ...map, [slot]: defaultSlotSpec(slot) };
-}
-
-/**
- * Build the create payload for a brand-new card. Seeds title styling and
- * defaults `image_key` from the profile's own intro photo (epic decision 3b —
- * the photo is profile-level; a card starts from it and may reframe later).
- * `shown_fields` starts empty, so a fresh card is `title-only` until the user
- * ticks a fact — the composition rule made visible from the first gesture.
+ * Build the create payload for a brand-new card. `text_elements` starts EMPTY —
+ * the renderer/preview apply the default styling for every slot, so a fresh card
+ * looks finished without persisting redundant specs; a spec is written only when
+ * the user actually restyles a slot. Defaults `image_key` from the profile's own
+ * intro photo (epic decision 3b). `shown_fields` empty -> a fresh card is
+ * title-only until the user ticks a fact (the composition rule made visible).
  * @param {{name: string, profile: object}} args
  */
 export function buildCreateFields({ name, profile }) {
@@ -65,9 +53,9 @@ export function buildCreateFields({ name, profile }) {
     shown_fields: [],
     title_text: name,
     image_key: profile?.introPhotoKey || null,
-    text_elements: { [TITLE_SLOT]: defaultSlotSpec(TITLE_SLOT) },
+    text_elements: {},
     duration: DEFAULT_DURATION,
   };
 }
 
-export { Align, FontKey };
+export { TITLE_SLOT };

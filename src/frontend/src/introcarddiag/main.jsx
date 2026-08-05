@@ -2,7 +2,6 @@ import { createRoot } from 'react-dom/client';
 import '../index.css'; // Tailwind — without it every class is inert (0px measures)
 import { IntroCardEditorContainer } from '../components/introcards/IntroCardEditorContainer';
 import { useIntroCardStore, useProfileStore, useCurrentProfile } from '../stores';
-import { defaultSlotSpec } from '../components/introcards/introCardDefaults';
 
 /**
  * T5205 — DEV-ONLY real-browser harness for the intro card editor.
@@ -41,8 +40,8 @@ const MOCK_CARD = {
   focal_x: 0.5,
   focal_y: 0.5,
   zoom: 1.0,
-  text_elements: { title: defaultSlotSpec('title') },
-  duration: 4.0,
+  text_elements: {}, // empty -> default styling applied, like a fresh card
+  duration: 3.0,
   is_default: true,
   composition: 'hero',
   previewUrl: PHOTO,

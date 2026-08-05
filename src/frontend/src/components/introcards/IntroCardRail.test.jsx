@@ -59,9 +59,13 @@ describe('IntroCardRail', () => {
 
   it('editing styling routes through onUpdateSlotSpec for the selected slot', () => {
     const props = renderRail();
-    // The title slot is selected; changing size (a preset) emits a styling update.
-    fireEvent.click(screen.getByLabelText('Size L'));
+    // The title slot is selected; picking a colour swatch emits a styling update
+    // (size/align are layout-owned by the contract and not shown here).
+    fireEvent.click(screen.getByLabelText('Color #FFD66B'));
     expect(props.onUpdateSlotSpec).toHaveBeenCalled();
     expect(props.onUpdateSlotSpec.mock.calls.at(-1)[0]).toBe('title');
+    // No size/align controls in the card rail.
+    expect(screen.queryByLabelText('Size')).toBeNull();
+    expect(screen.queryByLabelText('Align')).toBeNull();
   });
 });

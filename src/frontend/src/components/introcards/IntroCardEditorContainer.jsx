@@ -17,6 +17,7 @@ import { IntroCardStage } from './IntroCardStage';
 import { IntroCardRail } from './IntroCardRail';
 import { ConsentGate } from './ConsentGate';
 import { defaultSlotSpec } from './introCardDefaults';
+import { treatmentAccent } from './introCardVisual';
 import { TITLE_SLOT } from './introCardEditorConstants';
 
 export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile }) {
@@ -119,8 +120,10 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
   }, [card.text_elements, patchDebounced]);
 
   const specForSlot = useCallback((slot) => {
-    return card.text_elements?.[slot] || defaultSlotSpec(slot);
-  }, [card.text_elements]);
+    // Fall back to the SAME default styling the renderer applies to an unstyled
+    // slot (accent depends on the treatment), so the rail shows the true look.
+    return card.text_elements?.[slot] || defaultSlotSpec(slot, treatmentAccent(card.treatment));
+  }, [card.text_elements, card.treatment]);
 
   // --- Photo framing (focal + zoom) --------------------------------------
   const onPhotoDragMove = useCallback((focal) => setDragFocal(focal), []);
@@ -189,6 +192,8 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           onPhotoDragEnd={onPhotoDragEnd}
           onZoomInput={onZoomInput}
           onZoomRelease={onZoomRelease}
+          selectedSlot={selectedSlot}
+          onSelectSlot={setSelectedSlot}
         />
         <IntroCardRail
           card={card}

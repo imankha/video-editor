@@ -13,9 +13,9 @@ import {
   SLOT_META,
   TITLE_SLOT,
   TREATMENTS,
-  SIZE_PRESETS,
   COLOR_SWATCHES,
 } from './introCardEditorConstants';
+import { treatmentBackgroundCss } from './introCardVisual';
 import { slotDisplayText } from './IntroCardPreview';
 
 export function IntroCardRail({
@@ -92,7 +92,7 @@ export function IntroCardRail({
                   active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
                 }`}
               >
-                <span className="w-full h-8 rounded" style={t.swatchStyle} />
+                <span className="w-full h-8 rounded" style={{ background: treatmentBackgroundCss(t.key) }} />
                 <span className="text-[11px] text-gray-300">{t.label}</span>
               </button>
             );
@@ -185,8 +185,9 @@ function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onComm
         spec={spec}
         onChange={(next) => onUpdateSlotSpec(slot, next)}
         hideText
+        hideSize
+        hideAlign
         hideFooterNote
-        sizePresets={SIZE_PRESETS}
         colorSwatches={COLOR_SWATCHES}
       />
     </div>

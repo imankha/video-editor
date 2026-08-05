@@ -14,13 +14,17 @@
 // <TextSpecEditor spec={TextSpec} onChange={(nextSpec) => void} fonts={FontKey[]} />
 //
 // Optional props let a host tailor the SAME editor without a second component
-// (T5205 opts into all three; T5225 passes none and keeps its raw controls):
+// (T5225 passes none and keeps every control; T5205's card rail opts in):
 //   hideText      -- omit the Text field (the card editor edits the title/fact
 //                    text outside the styling rail, since a fact's text comes
 //                    from the profile, not this spec).
-//   sizePresets   -- [{key,label,value}]; render Size as preset buttons
-//                    (S/M/L/XL) instead of the raw range.
+//   hideSize      -- omit the Size control. The card editor hides it because
+//                    font SIZE is LAYOUT-OWNED there (composition-derived via the
+//                    T5210 geometry contract), not user styling.
+//   hideAlign     -- omit the Align control (same reason: alignment is
+//                    composition-derived in the card editor).
 //   colorSwatches -- [hex]; render quick-pick swatches beside the custom picker.
+//   hideFooterNote-- omit the overlay-specific "burned into the export" note.
 
 import { Align, FontKey } from '../../constants/textSpec';
 
@@ -37,7 +41,7 @@ const ALIGN_LABELS = {
   [Align.RIGHT]: 'Right',
 };
 
-export function TextSpecEditor({ spec, onChange, fonts, hideText = false, sizePresets = null, colorSwatches = null, hideFooterNote = false }) {
+export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, hideFooterNote = false }) {
   const emit = (patch) => onChange({ ...spec, ...patch });
 
   return (
@@ -97,46 +101,23 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, sizePr
         />
       </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-gray-400">Align</span>
-        <select
-          aria-label="Align"
-          value={spec.align}
-          onChange={(e) => emit({ align: e.target.value })}
-          className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white"
-        >
-          {Object.values(Align).map((value) => (
-            <option key={value} value={value}>{ALIGN_LABELS[value] || value}</option>
-          ))}
-        </select>
-      </label>
+      {!hideAlign && (
+        <label className="flex flex-col gap-1">
+          <span className="text-xs uppercase tracking-wide text-gray-400">Align</span>
+          <select
+            aria-label="Align"
+            value={spec.align}
+            onChange={(e) => emit({ align: e.target.value })}
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white"
+          >
+            {Object.values(Align).map((value) => (
+              <option key={value} value={value}>{ALIGN_LABELS[value] || value}</option>
+            ))}
+          </select>
+        </label>
+      )}
 
-      {sizePresets && sizePresets.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-gray-400">Size</span>
-          <div className="flex gap-1.5" role="group" aria-label="Size">
-            {sizePresets.map((preset) => {
-              const active = nearestPresetKey(sizePresets, spec.size) === preset.key;
-              return (
-                <button
-                  key={preset.key}
-                  type="button"
-                  aria-label={`Size ${preset.label}`}
-                  aria-pressed={active}
-                  onClick={() => emit({ size: preset.value })}
-                  className={`flex-1 py-1.5 rounded text-sm font-medium border transition-colors ${
-                    active
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
+      {!hideSize && (
         <label className="flex flex-col gap-1">
           <span className="text-xs uppercase tracking-wide text-gray-400">Size</span>
           <input
@@ -188,21 +169,6 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, sizePr
       )}
     </div>
   );
-}
-
-// Nearest preset key for a normalised size, so the active preset button reads
-// correctly even after the value was set elsewhere (e.g. a duplicated card).
-function nearestPresetKey(presets, sizeValue) {
-  let bestKey = presets[0]?.key;
-  let bestDelta = Infinity;
-  for (const preset of presets) {
-    const delta = Math.abs(preset.value - sizeValue);
-    if (delta < bestDelta) {
-      bestKey = preset.key;
-      bestDelta = delta;
-    }
-  }
-  return bestKey;
 }
 
 export default TextSpecEditor;

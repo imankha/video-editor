@@ -130,21 +130,46 @@ test.describe('T5205 intro card editor (real browser)', () => {
     await saveEvidence(page, 'T5205-04c-zoom');
   });
 
-  test('5: selecting a slot and restyling it updates live', async ({ page }) => {
-    // Title slot is selected by default; XL size preset reads active after click.
-    const xl = page.getByLabel('Size XL');
-    await xl.click();
-    await expect(xl).toHaveAttribute('aria-pressed', 'true');
+  test('5: text slots render at the contract geometry and restyle live', async ({ page }) => {
+    // Title + the shown fact are drawn on the stage (post-rebase: geometry fed).
+    await expect(page.locator(PREVIEW)).toContainText('CHAMPION');
+    await expect(page.locator(PREVIEW)).toContainText('Midfielder');
 
-    // Show a fact, select its slot, and confirm the slot button is selected.
-    await page.locator('label', { hasText: 'Team' }).locator('input[type=checkbox]').check();
-    const teamSlot = page.getByRole('button', { name: 'Team', exact: true });
-    await teamSlot.click();
-    await expect(teamSlot).toHaveAttribute('aria-pressed', 'true');
-
-    // A colour swatch applies to the selected slot.
+    // A colour swatch applies to the selected (title) slot. Size/align are NOT in
+    // the card rail — they are layout-owned by the composition (contract).
+    await expect(page.getByLabel('Size')).toHaveCount(0);
+    await expect(page.getByLabel('Align')).toHaveCount(0);
     await page.getByLabel('Color #FFD66B').click();
     await expect(page.getByLabel('Color #FFD66B')).toHaveAttribute('aria-pressed', 'true');
     await saveEvidence(page, 'T5205-05-slot-styling');
+  });
+
+  test('6: clicking a slot on the stage selects it', async ({ page }) => {
+    // The shown fact (position) renders; clicking its hotspot selects that slot,
+    // reflected by the rail's slot button becoming pressed.
+    const positionSlotBtn = page.getByRole('button', { name: 'Position', exact: true });
+    await expect(positionSlotBtn).toHaveAttribute('aria-pressed', 'false');
+    await page.getByRole('button', { name: 'Select position' }).click();
+    await expect(positionSlotBtn).toHaveAttribute('aria-pressed', 'true');
+    await saveEvidence(page, 'T5205-06-slot-click-select');
+  });
+
+  test('7: motion preview plays from the shared timing constants', async ({ page }) => {
+    const button = page.locator('[data-testid="motion-preview-button"]');
+    await button.click();
+
+    // The overlay mounts and its text slots are actively animating (Web Animations
+    // driven by INTRO_CARD_MOTION), proving it plays real motion, not a static frame.
+    const overlay = page.locator('[data-testid="motion-preview"]');
+    await expect(overlay).toBeVisible();
+    const running = await page.locator('[data-testid="motion-slot-title"]').evaluate(
+      (el) => el.getAnimations().length > 0
+    );
+    expect(running).toBe(true);
+    await saveEvidence(page, 'T5205-07-motion-playing');
+
+    // It ends on its own (card duration) and returns to the editor.
+    await expect(overlay).toBeHidden({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Motion preview' })).toBeVisible();
   });
 });

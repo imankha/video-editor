@@ -1,12 +1,14 @@
-// T5205 — the card editor's opt-in extensions to the SHARED TextSpecEditor
-// (size presets, colour swatches, hidden text field). T5225's defaults are
-// unchanged and covered by TextSpecEditor.test.jsx.
+// T5205 — the card rail's opt-in extensions to the SHARED TextSpecEditor
+// (colour swatches, and hiding the text/size/align controls because a card's
+// text comes from title_text/profile and size/align are layout-owned by the
+// T5210 geometry contract). T5225's defaults are unchanged and covered by
+// TextSpecEditor.test.jsx.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { TextSpecEditor } from './TextSpecEditor';
 import { Align, FontKey } from '../../constants/textSpec';
-import { SIZE_PRESETS, COLOR_SWATCHES } from '../introcards/introCardEditorConstants';
+import { COLOR_SWATCHES } from '../introcards/introCardEditorConstants';
 
 afterEach(cleanup);
 
@@ -19,19 +21,15 @@ function baseSpec(overrides = {}) {
   };
 }
 
-describe('TextSpecEditor — T5205 rail extensions', () => {
-  it('hideText omits the Text field', () => {
-    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} hideText />);
+describe('TextSpecEditor — T5205 card-rail extensions', () => {
+  it('hideText / hideSize / hideAlign omit those controls (layout is composition-owned)', () => {
+    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} hideText hideSize hideAlign />);
     expect(screen.queryByText('Text')).toBeNull();
-  });
-
-  it('size presets replace the raw range and emit the preset value', () => {
-    const onChange = vi.fn();
-    render(<TextSpecEditor spec={baseSpec({ size: 0.04 })} onChange={onChange} sizePresets={SIZE_PRESETS} />);
-    const xl = SIZE_PRESETS.find((p) => p.key === 'XL');
-    fireEvent.click(screen.getByLabelText(`Size ${xl.label}`));
-    const next = onChange.mock.calls.at(-1)[0];
-    expect(next.size).toBeCloseTo(xl.value, 5);
+    expect(screen.queryByLabelText('Size')).toBeNull();
+    expect(screen.queryByLabelText('Align')).toBeNull();
+    // Font + colour (the actual card styling) remain.
+    expect(screen.getByLabelText(/font/i)).toBeTruthy();
+    expect(screen.getByLabelText('Color')).toBeTruthy();
   });
 
   it('colour swatches emit the swatch hex, leaving the rest of the spec intact', () => {
@@ -46,5 +44,11 @@ describe('TextSpecEditor — T5205 rail extensions', () => {
   it('hideFooterNote suppresses the overlay-specific note', () => {
     render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} hideFooterNote />);
     expect(screen.queryByText(/burned into the exported video/i)).toBeNull();
+  });
+
+  it('default (T5225) still shows size + align controls', () => {
+    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} />);
+    expect(screen.getByLabelText('Size')).toBeTruthy();
+    expect(screen.getByLabelText('Align')).toBeTruthy();
   });
 });

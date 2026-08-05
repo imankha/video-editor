@@ -1,23 +1,24 @@
 // T5205 — the shared, presentational card PREVIEW (browser render, no backend
-// call). Used at two sizes: a static tile in the library grid, and the base
-// layer under the editor's interactive stage. Props in, no store, no fetch.
+// call). Used at two sizes: a static tile in the library grid, and the base layer
+// under the editor's interactive stage. Props in, no store, no fetch.
 //
-// It composes: the treatment backdrop + the focal-framed photo. TEXT SLOTS are
-// drawn only when a `geometry` map is supplied — that map is T5210's composition
-// geometry contract (normalised rect per slot per aspect), which this screen
-// imports once it lands on master. Until then the preview shows the treatment +
-// photo faithfully and omits slot text rather than inventing positions.
+// It composes, from T5210's shared contract, exactly what the render engine draws:
+// the treatment backdrop + the focal-framed photo in its composition rect + the
+// legibility scrim + one RichText per text slot at its contract geometry (styling
+// merged over layout — see introCardPreviewElements). What the editor previews is
+// what player_intro.py renders.
 
 import { RichText } from '../RichText';
 import { selectCardComposition } from '../../utils/introCardComposition';
-import { treatmentMeta } from './introCardEditorConstants';
+import { geometryFor, CARD_ASPECTS } from '../../utils/introCardGeometry';
+import { treatmentBackgroundCss, photoStyleFor, scrimBackground } from './introCardVisual';
+import { buildPreviewElements } from './introCardPreviewElements';
 
 /**
  * Resolve the effective photo framing for a card. Card focal/zoom win; a NULL on
  * any of them means "inherit the profile's framing" (epic decision 3b). The
  * profile does not yet store a focal point, so inheritance currently resolves to
- * centred, un-zoomed framing — the documented fallback until profile framing
- * ships.
+ * centred, un-zoomed framing — the documented fallback until profile framing ships.
  */
 export function resolveFraming(card, profile) {
   const pick = (cardVal, profileVal, fallback) =>
@@ -31,8 +32,7 @@ export function resolveFraming(card, profile) {
 
 /**
  * Value a slot displays: the card's title text for the title slot, the profile
- * fact for a fact slot. Returns '' when unset (caller decides whether that is an
- * inline "fill it" prompt or just an absent line).
+ * fact for a fact slot. '' when unset.
  */
 export function slotDisplayText(slot, card, profile) {
   if (slot === 'title') return card?.title_text || '';
@@ -44,55 +44,38 @@ export function IntroCardPreview({
   profile,
   boxWidth,
   boxHeight,
-  geometry = null,
+  aspect = CARD_ASPECTS.portrait,
+  renderSlots = true,
 }) {
-  const treatment = treatmentMeta(card?.treatment);
   const composition = selectCardComposition(card);
-  const { focalX, focalY, zoom } = resolveFraming(card, profile);
+  const geo = geometryFor(composition, aspect);
+  const framing = resolveFraming(card, profile);
   const photoUrl = card?.image_key ? card?.previewUrl : null;
+  const hasPhoto = !!card?.image_key;
+
+  const { rectStyle, imgStyle } = photoStyleFor(geo.photo, framing, boxWidth, boxHeight);
+  const scrim = scrimBackground(composition, hasPhoto);
+  const elements = renderSlots ? buildPreviewElements(card, profile, composition, aspect) : [];
 
   return (
     <div
       className="relative overflow-hidden"
-      style={{ width: `${boxWidth}px`, height: `${boxHeight}px`, ...treatment.stageStyle }}
+      style={{ width: `${boxWidth}px`, height: `${boxHeight}px`, background: treatmentBackgroundCss(card?.treatment || 'gold') }}
       data-composition={composition}
-      data-treatment={treatment.key}
+      data-treatment={card?.treatment || 'gold'}
     >
       {photoUrl && (
-        <img
-          src={photoUrl}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 w-full h-full select-none pointer-events-none"
-          style={{
-            objectFit: 'cover',
-            objectPosition: `${focalX * 100}% ${focalY * 100}%`,
-            transform: `scale(${zoom})`,
-            transformOrigin: `${focalX * 100}% ${focalY * 100}%`,
-          }}
-        />
+        <div style={rectStyle}>
+          <img src={photoUrl} alt="" draggable={false} className="select-none pointer-events-none" style={imgStyle} />
+          {scrim && <div className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />}
+        </div>
       )}
 
-      {/* Text slots: only with T5210 composition geometry. Each slot renders one
-          RichText at its normalised rect, its text from the canonical source
-          (title_text / profile fact) merged over the stored STYLING spec. */}
-      {geometry &&
-        Object.entries(geometry).map(([slot, rect]) => {
-          const spec = card?.text_elements?.[slot];
-          const text = slotDisplayText(slot, card, profile);
-          if (!spec || !text) return null;
-          const merged = {
-            ...spec,
-            text,
-            position: rect.position,
-            maxWidth: rect.maxWidth,
-          };
-          return (
-            <div key={slot} className="absolute inset-0">
-              <RichText spec={merged} boxWidth={boxWidth} boxHeight={boxHeight} />
-            </div>
-          );
-        })}
+      {elements.map(({ slot, spec }) => (
+        <div key={slot} className="absolute inset-0 pointer-events-none">
+          <RichText spec={spec} boxWidth={boxWidth} boxHeight={boxHeight} />
+        </div>
+      ))}
     </div>
   );
 }
