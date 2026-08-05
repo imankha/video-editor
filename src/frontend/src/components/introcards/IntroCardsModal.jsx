@@ -8,8 +8,10 @@
 // editor MODE).
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import { useIntroCardStore, useCurrentProfile } from '../../stores';
+import { Z } from '../../constants/zLayers';
 import { IntroCardGrid } from './IntroCardGrid';
 import { IntroCardEditorContainer } from './IntroCardEditorContainer';
 import { buildCreateFields } from './introCardDefaults';
@@ -80,20 +82,22 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     }
   };
 
-  // Deepen the backdrop (/70 -> /80 in T6540, /80 -> /90 + blur `md` here) and
-  // grow the panel to max-w-6xl so the DIMMED page reads clearly as background.
+  // T6600 z-order fix. This modal is opened as a CHILD of ManageProfilesModal,
+  // which lives inside the app's `fixed top-4 right-4 z-30` header — so rendered
+  // inline it is TRAPPED in that stacking context and its root-level ceiling is
+  // the header's z, NOT the value it sets. DraftTile portals its hover overlays to
+  // document.body at Z.OVERLAY_BACKDROP/Z.PLAYER (its hover:scale transform breaks
+  // fixed descendants), so those tile overlays paint OVER a trapped modal with
+  // undimmed buttons, ABOVE the scrim — which no backdrop opacity can cover (the
+  // bug mis-fixed twice in T6540/T6580 by deepening the scrim).
   //
-  // PARTIAL, NOT A FULL FIX for T6580 item 1. The real complaint is a Z-ORDER
-  // bug, and no scrim opacity can cover it: DraftTile portals its hover overlays
-  // to document.body at z-[60]/z-[70] (its hover:scale transform breaks fixed
-  // descendants), while this modal is a CHILD of ManageProfilesModal's z-50
-  // fixed root — that ESTABLISHES a stacking context, so this modal's ceiling is
-  // z-50 no matter what number it uses. Draft tiles therefore paint OVER the
-  // panel with undimmed buttons, ABOVE the scrim. That z-order fix is its own
-  // task, T6600 (worked separately on clean master) — do NOT change z-index or
-  // portal anything here. Item 1 closes only when T6600 lands.
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+  // Fix: portal to document.body (escape the trap) and sit at Z.MODAL_ELEVATED,
+  // the nested-modal rung ABOVE the tile portal layer. The delete-card
+  // ConfirmationDialog is a DESCENDANT of this subtree, so it keeps its own MODAL
+  // rung and still renders above the grid (see constants/zLayers § nested modals).
+  // The scrim/blur/max-w-6xl panel treatment from T6580 is unchanged.
+  return createPortal(
+    <div data-testid="intro-cards-modal" className={`fixed inset-0 ${Z.MODAL_ELEVATED} flex items-center justify-center bg-black/90 backdrop-blur-md p-4`}>
       <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-6xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Intro cards</h2>
@@ -139,7 +143,8 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
