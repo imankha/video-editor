@@ -50,8 +50,10 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
       'broadcast',
       '9:16',
     );
-    // class is blank -> omitted; position still renders (at fact2's ordinal slot).
+    // class is blank -> omitted; position still renders at fact2's ORDINAL slot
+    // (numbering follows shown_fields index, matching the renderer's enumerate).
     expect(els.map((e) => e.slot)).toEqual(['title', 'position']);
+    expect(els.find((e) => e.slot === 'position').geoSlot).toBe('fact2');
   });
 
   it('omits the title when title_text is blank', () => {

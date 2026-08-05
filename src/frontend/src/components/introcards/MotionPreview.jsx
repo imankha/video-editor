@@ -49,13 +49,14 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
       ));
     }
 
-    // Per-line staggered fade-up (opacity 0->1 + rise), keyed by STAGGER_ORDER.
+    // Per-line staggered fade-up (opacity 0->1 + rise). Stagger keys off the
+    // GEOMETRY slot (geoSlot), matching the renderer's stagger-by-slot — not the
+    // rendered-fact count (which would differ when an earlier fact is blank).
     const risePx = m.textRiseFrac * boxHeight;
-    elements.forEach((el, i) => {
+    elements.forEach((el) => {
       const node = slotRefs.current[el.slot];
       if (!node) return;
-      const ordinal = el.kind === 'title' ? 'title' : `fact${factIndex(elements, i)}`;
-      const staggerIdx = Math.max(0, STAGGER_ORDER.indexOf(ordinal));
+      const staggerIdx = Math.max(0, STAGGER_ORDER.indexOf(el.geoSlot));
       const delayMs = (m.textStaggerFirstSt + staggerIdx * m.textStaggerStep) * 1000;
       animations.push(node.animate(
         [
@@ -114,16 +115,6 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
       <div ref={flashRef} className="absolute inset-0 pointer-events-none" style={{ background: '#ffffff', opacity: 0 }} />
     </div>
   );
-}
-
-// The ordinal index (1-based) of a fact element among the fact elements, matching
-// the renderer's fact{N} keying (elements are emitted title-first then facts).
-function factIndex(elements, indexInList) {
-  let n = 0;
-  for (let k = 0; k <= indexInList; k += 1) {
-    if (elements[k].kind === 'fact') n += 1;
-  }
-  return n;
 }
 
 export default MotionPreview;

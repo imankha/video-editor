@@ -50,8 +50,11 @@ export function mergeSpec(styling, text, slotGeo, kind, accent) {
 
 /**
  * The list of drawable elements for a card at a composition + aspect. Each entry
- * is { slot (semantic key), kind, spec }. Omits any line whose text is blank.
- * @returns {{slot:string, kind:string, spec:object}[]}
+ * is { slot (semantic styling key), geoSlot (ORDINAL geometry key: title/fact1..),
+ * kind, spec }. Omits any line whose text is blank. `geoSlot` is what stagger and
+ * geometry key off (mirrors the renderer, which staggers by the geometry slot,
+ * NOT by rendered-fact count — matters when an earlier shown fact is blank).
+ * @returns {{slot:string, geoSlot:string, kind:string, spec:object}[]}
  */
 export function buildPreviewElements(card, profile, composition, aspect) {
   const geo = geometryFor(composition, aspect);
@@ -66,20 +69,24 @@ export function buildPreviewElements(card, profile, composition, aspect) {
   if (slots[TITLE_SLOT] && titleText) {
     out.push({
       slot: TITLE_SLOT,
+      geoSlot: TITLE_SLOT,
       kind: 'title',
       spec: mergeSpec(textElements[TITLE_SLOT], titleText, slots[TITLE_SLOT], 'title', accent),
     });
   }
 
-  // Facts — ORDINAL geometry slot fact{i+1} <- SEMANTIC field shownFields[i].
+  // Facts — ORDINAL geometry slot fact{i+1} <- SEMANTIC field shownFields[i]. The
+  // ordinal is the shown_fields INDEX (not the rendered count), so a blank
+  // earlier fact still leaves its slot empty and the next fact keeps fact{i+1}.
   shownFields.forEach((field, i) => {
-    const slotKey = `fact${i + 1}`;
-    const slotGeo = slots[slotKey];
+    const geoSlot = `fact${i + 1}`;
+    const slotGeo = slots[geoSlot];
     if (!slotGeo) return; // more facts than the composition has slots (unreachable)
     const value = ((profile && profile[field]) || '').trim();
     if (!value) return; // unfilled fact -> omitted (the rail prompts to fill it)
     out.push({
       slot: field,
+      geoSlot,
       kind: 'fact',
       spec: mergeSpec(textElements[field], value, slotGeo, 'fact', accent),
     });
