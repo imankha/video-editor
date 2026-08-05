@@ -1,6 +1,6 @@
 # T5210 — Intro card render engine: design
 
-**Status:** WAITING ON USER (design gate)
+**Status:** APPROVED 2026-08-05 (gate corrections folded in) — implementing the engine
 **Tier:** L · Backend (+ a generated frontend mirror, already landed) · no schema change
 **Task:** [T5210-intro-card-generation.md](player-intro/T5210-intro-card-generation.md) ·
 **Epic:** [Player Intro + Rich Text](player-intro/EPIC.md) (decisions 2, 2b, 3, 3b, 5, 9, 10)
@@ -88,32 +88,54 @@ card with a name + 1 fact in the lower third; `broadcast` adds a lower-third ban
 facts; `recruiting` is the "profile" look — an **inset** photo (top band at 9:16, left
 column at 16:9) beside a denser 3-fact stack.
 
+> **Gate-resolution note (landed in `T5210: fold gate corrections...`):** the `subtitle`
+> slot was DROPPED (no schema field feeds it), so the tables below carry only `title` +
+> facts. Values match the committed contract module.
+
 ### 9:16 (portrait)
 
-| Composition | photo `{x,y,w,h}` | title `{x,y,mw,size,align}` | subtitle | fact1 | fact2 | fact3 |
-|---|---|---|---|---|---|---|
-| title-only | 0,0,1,1 | .5,.40,.86,.072,C | .5,.50,.80,.034,C | — | — | — |
-| hero | 0,0,1,1 | .5,.72,.90,.066,C | .5,.795,.80,.030,C | .5,.84,.80,.034,C | — | — |
-| broadcast | 0,0,1,1 | .5,.66,.90,.062,C | .5,.735,.80,.028,C | .5,.79,.80,.030,C | .5,.845,.80,.030,C | — |
-| recruiting | 0,0,1,.56 | .5,.60,.90,.058,C | .5,.665,.80,.028,C | .5,.72,.80,.032,C | .5,.79,.80,.032,C | .5,.86,.80,.032,C |
+| Composition | photo `{x,y,w,h}` | title `{x,y,mw,size,align}` | fact1 | fact2 | fact3 |
+|---|---|---|---|---|---|
+| title-only | 0,0,1,1 | .5,.44,.86,.072,C | — | — | — |
+| hero | 0,0,1,1 | .5,.74,.90,.066,C | .5,.84,.80,.034,C | — | — |
+| broadcast | 0,0,1,1 | .5,.68,.90,.062,C | .5,.79,.80,.030,C | .5,.845,.80,.030,C | — |
+| recruiting | 0,0,1,.56 | .5,.61,.90,.058,C | .5,.72,.80,.032,C | .5,.79,.80,.032,C | .5,.86,.80,.032,C |
 
 ### 16:9 (landscape)
 
-| Composition | photo `{x,y,w,h}` | title | subtitle | fact1 | fact2 | fact3 |
-|---|---|---|---|---|---|---|
-| title-only | 0,0,1,1 | .5,.38,.86,.135,C | .5,.60,.80,.060,C | — | — | — |
-| hero | 0,0,1,1 | .06,.66,.62,.120,L | .06,.80,.55,.050,L | .06,.865,.55,.055,L | — | — |
-| broadcast | 0,0,1,1 | .06,.62,.60,.110,L | .06,.75,.55,.045,L | .06,.82,.42,.048,L | .06,.89,.42,.048,L | — |
-| recruiting | 0,0,.46,1 | .52,.20,.44,.095,L | .52,.33,.42,.042,L | .52,.46,.42,.050,L | .52,.60,.42,.050,L | .52,.74,.42,.050,L |
+| Composition | photo `{x,y,w,h}` | title | fact1 | fact2 | fact3 |
+|---|---|---|---|---|---|
+| title-only | 0,0,1,1 | .5,.42,.86,.135,C | — | — | — |
+| hero | 0,0,1,1 | .06,.68,.62,.120,L | .06,.86,.55,.055,L | — | — |
+| broadcast | 0,0,1,1 | .06,.64,.60,.110,L | .06,.82,.42,.048,L | .06,.89,.42,.048,L | — |
+| recruiting | 0,0,.46,1 | .52,.22,.44,.095,L | .52,.46,.42,.050,L | .52,.60,.42,.050,L | .52,.74,.42,.050,L |
 
 (C = center, L = left. `mw` = maxWidth. Sizes differ per aspect on purpose — a title that
 reads on a tall 9:16 frame is a different fraction-of-height than on a short 16:9 one.)
 
-**Slot fill:** `title`/`subtitle` text come from the card (`text_elements[slot].text` /
-`title_text`); `fact1..factN` map **in order** from the card's `shown_fields`, with the
-VALUE read from the profile. A shown field the profile hasn't filled is **omitted and
-logged** — the slot is skipped, never drawn blank (task §A, decision 3). Composition already
-guarantees the fact count equals the slot count (parity-tested), so no empty slots.
+**Slot fill (seam-corrected):** `text_elements` is **STYLING ONLY** — never its `.text`.
+- `title` text comes from the card's **`title_text`** column; styling from
+  `text_elements["title"]`.
+- `fact{i}` (ORDINAL geometry) maps to `shown_fields[i-1]` (SEMANTIC): value from the
+  **profile** (`field_values[field]`), styling from `text_elements[field]`. Keeping styling
+  semantic means un-ticking one fact never transfers another fact's styling.
+- A `title_text`/fact value that is blank is **omitted and logged** — the slot is skipped,
+  never drawn blank (task §A, decision 3). Composition guarantees the fact count equals the
+  slot count (parity-tested), so no empty slots.
+
+### 4b. Treatment palette (Q5 — moved into the contract)
+
+`gold`/`dark` are radial gradients, `photo-forward` is a flat colour; each has an accent.
+Adopted verbatim from T5205's `introCardEditorConstants.js` (editor look unchanged, now
+canonical). Encoded as endpoints + centre + extent (not flattened), so the browser rebuilds
+the CSS and ffmpeg paints the same pixels via `geq` (radial distance
+`hypot((x-cx)/ex, (y-cy)/ey)`, stops lerped by `clip(d/lastStopPos,0,1)`).
+
+| Treatment | Background | Accent |
+|---|---|---|
+| gold | radial `#2a2410`@0 → `#0d0b06`@.70, centre (.5,0), extent (1.2,1.2) | `#f7e28b` |
+| dark | radial `#1a2230`@0 → `#05070b`@.70, centre (.5,0), extent (1.2,1.2) | `#e5e7eb` |
+| photo-forward | solid `#04060a` | `#ffffff` |
 
 ## 5. Motion timing values (**gate: review these**)
 
@@ -123,7 +145,7 @@ Seconds, relative to the card timeline `0..duration` (`duration` stored per card
 |---|---|---|
 | `photoPushInZoomStart` → `End` | 1.0 → 1.12 | Ken Burns push-in across the whole card, ease-out, FROM the stored focal framing |
 | `textStaggerFirstSt` | 0.35 | first element begins fading up |
-| `textStaggerStep` | 0.16 | added delay per subsequent element (order: title, subtitle, fact1..3) |
+| `textStaggerStep` | 0.16 | added delay per subsequent element (order: title, fact1..3) |
 | `textFadeD` | 0.45 | per-element fade-up duration |
 | `textRiseFrac` | 0.02 | elements rise this fraction of frame height while fading in |
 | `flashOutD` | 0.22 | white-flash EXIT into the footage (tail of the card) |
@@ -164,9 +186,10 @@ resolved by T5220 and passed in, so the engine never touches the DB or R2. This 
    aspect      = aspect_key(info["width"], info["height"])
    geo         = geometry_for(composition, aspect)            # from the landed contract
 2. Assemble the SHOWN elements (in STAGGER_ORDER), skipping any whose text is empty:
-     - title/subtitle: text from card, styling from text_elements[slot]
-     - fact{i}: text from field_values[shown_fields[i]] (omit+log if blank), styling from
-       text_elements[fact_slot] if the card styled it, else a per-treatment default TextSpec
+     - title: text from card["title_text"], styling from text_elements["title"]
+     - fact{i}: geometry = geo.slots["fact{i+1}"] (ORDINAL); field = shown_fields[i]
+       (SEMANTIC); text = field_values[field] (omit+log if blank); styling =
+       text_elements.get(field) if the card styled it, else a per-treatment default TextSpec
    For each, build a full TextSpec = card styling + slot geometry (position=(x,y),
    maxWidth, size, align) and render_text_layer(spec, W, H) -> RGBA PNG at frame size.
 3. content_hash = sha256 over EVERYTHING that affects pixels: composition, treatment,
