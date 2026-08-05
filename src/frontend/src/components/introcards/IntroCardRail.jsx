@@ -24,7 +24,7 @@ import {
   TREATMENTS,
   COLOR_SWATCHES,
 } from './introCardEditorConstants';
-import { treatmentAccent, treatmentBackgroundCss } from './introCardVisual';
+import { treatmentAccent, treatmentBackgroundCss, treatmentBand } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
 
 export function IntroCardRail({
@@ -135,16 +135,23 @@ export function IntroCardRail({
                       active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
                     }`}
                   >
-                    {/* The swatch shows what actually DIFFERS between treatments:
-                        backdrop + the treatment's accent. Backdrop alone is not it
-                        (all three are near-black by design), so a backdrop-only
-                        swatch read as three identical dark rectangles. */}
+                    {/* A mini card: backdrop + the treatment's lower-third BAND
+                        (T6580 item 4 — what actually grounds the text and makes
+                        the three visibly differ) with the accent bar on it.
+                        Photo-forward has no band, so its accent sits on the plain
+                        backdrop. */}
                     <span
-                      className="w-full h-8 rounded flex items-end justify-center pb-1 overflow-hidden"
+                      className="relative w-full h-8 rounded flex items-end justify-center overflow-hidden"
                       style={{ background: treatmentBackgroundCss(t.key) }}
                     >
+                      {treatmentBand(t.key) && (
+                        <span
+                          className="absolute inset-x-0 bottom-0 h-1/2"
+                          style={{ background: treatmentBand(t.key).color, opacity: treatmentBand(t.key).opacity }}
+                        />
+                      )}
                       <span
-                        className="block w-3/5 h-1.5 rounded-sm"
+                        className="relative block w-3/5 h-1.5 rounded-sm mb-1"
                         style={{ background: treatmentAccent(t.key) }}
                       />
                     </span>

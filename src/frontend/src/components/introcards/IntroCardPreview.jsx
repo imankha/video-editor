@@ -11,7 +11,10 @@
 import { RichText } from '../RichText';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor, CARD_ASPECTS } from '../../utils/introCardGeometry';
-import { treatmentBackgroundCss, photoStyleFor, scrimBackground } from './introCardVisual';
+import {
+  treatmentBackgroundCss, photoStyleFor, scrimBackground,
+  bandStyleFor, photoTintCss, photoVignetteCss,
+} from './introCardVisual';
 import { buildPreviewElements, resolveTitleText } from './introCardPreviewElements';
 
 /**
@@ -54,23 +57,36 @@ export function IntroCardPreview({
   const photoUrl = card?.image_key ? card?.previewUrl : null;
   const hasPhoto = !!card?.image_key;
 
+  const treatment = card?.treatment || 'gold';
   const { rectStyle, imgStyle } = photoStyleFor(geo.photo, framing, boxWidth, boxHeight);
-  const scrim = scrimBackground(composition, hasPhoto);
+  const scrim = scrimBackground(composition, hasPhoto, treatment);
+  // Treatment-owned photo grade + lower-third band (T6580 item 4), all from the
+  // shared contract so the export matches.
+  const tint = hasPhoto ? photoTintCss(treatment) : null;
+  const vignette = hasPhoto ? photoVignetteCss(treatment) : null;
+  const bandStyle = hasPhoto ? bandStyleFor(composition, treatment, boxWidth, boxHeight) : null;
   const elements = renderSlots ? buildPreviewElements(card, profile, composition, aspect) : [];
 
   return (
     <div
       className="relative overflow-hidden"
-      style={{ width: `${boxWidth}px`, height: `${boxHeight}px`, background: treatmentBackgroundCss(card?.treatment || 'gold') }}
+      style={{ width: `${boxWidth}px`, height: `${boxHeight}px`, background: treatmentBackgroundCss(treatment) }}
       data-composition={composition}
-      data-treatment={card?.treatment || 'gold'}
+      data-treatment={treatment}
     >
       {photoUrl && (
         <div style={rectStyle}>
           <img src={photoUrl} alt="" draggable={false} className="select-none pointer-events-none" style={imgStyle} />
+          {/* Photo grade (C): a colour wash then a vignette, clipped to the photo. */}
+          {tint && <div className="absolute inset-0 pointer-events-none" style={{ background: tint }} />}
+          {vignette && <div className="absolute inset-0 pointer-events-none" style={{ background: vignette }} />}
           {scrim && <div className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />}
         </div>
       )}
+
+      {/* Accent band (B): a frame-level lower-third ground, above the photo grade
+          and below the text. */}
+      {bandStyle && <div style={bandStyle} />}
 
       {elements.map(({ slot, spec }) => (
         <div key={slot} className="absolute inset-0 pointer-events-none">

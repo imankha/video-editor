@@ -11,7 +11,10 @@ import { useEffect, useRef } from 'react';
 import { RichText } from '../RichText';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor, INTRO_CARD_MOTION, STAGGER_ORDER } from '../../utils/introCardGeometry';
-import { treatmentBackgroundCss, photoStyleFor, scrimBackground } from './introCardVisual';
+import {
+  treatmentBackgroundCss, photoStyleFor, scrimBackground,
+  bandStyleFor, photoTintCss, photoVignetteCss,
+} from './introCardVisual';
 import { buildPreviewElements } from './introCardPreviewElements';
 import { resolveFraming } from './IntroCardPreview';
 
@@ -27,8 +30,12 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
   const framing = resolveFraming(card, profile);
   const hasPhoto = !!card?.image_key;
   const photoUrl = hasPhoto ? card?.previewUrl : null;
+  const treatment = card?.treatment || 'gold';
   const { rectStyle, imgStyle } = photoStyleFor(geo.photo, framing, boxWidth, boxHeight);
-  const scrim = scrimBackground(composition, hasPhoto);
+  const scrim = scrimBackground(composition, hasPhoto, treatment);
+  const tint = hasPhoto ? photoTintCss(treatment) : null;
+  const vignette = hasPhoto ? photoVignetteCss(treatment) : null;
+  const bandStyle = hasPhoto ? bandStyleFor(composition, treatment, boxWidth, boxHeight) : null;
   const elements = buildPreviewElements(card, profile, composition, aspect);
 
   const durationSec = card?.duration || 4.0;
@@ -89,16 +96,19 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
     <div
       data-testid="motion-preview"
       className="absolute inset-0 overflow-hidden"
-      style={{ width: `${boxWidth}px`, height: `${boxHeight}px`, background: treatmentBackgroundCss(card?.treatment || 'gold') }}
+      style={{ width: `${boxWidth}px`, height: `${boxHeight}px`, background: treatmentBackgroundCss(treatment) }}
     >
       {photoUrl && (
         <div style={rectStyle}>
           <div ref={photoRef} className="w-full h-full">
             <img src={photoUrl} alt="" draggable={false} className="select-none pointer-events-none" style={imgStyle} />
           </div>
+          {tint && <div className="absolute inset-0 pointer-events-none" style={{ background: tint }} />}
+          {vignette && <div className="absolute inset-0 pointer-events-none" style={{ background: vignette }} />}
           {scrim && <div className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />}
         </div>
       )}
+      {bandStyle && <div style={bandStyle} />}
 
       {elements.map((el) => (
         <div

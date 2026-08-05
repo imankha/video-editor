@@ -323,6 +323,23 @@ export const INTRO_CARD_TREATMENTS = /* @parity:treatments:start */ {
         }
       ],
       "type": "radial"
+    },
+    "band": {
+      "color": "#0e1622",
+      "featherFrac": 0.16,
+      "heightFrac": 0.44,
+      "opacity": 0.92
+    },
+    "photoMood": {
+      "tint": {
+        "color": "#16233a",
+        "opacity": 0.26
+      },
+      "vignette": {
+        "extent": 0.74,
+        "innerFrac": 0.38,
+        "opacity": 0.62
+      }
     }
   },
   "gold": {
@@ -348,6 +365,23 @@ export const INTRO_CARD_TREATMENTS = /* @parity:treatments:start */ {
         }
       ],
       "type": "radial"
+    },
+    "band": {
+      "color": "#241a0b",
+      "featherFrac": 0.16,
+      "heightFrac": 0.44,
+      "opacity": 0.9
+    },
+    "photoMood": {
+      "tint": {
+        "color": "#5a3a12",
+        "opacity": 0.22
+      },
+      "vignette": {
+        "extent": 0.78,
+        "innerFrac": 0.45,
+        "opacity": 0.5
+      }
     }
   },
   "photo-forward": {
@@ -356,6 +390,11 @@ export const INTRO_CARD_TREATMENTS = /* @parity:treatments:start */ {
       "color": "#04060a",
       "css": "#04060a",
       "type": "solid"
+    },
+    "band": null,
+    "photoMood": {
+      "tint": null,
+      "vignette": null
     }
   }
 } /* @parity:treatments:end */;
@@ -371,6 +410,8 @@ export const INTRO_CARD_MOTION = /* @parity:motion:start */ {
 } /* @parity:motion:end */;
 
 export const STAGGER_ORDER = /* @parity:staggerOrder:start */ ["title", "subtitle", "fact1", "fact2", "fact3"] /* @parity:staggerOrder:end */;
+
+export const BAND_COMPOSITIONS = /* @parity:bandCompositions:start */ ["hero", "broadcast"] /* @parity:bandCompositions:end */;
 
 /**
  * Resolve an output frame size to its contract aspect key. Mirrors
@@ -410,4 +451,13 @@ export function treatmentFor(treatment) {
     throw new Error(`unknown treatment=${treatment}`);
   }
   return t;
+}
+
+/**
+ * Whether a treatment band applies for a composition (`bottom` | `none`).
+ * Mirrors `intro_card_geometry.band_kind` so preview and export gate it the same.
+ * @param {string} composition one of COMPOSITION.* (introCardComposition.js)
+ */
+export function bandKind(composition) {
+  return BAND_COMPOSITIONS.includes(composition) ? 'bottom' : 'none';
 }

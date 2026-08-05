@@ -104,6 +104,11 @@ def test_aspects_parity(js_source):
     }
 
 
+def test_band_compositions_parity(js_source):
+    js_bands = _extract_parity_block(js_source, "bandCompositions")
+    assert js_bands == list(g.BAND_COMPOSITIONS)
+
+
 # --- Shape / completeness: every derived composition has both aspects, every -----
 # --- slot is well-formed and in-frame. Guards a value edit as much as parity. -----
 
@@ -176,24 +181,65 @@ def test_stagger_order_includes_subtitle_after_title():
     assert g.STAGGER_ORDER == ("title", "subtitle", "fact1", "fact2", "fact3")
 
 
+def _is_hex(c):
+    return isinstance(c, str) and c.startswith("#") and len(c) == 7
+
+
 def test_treatment_palette_covers_all_treatments():
     from app.services.intro_cards import TREATMENTS
 
     assert set(g.TREATMENTS_CONTRACT) == set(TREATMENTS)
     for name, t in g.TREATMENTS_CONTRACT.items():
-        assert set(t) == {"background", "accent"}, f"{name} unexpected keys"
-        assert t["accent"].startswith("#") and len(t["accent"]) == 7
+        # T6580 item 4: each treatment owns background + accent + band + photoMood.
+        assert set(t) == {"background", "accent", "band", "photoMood"}, f"{name} unexpected keys"
+        assert _is_hex(t["accent"])
         bg = t["background"]
         if bg["type"] == "solid":
-            assert bg["color"].startswith("#") and len(bg["color"]) == 7
+            assert _is_hex(bg["color"])
         elif bg["type"] == "radial":
             # endpoints preserved (not flattened to one colour), centre + extent present.
             assert len(bg["stops"]) >= 2
             assert len(bg["center"]) == 2 and len(bg["extent"]) == 2
             for stop in bg["stops"]:
-                assert stop["color"].startswith("#") and 0.0 <= stop["pos"] <= 1.0
+                assert _is_hex(stop["color"]) and 0.0 <= stop["pos"] <= 1.0
         else:
             raise AssertionError(f"{name} unknown background type {bg['type']!r}")
+
+        # band: a solid lower-third ground, or None (photo-forward).
+        band = t["band"]
+        if band is not None:
+            assert _is_hex(band["color"])
+            assert 0.0 <= band["opacity"] <= 1.0
+            assert 0.0 < band["heightFrac"] <= 1.0   # EXPLICIT height (user ask)
+            assert 0.0 <= band["featherFrac"] <= 1.0
+
+        # photoMood: tint (colour wash) + vignette, each present as a dict or None.
+        mood = t["photoMood"]
+        assert set(mood) == {"tint", "vignette"}, f"{name} photoMood keys"
+        if mood["tint"] is not None:
+            assert _is_hex(mood["tint"]["color"]) and 0.0 <= mood["tint"]["opacity"] <= 1.0
+        if mood["vignette"] is not None:
+            assert 0.0 <= mood["vignette"]["opacity"] <= 1.0
+            assert 0.0 <= mood["vignette"]["innerFrac"] <= 1.0
+            assert 0.0 < mood["vignette"]["extent"] <= 2.0
+
+
+def test_band_applies_to_lower_third_photo_compositions_only():
+    from app.services.intro_cards import (
+        COMPOSITION_BROADCAST,
+        COMPOSITION_HERO,
+        COMPOSITION_RECRUITING,
+        COMPOSITION_TITLE_ONLY,
+    )
+    assert g.band_kind(COMPOSITION_HERO) == "bottom"
+    assert g.band_kind(COMPOSITION_BROADCAST) == "bottom"
+    assert g.band_kind(COMPOSITION_TITLE_ONLY) == "none"
+    assert g.band_kind(COMPOSITION_RECRUITING) == "none"
+    # photo-forward carries no band (photo dominates), so it never grounds text.
+    assert g.TREATMENTS_CONTRACT["photo-forward"]["band"] is None
+    # gold + dark do.
+    assert g.TREATMENTS_CONTRACT["gold"]["band"] is not None
+    assert g.TREATMENTS_CONTRACT["dark"]["band"] is not None
 
 
 def test_treatment_for_unknown_raises():
