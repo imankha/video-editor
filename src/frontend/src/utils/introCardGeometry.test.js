@@ -3,11 +3,13 @@ import {
   CARD_ASPECTS,
   INTRO_CARD_GEOMETRY,
   INTRO_CARD_MOTION,
+  INTRO_CARD_TREATMENTS,
   STAGGER_ORDER,
   aspectKey,
   geometryFor,
+  treatmentFor,
 } from './introCardGeometry';
-import { COMPOSITION, deriveComposition } from './introCardComposition';
+import { COMPOSITION, deriveComposition, TREATMENTS } from './introCardComposition';
 
 // The Python-vs-JS number parity is guarded by the backend
 // tests/test_t5210_geometry_parity.py (it re-parses this file's embedded JSON).
@@ -95,7 +97,32 @@ describe('INTRO_CARD_MOTION', () => {
     );
   });
 
-  it('STAGGER_ORDER lists title/subtitle then the fact slots', () => {
-    expect(STAGGER_ORDER).toEqual(['title', 'subtitle', 'fact1', 'fact2', 'fact3']);
+  it('STAGGER_ORDER lists title then the fact slots (no subtitle)', () => {
+    expect(STAGGER_ORDER).toEqual(['title', 'fact1', 'fact2', 'fact3']);
+  });
+});
+
+describe('INTRO_CARD_TREATMENTS (editor swatches = render pixels)', () => {
+  it('covers every treatment the toggle offers', () => {
+    expect(Object.keys(INTRO_CARD_TREATMENTS).sort()).toEqual([...TREATMENTS].sort());
+  });
+
+  it('exposes a background (solid or radial endpoints) + accent per treatment', () => {
+    for (const name of TREATMENTS) {
+      const t = treatmentFor(name);
+      expect(t.accent).toMatch(/^#[0-9a-f]{6}$/i);
+      if (t.background.type === 'solid') {
+        expect(t.background.color).toMatch(/^#[0-9a-f]{6}$/i);
+      } else {
+        expect(t.background.type).toBe('radial');
+        expect(t.background.stops.length).toBeGreaterThanOrEqual(2);
+        expect(t.background.center).toHaveLength(2);
+        expect(t.background.extent).toHaveLength(2);
+      }
+    }
+  });
+
+  it('throws on an unknown treatment', () => {
+    expect(() => treatmentFor('neon')).toThrow();
   });
 });

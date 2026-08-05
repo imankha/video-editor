@@ -85,6 +85,12 @@ def test_motion_parity(js_source):
     assert js_motion == py_motion
 
 
+def test_treatments_parity(js_source):
+    js_treatments = _extract_parity_block(js_source, "treatments")
+    py_treatments = json.loads(json.dumps(g.TREATMENTS_CONTRACT))
+    assert js_treatments == py_treatments
+
+
 def test_stagger_order_parity(js_source):
     js_order = _extract_parity_block(js_source, "staggerOrder")
     assert js_order == list(g.STAGGER_ORDER)
@@ -146,7 +152,8 @@ def test_slot_rects_are_in_frame_and_well_formed():
 
 def test_compositions_show_expected_fact_slot_counts():
     """title-only shows no facts; hero 1; broadcast 2; recruiting 3 — the whole
-    point of deriving composition from fact count."""
+    point of deriving composition from fact count. Every composition has exactly
+    one `title` slot; there is NO subtitle slot (no schema field feeds it)."""
     expected_facts = {
         COMPOSITION_TITLE_ONLY: 0,
         COMPOSITION_HERO: 1,
@@ -158,6 +165,37 @@ def test_compositions_show_expected_fact_slot_counts():
             slots = g.geometry_for(comp, aspect)["slots"]
             fact_slots = [s for s in slots if s.startswith("fact")]
             assert len(fact_slots) == n, f"{comp}/{aspect} expected {n} fact slots"
+            assert g.SLOT_TITLE in slots, f"{comp}/{aspect} missing title slot"
+            assert "subtitle" not in slots, f"{comp}/{aspect} must not define a subtitle slot"
+
+
+def test_stagger_order_has_no_subtitle():
+    assert g.STAGGER_ORDER == ("title", "fact1", "fact2", "fact3")
+
+
+def test_treatment_palette_covers_all_treatments():
+    from app.services.intro_cards import TREATMENTS
+
+    assert set(g.TREATMENTS_CONTRACT) == set(TREATMENTS)
+    for name, t in g.TREATMENTS_CONTRACT.items():
+        assert set(t) == {"background", "accent"}, f"{name} unexpected keys"
+        assert t["accent"].startswith("#") and len(t["accent"]) == 7
+        bg = t["background"]
+        if bg["type"] == "solid":
+            assert bg["color"].startswith("#") and len(bg["color"]) == 7
+        elif bg["type"] == "radial":
+            # endpoints preserved (not flattened to one colour), centre + extent present.
+            assert len(bg["stops"]) >= 2
+            assert len(bg["center"]) == 2 and len(bg["extent"]) == 2
+            for stop in bg["stops"]:
+                assert stop["color"].startswith("#") and 0.0 <= stop["pos"] <= 1.0
+        else:
+            raise AssertionError(f"{name} unknown background type {bg['type']!r}")
+
+
+def test_treatment_for_unknown_raises():
+    with pytest.raises(KeyError):
+        g.treatment_for("neon")
 
 
 def test_aspect_key_buckets_portrait_landscape_square():
