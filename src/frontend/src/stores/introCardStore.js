@@ -66,6 +66,19 @@ export const useIntroCardStore = create((set, get) => ({
   },
 
   /**
+   * Optimistic, LOCAL-ONLY merge into a card row — no network call. The editor
+   * (T5205) applies each gesture locally first so the live preview updates
+   * instantly, then persists via `updateCard` (debounced for text styling). The
+   * store stays the single source of truth: this is an optimistic write TO the
+   * store, not a duplicate copy held in a component's useState. On a failed
+   * persist the caller reconciles with `fetchCards({ force: true })`.
+   */
+  patchCardLocal: (cardId, fields) =>
+    set((state) => ({
+      cards: state.cards.map((c) => (c.id === cardId ? { ...c, ...fields } : c)),
+    })),
+
+  /**
    * Surgical update (gesture: one edited field). Sends ONLY the changed field(s)
    * — never the whole card — matching the backend persistence rule.
    */

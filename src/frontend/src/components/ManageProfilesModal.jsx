@@ -3,6 +3,7 @@ import { X, Pencil, Trash2, ArrowLeft, Check, ChevronDown } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { useProfileStore } from '../stores';
 import { ProfileIntroSection } from './ProfileIntroSection';
+import { IntroCardsModal } from './introcards/IntroCardsModal';
 import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
@@ -229,6 +230,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
   const [editingProfileId, setEditingProfileId] = useState(null);
   const editingProfile = profiles.find(p => p.id === editingProfileId) || null;
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [showIntroCards, setShowIntroCards] = useState(false);
 
   // Reset mode when modal opens
   useEffect(() => {
@@ -424,9 +426,33 @@ export function ManageProfilesModal({ isOpen, onClose }) {
             />
             {/* Per-profile intro photo + parental-consent attestation (T5190) */}
             <ProfileIntroSection profile={editingProfile} />
+            {/* Intro card library + editor (T5205). Cards are scoped to the
+                CURRENT profile via the X-Profile-ID header, so this entry point
+                only opens for the active profile. */}
+            <div className="px-4 pb-4">
+              {editingProfile.isCurrent ? (
+                <button
+                  type="button"
+                  onClick={() => setShowIntroCards(true)}
+                  className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors"
+                >
+                  Intro cards
+                </button>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Switch to this profile to manage its intro cards.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      <IntroCardsModal
+        isOpen={showIntroCards}
+        onClose={() => setShowIntroCards(false)}
+        onEditProfile={() => setShowIntroCards(false)}
+      />
 
       {/* Delete confirmation */}
       <ConfirmationDialog
