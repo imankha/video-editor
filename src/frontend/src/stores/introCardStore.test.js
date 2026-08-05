@@ -57,6 +57,22 @@ describe('introCardStore', () => {
     expect(useIntroCardStore.getState().cards[0]).toEqual(updated);
   });
 
+  it('updateCard merges only the changed field, preserving a concurrent optimistic edit (T5205)', async () => {
+    // Local row already carries an optimistic shown_fields edit from a later
+    // gesture; an in-flight debounced text_elements PATCH now resolves with a
+    // server snapshot that predates that edit. The merge must NOT revert it.
+    useIntroCardStore.setState({ cards: [{ id: 7, shown_fields: ['position'], text_elements: { title: { size: 1 } }, treatment: 'gold' }] });
+    const staleServerRow = { id: 7, shown_fields: [], text_elements: { title: { size: 2 } }, treatment: 'gold', updated_at: 't1' };
+    mockFetch.mockResolvedValueOnce(jsonResponse(staleServerRow));
+
+    await useIntroCardStore.getState().updateCard(7, { text_elements: { title: { size: 2 } } });
+
+    const row = useIntroCardStore.getState().cards[0];
+    expect(row.text_elements).toEqual({ title: { size: 2 } }); // the changed field: server value
+    expect(row.shown_fields).toEqual(['position']); // concurrent edit preserved, not reverted to []
+    expect(row.updated_at).toBe('t1');
+  });
+
   it('setDefault refetches the authoritative list (does not guess locally)', async () => {
     useIntroCardStore.setState({
       cards: [{ id: 1, is_default: true }, { id: 2, is_default: false }],

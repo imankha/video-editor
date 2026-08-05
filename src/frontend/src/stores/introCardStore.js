@@ -66,6 +66,19 @@ export const useIntroCardStore = create((set, get) => ({
   },
 
   /**
+   * Optimistic, LOCAL-ONLY merge into a card row — no network call. The editor
+   * (T5205) applies each gesture locally first so the live preview updates
+   * instantly, then persists via `updateCard` (debounced for text styling). The
+   * store stays the single source of truth: this is an optimistic write TO the
+   * store, not a duplicate copy held in a component's useState. On a failed
+   * persist the caller reconciles with `fetchCards({ force: true })`.
+   */
+  patchCardLocal: (cardId, fields) =>
+    set((state) => ({
+      cards: state.cards.map((c) => (c.id === cardId ? { ...c, ...fields } : c)),
+    })),
+
+  /**
    * Surgical update (gesture: one edited field). Sends ONLY the changed field(s)
    * — never the whole card — matching the backend persistence rule.
    */
@@ -78,7 +91,26 @@ export const useIntroCardStore = create((set, get) => ({
     if (!response.ok) return null;
     const updated = await response.json();
     set((state) => ({
-      cards: state.cards.map((c) => (c.id === cardId ? updated : c)),
+      cards: state.cards.map((c) => {
+        if (c.id !== cardId) return c;
+        // Merge ONLY the fields this call changed (plus the server-derived
+        // refreshes) onto the CURRENT row — never the full server snapshot.
+        // The editor fires surgical single-field PATCHes and a debounced
+        // text_elements write can resolve AFTER a later gesture changed a
+        // different field; replacing the whole row with this response's stale
+        // snapshot of that other field would silently revert the newer edit
+        // (lost update on read). Per field the server is authoritative and the
+        // DB serialises the writes, so applying just the changed keys keeps the
+        // store the single source of truth without clobbering concurrent edits.
+        const merged = { ...c };
+        for (const key of Object.keys(changedFields)) merged[key] = updated[key];
+        if ('updated_at' in updated) merged.updated_at = updated.updated_at;
+        // image_key change also brings a freshly presigned preview URL.
+        if ('image_key' in changedFields && 'previewUrl' in updated) {
+          merged.previewUrl = updated.previewUrl;
+        }
+        return merged;
+      }),
     }));
     return updated;
   },

@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  T5205 DEV-ONLY diagnostic harness for the intro card editor (Part 1).
+  NOT a production page: not in vite build rollupOptions.input (only index.html
+  is), so it never ships. Served by the dev server only, for the Playwright
+  real-browser verification of pointer/visual behaviour (photo drag + zoom,
+  aspect toggle, slot selection, live composition) that jsdom passes falsely.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Intro card editor diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0b0f16; }
+    </style>
+  </head>
+  <body>
+    <div id="introcarddiag-root" style="padding: 16px; height: 100vh;"></div>
+    <script type="module" src="/src/introcarddiag/main.jsx"></script>
+  </body>
+</html>
