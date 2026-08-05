@@ -72,33 +72,49 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
         </select>
       </label>
 
+      {/* Quick picks and the custom picker sit on ONE row (T6510 UX pass). The
+          picker used to render full-width BELOW the swatches, where a native
+          <input type="color"> reads as a second, redundant "current colour"
+          display rather than a control - two affordances for one value. Inline
+          and swatch-sized, it reads as "one more colour, but any colour". */}
       <div className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-gray-400">Color</span>
-        {colorSwatches && colorSwatches.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-1">
-            {colorSwatches.map((hex) => {
-              const active = (spec.color || '').toUpperCase() === hex.toUpperCase();
-              return (
-                <button
-                  key={hex}
-                  type="button"
-                  aria-label={`Color ${hex}`}
-                  aria-pressed={active}
-                  onClick={() => emit({ color: hex })}
-                  style={{ backgroundColor: hex }}
-                  className={`w-6 h-6 rounded border ${active ? 'border-white ring-2 ring-blue-500' : 'border-gray-600'}`}
-                />
-              );
-            })}
-          </div>
-        )}
-        <input
-          type="color"
-          aria-label="Color"
-          value={spec.color}
-          onChange={(e) => emit({ color: e.target.value })}
-          className="h-8 w-full bg-gray-800 border border-gray-700 rounded"
-        />
+        {/* Deliberately NOT aria-labelled "Color" at the group level: each control
+            inside is named precisely ("Color #RRGGBB" per swatch, "Custom color"
+            for the picker), and a group named "Color" as well would make
+            getByLabelText(/color/i) ambiguous for both users and tests. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {colorSwatches && colorSwatches.length > 0 && colorSwatches.map((hex) => {
+            const active = (spec.color || '').toUpperCase() === hex.toUpperCase();
+            return (
+              <button
+                key={hex}
+                type="button"
+                aria-label={`Color ${hex}`}
+                aria-pressed={active}
+                onClick={() => emit({ color: hex })}
+                style={{ backgroundColor: hex }}
+                className={`w-6 h-6 rounded border ${active ? 'border-white ring-2 ring-blue-500' : 'border-gray-600'}`}
+              />
+            );
+          })}
+          <label
+            className="relative w-6 h-6 rounded border border-gray-600 overflow-hidden cursor-pointer shrink-0"
+            title="Custom color"
+            style={{
+              background:
+                'conic-gradient(#ef4444,#f59e0b,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)',
+            }}
+          >
+            <input
+              type="color"
+              aria-label="Custom color"
+              value={spec.color}
+              onChange={(e) => emit({ color: e.target.value })}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </label>
+        </div>
       </div>
 
       {!hideAlign && (

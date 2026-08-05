@@ -15,7 +15,7 @@ import {
   TREATMENTS,
   COLOR_SWATCHES,
 } from './introCardEditorConstants';
-import { treatmentBackgroundCss } from './introCardVisual';
+import { treatmentAccent, treatmentBackgroundCss } from './introCardVisual';
 import { slotDisplayText } from './IntroCardPreview';
 
 export function IntroCardRail({
@@ -92,7 +92,21 @@ export function IntroCardRail({
                   active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
                 }`}
               >
-                <span className="w-full h-8 rounded" style={{ background: treatmentBackgroundCss(t.key) }} />
+                {/* The swatch must show what actually DIFFERS between treatments.
+                    Backdrop alone is not it: all three backdrops are near-black by
+                    design (they sit behind a photo), so a backdrop-only swatch made
+                    the three read as identical dark rectangles - the one control
+                    whose whole job is "change the look" previewed no look at all.
+                    Backdrop + the treatment's accent is what the card really is. */}
+                <span
+                  className="w-full h-8 rounded flex items-end justify-center pb-1 overflow-hidden"
+                  style={{ background: treatmentBackgroundCss(t.key) }}
+                >
+                  <span
+                    className="block w-3/5 h-1.5 rounded-sm"
+                    style={{ background: treatmentAccent(t.key) }}
+                  />
+                </span>
                 <span className="text-[11px] text-gray-300">{t.label}</span>
               </button>
             );

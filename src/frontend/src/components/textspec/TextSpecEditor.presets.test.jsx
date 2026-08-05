@@ -29,7 +29,7 @@ describe('TextSpecEditor — T5205 card-rail extensions', () => {
     expect(screen.queryByLabelText('Align')).toBeNull();
     // Font + colour (the actual card styling) remain.
     expect(screen.getByLabelText(/font/i)).toBeTruthy();
-    expect(screen.getByLabelText('Color')).toBeTruthy();
+    expect(screen.getByLabelText('Custom color')).toBeTruthy();
   });
 
   it('colour swatches emit the swatch hex, leaving the rest of the spec intact', () => {

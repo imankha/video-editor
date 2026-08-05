@@ -99,7 +99,9 @@ describe('TextSpecEditor - pure presentational contract (T5225 design §4.1)', (
     const onChange = vi.fn();
     render(<TextSpecEditor spec={baseSpec()} onChange={onChange} fonts={FONT_CATALOGUE} />);
 
-    const colorInput = screen.getByLabelText(/color/i);
+    // The colour control is now quick-pick swatches PLUS a custom picker, so
+    // /color/i is ambiguous; target the picker explicitly.
+    const colorInput = screen.getByLabelText('Custom color');
     fireEvent.change(colorInput, { target: { value: '#00FF00' } });
 
     const nextSpec = onChange.mock.calls.at(-1)[0];
