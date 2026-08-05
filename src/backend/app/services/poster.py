@@ -569,10 +569,15 @@ def get_project_poster_marker_time(project_id: int | None) -> float | None:
         return float(row["poster_marker_time"]) if row and row["poster_marker_time"] is not None else None
 
 
-def set_project_poster_marker_time(project_id: int, time: float | None) -> float | None:
+def set_project_poster_marker_time(project_id: int, time: float) -> float:
     """Surgical write of the projects.poster_marker_time override (gesture-only
     -- fired from an explicit drag-end / button click, never a useEffect).
-    `time=None` clears it back to auto (window midpoint). Returns the stored
+
+    T6560: `time` is a concrete frame time -- the clear-to-none path was removed
+    (the endpoint rejects a null/missing time). The preview image is ALWAYS a
+    frame (T6510); the marker only MOVES, it never clears. (A stored NULL still
+    means "no override -> window midpoint" for legacy rows and get_/select_
+    fallbacks, but no write path produces one anymore.) Returns the stored
     value."""
     from ..database import get_db_connection
     with get_db_connection() as conn:

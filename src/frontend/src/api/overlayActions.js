@@ -251,11 +251,14 @@ export async function deleteText(projectId, id) {
 }
 
 /**
- * T5410: set (or clear) the pre-export poster marker time.
+ * T5410: set the pre-export poster marker time (the frame the share link
+ * unfurls to). MOVE-only -- T6560 removed the clear-to-null path: the preview
+ * image is ALWAYS a frame (T6510), so `time` must be a concrete, finite,
+ * non-negative number; the backend 422s a null/missing time. Reset-to-auto is a
+ * separate call (revertPoster), which regenerates a real frame.
  * @param {number} projectId
- * @param {number | null} time - seconds on the final timeline, or null to
- *   clear the override back to auto (export-time window midpoint).
- * @returns {Promise<{success: boolean, time: number|null}>}
+ * @param {number} time - seconds on the final timeline (a concrete frame).
+ * @returns {Promise<{success: boolean, time: number}>}
  */
 export async function setPosterTime(projectId, time) {
   try {

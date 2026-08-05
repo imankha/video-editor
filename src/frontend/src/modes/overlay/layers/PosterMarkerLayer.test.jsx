@@ -96,6 +96,29 @@ describe('PosterMarkerLayer (T5410)', () => {
     expect(onDragEnd).toHaveBeenCalledWith(expect.closeTo(timeAtX(620), 5));
   });
 
+  it('a pure CLICK (pointerdown+up, no movement) commits NOTHING -- the marker moves only on a drag (T6560)', () => {
+    const { onDragEnd } = renderMarker();
+    const marker = screen.getByTestId('poster-marker');
+
+    // Down and up at the SAME clientX: this is a click, not a drag. Before T6560
+    // it snapped the marker to pixelToVisualTime(clientX); now it must be a no-op.
+    fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it('a release-IN-PLACE (sub-threshold jitter) commits NOTHING (T6560)', () => {
+    const { onDragEnd } = renderMarker();
+    const marker = screen.getByTestId('poster-marker');
+
+    fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    // Jitter within DRAG_THRESHOLD_PX (4px) and back -- not a deliberate move.
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 502, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+
   it('honours a marker time outside a hypothetical window with no clamping (renders near the start)', () => {
     renderMarker({ visualTime: 0.1 });
     const marker = screen.getByTestId('poster-marker');

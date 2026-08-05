@@ -13,6 +13,7 @@ These endpoints handle highlight regions, effect types, and final output.
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import subprocess
@@ -25,7 +26,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from starlette.background import BackgroundTask
 
 from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
@@ -2158,17 +2159,35 @@ async def list_highlights(raw_clip_id: int = None):
 # =============================================================================
 
 class PosterTimeRequest(BaseModel):
-    """Body for the poster-time surgical write. `time=None` clears the
-    override back to auto (the export-time window midpoint)."""
-    time: float | None = None
+    """Body for the poster-time surgical write. A concrete, finite, non-negative
+    final-video time is REQUIRED.
+
+    T6560: the null/clear path was REMOVED here. T6510 established that the
+    preview image is ALWAYS a frame (a default is resolved, shown, and moved),
+    so there is no valid "none" state -- the marker can only be MOVED to another
+    frame, never cleared. Making `time` required (no `= None` default) means a
+    missing/undefined/null body now 422s LOUDLY at this persistence boundary
+    instead of silently clearing the reel's poster, so no UI path (present or
+    future regression) can reach the invalid state. Resetting to the AUTOMATIC
+    frame is a different gesture (POST /poster/revert), which regenerates a real
+    frame and overwrites the R2 object -- it never lands on "nothing"."""
+    time: float
+
+    @field_validator("time")
+    @classmethod
+    def _finite_nonnegative(cls, value: float) -> float:
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("poster time must be a finite, non-negative number")
+        return value
 
 
 @router.post("/projects/{project_id}/poster-time")
 async def set_poster_time(project_id: int, body: PosterTimeRequest):
     """Surgical, gesture-only write of the user's pre-export poster marker
     (T5410) -- fired from the overlay timeline marker's drag-end or the
-    "Use current frame as cover" button, never a useEffect. `time: null`
-    clears the override back to auto (the export-time window midpoint).
+    "Use current frame as cover" button, never a useEffect. The marker can only
+    be MOVED to a concrete frame; there is no clear-to-none (T6560) -- see
+    PosterTimeRequest. Reset-to-auto is POST /poster/revert.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()

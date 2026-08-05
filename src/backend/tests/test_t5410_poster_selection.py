@@ -24,7 +24,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
+from app.routers.export.overlay import PosterTimeRequest
 from app.services import poster as poster_mod
 from app.services.poster import (
     END_MARGIN_SECONDS,
@@ -275,13 +277,21 @@ def test_marker_time_set_and_read_back(db):
     assert get_project_poster_marker_time(pid) == pytest.approx(3.25)
 
 
-def test_marker_time_clears_on_none(db):
-    pid = _seed_project(db)
-    set_project_poster_marker_time(pid, 3.25)
-    assert get_project_poster_marker_time(pid) == pytest.approx(3.25)
+def test_poster_time_request_rejects_clear_and_invalid():
+    """T6560: the poster-time write is MOVE-only -- a null/missing/non-finite/
+    negative time is refused at the request boundary (Pydantic), so no UI path
+    can silently clear the reel's poster to 'none'. Reset-to-auto is /poster/
+    revert. A legacy stored NULL still reads as 'no override -> midpoint'
+    (test_marker_time_none_by_default), but nothing WRITES one anymore."""
+    # A concrete frame time is accepted (including 0.0 -- the first frame).
+    assert PosterTimeRequest(time=3.25).time == pytest.approx(3.25)
+    assert PosterTimeRequest(time=0.0).time == 0.0
 
-    set_project_poster_marker_time(pid, None)
-    assert get_project_poster_marker_time(pid) is None
+    # The clear path (null / missing) and nonsensical times are rejected.
+    for bad in ({"time": None}, {}, {"time": -1.0},
+                {"time": float("nan")}, {"time": float("inf")}):
+        with pytest.raises(ValidationError):
+            PosterTimeRequest(**bad)
 
 
 def test_marker_time_none_project_id_returns_none():

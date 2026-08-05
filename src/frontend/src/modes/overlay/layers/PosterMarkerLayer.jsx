@@ -3,6 +3,11 @@ import { Image, ImageOff } from 'lucide-react';
 import { formatTimeSimple } from '../../../components/shared/clipConstants';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 
+// Pointer travel (px) below which a pointerdown->up is a CLICK, not a drag, and
+// commits nothing. Small enough that any intended drag clears it, large enough
+// to swallow the sub-pixel jitter of a "click in place" (T6560).
+const DRAG_THRESHOLD_PX = 4;
+
 /**
  * PosterMarkerLayer - the cover-photo (poster) marker on the overlay timeline (T5410).
  *
@@ -30,6 +35,16 @@ export default function PosterMarkerLayer({
   const trackRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragVisualTime, setDragVisualTime] = useState(null);
+  // Where the pointer went down, and whether it has moved past DRAG_THRESHOLD_PX
+  // since. A pointerdown+up with no real movement is a CLICK, not a drag, and
+  // must NOT commit: the marker only MOVES on a deliberate drag (or arrow keys),
+  // never on a stray click/tap. Without this, a click committed
+  // pixelToVisualTime(clientX), snapping the marker to wherever inside its 32px
+  // hit box you clicked -- so "click it / release in place" relocated the frame
+  // (the T6560 "turn it off by clicking" report). Belt to the backend's brace:
+  // /poster-time can no longer clear to none, and a click no longer writes.
+  const pointerDownXRef = useRef(null);
+  const movedRef = useRef(false);
   const isCoarsePointer = useIsCoarsePointer();
   const hitSize = isCoarsePointer ? 44 : 32;
 
@@ -59,6 +74,8 @@ export default function PosterMarkerLayer({
     e.stopPropagation();
     e.preventDefault();
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointerDownXRef.current = e.clientX;
+    movedRef.current = false;
     setIsDragging(true);
     setDragVisualTime(shownVisualTime);
   }, [disabled, shownVisualTime]);
@@ -68,17 +85,29 @@ export default function PosterMarkerLayer({
 
     const handlePointerMove = (e) => {
       if (e.cancelable) e.preventDefault();
-      setDragVisualTime(pixelToVisualTime(e.clientX));
+      if (pointerDownXRef.current != null
+          && Math.abs(e.clientX - pointerDownXRef.current) > DRAG_THRESHOLD_PX) {
+        movedRef.current = true;
+      }
+      // Only track the pointer once it's a real drag -- a sub-threshold jitter
+      // must not visually nudge the marker off its committed frame.
+      if (movedRef.current) setDragVisualTime(pixelToVisualTime(e.clientX));
     };
     const handlePointerUp = (e) => {
+      const moved = movedRef.current;
       const finalTime = pixelToVisualTime(e.clientX);
       setIsDragging(false);
       setDragVisualTime(null);
-      commitDrag(finalTime);
+      pointerDownXRef.current = null;
+      movedRef.current = false;
+      // A click / release-in-place is NOT a move: leave the frame untouched.
+      if (moved) commitDrag(finalTime);
     };
     const handlePointerCancel = () => {
       setIsDragging(false);
       setDragVisualTime(null);
+      pointerDownXRef.current = null;
+      movedRef.current = false;
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
