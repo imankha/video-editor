@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Image } from 'lucide-react';
 import { ShareModal } from './ShareModal';
+import { Z } from '../constants/zLayers';
 import { CollectionShareModal } from './CollectionShareModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
 import { Button } from './shared/Button';
@@ -264,8 +265,9 @@ export function DownloadsPanel({
       title: download.project_name,
       downloadId: download.id,
     });
-    // Do NOT close the panel here: the player renders above it (z-[70] vs the
-    // panel's z-50), and collection playback (onPlayCollection) already leaves
+    // Do NOT close the panel here: the player renders above it (Z.PLAYER vs the
+    // panel's Z.MODAL, see constants/zLayers), and collection playback
+    // (onPlayCollection) already leaves
     // My Reels open. Closing only on single-reel play made the panel vanish
     // "sometimes" — exiting the player dropped the user back to the app instead
     // of My Reels. Only the X button closes the panel now.
@@ -430,12 +432,12 @@ export function DownloadsPanel({
       {isOpen && <>
       {/* Backdrop — visual only. No click-to-close (misclicks must not dismiss
           My Reels); the X button is the only way to close. */}
-      <div className="fixed inset-0 bg-black/50 z-40" />
+      <div className={`fixed inset-0 bg-black/50 ${Z.DROPDOWN}`} />
 
       {/* Panel — max-w-md (448px) below lg; widens at lg+ so poster-tile
           carousels/grids show more tiles per row (T5673). Slide-in transform is
           width-relative, so the open/close animation holds at every width. */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md lg:max-w-2xl xl:max-w-3xl bg-gray-800 shadow-xl z-50 flex flex-col border-l border-gray-700 animate-slide-in-right">
+      <div className={`fixed right-0 top-0 h-full w-full max-w-md lg:max-w-2xl xl:max-w-3xl bg-gray-800 shadow-xl ${Z.MODAL} flex flex-col border-l border-gray-700 animate-slide-in-right`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">

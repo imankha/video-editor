@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Z } from '../constants/zLayers';
 import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
@@ -666,7 +667,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           <div
             ref={menuRef}
             data-testid="draft-kebab-menu"
-            className="fixed bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 w-48 py-1"
+            className={`fixed bg-gray-700 border border-gray-600 rounded-lg shadow-xl ${Z.MODAL} w-48 py-1`}
             style={{ top: `${menuPos.top}px`, left: `${Math.max(8, menuPos.left)}px` }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -705,10 +706,10 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isPreviewing && project.final_video_id && createPortal(
         <>
           <div
-            className="fixed inset-0 bg-black/80 z-[60]"
+            className={`fixed inset-0 bg-black/80 ${Z.OVERLAY_BACKDROP}`}
             onClick={(e) => { e.stopPropagation(); setIsPreviewing(false); }}
           />
-          <div className="fixed inset-4 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl">
+          <div className={`fixed inset-4 md:inset-12 lg:inset-20 ${Z.PLAYER} flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl`}>
             <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
               <div className="flex items-center gap-3">
                 <Film size={20} className={REEL.accent} />

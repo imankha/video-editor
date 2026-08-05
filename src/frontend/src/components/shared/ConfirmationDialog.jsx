@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Button } from './Button';
+import { Z } from '../../constants/zLayers';
 
 /**
  * ConfirmationDialog - Modal dialog with configurable buttons
@@ -32,7 +33,7 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className={`fixed inset-0 ${Z.MODAL} flex items-center justify-center bg-black/60 backdrop-blur-sm`}
     >
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 border border-gray-700">
         {/* Header */}

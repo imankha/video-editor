@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Pencil, Trash2, ArrowLeft, Check, ChevronDown } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
+import { Z } from '../constants/zLayers';
 import { useProfileStore } from '../stores';
 import { ProfileIntroSection } from './ProfileIntroSection';
 import { IntroCardsModal } from './introcards/IntroCardsModal';
@@ -299,7 +300,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+      className={`fixed inset-0 bg-black/70 flex items-center justify-center ${Z.MODAL}`}
     >
       <div className="bg-gray-800 rounded-lg w-full max-w-md border border-gray-700 max-h-[90vh] flex flex-col">
         {/* List mode */}

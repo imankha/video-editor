@@ -1,6 +1,7 @@
 import React from 'react';
 import { Lock, X } from 'lucide-react';
 import { Button } from '../shared/Button';
+import { Z } from '../../constants/zLayers';
 import { ratioDisplay, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { formatDurationHuman } from './format';
 
@@ -24,7 +25,7 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose, kind = 'co
   const isRanking = kind === 'ranking';
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+    <div className={`fixed inset-0 ${Z.ALERT} flex items-center justify-center p-4`}>
       {/* Visual scrim only — no click-to-close (misclicks must not dismiss). */}
       <div className="absolute inset-0 bg-black/60" />
 
