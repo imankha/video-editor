@@ -32,7 +32,6 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 const HARNESS = '/introcarddiag.html';
 
 const PREVIEW = '[data-composition]';
-const COMP_LABEL = '[data-testid="composition-label"]';
 const DRAG = '[data-testid="intro-photo-drag"]';
 
 test.describe('T5205 intro card editor (real browser)', () => {
@@ -51,35 +50,36 @@ test.describe('T5205 intro card editor (real browser)', () => {
   });
 
   test('2: ticking facts re-composes live; treatment is independent', async ({ page }) => {
-    const label = page.locator(COMP_LABEL);
-    // The badge now reads as product feedback ("Hero layout"); the raw key stays
-    // on data-composition-key for a precise assertion (T6540 info-design pass).
+    // The composition is no longer NAMED in the UI (T6570: the user does not want
+    // the layout named); the derived composition is asserted from the preview
+    // root's data-composition attribute instead of a visible badge.
+    const preview = page.locator(PREVIEW);
     // photo + 1 fact (position) -> hero
-    await expect(label).toHaveAttribute('data-composition-key', 'hero');
+    await expect(preview).toHaveAttribute('data-composition', 'hero');
 
     // + team -> broadcast, + class -> recruiting (live, no template picker)
     await page.locator('label', { hasText: 'Team' }).locator('input[type=checkbox]').check();
-    await expect(label).toHaveAttribute('data-composition-key', 'broadcast');
+    await expect(preview).toHaveAttribute('data-composition', 'broadcast');
     await page.locator('label', { hasText: 'Class' }).locator('input[type=checkbox]').check();
-    await expect(label).toHaveAttribute('data-composition-key', 'recruiting');
+    await expect(preview).toHaveAttribute('data-composition', 'recruiting');
     await saveEvidence(page, 'T5205-02a-recruiting');
 
     // Treatment changes the LOOK but not the composition (3rd fact stayed put).
     await page.getByRole('button', { name: 'Dark' }).click();
-    await expect(page.locator(PREVIEW)).toHaveAttribute('data-treatment', 'dark');
-    await expect(label).toHaveAttribute('data-composition-key', 'recruiting'); // unchanged by treatment
+    await expect(preview).toHaveAttribute('data-treatment', 'dark');
+    await expect(preview).toHaveAttribute('data-composition', 'recruiting'); // unchanged by treatment
 
     // Untick back to one fact -> hero (look unchanged: still dark).
     await page.locator('label', { hasText: 'Team' }).locator('input[type=checkbox]').uncheck();
     await page.locator('label', { hasText: 'Class' }).locator('input[type=checkbox]').uncheck();
-    await expect(label).toHaveAttribute('data-composition-key', 'hero');
-    await expect(page.locator(PREVIEW)).toHaveAttribute('data-treatment', 'dark');
+    await expect(preview).toHaveAttribute('data-composition', 'hero');
+    await expect(preview).toHaveAttribute('data-treatment', 'dark');
 
     // Remove the photo -> title-only; re-add -> fact-driven composition returns.
     await page.getByRole('button', { name: 'Remove' }).click();
-    await expect(label).toHaveAttribute('data-composition-key', 'title-only');
+    await expect(preview).toHaveAttribute('data-composition', 'title-only');
     await page.getByRole('button', { name: 'Use profile photo' }).click();
-    await expect(label).toHaveAttribute('data-composition-key', 'hero');
+    await expect(preview).toHaveAttribute('data-composition', 'hero');
     await saveEvidence(page, 'T5205-02b-photo-toggle');
   });
 

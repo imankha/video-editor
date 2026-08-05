@@ -60,4 +60,51 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
     const els = buildPreviewElements({ ...card, title_text: '  ' }, profile, 'hero', '9:16');
     expect(els.find((e) => e.slot === 'title')).toBeUndefined();
   });
+
+  // T6570 — the title text is the profile's Full Name (title_text a legacy override).
+  it('sources the title from the profile full name when there is no title_text', () => {
+    const els = buildPreviewElements(
+      { treatment: 'gold', shown_fields: [], text_elements: {} },
+      { ...profile, full_name: 'Jordan Vega' },
+      'title-only', '9:16',
+    );
+    expect(els.find((e) => e.slot === 'title').spec.text).toBe('Jordan Vega');
+  });
+
+  it('grandfathers a legacy title_text over the profile full name', () => {
+    const els = buildPreviewElements(
+      { treatment: 'gold', title_text: 'Legacy', shown_fields: [], text_elements: {} },
+      { ...profile, full_name: 'Jordan Vega' },
+      'title-only', '9:16',
+    );
+    expect(els.find((e) => e.slot === 'title').spec.text).toBe('Legacy');
+  });
+
+  it('omits the title when neither title_text nor full_name is set', () => {
+    const els = buildPreviewElements(
+      { treatment: 'gold', shown_fields: [], text_elements: {} },
+      { ...profile },
+      'title-only', '9:16',
+    );
+    expect(els.find((e) => e.slot === 'title')).toBeUndefined();
+  });
+
+  // T6570 — the subtitle is FREE TEXT on the card, orthogonal to composition.
+  it('renders the card subtitle at the subtitle slot when present', () => {
+    const els = buildPreviewElements(
+      { ...card, subtitle_text: 'State Cup 2027' },
+      profile, 'broadcast', '9:16',
+    );
+    const geo = geometryFor('broadcast', '9:16');
+    const sub = els.find((e) => e.slot === 'subtitle');
+    expect(sub.spec.text).toBe('State Cup 2027');
+    expect(sub.spec.position).toEqual({ x: geo.slots.subtitle.x, y: geo.slots.subtitle.y });
+    // order: title, subtitle, then the facts
+    expect(els.map((e) => e.slot)).toEqual(['title', 'subtitle', 'team', 'position']);
+  });
+
+  it('omits the subtitle when subtitle_text is blank', () => {
+    const els = buildPreviewElements({ ...card, subtitle_text: '  ' }, profile, 'hero', '9:16');
+    expect(els.find((e) => e.slot === 'subtitle')).toBeUndefined();
+  });
 });

@@ -65,6 +65,7 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
         treatment: card.treatment,
         shown_fields: card.shown_fields || [],
         title_text: card.title_text,
+        subtitle_text: card.subtitle_text, // free text travels with the copy (T6570)
         image_key: card.image_key,
         image_cutout_key: card.image_cutout_key,
         focal_x: card.focal_x,
@@ -79,14 +80,21 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     }
   };
 
-  // T6540 item 6: the reel card a user saw "inside the modal" is the page BEHIND
-  // (My Reels) showing through this backdrop in the margin around the opaque
-  // panel — not leaked content (the panel is opaque bg-gray-900, so nothing
-  // renders through its interior). Deepened /70 -> /80 so the dimmed page reads
-  // clearly as background, not as part of the editor.
+  // Deepen the backdrop (/70 -> /80 in T6540, /80 -> /90 + blur `md` here) and
+  // grow the panel to max-w-6xl so the DIMMED page reads clearly as background.
+  //
+  // PARTIAL, NOT A FULL FIX for T6580 item 1. The real complaint is a Z-ORDER
+  // bug, and no scrim opacity can cover it: DraftTile portals its hover overlays
+  // to document.body at z-[60]/z-[70] (its hover:scale transform breaks fixed
+  // descendants), while this modal is a CHILD of ManageProfilesModal's z-50
+  // fixed root — that ESTABLISHES a stacking context, so this modal's ceiling is
+  // z-50 no matter what number it uses. Draft tiles therefore paint OVER the
+  // panel with undimmed buttons, ABOVE the scrim. That z-order fix is its own
+  // task, T6600 (worked separately on clean master) — do NOT change z-index or
+  // portal anything here. Item 1 closes only when T6600 lands.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-5xl h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-6xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Intro cards</h2>
           <button

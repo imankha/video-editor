@@ -2,7 +2,8 @@
 // drafts). Information design (T6540): the rail is organised into two tiers a
 // first-time user can scan without reading every label —
 //   CONTENT ("On the card"): which facts show (the composition axis), captioned
-//     with the live layout name so ticking a fact reads as cause -> effect.
+//     so ticking a fact reads as cause -> effect (WITHOUT naming a layout; T6570
+//     — the user does not want the layout named).
 //   PHOTO: the photo as ONE object — thumbnail, replace/remove, AND zoom together
 //     (drag stays on the stage; the indirect controls live here, not split off).
 //   STYLE: the look — treatment + the selected slot's typography, grouped in one
@@ -19,10 +20,11 @@ import {
   FACT_SLOTS,
   SLOT_META,
   TITLE_SLOT,
+  SUBTITLE_SLOT,
   TREATMENTS,
   COLOR_SWATCHES,
 } from './introCardEditorConstants';
-import { treatmentAccent, treatmentBackgroundCss } from './introCardVisual';
+import { treatmentAccent, treatmentBackgroundCss, treatmentBand } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
 
 export function IntroCardRail({
@@ -32,7 +34,7 @@ export function IntroCardRail({
   onSelectSlot,
   onToggleFact,
   onSetTreatment,
-  onCommitTitle,
+  onCommitSubtitle,
   specForSlot,
   onUpdateSlotSpec,
   onImageChanged,
@@ -43,22 +45,22 @@ export function IntroCardRail({
   onZoomRelease,
 }) {
   const shown = card.shown_fields || [];
-  // Slots available to style: the title, plus every shown fact.
-  const slotOptions = [TITLE_SLOT, ...FACT_SLOTS.filter((f) => shown.includes(f))];
+  // Slots available to style: the title (profile Full Name), the subtitle (free
+  // text — always offered so the user can turn one on), plus every shown fact.
+  const slotOptions = [TITLE_SLOT, SUBTITLE_SLOT, ...FACT_SLOTS.filter((f) => shown.includes(f))];
   const activeSlot = slotOptions.includes(selectedSlot) ? selectedSlot : TITLE_SLOT;
-  // A single styleable slot means there is nothing to switch between: showing a
-  // one-item "picker" reads as a stray button, so we drop it and label the drawer
-  // for the one slot instead (recognition over recall).
+  // Title + subtitle are always present, so there is always more than one slot to
+  // pick between — the picker always renders (the one-slot special case is gone).
   const hasSlotChoice = slotOptions.length > 1;
 
   return (
-    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-4 lg:pr-1">
+    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-3 lg:pr-1">
       {/* CONTENT tier — the primary decision, and the ONLY signpost that ticking
           a fact re-lays-out the card (the epic has no template picker). */}
       <section>
         <SectionHeading>On the card</SectionHeading>
-        <p className="text-xs text-gray-400 leading-snug mb-2">
-          The layout adapts to the facts you show (named on the card).
+        <p className="text-xs text-gray-400 leading-snug mb-1.5">
+          The layout adapts to the facts you show.
         </p>
         <div className="space-y-0.5">
           {FACT_SLOTS.map((slot) => {
@@ -75,7 +77,7 @@ export function IntroCardRail({
                     className="w-4 h-4 accent-blue-500 cursor-pointer flex-shrink-0"
                   />
                   <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
-                  {value && <span className="text-xs text-gray-500 truncate">— {value}</span>}
+                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
                 </label>
                 {isShown && !value && (
                   <p className="ml-8 mb-1 text-xs text-amber-400/90">
@@ -133,20 +135,27 @@ export function IntroCardRail({
                       active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
                     }`}
                   >
-                    {/* The swatch shows what actually DIFFERS between treatments:
-                        backdrop + the treatment's accent. Backdrop alone is not it
-                        (all three are near-black by design), so a backdrop-only
-                        swatch read as three identical dark rectangles. */}
+                    {/* A mini card: backdrop + the treatment's lower-third BAND
+                        (T6580 item 4 — what actually grounds the text and makes
+                        the three visibly differ) with the accent bar on it.
+                        Photo-forward has no band, so its accent sits on the plain
+                        backdrop. */}
                     <span
-                      className="w-full h-8 rounded flex items-end justify-center pb-1 overflow-hidden"
+                      className="relative w-full h-8 rounded flex items-end justify-center overflow-hidden"
                       style={{ background: treatmentBackgroundCss(t.key) }}
                     >
+                      {treatmentBand(t.key) && (
+                        <span
+                          className="absolute inset-x-0 bottom-0 h-1/2"
+                          style={{ background: treatmentBand(t.key).color, opacity: treatmentBand(t.key).opacity }}
+                        />
+                      )}
                       <span
-                        className="block w-3/5 h-1.5 rounded-sm"
+                        className="relative block w-3/5 h-1.5 rounded-sm mb-1"
                         style={{ background: treatmentAccent(t.key) }}
                       />
                     </span>
-                    <span className="text-[11px] text-gray-300">{t.label}</span>
+                    <span className="text-xs text-gray-200">{t.label}</span>
                   </button>
                 );
               })}
@@ -167,7 +176,7 @@ export function IntroCardRail({
                       type="button"
                       aria-pressed={active}
                       onClick={() => onSelectSlot(slot)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors coarse-pointer:min-h-[44px] ${
+                      className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors coarse-pointer:min-h-[44px] ${
                         active ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
                       }`}
                     >
@@ -184,8 +193,8 @@ export function IntroCardRail({
               profile={profile}
               specForSlot={specForSlot}
               onUpdateSlotSpec={onUpdateSlotSpec}
-              onCommitTitle={onCommitTitle}
               onEditProfile={onEditProfile}
+              onCommitSubtitle={onCommitSubtitle}
             />
           </div>
         </div>
@@ -215,22 +224,28 @@ function MiniLabel({ children }) {
  * profile value (read-only here; edited on the profile), or an inline prompt.
  * Both share the styling editor below.
  */
-function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onCommitTitle, onEditProfile }) {
+function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEditProfile, onCommitSubtitle }) {
   const meta = SLOT_META[slot];
   const spec = specForSlot(slot);
   const value = slotDisplayText(slot, card, profile);
+  // Three kinds of text source: the SUBTITLE is the one FREE-TEXT field (a
+  // property of THIS card); the TITLE is the profile's Full Name and the FACTS
+  // are profile values (both read-only here, edited on the profile). T6570.
+  const isTitle = slot === TITLE_SLOT;
+  const isSubtitle = slot === SUBTITLE_SLOT;
+  const sourceLabel = isTitle ? 'Full name' : meta.label;
 
   return (
     <div className="space-y-3">
-      {slot === TITLE_SLOT ? (
-        <TitleInput value={card.title_text || ''} onCommit={onCommitTitle} />
+      {isSubtitle ? (
+        <SubtitleInput value={card.subtitle_text || ''} onCommit={onCommitSubtitle} />
       ) : value ? (
         <div className="text-xs text-gray-400">
-          {meta.label}: <span className="text-gray-200">{value}</span> (edit on the profile)
+          {sourceLabel}: <span className="text-gray-200">{value}</span> (edit on the profile)
         </div>
       ) : (
         <p className="text-xs text-amber-400/90">
-          No {meta.label.toLowerCase()} on this profile yet.{' '}
+          No {sourceLabel.toLowerCase()} on this profile yet.{' '}
           <button type="button" onClick={onEditProfile} className="underline hover:text-amber-300">
             Add it
           </button>
@@ -253,15 +268,18 @@ function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onComm
 }
 
 /**
- * Title text draft — typing never hits the API; commits on blur/Enter, and only
- * when the value actually changed (mirrors ProfileIntroSection's IntroFactInput).
+ * The card's SUBTITLE — the ONE free-text field (T6570). A property of THIS card
+ * (a tournament name / sub-heading), unlike the title (the athlete's Full Name,
+ * from the profile). Typing never hits the API; commits on blur/Enter and only
+ * when changed. An empty value is a real state (the renderer omits the line), so
+ * it is committed too. Draft re-syncs when the persisted value moves under an
+ * untouched input (mirrors CardNameInput / IntroFactInput).
  */
-function TitleInput({ value, onCommit }) {
+function SubtitleInput({ value, onCommit }) {
   const [draft, setDraft] = useState(value);
   const [dirty, setDirty] = useState(false);
   const [lastValue, setLastValue] = useState(value);
 
-  // Render-time re-sync when the persisted value moves under an untouched input.
   if (value !== lastValue && !dirty) {
     setLastValue(value);
     setDraft(value);
@@ -276,14 +294,15 @@ function TitleInput({ value, onCommit }) {
 
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-gray-400">Title text</span>
+      <span className="text-xs uppercase tracking-wide text-gray-400">Subtitle (this card)</span>
       <input
         type="text"
         value={draft}
+        placeholder="e.g. State Cup 2027"
         onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-        className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
+        className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500"
       />
     </label>
   );

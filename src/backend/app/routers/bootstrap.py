@@ -20,6 +20,7 @@ from ..services.user_db import (
     INTRO_FACT_FIELDS,
     get_all_intro_consents,
     get_all_intro_facts,
+    get_all_intro_full_names,
     get_all_intro_photo_keys,
     get_profiles,
     get_selected_profile_id,
@@ -53,6 +54,8 @@ def _read_user_scoped(user_id: str) -> dict:
     # same KV mechanism, read once so the derived card layout (epic decision 2)
     # has correct data on first paint too.
     facts = get_all_intro_facts(user_id)
+    # Card title source (T6570) — same first-paint payload as the facts.
+    full_names = get_all_intro_full_names(user_id)
     profiles = [
         {
             "id": p["id"],
@@ -67,6 +70,7 @@ def _read_user_scoped(user_id: str) -> dict:
                 generate_presigned_url_global(photo_keys[p["id"]])
                 if p["id"] in photo_keys else None
             ),
+            "full_name": full_names.get(p["id"]),
             **{field: facts.get(p["id"], {}).get(field) for field in INTRO_FACT_FIELDS},
         }
         for p in profiles_raw

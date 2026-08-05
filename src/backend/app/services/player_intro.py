@@ -28,7 +28,9 @@ Contract (task §D):
 
 Text sourcing (seam-critical — see intro_card_geometry's mapping note):
   - `text_elements` is STYLING ONLY. NEVER read its `.text` (always '').
-  - title text  = card["title_text"]; styling = text_elements["title"].
+  - title text  = profile full name, passed in as field_values["full_name"]
+    (T6570); a card-level card["title_text"] is a GRANDFATHERED override for
+    pre-T6570 cards. styling = text_elements["title"].
   - fact{i} geometry (ORDINAL) <- shown_fields[i] (SEMANTIC): text =
     field_values[field] (omit+log if blank), styling = text_elements[field].
 """
@@ -49,6 +51,7 @@ from app.services.intro_card_geometry import (
     MOTION,
     STAGGER_ORDER,
     aspect_key,
+    band_kind,
     geometry_for,
     treatment_for,
 )
@@ -65,7 +68,7 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_intro_cards"
 # Bump whenever the RENDERER (filtergraph, defaults, motion wiring) changes so
 # stale cached cards from an old build rebuild. Distinct from the card's content
 # hash, which changes when the user edits the card.
-_CARD_VERSION = "v1-animated"
+_CARD_VERSION = "v2-treatment-band"  # T6580 item 4: band + photo grade added
 
 # Default per-slot styling used ONLY when the card left a slot unstyled
 # (text_elements has no entry). A shadow keeps text legible over a photo. The
@@ -254,6 +257,58 @@ def _render_scrim(kind: str, w: int, h: int) -> Image.Image | None:
     return None
 
 
+# --- Treatment photo grade + band (T6580 item 4) — parity with introCardVisual.js -
+def _render_tint(tint: dict | None, w: int, h: int) -> Image.Image | None:
+    """A flat normal-alpha colour wash over the photo (the treatment's grade).
+    Matches the CSS `rgba(color, opacity)` overlay the preview paints."""
+    if not tint:
+        return None
+    r, g, b = _hex_to_rgb(tint["color"])
+    return Image.new("RGBA", (w, h), (r, g, b, round(float(tint["opacity"]) * 255)))
+
+
+def _render_vignette(v: dict | None, w: int, h: int) -> Image.Image | None:
+    """Radial edge-darkening: transparent within `innerFrac` of the ellipse,
+    ramping to `opacity` black at its edge. Same normalised radial distance the
+    CSS radial-gradient uses (`extent` = the ellipse radius fraction), so the
+    browser preview and this render match."""
+    if not v:
+        return None
+    opacity = float(v["opacity"])
+    inner = float(v["innerFrac"])
+    extent = float(v["extent"])
+    xs = np.arange(w, dtype=np.float64)
+    ys = np.arange(h, dtype=np.float64)
+    nx = (xs[None, :] - 0.5 * w) / (extent * w)
+    ny = (ys[:, None] - 0.5 * h) / (extent * h)
+    d = np.sqrt(nx * nx + ny * ny)  # 0 at centre, 1 at the ellipse edge
+    t = np.clip((d - inner) / max(1.0 - inner, 1e-6), 0.0, 1.0)
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    rgba[..., 3] = np.clip(opacity * 255.0 * t, 0, 255).astype(np.uint8)
+    return Image.fromarray(rgba, "RGBA")
+
+
+def _render_band(band: dict | None, w: int, h: int) -> Image.Image | None:
+    """A solid lower-third ground behind the text: `heightFrac` of the frame tall,
+    filled at `opacity`, with the top `featherFrac` of the band fading in (no hard
+    edge). Matches the CSS `linear-gradient(to top, ...)` the preview paints."""
+    if not band:
+        return None
+    r, g, b = _hex_to_rgb(band["color"])
+    opacity = float(band["opacity"])
+    band_h = max(round(float(band["heightFrac"]) * h), 1)
+    feather = float(band["featherFrac"])
+    top = h - band_h
+    ys = np.arange(h, dtype=np.float64)
+    p = np.clip((ys - top) / band_h, 0.0, 1.0)  # 0 at band top, 1 at the base
+    ramp = np.clip(p / max(feather, 1e-6), 0.0, 1.0)
+    ramp[ys < top] = 0.0
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    rgba[..., 0], rgba[..., 1], rgba[..., 2] = r, g, b
+    rgba[..., 3] = (opacity * 255.0 * ramp).astype(np.uint8)[:, None]
+    return Image.fromarray(rgba, "RGBA")
+
+
 def _frame_photo(
     image_path: str, rw: int, rh: int, focal_x: float, focal_y: float, zoom: float
 ) -> Image.Image:
@@ -320,8 +375,11 @@ def _select_elements(card: dict, field_values: dict, geo: dict, accent: str) -> 
     shown_fields = card.get("shown_fields") or []
     elements: list[dict] = []
 
-    # title (free text from the card's title_text column; styling keyed "title")
-    title_text = (card.get("title_text") or "").strip()
+    # title: the PROFILE's full name (T6570) -- the name is a property of the
+    # athlete, not of a card. A card-level title_text is a GRANDFATHERED override
+    # for cards authored before T6570; a card created after it never sets one, so
+    # it always follows the profile. Styling keyed "title".
+    title_text = (card.get("title_text") or "").strip() or (field_values.get("full_name") or "").strip()
     if "title" in slots:
         if title_text:
             elements.append({
@@ -329,7 +387,21 @@ def _select_elements(card: dict, field_values: dict, geo: dict, accent: str) -> 
                 "spec": _merge_spec(text_elements.get("title"), title_text, slots["title"], "title", accent),
             })
         else:
-            logger.info("[PlayerIntro] title omitted: card has no title_text")
+            logger.info("[PlayerIntro] title omitted: profile full_name unset and no legacy title_text")
+
+    # subtitle: FREE TEXT on the card (T6570) — a tournament name / sub-heading,
+    # a property of THIS card (not the athlete). Orthogonal to composition; it
+    # never counts toward the fact-count. styling keyed "subtitle" (fact-like
+    # default). .get() column-guards the read for a pre-v035 card row.
+    subtitle_text = (card.get("subtitle_text") or "").strip()
+    if "subtitle" in slots:
+        if subtitle_text:
+            elements.append({
+                "slot": "subtitle",
+                "spec": _merge_spec(text_elements.get("subtitle"), subtitle_text, slots["subtitle"], "subtitle", accent),
+            })
+        else:
+            logger.info("[PlayerIntro] subtitle omitted: card has no subtitle_text")
 
     # facts: ORDINAL geometry slot fact{i+1} <- SEMANTIC field shown_fields[i]
     for i, field in enumerate(shown_fields):
@@ -474,8 +546,33 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
             last = "[withphoto]"
             idx += 1
 
-            # --- Scrim (legibility over the photo) ------------------------------
-            scrim = _render_scrim(_scrim_kind(composition, True), w, h)
+            # --- Treatment photo GRADE (T6580 item 4): tint then vignette, over
+            # the photo rect (px,py, rw x rh) so they clip to the photo exactly as
+            # the preview does. Each is a static PNG overlaid on every frame. -----
+            photo_mood = treatment.get("photoMood") or {}
+            for name, img in (
+                ("tint", _render_tint(photo_mood.get("tint"), rw, rh)),
+                ("vignette", _render_vignette(photo_mood.get("vignette"), rw, rh)),
+            ):
+                if img is None:
+                    continue
+                png = tmp_dir / f"{name}.png"
+                img.save(png)
+                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", png.as_posix()]
+                parts.append(f"[{idx}:v]format=rgba[{name}]")
+                parts.append(f"{last}[{name}]overlay=x={px}:y={py}[with{name}]")
+                last = f"[with{name}]"
+                idx += 1
+
+            # --- Text ground: a treatment BAND (T6580 item 4) grounds the text in
+            # the lower-third looks; where there is no band (photo-forward), the
+            # bottom scrim stays. They are mutually exclusive, so the band replaces
+            # the scrim rather than stacking. -----------------------------------
+            band_spec = treatment.get("band") if band_kind(composition) == "bottom" else None
+            scrim_kind = _scrim_kind(composition, True)
+            if band_spec and scrim_kind == "bottom":
+                scrim_kind = "none"
+            scrim = _render_scrim(scrim_kind, w, h)
             if scrim is not None:
                 scrim_png = tmp_dir / "scrim.png"
                 scrim.save(scrim_png)
@@ -483,6 +580,15 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
                 parts.append(f"[{idx}:v]format=rgba[scrim]")
                 parts.append(f"{last}[scrim]overlay=x=0:y=0[withscrim]")
                 last = "[withscrim]"
+                idx += 1
+            band_img = _render_band(band_spec, w, h)
+            if band_img is not None:
+                band_png = tmp_dir / "band.png"
+                band_img.save(band_png)
+                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", band_png.as_posix()]
+                parts.append(f"[{idx}:v]format=rgba[band]")
+                parts.append(f"{last}[band]overlay=x=0:y=0[withband]")
+                last = "[withband]"
                 idx += 1
 
         # --- Text PNGs: staggered fade-up (alpha ramp on the PNG + a small rise) -

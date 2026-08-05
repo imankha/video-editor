@@ -18,7 +18,7 @@ import { IntroCardRail } from './IntroCardRail';
 import { ConsentGate } from './ConsentGate';
 import { defaultSlotSpec } from './introCardDefaults';
 import { treatmentAccent } from './introCardVisual';
-import { TITLE_SLOT } from './introCardEditorConstants';
+import { TITLE_SLOT, FACT_SLOTS } from './introCardEditorConstants';
 
 export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile }) {
   const updateCard = useIntroCardStore((s) => s.updateCard);
@@ -82,11 +82,20 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
   }, []);
 
   // --- Facts (composition axis) ------------------------------------------
+  // shown_fields is ORDINAL: fact{N} geometry is the Nth entry, so the array
+  // ORDER decides which line each fact lands on (preview AND export). It must be
+  // the canonical FACT_SLOTS order, NOT click order — otherwise ticking the same
+  // facts in a different sequence lays them out differently (T6580: "the card
+  // looks different depending on the order I click the on-the-card buttons").
+  // Rebuild from FACT_SLOTS every toggle so the order is stable regardless of
+  // click sequence and any legacy click-ordered array is corrected on the next
+  // gesture. Styling is keyed semantically (by field), so reordering never moves
+  // a slot's styling.
   const toggleFact = useCallback((slot) => {
-    const current = card.shown_fields || [];
-    const next = current.includes(slot)
-      ? current.filter((f) => f !== slot)
-      : [...current, slot];
+    const shown = new Set(card.shown_fields || []);
+    if (shown.has(slot)) shown.delete(slot);
+    else shown.add(slot);
+    const next = FACT_SLOTS.filter((f) => shown.has(f));
     patch({ shown_fields: next });
   }, [card.shown_fields, patch]);
 
@@ -103,12 +112,12 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
     patch({ name: trimmed });
   }, [card.name, patch]);
 
-  // --- Title text ---------------------------------------------------------
-  const commitTitle = useCallback((value) => {
+  // --- Subtitle (the ONE free-text field, a property of THIS card, T6570) -
+  const commitSubtitle = useCallback((value) => {
     const trimmed = value.trim();
-    if (trimmed === (card.title_text || '')) return;
-    patch({ title_text: trimmed });
-  }, [card.title_text, patch]);
+    if (trimmed === (card.subtitle_text || '')) return;
+    patch({ subtitle_text: trimmed });
+  }, [card.subtitle_text, patch]);
 
   // --- Slot styling (text_elements) --------------------------------------
   // Rebase on the LIVE (optimistic) card.text_elements so editing slot B within
@@ -203,7 +212,7 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           onSelectSlot={setSelectedSlot}
           onToggleFact={toggleFact}
           onSetTreatment={setTreatment}
-          onCommitTitle={commitTitle}
+          onCommitSubtitle={commitSubtitle}
           specForSlot={specForSlot}
           onUpdateSlotSpec={updateSlotSpec}
           onImageChanged={onImageChanged}

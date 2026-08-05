@@ -49,18 +49,22 @@ SEMANTIC, and the renderer maps between them. Read this before touching either.
   - The card's `text_elements` is **STYLING ONLY** (shipped v034 schema, T5195):
     T5205 writes `''` into every `text_elements[slot].text`. NEVER read the text
     from there or you render blank lines. Text sources:
-        * title  -> the card's `title_text` column (free text; omit+log if blank)
-        * factN  -> the PROFILE value for `shown_fields[N-1]` (omit+log if blank)
+        * title    -> the PROFILE's Full Name (T6570), passed in as
+          `field_values["full_name"]`; `card["title_text"]` is a GRANDFATHERED
+          override for pre-T6570 cards. omit+log if blank.
+        * subtitle -> the card's `subtitle_text` column (free text on THIS card,
+          e.g. a tournament name; T6570 / migration v035). omit+log if blank.
+        * factN    -> the PROFILE value for `shown_fields[N-1]` (omit+log if blank)
   - So the renderer walks:
         for i, field in enumerate(card["shown_fields"]):
             geo_slot = geometry.slots[f"fact{i+1}"]      # ORDINAL position
             styling  = card["text_elements"].get(field)  # SEMANTIC styling (may be None)
             value    = field_values.get(field)           # PROFILE value (omit if blank)
-    and for the title: geo_slot = slots["title"], styling = text_elements.get("title"),
-    text = card["title_text"].
-  - There is deliberately NO `subtitle` slot: the shipped schema has only
-    `title_text` (no subtitle column) and T5205 authors none. Adding one would be a
-    migration, out of scope. See SLOT_* below.
+    and for title/subtitle: geo_slot = slots["title"|"subtitle"], styling =
+    text_elements.get(...), text = full name / card["subtitle_text"].
+  - The `subtitle` slot is ORTHOGONAL to composition (like the treatment axis):
+    it is free text the user turns on and does NOT count toward the fact-count,
+    so adding a subtitle never changes which composition is derived.
 
 Nothing here is stored on a card. Composition is derived from
 (`has_photo`, `shown_fields`) via `intro_cards.derive_composition`; this module only
@@ -86,11 +90,13 @@ from app.services.intro_cards import (
 ASPECT_PORTRAIT = "9:16"
 ASPECT_LANDSCAPE = "16:9"
 
-# Text slots. `title` free text comes from the card's `title_text`; `fact1..fact3`
-# are the ORDINAL fact-line positions, filled IN ORDER from the card's
-# `shown_fields` with the VALUE read from the profile (see the mapping note above).
-# There is NO subtitle slot — the shipped schema has no subtitle field.
+# Text slots. `title` = the profile's Full Name (T6570); `subtitle` = free text
+# on the card (T6570; a tournament name etc.), ORTHOGONAL to composition;
+# `fact1..fact3` are the ORDINAL fact-line positions, filled IN ORDER from the
+# card's `shown_fields` with the VALUE read from the profile (see the mapping
+# note above).
 SLOT_TITLE = "title"
+SLOT_SUBTITLE = "subtitle"
 SLOT_FACT1 = "fact1"
 SLOT_FACT2 = "fact2"
 SLOT_FACT3 = "fact3"
@@ -114,27 +120,36 @@ def _slot(x: float, y: float, max_width: float, size: float, align: str) -> dict
 # =============================================================================
 # SLOT GEOMETRY  (composition -> aspect -> {photo, slots})
 # =============================================================================
-# Approved values (T5210 design gate). The photo placement is what separates the
-# four looks:
+# Approved values (T5210 design gate; the subtitle slot + the title positions
+# that make room for it are RESTORED from commit c806e2a5, where they were
+# reviewed and approved, after being dropped when the subtitle was removed —
+# T6570 gives the subtitle a data source, so it comes back). The photo placement
+# is what separates the four looks:
 #   - title-only : a text-forward card; the photo (if any) is a full-bleed,
-#     scrimmed background, the title centred.
+#     scrimmed background, title + subtitle centred.
 #   - hero       : the photo IS the card (full-bleed push-in); a name + one fact
 #     sit in the lower third. 16:9 anchors the text left so the subject stays clear.
 #   - broadcast  : full-bleed photo + a lower-third band; name + two facts.
 #   - recruiting : the "profile" look — an INSET photo (top band at 9:16, left
 #     column at 16:9) with a denser three-fact stack beside/below it.
+# The `subtitle` slot is present in EVERY composition but ORTHOGONAL to it: an
+# empty subtitle is simply omitted (like an unticked fact), so a card without one
+# looks exactly as before; a card with one gets the sub-heading between the title
+# and the facts. Adding a subtitle NEVER changes the derived composition.
 GEOMETRY: dict[str, dict[str, dict]] = {
     COMPOSITION_TITLE_ONLY: {
         ASPECT_PORTRAIT: {
             "photo": dict(_FULL_BLEED),
             "slots": {
-                SLOT_TITLE: _slot(0.5, 0.44, 0.86, 0.072, ALIGN_CENTER),
+                SLOT_TITLE: _slot(0.5, 0.40, 0.86, 0.072, ALIGN_CENTER),
+                SLOT_SUBTITLE: _slot(0.5, 0.50, 0.80, 0.034, ALIGN_CENTER),
             },
         },
         ASPECT_LANDSCAPE: {
             "photo": dict(_FULL_BLEED),
             "slots": {
-                SLOT_TITLE: _slot(0.5, 0.42, 0.86, 0.135, ALIGN_CENTER),
+                SLOT_TITLE: _slot(0.5, 0.38, 0.86, 0.135, ALIGN_CENTER),
+                SLOT_SUBTITLE: _slot(0.5, 0.60, 0.80, 0.060, ALIGN_CENTER),
             },
         },
     },
@@ -142,15 +157,17 @@ GEOMETRY: dict[str, dict[str, dict]] = {
         ASPECT_PORTRAIT: {
             "photo": dict(_FULL_BLEED),
             "slots": {
-                SLOT_TITLE: _slot(0.5, 0.74, 0.90, 0.066, ALIGN_CENTER),
+                SLOT_TITLE: _slot(0.5, 0.72, 0.90, 0.066, ALIGN_CENTER),
+                SLOT_SUBTITLE: _slot(0.5, 0.795, 0.80, 0.030, ALIGN_CENTER),
                 SLOT_FACT1: _slot(0.5, 0.84, 0.80, 0.034, ALIGN_CENTER),
             },
         },
         ASPECT_LANDSCAPE: {
             "photo": dict(_FULL_BLEED),
             "slots": {
-                SLOT_TITLE: _slot(0.06, 0.68, 0.62, 0.120, ALIGN_LEFT),
-                SLOT_FACT1: _slot(0.06, 0.86, 0.55, 0.055, ALIGN_LEFT),
+                SLOT_TITLE: _slot(0.06, 0.66, 0.62, 0.120, ALIGN_LEFT),
+                SLOT_SUBTITLE: _slot(0.06, 0.80, 0.55, 0.050, ALIGN_LEFT),
+                SLOT_FACT1: _slot(0.06, 0.865, 0.55, 0.055, ALIGN_LEFT),
             },
         },
     },
@@ -158,7 +175,8 @@ GEOMETRY: dict[str, dict[str, dict]] = {
         ASPECT_PORTRAIT: {
             "photo": dict(_FULL_BLEED),
             "slots": {
-                SLOT_TITLE: _slot(0.5, 0.68, 0.90, 0.062, ALIGN_CENTER),
+                SLOT_TITLE: _slot(0.5, 0.66, 0.90, 0.062, ALIGN_CENTER),
+                SLOT_SUBTITLE: _slot(0.5, 0.735, 0.80, 0.028, ALIGN_CENTER),
                 SLOT_FACT1: _slot(0.5, 0.79, 0.80, 0.030, ALIGN_CENTER),
                 SLOT_FACT2: _slot(0.5, 0.845, 0.80, 0.030, ALIGN_CENTER),
             },
@@ -166,7 +184,8 @@ GEOMETRY: dict[str, dict[str, dict]] = {
         ASPECT_LANDSCAPE: {
             "photo": dict(_FULL_BLEED),
             "slots": {
-                SLOT_TITLE: _slot(0.06, 0.64, 0.60, 0.110, ALIGN_LEFT),
+                SLOT_TITLE: _slot(0.06, 0.62, 0.60, 0.110, ALIGN_LEFT),
+                SLOT_SUBTITLE: _slot(0.06, 0.75, 0.55, 0.045, ALIGN_LEFT),
                 SLOT_FACT1: _slot(0.06, 0.82, 0.42, 0.048, ALIGN_LEFT),
                 SLOT_FACT2: _slot(0.06, 0.89, 0.42, 0.048, ALIGN_LEFT),
             },
@@ -176,7 +195,8 @@ GEOMETRY: dict[str, dict[str, dict]] = {
         ASPECT_PORTRAIT: {
             "photo": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 0.56},
             "slots": {
-                SLOT_TITLE: _slot(0.5, 0.61, 0.90, 0.058, ALIGN_CENTER),
+                SLOT_TITLE: _slot(0.5, 0.60, 0.90, 0.058, ALIGN_CENTER),
+                SLOT_SUBTITLE: _slot(0.5, 0.665, 0.80, 0.028, ALIGN_CENTER),
                 SLOT_FACT1: _slot(0.5, 0.72, 0.80, 0.032, ALIGN_CENTER),
                 SLOT_FACT2: _slot(0.5, 0.79, 0.80, 0.032, ALIGN_CENTER),
                 SLOT_FACT3: _slot(0.5, 0.86, 0.80, 0.032, ALIGN_CENTER),
@@ -185,7 +205,8 @@ GEOMETRY: dict[str, dict[str, dict]] = {
         ASPECT_LANDSCAPE: {
             "photo": {"x": 0.0, "y": 0.0, "w": 0.46, "h": 1.0},
             "slots": {
-                SLOT_TITLE: _slot(0.52, 0.22, 0.44, 0.095, ALIGN_LEFT),
+                SLOT_TITLE: _slot(0.52, 0.20, 0.44, 0.095, ALIGN_LEFT),
+                SLOT_SUBTITLE: _slot(0.52, 0.33, 0.42, 0.042, ALIGN_LEFT),
                 SLOT_FACT1: _slot(0.52, 0.46, 0.42, 0.050, ALIGN_LEFT),
                 SLOT_FACT2: _slot(0.52, 0.60, 0.42, 0.050, ALIGN_LEFT),
                 SLOT_FACT3: _slot(0.52, 0.74, 0.42, 0.050, ALIGN_LEFT),
@@ -196,18 +217,36 @@ GEOMETRY: dict[str, dict[str, dict]] = {
 
 
 # =============================================================================
-# TREATMENT PALETTE  (treatment -> {background, accent})
+# TREATMENT PALETTE  (treatment -> {background, accent, band, photoMood})
 # =============================================================================
-# Adopted verbatim from T5205's introCardEditorConstants.js so the editor's look
-# is unchanged — this makes them canonical. The background is either a `solid`
-# colour or a `radial` gradient; a gradient is encoded as endpoints + centre +
-# extent (NOT flattened to one colour) so BOTH sides render the same pixels:
-#   - the editor rebuilds the CSS `radial-gradient(...)` from these fields (the
-#     `css` field is the exact string it already uses, kept for a 1:1 check);
-#   - the render engine paints it with ffmpeg `geq`, computing the same normalised
-#     radial distance d = hypot((x-cx)/ex, (y-cy)/ey) and lerping the stops by
-#     clip(d / lastStopPos, 0, 1). `center`/`extent` are fractions of frame w/h;
-#     `pos` is the CSS stop position (0..1 of the radius).
+# A treatment must VISIBLY change the card even on a full-bleed photo, where the
+# `background` is hidden (T6580 item 4 — the "changing Style barely changes
+# anything" complaint). So each treatment OWNS four things, ALL here in the shared
+# contract (never in the editor only) so the browser preview and the ffmpeg export
+# render the same pixels:
+#   - background : the radial/solid backdrop (hidden behind a full-bleed photo;
+#     visible on `recruiting`'s inset). Encoded as endpoints + centre + extent so
+#     both sides paint the same gradient (editor: CSS `radial-gradient`; engine:
+#     ffmpeg `geq`, d = hypot((x-cx)/ex, (y-cy)/ey), stops lerped by
+#     clip(d/lastStopPos, 0, 1)). `css` is the exact editor string, kept for a
+#     1:1 check.
+#   - accent     : the title's default colour.
+#   - band (B)   : a SOLID lower-third ground behind the text, so contrast stops
+#     depending on the photo AND the treatment differs on ANY footage. A vertical
+#     band filled with `color` at `opacity`, `heightFrac` of the frame HEIGHT tall
+#     (EXPLICIT, not implicit), with the top `featherFrac` of the band fading in
+#     so it has no hard edge. Applies only to the `bandCompositions` (lower-third
+#     text over a full-bleed photo). `photo-forward` has NO band (photo dominates
+#     — the plain scrim stays). Gold is DESATURATED + dark ("pull the gold back").
+#   - photoMood (C): a colour GRADE over the photo — a `tint` (a normal-alpha
+#     colour wash: warm for gold, cool for dark; none for photo-forward) and a
+#     `vignette` (radial edge-darkening: soft for gold, strong/moody for dark;
+#     none for photo-forward). Normal-alpha (not multiply) so CSS and PIL match
+#     to the pixel. tint = {color, opacity}; vignette = {opacity, innerFrac}
+#     (transparent inside `innerFrac` of the half-diagonal, ramping to `opacity`
+#     at the corner). `null` = that grade is off.
+#
+# Direction: B + C combined, gold pulled back (T6580 item 4, user-approved).
 TREATMENTS_CONTRACT: dict[str, dict] = {
     TREATMENT_GOLD: {
         "background": {
@@ -221,6 +260,12 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
             "css": "radial-gradient(120% 120% at 50% 0%, #2a2410 0%, #0d0b06 70%)",
         },
         "accent": "#f7e28b",
+        # Desaturated dark-warm ground (NOT the loud bright gold of the sample).
+        "band": {"color": "#241a0b", "opacity": 0.9, "heightFrac": 0.44, "featherFrac": 0.16},
+        "photoMood": {
+            "tint": {"color": "#5a3a12", "opacity": 0.22},   # warm/premium
+            "vignette": {"opacity": 0.5, "innerFrac": 0.45, "extent": 0.78},
+        },
     },
     TREATMENT_DARK: {
         "background": {
@@ -234,6 +279,11 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
             "css": "radial-gradient(120% 120% at 50% 0%, #1a2230 0%, #05070b 70%)",
         },
         "accent": "#e5e7eb",
+        "band": {"color": "#0e1622", "opacity": 0.92, "heightFrac": 0.44, "featherFrac": 0.16},
+        "photoMood": {
+            "tint": {"color": "#16233a", "opacity": 0.26},   # cool/moody
+            "vignette": {"opacity": 0.62, "innerFrac": 0.38, "extent": 0.74},
+        },
     },
     TREATMENT_PHOTO_FORWARD: {
         "background": {
@@ -242,8 +292,17 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
             "css": "#04060a",
         },
         "accent": "#ffffff",
+        "band": None,                                        # clean/natural — no band
+        "photoMood": {"tint": None, "vignette": None},       # no grade
     },
 }
+
+# The compositions whose text sits in the lower third OVER a full-bleed photo, so
+# a treatment band grounds it. title-only centres its title (no lower-third band)
+# and recruiting puts its text on the treatment background beside the inset photo
+# (already grounded). Contract-driven (mirrored to JS) so preview and export gate
+# the band identically — the same "one rule, both consumers" shape as the scrim.
+BAND_COMPOSITIONS: tuple[str, ...] = (COMPOSITION_HERO, COMPOSITION_BROADCAST)
 
 
 # =============================================================================
@@ -251,7 +310,7 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
 # =============================================================================
 # Card `duration` is stored per-card; these are the relative offsets both the
 # renderer and the browser preview animate with. The stagger runs in slot ORDER
-# (title, fact1, fact2, fact3): element i begins at `firstSt + i*step`. The exit
+# (title, subtitle, fact1, fact2, fact3): element i begins at `firstSt + i*step`. The exit
 # flash is the LAST beat, so the card's final frame is a deterministic white that
 # cuts cleanly into the reel (mirrors T5240's flash, applied last).
 MOTION: dict[str, float | int] = {
@@ -264,10 +323,11 @@ MOTION: dict[str, float | int] = {
     "flashOutD": 0.22,
 }
 
-# The slot order the stagger walks (no subtitle). Shared so the preview and the
-# renderer index the stagger identically.
+# The slot order the stagger walks. Shared so the preview and the renderer index
+# the stagger identically.
 STAGGER_ORDER: tuple[str, ...] = (
     SLOT_TITLE,
+    SLOT_SUBTITLE,
     SLOT_FACT1,
     SLOT_FACT2,
     SLOT_FACT3,
@@ -300,11 +360,19 @@ def geometry_for(composition: str, aspect: str) -> dict:
 
 
 def treatment_for(treatment: str) -> dict:
-    """Return `{background, accent}` for a treatment key. Unknown keys RAISE."""
+    """Return `{background, accent, band, photoMood}` for a treatment key. Unknown
+    keys RAISE."""
     try:
         return TREATMENTS_CONTRACT[treatment]
     except KeyError as e:
         raise KeyError(f"unknown treatment {treatment!r}") from e
+
+
+def band_kind(composition: str) -> str:
+    """Whether a treatment band applies for a composition: `bottom` for the
+    lower-third-over-photo looks, else `none`. Mirrored verbatim in JS
+    (`bandKind`) so preview and export gate the band identically."""
+    return "bottom" if composition in BAND_COMPOSITIONS else "none"
 
 
 # =============================================================================
@@ -325,6 +393,7 @@ def contract_as_dict() -> dict:
         "motion": MOTION,
         "staggerOrder": list(STAGGER_ORDER),
         "aspects": {"portrait": ASPECT_PORTRAIT, "landscape": ASPECT_LANDSCAPE},
+        "bandCompositions": list(BAND_COMPOSITIONS),
     }
 
 
@@ -338,6 +407,7 @@ def render_js_mirror() -> str:
     motion = json.dumps(c["motion"], indent=2, sort_keys=True)
     stagger = json.dumps(c["staggerOrder"])
     aspects = json.dumps(c["aspects"], indent=2, sort_keys=True)
+    band_compositions = json.dumps(c["bandCompositions"])
     return f"""// GENERATED FROM app/services/intro_card_geometry.py — do not hand-edit.
 // Regenerate: cd src/backend && .venv/Scripts/python.exe -m app.services.intro_card_geometry
 // Parity is enforced by src/backend/tests/test_t5210_geometry_parity.py.
@@ -356,6 +426,8 @@ export const INTRO_CARD_TREATMENTS = /* @parity:treatments:start */ {treatments}
 export const INTRO_CARD_MOTION = /* @parity:motion:start */ {motion} /* @parity:motion:end */;
 
 export const STAGGER_ORDER = /* @parity:staggerOrder:start */ {stagger} /* @parity:staggerOrder:end */;
+
+export const BAND_COMPOSITIONS = /* @parity:bandCompositions:start */ {band_compositions} /* @parity:bandCompositions:end */;
 
 /**
  * Resolve an output frame size to its contract aspect key. Mirrors
@@ -395,6 +467,15 @@ export function treatmentFor(treatment) {{
     throw new Error(`unknown treatment=${{treatment}}`);
   }}
   return t;
+}}
+
+/**
+ * Whether a treatment band applies for a composition (`bottom` | `none`).
+ * Mirrors `intro_card_geometry.band_kind` so preview and export gate it the same.
+ * @param {{string}} composition one of COMPOSITION.* (introCardComposition.js)
+ */
+export function bandKind(composition) {{
+  return BAND_COMPOSITIONS.includes(composition) ? 'bottom' : 'none';
 }}
 """
 

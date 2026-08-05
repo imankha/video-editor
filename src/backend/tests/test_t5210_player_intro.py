@@ -106,6 +106,57 @@ def test_select_elements_reads_title_text_not_text_elements_text():
     assert title["spec"].size == geo["slots"]["title"]["size"]
 
 
+def test_select_elements_title_from_profile_full_name():
+    # T6570: with no legacy title_text, the title text is the PROFILE's full name,
+    # passed in via field_values["full_name"] (mirrors the browser preview).
+    card = _card(["position"], title_text=None)
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, fields, geo, "#ffffff")
+    title = next(e for e in els if e["slot"] == "title")
+    assert title["spec"].text == "Jordan Vega"
+
+
+def test_select_elements_legacy_title_text_grandfathers_over_full_name():
+    # A pre-T6570 card that stored a title_text keeps rendering it (override),
+    # even when the profile now has a full name.
+    card = _card(["position"], title_text="Legacy Name")
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, fields, geo, "#ffffff")
+    title = next(e for e in els if e["slot"] == "title")
+    assert title["spec"].text == "Legacy Name"
+
+
+def test_select_elements_renders_card_subtitle_when_present():
+    # T6570: subtitle is FREE TEXT on the card; it renders at the subtitle slot,
+    # between title and facts, and is orthogonal to composition.
+    card = _card(["position"], title_text=None, subtitle_text="State Cup 2027")
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, fields, geo, "#ffffff")
+    sub = next(e for e in els if e["slot"] == "subtitle")
+    assert sub["spec"].text == "State Cup 2027"
+    # position taken from the composition's subtitle slot (layout owns it)
+    assert sub["spec"].position.y == geo["slots"]["subtitle"]["y"]
+    # order: title, subtitle, then the fact
+    assert [e["slot"] for e in els] == ["title", "subtitle", "fact1"]
+
+
+def test_select_elements_omits_blank_subtitle(caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    card = _card(["position"], title_text="T", subtitle_text="   ")
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, FIELDS, geo, "#ffffff")
+    assert not any(e["slot"] == "subtitle" for e in els)
+    assert "subtitle omitted" in caplog.text
+
+
 def test_select_elements_maps_ordinal_geometry_to_semantic_styling():
     # SEAM 2: fact{i} geometry <- shown_fields[i]; styling keyed by the FIELD name.
     card = _card(["position", "class"], text_elements={
@@ -154,6 +205,42 @@ def test_content_hash_changes_on_pixel_edit_stable_on_rename(photo):
     c_edit = dict(c1, title_text="New Title")
     els_e = P._select_elements(c_edit, FIELDS, geo, "#ffffff")
     assert P._content_hash(c_edit, FIELDS, photo, info, "hero", "9:16", els_e) != h1
+
+
+def test_render_band_is_grounded_at_base_and_fades_at_top():
+    # T6580 item 4: a lower-third band, opaque at the base, feathered at the top,
+    # empty above it.
+    band = {"color": "#241a0b", "opacity": 0.9, "heightFrac": 0.44, "featherFrac": 0.16}
+    im = np.asarray(P._render_band(band, 40, 100))
+    assert im.shape == (100, 40, 4)
+    top = 100 - round(0.44 * 100)          # band starts here
+    assert im[0, 20, 3] == 0               # nothing above the band
+    assert im[top, 20, 3] == 0             # transparent at the band's very top
+    assert im[99, 20, 3] > 200             # ~opaque at the base
+    # colour is the band colour where painted
+    assert tuple(im[99, 20, :3]) == P._hex_to_rgb("#241a0b")
+
+
+def test_render_vignette_dark_at_corners_clear_at_centre():
+    v = {"opacity": 0.6, "innerFrac": 0.4, "extent": 0.72}
+    im = np.asarray(P._render_vignette(v, 80, 80))
+    assert im[40, 40, 3] == 0              # centre is clear
+    assert im[0, 0, 3] > im[40, 40, 3]     # corner darker than centre
+    assert (im[..., :3] == 0).all()        # vignette is black, only alpha varies
+
+
+def test_render_tint_is_flat_colour_wash():
+    im = np.asarray(P._render_tint({"color": "#5a3a12", "opacity": 0.25}, 10, 10))
+    assert (im[..., :3] == P._hex_to_rgb("#5a3a12")).all()
+    assert im[0, 0, 3] == round(0.25 * 255)
+    assert P._render_tint(None, 10, 10) is None
+
+
+def test_photo_forward_has_no_band_or_grade():
+    from app.services.intro_card_geometry import treatment_for
+    t = treatment_for("photo-forward")
+    assert t["band"] is None
+    assert t["photoMood"]["tint"] is None and t["photoMood"]["vignette"] is None
 
 
 def test_scrim_kind_by_composition():

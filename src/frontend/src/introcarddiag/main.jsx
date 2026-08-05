@@ -34,7 +34,7 @@ const MOCK_CARD = {
   name: 'Stafford intro',
   shown_fields: ['position'],
   treatment: 'gold',
-  title_text: 'CHAMPION',
+  // T6570: no title_text — the title resolves from the profile's Full Name below.
   image_key: 'intro/mock.png',
   image_cutout_key: null,
   focal_x: 0.5,
@@ -56,6 +56,7 @@ const MOCK_PROFILE = {
   introConsentAt: '2026-08-05T00:00:00Z', // consented -> skip the gate
   introPhotoKey: 'intro/mock.png',
   introPhotoUrl: PHOTO,
+  full_name: 'CHAMPION', // T6570: the card title reads from here, not a text box
   position: 'Midfielder 6-8-10',
   class: '', // deliberately empty -> exercises the "unfilled fact" prompt
   team: 'Riverside FC',
@@ -103,8 +104,8 @@ function Harness() {
   // scroll condition that produced the original "cramped rail" complaint was
   // never reproduced. Keep these classes in step with IntroCardsModal.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-5xl h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-6xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Intro cards</h2>
         </div>

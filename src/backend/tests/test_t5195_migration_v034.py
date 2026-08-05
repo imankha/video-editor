@@ -128,8 +128,10 @@ def test_noop_column_on_missing_final_videos(tmp_path):
     assert "intro_cards" in tables
 
 
-def test_registry_head_is_v034():
+def test_registry_head_is_v035():
     from app.migrations.profile_db import MIGRATIONS
-    assert max(m.version for m in MIGRATIONS) == 34
-    # Exactly one migration owns v034 (no collision with a sibling branch).
+    # T6570 added v035 (intro_cards.subtitle_text) on top of v034.
+    assert max(m.version for m in MIGRATIONS) == 35
+    # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
+    assert sum(1 for m in MIGRATIONS if m.version == 35) == 1

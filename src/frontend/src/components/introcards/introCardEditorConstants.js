@@ -41,30 +41,23 @@ export const TREATMENTS = TREATMENT_KEYS.map((key) => ({
   label: TREATMENT_LABELS[key] || key,
 }));
 
-// The card's text slots (SEMANTIC styling keys). `title` is free text the user
-// types; the three fact slots take their VALUE from the profile (position/class/
-// team) and only their STYLING from the card. Slot IDENTITY is here; slot
-// GEOMETRY (where each renders, and its size/align) is T5210's contract.
+// The card's text slots (SEMANTIC styling keys). `title` reads from the profile's
+// Full Name (T6570); `subtitle` is the ONE piece of FREE TEXT the user types on
+// THIS card (T6570; a tournament name etc.); the three fact slots take their
+// VALUE from the profile (position/class/team) and only their STYLING from the
+// card. Slot IDENTITY is here; slot GEOMETRY is T5210's contract.
 export const TITLE_SLOT = 'title';
+export const SUBTITLE_SLOT = 'subtitle';
 export const FACT_SLOTS = ['position', 'class', 'team'];
-export const ALL_SLOTS = [TITLE_SLOT, ...FACT_SLOTS];
+export const ALL_SLOTS = [TITLE_SLOT, SUBTITLE_SLOT, ...FACT_SLOTS];
 
 // Human labels + the profile field each fact slot reads its value from.
 export const SLOT_META = {
   title: { label: 'Title', kind: 'title' },
+  subtitle: { label: 'Subtitle', kind: 'subtitle' },
   position: { label: 'Position', kind: 'fact', profileField: 'position' },
   class: { label: 'Class', kind: 'fact', profileField: 'class' },
   team: { label: 'Team', kind: 'fact', profileField: 'team' },
-};
-
-// Human-readable names for the derived composition (deriveComposition keys). The
-// composition is product feedback ("what layout are you looking at"), so the UI
-// shows a title-cased name, never the raw slug. Keep in step with COMPOSITION.
-export const COMPOSITION_LABELS = {
-  'title-only': 'Title only',
-  hero: 'Hero',
-  broadcast: 'Broadcast',
-  recruiting: 'Recruiting',
 };
 
 // Aspect-preview options. ONE stored focal point serves BOTH (epic decision 3b),

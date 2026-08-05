@@ -6,11 +6,13 @@ import { TITLE_SLOT, DEFAULT_TREATMENT, PLACEHOLDER_SLOT_GEOMETRY } from './intr
 import { DEFAULT_TITLE_FONT, DEFAULT_FACT_FONT } from './introCardPreviewElements';
 
 describe('buildCreateFields', () => {
-  it('starts a fresh card as title-only (no facts) with the title text = name', () => {
+  it('starts a fresh card as title-only (no facts) and sets NO title_text (T6570: title = profile Full Name)', () => {
     const fields = buildCreateFields({ name: 'My card', profile: {} });
     expect(fields.name).toBe('My card');
     expect(fields.shown_fields).toEqual([]);
-    expect(fields.title_text).toBe('My card');
+    // A new card never authors a title_text override — the title resolves from
+    // the profile's Full Name at render time.
+    expect(fields.title_text).toBeUndefined();
     expect(fields.treatment).toBe(DEFAULT_TREATMENT);
   });
 

@@ -672,11 +672,19 @@ def get_all_intro_photo_keys(user_id: str | None = None) -> dict[str, str]:
 # value is a real state (fewer facts -> a plainer composition), never a
 # substituted placeholder -- that judgment belongs to the card editor (T5205).
 INTRO_FACT_FIELDS = ("position", "class", "team")
-_INTRO_FACT_PREFIXES = {field: f"intro_{field}." for field in INTRO_FACT_FIELDS}
+# The card TITLE source (T6570): the athlete's full name, a property of the
+# player, not of a card. Stored with the SAME per-profile user_settings KV
+# mechanism as the facts, but it is NOT a fact -- it never counts toward the
+# composition fact-count (the title is always present, like the treatment axis).
+# Kept separate from INTRO_FACT_FIELDS for exactly that reason; do not fold it in.
+INTRO_FULL_NAME_FIELD = "full_name"
+# All per-profile intro TEXT fields share the intro_{field}.{profile_id} key.
+_INTRO_TEXT_FIELDS = (*INTRO_FACT_FIELDS, INTRO_FULL_NAME_FIELD)
+_INTRO_FIELD_PREFIXES = {field: f"intro_{field}." for field in _INTRO_TEXT_FIELDS}
 
 
 def _intro_fact_setting(field: str, profile_id: str) -> str:
-    return f"{_INTRO_FACT_PREFIXES[field]}{profile_id}"
+    return f"{_INTRO_FIELD_PREFIXES[field]}{profile_id}"
 
 
 def get_intro_fact(user_id: str | None, profile_id: str, field: str) -> str | None:
@@ -717,7 +725,8 @@ def get_all_intro_facts(user_id: str | None = None) -> dict[str, dict[str, str]]
     """
     result: dict[str, dict[str, str]] = {}
     with get_user_db_connection(user_id) as conn:
-        for field, prefix in _INTRO_FACT_PREFIXES.items():
+        for field in INTRO_FACT_FIELDS:
+            prefix = _INTRO_FIELD_PREFIXES[field]
             rows = conn.execute(
                 "SELECT key, value FROM user_settings WHERE key LIKE ?",
                 (f"{prefix}%",),
@@ -726,6 +735,22 @@ def get_all_intro_facts(user_id: str | None = None) -> dict[str, dict[str, str]]
                 profile_id = row["key"][len(prefix):]
                 result.setdefault(profile_id, {})[field] = row["value"]
     return result
+
+
+def get_all_intro_full_names(user_id: str | None = None) -> dict[str, str]:
+    """Map of profile_id -> full name for every profile that has set one.
+
+    The card TITLE source (T6570). Read alongside the profiles list / bootstrap
+    so GET /api/profiles exposes it without a second fetch, exactly like the
+    intro facts above.
+    """
+    prefix = _INTRO_FIELD_PREFIXES[INTRO_FULL_NAME_FIELD]
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE key LIKE ?",
+            (f"{prefix}%",),
+        ).fetchall()
+    return {row["key"][len(prefix):]: row["value"] for row in rows}
 
 
 PREF_PREFIX = "pref."

@@ -126,6 +126,21 @@ export function ProfileIntroSection({ profile }) {
         />
       </div>
 
+      {/* Full Name — the card TITLE source (T6570). A property of the ATHLETE,
+          not of a card, so it lives here and every card reads it. Distinct from
+          the profile's short switcher label (profile.name, e.g. "Stafford").
+          Same gesture-based KV save as the facts, but it is NOT a composition
+          fact — it never changes which layout is derived. */}
+      <IntroFactInput
+        profileId={profile.id}
+        field="full_name"
+        label="Full Name"
+        placeholder="e.g. Jordan Vega"
+        value={profile.full_name}
+        onCommit={setIntroFact}
+        onError={setError}
+      />
+
       {/* Structured intro facts — position/class/team. The card layout T5195/
           T5210 render is DERIVED from how many of these are set (epic
           decision 2), so each is independently editable and clearable. */}

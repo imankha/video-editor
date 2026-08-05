@@ -10,7 +10,7 @@
 
 import { geometryFor } from '../../utils/introCardGeometry';
 import { treatmentAccent } from './introCardVisual';
-import { TITLE_SLOT } from './introCardEditorConstants';
+import { TITLE_SLOT, SUBTITLE_SLOT } from './introCardEditorConstants';
 
 // Defaults mirror player_intro.py (_DEFAULT_*_FONT / _*_SHADOW / _FACT_DEFAULT_COLOR).
 export const DEFAULT_TITLE_FONT = 'anton';
@@ -19,6 +19,19 @@ export const FACT_DEFAULT_COLOR = '#ffffff';
 const TITLE_SHADOW = { blur: 0.06, color: '#000000', opacity: 0.55 };
 const FACT_SHADOW = { blur: 0.05, color: '#000000', opacity: 0.5 };
 const NO_STROKE = { width: 0, color: '#000000' };
+
+/**
+ * The card's TITLE text (T6570): the profile's full name — the name is a
+ * property of the ATHLETE, not of a card. A card-level `title_text` is a
+ * GRANDFATHERED override for cards authored before T6570; a card created after
+ * it never sets one, so it always follows the profile. Mirrors
+ * player_intro._select_elements so preview and export agree.
+ */
+export function resolveTitleText(card, profile) {
+  const legacy = (card?.title_text || '').trim();
+  if (legacy) return legacy;
+  return (profile?.full_name || '').trim();
+}
 
 /** Default STYLING for an unstyled slot (font/colour/shadow), by kind. */
 export function defaultStyling(kind, accent) {
@@ -64,14 +77,28 @@ export function buildPreviewElements(card, profile, composition, aspect) {
   const accent = treatmentAccent(card?.treatment || 'gold');
   const out = [];
 
-  // Title — free text from title_text; styling keyed "title".
-  const titleText = (card?.title_text || '').trim();
+  // Title — the profile's full name (T6570), title_text a legacy override;
+  // styling keyed "title".
+  const titleText = resolveTitleText(card, profile);
   if (slots[TITLE_SLOT] && titleText) {
     out.push({
       slot: TITLE_SLOT,
       geoSlot: TITLE_SLOT,
       kind: 'title',
       spec: mergeSpec(textElements[TITLE_SLOT], titleText, slots[TITLE_SLOT], 'title', accent),
+    });
+  }
+
+  // Subtitle — FREE TEXT on the card (T6570; a tournament name etc.). Orthogonal
+  // to composition; styling keyed "subtitle". Omitted when blank (never a blank
+  // line), exactly like an unset fact. Mirrors player_intro._select_elements.
+  const subtitleText = (card?.subtitle_text || '').trim();
+  if (slots[SUBTITLE_SLOT] && subtitleText) {
+    out.push({
+      slot: SUBTITLE_SLOT,
+      geoSlot: SUBTITLE_SLOT,
+      kind: 'subtitle',
+      spec: mergeSpec(textElements[SUBTITLE_SLOT], subtitleText, slots[SUBTITLE_SLOT], 'subtitle', accent),
     });
   }
 
