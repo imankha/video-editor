@@ -1,0 +1,35 @@
+<!doctype html>
+<!--
+  T6480 DEV-ONLY diagnostic harness for the SHARED TextSpecEditor rail's
+  contrast in BOTH of its hosts. NOT a production page: it is not listed in vite
+  build rollupOptions.input (only index.html is), so it never ships. Served by
+  the dev server only, for the Playwright real-browser contrast evidence
+  (a contrast bug cannot be proven fixed in jsdom).
+
+  It mounts the REAL TextSpecEditor three ways over a representative purple app
+  background:
+    1. Overlay host, OLD light-glass panel (the reported bug) -- for before/after.
+    2. Overlay host, NEW dark-glass panel (the fix).
+    3. Card editor host (dark, unchanged) -- proves no regression there.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TextSpecEditor contrast diag (dev only)</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        /* Representative of the overlay screen's purple app background, so the
+           light-glass panel reads "light-purple" exactly as reported. */
+        background: linear-gradient(135deg, #4c1d95 0%, #1e1b4b 60%, #312e81 100%);
+        min-height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="textspecdiag-root"></div>
+    <script type="module" src="/src/textspecdiag/main.jsx"></script>
+  </body>
+</html>

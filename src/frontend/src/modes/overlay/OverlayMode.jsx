@@ -56,6 +56,7 @@ export function OverlayMode({
   onAddText,
   onMoveTextStart,
   onMoveTextEnd,
+  onMoveTextBody,
   onSelectText,
   onDeleteText,
   onToggleText,
@@ -95,12 +96,12 @@ export function OverlayMode({
   );
 
   // Calculate total layer height for playhead line
-  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-14=3.5rem)
+  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-28=7rem, T6610)
   const getTotalLayerHeight = () => {
     if (hasDetectionData) {
-      return '14.25rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem) + Text (3.5rem)
+      return '17.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem) + Text (7rem)
     }
-    return '12rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (3.5rem) + padding
+    return '15.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (7rem) + padding
   };
 
   // T5410: default marker position (no override yet) = midpoint of the
@@ -176,9 +177,9 @@ export function OverlayMode({
         <Circle size={18} className={selectedLayer === 'highlight' ? 'text-orange-300' : 'text-orange-400'} />
       </div>
 
-      {/* Text Layer Label (T5225) */}
+      {/* Text Layer Label (T5225; T6610 grew the lane to h-28 for scrollbar clearance) */}
       <div
-        className={`mt-0.5 lg:mt-1 h-10 lg:h-14 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-20 lg:h-28 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
           selectedLayer === 'text' ? 'bg-cyan-900/30' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('text')}
@@ -272,6 +273,7 @@ export function OverlayMode({
                 onAddText={onAddText}
                 onMoveTextStart={onMoveTextStart}
                 onMoveTextEnd={onMoveTextEnd}
+                onMoveTextBody={onMoveTextBody}
                 onSelectText={onSelectText}
                 onDeleteText={onDeleteText}
                 onToggleText={onToggleText}

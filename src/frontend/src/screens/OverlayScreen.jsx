@@ -317,6 +317,7 @@ export function OverlayScreen({
     addText,
     moveTextStart,
     moveTextEnd,
+    moveTextBlock,
     updateTextSpec,
     toggleText,
     deleteText,
@@ -972,6 +973,22 @@ export function OverlayScreen({
     setOverlayChangedSinceExport(true);
   }, [moveTextEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
+  // T6610: move the WHOLE block in time (body drag / keyboard nudge), duration
+  // preserved. Optimistic local move on every drag tick (`commit=false`, no
+  // network write -- the drag stays smooth); exactly ONE surgical persist fires
+  // on drag END / each keypress (`commit=true`), reusing the SAME move_text_edge
+  // write path as the levers, now carrying BOTH edges. No reactive persistence:
+  // the write is bound to the pointerup/keydown gesture, never a useEffect.
+  const wrappedMoveTextBody = useCallback((id, newStartTime, commit) => {
+    const updated = moveTextBlock(id, newStartTime);
+    if (!updated) return;
+    setOverlayChangedSinceExport(true);
+    if (commit && canSyncActions) {
+      dispatchOverlayAction('moveTextBody', () =>
+        overlayActions.moveTextEdge(projectId, id, updated.startTime, updated.endTime));
+    }
+  }, [moveTextBlock, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
   // Debounced whole-spec persistence (design O4: entity-surgical, ~250ms,
   // never per-keystroke). Local state updates optimistically on EVERY change
   // so the live preview tracks each keystroke; only the network write waits.
@@ -1465,6 +1482,7 @@ export function OverlayScreen({
       onAddText={wrappedAddText}
       onMoveTextStart={wrappedMoveTextStart}
       onMoveTextEnd={wrappedMoveTextEnd}
+      onMoveTextBody={wrappedMoveTextBody}
       onSelectText={setSelectedTextId}
       onDeleteText={wrappedDeleteText}
       onToggleText={wrappedToggleText}

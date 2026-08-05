@@ -181,6 +181,7 @@ export function OverlayModeView({
   onAddText,
   onMoveTextStart,
   onMoveTextEnd,
+  onMoveTextBody,
   onSelectText,
   onDeleteText,
   onToggleText,
@@ -579,7 +580,14 @@ export function OverlayModeView({
     : null;
 
   const textEditorCard = selectedTextBlock ? (
-    <div className="bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20 mt-3">
+    // T6480: this rail hosts the SHARED TextSpecEditor, whose control + label
+    // colours (text-gray-400 labels, gray-800 inputs, amber footer) are tuned for
+    // a DARK surface -- the same surface the card editor gives it. The overlay
+    // screen's other panels are light glass (bg-white/10 over the purple app bg),
+    // which rendered those labels bright-on-bright (the reported bug). We fix it
+    // host-side -- a dark glass panel here -- rather than darkening the shared
+    // component, which would invert the bug in the (already-dark) card editor.
+    <div className="bg-gray-900/85 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-gray-700 mt-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-white">Edit Text</h3>
         <button
@@ -797,6 +805,7 @@ export function OverlayModeView({
             onAddText={onAddText}
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
+            onMoveTextBody={onMoveTextBody}
             onSelectText={onSelectText}
             onDeleteText={onDeleteText}
             onToggleText={onToggleText}
@@ -885,6 +894,7 @@ export function OverlayModeView({
                         onAddText={onAddText}
                         onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
+                        onMoveTextBody={onMoveTextBody}
                         onSelectText={onSelectText}
                         onDeleteText={onDeleteText}
                         onToggleText={onToggleText}

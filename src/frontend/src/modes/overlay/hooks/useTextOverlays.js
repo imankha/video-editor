@@ -83,6 +83,24 @@ export default function useTextOverlays() {
     return updated;
   }, [textOverlays, duration]);
 
+  // T6610: move the WHOLE block in time -- start and end shift together, so the
+  // block's DURATION is preserved (unlike moveTextStart/moveTextEnd, which move a
+  // single edge and thus resize). `newStartTime` is the desired new start (the
+  // body-drag caller has already applied leading-edge boundary snapping); we only
+  // clamp the block inside [0, duration] here so it can't be dragged off the reel.
+  // Returns the updated entity (same contract as the edge movers) so the wrapped
+  // handler can fire ONE surgical persist on drag end from the return value.
+  const moveTextBlock = useCallback((id, newStartTime) => {
+    const target = textOverlays.find(block => block.id === id);
+    if (!target) return null;
+    const blockDuration = target.endTime - target.startTime;
+    const maxStart = (duration != null ? duration : Infinity) - blockDuration;
+    const clampedStart = Math.max(0, Math.min(newStartTime, Math.max(0, maxStart)));
+    const updated = { ...target, startTime: clampedStart, endTime: clampedStart + blockDuration };
+    setTextOverlays(prev => prev.map(block => (block.id === id ? updated : block)));
+    return updated;
+  }, [textOverlays, duration]);
+
   const updateTextSpec = useCallback((id, nextSpec) => {
     const target = textOverlays.find(block => block.id === id);
     if (!target) return null;
@@ -153,6 +171,7 @@ export default function useTextOverlays() {
     addText,
     moveTextStart,
     moveTextEnd,
+    moveTextBlock,
     updateTextSpec,
     toggleText,
     deleteText,
