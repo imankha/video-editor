@@ -18,6 +18,39 @@ scrim `/70 → /80` and it is still not enough.
 Make the backdrop actually suppress the page. Options: a much heavier scrim, a blur, or a fuller-bleed
 panel. The bar is that nothing behind competes for attention — bright accent buttons are the tell.
 
+### CORRECTION 2026-08-05 — this is a Z-ORDER bug, and a scrim CANNOT fix it
+
+Second round of user screenshots (reel cards painted crisply over the modal *panel*, cyan buttons
+undimmed) plus a code read settle the question T6540 left open (*"resolve whether a reel card seen
+inside the modal is page bleed-through or a layering bug"*). **It is a layering bug.** Both passes so
+far have raised the scrim (T6540 `/70`→`/80`, this task `/80`→`/90`+blur) and neither could work,
+because the offending elements paint ABOVE the scrim:
+
+- `ManageProfilesModal`'s root is `fixed inset-0 ... z-50` (`ManageProfilesModal.jsx:302`), which
+  **establishes a stacking context**.
+- `IntroCardsModal` is rendered as a CHILD of that subtree (`ManageProfilesModal.jsx:451`) and sets
+  its own `fixed inset-0 z-50` (`IntroCardsModal.jsx:88`). That `z-50` is scoped to the parent's
+  context, so the intro card modal's effective root-level ceiling is z-50 — it cannot rise above
+  anything else on the page at z-50 or higher, no matter what number it uses internally.
+- `DraftTile` portals its overlays **to `document.body`** at `z-[60]` and `z-[70]`
+  (`DraftTile.jsx:708,711`) — deliberately, because the tile's `hover:scale-[1.03]` transform
+  (`:411`) makes it a containing block and breaks `fixed` descendants.
+
+So draft/reel tiles outrank the intro-card modal BY CONSTRUCTION. Raising the scrim to `/100` would
+still leave them on top.
+
+**Fix the stacking, not the opacity.** Requirements:
+- The intro-card modal must not be trapped inside another modal's stacking context — portal it to
+  `document.body` like `DraftTile` already does, or hoist it out of `ManageProfilesModal`'s subtree.
+- Give the app ONE ordered z-index scale in a single place (values are currently scattered ad hoc:
+  z-40/50/[60]/[70]/[90] across ~30 components) and place both modals on it. Nested-modal order must
+  be expressible, since ManageProfiles → IntroCards → ConfirmationDialog can all be open at once.
+- Do NOT solve it by bumping IntroCardsModal to a bigger number in isolation — that just moves the
+  collision to `CollectionPlayer` (`z-[70]`) and `LockedReasonModal` (`z-[90]`).
+- Verify with the modal open AND a draft tile hovered (the hover state is what portals), at desktop
+  and 375px. The scrim change is still fine to keep, but it is not the fix and must not be reported
+  as one.
+
 ## 2. The card is too small
 
 > The Card should be bigger.
