@@ -513,6 +513,7 @@ def _overlay_sync(
     progress_callback=None,
     overlay_settings: dict = None,
     profile_id: str | None = None,
+    text_layers: list = None,
 ) -> dict:
     from app.routers.export.overlay import _process_frames_to_ffmpeg
     from app.storage import download_from_r2, upload_to_r2
@@ -543,7 +544,11 @@ def _overlay_sync(
             if progress_callback:
                 progress_callback(10, "Processing frames...", ExportPhase.PROCESSING)
 
-            if not highlight_regions:
+            # T5225: a project with text but no highlight regions must still go
+            # through the frame loop -- the plain-copy shortcut would silently
+            # drop the text (same class of bug as the has_keyframes gate in
+            # overlay.py's render_overlay endpoint).
+            if not highlight_regions and not text_layers:
                 import shutil
                 shutil.copy(input_path, output_path)
             else:
@@ -559,6 +564,7 @@ def _overlay_sync(
                     effect_type,
                     frame_progress,
                     overlay_settings=overlay_settings,
+                    text_layers=text_layers,
                 )
 
             process_time = time.time() - start_time - download_time

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OverlayModeView } from '../modes';
 import { OverlayContainer } from '../containers';
-import { useHighlightRegions, useOverlayState } from '../modes/overlay';
+import { useHighlightRegions, useOverlayState, useTextOverlays } from '../modes/overlay';
+import { FontKey, Align, Animation } from '../constants/textSpec';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
@@ -45,6 +46,23 @@ import { clipGameClock } from '../utils/timeFormat';
  *
  * @see AppJSX_REDUCTION/TASK-04-self-contained-overlay-screen.md
  */
+
+// T5225: a newly clicked-to-add text block needs SOME starting spec so it's
+// immediately visible/editable -- mirrors addHighlightRegion materializing
+// seed keyframes so the user sees something on screen before their first edit.
+const DEFAULT_TEXT_SPEC = {
+  text: 'Your text',
+  font: FontKey.ANTON,
+  size: 0.06,
+  color: '#FFFFFF',
+  align: Align.CENTER,
+  position: { x: 0.5, y: 0.4 },
+  maxWidth: 0.8,
+  shadow: { blur: 0, color: '#000000', opacity: 0 },
+  stroke: { width: 0, color: '#000000' },
+  animation: Animation.NONE,
+};
+
 export function OverlayScreen({
   // Export callback (legacy - will be moved to store in Task 07)
   onExportComplete,
@@ -287,6 +305,28 @@ export function OverlayScreen({
     restoreRegions: restoreHighlightRegions,
     setVideoDetections: setHighlightVideoDetections,
   } = useHighlightRegions(effectiveOverlayMetadata);
+
+  // =========================================
+  // TEXT OVERLAYS HOOK - OWNED BY THIS SCREEN (T5225)
+  // =========================================
+
+  const {
+    textOverlaysWithLayout,
+    selectedTextId,
+    setSelectedTextId,
+    addText,
+    moveTextStart,
+    moveTextEnd,
+    updateTextSpec,
+    toggleText,
+    deleteText,
+    restoreTextOverlays,
+  } = useTextOverlays();
+
+  // Interior clip cut-points on the concatenated timeline, for text-range
+  // snapping (design §2). Read-only, hydrated from /overlay-data alongside
+  // the rest of the restore payload -- never written back.
+  const [clipBoundaries, setClipBoundaries] = useState([]);
 
   // =========================================
   // ZOOM HOOKS
@@ -596,6 +636,13 @@ export function OverlayScreen({
             data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
           );
 
+          // T5225: restore text blocks + clip boundaries. Read-only hydration
+          // (design §5.1) -- no write-back; runs while overlaySyncState is
+          // still 'loading' (set above), so canSyncActions is false and none
+          // of these local sets can fire a surgical POST.
+          restoreTextOverlays(data.text_overlays || [], videoDuration);
+          setClipBoundaries(data.clip_boundaries || []);
+
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
@@ -607,7 +654,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections, restoreTextOverlays]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -680,6 +727,11 @@ export function OverlayScreen({
             data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
           );
 
+          // T5225: restore text blocks + clip boundaries (read-only, see the
+          // fresh-export effect above for the write-back-safety rationale).
+          restoreTextOverlays(data.text_overlays || [], effectiveDuration);
+          setClipBoundaries(data.clip_boundaries || []);
+
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
@@ -691,7 +743,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections, restoreTextOverlays]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -882,6 +934,96 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightShape, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  // =========================================
+  // TEXT OVERLAY WRAPPED HANDLERS (T5225)
+  // =========================================
+  // Same gesture -> optimistic local mutate -> surgical POST pattern as the
+  // highlight handlers above. Every useTextOverlays mutator RETURNS the
+  // updated/new/removed entity, so these read that return value directly --
+  // never a stale re-read of `textOverlays` (T5644 landmine, design §5.1).
+
+  const wrappedAddText = useCallback((clickTime) => {
+    const newBlock = addText(clickTime, DEFAULT_TEXT_SPEC);
+    if (newBlock && canSyncActions) {
+      dispatchOverlayAction('createText', () =>
+        overlayActions.createText(projectId, newBlock.id, newBlock.spec, newBlock.startTime, newBlock.endTime));
+    }
+    setOverlayChangedSinceExport(true);
+    if (newBlock) setSelectedTextId(newBlock.id);
+    return newBlock?.id ?? null;
+  }, [addText, projectId, canSyncActions, setOverlayChangedSinceExport, setSelectedTextId]);
+
+  const wrappedMoveTextStart = useCallback((id, newStartTime) => {
+    const updated = moveTextStart(id, newStartTime);
+    if (updated && canSyncActions) {
+      dispatchOverlayAction('moveTextEdgeStart', () =>
+        overlayActions.moveTextEdge(projectId, id, updated.startTime, null));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [moveTextStart, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedMoveTextEnd = useCallback((id, newEndTime) => {
+    const updated = moveTextEnd(id, newEndTime);
+    if (updated && canSyncActions) {
+      dispatchOverlayAction('moveTextEdgeEnd', () =>
+        overlayActions.moveTextEdge(projectId, id, null, updated.endTime));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [moveTextEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  // Debounced whole-spec persistence (design O4: entity-surgical, ~250ms,
+  // never per-keystroke). Local state updates optimistically on EVERY change
+  // so the live preview tracks each keystroke; only the network write waits.
+  // Keyed PER BLOCK ID (a Map, not one shared timer): a single shared timer
+  // would let editing block B within the debounce window cancel block A's
+  // still-pending write, silently dropping A's edit (reviewer finding). Each
+  // block's debounce is independent, so switching the selected block never
+  // cancels another block's scheduled POST.
+  const updateTextSpecTimersRef = useRef(new Map());
+  const wrappedUpdateTextSpec = useCallback((id, nextSpec) => {
+    const updated = updateTextSpec(id, nextSpec);
+    setOverlayChangedSinceExport(true);
+    if (!updated || !canSyncActions) return;
+
+    const timers = updateTextSpecTimersRef.current;
+    if (timers.has(id)) {
+      clearTimeout(timers.get(id));
+    }
+    timers.set(id, setTimeout(() => {
+      timers.delete(id);
+      dispatchOverlayAction('updateTextSpec', () => overlayActions.updateTextSpec(projectId, id, nextSpec));
+    }, 250));
+  }, [updateTextSpec, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  useEffect(() => () => {
+    updateTextSpecTimersRef.current.forEach(clearTimeout);
+    updateTextSpecTimersRef.current.clear();
+  }, []);
+
+  const wrappedToggleText = useCallback((id, enabled) => {
+    const updated = toggleText(id, enabled);
+    if (updated && canSyncActions) {
+      dispatchOverlayAction('toggleText', () => overlayActions.toggleText(projectId, id, enabled));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [toggleText, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedDeleteText = useCallback((id) => {
+    // Cancel any pending debounced spec write for this block -- otherwise it
+    // fires after the block is gone and 400s against update_text_spec (harmless
+    // but noisy; the delete already achieves the user's intent).
+    const timers = updateTextSpecTimersRef.current;
+    if (timers.has(id)) {
+      clearTimeout(timers.get(id));
+      timers.delete(id);
+    }
+    const removed = deleteText(id);
+    if (removed && canSyncActions) {
+      dispatchOverlayAction('deleteText', () => overlayActions.deleteText(projectId, id));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [deleteText, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: poster (cover-photo) marker drag-end / "Use current
   // frame as cover" (T5410). Fires the surgical poster-time write ONCE per
@@ -1324,6 +1466,17 @@ export function OverlayScreen({
       framingOutdated={framingOutdated}
       // T5676: lock the Overlay Settings card during an in-flight overlay export
       settingsDisabled={isOverlayExporting}
+      // T5225: Overlay text blocks
+      textOverlays={textOverlaysWithLayout}
+      clipBoundaries={clipBoundaries}
+      selectedTextId={selectedTextId}
+      onAddText={wrappedAddText}
+      onMoveTextStart={wrappedMoveTextStart}
+      onMoveTextEnd={wrappedMoveTextEnd}
+      onSelectText={setSelectedTextId}
+      onDeleteText={wrappedDeleteText}
+      onToggleText={wrappedToggleText}
+      onUpdateTextSpec={wrappedUpdateTextSpec}
     />
   );
 }

@@ -342,6 +342,57 @@ def select_poster_frame(
     return start + (end - start) / 2.0
 
 
+def _accumulate_clip_boundary_offsets(
+    clips: list[tuple[dict | None, float | None]] | None,
+) -> list[float]:
+    """Interior cut-points (seconds) on the FINAL concatenated timeline where one
+    working clip ends and the next begins -- for T5225 overlay-text range
+    snapping.
+
+    Reuses the SAME per-clip output-duration accumulation `_clip_slowmo_walk`
+    already performs for `first_slowmo_section` (canonicalize -> walk ->
+    clip_out); this does not re-walk segments a second way (design SS2.1 / O2).
+    Excludes the trivial leading 0.0 and the trailing total (== full duration,
+    not an interior boundary) -- the client already has `video_duration` for
+    the end edge. Degrades to `[]` (never a partial/fabricated list) the moment
+    any clip's output duration is non-finite -- the SAME bail
+    `first_slowmo_section` uses -- so a published reel with pruned
+    `working_clips` (`read_clip_segments_for_project` -> `[]`) or any other
+    unresolvable-length clip never emits wrong offsets; the client falls back
+    to free (unsnapped) drag.
+    """
+    if not clips:
+        return []
+
+    offsets: list[float] = []
+    cumulative = 0.0
+    for segments_data, source_duration in clips:
+        canon = canonicalize_segments_data(segments_data, source_duration)
+        _, clip_out = _clip_slowmo_walk(canon, source_duration)
+        if not math.isfinite(clip_out):
+            logger.info(
+                "[Poster] clip output duration is non-finite; cannot derive "
+                "clip boundaries -> []"
+            )
+            return []
+        cumulative += clip_out
+        offsets.append(cumulative)
+
+    # Drop the trailing boundary -- it equals the total duration, not an
+    # INTERIOR cut-point (a single clip therefore correctly yields []).
+    return offsets[:-1]
+
+
+def clip_boundary_offsets(project_id: int | None) -> list[float]:
+    """Public entry point (T5225): interior clip cut-points for `project_id`'s
+    LATEST working clips, in concatenation order. Opens its own connection via
+    `load_project_clip_segments` (same helper `poster_slowmo_section` already
+    uses in overlay.py's `/overlay-data`), so it degrades to `[]` -- never
+    raises -- for a missing project_id or an unresolvable clip set (see
+    `_accumulate_clip_boundary_offsets` above)."""
+    return _accumulate_clip_boundary_offsets(load_project_clip_segments(project_id))
+
+
 def read_clip_segments_for_project(
     cursor, project_id: int | None
 ) -> list[tuple[dict | None, float | None]]:

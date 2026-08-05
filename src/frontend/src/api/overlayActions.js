@@ -185,6 +185,72 @@ export async function setHighlightShape(projectId, highlightShape) {
 }
 
 /**
+ * T5225: create a new Overlay text block.
+ * @param {number} projectId
+ * @param {string} id - Client-generated text block id (optimistic create, mirrors createRegion's regionId)
+ * @param {Object} spec - The full TextSpec
+ * @param {number} startTime
+ * @param {number} endTime
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function createText(projectId, id, spec, startTime, endTime) {
+  return sendAction(projectId, 'add_text', null, {
+    id,
+    spec,
+    start_time: startTime,
+    end_time: endTime,
+  });
+}
+
+/**
+ * T5225: move a text block's start and/or end edge (lever drag).
+ * @param {number} projectId
+ * @param {string} id
+ * @param {number|null} startTime
+ * @param {number|null} endTime
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function moveTextEdge(projectId, id, startTime = null, endTime = null) {
+  const data = {};
+  if (startTime !== null) data.start_time = startTime;
+  if (endTime !== null) data.end_time = endTime;
+  return sendAction(projectId, 'move_text_edge', { id }, data);
+}
+
+/**
+ * T5225: replace a text block's WHOLE TextSpec (design O4 -- entity-surgical,
+ * debounced by the caller, never per-keystroke).
+ * @param {number} projectId
+ * @param {string} id
+ * @param {Object} spec - The full, updated TextSpec
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function updateTextSpec(projectId, id, spec) {
+  return sendAction(projectId, 'update_text_spec', { id }, { spec });
+}
+
+/**
+ * T5225: enable/disable a text block without deleting it.
+ * @param {number} projectId
+ * @param {string} id
+ * @param {boolean} enabled
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function toggleText(projectId, id, enabled) {
+  return sendAction(projectId, 'toggle_text', { id }, { enabled });
+}
+
+/**
+ * T5225: delete a text block by id. Idempotent server-side if already absent.
+ * @param {number} projectId
+ * @param {string} id
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function deleteText(projectId, id) {
+  return sendAction(projectId, 'delete_text', { id });
+}
+
+/**
  * T5410: set (or clear) the pre-export poster marker time.
  * @param {number} projectId
  * @param {number | null} time - seconds on the final timeline, or null to

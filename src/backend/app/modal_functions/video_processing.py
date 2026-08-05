@@ -186,6 +186,62 @@ def _has_audio_stream(video_path: str) -> bool:
         return True
 
 
+def _decode_text_layers(text_layers: list, frame_w: int, frame_h: int) -> list:
+    """T5225: decode each pre-rasterised PNG text layer ONCE, before the frame
+    loop. INLINE COPY of the identical helper in
+    `app/routers/export/overlay.py` -- the Modal image mounts NEITHER `app`
+    NOR Pillow (see the image def above: only boto3/opencv/numpy), so this
+    module can't import the app-side helper or re-rasterise; it only ever
+    receives already-rasterised PNG bytes and decodes them with cv2 (the same
+    "inline mirror" pattern `_spotlight_reveal` below already uses for the
+    identical constraint). Keep this in sync with overlay.py's copy.
+
+    O3 hard constraint: rasterised dims MUST equal frame dims -- raise rather
+    than silently `cv2.resize`.
+    """
+    import cv2
+    import numpy as np
+
+    decoded = []
+    for layer in text_layers:
+        arr = np.frombuffer(layer["png"], dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise ValueError("[Overlay Text] failed to decode a text layer PNG")
+        h, w = img.shape[:2]
+        if (w, h) != (frame_w, frame_h):
+            raise ValueError(
+                f"[Overlay Text] rasterised layer dims {w}x{h} != frame dims "
+                f"{frame_w}x{frame_h} -- refusing to silently rescale"
+            )
+        if img.ndim != 3 or img.shape[2] != 4:
+            raise ValueError("[Overlay Text] decoded text layer has no alpha channel")
+        decoded.append({
+            "startTime": layer["startTime"],
+            "endTime": layer["endTime"],
+            "bgr": img[:, :, :3].astype(np.float32),
+            "alpha": (img[:, :, 3:4].astype(np.float32)) / 255.0,
+        })
+    return decoded
+
+
+def _blend_text_layers(frame, decoded_layers: list, current_time: float):
+    """T5225: alpha-blend every ACTIVE text layer onto `frame` (BGR uint8).
+
+    ACTIVE = half-open ``startTime <= t < endTime`` (design O6). INLINE COPY of
+    the identical helper in `app/routers/export/overlay.py` -- see
+    `_decode_text_layers` docstring above for why this can't be a shared
+    import. Never re-rasterises -- purely a per-frame numpy blend of bytes
+    rasterised exactly once, upstream, app-side."""
+    import numpy as np
+
+    for layer in decoded_layers:
+        if layer["startTime"] <= current_time < layer["endTime"]:
+            alpha = layer["alpha"]
+            frame = (frame.astype(np.float32) * (1 - alpha) + layer["bgr"] * alpha).astype(np.uint8)
+    return frame
+
+
 @app.function(
     image=image,
     gpu="T4",  # NVIDIA T4 - good balance of cost/performance
@@ -200,6 +256,7 @@ def render_overlay(
     highlight_regions: list,
     effect_type: str = "dark_overlay",
     overlay_settings: dict = None,
+    text_layers: list = None,
 ):
     """
     Apply highlight overlays to video on GPU.
@@ -246,6 +303,7 @@ def render_overlay(
                 "highlight_regions": highlight_regions,
                 "effect_type": effect_type,
                 "overlay_settings": overlay_settings or {},
+                "text_layers": text_layers or [],
             }):
                 # Map frame processing 0-100% to overall 25-80%
                 overall = 25 + int(frame_progress * 0.55)
@@ -297,9 +355,12 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
     highlight_regions = params.get("highlight_regions", [])
     effect_type = params.get("effect_type", "dark_overlay")
     overlay_settings = params.get("overlay_settings", {})
+    text_layers = params.get("text_layers", [])
 
-    if not highlight_regions:
-        logger.info(f"[{job_id}] No highlights - copying video")
+    # T5225: a project with text but no highlight regions must still go through
+    # the frame loop -- the plain-copy shortcut would silently drop the text.
+    if not highlight_regions and not text_layers:
+        logger.info(f"[{job_id}] No highlights or text - copying video")
         cmd = ["ffmpeg", "-y", "-i", input_path, "-c", "copy", output_path]
         subprocess.run(cmd, check=True)
         return
@@ -316,6 +377,8 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
     logger.info(f"[{job_id}] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
 
     sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
+    # T5225: decode every text layer's PNG ONCE, before the frame loop.
+    decoded_text_layers = _decode_text_layers(text_layers, width, height)
 
     ffmpeg_cmd = [
         "ffmpeg", "-y",
@@ -366,6 +429,9 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
                     frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type, overlay_settings)
                 else:
                     frame = _render_highlight(frame, active_region, current_time, effect_type, overlay_settings)
+
+            if decoded_text_layers:
+                frame = _blend_text_layers(frame, decoded_text_layers, current_time)
 
             try:
                 if ffmpeg_proc.stdin and not ffmpeg_proc.stdin.closed:
@@ -428,10 +494,12 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
     highlight_regions = params.get("highlight_regions", [])
     effect_type = params.get("effect_type", "dark_overlay")
     overlay_settings = params.get("overlay_settings", {})
+    text_layers = params.get("text_layers", [])
 
-    # If no highlights, just copy the video
-    if not highlight_regions:
-        logger.info(f"[{job_id}] No highlights - copying video")
+    # If no highlights AND no text, just copy the video (T5225: text-only
+    # projects must still go through the frame loop, not this shortcut).
+    if not highlight_regions and not text_layers:
+        logger.info(f"[{job_id}] No highlights or text - copying video")
         cmd = ["ffmpeg", "-y", "-i", input_path, "-c", "copy", output_path]
         subprocess.run(cmd, check=True)
         return
@@ -450,6 +518,8 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
 
     # Sort regions by start time
     sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
+    # T5225: decode every text layer's PNG ONCE, before the frame loop.
+    decoded_text_layers = _decode_text_layers(text_layers, width, height)
 
     # Start FFmpeg process
     # Note: -pix_fmt yuv420p is REQUIRED for broad compatibility (Windows Media Player, etc.)
@@ -532,6 +602,9 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
                     frame = _render_highlight(
                         frame, active_region, current_time, effect_type, overlay_settings
                     )
+
+            if decoded_text_layers:
+                frame = _blend_text_layers(frame, decoded_text_layers, current_time)
 
             # Write frame to FFmpeg - check if pipe is still open
             try:
