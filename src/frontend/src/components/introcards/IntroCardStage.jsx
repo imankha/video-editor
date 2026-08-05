@@ -148,8 +148,10 @@ export function IntroCardStage({
             step={0.05}
             value={zoom}
             onChange={(e) => onZoomInput(parseFloat(e.target.value))}
+            // Commit ONCE per interaction: on pointer release (drag) or on blur
+            // (keyboard), never per input event / per arrow-key repeat.
             onPointerUp={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
-            onKeyUp={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
+            onBlur={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
             className="flex-1"
           />
         </label>

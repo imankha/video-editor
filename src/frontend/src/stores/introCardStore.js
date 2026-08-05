@@ -91,7 +91,26 @@ export const useIntroCardStore = create((set, get) => ({
     if (!response.ok) return null;
     const updated = await response.json();
     set((state) => ({
-      cards: state.cards.map((c) => (c.id === cardId ? updated : c)),
+      cards: state.cards.map((c) => {
+        if (c.id !== cardId) return c;
+        // Merge ONLY the fields this call changed (plus the server-derived
+        // refreshes) onto the CURRENT row — never the full server snapshot.
+        // The editor fires surgical single-field PATCHes and a debounced
+        // text_elements write can resolve AFTER a later gesture changed a
+        // different field; replacing the whole row with this response's stale
+        // snapshot of that other field would silently revert the newer edit
+        // (lost update on read). Per field the server is authoritative and the
+        // DB serialises the writes, so applying just the changed keys keeps the
+        // store the single source of truth without clobbering concurrent edits.
+        const merged = { ...c };
+        for (const key of Object.keys(changedFields)) merged[key] = updated[key];
+        if ('updated_at' in updated) merged.updated_at = updated.updated_at;
+        // image_key change also brings a freshly presigned preview URL.
+        if ('image_key' in changedFields && 'previewUrl' in updated) {
+          merged.previewUrl = updated.previewUrl;
+        }
+        return merged;
+      }),
     }));
     return updated;
   },
