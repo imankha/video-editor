@@ -52,6 +52,32 @@ it is trusted.
 Nothing here is exotic or user-specific: any branch whose CI-green tip is pushed shortly before a
 merge is exposed, and the failure is silent on both sides.
 
+### Observed again 2026-08-05 — a SECOND mechanism producing the same blind spot
+
+Four Player Intro merges landed in one session. **Three consecutive master SHAs finished with Master
+CI `cancelled`, not green** — not because anything failed, but because each was superseded by the
+next push before it could finish (concurrency cancellation):
+
+| SHA | Contains | Master CI |
+|---|---|---|
+| `b2904024` | up to T5210 | success |
+| `2a3594a6` | **T5205 merge** | **cancelled** |
+| `69d04c30` | docs | **cancelled** |
+| `7f890b5e` | docs | first run to actually cover T5205 |
+
+So T5205's merge commit never received a full-suite verdict. It was covered only incidentally, by a
+later *documentation* commit that happened to run the suite. Had that docs commit not been pushed,
+the last green Master CI would have predated the merge entirely and nobody would have noticed.
+
+This is a distinct mechanism from the original stale-SHA bug but the same end state: **master is
+green-looking while no run has actually verified its current tree.** Note Branch CI does not cover
+the gap either — T5205 was frontend-only, so its Branch CI legitimately SKIPPED the backend job
+(T6405 layer scoping). Master CI was the only thing that would have run the full suite against the
+merged tree, and it was cancelled.
+
+Any fix must therefore answer: *which run proves the CURRENT master tree is green?* — and treat
+"cancelled" as "no verdict", never as "not failed".
+
 ## Scope
 
 Three defects, in priority order. Design should confirm each before building.
