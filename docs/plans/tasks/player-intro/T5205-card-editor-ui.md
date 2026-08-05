@@ -8,6 +8,18 @@
 > UI mockups (library grid + editor): <https://claude.ai/code/artifact/93478a34-c7e5-406f-a56b-3c3724e4b6dd> § 06 A and B.
 > Reference: `.claude/references/ui-style-guide.md`, `src/frontend/CLAUDE.md` (MVC, data-always-ready).
 
+## Contract ownership (wave decision 2026-08-04)
+
+T5210 runs in PARALLEL and **owns the shared contract** — slot geometry (normalised rects per
+composition, 9:16 and 16:9) and the motion timing constants — landing it on master as an early
+standalone commit with a JS mirror for you to import.
+
+**Do not invent either set of numbers.** Start on everything that does not depend on them (library
+grid, create/duplicate/default/delete, right-rail TextSpec controls, photo drag + zoom, consent,
+public-exposure notice), then rebase on master and consume the contract for the stage geometry and
+the motion preview. If you find yourself typing a slot position or an animation duration, stop —
+that value belongs to T5210.
+
 ## Problem
 
 The card library ([T5195](T5195-intro-card-library.md)) has an API and no way to use it. This task
@@ -49,7 +61,7 @@ element.
     saving. This is the whole reason a focal point beats a crop; make it visible.
 - **Stage** composes the treatment background + the image + one
   [`RichText`](T5180-rich-text-engine.md) component per slot. Clicking a slot selects it.
-- **Right rail** edits the selected slot's TextSpec: text, font (the 6-face catalogue with each name
+- **Right rail** edits the selected slot's TextSpec: text, font (the **4**-face catalogue - anton, oswald, graduate, playfair; T5180 cut it from six in f0f28d4a, so read the live manifest rather than hardcoding - with each name
   set in its own face), size (S/M/L/XL mapping to normalised values — not a raw number field),
   colour (swatches + custom picker), alignment. These four controls are the user-facing meaning of
   "control font and font colour".

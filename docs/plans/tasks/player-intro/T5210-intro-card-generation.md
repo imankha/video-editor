@@ -13,6 +13,19 @@ Previously: render one card from the profile's athlete fields with `drawtext`. N
 card document** from the library — an image plus N TextSpec elements placed in a template's slots —
 with text rasterised by [T5180](T5180-rich-text-engine.md), not by `drawtext`.
 
+## Contract ownership (wave decision 2026-08-04)
+
+T5205 runs in PARALLEL with this task and cannot import Python. **T5210 owns the shared contract**
+and lands it FIRST, as a small standalone commit pushed to master before the rest of the work:
+
+1. **Slot geometry** — normalised (0..1) slot rects + photo placement for each of the 4 compositions,
+   at both 9:16 and 16:9. Python source of truth + a JS mirror the editor stage imports.
+2. **Motion timing constants** — the push-in / stagger / flash timeline. Same pair.
+
+Both mirrors need a parity test asserting the two copies agree (the T5180 `text_render` / `RichText`
+pattern). Until this commit lands, T5205 works on the parts that do not depend on it. Do not let the
+geometry live only inside a filtergraph string — the editor has to read the same numbers.
+
 ## Problem
 
 Turn an `intro_cards` row into an animated MP4 that can be prepended to a reel of any resolution,
