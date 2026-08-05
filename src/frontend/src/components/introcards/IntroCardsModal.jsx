@@ -80,12 +80,18 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     }
   };
 
-  // The backdrop must SUPPRESS the page behind it: reel cards with bright cyan
-  // buttons were still legible in the margin around the panel, pulling the eye
-  // off the card being edited (T6580 item 1; the scrim went /70 -> /80 in T6540
-  // and that was not enough). Deepen to /90 AND raise the blur to `md`, and grow
-  // the panel to max-w-6xl (a fuller-bleed panel leaves less page showing). Now
-  // nothing behind competes for attention.
+  // Deepen the backdrop (/70 -> /80 in T6540, /80 -> /90 + blur `md` here) and
+  // grow the panel to max-w-6xl so the DIMMED page reads clearly as background.
+  //
+  // PARTIAL, NOT A FULL FIX for T6580 item 1. The real complaint is a Z-ORDER
+  // bug, and no scrim opacity can cover it: DraftTile portals its hover overlays
+  // to document.body at z-[60]/z-[70] (its hover:scale transform breaks fixed
+  // descendants), while this modal is a CHILD of ManageProfilesModal's z-50
+  // fixed root — that ESTABLISHES a stacking context, so this modal's ceiling is
+  // z-50 no matter what number it uses. Draft tiles therefore paint OVER the
+  // panel with undimmed buttons, ABOVE the scrim. That z-order fix is its own
+  // task, T6600 (worked separately on clean master) — do NOT change z-index or
+  // portal anything here. Item 1 closes only when T6600 lands.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
       <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-6xl h-[85vh] flex flex-col">
