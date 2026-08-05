@@ -20,7 +20,15 @@
 
 import { useEffect, useState } from 'react';
 
-const FONTS_MANIFEST_URL = '/api/fonts/fonts.json';
+import { resolveApiUrl } from '../config';
+
+// MUST go through resolveApiUrl. A bare '/api/...' resolves against the FRONTEND
+// origin, which in staging/prod is Cloudflare Pages, not the API — the SPA
+// catch-all then answers with index.html (HTTP 200, text/html). The manifest
+// fetch silently yields non-JSON and NO @font-face rules get injected, so every
+// face falls back to the same default and the font picker appears to do nothing.
+// Local dev hides this because Vite proxies /api to the backend.
+const FONTS_MANIFEST_URL = resolveApiUrl('/api/fonts/fonts.json');
 
 // Module-level so @font-face rules are injected at most once per manifest,
 // regardless of how many RichText instances mount (one-time static-asset
@@ -49,7 +57,7 @@ function injectFontFaces(manifest) {
         : entry.weight || 400;
       return `@font-face {
         font-family: "${key}";
-        src: url("/api/fonts/${entry.file}") format("${format}");
+        src: url("${resolveApiUrl(`/api/fonts/${entry.file}`)}") format("${format}");
         font-weight: ${weightDescriptor};
         font-style: ${entry.style || 'normal'};
       }`;
