@@ -1056,7 +1056,7 @@ def ensure_database():
                 name              TEXT NOT NULL,
                 shown_fields      TEXT NOT NULL,
                 treatment         TEXT NOT NULL,
-                title_text        TEXT,
+                title_text        TEXT,  -- LEGACY (T6570): title now = profile Full Name; grandfathered override for pre-T6570 cards
                 image_key         TEXT,
                 image_cutout_key  TEXT,
                 focal_x           REAL,

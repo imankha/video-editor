@@ -106,6 +106,30 @@ def test_select_elements_reads_title_text_not_text_elements_text():
     assert title["spec"].size == geo["slots"]["title"]["size"]
 
 
+def test_select_elements_title_from_profile_full_name():
+    # T6570: with no legacy title_text, the title text is the PROFILE's full name,
+    # passed in via field_values["full_name"] (mirrors the browser preview).
+    card = _card(["position"], title_text=None)
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, fields, geo, "#ffffff")
+    title = next(e for e in els if e["slot"] == "title")
+    assert title["spec"].text == "Jordan Vega"
+
+
+def test_select_elements_legacy_title_text_grandfathers_over_full_name():
+    # A pre-T6570 card that stored a title_text keeps rendering it (override),
+    # even when the profile now has a full name.
+    card = _card(["position"], title_text="Legacy Name")
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, fields, geo, "#ffffff")
+    title = next(e for e in els if e["slot"] == "title")
+    assert title["spec"].text == "Legacy Name"
+
+
 def test_select_elements_maps_ordinal_geometry_to_semantic_styling():
     # SEAM 2: fact{i} geometry <- shown_fields[i]; styling keyed by the FIELD name.
     card = _card(["position", "class"], text_elements={

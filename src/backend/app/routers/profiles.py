@@ -36,6 +36,7 @@ from app.services.user_db import (
     clear_intro_photo_key,
     get_all_intro_consents,
     get_all_intro_facts,
+    get_all_intro_full_names,
     get_all_intro_photo_keys,
     get_intro_photo_key,
     get_profiles,
@@ -93,7 +94,9 @@ class DeleteIntroImageRequest(BaseModel):
 
 
 class UpdateIntroFactRequest(BaseModel):
-    field: Literal["position", "class", "team"]
+    # position/class/team drive the composition; full_name is the card TITLE
+    # source (T6570) -- same KV write path, but NOT a composition fact.
+    field: Literal["position", "class", "team", "full_name"]
     value: str | None = None
 
 
@@ -147,6 +150,8 @@ async def list_profiles():
     # the card layout T5195/T5210 derive from field COUNT, so they must ride the
     # same payload as consent/photo rather than a separate fetch.
     facts = get_all_intro_facts(user_id)
+    # The card title source (T6570) rides the same payload as the facts.
+    full_names = get_all_intro_full_names(user_id)
 
     return {"profiles": [
         {
@@ -157,6 +162,7 @@ async def list_profiles():
             "isDefault": bool(p["is_default"]),
             "isCurrent": p["id"] == selected,
             "introConsentAt": consents.get(p["id"]),
+            "full_name": full_names.get(p["id"]),
             **_intro_photo_fields(photo_keys.get(p["id"])),
             **_intro_fact_fields(facts.get(p["id"], {})),
         }

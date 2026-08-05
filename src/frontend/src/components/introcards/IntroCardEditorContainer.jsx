@@ -112,13 +112,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
     patch({ name: trimmed });
   }, [card.name, patch]);
 
-  // --- Title text ---------------------------------------------------------
-  const commitTitle = useCallback((value) => {
-    const trimmed = value.trim();
-    if (trimmed === (card.title_text || '')) return;
-    patch({ title_text: trimmed });
-  }, [card.title_text, patch]);
-
   // --- Slot styling (text_elements) --------------------------------------
   // Rebase on the LIVE (optimistic) card.text_elements so editing slot B within
   // the debounce window never drops slot A's just-applied change. Stored spec is
@@ -212,7 +205,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           onSelectSlot={setSelectedSlot}
           onToggleFact={toggleFact}
           onSetTreatment={setTreatment}
-          onCommitTitle={commitTitle}
           specForSlot={specForSlot}
           onUpdateSlotSpec={updateSlotSpec}
           onImageChanged={onImageChanged}

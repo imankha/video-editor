@@ -34,7 +34,7 @@ const MOCK_CARD = {
   name: 'Stafford intro',
   shown_fields: ['position'],
   treatment: 'gold',
-  title_text: 'CHAMPION',
+  // T6570: no title_text — the title resolves from the profile's Full Name below.
   image_key: 'intro/mock.png',
   image_cutout_key: null,
   focal_x: 0.5,
@@ -56,6 +56,7 @@ const MOCK_PROFILE = {
   introConsentAt: '2026-08-05T00:00:00Z', // consented -> skip the gate
   introPhotoKey: 'intro/mock.png',
   introPhotoUrl: PHOTO,
+  full_name: 'CHAMPION', // T6570: the card title reads from here, not a text box
   position: 'Midfielder 6-8-10',
   class: '', // deliberately empty -> exercises the "unfilled fact" prompt
   team: 'Riverside FC',

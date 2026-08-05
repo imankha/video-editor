@@ -32,7 +32,6 @@ export function IntroCardRail({
   onSelectSlot,
   onToggleFact,
   onSetTreatment,
-  onCommitTitle,
   specForSlot,
   onUpdateSlotSpec,
   onImageChanged,
@@ -184,7 +183,6 @@ export function IntroCardRail({
               profile={profile}
               specForSlot={specForSlot}
               onUpdateSlotSpec={onUpdateSlotSpec}
-              onCommitTitle={onCommitTitle}
               onEditProfile={onEditProfile}
             />
           </div>
@@ -215,22 +213,25 @@ function MiniLabel({ children }) {
  * profile value (read-only here; edited on the profile), or an inline prompt.
  * Both share the styling editor below.
  */
-function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onCommitTitle, onEditProfile }) {
+function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEditProfile }) {
   const meta = SLOT_META[slot];
   const spec = specForSlot(slot);
   const value = slotDisplayText(slot, card, profile);
+  // T6570: the title is no longer a free-text box — it is the profile's Full
+  // Name (a property of the athlete), so it reads exactly like a fact: the
+  // resolved value, edited on the profile, with an inline prompt when unset.
+  const isTitle = slot === TITLE_SLOT;
+  const sourceLabel = isTitle ? 'Full name' : meta.label;
 
   return (
     <div className="space-y-3">
-      {slot === TITLE_SLOT ? (
-        <TitleInput value={card.title_text || ''} onCommit={onCommitTitle} />
-      ) : value ? (
+      {value ? (
         <div className="text-xs text-gray-400">
-          {meta.label}: <span className="text-gray-200">{value}</span> (edit on the profile)
+          {sourceLabel}: <span className="text-gray-200">{value}</span> (edit on the profile)
         </div>
       ) : (
         <p className="text-xs text-amber-400/90">
-          No {meta.label.toLowerCase()} on this profile yet.{' '}
+          No {sourceLabel.toLowerCase()} on this profile yet.{' '}
           <button type="button" onClick={onEditProfile} className="underline hover:text-amber-300">
             Add it
           </button>
@@ -249,43 +250,6 @@ function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onComm
         colorSwatches={COLOR_SWATCHES}
       />
     </div>
-  );
-}
-
-/**
- * Title text draft — typing never hits the API; commits on blur/Enter, and only
- * when the value actually changed (mirrors ProfileIntroSection's IntroFactInput).
- */
-function TitleInput({ value, onCommit }) {
-  const [draft, setDraft] = useState(value);
-  const [dirty, setDirty] = useState(false);
-  const [lastValue, setLastValue] = useState(value);
-
-  // Render-time re-sync when the persisted value moves under an untouched input.
-  if (value !== lastValue && !dirty) {
-    setLastValue(value);
-    setDraft(value);
-  }
-
-  const commit = () => {
-    if (!dirty) return;
-    setDirty(false);
-    setLastValue(draft);
-    onCommit(draft);
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-gray-400">Title text</span>
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-        className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-      />
-    </label>
   );
 }
 

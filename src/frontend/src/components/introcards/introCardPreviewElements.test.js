@@ -60,4 +60,32 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
     const els = buildPreviewElements({ ...card, title_text: '  ' }, profile, 'hero', '9:16');
     expect(els.find((e) => e.slot === 'title')).toBeUndefined();
   });
+
+  // T6570 — the title text is the profile's Full Name (title_text a legacy override).
+  it('sources the title from the profile full name when there is no title_text', () => {
+    const els = buildPreviewElements(
+      { treatment: 'gold', shown_fields: [], text_elements: {} },
+      { ...profile, full_name: 'Jordan Vega' },
+      'title-only', '9:16',
+    );
+    expect(els.find((e) => e.slot === 'title').spec.text).toBe('Jordan Vega');
+  });
+
+  it('grandfathers a legacy title_text over the profile full name', () => {
+    const els = buildPreviewElements(
+      { treatment: 'gold', title_text: 'Legacy', shown_fields: [], text_elements: {} },
+      { ...profile, full_name: 'Jordan Vega' },
+      'title-only', '9:16',
+    );
+    expect(els.find((e) => e.slot === 'title').spec.text).toBe('Legacy');
+  });
+
+  it('omits the title when neither title_text nor full_name is set', () => {
+    const els = buildPreviewElements(
+      { treatment: 'gold', shown_fields: [], text_elements: {} },
+      { ...profile },
+      'title-only', '9:16',
+    );
+    expect(els.find((e) => e.slot === 'title')).toBeUndefined();
+  });
 });

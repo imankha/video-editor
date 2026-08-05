@@ -1,8 +1,8 @@
 // T5205 — factories for a new card and a slot's default STYLING spec.
 //
 // A stored `text_elements[slot]` is a STYLING-ONLY TextSpec (epic data model,
-// T5210 contract): its `.text` is not authoritative (the title's text is
-// `card.title_text`, a fact's text is the profile field), and its
+// T5210 contract): its `.text` is not authoritative (the title's text is the
+// profile's Full Name (T6570), a fact's text is the profile field), and its
 // `.size`/`.align`/`.position`/`.maxWidth` are neutral placeholders that the
 // composition geometry OVERRIDES at render/preview time. What the editor owns
 // here is font / colour / shadow / stroke — the styling the rail edits.
@@ -24,7 +24,7 @@ export function defaultSlotSpec(slot, accent = treatmentAccent(DEFAULT_TREATMENT
   const kind = SLOT_META[slot]?.kind || 'fact';
   const styling = defaultStyling(kind, accent);
   return {
-    text: '', // styling-only: real text is title_text / the profile fact
+    text: '', // styling-only: real text is the profile full name / the profile fact
     font: styling.font,
     color: styling.color,
     size: DEFAULT_SIZE,
@@ -48,10 +48,12 @@ export function defaultSlotSpec(slot, accent = treatmentAccent(DEFAULT_TREATMENT
  */
 export function buildCreateFields({ name, profile }) {
   return {
+    // `name` is the LIBRARY label only. The card TITLE is the profile's Full
+    // Name (T6570), resolved at render time — a new card sets NO title_text, so
+    // it never depends on the legacy free-text override.
     name,
     treatment: DEFAULT_TREATMENT,
     shown_fields: [],
-    title_text: name,
     image_key: profile?.introPhotoKey || null,
     text_elements: {},
     duration: DEFAULT_DURATION,

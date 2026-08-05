@@ -12,7 +12,7 @@ import { RichText } from '../RichText';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor, CARD_ASPECTS } from '../../utils/introCardGeometry';
 import { treatmentBackgroundCss, photoStyleFor, scrimBackground } from './introCardVisual';
-import { buildPreviewElements } from './introCardPreviewElements';
+import { buildPreviewElements, resolveTitleText } from './introCardPreviewElements';
 
 /**
  * Resolve the effective photo framing for a card. Card focal/zoom win; a NULL on
@@ -31,11 +31,11 @@ export function resolveFraming(card, profile) {
 }
 
 /**
- * Value a slot displays: the card's title text for the title slot, the profile
- * fact for a fact slot. '' when unset.
+ * Value a slot displays: the profile's full name for the title slot (T6570;
+ * title_text a legacy override), the profile fact for a fact slot. '' when unset.
  */
 export function slotDisplayText(slot, card, profile) {
-  if (slot === 'title') return card?.title_text || '';
+  if (slot === 'title') return resolveTitleText(card, profile);
   return (profile && profile[slot]) || '';
 }
 
