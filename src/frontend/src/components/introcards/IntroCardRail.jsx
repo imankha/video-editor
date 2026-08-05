@@ -2,7 +2,8 @@
 // drafts). Information design (T6540): the rail is organised into two tiers a
 // first-time user can scan without reading every label —
 //   CONTENT ("On the card"): which facts show (the composition axis), captioned
-//     with the live layout name so ticking a fact reads as cause -> effect.
+//     so ticking a fact reads as cause -> effect (WITHOUT naming a layout; T6570
+//     — the user does not want the layout named).
 //   PHOTO: the photo as ONE object — thumbnail, replace/remove, AND zoom together
 //     (drag stays on the stage; the indirect controls live here, not split off).
 //   STYLE: the look — treatment + the selected slot's typography, grouped in one
@@ -59,7 +60,7 @@ export function IntroCardRail({
       <section>
         <SectionHeading>On the card</SectionHeading>
         <p className="text-xs text-gray-400 leading-snug mb-1.5">
-          The layout adapts to the facts you show (named on the card).
+          The layout adapts to the facts you show.
         </p>
         <div className="space-y-0.5">
           {FACT_SLOTS.map((slot) => {

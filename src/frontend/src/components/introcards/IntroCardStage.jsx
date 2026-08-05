@@ -1,21 +1,22 @@
 // T5205 — the editor STAGE (presentational). Shows the card at a chosen aspect
 // (9:16 / 16:9 toggle), lets the user drag the photo to reframe and zoom it,
-// select a text slot by clicking it, and play the motion preview. Names the
-// current composition quietly on the stage. Drag/zoom are transient here; the
-// container commits each ONCE on release.
+// select a text slot by clicking it, and play the motion preview. The layout is
+// NOT named on the stage (T6570: the user does not want the layout named); the
+// causal signal lives as the rail's facts caption. Drag/zoom are transient here;
+// the container commits each ONCE on release.
 //
 // Slot geometry, treatment colours and motion timing all come from T5210's shared
 // contract (via IntroCardPreview / introCardGeometry / MotionPreview) — this stage
 // hard-codes none of them.
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Square, LayoutTemplate } from 'lucide-react';
+import { Play, Square } from 'lucide-react';
 import { IntroCardPreview, resolveFraming } from './IntroCardPreview';
 import { MotionPreview } from './MotionPreview';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor } from '../../utils/introCardGeometry';
 import { buildPreviewElements } from './introCardPreviewElements';
-import { ASPECT_OPTIONS, COMPOSITION_LABELS } from './introCardEditorConstants';
+import { ASPECT_OPTIONS } from './introCardEditorConstants';
 
 // Desktop caps. The card is the thing being designed (T6580), so it fills the
 // available stage column instead of sitting small in a large modal.
@@ -201,19 +202,11 @@ export function IntroCardStage({
           );
         })}
 
-        {/* Composition readout — PRODUCT FEEDBACK, not a debug slug. A human,
-            title-cased layout name with a layout icon, so a first-timer connects
-            "I ticked a fact" to "the layout changed" (the epic has no template
-            picker — this caption is the only surface that explains it). The raw
-            key stays on data-composition-key for tests. */}
-        <span
-          className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/70 backdrop-blur-sm text-xs font-medium text-gray-100 pointer-events-none"
-          data-testid="composition-label"
-          data-composition-key={composition}
-        >
-          <LayoutTemplate size={14} className="text-gray-400" />
-          {COMPOSITION_LABELS[composition] || composition} layout
-        </span>
+        {/* No composition NAME on the stage (T6570): the user does not want the
+            layout named. The causal signal — that ticking facts re-lays-out the
+            card — is carried by the rail's "the layout adapts to the facts you
+            show" caption WITHOUT naming a layout. The preview root still exposes
+            data-composition for tests. */}
 
         {playing && (
           <MotionPreview
