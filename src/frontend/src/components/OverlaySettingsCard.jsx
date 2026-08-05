@@ -213,11 +213,18 @@ export default function OverlaySettingsCard({
         </>
       )}
 
-      {/* Cover photo (T5410): honest copy -- picks the middle of the open-play
-          slow-mo. Never "AI-picked" / "smart". */}
+      {/* Preview image (T5410, renamed T6510): honest copy -- picks the middle of
+          the open-play slow-mo. Never "AI-picked" / "smart".
+          The name says the CONSEQUENCE, not the artefact: this still is what a
+          share link unfurls to, which is the only reason a user should care. */}
       <div className="border-t border-gray-700 pt-3 space-y-2">
         <div className="flex flex-col">
-          <span className="text-sm font-medium text-gray-200">Cover photo</span>
+          <span
+            className="text-sm font-medium text-gray-200"
+            title="This image is what people see when you share the link."
+          >
+            Preview image
+          </span>
           <span className="text-xs text-gray-400">
             {posterUploaded
               ? 'Custom image in use'

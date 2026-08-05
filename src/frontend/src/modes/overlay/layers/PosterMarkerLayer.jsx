@@ -124,18 +124,19 @@ export default function PosterMarkerLayer({
   if (timelineDuration <= 0) return null;
 
   const sourceTimeLabel = formatTimeSimple(visualTimeToSourceTime(shownVisualTime));
+  // Copy names the CONSEQUENCE (what a share link shows), not the artefact (T6510).
   const label = isUploaded
-    ? 'Cover photo: custom image in use. This marker is inactive.'
+    ? 'Preview image: custom image in use. This marker is inactive.'
     : isDragging
-      ? `Cover frame: ${sourceTimeLabel}`
-      : 'Cover frame — the middle of the open-play slow-mo. Drag to change, or use the panel below.';
+      ? `Preview frame: ${sourceTimeLabel}`
+      : 'Preview frame — what people see when you share the link. The middle of the open-play slow-mo; drag to change, or use the panel below.';
 
   return (
     <div
       ref={trackRef}
       data-testid="poster-marker"
       role="slider"
-      aria-label="Cover photo marker"
+      aria-label="Preview image marker"
       aria-valuetext={sourceTimeLabel}
       aria-disabled={disabled}
       tabIndex={disabled ? -1 : 0}
