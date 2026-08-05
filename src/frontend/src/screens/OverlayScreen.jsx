@@ -1025,12 +1025,19 @@ export function OverlayScreen({
     setOverlayChangedSinceExport(true);
   }, [deleteText, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
-  // Wrapped handler: poster (cover-photo) marker drag-end / "Use current
-  // frame as cover" (T5410). Fires the surgical poster-time write ONCE per
-  // gesture -- never a useEffect. `time=null` (unused here) would clear back
-  // to auto; the marker always sends a concrete time from a drag-end or the
-  // playhead-capture button.
+  // Wrapped handler: poster (preview-image) marker drag-end / "Use current
+  // frame" (T5410). Fires the surgical poster-time write ONCE per gesture --
+  // never a useEffect. The marker only ever MOVES to a concrete frame: T6510
+  // established the preview image is ALWAYS a frame, so there is no clear-to-
+  // none. T6560 makes that structural -- a non-finite time (a NaN/undefined
+  // slipping through from a bad caller) is refused LOUDLY here rather than
+  // silently blanking the reel's poster, matching the backend, which now 422s a
+  // null/missing poster-time. Reset-to-auto is a separate gesture (revert).
   const wrappedSetPosterMarkerTime = useCallback((time) => {
+    if (!Number.isFinite(time)) {
+      console.error('[OverlayScreen] refusing non-finite poster marker time:', time);
+      return;
+    }
     setPosterMarkerTime(time);
     setPosterUploadedFilename(null); // dragging/re-picking supersedes any prior upload
     if (canSyncActions) {

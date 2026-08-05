@@ -284,11 +284,6 @@ export default function OverlaySettingsCard({
           )}
         </div>
       </div>
-
-      {/* Export Info */}
-      <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-        Applies highlight overlay (H.264)
-      </div>
     </div>
   );
 }
