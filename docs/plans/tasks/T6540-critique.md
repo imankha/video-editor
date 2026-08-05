@@ -219,5 +219,40 @@ by raising panel opacity / z-index / bounds) or outside it in the dimmed margin
 | 7 | `coarse-pointer:min-h-[44px]` on fact rows, chips, treatment buttons | Touch targets |
 | 8 | Verify 375px: no overflow, no cramping, single scroll region | Responsive |
 | 9 | Resolve the reel-card-in-modal question in the browser | Correctness |
+
+---
+
+## Verification under the REAL modal geometry (density gate)
+
+First-pass verification used a harness with no size cap, so the `h-[85vh]`
+scroll condition that produced the original "cramped rail" complaint was never
+reproduced. The harness now wraps the editor in `IntroCardsModal`'s exact box
+(`max-w-5xl` = 1024px width cap, `h-[85vh]`, body `overflow-y-auto`). Measured
+in a real browser (Chromium) at the 3-facts "recruiting" state:
+
+| Metric | Pre-redesign (baseline) | Redesign v1 (regressed) | Redesign final |
+|---|---|---|---|
+| Desktop rail scroll depth | 146px | 250px | **140px** |
+| Desktop reach Effects | in view | 95px | 6px (≈in view) |
+| Desktop reach footer | 58px | 161px | **51px** |
+| Mobile total scroll | 769px | 858px | **731px** |
+| Mobile reach footer | 687px | 795px | **669px** |
+| Horizontal overflow @1024 & @1440 (incl. 16:9) | 0 | 0 | 0 |
+
+v1 scrolled markedly WORSE than the complaint (the two-tier headings, causal
+caption, and boxed Style panel out-weighed the Effects-collapse saving). Fixes:
+dropped the boxed Style panel (heading-only grouping), tightened vertical rhythm
+(`space-y-6`→`4`, fact rows `py-1.5`→`1`, heading margins `mb-2`→`1.5`), shortened
+the caption to one line, and removed the redundant "Treatment" mini-label (the
+swatches are self-captioned). Final density is at-or-below baseline everywhere.
+
+**Scroll regions:** exactly ONE at every width — desktop scrolls the RAIL (stage
+pinned, standard editor idiom); mobile scrolls the modal BODY as one. Never two
+nested scrollbars.
+
+**Item 6 confirmed in-browser:** with the real modal box, the dimmed page is
+visible only in the margin OUTSIDE the opaque `bg-gray-900` panel; nothing renders
+through the panel interior. The reel card was page bleed-through, not leaked
+content. Scrim deepened `/70`→`/80`.
 </content>
 </invoke>

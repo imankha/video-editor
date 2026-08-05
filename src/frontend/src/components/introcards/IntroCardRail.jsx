@@ -21,11 +21,9 @@ import {
   TITLE_SLOT,
   TREATMENTS,
   COLOR_SWATCHES,
-  COMPOSITION_LABELS,
 } from './introCardEditorConstants';
 import { treatmentAccent, treatmentBackgroundCss } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
-import { selectCardComposition } from '../../utils/introCardComposition';
 
 export function IntroCardRail({
   card,
@@ -52,18 +50,15 @@ export function IntroCardRail({
   // one-item "picker" reads as a stray button, so we drop it and label the drawer
   // for the one slot instead (recognition over recall).
   const hasSlotChoice = slotOptions.length > 1;
-  const composition = selectCardComposition(card);
-  const compositionLabel = COMPOSITION_LABELS[composition] || composition;
 
   return (
-    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-6 lg:pr-1">
+    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-4 lg:pr-1">
       {/* CONTENT tier — the primary decision, and the ONLY signpost that ticking
           a fact re-lays-out the card (the epic has no template picker). */}
       <section>
         <SectionHeading>On the card</SectionHeading>
-        <p className="text-xs text-gray-400 leading-snug mb-3">
-          The layout adapts to the facts you show — currently{' '}
-          <span className="font-medium text-gray-200">{compositionLabel}</span>.
+        <p className="text-xs text-gray-400 leading-snug mb-2">
+          The layout adapts to the facts you show (named on the card).
         </p>
         <div className="space-y-0.5">
           {FACT_SLOTS.map((slot) => {
@@ -72,7 +67,7 @@ export function IntroCardRail({
             const value = slotDisplayText(slot, card, profile);
             return (
               <div key={slot}>
-                <label className="flex items-center gap-2.5 cursor-pointer py-1.5 coarse-pointer:min-h-[44px] rounded hover:bg-gray-800/60 px-1 -mx-1">
+                <label className="flex items-center gap-2.5 cursor-pointer py-1 coarse-pointer:min-h-[44px] rounded hover:bg-gray-800/60 px-1 -mx-1">
                   <input
                     type="checkbox"
                     checked={isShown}
@@ -115,14 +110,16 @@ export function IntroCardRail({
         />
       </section>
 
-      {/* STYLE tier — the look. Grouped in one panel so treatment + typography
-          read as refinements, secondary to the content decision above. */}
+      {/* STYLE tier — the look. Treatment + typography read as refinements,
+          secondary to the content decision above; the heading alone sets them
+          apart (a box or divider only added scroll height). */}
       <section>
         <SectionHeading>Style</SectionHeading>
-        <div className="rounded-lg border border-gray-700/70 bg-gray-800/40 p-3 space-y-4">
-          {/* Treatment — independent of composition (decision 2b). */}
+        <div className="space-y-3">
+          {/* Treatment — independent of composition (decision 2b). No mini-label:
+              each swatch is captioned (Gold / Dark / Photo forward), so a group
+              label just added a row of scroll for no information. */}
           <div>
-            <MiniLabel>Treatment</MiniLabel>
             <div className="flex gap-2" role="group" aria-label="Treatment">
               {TREATMENTS.map((t) => {
                 const active = card.treatment === t.key;
@@ -203,13 +200,13 @@ export function IntroCardRail({
 
 /** Primary rail heading (white, semibold) — the top of the hierarchy. */
 function SectionHeading({ children }) {
-  return <h3 className="text-sm font-semibold text-white mb-2">{children}</h3>;
+  return <h3 className="text-sm font-semibold text-white mb-1.5">{children}</h3>;
 }
 
 /** Secondary group label (grey, uppercase) — subordinate to a SectionHeading. */
 function MiniLabel({ children }) {
   return (
-    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{children}</span>
+    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{children}</span>
   );
 }
 
@@ -322,7 +319,7 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {hasPhoto && (
         <div className="flex items-center gap-3">
           <img

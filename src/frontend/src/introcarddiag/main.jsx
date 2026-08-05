@@ -96,14 +96,27 @@ function Harness() {
   const card = useIntroCardStore((s) => s.cards.find((c) => c.id === 1) || null);
   const profile = useCurrentProfile();
   if (!card || !profile) return null;
+  // Reproduce IntroCardsModal.jsx's EXACT box so the harness is not more
+  // generous than production: a 1024px width cap (max-w-5xl) AND a fixed 85vh
+  // height whose BODY is the scroll region (flex-1 min-h-0 overflow-y-auto).
+  // Without this the editor spread into the whole viewport and the h-[85vh]
+  // scroll condition that produced the original "cramped rail" complaint was
+  // never reproduced. Keep these classes in step with IntroCardsModal.
   return (
-    <div style={{ maxWidth: 960, height: '100%' }}>
-      <IntroCardEditorContainer
-        card={card}
-        profile={profile}
-        onBack={() => {}}
-        onEditProfile={() => {}}
-      />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-5xl h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
+          <h2 className="text-base font-semibold text-white">Intro cards</h2>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
+          <IntroCardEditorContainer
+            card={card}
+            profile={profile}
+            onBack={() => {}}
+            onEditProfile={() => {}}
+          />
+        </div>
+      </div>
     </div>
   );
 }
