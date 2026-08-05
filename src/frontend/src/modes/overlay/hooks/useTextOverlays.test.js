@@ -122,6 +122,70 @@ describe('useTextOverlays - moveEdge returns the updated entity (T5225)', () => 
   });
 });
 
+describe('useTextOverlays - moveTextBlock moves the whole block (T6610)', () => {
+  it('moves start AND end together, preserving duration, and returns the updated block', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let block;
+    act(() => { block = result.current.addText(2, baseSpec()); }); // [2, 4], duration 2
+    const span = block.endTime - block.startTime;
+
+    let updated;
+    act(() => { updated = result.current.moveTextBlock(block.id, 6); });
+
+    expect(updated).toBeTruthy();
+    expect(updated.id).toBe(block.id);
+    expect(updated.startTime).toBeCloseTo(6, 5);
+    expect(updated.endTime).toBeCloseTo(6 + span, 5); // duration preserved
+    expect(updated.endTime - updated.startTime).toBeCloseTo(span, 5);
+
+    const inState = result.current.textOverlays.find((b) => b.id === block.id);
+    expect(inState.startTime).toBeCloseTo(6, 5);
+    expect(inState.endTime).toBeCloseTo(6 + span, 5);
+  });
+
+  it('clamps at the LEFT edge (start cannot go below 0), duration preserved', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let block;
+    act(() => { block = result.current.addText(2, baseSpec()); }); // [2, 4]
+    const span = block.endTime - block.startTime;
+
+    let updated;
+    act(() => { updated = result.current.moveTextBlock(block.id, -5); });
+
+    expect(updated.startTime).toBe(0);
+    expect(updated.endTime).toBeCloseTo(span, 5);
+  });
+
+  it('clamps at the RIGHT edge (end cannot exceed duration), duration preserved', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let block;
+    act(() => { block = result.current.addText(2, baseSpec()); }); // [2, 4], span 2
+    const span = block.endTime - block.startTime;
+
+    let updated;
+    act(() => { updated = result.current.moveTextBlock(block.id, 100); });
+
+    expect(updated.endTime).toBeCloseTo(10, 5);
+    expect(updated.startTime).toBeCloseTo(10 - span, 5);
+  });
+
+  it('returns null for an unknown id (nothing to move)', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+    act(() => { result.current.addText(2, baseSpec()); });
+
+    let updated;
+    act(() => { updated = result.current.moveTextBlock('does-not-exist', 5); });
+    expect(updated).toBeNull();
+  });
+});
+
 describe('useTextOverlays - updateSpec returns the updated entity (T5225)', () => {
   it('updateTextSpec replaces the block spec wholesale and returns the updated block', () => {
     const { result } = renderHook(() => useTextOverlays());

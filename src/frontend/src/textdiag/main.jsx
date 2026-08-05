@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 // Tailwind utilities: without this the harness renders EVERY layout class inert
 // (position/height/flex all unset), so the levers measure 0px tall and every
@@ -51,9 +51,21 @@ function TextDiagHarness() {
     addText,
     moveTextStart,
     moveTextEnd,
+    moveTextBlock,
     toggleText,
     deleteText,
   } = useTextOverlays();
+
+  // T6610: count the SINGLE surgical persist that a completed body drag / keyboard
+  // nudge should fire (commit=true). In the real app this is
+  // OverlayScreen.wrappedMoveTextBody's dispatchOverlayAction; here we mirror the
+  // commit path locally so the spec can assert "exactly one write per drag" the
+  // same way it would count network requests.
+  const [commits, setCommits] = useState(0);
+  const handleMoveTextBody = (id, newStart, commit) => {
+    moveTextBlock(id, newStart);
+    if (commit) setCommits((c) => c + 1);
+  };
 
   useEffect(() => {
     initializeWithDuration(DURATION);
@@ -74,8 +86,8 @@ function TextDiagHarness() {
         style={{ color: '#d1d5db', fontSize: 13, marginBottom: 16, fontFamily: 'monospace' }}
       >
         {block
-          ? `count=${textOverlaysWithLayout.length} start=${block.startTime.toFixed(3)} end=${block.endTime.toFixed(3)} enabled=${block.enabled}`
-          : `count=${textOverlaysWithLayout.length} no-block`}
+          ? `count=${textOverlaysWithLayout.length} start=${block.startTime.toFixed(3)} end=${block.endTime.toFixed(3)} enabled=${block.enabled} selected=${selectedTextId === block.id ? 'yes' : 'no'} commits=${commits}`
+          : `count=${textOverlaysWithLayout.length} no-block commits=${commits}`}
       </div>
 
       {/* Fixed-width host so the track's bounding rect (and thus lever hit-tests
@@ -90,6 +102,7 @@ function TextDiagHarness() {
           onAddText={(t) => addText(t, DEFAULT_SPEC)}
           onMoveTextStart={moveTextStart}
           onMoveTextEnd={moveTextEnd}
+          onMoveTextBody={handleMoveTextBody}
           onSelectText={setSelectedTextId}
           onDeleteText={deleteText}
           onToggleText={toggleText}

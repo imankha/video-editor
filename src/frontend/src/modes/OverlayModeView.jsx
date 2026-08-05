@@ -181,6 +181,7 @@ export function OverlayModeView({
   onAddText,
   onMoveTextStart,
   onMoveTextEnd,
+  onMoveTextBody,
   onSelectText,
   onDeleteText,
   onToggleText,
@@ -797,6 +798,7 @@ export function OverlayModeView({
             onAddText={onAddText}
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
+            onMoveTextBody={onMoveTextBody}
             onSelectText={onSelectText}
             onDeleteText={onDeleteText}
             onToggleText={onToggleText}
@@ -885,6 +887,7 @@ export function OverlayModeView({
                         onAddText={onAddText}
                         onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
+                        onMoveTextBody={onMoveTextBody}
                         onSelectText={onSelectText}
                         onDeleteText={onDeleteText}
                         onToggleText={onToggleText}
