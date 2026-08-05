@@ -180,7 +180,10 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
 
       {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+      {/* Stage grows to fill; the rail is a fixed-width, independently-scrolling
+          props column on desktop and stacks below on mobile (single modal scroll
+          there — no competing rail scrollbar). */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
         <IntroCardStage
           card={card}
           profile={profile}
@@ -190,8 +193,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           zoomDraft={zoomDraft}
           onPhotoDragMove={onPhotoDragMove}
           onPhotoDragEnd={onPhotoDragEnd}
-          onZoomInput={onZoomInput}
-          onZoomRelease={onZoomRelease}
           selectedSlot={selectedSlot}
           onSelectSlot={setSelectedSlot}
         />
@@ -208,6 +209,9 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           onImageChanged={onImageChanged}
           onEditProfile={onEditProfile}
           onError={setError}
+          zoomDraft={zoomDraft}
+          onZoomInput={onZoomInput}
+          onZoomRelease={onZoomRelease}
         />
       </div>
     </div>

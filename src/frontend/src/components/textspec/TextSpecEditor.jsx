@@ -25,7 +25,13 @@
 //                    composition-derived in the card editor).
 //   colorSwatches -- [hex]; render quick-pick swatches beside the custom picker.
 //   hideFooterNote-- omit the overlay-specific "burned into the export" note.
+//   collapseEffects-- tuck Shadow blur + Stroke width behind a collapsed
+//                    "Effects" disclosure (progressive disclosure). The card
+//                    editor opts in because those are expert dials that were
+//                    competing at equal weight with the primary Font/Colour
+//                    choices; the overlay host leaves them inline (default off).
 
+import { ChevronRight } from 'lucide-react';
 import { Align, FontKey } from '../../constants/textSpec';
 
 const FONT_LABELS = {
@@ -41,8 +47,40 @@ const ALIGN_LABELS = {
   [Align.RIGHT]: 'Right',
 };
 
-export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, hideFooterNote = false }) {
+export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, hideFooterNote = false, collapseEffects = false }) {
   const emit = (patch) => onChange({ ...spec, ...patch });
+
+  const shadowControl = (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs uppercase tracking-wide text-gray-400">Shadow blur</span>
+      <input
+        type="range"
+        aria-label="Shadow blur"
+        min={0}
+        max={0.5}
+        step={0.01}
+        value={spec.shadow?.blur ?? 0}
+        onChange={(e) => emit({ shadow: { ...spec.shadow, blur: parseFloat(e.target.value) } })}
+        className="w-full"
+      />
+    </label>
+  );
+
+  const strokeControl = (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs uppercase tracking-wide text-gray-400">Stroke width</span>
+      <input
+        type="range"
+        aria-label="Stroke width"
+        min={0}
+        max={0.15}
+        step={0.005}
+        value={spec.stroke?.width ?? 0}
+        onChange={(e) => emit({ stroke: { ...spec.stroke, width: parseFloat(e.target.value) } })}
+        className="w-full"
+      />
+    </label>
+  );
 
   return (
     <div className="flex flex-col gap-3 text-sm text-gray-200">
@@ -149,33 +187,23 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
         </label>
       )}
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-gray-400">Shadow blur</span>
-        <input
-          type="range"
-          aria-label="Shadow blur"
-          min={0}
-          max={0.5}
-          step={0.01}
-          value={spec.shadow?.blur ?? 0}
-          onChange={(e) => emit({ shadow: { ...spec.shadow, blur: parseFloat(e.target.value) } })}
-          className="w-full"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-gray-400">Stroke width</span>
-        <input
-          type="range"
-          aria-label="Stroke width"
-          min={0}
-          max={0.15}
-          step={0.005}
-          value={spec.stroke?.width ?? 0}
-          onChange={(e) => emit({ stroke: { ...spec.stroke, width: parseFloat(e.target.value) } })}
-          className="w-full"
-        />
-      </label>
+      {collapseEffects ? (
+        <details className="group border-t border-gray-700/70 pt-3">
+          <summary className="flex items-center gap-1 cursor-pointer select-none list-none text-xs uppercase tracking-wide text-gray-400 hover:text-gray-300 [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={14} className="transition-transform group-open:rotate-90" />
+            Effects
+          </summary>
+          <div className="mt-3 flex flex-col gap-3">
+            {shadowControl}
+            {strokeControl}
+          </div>
+        </details>
+      ) : (
+        <>
+          {shadowControl}
+          {strokeControl}
+        </>
+      )}
 
       {!hideFooterNote && (
         <p className="text-xs text-amber-400/90 leading-snug">

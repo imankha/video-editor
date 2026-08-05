@@ -51,4 +51,23 @@ describe('TextSpecEditor — T5205 card-rail extensions', () => {
     expect(screen.getByLabelText('Size')).toBeTruthy();
     expect(screen.getByLabelText('Align')).toBeTruthy();
   });
+
+  it('default (T5225 overlay host) keeps Shadow/Stroke INLINE — no Effects disclosure', () => {
+    // The overlay host passes no collapseEffects, so the expert dials must stay
+    // visible exactly as before. Key on the ABSENCE of the "Effects" summary
+    // (jsdom keeps <details> children in the DOM regardless of open state, so
+    // asserting the input alone can't distinguish inline from collapsed).
+    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} />);
+    expect(screen.queryByText('Effects')).toBeNull();
+    expect(screen.getByLabelText('Shadow blur')).toBeTruthy();
+    expect(screen.getByLabelText('Stroke width')).toBeTruthy();
+  });
+
+  it('collapseEffects tucks Shadow/Stroke behind an "Effects" disclosure (card rail opt-in)', () => {
+    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} collapseEffects />);
+    // The disclosure summary is present; the controls still exist within it.
+    expect(screen.getByText('Effects')).toBeTruthy();
+    expect(screen.getByLabelText('Shadow blur')).toBeTruthy();
+    expect(screen.getByLabelText('Stroke width')).toBeTruthy();
+  });
 });

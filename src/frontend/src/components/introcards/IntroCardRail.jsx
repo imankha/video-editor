@@ -1,8 +1,15 @@
-// T5205 — the editor RIGHT RAIL (presentational + small local input drafts).
-// Sections: which facts to show (the composition axis), the visual treatment
-// (independent look axis), the photo, and the selected slot's text + styling.
-// Ends with the public-exposure notice. Styling edits go through the SHARED
-// TextSpecEditor (T5225) — one editor, extended in place, not a second one.
+// T5205 / T6540 — the editor RIGHT RAIL (presentational + small local input
+// drafts). Information design (T6540): the rail is organised into two tiers a
+// first-time user can scan without reading every label —
+//   CONTENT ("On the card"): which facts show (the composition axis), captioned
+//     with the live layout name so ticking a fact reads as cause -> effect.
+//   PHOTO: the photo as ONE object — thumbnail, replace/remove, AND zoom together
+//     (drag stays on the stage; the indirect controls live here, not split off).
+//   STYLE: the look — treatment + the selected slot's typography, grouped in one
+//     panel so it reads as secondary to the content decision above.
+// White section headings vs grey mini-labels give the hierarchy; expert dials
+// (shadow/stroke) sit behind the shared editor's collapsed "Effects" disclosure.
+// Styling edits go through the SHARED TextSpecEditor (T5225) — one editor.
 
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
@@ -16,7 +23,7 @@ import {
   COLOR_SWATCHES,
 } from './introCardEditorConstants';
 import { treatmentAccent, treatmentBackgroundCss } from './introCardVisual';
-import { slotDisplayText } from './IntroCardPreview';
+import { slotDisplayText, resolveFraming } from './IntroCardPreview';
 
 export function IntroCardRail({
   card,
@@ -31,35 +38,47 @@ export function IntroCardRail({
   onImageChanged,
   onEditProfile,
   onError,
+  zoomDraft,
+  onZoomInput,
+  onZoomRelease,
 }) {
   const shown = card.shown_fields || [];
   // Slots available to style: the title, plus every shown fact.
   const slotOptions = [TITLE_SLOT, ...FACT_SLOTS.filter((f) => shown.includes(f))];
   const activeSlot = slotOptions.includes(selectedSlot) ? selectedSlot : TITLE_SLOT;
+  // A single styleable slot means there is nothing to switch between: showing a
+  // one-item "picker" reads as a stray button, so we drop it and label the drawer
+  // for the one slot instead (recognition over recall).
+  const hasSlotChoice = slotOptions.length > 1;
 
   return (
-    <div className="flex-1 min-w-0 lg:max-w-sm overflow-y-auto space-y-5 pr-1">
-      {/* Facts to show -> derives the composition */}
-      <Section title="Show on the card">
-        <div className="space-y-2">
+    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-4 lg:pr-1">
+      {/* CONTENT tier — the primary decision, and the ONLY signpost that ticking
+          a fact re-lays-out the card (the epic has no template picker). */}
+      <section>
+        <SectionHeading>On the card</SectionHeading>
+        <p className="text-xs text-gray-400 leading-snug mb-2">
+          The layout adapts to the facts you show (named on the card).
+        </p>
+        <div className="space-y-0.5">
           {FACT_SLOTS.map((slot) => {
             const meta = SLOT_META[slot];
             const isShown = shown.includes(slot);
             const value = slotDisplayText(slot, card, profile);
             return (
               <div key={slot}>
-                <label className="flex items-center gap-2.5 cursor-pointer">
+                <label className="flex items-center gap-2.5 cursor-pointer py-1 coarse-pointer:min-h-[44px] rounded hover:bg-gray-800/60 px-1 -mx-1">
                   <input
                     type="checkbox"
                     checked={isShown}
                     onChange={() => onToggleFact(slot)}
-                    className="w-4 h-4 accent-blue-500 cursor-pointer"
+                    className="w-4 h-4 accent-blue-500 cursor-pointer flex-shrink-0"
                   />
-                  <span className="text-sm text-gray-200">{meta.label}</span>
+                  <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
                   {value && <span className="text-xs text-gray-500 truncate">— {value}</span>}
                 </label>
                 {isShown && !value && (
-                  <p className="ml-6 mt-0.5 text-xs text-amber-400/90">
+                  <p className="ml-8 mb-1 text-xs text-amber-400/90">
                     No {meta.label.toLowerCase()} on this profile yet.{' '}
                     <button
                       type="button"
@@ -75,81 +94,102 @@ export function IntroCardRail({
             );
           })}
         </div>
-      </Section>
+      </section>
 
-      {/* Treatment — independent of composition */}
-      <Section title="Treatment">
-        <div className="flex gap-2" role="group" aria-label="Treatment">
-          {TREATMENTS.map((t) => {
-            const active = card.treatment === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onSetTreatment(t.key)}
-                className={`flex-1 flex flex-col items-center gap-1 p-2 rounded border transition-colors ${
-                  active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
-                }`}
-              >
-                {/* The swatch must show what actually DIFFERS between treatments.
-                    Backdrop alone is not it: all three backdrops are near-black by
-                    design (they sit behind a photo), so a backdrop-only swatch made
-                    the three read as identical dark rectangles - the one control
-                    whose whole job is "change the look" previewed no look at all.
-                    Backdrop + the treatment's accent is what the card really is. */}
-                <span
-                  className="w-full h-8 rounded flex items-end justify-center pb-1 overflow-hidden"
-                  style={{ background: treatmentBackgroundCss(t.key) }}
-                >
-                  <span
-                    className="block w-3/5 h-1.5 rounded-sm"
-                    style={{ background: treatmentAccent(t.key) }}
-                  />
-                </span>
-                <span className="text-[11px] text-gray-300">{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
-
-      {/* Photo */}
-      <Section title="Photo">
-        <PhotoControls card={card} profile={profile} onImageChanged={onImageChanged} onError={onError} />
-      </Section>
-
-      {/* Slot text + styling */}
-      <Section title="Text">
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {slotOptions.map((slot) => {
-            const active = slot === activeSlot;
-            return (
-              <button
-                key={slot}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onSelectSlot(slot)}
-                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                  active ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                {SLOT_META[slot].label}
-              </button>
-            );
-          })}
-        </div>
-
-        <SlotEditor
-          slot={activeSlot}
+      {/* PHOTO — one object: thumbnail + replace/remove + zoom, all together. */}
+      <section>
+        <SectionHeading>Photo</SectionHeading>
+        <PhotoControls
           card={card}
           profile={profile}
-          specForSlot={specForSlot}
-          onUpdateSlotSpec={onUpdateSlotSpec}
-          onCommitTitle={onCommitTitle}
-          onEditProfile={onEditProfile}
+          onImageChanged={onImageChanged}
+          onError={onError}
+          zoomDraft={zoomDraft}
+          onZoomInput={onZoomInput}
+          onZoomRelease={onZoomRelease}
         />
-      </Section>
+      </section>
+
+      {/* STYLE tier — the look. Treatment + typography read as refinements,
+          secondary to the content decision above; the heading alone sets them
+          apart (a box or divider only added scroll height). */}
+      <section>
+        <SectionHeading>Style</SectionHeading>
+        <div className="space-y-3">
+          {/* Treatment — independent of composition (decision 2b). No mini-label:
+              each swatch is captioned (Gold / Dark / Photo forward), so a group
+              label just added a row of scroll for no information. */}
+          <div>
+            <div className="flex gap-2" role="group" aria-label="Treatment">
+              {TREATMENTS.map((t) => {
+                const active = card.treatment === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onSetTreatment(t.key)}
+                    className={`flex-1 flex flex-col items-center gap-1 p-2 rounded border transition-colors coarse-pointer:min-h-[44px] ${
+                      active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                  >
+                    {/* The swatch shows what actually DIFFERS between treatments:
+                        backdrop + the treatment's accent. Backdrop alone is not it
+                        (all three are near-black by design), so a backdrop-only
+                        swatch read as three identical dark rectangles. */}
+                    <span
+                      className="w-full h-8 rounded flex items-end justify-center pb-1 overflow-hidden"
+                      style={{ background: treatmentBackgroundCss(t.key) }}
+                    >
+                      <span
+                        className="block w-3/5 h-1.5 rounded-sm"
+                        style={{ background: treatmentAccent(t.key) }}
+                      />
+                    </span>
+                    <span className="text-[11px] text-gray-300">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Selected slot's text + typography. The slot picker appears only when
+              there is more than one slot to choose between. */}
+          <div>
+            <MiniLabel>{hasSlotChoice ? 'Text' : `${SLOT_META[activeSlot].label} style`}</MiniLabel>
+            {hasSlotChoice && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {slotOptions.map((slot) => {
+                  const active = slot === activeSlot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => onSelectSlot(slot)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors coarse-pointer:min-h-[44px] ${
+                        active ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      {SLOT_META[slot].label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <SlotEditor
+              slot={activeSlot}
+              card={card}
+              profile={profile}
+              specForSlot={specForSlot}
+              onUpdateSlotSpec={onUpdateSlotSpec}
+              onCommitTitle={onCommitTitle}
+              onEditProfile={onEditProfile}
+            />
+          </div>
+        </div>
+      </section>
 
       <p className="text-xs text-amber-400/90 leading-snug border-t border-gray-700 pt-3">
         Anyone with the share link can see this card.
@@ -158,12 +198,15 @@ export function IntroCardRail({
   );
 }
 
-function Section({ title, children }) {
+/** Primary rail heading (white, semibold) — the top of the hierarchy. */
+function SectionHeading({ children }) {
+  return <h3 className="text-sm font-semibold text-white mb-1.5">{children}</h3>;
+}
+
+/** Secondary group label (grey, uppercase) — subordinate to a SectionHeading. */
+function MiniLabel({ children }) {
   return (
-    <div>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{title}</h4>
-      {children}
-    </div>
+    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{children}</span>
   );
 }
 
@@ -202,6 +245,7 @@ function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onComm
         hideSize
         hideAlign
         hideFooterNote
+        collapseEffects
         colorSwatches={COLOR_SWATCHES}
       />
     </div>
@@ -245,13 +289,16 @@ function TitleInput({ value, onCommit }) {
   );
 }
 
-function PhotoControls({ card, profile, onImageChanged, onError }) {
+function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZoomInput, onZoomRelease }) {
   const uploadIntroImage = useProfileStore((s) => s.uploadIntroImage);
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
   const hasPhoto = !!card.image_key;
   const profileKey = profile?.introPhotoKey;
+  // Live zoom while the slider is dragged; the persisted value otherwise. Commits
+  // once on release (the container patches card.zoom), never per input event.
+  const zoom = zoomDraft != null ? zoomDraft : resolveFraming(card, profile).zoom;
 
   const handleFilePick = async (e) => {
     const file = e.target.files?.[0];
@@ -278,12 +325,12 @@ function PhotoControls({ card, profile, onImageChanged, onError }) {
           <img
             src={card.previewUrl}
             alt="Card"
-            className="w-16 h-16 rounded object-cover border border-gray-600 bg-gray-900"
+            className="w-16 h-16 rounded object-cover border border-gray-600 bg-gray-900 flex-shrink-0"
           />
           <button
             type="button"
             onClick={() => onImageChanged(null)}
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-400"
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-400 coarse-pointer:min-h-[44px]"
           >
             <Trash2 size={14} /> Remove
           </button>
@@ -295,7 +342,7 @@ function PhotoControls({ card, profile, onImageChanged, onError }) {
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm text-white disabled:opacity-60"
+          className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm text-white disabled:opacity-60 coarse-pointer:min-h-[44px]"
         >
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
           {uploading ? 'Uploading...' : hasPhoto ? 'Replace' : 'Upload photo'}
@@ -304,12 +351,32 @@ function PhotoControls({ card, profile, onImageChanged, onError }) {
           <button
             type="button"
             onClick={() => onImageChanged(profileKey, profile?.introPhotoUrl || null)}
-            className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-sm text-gray-200"
+            className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-sm text-gray-200 coarse-pointer:min-h-[44px]"
           >
             Use profile photo
           </button>
         )}
       </div>
+
+      {/* Zoom — the photo's indirect reframe control, kept WITH replace/remove
+          (the drag itself stays on the stage). Commits on release. */}
+      {hasPhoto && (
+        <label className="flex items-center gap-2.5 text-xs text-gray-400 pt-1">
+          <span className="uppercase tracking-wide">Zoom</span>
+          <input
+            type="range"
+            aria-label="Zoom"
+            min={1}
+            max={4}
+            step={0.05}
+            value={zoom}
+            onChange={(e) => onZoomInput(parseFloat(e.target.value))}
+            onPointerUp={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
+            onBlur={(e) => onZoomRelease(parseFloat(e.currentTarget.value))}
+            className="flex-1"
+          />
+        </label>
+      )}
 
       <input
         ref={fileInputRef}
