@@ -17,8 +17,18 @@ import { geometryFor } from '../../utils/introCardGeometry';
 import { buildPreviewElements } from './introCardPreviewElements';
 import { ASPECT_OPTIONS, COMPOSITION_LABELS } from './introCardEditorConstants';
 
-const STAGE_MAX_H = 420;
-const STAGE_MAX_W = 480;
+// Desktop caps. The card is the thing being designed (T6580), so it fills the
+// available stage column instead of sitting small in a large modal.
+const STAGE_MAX_H = 640;
+const STAGE_MAX_W = 600;
+// Stacked (mobile) layout: keep the card at the T6540 height so a bigger card
+// never pushes the rail controls below the fold — the density gate is a HARD
+// constraint (T6540-critique). The card grows on desktop, where the stage and
+// rail are side by side and the rail scrolls independently.
+const STACKED_MAX_H = 420;
+// Vertical chrome reserved inside the stage column (aspect toggle + motion
+// preview button + the column's gaps) so a full-height card never clips them.
+const STAGE_CHROME_H = 104;
 
 // The stage box is capped by BOTH a max height and the width actually available
 // (measured), so a 16:9 card (which is wide) never overflows a 375px phone — the
@@ -58,21 +68,31 @@ export function IntroCardStage({
   const aspectOpt = ASPECT_OPTIONS.find((a) => a.key === aspectRatio) || ASPECT_OPTIONS[0];
   const aspect = aspectOpt.key; // === CARD_ASPECTS key ('9:16' / '16:9')
 
-  // Measure the width the stage column actually gives us and cap the box to it,
-  // so the card fits any viewport (mobile especially) instead of a fixed 480px.
+  // Measure the space the stage column actually gives us (BOTH axes) and size the
+  // card to it. On desktop the column is height-constrained by the flex row, so
+  // its measured height is a stable target (the card is a child and never drives
+  // the column height — no feedback loop); on a stacked layout the column height
+  // is content-driven, so we cap by the fixed stacked height instead of the
+  // (circular) measurement.
   const wrapRef = useRef(null);
-  const [availW, setAvailW] = useState(STAGE_MAX_W);
+  const [avail, setAvail] = useState({ w: STAGE_MAX_W, h: STAGE_MAX_H });
   useEffect(() => {
     const el = wrapRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect?.width;
-      if (w) setAvailW(w);
+      const cr = entries[0]?.contentRect;
+      if (cr?.width) setAvail({ w: cr.width, h: cr.height });
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const box = boxFor(aspectOpt, Math.min(STAGE_MAX_W, availW), STAGE_MAX_H);
+  const isWide = typeof window !== 'undefined'
+    && window.matchMedia('(min-width: 1024px)').matches;
+  const maxW = Math.min(STAGE_MAX_W, avail.w);
+  const maxH = isWide
+    ? Math.min(STAGE_MAX_H, Math.max(STACKED_MAX_H, avail.h - STAGE_CHROME_H))
+    : STACKED_MAX_H;
+  const box = boxFor(aspectOpt, maxW, maxH);
 
   const persisted = resolveFraming(card, profile);
   const focalX = dragFocal ? dragFocal.x : persisted.focalX;
@@ -138,7 +158,7 @@ export function IntroCardStage({
               type="button"
               aria-pressed={active}
               onClick={() => onAspectRatioChange(opt.key)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}
+              className={`px-4 py-1.5 rounded text-sm font-medium transition-colors coarse-pointer:min-h-[44px] ${active ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}
             >
               {opt.label}
             </button>
@@ -187,11 +207,11 @@ export function IntroCardStage({
             picker — this caption is the only surface that explains it). The raw
             key stays on data-composition-key for tests. */}
         <span
-          className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/70 backdrop-blur-sm text-[11px] font-medium text-gray-100 pointer-events-none"
+          className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/70 backdrop-blur-sm text-xs font-medium text-gray-100 pointer-events-none"
           data-testid="composition-label"
           data-composition-key={composition}
         >
-          <LayoutTemplate size={12} className="text-gray-400" />
+          <LayoutTemplate size={14} className="text-gray-400" />
           {COMPOSITION_LABELS[composition] || composition} layout
         </span>
 
@@ -214,9 +234,9 @@ export function IntroCardStage({
         type="button"
         onClick={() => setPlaying((p) => !p)}
         data-testid="motion-preview-button"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700"
+        className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 coarse-pointer:min-h-[44px]"
       >
-        {playing ? <><Square size={14} /> Stop</> : <><Play size={14} /> Motion preview</>}
+        {playing ? <><Square size={16} /> Stop</> : <><Play size={16} /> Motion preview</>}
       </button>
     </div>
   );

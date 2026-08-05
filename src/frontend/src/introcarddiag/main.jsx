@@ -103,8 +103,8 @@ function Harness() {
   // scroll condition that produced the original "cramped rail" complaint was
   // never reproduced. Keep these classes in step with IntroCardsModal.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-5xl h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-6xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Intro cards</h2>
         </div>

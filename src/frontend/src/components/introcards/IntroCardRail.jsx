@@ -52,12 +52,12 @@ export function IntroCardRail({
   const hasSlotChoice = slotOptions.length > 1;
 
   return (
-    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-4 lg:pr-1">
+    <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-3 lg:pr-1">
       {/* CONTENT tier — the primary decision, and the ONLY signpost that ticking
           a fact re-lays-out the card (the epic has no template picker). */}
       <section>
         <SectionHeading>On the card</SectionHeading>
-        <p className="text-xs text-gray-400 leading-snug mb-2">
+        <p className="text-xs text-gray-400 leading-snug mb-1.5">
           The layout adapts to the facts you show (named on the card).
         </p>
         <div className="space-y-0.5">
@@ -75,7 +75,7 @@ export function IntroCardRail({
                     className="w-4 h-4 accent-blue-500 cursor-pointer flex-shrink-0"
                   />
                   <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
-                  {value && <span className="text-xs text-gray-500 truncate">— {value}</span>}
+                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
                 </label>
                 {isShown && !value && (
                   <p className="ml-8 mb-1 text-xs text-amber-400/90">
@@ -146,7 +146,7 @@ export function IntroCardRail({
                         style={{ background: treatmentAccent(t.key) }}
                       />
                     </span>
-                    <span className="text-[11px] text-gray-300">{t.label}</span>
+                    <span className="text-xs text-gray-200">{t.label}</span>
                   </button>
                 );
               })}
@@ -167,7 +167,7 @@ export function IntroCardRail({
                       type="button"
                       aria-pressed={active}
                       onClick={() => onSelectSlot(slot)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors coarse-pointer:min-h-[44px] ${
+                      className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors coarse-pointer:min-h-[44px] ${
                         active ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
                       }`}
                     >
