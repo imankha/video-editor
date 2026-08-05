@@ -39,17 +39,13 @@ because the offending elements paint ABOVE the scrim:
 So draft/reel tiles outrank the intro-card modal BY CONSTRUCTION. Raising the scrim to `/100` would
 still leave them on top.
 
-**Fix the stacking, not the opacity.** Requirements:
-- The intro-card modal must not be trapped inside another modal's stacking context — portal it to
-  `document.body` like `DraftTile` already does, or hoist it out of `ManageProfilesModal`'s subtree.
-- Give the app ONE ordered z-index scale in a single place (values are currently scattered ad hoc:
-  z-40/50/[60]/[70]/[90] across ~30 components) and place both modals on it. Nested-modal order must
-  be expressible, since ManageProfiles → IntroCards → ConfirmationDialog can all be open at once.
-- Do NOT solve it by bumping IntroCardsModal to a bigger number in isolation — that just moves the
-  collision to `CollectionPlayer` (`z-[70]`) and `LockedReasonModal` (`z-[90]`).
-- Verify with the modal open AND a draft tile hovered (the hover state is what portals), at desktop
-  and 375px. The scrim change is still fine to keep, but it is not the fix and must not be reported
-  as one.
+**The layering fix now lives in its own task: [T6600](T6600-modal-z-order-and-stacking-scale.md)**
+(portal/hoist the modal out of the parent stacking context + one ordered z-index scale + a sweep).
+
+**What remains in T6580 item 1** is only the scrim/blur/panel treatment. Keep it — a heavier scrim
+is still the right call for genuine bleed-through — but it does NOT close this item's acceptance
+criterion on its own, and must not be reported as fixing the reel cards. Item 1 is fully satisfied
+only once T6600 lands.
 
 ## 2. The card is too small
 
