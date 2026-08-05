@@ -66,7 +66,6 @@ from ...services.poster import (
     read_clip_segments_for_project,
     revert_to_auto_poster,
     set_project_poster_marker_time,
-    store_override_poster,
 )
 from ...services.video_detections import hoist_video_detections, slice_detections
 from ...storage import (
@@ -2061,13 +2060,17 @@ async def get_overlay_data(project_id: int):
         # clip_boundary_offsets never raises (O2, binding).
         clip_boundaries = clip_boundary_offsets(project_id)
 
-        # T6380: hydrate the overlay cover state. poster_source on the project's
-        # CURRENT final video tells the client whether a custom upload is the
-        # cover actually served, so a reload restores "Custom image in use"
-        # instead of falsely showing the auto/marker state (bug 2 -- the
+        # T6380/T6510: hydrate the overlay cover state. poster_source on the
+        # project's CURRENT final video tells the client whether a custom upload
+        # is the cover actually served, so a reload restores "Custom image in
+        # use" instead of falsely showing the auto/marker state (bug 2 -- the
         # uploaded state was previously written only from the upload response
-        # and never read back). Read-only: no write-back (CLAUDE.md restore
-        # rule 4). poster_source is a v032 column on this HOT read path, so it
+        # and never read back). T6510 removed the upload WRITE path but this
+        # READ path is RETAINED for grandfathered poster_source='upload' reels
+        # (their stored poster keeps serving; the client offers a one-way "Use a
+        # frame instead" via /poster/revert) -- do NOT delete it as dead code.
+        # Read-only: no write-back (CLAUDE.md restore rule 4). poster_source is a
+        # v032 column on this HOT read path, so it
         # is column-guarded -- a below-head profile must not 500 the whole
         # overlay screen (mirrors the poster_marker_time guard at :181 and the
         # detections_data guard above; the T5630 _has_stage_columns landmine).
@@ -2177,71 +2180,21 @@ async def set_poster_time(project_id: int, body: PosterTimeRequest):
     return JSONResponse({"success": True, "time": stored})
 
 
-@router.post("/projects/{project_id}/poster/upload")
-async def upload_poster_image(project_id: int, image: UploadFile = File(...)):
-    """Upload a custom cover image for a project's current final video (T5410).
-
-    Decode-verifies the upload is a real image (rejects anything cv2 can't
-    decode), re-encodes as JPEG capped to a ~1440px long edge (aspect
-    preserved, no forced crop), and overwrites the deterministic poster key.
-    Sets poster_source='upload', poster_frame_time=NULL (no source frame --
-    the overlay UI shows the uploaded thumbnail instead of a marker position).
-
-    Requires the project to already have a final video (the poster's R2 key
-    is derived from the final video's filename) -- uploading before the first
-    export has nothing to key against.
-    """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT p.final_video_id AS final_video_id, fv.filename AS filename "
-            "FROM projects p LEFT JOIN final_videos fv ON fv.id = p.final_video_id "
-            "WHERE p.id = ?",
-            (project_id,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Project not found")
-        final_video_id = row["final_video_id"]
-        final_filename = row["filename"]
-        if not final_video_id or not final_filename:
-            raise HTTPException(
-                status_code=400,
-                detail="Project has no exported final video yet -- export before uploading a custom cover",
-            )
-
-    raw = await image.read()
-
-    import cv2
-    import numpy as np
-
-    decoded = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-    if decoded is None:
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
-
-    height, width = decoded.shape[:2]
-    max_long_edge = 1440
-    long_edge = max(height, width)
-    if long_edge > max_long_edge:
-        scale = max_long_edge / long_edge
-        decoded = cv2.resize(decoded, (int(width * scale), int(height * scale)))
-
-    ok, buf = cv2.imencode(".jpg", decoded, [cv2.IMWRITE_JPEG_QUALITY, 90])
-    if not ok:
-        raise HTTPException(status_code=400, detail="Could not encode uploaded image as JPEG")
-
-    user_id = get_current_user_id()
-    stored = store_override_poster(user_id, final_video_id, final_filename, buf.tobytes())
-    if not stored:
-        raise HTTPException(status_code=500, detail="Failed to store the uploaded cover image")
-
-    return JSONResponse({"success": True, "poster_filename": stored})
+# T6510: the custom-cover UPLOAD endpoint (POST /poster/upload) was REMOVED.
+# The preview image is now always a frame from the reel (default resolved,
+# shown, and moved via the timeline marker), so there is no upload write path.
+# Existing poster_source='upload' reels are GRANDFATHERED: the /overlay-data
+# READ path still returns their poster_source/poster_filename (see
+# _get_overlay_data above) and their stored R2 poster keeps serving, and
+# /poster/revert below is the one-way switch back to a frame. The retired
+# `store_override_poster` service helper was deleted with this endpoint.
 
 
 @router.post("/projects/{project_id}/poster/revert")
 async def revert_poster_image(project_id: int):
-    """Revert a custom cover (uploaded image or overlay marker) back to the
-    auto/marker cover (T6380). Mirrors the poster/upload shape.
+    """Revert a custom cover (a grandfathered upload or an overlay marker) back
+    to the auto/marker cover (T6380). The one-way "Use a frame instead" switch
+    (the upload write path itself was removed in T6510).
 
     Regenerates the open-play frame the export-time selector picks and
     OVERWRITES the deterministic poster key, so shares / og:image / the share

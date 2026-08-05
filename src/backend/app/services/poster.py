@@ -708,29 +708,11 @@ async def generate_poster_at_export(
         return None
 
 
-def store_override_poster(
-    user_id: str, final_video_id: int, final_filename: str, jpeg_bytes: bytes,
-) -> str | None:
-    """Overwrite the deterministic poster key with a user-uploaded cover image
-    (T5410). Sets poster_source='upload', poster_frame_time=NULL (no source
-    frame on the final timeline -- the overlay UI shows the uploaded thumbnail
-    instead of a marker position). Returns the stored basename, or None on R2
-    failure (never raises)."""
-    basename = poster_basename(final_filename)
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = str(Path(tmp) / basename)
-        Path(tmp_path).write_bytes(jpeg_bytes)
-        dims = _jpeg_dimensions(tmp_path)
-    metadata = {"width": dims[0], "height": dims[1]} if dims else None
-    if not upload_bytes_to_r2(
-        user_id, poster_rel_path(basename), jpeg_bytes,
-        fast=True, content_type="image/jpeg", metadata=metadata,
-    ):
-        logger.info(f"[Poster] upload override R2 write failed for {poster_rel_path(basename)}")
-        return None
-    _set_poster_fields(final_video_id, basename, None, "upload")
-    logger.info(f"[Poster] fv={final_video_id} stored upload override {poster_rel_path(basename)}")
-    return basename
+# T6510: `store_override_poster` (the custom-cover UPLOAD write helper, T5410)
+# was DELETED with the upload endpoint. The preview image is now always a frame
+# from the reel, so 'upload' is no longer a WRITABLE poster_source. The value
+# still READS for grandfathered reels (see overlay.py /overlay-data), and
+# `revert_to_auto_poster` below remains the one-way switch off it.
 
 
 async def revert_to_auto_poster(
@@ -742,8 +724,9 @@ async def revert_to_auto_poster(
     """Revert a custom cover (uploaded image or overlay marker) back to the
     auto/marker cover and OVERWRITE the deterministic poster key (T6380).
 
-    This is the inverse of `store_override_poster`. It re-runs the SINGLE
-    poster-selection path (`generate_poster_at_export`) -- there is deliberately
+    This is the one-way switch off a custom cover (its upload write path was
+    removed in T6510). It re-runs the SINGLE poster-selection path
+    (`generate_poster_at_export`) -- there is deliberately
     no second re-derivation of the frame -- so the stored object and the
     poster_source/poster_frame_time columns return to exactly what a fresh
     export would produce: 'overlay' when the project still carries a poster

@@ -1038,27 +1038,13 @@ export function OverlayScreen({
     }
   }, [setPosterMarkerTime, setPosterUploadedFilename, projectId, canSyncActions]);
 
-  // Wrapped handler: upload a custom cover image (T5410). Gesture-triggered
-  // from the file input's onChange -- awaited (not fire-and-forget) so the
-  // panel can reflect the uploaded state only once the write actually lands.
-  const wrappedUploadPoster = useCallback(async (file) => {
-    if (!canSyncActions) return;
-    const result = await overlayActions.uploadPoster(projectId, file);
-    if (result?.success) {
-      setPosterUploadedFilename(result.poster_filename);
-      track('overlay_poster_upload', {}, { debugOnly: true });
-    } else {
-      console.error('[OverlayScreen] Poster upload failed:', result?.error);
-    }
-  }, [projectId, canSyncActions, setPosterUploadedFilename]);
-
-  // Wrapped handler: "Remove" the uploaded cover, reverting to the auto/marker
-  // cover (T6380). Gesture-triggered (the Remove click) -- awaited, never a
-  // useEffect. The backend regenerates the frame and OVERWRITES the
-  // deterministic R2 poster key (so shares/og:image reflect the removal), then
-  // returns the resulting state; we clear the uploaded filename from that
-  // response, not optimistically, so the marker/auto state reactivates only
-  // once the write actually lands.
+  // Wrapped handler: "Use a frame instead" for a grandfathered custom upload,
+  // reverting to the auto/marker cover (T6380; uploading itself was removed in
+  // T6510). Gesture-triggered (the button click) -- awaited, never a useEffect.
+  // The backend regenerates the frame and OVERWRITES the deterministic R2 poster
+  // key (so shares/og:image reflect the switch), then returns the resulting
+  // state; we clear the uploaded filename from that response, not optimistically,
+  // so the marker/auto state reactivates only once the write actually lands.
   const wrappedRemoveUpload = useCallback(async () => {
     if (!canSyncActions) return;
     const result = await overlayActions.revertPoster(projectId);
@@ -1414,12 +1400,11 @@ export function OverlayScreen({
       onFillEnabledChange={wrappedSetFillEnabled}
       onFillOpacityChange={wrappedSetFillOpacity}
       onDimStrengthChange={wrappedSetDimStrength}
-      // T5410: cover-photo (poster) marker
+      // T5410 / T6510: preview-image (poster) marker
       posterMarkerTime={posterMarkerTime}
       posterSlowmoSection={posterSlowmoSection}
       posterUploaded={!!posterUploadedFilename}
       onPosterMarkerDragEnd={wrappedSetPosterMarkerTime}
-      onUploadPoster={wrappedUploadPoster}
       onRemoveUpload={wrappedRemoveUpload}
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}

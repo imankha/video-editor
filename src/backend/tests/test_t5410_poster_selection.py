@@ -10,10 +10,10 @@ Covers:
   (T4110 barrier explicitly asserted); NO detection call anywhere.
 - get_project_poster_marker_time / set_project_poster_marker_time: persists,
   clears on None, column-guarded for the deploy->migrate window.
-- store_override_poster: upload path sets poster_source='upload',
-  poster_frame_time=NULL.
-- poster-time / poster/upload endpoints (gesture-scoped).
-- backfill `force` skips poster_source in ('overlay', 'upload').
+- poster-time endpoint (gesture-scoped). (The poster/upload endpoint +
+  store_override_poster were removed in T6510 -- see note where their tests were.)
+- backfill `force` skips poster_source in ('overlay', 'upload') -- the 'upload'
+  value still READS for grandfathered reels.
 - publish no longer generates a poster (see test_t5280_poster_at_publish.py).
 - v032 migration: adds all three columns, idempotent.
 """
@@ -34,7 +34,6 @@ from app.services.poster import (
     open_play_window,
     select_poster_frame,
     set_project_poster_marker_time,
-    store_override_poster,
 )
 from app.utils.encoding import encode_data
 
@@ -301,37 +300,11 @@ def test_marker_time_column_guarded_pre_migration(db):
     assert get_project_poster_marker_time(pid) is None
 
 
-# ---------------------------------------------------------------------------
-# store_override_poster: upload path
-# ---------------------------------------------------------------------------
-
-def test_store_override_poster_sets_upload_source_and_null_frame_time(db):
-    fv_id = _seed_final_video(db, "cover.mp4")
-
-    with patch.object(poster_mod, "upload_bytes_to_r2", return_value=True):
-        stored = store_override_poster(USER_ID, fv_id, "cover.mp4", b"\xff\xd8fakejpeg")
-
-    assert stored == "cover.mp4.jpg"
-    row = _connect(db).execute(
-        "SELECT poster_filename, poster_frame_time, poster_source FROM final_videos WHERE id = ?",
-        (fv_id,),
-    ).fetchone()
-    assert row["poster_filename"] == "cover.mp4.jpg"
-    assert row["poster_frame_time"] is None
-    assert row["poster_source"] == "upload"
-
-
-def test_store_override_poster_r2_failure_returns_none(db):
-    fv_id = _seed_final_video(db, "cover2.mp4")
-
-    with patch.object(poster_mod, "upload_bytes_to_r2", return_value=False):
-        stored = store_override_poster(USER_ID, fv_id, "cover2.mp4", b"\xff\xd8fakejpeg")
-
-    assert stored is None
-    row = _connect(db).execute(
-        "SELECT poster_filename FROM final_videos WHERE id = ?", (fv_id,)
-    ).fetchone()
-    assert row["poster_filename"] is None
+# T6510: `store_override_poster` (the custom-cover upload write helper) was
+# deleted with the upload endpoint, so its two tests were removed here. The
+# 'upload' poster_source still READS for grandfathered reels; that read + the
+# one-way revert off it are covered by test_t6380_poster_revert.py and the
+# backfill-skips-'upload' test just below (unchanged).
 
 
 # ---------------------------------------------------------------------------

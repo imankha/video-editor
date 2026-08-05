@@ -277,32 +277,6 @@ export async function setPosterTime(projectId, time) {
 }
 
 /**
- * T5410: upload a custom cover image for the project's current final video.
- * @param {number} projectId
- * @param {File} file
- * @returns {Promise<{success: boolean, poster_filename?: string, error?: string}>}
- */
-export async function uploadPoster(projectId, file) {
-  try {
-    const form = new FormData();
-    form.append('image', file);
-    const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/poster/upload`, {
-      method: 'POST',
-      body: form,
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      console.error('[overlayActions] uploadPoster failed:', result.detail || result.error);
-      return { success: false, error: result.detail || result.error, status: response.status };
-    }
-    return result;
-  } catch (err) {
-    console.error('[overlayActions] uploadPoster network error:', err);
-    return { success: false, error: err.message };
-  }
-}
-
-/**
  * T6380: revert a custom cover (uploaded image or overlay marker) back to the
  * auto/marker cover. Regenerates the frame the export-time selector picks and
  * overwrites the deterministic poster key server-side (the R2 object actually
@@ -343,6 +317,5 @@ export default {
   setDimStrength,
   setHighlightShape,
   setPosterTime,
-  uploadPoster,
   revertPoster,
 };
