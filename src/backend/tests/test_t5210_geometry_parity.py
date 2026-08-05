@@ -152,8 +152,10 @@ def test_slot_rects_are_in_frame_and_well_formed():
 
 def test_compositions_show_expected_fact_slot_counts():
     """title-only shows no facts; hero 1; broadcast 2; recruiting 3 — the whole
-    point of deriving composition from fact count. Every composition has exactly
-    one `title` slot; there is NO subtitle slot (no schema field feeds it)."""
+    point of deriving composition from fact count. Every composition also defines
+    exactly one `title` slot AND one `subtitle` slot (T6570: the subtitle is free
+    text the user turns on, ORTHOGONAL to composition, so it is present in every
+    layout and simply omitted when empty — it never changes the fact count)."""
     expected_facts = {
         COMPOSITION_TITLE_ONLY: 0,
         COMPOSITION_HERO: 1,
@@ -166,11 +168,12 @@ def test_compositions_show_expected_fact_slot_counts():
             fact_slots = [s for s in slots if s.startswith("fact")]
             assert len(fact_slots) == n, f"{comp}/{aspect} expected {n} fact slots"
             assert g.SLOT_TITLE in slots, f"{comp}/{aspect} missing title slot"
-            assert "subtitle" not in slots, f"{comp}/{aspect} must not define a subtitle slot"
+            assert g.SLOT_SUBTITLE in slots, f"{comp}/{aspect} missing subtitle slot"
 
 
-def test_stagger_order_has_no_subtitle():
-    assert g.STAGGER_ORDER == ("title", "fact1", "fact2", "fact3")
+def test_stagger_order_includes_subtitle_after_title():
+    # T6570: subtitle staggers between the title and the facts.
+    assert g.STAGGER_ORDER == ("title", "subtitle", "fact1", "fact2", "fact3")
 
 
 def test_treatment_palette_covers_all_treatments():

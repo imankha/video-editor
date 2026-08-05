@@ -97,8 +97,8 @@ describe('INTRO_CARD_MOTION', () => {
     );
   });
 
-  it('STAGGER_ORDER lists title then the fact slots (no subtitle)', () => {
-    expect(STAGGER_ORDER).toEqual(['title', 'fact1', 'fact2', 'fact3']);
+  it('STAGGER_ORDER lists title, subtitle, then the fact slots (T6570)', () => {
+    expect(STAGGER_ORDER).toEqual(['title', 'subtitle', 'fact1', 'fact2', 'fact3']);
   });
 });
 

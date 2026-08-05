@@ -130,6 +130,33 @@ def test_select_elements_legacy_title_text_grandfathers_over_full_name():
     assert title["spec"].text == "Legacy Name"
 
 
+def test_select_elements_renders_card_subtitle_when_present():
+    # T6570: subtitle is FREE TEXT on the card; it renders at the subtitle slot,
+    # between title and facts, and is orthogonal to composition.
+    card = _card(["position"], title_text=None, subtitle_text="State Cup 2027")
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, fields, geo, "#ffffff")
+    sub = next(e for e in els if e["slot"] == "subtitle")
+    assert sub["spec"].text == "State Cup 2027"
+    # position taken from the composition's subtitle slot (layout owns it)
+    assert sub["spec"].position.y == geo["slots"]["subtitle"]["y"]
+    # order: title, subtitle, then the fact
+    assert [e["slot"] for e in els] == ["title", "subtitle", "fact1"]
+
+
+def test_select_elements_omits_blank_subtitle(caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    card = _card(["position"], title_text="T", subtitle_text="   ")
+    from app.services.intro_card_geometry import geometry_for
+    geo = geometry_for("hero", "9:16")
+    els = P._select_elements(card, FIELDS, geo, "#ffffff")
+    assert not any(e["slot"] == "subtitle" for e in els)
+    assert "subtitle omitted" in caplog.text
+
+
 def test_select_elements_maps_ordinal_geometry_to_semantic_styling():
     # SEAM 2: fact{i} geometry <- shown_fields[i]; styling keyed by the FIELD name.
     card = _card(["position", "class"], text_elements={

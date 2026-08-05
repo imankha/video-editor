@@ -1057,6 +1057,7 @@ def ensure_database():
                 shown_fields      TEXT NOT NULL,
                 treatment         TEXT NOT NULL,
                 title_text        TEXT,  -- LEGACY (T6570): title now = profile Full Name; grandfathered override for pre-T6570 cards
+                subtitle_text     TEXT,  -- free-text card subtitle (T6570); NULL = none (kept in step with migration v035)
                 image_key         TEXT,
                 image_cutout_key  TEXT,
                 focal_x           REAL,

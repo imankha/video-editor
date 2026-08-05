@@ -36,12 +36,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
           "x": 0.06,
           "y": 0.89
         },
+        "subtitle": {
+          "align": "left",
+          "maxWidth": 0.55,
+          "size": 0.045,
+          "x": 0.06,
+          "y": 0.75
+        },
         "title": {
           "align": "left",
           "maxWidth": 0.6,
           "size": 0.11,
           "x": 0.06,
-          "y": 0.64
+          "y": 0.62
         }
       }
     },
@@ -67,12 +74,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
           "x": 0.5,
           "y": 0.845
         },
+        "subtitle": {
+          "align": "center",
+          "maxWidth": 0.8,
+          "size": 0.028,
+          "x": 0.5,
+          "y": 0.735
+        },
         "title": {
           "align": "center",
           "maxWidth": 0.9,
           "size": 0.062,
           "x": 0.5,
-          "y": 0.68
+          "y": 0.66
         }
       }
     }
@@ -91,14 +105,21 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
           "maxWidth": 0.55,
           "size": 0.055,
           "x": 0.06,
-          "y": 0.86
+          "y": 0.865
+        },
+        "subtitle": {
+          "align": "left",
+          "maxWidth": 0.55,
+          "size": 0.05,
+          "x": 0.06,
+          "y": 0.8
         },
         "title": {
           "align": "left",
           "maxWidth": 0.62,
           "size": 0.12,
           "x": 0.06,
-          "y": 0.68
+          "y": 0.66
         }
       }
     },
@@ -117,12 +138,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
           "x": 0.5,
           "y": 0.84
         },
+        "subtitle": {
+          "align": "center",
+          "maxWidth": 0.8,
+          "size": 0.03,
+          "x": 0.5,
+          "y": 0.795
+        },
         "title": {
           "align": "center",
           "maxWidth": 0.9,
           "size": 0.066,
           "x": 0.5,
-          "y": 0.74
+          "y": 0.72
         }
       }
     }
@@ -157,12 +185,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
           "x": 0.52,
           "y": 0.74
         },
+        "subtitle": {
+          "align": "left",
+          "maxWidth": 0.42,
+          "size": 0.042,
+          "x": 0.52,
+          "y": 0.33
+        },
         "title": {
           "align": "left",
           "maxWidth": 0.44,
           "size": 0.095,
           "x": 0.52,
-          "y": 0.22
+          "y": 0.2
         }
       }
     },
@@ -195,12 +230,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
           "x": 0.5,
           "y": 0.86
         },
+        "subtitle": {
+          "align": "center",
+          "maxWidth": 0.8,
+          "size": 0.028,
+          "x": 0.5,
+          "y": 0.665
+        },
         "title": {
           "align": "center",
           "maxWidth": 0.9,
           "size": 0.058,
           "x": 0.5,
-          "y": 0.61
+          "y": 0.6
         }
       }
     }
@@ -214,12 +256,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
         "y": 0.0
       },
       "slots": {
+        "subtitle": {
+          "align": "center",
+          "maxWidth": 0.8,
+          "size": 0.06,
+          "x": 0.5,
+          "y": 0.6
+        },
         "title": {
           "align": "center",
           "maxWidth": 0.86,
           "size": 0.135,
           "x": 0.5,
-          "y": 0.42
+          "y": 0.38
         }
       }
     },
@@ -231,12 +280,19 @@ export const INTRO_CARD_GEOMETRY = /* @parity:geometry:start */ {
         "y": 0.0
       },
       "slots": {
+        "subtitle": {
+          "align": "center",
+          "maxWidth": 0.8,
+          "size": 0.034,
+          "x": 0.5,
+          "y": 0.5
+        },
         "title": {
           "align": "center",
           "maxWidth": 0.86,
           "size": 0.072,
           "x": 0.5,
-          "y": 0.44
+          "y": 0.4
         }
       }
     }
@@ -314,7 +370,7 @@ export const INTRO_CARD_MOTION = /* @parity:motion:start */ {
   "textStaggerStep": 0.16
 } /* @parity:motion:end */;
 
-export const STAGGER_ORDER = /* @parity:staggerOrder:start */ ["title", "fact1", "fact2", "fact3"] /* @parity:staggerOrder:end */;
+export const STAGGER_ORDER = /* @parity:staggerOrder:start */ ["title", "subtitle", "fact1", "fact2", "fact3"] /* @parity:staggerOrder:end */;
 
 /**
  * Resolve an output frame size to its contract aspect key. Mirrors

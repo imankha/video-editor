@@ -48,6 +48,9 @@ class CreateIntroCardRequest(BaseModel):
     treatment: str
     shown_fields: list[str] = []
     title_text: str | None = None
+    # Free-text card subtitle (T6570) — a property of THIS card (e.g. a
+    # tournament name), unlike the title which is the profile's Full Name.
+    subtitle_text: str | None = None
     image_key: str | None = None
     image_cutout_key: str | None = None
     focal_x: float | None = None
@@ -67,6 +70,7 @@ class UpdateIntroCardRequest(BaseModel):
     treatment: str | None = None
     shown_fields: list[str] | None = None
     title_text: str | None = None
+    subtitle_text: str | None = None
     image_key: str | None = None
     image_cutout_key: str | None = None
     focal_x: float | None = None
@@ -89,6 +93,18 @@ def _table_missing(cursor) -> bool:
     return cursor.fetchone() is None
 
 
+def _has_subtitle_column(cursor) -> bool:
+    """True when `intro_cards.subtitle_text` exists (T6570 / migration v035).
+
+    Column-guards BOTH the read and the write for the deploy→migrate window: a
+    below-head profile DB has the v034 table WITHOUT this column, so a hot read
+    (`_serialize`) must not `row["subtitle_text"]`-KeyError and a write must not
+    reference a missing column (the T6550 unguarded-write class — do not repeat
+    it). PRAGMA rows are indexed positionally (row[1] == column name)."""
+    cursor.execute("PRAGMA table_info(intro_cards)")
+    return any(r[1] == "subtitle_text" for r in cursor.fetchall())
+
+
 def _serialize(row) -> dict:
     """Map a DB row to an API payload. `composition` is DERIVED here (never
     stored); `previewUrl` is presigned at read time (never stored presigned)."""
@@ -100,6 +116,10 @@ def _serialize(row) -> dict:
         "shown_fields": shown_fields,
         "treatment": row["treatment"],
         "title_text": row["title_text"],
+        # Column-guarded (T6570 / v035): a below-head DB lacks this column, so
+        # read it only when present — otherwise None (no subtitle), never a 500.
+        # NB: keep `.keys()` — `in` on a sqlite3.Row tests VALUES, not columns.
+        "subtitle_text": (row["subtitle_text"] if "subtitle_text" in row.keys() else None),  # noqa: SIM118
         "image_key": image_key,
         "image_cutout_key": row["image_cutout_key"],
         "focal_x": row["focal_x"],
@@ -160,26 +180,21 @@ async def create_intro_card(request: CreateIntroCardRequest):
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        columns = ["name", "shown_fields", "treatment", "title_text", "image_key",
+                   "image_cutout_key", "focal_x", "focal_y", "zoom", "text_elements", "duration"]
+        values = [request.name.strip(), json.dumps(shown_fields), treatment,
+                  request.title_text, request.image_key, request.image_cutout_key,
+                  focal_x, focal_y, zoom, encode_data(text_elements), duration]
+        # Column-guarded WRITE (T6570 / v035, T6550 lesson): only write the
+        # subtitle when the column exists; below-head DBs create the card without
+        # it rather than 500ing.
+        if _has_subtitle_column(cursor):
+            columns.append("subtitle_text")
+            values.append(request.subtitle_text)
+        placeholders = ", ".join(["?"] * len(columns))
         cursor.execute(
-            """
-            INSERT INTO intro_cards
-                (name, shown_fields, treatment, title_text, image_key,
-                 image_cutout_key, focal_x, focal_y, zoom, text_elements, duration)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                request.name.strip(),
-                json.dumps(shown_fields),
-                treatment,
-                request.title_text,
-                request.image_key,
-                request.image_cutout_key,
-                focal_x,
-                focal_y,
-                zoom,
-                encode_data(text_elements),
-                duration,
-            ),
+            f"INSERT INTO intro_cards ({', '.join(columns)}) VALUES ({placeholders})",
+            values,
         )
         card_id = cursor.lastrowid
         conn.commit()
@@ -198,6 +213,7 @@ _UPDATABLE_FIELDS = {
     "treatment": ("treatment", validate_treatment),
     "shown_fields": ("shown_fields", lambda v: json.dumps(validate_shown_fields(v))),
     "title_text": ("title_text", lambda v: v),
+    "subtitle_text": ("subtitle_text", lambda v: v),
     "image_key": ("image_key", lambda v: v),
     "image_cutout_key": ("image_cutout_key", lambda v: v),
     "focal_x": ("focal_x", lambda v: validate_focal(v, "focal_x")),
@@ -222,25 +238,30 @@ async def update_intro_card(card_id: int, request: UpdateIntroCardRequest):
     if not provided:
         raise HTTPException(status_code=400, detail="no fields to update")
 
-    set_columns: list[str] = []
-    values: list[Any] = []
+    updates: dict[str, Any] = {}  # column -> validated value
     try:
         for field in provided:
             column, validator = _UPDATABLE_FIELDS[field]
-            set_columns.append(f"{column} = ?")
-            values.append(validator(getattr(request, field)))
+            updates[column] = validator(getattr(request, field))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-
-    set_columns.append("updated_at = datetime('now')")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         if _table_missing(cursor) or _fetch_card(cursor, card_id) is None:
             raise HTTPException(status_code=404, detail="intro card not found")
+        # Column-guarded WRITE (T6570 / v035, T6550 lesson): drop a subtitle write
+        # on a below-head DB rather than referencing a missing column and 500ing.
+        if "subtitle_text" in updates and not _has_subtitle_column(cursor):
+            del updates["subtitle_text"]
+            logger.warning(
+                "[intro_cards] subtitle_text write skipped: column not present yet (pre-v035)"
+            )
+        set_columns = [f"{c} = ?" for c in updates]
+        set_columns.append("updated_at = datetime('now')")
         cursor.execute(
             f"UPDATE intro_cards SET {', '.join(set_columns)} WHERE id = ?",
-            (*values, card_id),
+            (*updates.values(), card_id),
         )
         conn.commit()
         row = _fetch_card(cursor, card_id)

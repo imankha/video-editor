@@ -56,6 +56,7 @@ POST_V023_COLUMNS = {
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation"],                                                       # v029
     "projects": ["poster_marker_time"],                                                  # v032
+    "intro_cards": ["subtitle_text"],                                                    # v035
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
     # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
@@ -65,8 +66,11 @@ POST_V023_COLUMNS = {
     #   intro_cards TABLE. No EXISTING hot read names intro_card_id (T5215 adds the reads);
     #   the intro-cards list route guards the whole missing TABLE itself (returns []), a case
     #   this column-drop harness does not synthesise, so it is covered by test_t5195 directly.
+    # v035 (T6570 subtitle) adds intro_cards.subtitle_text. Unlike v034's whole-table case,
+    #   the column-drop harness DOES synthesise this (table present, column gone), so the
+    #   create/list/update hot paths are driven directly below (read + write column-guarded).
 }
-HEAD_VERSION_AUDITED = 34
+HEAD_VERSION_AUDITED = 35
 
 
 def _cleanup(user_id: str) -> None:
@@ -212,6 +216,27 @@ def test_clips_lists(below_head):
 
     _run(list_raw_clips())
     _run(list_project_clips(below_head["project_id"], BackgroundTasks()))  # working_clips.rotation (v029)
+
+
+def test_intro_cards_hot_paths(below_head):
+    # v035 drops intro_cards.subtitle_text -> the create/list/update hot paths must
+    # column-guard BOTH the read (_serialize) AND the write (create INSERT / update
+    # SET; the T6550 lesson) and never fire a missing-column 500.
+    from app.routers.intro_cards import (
+        CreateIntroCardRequest,
+        UpdateIntroCardRequest,
+        create_intro_card,
+        list_intro_cards,
+        update_intro_card,
+    )
+    created = _run(create_intro_card(CreateIntroCardRequest(
+        name="Card", treatment="gold", shown_fields=[], subtitle_text="dropped pre-v035",
+    )))
+    assert created["subtitle_text"] is None          # read guard -> None, no 500
+    listed = _run(list_intro_cards())
+    assert isinstance(listed["cards"], list) and len(listed["cards"]) >= 1
+    updated = _run(update_intro_card(created["id"], UpdateIntroCardRequest(subtitle_text="still dropped")))
+    assert updated["subtitle_text"] is None          # write skipped, still no 500
 
 
 def test_overlay_data(below_head):

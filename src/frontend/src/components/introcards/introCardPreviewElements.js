@@ -10,7 +10,7 @@
 
 import { geometryFor } from '../../utils/introCardGeometry';
 import { treatmentAccent } from './introCardVisual';
-import { TITLE_SLOT } from './introCardEditorConstants';
+import { TITLE_SLOT, SUBTITLE_SLOT } from './introCardEditorConstants';
 
 // Defaults mirror player_intro.py (_DEFAULT_*_FONT / _*_SHADOW / _FACT_DEFAULT_COLOR).
 export const DEFAULT_TITLE_FONT = 'anton';
@@ -86,6 +86,19 @@ export function buildPreviewElements(card, profile, composition, aspect) {
       geoSlot: TITLE_SLOT,
       kind: 'title',
       spec: mergeSpec(textElements[TITLE_SLOT], titleText, slots[TITLE_SLOT], 'title', accent),
+    });
+  }
+
+  // Subtitle — FREE TEXT on the card (T6570; a tournament name etc.). Orthogonal
+  // to composition; styling keyed "subtitle". Omitted when blank (never a blank
+  // line), exactly like an unset fact. Mirrors player_intro._select_elements.
+  const subtitleText = (card?.subtitle_text || '').trim();
+  if (slots[SUBTITLE_SLOT] && subtitleText) {
+    out.push({
+      slot: SUBTITLE_SLOT,
+      geoSlot: SUBTITLE_SLOT,
+      kind: 'subtitle',
+      spec: mergeSpec(textElements[SUBTITLE_SLOT], subtitleText, slots[SUBTITLE_SLOT], 'subtitle', accent),
     });
   }
 

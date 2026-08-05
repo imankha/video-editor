@@ -88,4 +88,23 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
     );
     expect(els.find((e) => e.slot === 'title')).toBeUndefined();
   });
+
+  // T6570 — the subtitle is FREE TEXT on the card, orthogonal to composition.
+  it('renders the card subtitle at the subtitle slot when present', () => {
+    const els = buildPreviewElements(
+      { ...card, subtitle_text: 'State Cup 2027' },
+      profile, 'broadcast', '9:16',
+    );
+    const geo = geometryFor('broadcast', '9:16');
+    const sub = els.find((e) => e.slot === 'subtitle');
+    expect(sub.spec.text).toBe('State Cup 2027');
+    expect(sub.spec.position).toEqual({ x: geo.slots.subtitle.x, y: geo.slots.subtitle.y });
+    // order: title, subtitle, then the facts
+    expect(els.map((e) => e.slot)).toEqual(['title', 'subtitle', 'team', 'position']);
+  });
+
+  it('omits the subtitle when subtitle_text is blank', () => {
+    const els = buildPreviewElements({ ...card, subtitle_text: '  ' }, profile, 'hero', '9:16');
+    expect(els.find((e) => e.slot === 'subtitle')).toBeUndefined();
+  });
 });

@@ -336,6 +336,20 @@ def _select_elements(card: dict, field_values: dict, geo: dict, accent: str) -> 
         else:
             logger.info("[PlayerIntro] title omitted: profile full_name unset and no legacy title_text")
 
+    # subtitle: FREE TEXT on the card (T6570) — a tournament name / sub-heading,
+    # a property of THIS card (not the athlete). Orthogonal to composition; it
+    # never counts toward the fact-count. styling keyed "subtitle" (fact-like
+    # default). .get() column-guards the read for a pre-v035 card row.
+    subtitle_text = (card.get("subtitle_text") or "").strip()
+    if "subtitle" in slots:
+        if subtitle_text:
+            elements.append({
+                "slot": "subtitle",
+                "spec": _merge_spec(text_elements.get("subtitle"), subtitle_text, slots["subtitle"], "subtitle", accent),
+            })
+        else:
+            logger.info("[PlayerIntro] subtitle omitted: card has no subtitle_text")
+
     # facts: ORDINAL geometry slot fact{i+1} <- SEMANTIC field shown_fields[i]
     for i, field in enumerate(shown_fields):
         slot_key = f"fact{i + 1}"

@@ -19,6 +19,7 @@ import {
   FACT_SLOTS,
   SLOT_META,
   TITLE_SLOT,
+  SUBTITLE_SLOT,
   TREATMENTS,
   COLOR_SWATCHES,
 } from './introCardEditorConstants';
@@ -32,6 +33,7 @@ export function IntroCardRail({
   onSelectSlot,
   onToggleFact,
   onSetTreatment,
+  onCommitSubtitle,
   specForSlot,
   onUpdateSlotSpec,
   onImageChanged,
@@ -42,12 +44,12 @@ export function IntroCardRail({
   onZoomRelease,
 }) {
   const shown = card.shown_fields || [];
-  // Slots available to style: the title, plus every shown fact.
-  const slotOptions = [TITLE_SLOT, ...FACT_SLOTS.filter((f) => shown.includes(f))];
+  // Slots available to style: the title (profile Full Name), the subtitle (free
+  // text — always offered so the user can turn one on), plus every shown fact.
+  const slotOptions = [TITLE_SLOT, SUBTITLE_SLOT, ...FACT_SLOTS.filter((f) => shown.includes(f))];
   const activeSlot = slotOptions.includes(selectedSlot) ? selectedSlot : TITLE_SLOT;
-  // A single styleable slot means there is nothing to switch between: showing a
-  // one-item "picker" reads as a stray button, so we drop it and label the drawer
-  // for the one slot instead (recognition over recall).
+  // Title + subtitle are always present, so there is always more than one slot to
+  // pick between — the picker always renders (the one-slot special case is gone).
   const hasSlotChoice = slotOptions.length > 1;
 
   return (
@@ -184,6 +186,7 @@ export function IntroCardRail({
               specForSlot={specForSlot}
               onUpdateSlotSpec={onUpdateSlotSpec}
               onEditProfile={onEditProfile}
+              onCommitSubtitle={onCommitSubtitle}
             />
           </div>
         </div>
@@ -213,19 +216,22 @@ function MiniLabel({ children }) {
  * profile value (read-only here; edited on the profile), or an inline prompt.
  * Both share the styling editor below.
  */
-function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEditProfile }) {
+function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEditProfile, onCommitSubtitle }) {
   const meta = SLOT_META[slot];
   const spec = specForSlot(slot);
   const value = slotDisplayText(slot, card, profile);
-  // T6570: the title is no longer a free-text box — it is the profile's Full
-  // Name (a property of the athlete), so it reads exactly like a fact: the
-  // resolved value, edited on the profile, with an inline prompt when unset.
+  // Three kinds of text source: the SUBTITLE is the one FREE-TEXT field (a
+  // property of THIS card); the TITLE is the profile's Full Name and the FACTS
+  // are profile values (both read-only here, edited on the profile). T6570.
   const isTitle = slot === TITLE_SLOT;
+  const isSubtitle = slot === SUBTITLE_SLOT;
   const sourceLabel = isTitle ? 'Full name' : meta.label;
 
   return (
     <div className="space-y-3">
-      {value ? (
+      {isSubtitle ? (
+        <SubtitleInput value={card.subtitle_text || ''} onCommit={onCommitSubtitle} />
+      ) : value ? (
         <div className="text-xs text-gray-400">
           {sourceLabel}: <span className="text-gray-200">{value}</span> (edit on the profile)
         </div>
@@ -250,6 +256,47 @@ function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEdit
         colorSwatches={COLOR_SWATCHES}
       />
     </div>
+  );
+}
+
+/**
+ * The card's SUBTITLE — the ONE free-text field (T6570). A property of THIS card
+ * (a tournament name / sub-heading), unlike the title (the athlete's Full Name,
+ * from the profile). Typing never hits the API; commits on blur/Enter and only
+ * when changed. An empty value is a real state (the renderer omits the line), so
+ * it is committed too. Draft re-syncs when the persisted value moves under an
+ * untouched input (mirrors CardNameInput / IntroFactInput).
+ */
+function SubtitleInput({ value, onCommit }) {
+  const [draft, setDraft] = useState(value);
+  const [dirty, setDirty] = useState(false);
+  const [lastValue, setLastValue] = useState(value);
+
+  if (value !== lastValue && !dirty) {
+    setLastValue(value);
+    setDraft(value);
+  }
+
+  const commit = () => {
+    if (!dirty) return;
+    setDirty(false);
+    setLastValue(draft);
+    onCommit(draft);
+  };
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs uppercase tracking-wide text-gray-400">Subtitle (this card)</span>
+      <input
+        type="text"
+        value={draft}
+        placeholder="e.g. State Cup 2027"
+        onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+        className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500"
+      />
+    </label>
   );
 }
 

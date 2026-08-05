@@ -36,6 +36,7 @@ export function resolveFraming(card, profile) {
  */
 export function slotDisplayText(slot, card, profile) {
   if (slot === 'title') return resolveTitleText(card, profile);
+  if (slot === 'subtitle') return card?.subtitle_text || ''; // free text on the card (T6570)
   return (profile && profile[slot]) || '';
 }
 

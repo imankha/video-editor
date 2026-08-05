@@ -33,6 +33,7 @@ from .v031_reclassify_teammate_clips_to_team import V031ReclassifyTeammateClipsT
 from .v032_add_poster_marker_fields import V032AddPosterMarkerFields
 from .v033_heal_moved_reel_attribution import V033HealMovedReelAttribution
 from .v034_intro_card_library import V034IntroCardLibrary
+from .v035_intro_card_subtitle import V035IntroCardSubtitle
 
 MIGRATIONS = [
     V001Baseline(),
@@ -69,6 +70,7 @@ MIGRATIONS = [
     V032AddPosterMarkerFields(),
     V033HealMovedReelAttribution(),
     V034IntroCardLibrary(),
+    V035IntroCardSubtitle(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
