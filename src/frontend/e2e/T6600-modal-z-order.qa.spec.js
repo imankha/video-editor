@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
-import { saveEvidence } from './helpers/qa.js';
+import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+import { Z } from '../src/constants/zLayers.js';
 
 /**
  * T6600 — REAL BROWSER proof of the intro-card modal z-order fix. Pure CSS
@@ -71,6 +72,9 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
     for (const [w, h, label] of [[1280, 800, 'desktop'], [375, 780, '375px']]) {
       await page.setViewportSize({ width: w, height: h });
       await openIntroCards(page);
+
+      // Responsive: the open modal must not introduce horizontal overflow.
+      await assertNoHorizontalOverflow(page);
 
       // (1) Hover every real draft tile; none may paint over the modal.
       const tiles = page.locator('[data-testid="project-card"]');
@@ -162,5 +166,81 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
 
     // Clean up the card created for this test (leave the real account as found).
     await page.getByRole('button', { name: 'Delete card' }).click().catch(() => {});
+  });
+
+  // Regression matrix for the mechanical scale migration (byte-identical z-values,
+  // now read from constants/zLayers). The ordering itself is locked by
+  // src/constants/zLayers.test.js; this proves it against the REAL DownloadsPanel
+  // in a real browser: the PLAYER rung (CollectionPlayer) covers the panel, and the
+  // ALERT rung (LockedReasonModal) covers the player. The rung classes injected are
+  // the exact strings the migrated components render (Z.PLAYER / Z.ALERT).
+  // Which layer is topmost at (x,y)? Report the DownloadsPanel drawer as
+  // 'downloads-panel' (a RIGHT-side panel, so the probe point comes from its own
+  // bounding box), else the topmost element's testid.
+  const topTestIdAt = (page, x, y) => page.evaluate(([px, py]) => {
+    let n = document.elementsFromPoint(px, py)[0];
+    while (n && n !== document.body) {
+      if ((n.className || '').toString().includes('animate-slide-in-right')) return 'downloads-panel';
+      const t = n.getAttribute('data-testid');
+      if (t) return t;
+      n = n.parentElement;
+    }
+    return null;
+  }, [x, y]);
+
+  test('regression: PLAYER covers DownloadsPanel; ALERT covers the player', async ({ context, page }) => {
+    await loginAsRealUser(context, REAL_EMAIL);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+
+    // Open the REAL DownloadsPanel (My Reels) — it opens even with zero reels.
+    await page.getByRole('button', { name: /my reels/i }).first().click();
+    const drawer = page.locator('.animate-slide-in-right').first();
+    await drawer.waitFor({ timeout: 15000 });
+    const dbox = await drawer.boundingBox();
+    // Probe just inside the drawer's LEFT edge, clamped into the viewport, so the
+    // point is guaranteed to land on the panel (a right-side sheet).
+    const px = Math.min(Math.max(dbox.x + 15, 5), 1280 - 5);
+    const py = Math.min(dbox.y + dbox.height / 2, 800 - 5);
+    expect(await topTestIdAt(page, px, py), 'DownloadsPanel drawer is open beneath the probe point').toBe('downloads-panel');
+
+    // If the account has a published reel, drive the REAL CollectionPlayer too.
+    const reel = page.locator('[data-testid="reel-card"]');
+    if ((await reel.count()) > 0) {
+      await reel.first().getByRole('button', { name: 'Play video' }).first().click();
+      await page.locator('[data-testid="collection-player-backdrop"]').waitFor({ timeout: 15000 });
+      const t = await topTestIdAt(page, px, py);
+      expect(t, 'real CollectionPlayer must cover the DownloadsPanel').not.toBe('downloads-panel');
+      await saveEvidence(page, 'T6600-real-collectionplayer-over-downloads');
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(200);
+    }
+
+    // PLAYER rung over the real panel: inject CollectionPlayer's real root class.
+    await page.evaluate((cls) => {
+      const el = document.createElement('div');
+      el.className = `fixed inset-0 ${cls} bg-black`;
+      el.setAttribute('data-testid', 't6600-player-probe');
+      document.body.appendChild(el);
+    }, Z.PLAYER);
+    await page.waitForTimeout(60);
+    expect(await topTestIdAt(page, px, py), 'PLAYER rung must cover the DownloadsPanel').toBe('t6600-player-probe');
+    await saveEvidence(page, 'T6600-player-over-downloads');
+
+    // ALERT rung over the player: inject LockedReasonModal's real root class.
+    await page.evaluate((cls) => {
+      const el = document.createElement('div');
+      el.className = `fixed inset-0 ${cls} flex items-center justify-center`;
+      el.setAttribute('data-testid', 't6600-alert-probe');
+      document.body.appendChild(el);
+    }, Z.ALERT);
+    await page.waitForTimeout(60);
+    expect(await topTestIdAt(page, px, py), 'ALERT rung (LockedReason) must cover the player').toBe('t6600-alert-probe');
+    await saveEvidence(page, 'T6600-alert-over-player');
+
+    await page.evaluate(() => {
+      document.querySelector('[data-testid="t6600-player-probe"]')?.remove();
+      document.querySelector('[data-testid="t6600-alert-probe"]')?.remove();
+    });
   });
 });
