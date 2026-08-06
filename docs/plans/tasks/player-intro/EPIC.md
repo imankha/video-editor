@@ -13,6 +13,7 @@ cards are built on is **built once and reused** as a text layer on the Overlay t
 
 1. **N intro cards**, stored — each has a title, an image, and user-added text.
 2. The user controls the **text, the font, and the font colour**.
+   *(AMENDED 2026-08-06 by decision 12 — for CARDS the template owns font and colour; this now applies to Overlay text only.)*
 3. A **different intro can be attached to every reel or collection**.
 4. The user can define a **default** intro.
 5. The **text overlay system is reused** in Overlay, where the user selects a range of clips and
@@ -80,6 +81,7 @@ has failed.
 | 9 | **Card generation is non-fatal**, exactly like the outro. | A failed card logs loudly and the user still gets their video. It never sinks a download, a share or an export. |
 | 10 | **Animation is core, not optional.** The photo hero push-in, staggered text-in and white-flash out ARE v1. | The value is the motion + professionalism, not the data. A static frame is not acceptable. |
 | 11 | **Player cut-out (T5200) no longer blocks the card engine.** | A card works with a plain photo; the cut-out is an enhancement whenever it comes up. |
+| 12 | **REVISED 2026-08-06 — for CARDS, the TEMPLATE owns typography; the user does not pick font or colour.** The user picks which facts show, the treatment, the photo framing and their free text; font, colour, size, alignment, weight, shadow, stroke and spacing are derived from the treatment in the shared contract. **This amends requirement 2**, which said the user controls the font and the font colour. It applies to CARDS ONLY — the Overlay text rail keeps full user control. | User direction: *"the point of the templates is they all look professionally designed. The user shouldnt be able to make it ugly."* A card built with an arbitrary colour wheel produced saturated green text on a black panel beside a desaturated photo, coloured inconsistently within one line. If any reachable combination of controls yields an ugly card, the template promise is false — so the ugly combinations must be unreachable, not merely discouraged. Overlay text is exempt because it is the user annotating their own video, where no template promise is made. Tracked by T6640. |
 
 ## Data model
 
