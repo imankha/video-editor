@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, ArrowRightLeft, Loader, User, ChevronLeft } from 'lucide-react';
 import { REEL } from '../config/themeColors';
+import { Z } from '../constants/zLayers';
 
 /**
  * MoveToProfileModal - T4850/T5678: MOVE a published reel into a sibling profile.
@@ -31,7 +32,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
   const count = videoIds?.length || 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4">
+    <div className={`fixed inset-0 bg-black/60 ${Z.MODAL_ELEVATED} flex items-center justify-center p-4`}>
       <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 w-full max-w-sm">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-2">

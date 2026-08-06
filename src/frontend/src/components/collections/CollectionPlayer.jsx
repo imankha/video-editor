@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { X, Download, Loader, Pencil, Scale } from 'lucide-react';
 import { Button } from '../shared/Button';
+import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
@@ -195,7 +196,7 @@ export function CollectionPlayer({
           gutter must not dismiss. Close is via the X button / Escape only. */}
       <div
         data-testid="collection-player-backdrop"
-        className="fixed inset-0 z-[60] bg-black"
+        className={`fixed inset-0 ${Z.OVERLAY_BACKDROP} bg-black`}
         onClick={(e) => { e.stopPropagation(); }}
         onPointerDown={(e) => { e.stopPropagation(); }}
         onPointerUp={(e) => { e.stopPropagation(); }}
@@ -207,7 +208,7 @@ export function CollectionPlayer({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="fixed inset-0 z-[70] bg-black flex flex-col select-none outline-none md:inset-12 md:rounded-xl md:overflow-hidden">
+        className={`fixed inset-0 ${Z.PLAYER} bg-black flex flex-col select-none outline-none md:inset-12 md:rounded-xl md:overflow-hidden`}>
       {/* Segmented progress bar — each segment is a scrub target: hover shows the
           reel name, click jumps to that reel and seeks to the clicked fraction.
           The visible bar stays 4px; a taller transparent hit region (py-2) makes
