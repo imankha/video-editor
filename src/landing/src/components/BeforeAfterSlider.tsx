@@ -1,5 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 
+const SYNC_INTERVAL_MS = 500
+// Wide enough that ordinary decoder jitter on a phone never provokes a seek --
+// only a real divergence does.
+const DRIFT_TOLERANCE_S = 0.3
+
 interface BeforeAfterSliderProps {
   beforeSrc: string
   afterSrc: string
@@ -63,18 +68,52 @@ export function BeforeAfterSlider({
     return () => io.disconnect()
   }, [])
 
+  // Keep the two clips in step. Every guard below is about the mobile decoder:
+  // a seek into these clips on a phone routinely takes longer than one tick,
+  // and re-issuing it cancels the seek already in flight. That loop is what
+  // froze the After video mid-drag -- it was seeked forever and never resumed.
+  // So: only touch a video that has settled (not seeking, enough buffered),
+  // and prefer fastSeek, which lands on a keyframe instead of making the
+  // decoder rebuild an exact frame. Keyframe accuracy is plenty here.
   useEffect(() => {
+    if (!load) return
+    const lastTime = { before: -1, after: -1 }
+    const stalledTicks = { before: 0, after: 0 }
+
     const id = setInterval(() => {
-      if (sliderPosRef.current <= 0 || sliderPosRef.current >= 100) return
       const before = beforeVideoRef.current
       const after = afterVideoRef.current
-      if (!before || !after) return
-      if (Math.abs(before.currentTime - after.currentTime) > 0.15) {
-        after.currentTime = before.currentTime
+      if (!before || !after || document.hidden) return
+
+      // Restart a clip the browser stopped on its own: iOS suspends a decoder
+      // under memory pressure and leaves the element paused after some seeks,
+      // and neither state recovers unaided. Requiring currentTime > 0 keeps
+      // this from fighting an autoplay the browser refused outright (low power
+      // mode) -- that one stays on its poster, as before.
+      for (const [key, video] of [['before', before], ['after', after]] as const) {
+        const advanced = video.currentTime !== lastTime[key]
+        lastTime[key] = video.currentTime
+        stalledTicks[key] = advanced ? 0 : stalledTicks[key] + 1
+        const stuck = video.paused || stalledTicks[key] >= 2
+        if (stuck && video.currentTime > 0 && !video.seeking) {
+          video.play().catch(() => {
+            /* still refused -- try again next tick, nothing to recover here */
+          })
+        }
       }
-    }, 500)
+
+      if (sliderPosRef.current <= 0 || sliderPosRef.current >= 100) return
+      if (before.seeking || after.seeking) return
+      if (before.readyState < before.HAVE_FUTURE_DATA) return
+      if (after.readyState < after.HAVE_FUTURE_DATA) return
+      if (Math.abs(before.currentTime - after.currentTime) <= DRIFT_TOLERANCE_S) return
+
+      const target = after as HTMLVideoElement & { fastSeek?: (t: number) => void }
+      if (target.fastSeek) target.fastSeek(before.currentTime)
+      else target.currentTime = before.currentTime
+    }, SYNC_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [])
+  }, [load])
 
   // React sets src as a property after mount, which does not re-trigger the
   // autoplay the `autoPlay` attribute would have done at parse time. play() is
@@ -109,15 +148,32 @@ export function BeforeAfterSlider({
     return () => clearTimeout(timer)
   }, [hasRevealed, videosReady])
 
+  // A phone fires pointermove far faster than it can repaint, and each one used
+  // to re-render a subtree holding two playing videos plus a clip-path. That
+  // starves the decoders -- the drift the sync loop then tries to correct.
+  // Coalescing to one state update per frame keeps the drag off the decoders'
+  // backs.
+  const pendingXRef = useRef<number | null>(null)
+  const rafRef = useRef<number | null>(null)
+
   const updateSlider = useCallback((clientX: number) => {
-    const container = containerRef.current
-    if (!container) return
-    const rect = container.getBoundingClientRect()
-    const x = clientX - rect.left
-    const pct = Math.max(0, Math.min(100, (x / rect.width) * 100))
-    setSliderPos(pct)
-    if (!hasInteracted) setHasInteracted(true)
-  }, [hasInteracted])
+    pendingXRef.current = clientX
+    if (rafRef.current !== null) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      const container = containerRef.current
+      const x = pendingXRef.current
+      if (!container || x === null) return
+      const rect = container.getBoundingClientRect()
+      const pct = Math.max(0, Math.min(100, ((x - rect.left) / rect.width) * 100))
+      setSliderPos(pct)
+      setHasInteracted(true)
+    })
+  }, [])
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+  }, [])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     setIsDragging(true)
