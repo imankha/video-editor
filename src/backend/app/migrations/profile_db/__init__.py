@@ -35,6 +35,7 @@ from .v033_heal_moved_reel_attribution import V033HealMovedReelAttribution
 from .v034_intro_card_library import V034IntroCardLibrary
 from .v035_intro_card_subtitle import V035IntroCardSubtitle
 from .v036_null_dead_intro_card_title_text import V036NullDeadIntroCardTitleText
+from .v037_intro_min_duration import V037IntroMinDuration
 
 MIGRATIONS = [
     V001Baseline(),
@@ -73,6 +74,7 @@ MIGRATIONS = [
     V034IntroCardLibrary(),
     V035IntroCardSubtitle(),
     V036NullDeadIntroCardTitleText(),
+    V037IntroMinDuration(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

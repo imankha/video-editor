@@ -1251,11 +1251,19 @@ def ensure_database():
 
         # User settings - persisted preferences (synced to R2)
         # Uses JSON for flexible settings storage without schema changes
+        # intro_min_duration_seconds (T5215, profile_db v037): the reel-length
+        # floor below which the default intro card is not applied on the
+        # inherit-the-default resolution path (app.services.intro_cards.
+        # resolve_intro_card_id). A typed column, not settings_json -- it is
+        # read on every reel resolution and edited via a dedicated endpoint.
+        # Kept in step with migrations/profile_db/v037_intro_min_duration.py so
+        # a fresh profile gets the column here and an existing one gets it there.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 settings_json TEXT NOT NULL DEFAULT '{}',
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                intro_min_duration_seconds REAL NOT NULL DEFAULT 20.0
             )
         """)
 
