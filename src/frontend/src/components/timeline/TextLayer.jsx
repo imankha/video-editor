@@ -1,4 +1,4 @@
-import { Trash2, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Eye, EyeOff, Plus } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 import { snapToBoundary } from '../../utils/textSnapping';
@@ -23,6 +23,7 @@ export default function TextLayer({
   blocks = [],
   duration,
   visualDuration,
+  currentTime = 0,
   clipBoundaries = [],
   selectedTextId = null,
   onAddText,
@@ -271,16 +272,23 @@ export default function TextLayer({
       className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2 cursor-pointer"
       onClick={handleTrackClick}
     >
-      {/* T6630 -- persistent "clickable lane" affordance. Replaces the old
-          blocks.length===0 gate so the hint stays visible once blocks exist
-          (dimmer, so it does not shout). Lives in the tall lane (not the h-10
-          track) so it sits in the previously-inert lower band; pointer-events
-          are off so a click on it falls through to the whole-lane add target. */}
-      <div className="absolute bottom-1 left-3 pointer-events-none select-none">
-        <span className={`text-[11px] ${blocks.length === 0 ? 'text-gray-300' : 'text-gray-500'}`}>
-          Click empty lane to add text
-        </span>
-      </div>
+      {/* T6630 round 2 -- the "+ Add text" control lives INSIDE the text lane, in
+          context (the round-1 full-width button below the timeline, next to Add
+          Spotlight, was rejected). It sits in the previously-inert lower band so it
+          never overlaps a block/lever; it adds a block at the current playhead and
+          stops propagation so it does not ALSO fire the whole-lane click-to-add. */}
+      {onAddText && (
+        <button
+          type="button"
+          data-testid="add-text-in-lane"
+          onClick={(e) => { e.stopPropagation(); onAddText(currentTime); }}
+          className="absolute bottom-1 left-2 z-20 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium bg-cyan-600/90 hover:bg-cyan-500 text-white shadow coarse-pointer:min-h-11 transition-colors"
+          title="Add a text block at the playhead"
+        >
+          <Plus size={12} />
+          Add text
+        </button>
+      )}
 
       <div
         ref={trackRef}

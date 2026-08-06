@@ -8,10 +8,12 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
 import OverlaySettingsCard from '../components/OverlaySettingsCard';
+import OverlaySettingsTabs from '../components/overlay/OverlaySettingsTabs';
+import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
 import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Type, Trash2 } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Trash2 } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
@@ -229,6 +231,9 @@ export function OverlayModeView({
   // Layers
   selectedLayer,
   onLayerSelect,
+  // T6630 round 2: whole-text-layer visibility toggle (label icon + preview gate)
+  textLayerHidden = false,
+  onToggleTextLayer,
 
   // Export
   exportButtonRef,
@@ -257,6 +262,18 @@ export function OverlayModeView({
   // them (T4880); the inline scrollable layout keeps every control reachable.
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
+
+  // T6630 round 2: the three-tab settings section (Overlay | Text | Thumbnail).
+  // Default "overlay". Selecting a text block forces the Text tab (see
+  // handleSelectText below) so the on-screen panel updates in place — the panel
+  // has a CONSTANT height, so this never reflows the timeline.
+  const [activeTab, setActiveTab] = useState('overlay');
+  // Gesture-based tab switch: a block-select click flips to the Text tab. Passing
+  // null (deselect / "Done") does not change the tab. No reactive useEffect.
+  const handleSelectText = useCallback((id) => {
+    onSelectText && onSelectText(id);
+    if (id) setActiveTab('text');
+  }, [onSelectText]);
 
   // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
   // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
@@ -444,7 +461,7 @@ export function OverlayModeView({
               isDisabled={!showPlayerBoxes}
             />
           ),
-          effectiveOverlayMetadata && textOverlays.length > 0 && (
+          effectiveOverlayMetadata && !textLayerHidden && textOverlays.length > 0 && (
             <TextOverlayPreview
               key="text-preview"
               videoRef={videoRef}
@@ -544,7 +561,12 @@ export function OverlayModeView({
     return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null);
   }, [posterMarkerTime, posterSlowmoSection, effectiveOverlayMetadata?.duration, duration]);
 
-  const overlaySettingsCard = (
+  const selectedTextBlock = selectedTextId
+    ? textOverlays.find((b) => b.id === selectedTextId) || null
+    : null;
+
+  // --- Overlay tab: spotlight/highlight tuning (poster moved to Thumbnail tab). ---
+  const overlayPanel = (
     <OverlaySettingsCard
       highlightColor={highlightColor}
       onHighlightColorChange={onHighlightColorChange}
@@ -560,34 +582,14 @@ export function OverlayModeView({
       onHighlightEffectTypeChange={onHighlightEffectTypeChange}
       isHighlightEnabled={highlightRegions.length > 0}
       disabled={settingsDisabled}
-      posterMarkerTimeLabel={
-        !posterUploaded && posterMarkerTime != null ? formatTimeSimple(posterMarkerTime) : null
-      }
-      posterUploaded={posterUploaded}
-      posterPreviewVideoUrl={effectiveOverlayVideoUrl}
-      posterPreviewTime={posterFrameSourceTime}
-      onUseCurrentFrameAsCover={() => onPosterMarkerDragEnd?.(currentTime)}
-      onRemoveUpload={onRemoveUpload}
     />
   );
 
-  // T5225: the shared TextSpec editor rail, shown when a text block is
-  // selected on the timeline. Same component T5205's card editor will reuse
-  // (design §4.1) -- this screen only supplies the host (spec in, surgical
-  // update_text_spec out via onUpdateTextSpec, debounced by the caller).
-  const selectedTextBlock = selectedTextId
-    ? textOverlays.find((b) => b.id === selectedTextId) || null
-    : null;
-
-  const textEditorCard = selectedTextBlock ? (
-    // T6480: this rail hosts the SHARED TextSpecEditor, whose control + label
-    // colours (text-gray-400 labels, gray-800 inputs, amber footer) are tuned for
-    // a DARK surface -- the same surface the card editor gives it. The overlay
-    // screen's other panels are light glass (bg-white/10 over the purple app bg),
-    // which rendered those labels bright-on-bright (the reported bug). We fix it
-    // host-side -- a dark glass panel here -- rather than darkening the shared
-    // component, which would invert the bug in the (already-dark) card editor.
-    <div className="bg-gray-900/85 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-gray-700 mt-3">
+  // --- Text tab: the SHARED TextSpecEditor for the selected block, or an
+  // empty-state prompt. Always present (it is a tab, not a mounted-on-select
+  // rail), so selecting a block updates it in place without reflow. ---
+  const textPanel = selectedTextBlock ? (
+    <div>
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-white">Edit Text</h3>
         <button
@@ -601,9 +603,8 @@ export function OverlayModeView({
         spec={selectedTextBlock.spec}
         onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedTextBlock.id, nextSpec)}
       />
-      {/* T6630 -- discoverable delete, right where the user already is (design
-          B.1). Destructive styling per the UI style guide; reuses the SINGLE
-          onDeleteText path (which clears the selection, closing this rail). */}
+      {/* T6630 -- delete right where the user already is; reuses the SINGLE
+          onDeleteText path (which clears the selection). */}
       <button
         onClick={() => onDeleteText && onDeleteText(selectedTextBlock.id)}
         className="mt-3 w-full flex items-center justify-center gap-1.5 text-sm text-red-400 hover:text-red-300 border border-red-500/40 hover:border-red-500 rounded px-3 py-2 transition-colors"
@@ -612,7 +613,39 @@ export function OverlayModeView({
         Delete text
       </button>
     </div>
-  ) : null;
+  ) : (
+    <div className="flex flex-col items-start gap-2">
+      <p className="text-sm text-gray-300">No text block selected.</p>
+      <p className="text-xs text-gray-500">
+        Click a text block on the timeline to edit it, or use <span className="text-cyan-300">+ Add text</span> in the text lane to create one.
+      </p>
+    </div>
+  );
+
+  // --- Thumbnail tab (T6590): the chosen still as FEEDBACK; the marker owns
+  // setting the frame (no "Use current frame" button). ---
+  const thumbnailPanel = (
+    <ThumbnailPanel
+      posterMarkerTimeLabel={
+        !posterUploaded && posterMarkerTime != null ? formatTimeSimple(posterMarkerTime) : null
+      }
+      posterUploaded={posterUploaded}
+      posterPreviewVideoUrl={effectiveOverlayVideoUrl}
+      posterPreviewTime={posterFrameSourceTime}
+      onRemoveUpload={onRemoveUpload}
+      disabled={settingsDisabled}
+    />
+  );
+
+  const settingsTabs = (
+    <OverlaySettingsTabs
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      overlayPanel={overlayPanel}
+      textPanel={textPanel}
+      thumbnailPanel={thumbnailPanel}
+    />
+  );
 
   return (
     <>
@@ -743,10 +776,12 @@ export function OverlayModeView({
                 {controlsEl}
               </div>
               {/* Settings column — reclaimed pillarbox width, desktop only. Mobile
-                  renders its own copy above the Add Spotlight button (below). */}
+                  renders its own copy above the Add Spotlight button (below). The
+                  three-tab section (Overlay | Text | Thumbnail) has a constant
+                  height, so selecting a block swaps the Text tab in place without
+                  moving the timeline (T6630 round 2). */}
               <div className="hidden lg:block lg:flex-1 lg:min-w-0">
-                {overlaySettingsCard}
-                {textEditorCard}
+                {settingsTabs}
               </div>
             </div>
           )}
@@ -816,9 +851,11 @@ export function OverlayModeView({
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
             onMoveTextBody={onMoveTextBody}
-            onSelectText={onSelectText}
+            onSelectText={handleSelectText}
             onDeleteText={onDeleteText}
             onToggleText={onToggleText}
+            textLayerHidden={textLayerHidden}
+            onToggleTextLayer={onToggleTextLayer}
               />
             ) : isLoading ? (
               <div className="animate-pulse">
@@ -827,24 +864,6 @@ export function OverlayModeView({
               </div>
             ) : null}
           </div>
-          )}
-
-          {/* T6630 -- explicit, discoverable "Add Text" control directly below the
-              timeline (mirrors the prominent Add Spotlight CTA). This is the
-              PRIMARY route to add a text overlay; it adds a block at the current
-              playhead and selects it, reusing the SAME wrappedAddText path as the
-              lane click -- no second add path, no new persistence path. */}
-          {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
-            <div className="mt-3">
-              <Button
-                variant="cyan"
-                fullWidth
-                icon={Type}
-                onClick={() => onAddText && onAddText(currentTime)}
-              >
-                Add Text
-              </Button>
-            </div>
           )}
 
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
@@ -923,9 +942,11 @@ export function OverlayModeView({
                         onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
                         onMoveTextBody={onMoveTextBody}
-                        onSelectText={onSelectText}
+                        onSelectText={handleSelectText}
                         onDeleteText={onDeleteText}
                         onToggleText={onToggleText}
+            textLayerHidden={textLayerHidden}
+            onToggleTextLayer={onToggleTextLayer}
                       />
                     </div>
                   )}
@@ -971,12 +992,11 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Overlay Settings — mobile only (stacked above Add Spotlight). Desktop
-            renders the card beside the video in the two-column stage row (T5676). */}
+        {/* Settings tabs — mobile only (stacked above Add Spotlight). Desktop
+            renders the tabbed section beside the video in the two-column stage row. */}
         {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
           <div className="lg:hidden mt-6">
-            {overlaySettingsCard}
-            {textEditorCard}
+            {settingsTabs}
           </div>
         )}
 

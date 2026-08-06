@@ -193,6 +193,11 @@ export function OverlayScreen({
 
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
+  // T6630 round 2: whole-text-layer visibility (view-only, memory; hides every
+  // text block in the preview at once). Distinct from per-block `enabled` (T6620),
+  // which persists. A layer-level view toggle, like showPlayerBoxes -- not a
+  // gesture-persisted datum, so it is intentionally not written to the backend.
+  const [textLayerHidden, setTextLayerHidden] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const internalExportButtonRef = useRef(null);
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
@@ -1463,6 +1468,8 @@ export function OverlayScreen({
       // Layers
       selectedLayer={selectedLayer}
       onLayerSelect={setSelectedLayer}
+      textLayerHidden={textLayerHidden}
+      onToggleTextLayer={() => setTextLayerHidden((v) => !v)}
       // Export
       exportButtonRef={exportButtonRef}
       getRegionsForExport={getRegionsForExport}

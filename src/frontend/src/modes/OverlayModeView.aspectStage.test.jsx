@@ -89,11 +89,12 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
     expect(stage.style.aspectRatio).toBe('');
   });
 
-  it('renders the Overlay Settings card in both the desktop-beside and mobile-stacked slots', () => {
+  it('renders the settings tabs in both the desktop-beside and mobile-stacked slots', () => {
     isMobileMock.mockReturnValue(false);
     renderView();
-    // One copy in the desktop two-column row (hidden lg:block) + one in the
-    // mobile stacked slot (lg:hidden); both are in the DOM under jsdom.
-    expect(screen.getAllByText('Overlay Settings')).toHaveLength(2);
+    // T6630 round 2: the "Overlay Settings" card became the three-tab section
+    // (Overlay | Text | Thumbnail). One copy in the desktop two-column row
+    // (hidden lg:block) + one in the mobile stacked slot (lg:hidden); both in DOM.
+    expect(screen.getAllByTestId('overlay-settings-tabs')).toHaveLength(2);
   });
 });

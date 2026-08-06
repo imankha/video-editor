@@ -60,6 +60,9 @@ export function OverlayMode({
   onSelectText,
   onDeleteText,
   onToggleText,
+  // T6630 round 2: whole-text-layer visibility toggle (label icon).
+  textLayerHidden = false,
+  onToggleTextLayer,
   // Zoom state (from useZoom in App.jsx)
   zoom,
   panOffset,
@@ -136,17 +139,45 @@ export function OverlayMode({
     }
   };
 
-  // Layer labels for the fixed left column (matching FramingTimeline structure)
+  // Layer labels for the fixed left column (matching FramingTimeline structure).
+  // T6630 round 2: lane order now reflects the TRUE paint order in the video
+  // preview -- Text paints ON TOP of tracking (detection) and the spotlight
+  // (highlight), so the Text lane sits directly under the Video ruler, above
+  // Detection and Highlight (like every other editor's layer list).
   const layerLabels = (
     <>
-      {/* Video Timeline Label */}
+      {/* Video Timeline Label (ruler) */}
       <div
-        className={`h-8 lg:h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
+        className={`h-8 lg:h-12 flex items-center justify-center border-r border-gray-700 rounded-tl-lg transition-colors cursor-pointer ${
           selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('playhead')}
       >
         <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
+      </div>
+
+      {/* Text Layer Label (T5225). T6630 round 2: the icon TOGGLES whole-layer
+          visibility (hide every text block in the preview at once) -- a
+          layer-level control distinct from the per-block eye (T6620). Mirrors the
+          Detection label's show/hide-with-slash idiom below. Whole-layer hide is a
+          view-only toggle (memory), never persisted. */}
+      <div
+        className={`mt-0.5 lg:mt-1 h-28 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
+          textLayerHidden ? 'bg-gray-900 hover:bg-gray-800' : 'bg-cyan-900/30 hover:bg-cyan-900/40'
+        }`}
+        title={textLayerHidden ? 'Show text layer' : 'Hide text layer'}
+        aria-pressed={!textLayerHidden}
+        data-testid="text-layer-toggle"
+        onClick={() => onToggleTextLayer && onToggleTextLayer()}
+      >
+        <div className="relative">
+          <Type size={18} className={textLayerHidden ? 'text-gray-500' : 'text-cyan-300'} />
+          {textLayerHidden && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-6 h-0.5 bg-red-500 rotate-45 transform origin-center" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Detection Marker Layer Label (only if detection data exists) */}
@@ -167,27 +198,14 @@ export function OverlayMode({
         </div>
       )}
 
-      {/* Highlight Region Layer Label */}
+      {/* Highlight Region Layer Label (now the bottom lane -> rounds bottom-left) */}
       <div
-        className={`mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
           selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('highlight')}
       >
         <Circle size={18} className={selectedLayer === 'highlight' ? 'text-orange-300' : 'text-orange-400'} />
-      </div>
-
-      {/* Text Layer Label (T5225; T6610 grew the lane to h-28 for scrollbar
-          clearance). T6630: label height matches the lane's UNCONDITIONAL h-28 at
-          every breakpoint -- the lane is h-28 on all widths, so a responsive
-          h-20 label drifted out of alignment below lg. */}
-      <div
-        className={`mt-0.5 lg:mt-1 h-28 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
-          selectedLayer === 'text' ? 'bg-cyan-900/30' : 'bg-gray-900 hover:bg-gray-800'
-        }`}
-        onClick={() => onLayerSelect && onLayerSelect('text')}
-      >
-        <Type size={18} className={selectedLayer === 'text' ? 'text-cyan-300' : 'text-cyan-400'} />
       </div>
     </>
   );
@@ -216,6 +234,29 @@ export function OverlayMode({
             trimRange={trimRange}
             isPlaying={isPlaying}
           >
+            {/* Text Layer (T5225) -- FIRST overlay lane now (T6630 round 2): text
+                paints on top in the preview, so its lane sits directly under the
+                video ruler, above Detection and Highlight. */}
+            <div className="mt-0.5 lg:mt-1">
+              <TextLayer
+                blocks={textOverlays}
+                duration={duration}
+                visualDuration={visualDuration || duration}
+                currentTime={currentTime}
+                clipBoundaries={clipBoundaries}
+                selectedTextId={selectedTextId}
+                onAddText={onAddText}
+                onMoveTextStart={onMoveTextStart}
+                onMoveTextEnd={onMoveTextEnd}
+                onMoveTextBody={onMoveTextBody}
+                onSelectText={onSelectText}
+                onDeleteText={onDeleteText}
+                onToggleText={onToggleText}
+                visualTimeToSourceTime={visualTimeToSourceTime}
+                edgePadding={EDGE_PADDING}
+              />
+            </div>
+
             {/* Detection Marker Layer (only if detection data exists) */}
             {hasDetectionData && (
               <div className="mt-0.5 lg:mt-1">
@@ -265,30 +306,9 @@ export function OverlayMode({
               />
             </div>
 
-            {/* Text Layer (T5225) -- the shared TextSpec editing rail's range */}
-            <div className="mt-0.5 lg:mt-1">
-              <TextLayer
-                blocks={textOverlays}
-                duration={duration}
-                visualDuration={visualDuration || duration}
-                clipBoundaries={clipBoundaries}
-                selectedTextId={selectedTextId}
-                onAddText={onAddText}
-                onMoveTextStart={onMoveTextStart}
-                onMoveTextEnd={onMoveTextEnd}
-                onMoveTextBody={onMoveTextBody}
-                onSelectText={onSelectText}
-                onDeleteText={onDeleteText}
-                onToggleText={onToggleText}
-                visualTimeToSourceTime={visualTimeToSourceTime}
-                edgePadding={EDGE_PADDING}
-              />
-            </div>
-
-            {/* Poster (cover-photo) marker (T5410) -- pinned to the video-track
-                top rail (see PosterMarkerLayer's own -top-3 absolute position),
-                the SAME band the playhead occupies, so it never collides with
-                the region drag handles above. */}
+            {/* Thumbnail marker (T5410; T6590 round 2) -- a full-height guide line
+                with its handle at the vertical MIDDLE (see PosterMarkerLayer's
+                docstring); no longer the clipped/occluded top-rail chip. */}
             <PosterMarkerLayer
               visualTime={posterVisualTime}
               duration={duration}
