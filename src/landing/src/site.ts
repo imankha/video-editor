@@ -24,7 +24,7 @@ export const BRAND = 'ReelBallers'
  * The brand tagline. This is the headline humans read -- keep it short and keep
  * it the brand's voice. It is NOT the schema description; see DEFINITION.
  */
-export const TAGLINE = "Share Your Player's Brilliance"
+export const TAGLINE = "Share Your Athlete's Brilliance"
 
 /**
  * The one-sentence factual definition, for machines rather than humans. Used
