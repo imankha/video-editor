@@ -189,7 +189,7 @@ class TestCanonicalDefinition:
         d = CollectionDefinition(
             scope={"type": "all"}, filter={"tags": ["Goal", "Assist", "Goal"]},
             aspect_ratio="9:16", budget_sec=90.0)
-        out = _canonical_definition(d, "Top Goals & Assists - Portrait (1:30)")
+        out = _canonical_definition(d, "Top Goals & Assists - Portrait (1:30)", intro_card_id=0)
         assert out["filter"]["tags"] == ["Assist", "Goal"]
         assert out["budget_sec"] == 90.0
         assert out["title"] == "Top Goals & Assists - Portrait (1:30)"
@@ -199,7 +199,7 @@ class TestCanonicalDefinition:
         from app.routers.collections import _canonical_definition, CollectionDefinition
         d = CollectionDefinition(scope={"type": "game", "game_id": 7},
                                  aspect_ratio="16:9")
-        out = _canonical_definition(d, "Game 7 - Landscape")
+        out = _canonical_definition(d, "Game 7 - Landscape", intro_card_id=0)
         assert out["scope"] == {"type": "game", "game_id": 7}
         assert out["filter"] == {}
         assert "budget_sec" not in out

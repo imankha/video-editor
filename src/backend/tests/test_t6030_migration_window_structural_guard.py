@@ -57,15 +57,19 @@ POST_V023_COLUMNS = {
     "working_clips": ["rotation"],                                                       # v029
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
+    "user_settings": ["intro_min_duration_seconds"],                                     # v037
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
     # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
     #   It rewrites final_videos.game_ids and inserts reference games rows via
     #   ensure_game_reference; every column it touches predates v024.
     # v034 (T5195 intro card library) adds final_videos.intro_card_id (above) AND a new
-    #   intro_cards TABLE. No EXISTING hot read names intro_card_id (T5215 adds the reads);
-    #   the intro-cards list route guards the whole missing TABLE itself (returns []), a case
-    #   this column-drop harness does not synthesise, so it is covered by test_t5195 directly.
+    #   intro_cards TABLE. The intro-cards list route guards the whole missing TABLE itself
+    #   (returns []), a case this column-drop harness does not synthesise, so it is covered
+    #   by test_t5195 directly. T5215 (v037, below) is the first task to READ
+    #   final_videos.intro_card_id on a hot path (list_downloads, the reel PATCH, the overlay
+    #   finalize carry-forward) -- every one of those reads is column_exists-guarded
+    #   (test_gallery_downloads below drives list_downloads against this fixture).
     # v035 (T6570 subtitle) adds intro_cards.subtitle_text. Unlike v034's whole-table case,
     #   the column-drop harness DOES synthesise this (table present, column gone), so the
     #   create/list/update hot paths are driven directly below (read + write column-guarded).
@@ -73,8 +77,14 @@ POST_V023_COLUMNS = {
     #   It is an UPDATE ... SET title_text = NULL (column-guarded, same PRAGMA check as every
     #   other migration here) over an EXISTING column that has carried data since v034; no
     #   hot read gains a new column name to fail on.
+    # v037 (T5215 intro_min_duration_seconds) adds user_settings.intro_min_duration_seconds.
+    #   The read (services.intro_cards.get_intro_min_duration) is column_exists-guarded and
+    #   degrades to DEFAULT_INTRO_MIN_DURATION_SECONDS; the write
+    #   (routers.profiles.update_current_intro_min_duration) is column_exists-guarded and
+    #   refuses with 503 rather than naming a nonexistent column. See
+    #   test_profile_intro_min_duration below.
 }
-HEAD_VERSION_AUDITED = 36
+HEAD_VERSION_AUDITED = 37
 
 
 def _cleanup(user_id: str) -> None:
@@ -263,6 +273,29 @@ def test_gallery_downloads(below_head):
     from app.routers.downloads import list_downloads
 
     _run(list_downloads())
+
+
+def test_profile_intro_min_duration(below_head):
+    # v037 drops user_settings.intro_min_duration_seconds -> the GET must degrade
+    # to the guarded default (never 500), and the PATCH must refuse with a clear
+    # 503 rather than naming a nonexistent column (T5215).
+    from fastapi import HTTPException
+
+    from app.routers.profiles import (
+        UpdateIntroMinDurationRequest,
+        get_current_intro_min_duration,
+        update_current_intro_min_duration,
+    )
+    from app.services.intro_cards import DEFAULT_INTRO_MIN_DURATION_SECONDS
+
+    resp = _run(get_current_intro_min_duration())
+    assert resp["intro_min_duration_seconds"] == DEFAULT_INTRO_MIN_DURATION_SECONDS
+
+    with pytest.raises(HTTPException) as exc:
+        _run(update_current_intro_min_duration(
+            UpdateIntroMinDurationRequest(intro_min_duration_seconds=45.0)
+        ))
+    assert exc.value.status_code == 503
 
 
 def test_collections_summary(below_head):
