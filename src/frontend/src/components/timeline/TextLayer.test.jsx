@@ -45,12 +45,17 @@ function setCoarse(value) {
   });
 }
 
+const WIDE_RECT = () => ({
+  left: 0, top: 0, right: 1000, bottom: 112, width: 1000, height: 112, x: 0, y: 0,
+});
+
 function renderLayer(overrides = {}) {
   const onMoveTextStart = vi.fn();
   const onMoveTextEnd = vi.fn();
   const onMoveTextBody = vi.fn();
   const onAddText = vi.fn();
   const onSelectText = vi.fn();
+  const onDeleteText = vi.fn();
   const utils = render(
     <TextLayer
       blocks={[BLOCK]}
@@ -62,16 +67,21 @@ function renderLayer(overrides = {}) {
       onMoveTextBody={onMoveTextBody}
       onSelectText={onSelectText}
       onAddText={onAddText}
+      onDeleteText={onDeleteText}
       {...overrides}
     />
   );
   const track = utils.container.querySelector('.text-track') || utils.container.querySelector('[class*="track"]');
   if (track) {
-    track.getBoundingClientRect = () => ({
-      left: 0, top: 0, right: 1000, bottom: 48, width: 1000, height: 48, x: 0, y: 0,
-    });
+    track.getBoundingClientRect = () => WIDE_RECT();
   }
-  return { onMoveTextStart, onMoveTextEnd, onMoveTextBody, onSelectText, onAddText, track, ...utils };
+  // T6630: the click-to-add target is now the FULL-height lane (the .text-track's
+  // parent), so tests that add via click must measure that element's rect.
+  const lane = track ? track.parentElement : null;
+  if (lane) {
+    lane.getBoundingClientRect = () => WIDE_RECT();
+  }
+  return { onMoveTextStart, onMoveTextEnd, onMoveTextBody, onSelectText, onAddText, onDeleteText, track, lane, ...utils };
 }
 
 beforeEach(() => setCoarse(false));
@@ -232,5 +242,50 @@ describe('TextLayer — body drag moves the whole block (T6610)', () => {
     call = onMoveTextBody.mock.calls.at(-1);
     expect(call[1], 'Shift+ArrowLeft nudges back by 1s').toBeCloseTo(2 - 1.0, 5);
     expect(call[2]).toBe(true);
+  });
+});
+
+describe('TextLayer — add is reachable across the WHOLE lane (T6630)', () => {
+  // The bug this guards: the onClick used to live on the h-10 `.text-track`
+  // strip inside the h-28 lane, so the lower ~72px was inert. Clicking LOW in
+  // the lane (on the lane element itself, BELOW the track strip) must add --
+  // a test that only clicked the top strip passed on the broken code.
+  it('a click LOW in the lane (the previously-inert lower band) adds a block', () => {
+    const { onAddText, lane } = renderLayer({ blocks: [] });
+    expect(lane).toBeTruthy();
+    // clientY=90 is in the lower band (track is only 40px tall); the handler is
+    // on the full-height lane, so this must still add. Lane is mocked 1000px
+    // wide, edgePadding 20 -> usable 960; x=500 -> (500-20)/960*10 = 5.0s.
+    fireEvent.click(lane, { clientX: 500, clientY: 90 });
+    expect(onAddText).toHaveBeenCalledTimes(1);
+    expect(onAddText.mock.calls.at(-1)[0]).toBeCloseTo(5.0, 5);
+  });
+
+  it('the click-to-add affordance stays visible even when blocks already exist', () => {
+    renderLayer({ blocks: [BLOCK] });
+    expect(screen.getByText(/add text/i)).toBeTruthy();
+  });
+
+  it('clicking a per-block control (trash) never adds a block (guard preserved)', () => {
+    const { onAddText, onDeleteText } = renderLayer({ blocks: [BLOCK] });
+    fireEvent.click(screen.getByTitle('Delete text block'));
+    expect(onDeleteText).toHaveBeenCalledWith('t1');
+    expect(onAddText, 'a control click must not fall through to the lane add').not.toHaveBeenCalled();
+  });
+});
+
+describe('TextLayer — keyboard delete of the focused block (T6630)', () => {
+  it('Delete removes the focused block via the single onDeleteText path', () => {
+    const { onDeleteText } = renderLayer();
+    const body = screen.getByTestId('text-block-body-0');
+    fireEvent.keyDown(body, { key: 'Delete' });
+    expect(onDeleteText).toHaveBeenCalledWith('t1');
+  });
+
+  it('Backspace also removes the focused block', () => {
+    const { onDeleteText } = renderLayer();
+    const body = screen.getByTestId('text-block-body-0');
+    fireEvent.keyDown(body, { key: 'Backspace' });
+    expect(onDeleteText).toHaveBeenCalledWith('t1');
   });
 });

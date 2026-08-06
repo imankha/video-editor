@@ -11,7 +11,7 @@ import OverlaySettingsCard from '../components/OverlaySettingsCard';
 import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Type, Trash2 } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
@@ -601,6 +601,16 @@ export function OverlayModeView({
         spec={selectedTextBlock.spec}
         onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedTextBlock.id, nextSpec)}
       />
+      {/* T6630 -- discoverable delete, right where the user already is (design
+          B.1). Destructive styling per the UI style guide; reuses the SINGLE
+          onDeleteText path (which clears the selection, closing this rail). */}
+      <button
+        onClick={() => onDeleteText && onDeleteText(selectedTextBlock.id)}
+        className="mt-3 w-full flex items-center justify-center gap-1.5 text-sm text-red-400 hover:text-red-300 border border-red-500/40 hover:border-red-500 rounded px-3 py-2 transition-colors"
+      >
+        <Trash2 size={14} />
+        Delete text
+      </button>
     </div>
   ) : null;
 
@@ -817,6 +827,24 @@ export function OverlayModeView({
               </div>
             ) : null}
           </div>
+          )}
+
+          {/* T6630 -- explicit, discoverable "Add Text" control directly below the
+              timeline (mirrors the prominent Add Spotlight CTA). This is the
+              PRIMARY route to add a text overlay; it adds a block at the current
+              playhead and selects it, reusing the SAME wrappedAddText path as the
+              lane click -- no second add path, no new persistence path. */}
+          {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
+            <div className="mt-3">
+              <Button
+                variant="cyan"
+                fullWidth
+                icon={Type}
+                onClick={() => onAddText && onAddText(currentTime)}
+              >
+                Add Text
+              </Button>
+            </div>
           )}
 
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}

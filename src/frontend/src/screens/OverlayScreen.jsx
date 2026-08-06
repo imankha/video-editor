@@ -1035,6 +1035,9 @@ export function OverlayScreen({
       clearTimeout(timers.get(id));
       timers.delete(id);
     }
+    // T6630 note: deleteText() (useTextOverlays) already clears selectedTextId
+    // when the removed block is the selected one, so the Edit Text rail closes
+    // cleanly with no extra clear here (single source of truth for selection).
     const removed = deleteText(id);
     if (removed && canSyncActions) {
       dispatchOverlayAction('deleteText', () => overlayActions.deleteText(projectId, id));

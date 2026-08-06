@@ -215,8 +215,14 @@ export default function TextLayer({
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       nudgeBlock(block, e.shiftKey ? KEY_NUDGE_SECONDS_COARSE : KEY_NUDGE_SECONDS);
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      // T6630 -- keyboard delete of the focused block (design B.3). Same single
+      // surgical delete path as the per-block trash and the rail's Delete text;
+      // no second delete path.
+      e.preventDefault();
+      onDeleteText && onDeleteText(block.id);
     }
-  }, [nudgeBlock]);
+  }, [nudgeBlock, onDeleteText]);
 
   const handleBodyPointerDown = useCallback((e, block) => {
     // Levers stopPropagation on their own pointerdown, so this only ever fires for
@@ -261,19 +267,26 @@ export default function TextLayer({
     // `top-full`; the extra lane height reserves clear space between them and the
     // timeline's horizontal scrollbar at the container's bottom edge (T6610 item
     // 2). Keep in sync with OverlayMode.getTotalLayerHeight() + the text label.
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2">
+    <div
+      className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2 cursor-pointer"
+      onClick={handleTrackClick}
+    >
+      {/* T6630 -- persistent "clickable lane" affordance. Replaces the old
+          blocks.length===0 gate so the hint stays visible once blocks exist
+          (dimmer, so it does not shout). Lives in the tall lane (not the h-10
+          track) so it sits in the previously-inert lower band; pointer-events
+          are off so a click on it falls through to the whole-lane add target. */}
+      <div className="absolute bottom-1 left-3 pointer-events-none select-none">
+        <span className={`text-[11px] ${blocks.length === 0 ? 'text-gray-300' : 'text-gray-500'}`}>
+          Click empty lane to add text
+        </span>
+      </div>
+
       <div
         ref={trackRef}
-        className="text-track absolute inset-x-0 top-0 h-10 cursor-pointer overflow-visible rounded-r-lg"
-        onClick={handleTrackClick}
+        className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg"
       >
         <div className="absolute inset-0 bg-cyan-900 bg-opacity-10 rounded-r-lg" />
-
-        {blocks.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm">Click to add text</span>
-          </div>
-        )}
 
         {blocks.map((block) => {
           const isDraggingThisBlock = draggingLever?.blockId === block.id;
@@ -300,7 +313,7 @@ export default function TextLayer({
                 aria-valuenow={Math.round(block.startTime * 100) / 100}
                 aria-valuemin={0}
                 aria-valuemax={duration}
-                className={`h-full transition-all relative overflow-hidden border-l-2 border-r-2 border-cyan-400 bg-cyan-500 touch-none select-none cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-cyan-200 ${
+                className={`h-full transition-all relative overflow-hidden border-l-2 border-r-2 border-cyan-400 bg-cyan-500 touch-none select-none cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-cyan-200 hover:bg-opacity-40 hover:ring-1 hover:ring-cyan-300/70 ${
                   block.enabled === false ? 'bg-opacity-10' : 'bg-opacity-20'
                 } ${isSelected ? 'ring-2 ring-cyan-300' : ''} ${
                   draggingBody?.blockId === block.id ? 'ring-2 ring-cyan-200' : ''

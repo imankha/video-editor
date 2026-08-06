@@ -177,9 +177,12 @@ export function OverlayMode({
         <Circle size={18} className={selectedLayer === 'highlight' ? 'text-orange-300' : 'text-orange-400'} />
       </div>
 
-      {/* Text Layer Label (T5225; T6610 grew the lane to h-28 for scrollbar clearance) */}
+      {/* Text Layer Label (T5225; T6610 grew the lane to h-28 for scrollbar
+          clearance). T6630: label height matches the lane's UNCONDITIONAL h-28 at
+          every breakpoint -- the lane is h-28 on all widths, so a responsive
+          h-20 label drifted out of alignment below lg. */}
       <div
-        className={`mt-0.5 lg:mt-1 h-20 lg:h-28 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-28 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
           selectedLayer === 'text' ? 'bg-cyan-900/30' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('text')}
