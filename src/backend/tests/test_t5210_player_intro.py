@@ -7,6 +7,7 @@ T5240 luma-evidence approach.
 """
 
 import subprocess
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -88,25 +89,27 @@ def test_frame_photo_covers_exact_rect_and_keeps_alpha(photo, cutout):
     assert np.asarray(cut)[:, :, 3].min() == 0
 
 
-def test_select_elements_title_from_profile_ignores_text_elements_text_and_dead_title_text():
-    # SEAM 1: text_elements is styling only; its .text ('WRONG') must be ignored.
-    # T6620: the title TEXT is the profile's full_name ALWAYS; a stored title_text
-    # ('DEAD') is no longer read (was a pre-T6570 override).
+_W916, _H916 = 1080, 1920
+_W169, _H169 = 1920, 1080
+
+
+def test_select_elements_title_from_profile_ignores_dead_title_text_and_text_elements():
+    # T6620: the title TEXT is the profile's full_name ALWAYS; a stored
+    # title_text ('DEAD') is no longer read (was a pre-T6570 override).
+    # T6640: a legacy text_elements blob ('WRONG'/'graduate'/red) is ALSO
+    # ignored entirely — typography is template-owned (ROLE_FOR_SLOT), never
+    # read from the card. Both are grandfathered-dead columns.
     card = _card(["position"], text_elements={
         "title": {"text": "WRONG", "font": "graduate", "color": "#ff0000",
                   "size": 0.1, "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8},
     }, title_text="DEAD")
     fields = {**FIELDS, "full_name": "Jordan Vega"}
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("hero", "9:16")
-    els = P._select_elements(card, fields, geo, "#ffffff")
+    accent = "#f7e28b"
+    els = P._select_elements(card, fields, "hero", "9:16", accent, _W916, _H916)
     title = next(e for e in els if e["slot"] == "title")
-    assert title["spec"].text == "Jordan Vega"           # profile full_name, NOT title_text/text_elements
-    assert title["spec"].font.value == "graduate"        # styling from text_elements
-    assert title["spec"].color == "#ff0000"
-    # layout WINS over any stored position/size on the styling spec
-    assert title["spec"].position.x == geo["slots"]["title"]["x"]
-    assert title["spec"].size == geo["slots"]["title"]["size"]
+    assert title["spec"].text == "Jordan Vega"    # profile full_name, NOT title_text/text_elements
+    assert title["spec"].font.value == "anton"    # TEMPLATE typography, not text_elements' 'graduate'
+    assert title["spec"].color == accent          # the treatment accent, not text_elements' red
 
 
 def test_select_elements_title_from_profile_full_name():
@@ -114,9 +117,7 @@ def test_select_elements_title_from_profile_full_name():
     # passed in via field_values["full_name"] (mirrors the browser preview).
     card = _card(["position"], title_text=None)
     fields = {**FIELDS, "full_name": "Jordan Vega"}
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("hero", "9:16")
-    els = P._select_elements(card, fields, geo, "#ffffff")
+    els = P._select_elements(card, fields, "hero", "9:16", "#ffffff", _W916, _H916)
     title = next(e for e in els if e["slot"] == "title")
     assert title["spec"].text == "Jordan Vega"
 
@@ -127,25 +128,22 @@ def test_select_elements_title_text_is_dead_profile_full_name_always_wins():
     # which is the whole point of the fix). Regression pin for report item 2.
     card = _card(["position"], title_text="Legacy Name")
     fields = {**FIELDS, "full_name": "Jordan Vega"}
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("hero", "9:16")
-    els = P._select_elements(card, fields, geo, "#ffffff")
+    els = P._select_elements(card, fields, "hero", "9:16", "#ffffff", _W916, _H916)
     title = next(e for e in els if e["slot"] == "title")
     assert title["spec"].text == "Jordan Vega"
 
 
 def test_select_elements_renders_card_subtitle_when_present():
-    # T6570: subtitle is FREE TEXT on the card; it renders at the subtitle slot,
-    # between title and facts, and is orthogonal to composition.
+    # T6570: subtitle is FREE TEXT on the card; it renders between title and
+    # facts (STAGGER_ORDER), and is orthogonal to composition. T6640: it takes
+    # the SECONDARY role (muted), grouped with the supporting facts.
+    from app.services.intro_card_geometry import MUTED_COLOR
     card = _card(["position"], title_text=None, subtitle_text="State Cup 2027")
     fields = {**FIELDS, "full_name": "Jordan Vega"}
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("hero", "9:16")
-    els = P._select_elements(card, fields, geo, "#ffffff")
+    els = P._select_elements(card, fields, "hero", "9:16", "#ffffff", _W916, _H916)
     sub = next(e for e in els if e["slot"] == "subtitle")
     assert sub["spec"].text == "State Cup 2027"
-    # position taken from the composition's subtitle slot (layout owns it)
-    assert sub["spec"].position.y == geo["slots"]["subtitle"]["y"]
+    assert sub["spec"].color == MUTED_COLOR
     # order: title, subtitle, then the fact
     assert [e["slot"] for e in els] == ["title", "subtitle", "fact1"]
 
@@ -154,30 +152,32 @@ def test_select_elements_omits_blank_subtitle(caplog):
     import logging
     caplog.set_level(logging.INFO)
     card = _card(["position"], title_text="T", subtitle_text="   ")
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("hero", "9:16")
-    els = P._select_elements(card, FIELDS, geo, "#ffffff")
+    els = P._select_elements(card, FIELDS, "hero", "9:16", "#ffffff", _W916, _H916)
     assert not any(e["slot"] == "subtitle" for e in els)
     assert "subtitle omitted" in caplog.text
 
 
-def test_select_elements_maps_ordinal_geometry_to_semantic_styling():
-    # SEAM 2: fact{i} geometry <- shown_fields[i]; styling keyed by the FIELD name.
+def test_select_elements_ordinal_facts_use_role_typography_not_semantic_styling():
+    # T6640: fact{i} geometry <- shown_fields[i] (ORDINAL, unchanged); but
+    # STYLING no longer follows the semantic field at all — a legacy
+    # text_elements['class'] entry is ignored, and colour/font come from the
+    # ROLE (fact1 = primary/accent, fact2 = secondary/muted).
+    from app.services.intro_card_geometry import MUTED_COLOR
     card = _card(["position", "class"], text_elements={
         "class": {"text": "", "font": "playfair", "color": "#00ff00",
                   "size": 0.05, "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8},
     })
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("broadcast", "9:16")
-    els = P._select_elements(card, FIELDS, geo, "#ffffff")
+    accent = "#ffffff"
+    els = P._select_elements(card, FIELDS, "broadcast", "9:16", accent, _W916, _H916)
     by_slot = {e["slot"]: e["spec"] for e in els}
     assert by_slot["fact1"].text == "Point Guard"        # shown_fields[0]=position
     assert by_slot["fact2"].text == "2027"               # shown_fields[1]=class
-    # the class styling (semantic key) landed on fact2 (ordinal slot)
-    assert by_slot["fact2"].font.value == "playfair"
-    assert by_slot["fact2"].color == "#00ff00"
-    # position styled fact1 defaulted (no text_elements['position'])
-    assert by_slot["fact1"].font.value == P._DEFAULT_FACT_FONT
+    # fact2 (class) ignores its text_elements entry entirely -- secondary role.
+    assert by_slot["fact2"].font.value == "oswald"
+    assert by_slot["fact2"].color == MUTED_COLOR
+    # fact1 (position) is the PRIMARY role -- accented, same font family.
+    assert by_slot["fact1"].font.value == "oswald"
+    assert by_slot["fact1"].color == accent
 
 
 def test_select_elements_omits_blank_fact_and_blank_title(caplog):
@@ -185,9 +185,7 @@ def test_select_elements_omits_blank_fact_and_blank_title(caplog):
     caplog.set_level(logging.INFO)
     card = _card(["position", "class", "team"], title_text="")
     partial = {"position": "Point Guard", "class": "2027"}  # team missing
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("recruiting", "9:16")
-    els = P._select_elements(card, partial, geo, "#ffffff")
+    els = P._select_elements(card, partial, "recruiting", "9:16", "#ffffff", _W916, _H916)
     slots = {e["slot"] for e in els}
     assert slots == {"fact1", "fact2"}          # no title (blank), no fact3 (team unset)
     assert "title omitted" in caplog.text
@@ -195,26 +193,76 @@ def test_select_elements_omits_blank_fact_and_blank_title(caplog):
 
 
 def test_content_hash_changes_on_pixel_edit_stable_on_rename(photo):
-    from app.services.intro_card_geometry import geometry_for
-    geo = geometry_for("hero", "9:16")
     info = _info("9:16")
     c1 = _card(["position"])
-    els1 = P._select_elements(c1, FIELDS, geo, "#ffffff")
+    els1 = P._select_elements(c1, FIELDS, "hero", "9:16", "#ffffff", _W916, _H916)
     h1 = P._content_hash(c1, FIELDS, photo, info, "hero", "9:16", els1)
 
     c_rename = dict(c1, name="totally different name")
-    els_r = P._select_elements(c_rename, FIELDS, geo, "#ffffff")
+    els_r = P._select_elements(c_rename, FIELDS, "hero", "9:16", "#ffffff", _W916, _H916)
     assert P._content_hash(c_rename, FIELDS, photo, info, "hero", "9:16", els_r) == h1
 
     # A real pixel edit: the subtitle is rendered (hero has a subtitle slot).
     c_edit = dict(c1, subtitle_text="State Cup 2027")
-    els_e = P._select_elements(c_edit, FIELDS, geo, "#ffffff")
+    els_e = P._select_elements(c_edit, FIELDS, "hero", "9:16", "#ffffff", _W916, _H916)
     assert P._content_hash(c_edit, FIELDS, photo, info, "hero", "9:16", els_e) != h1
 
     # T6620: the DEAD title_text affects NO pixels (never read) -> hash stable.
     c_dead = dict(c1, title_text="Whatever New")
-    els_d = P._select_elements(c_dead, FIELDS, geo, "#ffffff")
+    els_d = P._select_elements(c_dead, FIELDS, "hero", "9:16", "#ffffff", _W916, _H916)
     assert P._content_hash(c_dead, FIELDS, photo, info, "hero", "9:16", els_d) == h1
+
+    # T6640: a DEAD text_elements edit affects NO pixels either -> hash stable.
+    c_dead_style = dict(c1, text_elements={"title": {"text": "", "font": "playfair",
+                         "color": "#ff0000", "size": 0.1,
+                         "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8}})
+    els_ds = P._select_elements(c_dead_style, FIELDS, "hero", "9:16", "#ffffff", _W916, _H916)
+    assert P._content_hash(c_dead_style, FIELDS, photo, info, "hero", "9:16", els_ds) == h1
+
+
+# =============================================================================
+# T6640 — wrap-never-collides matrix (the acceptance criterion). Contract-level
+# invariance is already proven exhaustively by test_t5210_geometry_parity.py;
+# this exercises the SAME property through the actual production entry point
+# (_select_elements, with real card/profile dicts and the caption text from
+# the reported bug), so a regression in the seam between the two (e.g. a bad
+# STAGGER_ORDER filter, a role misassignment) would be caught here too.
+# =============================================================================
+@pytest.mark.parametrize("comp,shown,aspect,w,h", [
+    ("title-only", [], "9:16", _W916, _H916),
+    ("title-only", [], "16:9", _W169, _H169),
+    ("hero", ["position"], "9:16", _W916, _H916),
+    ("hero", ["position"], "16:9", _W169, _H169),
+    ("broadcast", ["position", "class"], "9:16", _W916, _H916),
+    ("broadcast", ["position", "class"], "16:9", _W169, _H169),
+    ("recruiting", ["position", "class", "team"], "9:16", _W916, _H916),
+    ("recruiting", ["position", "class", "team"], "16:9", _W169, _H169),
+])
+def test_select_elements_wrap_never_collides_matrix(comp, shown, aspect, w, h):
+    card = _card(shown, title_text=None)
+    # Invented long two-word name (NO PII) -- the exact shape of the reported bug.
+    fields = {**FIELDS, "full_name": "Anastasia Wintergreen"}
+    els = P._select_elements(card, fields, comp, aspect, "#f7e28b", w, h)
+
+    intervals = []
+    for el in els:
+        spec = el["spec"]
+        px = max(round(spec.size * h), 1)
+        from app.services.fonts import load_font_for_render
+        from app.services.text_render import wrap_lines
+        font = load_font_for_render(spec.font.value, px)
+        lines = len(wrap_lines(spec.text, font, spec.maxWidth * w))
+        ascent, descent = font.getmetrics()
+        y0 = spec.position.y
+        y1 = y0 + lines * (ascent + descent) / h
+        assert y0 >= -1e-6 and y1 <= 1.0 + 1e-6, f"{comp}/{aspect}/{el['slot']}: [{y0},{y1}] escapes frame"
+        intervals.append((el["slot"], y0, y1))
+
+    intervals.sort(key=lambda t: t[1])
+    for (slot_a, _, end_a), (slot_b, start_b, _) in pairwise(intervals):
+        assert start_b >= end_a - 1e-6, (
+            f"{comp}/{aspect}: {slot_a} [ends {end_a:.4f}] collides with {slot_b} [starts {start_b:.4f}]"
+        )
 
 
 def test_render_band_is_grounded_at_base_and_fades_at_top():

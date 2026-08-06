@@ -1,20 +1,20 @@
-// T5205 — Intro card editor constants.
+// T5205 / T6640 — Intro card editor constants.
 //
-// SCOPE BOUNDARY: the layout numbers (slot geometry, motion timing) AND the
-// treatment palette are T5210's shared contract (introCardGeometry.js). This
-// file holds only editor-local UX: colour swatches, the treatment LABELS (the
-// contract owns the colours), slot identities, and the aspect-preview options.
-// Font SIZE, ALIGN and POSITION are LAYOUT-OWNED (composition-derived) per the
-// contract — they are NOT user-editable styling, so there are no size/align
-// presets here.
+// SCOPE BOUNDARY: the layout/reflow numbers AND the treatment palette (incl.
+// ALL typography — font/size/colour/shadow, T6640 decision 12) are T5210's
+// shared contract (introCardGeometry.js). This file holds only editor-local
+// UX: the treatment LABELS (the contract owns the colours), slot identities,
+// and the aspect-preview options. There are no size/align/font/colour presets
+// here — none of that is user-editable on the card rail any more.
 
-import { FontKey, Align } from '../../constants/textSpec';
 import { RATIO } from '../../constants/aspectRatios';
 import { TREATMENTS as TREATMENT_KEYS } from '../../utils/introCardComposition';
 
-// Colour swatches for the text-colour control (swatches + a custom picker, task
-// scope B). Curated, high-contrast picks that read on any treatment; the custom
-// picker covers everything else.
+// Colour swatches for the SHARED TextSpecEditor's generic `colorSwatches` prop.
+// T6640 removed the only PRODUCTION consumer (the card rail); kept because the
+// prop itself is still exercised by TextSpecEditor.presets.test.jsx and the
+// textspecdiag dev tool, both outside this task's scope. Curated, high-contrast
+// picks.
 export const COLOR_SWATCHES = [
   '#FFFFFF', // white
   '#000000', // black
@@ -72,19 +72,6 @@ export const ASPECT_OPTIONS = [
   { key: RATIO.LANDSCAPE, label: '16:9', w: 16, h: 9 },
 ];
 
-// Default treatment / font for a brand-new card and its title text.
+// Default treatment for a brand-new card.
 export const DEFAULT_TREATMENT = 'gold';
-export const DEFAULT_TITLE_FONT = FontKey.ANTON;
-export const DEFAULT_ALIGN = Align.CENTER;
-export const DEFAULT_SIZE = 0.06;
 export const DEFAULT_DURATION = 4.0; // seconds; mirrors the backend default
-
-// Placeholder position/size/maxWidth/align for a stored styling spec. text_elements
-// holds STYLING ONLY — the composition geometry (T5210) OVERRIDES all of these at
-// render/preview time ("layout always wins", player_intro._merge_spec). The TextSpec
-// schema still requires the fields, so a stored styling spec carries neutral
-// placeholders that are never treated as authoritative layout.
-export const PLACEHOLDER_SLOT_GEOMETRY = Object.freeze({
-  position: Object.freeze({ x: 0.5, y: 0.5 }),
-  maxWidth: 0.8,
-});

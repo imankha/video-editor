@@ -1,25 +1,20 @@
 // T5205 — assemble the card's text elements for the browser preview, mirroring
-// `player_intro._merge_spec` + element selection EXACTLY so the preview matches
-// the render (epic parity goal). THE seam rules (T5210 contract):
-//   - GEOMETRY is ORDINAL (title, fact1..3) and owns size/align/position/maxWidth.
-//   - STYLING is SEMANTIC (title/position/class/team) in text_elements and owns
-//     ONLY font/colour/shadow/stroke. `.text` is always '' — never read it.
+// `player_intro._select_elements` + `intro_card_geometry.layout` EXACTLY so the
+// preview matches the render (epic parity goal). T6640 THE seam rules:
+//   - Typography is TEMPLATE-owned via a fixed ROLE per slot (title/primary/
+//     secondary — `ROLE_FOR_SLOT` in the shared contract), never per-card
+//     styling. There is no more `text_elements` read here.
+//   - POSITION/SIZE are MEASURED (the shared `layout()` mirror below), not a
+//     fixed per-slot lookup — this is what guarantees a wrapped title can never
+//     collide with the slot below it (see docs/plans/tasks/T6640-design.md §A).
 //   - TEXT: title <- profile full_name ALWAYS (T6620; card.title_text is dead);
-//     factN <- profile[shown_fields[N-1]].
+//     subtitle <- card.subtitle_text; factN <- profile[shown_fields[N-1]].
 //     A blank value OMITS the line (never a blank render).
-//   - Layout ALWAYS wins over anything stored on the styling spec.
 
-import { geometryFor } from '../../utils/introCardGeometry';
+import { geometryFor, ROLE_FOR_SLOT, MUTED_COLOR, STAGGER_ORDER } from '../../utils/introCardGeometry';
+import { wrapLines, measureFontMetricsPx } from '../RichText';
 import { treatmentAccent } from './introCardVisual';
 import { TITLE_SLOT, SUBTITLE_SLOT } from './introCardEditorConstants';
-
-// Defaults mirror player_intro.py (_DEFAULT_*_FONT / _*_SHADOW / _FACT_DEFAULT_COLOR).
-export const DEFAULT_TITLE_FONT = 'anton';
-export const DEFAULT_FACT_FONT = 'oswald';
-export const FACT_DEFAULT_COLOR = '#ffffff';
-const TITLE_SHADOW = { blur: 0.06, color: '#000000', opacity: 0.55 };
-const FACT_SHADOW = { blur: 0.05, color: '#000000', opacity: 0.5 };
-const NO_STROKE = { width: 0, color: '#000000' };
 
 /**
  * The card's TITLE text: the profile's full name, ALWAYS — the name is a
@@ -35,91 +30,152 @@ export function resolveTitleText(card, profile) {
   return (profile?.full_name || '').trim();
 }
 
-/** Default STYLING for an unstyled slot (font/colour/shadow), by kind. */
-export function defaultStyling(kind, accent) {
-  if (kind === 'title') {
-    return { font: DEFAULT_TITLE_FONT, color: accent, shadow: { ...TITLE_SHADOW } };
+// =============================================================================
+// MEASURED LAYOUT (T6640) — the JS twin of `intro_card_geometry.layout` on the
+// backend. Same rhythm-gap rule, same shrink-to-fit title, same bottom/centre
+// anchor math — see the Python module's "MEASURED LAYOUT" docstring section for
+// the full algorithm writeup and the collision-safety argument. Font metrics
+// use the BARE font key as the CSS family (the @font-face rules register that
+// exact family name — `RichText.jsx::injectFontFaces`) and a fixed weight 400
+// (RichText's own fallback when a manifest entry isn't available) — this is a
+// LIVE-PREVIEW approximation; the backend render is authoritative, and runtime
+// agreement between this preview and the actual `<RichText>` output is proven
+// by the extended `e2e/T5180-text-parity.spec.js` (T6640 §2c), not by this
+// module needing pixel-exact metrics before the font has visually settled.
+const PREVIEW_FONT_WEIGHT = 400;
+
+function gapBetween(prevRole, role, reflow) {
+  if (prevRole == null) return 0;
+  if (prevRole === 'title') return reflow.gapAfterTitle;
+  if (prevRole === 'secondary' && role === 'secondary') return reflow.gapLine;
+  return reflow.gapGroup;
+}
+
+function fitTitle(text, typo, frameW, frameH, maxWidthFrac) {
+  let size = typo.size;
+  const maxPx = maxWidthFrac * frameW;
+  const step = 0.002;
+  while (size > typo.minSize) {
+    const px = Math.max(Math.round(size * frameH), 1);
+    const lines = wrapLines(text, typo.font, px, PREVIEW_FONT_WEIGHT, maxPx);
+    if (lines.length <= typo.maxLines) return { size, lines: lines.length };
+    size = Math.round((size - step) * 10000) / 10000;
   }
-  return { font: DEFAULT_FACT_FONT, color: FACT_DEFAULT_COLOR, shadow: { ...FACT_SHADOW } };
+  const px = Math.max(Math.round(typo.minSize * frameH), 1);
+  return { size: typo.minSize, lines: wrapLines(text, typo.font, px, PREVIEW_FONT_WEIGHT, maxPx).length };
+}
+
+function countLines(text, sizeFrac, fontKey, frameW, frameH, maxWidthFrac) {
+  const px = Math.max(Math.round(sizeFrac * frameH), 1);
+  return wrapLines(text, fontKey, px, PREVIEW_FONT_WEIGHT, maxWidthFrac * frameW).length;
+}
+
+function advanceFrac(sizeFrac, fontKey, frameH) {
+  const px = Math.max(Math.round(sizeFrac * frameH), 1);
+  const { ascentPx, descentPx } = measureFontMetricsPx(fontKey, px, PREVIEW_FONT_WEIGHT);
+  return (ascentPx + descentPx) / frameH;
 }
 
 /**
- * Full TextSpec = card STYLING (font/colour/shadow/stroke) + slot LAYOUT
- * (size/position/maxWidth/align, always winning) + resolved TEXT.
+ * Compute the measured, anchored text stack. `elements` is an ORDERED list of
+ * `[slot, text]` pairs already filtered to what will render, in STAGGER_ORDER.
+ * Returns `{slot: {x, y, size, align, maxWidth, font, color, shadow}}` — every
+ * field a full TextSpec needs, so the caller no longer merges any per-card
+ * styling. Mirrors `intro_card_geometry.layout` field-for-field.
+ * @param {string} composition @param {string} aspect
+ * @param {[string, string][]} elements
+ * @param {string} accent @param {number} frameW @param {number} frameH
  */
-export function mergeSpec(styling, text, slotGeo, kind, accent) {
-  const base = styling || defaultStyling(kind, accent);
+export function layout(composition, aspect, elements, accent, frameW, frameH) {
+  const geo = geometryFor(composition, aspect);
+  const { reflow, typography } = geo;
+
+  const measured = [];
+  let prevRole = null;
+  for (const [slot, text] of elements) {
+    const role = ROLE_FOR_SLOT[slot];
+    const rt = typography[role];
+    let size;
+    let lines;
+    if (role === 'title') {
+      ({ size, lines } = fitTitle(text, rt, frameW, frameH, reflow.maxWidth));
+    } else {
+      size = rt.size;
+      lines = countLines(text, size, rt.font, frameW, frameH, reflow.maxWidth);
+    }
+    const advance = advanceFrac(size, rt.font, frameH);
+    const gap = gapBetween(prevRole, role, reflow);
+    measured.push({ slot, role, rt, size, lines, advance, gap });
+    prevRole = role;
+  }
+
+  const total = measured.reduce((s, m) => s + m.lines * m.advance + m.gap, 0);
+  const top = reflow.anchorMode === 'bottom' ? reflow.anchorFrac - total : reflow.anchorFrac - total / 2;
+
+  const out = {};
+  let y = top;
+  for (const m of measured) {
+    y += m.gap;
+    const color = (m.role === 'title' || m.role === 'primary') ? accent : MUTED_COLOR;
+    out[m.slot] = {
+      x: reflow.anchorX, y, size: m.size, align: reflow.align, maxWidth: reflow.maxWidth,
+      font: m.rt.font, color, shadow: m.rt.shadow,
+    };
+    y += m.lines * m.advance;
+  }
+  return out;
+}
+
+function specFromLayout(text, pos) {
   return {
     text,
-    font: base.font || (kind === 'title' ? DEFAULT_TITLE_FONT : DEFAULT_FACT_FONT),
-    color: base.color || (kind === 'title' ? accent : FACT_DEFAULT_COLOR),
-    size: slotGeo.size,
-    align: slotGeo.align,
-    position: { x: slotGeo.x, y: slotGeo.y },
-    maxWidth: slotGeo.maxWidth,
+    font: pos.font,
+    color: pos.color,
+    size: pos.size,
+    align: pos.align,
+    position: { x: pos.x, y: pos.y },
+    maxWidth: pos.maxWidth,
     animation: 'none',
-    shadow: base.shadow || { blur: 0, color: '#000000', opacity: 0 },
-    stroke: base.stroke || { ...NO_STROKE },
+    shadow: pos.shadow,
+    stroke: { width: 0, color: '#000000' },
   };
 }
 
 /**
- * The list of drawable elements for a card at a composition + aspect. Each entry
- * is { slot (semantic styling key), geoSlot (ORDINAL geometry key: title/fact1..),
- * kind, spec }. Omits any line whose text is blank. `geoSlot` is what stagger and
- * geometry key off (mirrors the renderer, which staggers by the geometry slot,
- * NOT by rendered-fact count — matters when an earlier shown fact is blank).
+ * The list of drawable elements for a card at a composition + aspect + preview
+ * box size. Each entry is `{ slot, geoSlot, kind, spec }` (kept for call-site
+ * compatibility — `slot === geoSlot` always now, since T6640 dropped the
+ * ordinal/semantic split for STYLING; the ordinal/semantic split for the TEXT
+ * *source* — factN <- shown_fields[N-1] — is unchanged). Omits any line whose
+ * text is blank.
  * @returns {{slot:string, geoSlot:string, kind:string, spec:object}[]}
  */
-export function buildPreviewElements(card, profile, composition, aspect) {
-  const geo = geometryFor(composition, aspect);
-  const slots = geo.slots;
-  const textElements = card?.text_elements || {};
+export function buildPreviewElements(card, profile, composition, aspect, frameW, frameH) {
   const shownFields = card?.shown_fields || [];
   const accent = treatmentAccent(card?.treatment || 'gold');
-  const out = [];
+  const texts = {};
 
-  // Title — the profile's full name, ALWAYS (T6620; title_text is dead);
-  // styling keyed "title".
   const titleText = resolveTitleText(card, profile);
-  if (slots[TITLE_SLOT] && titleText) {
-    out.push({
-      slot: TITLE_SLOT,
-      geoSlot: TITLE_SLOT,
-      kind: 'title',
-      spec: mergeSpec(textElements[TITLE_SLOT], titleText, slots[TITLE_SLOT], 'title', accent),
-    });
-  }
+  if (titleText) texts[TITLE_SLOT] = titleText;
 
-  // Subtitle — FREE TEXT on the card (T6570; a tournament name etc.). Orthogonal
-  // to composition; styling keyed "subtitle". Omitted when blank (never a blank
-  // line), exactly like an unset fact. Mirrors player_intro._select_elements.
   const subtitleText = (card?.subtitle_text || '').trim();
-  if (slots[SUBTITLE_SLOT] && subtitleText) {
-    out.push({
-      slot: SUBTITLE_SLOT,
-      geoSlot: SUBTITLE_SLOT,
-      kind: 'subtitle',
-      spec: mergeSpec(textElements[SUBTITLE_SLOT], subtitleText, slots[SUBTITLE_SLOT], 'subtitle', accent),
-    });
-  }
+  if (subtitleText) texts[SUBTITLE_SLOT] = subtitleText;
 
-  // Facts — ORDINAL geometry slot fact{i+1} <- SEMANTIC field shownFields[i]. The
-  // ordinal is the shown_fields INDEX (not the rendered count), so a blank
-  // earlier fact still leaves its slot empty and the next fact keeps fact{i+1}.
   shownFields.forEach((field, i) => {
-    const geoSlot = `fact${i + 1}`;
-    const slotGeo = slots[geoSlot];
-    if (!slotGeo) return; // more facts than the composition has slots (unreachable)
+    const slot = `fact${i + 1}`;
     const value = ((profile && profile[field]) || '').trim();
     if (!value) return; // unfilled fact -> omitted (the rail prompts to fill it)
-    out.push({
-      slot: field,
-      geoSlot,
-      kind: 'fact',
-      spec: mergeSpec(textElements[field], value, slotGeo, 'fact', accent),
-    });
+    texts[slot] = value;
   });
 
-  return out;
+  const ordered = STAGGER_ORDER.filter((slot) => slot in texts).map((slot) => [slot, texts[slot]]);
+  if (ordered.length === 0) return [];
+  const positions = layout(composition, aspect, ordered, accent, frameW, frameH);
+
+  return ordered.map(([slot, text]) => ({
+    slot,
+    geoSlot: slot,
+    kind: ROLE_FOR_SLOT[slot],
+    spec: specFromLayout(text, positions[slot]),
+  }));
 }

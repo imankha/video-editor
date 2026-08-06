@@ -4,18 +4,17 @@ import { IntroCardEditorContainer } from '../components/introcards/IntroCardEdit
 import { useIntroCardStore, useProfileStore, useCurrentProfile } from '../stores';
 
 /**
- * T5205 — DEV-ONLY real-browser harness for the intro card editor.
+ * T5205 / T6640 — DEV-ONLY real-browser harness for the intro card editor.
  *
- * Mounts the REAL IntroCardEditorContainer (+ Stage + Rail + shared
- * TextSpecEditor) driven by the REAL Zustand stores, with only the NETWORK
- * actions stubbed to stay local (no backend in the sandbox — same constraint
- * and precedent as T5643/T5610's harnesses). Every gesture therefore exercises
- * the real optimistic-store path, the real focal/zoom math against the real
- * boundingBox, and the real Tailwind layout.
- *
- * Slot GEOMETRY + MOTION are T5210's contract and intentionally not exercised
- * here (the stage omits slot text until that mirror lands) — this harness proves
- * the pre-contract surface only.
+ * Mounts the REAL IntroCardEditorContainer (+ Stage + Rail) driven by the REAL
+ * Zustand stores, with only the NETWORK actions stubbed to stay local (no
+ * backend in the sandbox — same constraint and precedent as T5643/T5610's
+ * harnesses). Every gesture therefore exercises the real optimistic-store
+ * path, the real focal/zoom math against the real boundingBox, and the real
+ * Tailwind layout. T6640 removed the per-slot styling editor from the card
+ * rail (the shared `TextSpecEditor` no longer mounts here at all — decision 12
+ * makes typography template-owned); it is still used by the Overlay text rail
+ * elsewhere in the app.
  */
 
 // A wide (landscape) photo so a portrait 9:16 box has horizontal overflow to
@@ -40,7 +39,7 @@ const MOCK_CARD = {
   focal_x: 0.5,
   focal_y: 0.5,
   zoom: 1.0,
-  text_elements: {}, // empty -> default styling applied, like a fresh card
+  // text_elements dropped (T6640): dead column, typography is template-owned.
   duration: 3.0,
   is_default: true,
   composition: 'hero',

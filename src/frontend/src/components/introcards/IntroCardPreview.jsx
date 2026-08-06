@@ -13,7 +13,7 @@ import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor, CARD_ASPECTS } from '../../utils/introCardGeometry';
 import {
   treatmentBackgroundCss, photoStyleFor, scrimBackground,
-  bandStyleFor, photoTintCss, photoVignetteCss,
+  bandStyleFor, photoTintCss, photoVignetteCss, seamFadeCss,
 } from './introCardVisual';
 import { buildPreviewElements, resolveTitleText } from './introCardPreviewElements';
 
@@ -64,8 +64,9 @@ export function IntroCardPreview({
   // shared contract so the export matches.
   const tint = hasPhoto ? photoTintCss(treatment) : null;
   const vignette = hasPhoto ? photoVignetteCss(treatment) : null;
+  const seam = hasPhoto ? seamFadeCss(geo.reflow, treatment) : null;
   const bandStyle = hasPhoto ? bandStyleFor(composition, treatment, boxWidth, boxHeight) : null;
-  const elements = renderSlots ? buildPreviewElements(card, profile, composition, aspect) : [];
+  const elements = renderSlots ? buildPreviewElements(card, profile, composition, aspect, boxWidth, boxHeight) : [];
 
   return (
     <div
@@ -80,6 +81,7 @@ export function IntroCardPreview({
           {/* Photo grade (C): a colour wash then a vignette, clipped to the photo. */}
           {tint && <div className="absolute inset-0 pointer-events-none" style={{ background: tint }} />}
           {vignette && <div className="absolute inset-0 pointer-events-none" style={{ background: vignette }} />}
+          {seam && <div className="absolute inset-0 pointer-events-none" style={{ background: seam }} />}
           {scrim && <div className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />}
         </div>
       )}

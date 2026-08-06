@@ -1063,7 +1063,7 @@ def ensure_database():
                 focal_x           REAL,
                 focal_y           REAL,
                 zoom              REAL,
-                text_elements     BLOB,
+                text_elements     BLOB,  -- DEAD (T6640): typography is TEMPLATE-owned via ROLE_FOR_SLOT; never read. Was per-slot user styling; nulled by v038. Kept only so old rows still open.
                 duration          REAL NOT NULL DEFAULT 4.0,
                 is_default        INTEGER NOT NULL DEFAULT 0,
                 created_at        TEXT DEFAULT (datetime('now')),
