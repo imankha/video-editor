@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS intro_cards (
     name              TEXT NOT NULL,        -- library label; NEVER rendered into the video
     shown_fields      TEXT NOT NULL,        -- JSON list, subset of ['position','class','team']
     treatment         TEXT NOT NULL,        -- 'gold' | 'dark' | 'photo-forward'
-    title_text        TEXT,                 -- LEGACY (T6570): title now = profile Full Name; kept as a grandfathered override for pre-T6570 cards
+    title_text        TEXT,                 -- DEAD as of T6620: title = profile Full Name ALWAYS, never read. Was a pre-T6570 override; T6620 removed the read paths + nulls this column (v036). Do NOT reintroduce override semantics.
     image_key         TEXT,                 -- R2 key from T5190
     image_cutout_key  TEXT,                 -- nullable, set by T5200
     focal_x           REAL,                 -- NULL = inherit the profile's framing (decision 3b)

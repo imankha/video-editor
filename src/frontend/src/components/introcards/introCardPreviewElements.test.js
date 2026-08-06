@@ -1,7 +1,8 @@
 // T5205 — preview element assembly must mirror player_intro._merge_spec: styling
 // (font/colour/shadow/stroke) from text_elements, LAYOUT (size/align/position/
-// maxWidth) from the contract geometry (layout always wins), text from
-// title_text/profile, blank facts omitted, ordinal fact{N} <- shown_fields[N-1].
+// maxWidth) from the contract geometry (layout always wins), title text from the
+// profile full name ALWAYS (T6620; title_text is dead), blank facts omitted,
+// ordinal fact{N} <- shown_fields[N-1].
 
 import { describe, it, expect } from 'vitest';
 import { buildPreviewElements, mergeSpec, defaultStyling, DEFAULT_TITLE_FONT, DEFAULT_FACT_FONT } from './introCardPreviewElements';
@@ -28,8 +29,9 @@ describe('mergeSpec — layout always wins over stored styling', () => {
 });
 
 describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
+  // T6620: title_text is dead; the profile full_name is the title source.
   const card = { treatment: 'gold', title_text: 'CHAMPION', shown_fields: ['team', 'position'], text_elements: {} };
-  const profile = { position: 'Striker', team: 'Rovers', class: '' };
+  const profile = { full_name: 'Jordan Vega', position: 'Striker', team: 'Rovers', class: '' };
 
   it('maps the Nth shown fact to fact{N} geometry with the profile value', () => {
     const els = buildPreviewElements(card, profile, 'broadcast', '9:16');
@@ -56,13 +58,18 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
     expect(els.find((e) => e.slot === 'position').geoSlot).toBe('fact2');
   });
 
-  it('omits the title when title_text is blank', () => {
-    const els = buildPreviewElements({ ...card, title_text: '  ' }, profile, 'hero', '9:16');
+  it('omits the title when the profile full name is blank (T6620)', () => {
+    // A blank full_name omits the title even if a dead title_text is stored.
+    const els = buildPreviewElements(
+      { ...card, title_text: 'CHAMPION' },
+      { ...profile, full_name: '  ' },
+      'hero', '9:16',
+    );
     expect(els.find((e) => e.slot === 'title')).toBeUndefined();
   });
 
-  // T6570 — the title text is the profile's Full Name (title_text a legacy override).
-  it('sources the title from the profile full name when there is no title_text', () => {
+  // T6620 — the title text is the profile's Full Name, ALWAYS.
+  it('sources the title from the profile full name', () => {
     const els = buildPreviewElements(
       { treatment: 'gold', shown_fields: [], text_elements: {} },
       { ...profile, full_name: 'Jordan Vega' },
@@ -71,19 +78,19 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields', () => {
     expect(els.find((e) => e.slot === 'title').spec.text).toBe('Jordan Vega');
   });
 
-  it('grandfathers a legacy title_text over the profile full name', () => {
+  it('ignores a legacy title_text — the profile full name always wins (T6620)', () => {
     const els = buildPreviewElements(
       { treatment: 'gold', title_text: 'Legacy', shown_fields: [], text_elements: {} },
       { ...profile, full_name: 'Jordan Vega' },
       'title-only', '9:16',
     );
-    expect(els.find((e) => e.slot === 'title').spec.text).toBe('Legacy');
+    expect(els.find((e) => e.slot === 'title').spec.text).toBe('Jordan Vega');
   });
 
-  it('omits the title when neither title_text nor full_name is set', () => {
+  it('omits the title when full_name is unset (even with a dead title_text)', () => {
     const els = buildPreviewElements(
-      { treatment: 'gold', shown_fields: [], text_elements: {} },
-      { ...profile },
+      { treatment: 'gold', title_text: 'Legacy', shown_fields: [], text_elements: {} },
+      { position: 'Striker' }, // no full_name
       'title-only', '9:16',
     );
     expect(els.find((e) => e.slot === 'title')).toBeUndefined();

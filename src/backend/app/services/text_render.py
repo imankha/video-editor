@@ -58,6 +58,26 @@ def _cache_put(key: str, img: Image.Image) -> None:
         _LAYER_CACHE.popitem(last=False)  # evict least-recently-used
 
 
+# T6620: "blur implies a shadow." The Overlay text rail exposes ONLY a Shadow
+# blur slider (no opacity control) and a new overlay block defaults to
+# shadow.opacity 0, so gating the shadow purely on opacity > 0 made the blur
+# control inert by construction. Resolving a default opacity when blur > 0 but no
+# explicit opacity was set makes the dialed-in shadow render. Card slots set
+# their own opacity (> 0) and are unaffected. MUST stay in step with the frontend
+# preview (src/frontend/src/constants/textSpec.js::DEFAULT_SHADOW_OPACITY) or a
+# shadow shown in the preview would vanish on export.
+DEFAULT_SHADOW_OPACITY = 0.6
+
+
+def _resolve_shadow_opacity(shadow) -> float:
+    """Effective shadow opacity: the explicit value if set, else the
+    blur-implies-a-shadow default when blur > 0, else 0 (no shadow). Mirrors
+    frontend resolveShadowOpacity."""
+    if shadow.opacity > 0:
+        return shadow.opacity
+    return DEFAULT_SHADOW_OPACITY if shadow.blur > 0 else 0.0
+
+
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     h = hex_color.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
@@ -151,14 +171,18 @@ def render_text_layer(spec: TextSpec, frame_w: int, frame_h: int) -> Image.Image
     draw = ImageDraw.Draw(layer)
     fill_rgb = _hex_to_rgb(spec.color)
 
-    # Shadow: text rasterised in shadow.color at shadow.opacity, offset 0,
-    # Gaussian-blurred by blur_px, composited UNDER the fill. Skipped entirely
-    # when opacity is zero (no wasted work, and this guarantees a
-    # zero-magnitude shadow produces pixel-identical output to fill-only —
-    # required by TestShadowStroke.test_shadow_off_matches_fill_only_no_extra_pixels).
-    if spec.shadow.opacity > 0:
+    # Shadow: text rasterised in shadow.color at the EFFECTIVE opacity, offset 0,
+    # Gaussian-blurred by blur_px, composited UNDER the fill. T6620: the effective
+    # opacity resolves "blur implies a shadow" (blur > 0 with no explicit opacity
+    # -> a default), so the Overlay blur slider is no longer inert. Still skipped
+    # entirely when the effective opacity is zero (blur == 0 AND opacity == 0) —
+    # no wasted work, and this guarantees a zero-magnitude shadow produces
+    # pixel-identical output to fill-only (required by
+    # TestShadowStroke.test_shadow_off_matches_fill_only_no_extra_pixels).
+    effective_shadow_opacity = _resolve_shadow_opacity(spec.shadow)
+    if effective_shadow_opacity > 0:
         shadow_rgb = _hex_to_rgb(spec.shadow.color)
-        shadow_alpha = round(spec.shadow.opacity * 255)
+        shadow_alpha = round(effective_shadow_opacity * 255)
         shadow_layer = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
         shadow_draw = ImageDraw.Draw(shadow_layer)
         y = anchor_y

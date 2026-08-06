@@ -220,9 +220,11 @@ function MiniLabel({ children }) {
 }
 
 /**
- * Title slot -> a text input (commits card.title_text on blur). Fact slot -> the
- * profile value (read-only here; edited on the profile), or an inline prompt.
- * Both share the styling editor below.
+ * Athlete Name slot (key `title`) -> the profile's Full Name, read-only here and
+ * edited on the profile (T6620: no per-card text box, the profile always wins).
+ * Subtitle -> the one free-text field on the card. Fact slot -> the profile value
+ * (read-only here; edited on the profile), or an inline prompt. All share the
+ * styling editor below.
  */
 function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEditProfile, onCommitSubtitle }) {
   const meta = SLOT_META[slot];
