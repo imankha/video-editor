@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
+import { useIntroCardStore } from '../stores/introCardStore';
 
 const INTRO_FACT_FIELDS = [
   { key: 'position', label: 'Position', placeholder: 'e.g. Midfielder 6-8-10' },
@@ -159,6 +160,13 @@ export function ProfileIntroSection({ profile }) {
         ))}
       </div>
 
+      {/* T5215: the reel-length floor for the inherit-the-default resolution
+          path. Lives on profile.sqlite for the ACTIVE profile only — this
+          view can be opened for a non-active profile (ManageProfilesModal),
+          where the control is not meaningful (there is no per-arbitrary-
+          profile endpoint), so it only renders when editing the current one. */}
+      {profile.isCurrent && <IntroMinDurationInput onError={setError} />}
+
       {/* Parental-consent attestation */}
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input
@@ -176,6 +184,77 @@ export function ProfileIntroSection({ profile }) {
 
       {/* Shared failure surface for the image, fact and consent gestures. */}
       {error && <p className="text-red-400 text-xs">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * The reel-length floor below which the "inherit the default" resolution
+ * path resolves to no intro (T5215). `0 < value <= 300` seconds. Commits on
+ * blur/Enter only (same gesture pattern as the fact inputs above); an
+ * out-of-range value is rejected by the server and the input reverts to the
+ * last confirmed value rather than silently clamping.
+ */
+function IntroMinDurationInput({ onError }) {
+  const minDuration = useIntroCardStore((state) => state.minDuration);
+  const fetchMinDuration = useIntroCardStore((state) => state.fetchMinDuration);
+  const updateMinDuration = useIntroCardStore((state) => state.updateMinDuration);
+
+  const [draft, setDraft] = useState('');
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    fetchMinDuration();
+  }, [fetchMinDuration]);
+
+  // Re-sync the draft from the store once it loads, but never while the user
+  // is actively editing (same pattern IntroFactInput uses for profile-switch
+  // re-sync — here it guards the initial async load instead).
+  if (minDuration != null && !dirty && draft === '') {
+    setDraft(String(minDuration));
+  }
+
+  const commit = async () => {
+    if (!dirty) return;
+    setDirty(false);
+    const parsed = parseFloat(draft);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 300) {
+      onError('Intro duration threshold must be between 0 and 300 seconds.');
+      setDraft(String(minDuration));
+      return;
+    }
+    if (parsed === minDuration) return;
+    try {
+      await updateMinDuration(parsed);
+    } catch (err) {
+      onError(err.message || 'Could not update the intro duration threshold');
+      setDraft(String(minDuration));
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-400 mb-1">
+        Minimum reel length for the default intro
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={0.01}
+          max={300}
+          step={1}
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          className="w-20 px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+        />
+        <span className="text-xs text-gray-400">seconds</span>
+      </div>
+      <p className="mt-1 text-xs text-gray-500">
+        Reels shorter than this won&apos;t carry your default intro (an explicitly
+        attached card always plays).
+      </p>
     </div>
   );
 }

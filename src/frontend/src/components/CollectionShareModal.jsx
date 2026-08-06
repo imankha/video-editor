@@ -5,6 +5,9 @@ import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { IntroCardCarousel } from './introcards/IntroCardCarousel';
+import { useIntroCardStore } from '../stores/introCardStore';
+import { useProfileStore } from '../stores/profileStore';
 
 const collectionLink = (token) => `${window.location.origin}/shared/collection/${token}`;
 
@@ -30,12 +33,26 @@ export function CollectionShareModal({ definition, title, onClose }) {
   const [creatingPublicLink, setCreatingPublicLink] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // T5215: the picker's raw client choice -- null = "use my current default"
+  // (the server resolves + freezes the CONCRETE id at share-creation time so a
+  // later default change never moves this link), 0 = no intro, <id> = explicit.
+  const [introCardId, setIntroCardId] = useState(null);
+  const introCards = useIntroCardStore((state) => state.cards);
+  const fetchIntroCards = useIntroCardStore((state) => state.fetchCards);
+  const currentProfile = useProfileStore(
+    (state) => state.profiles.find((p) => p.id === state.currentProfileId)
+  );
+
   useEffect(() => {
     apiFetch(`${API_BASE}/api/gallery/contacts`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data) setContacts(data.contacts); })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchIntroCards();
+  }, [fetchIntroCards]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -47,7 +64,11 @@ export function CollectionShareModal({ definition, title, onClose }) {
     const resp = await apiFetch(`${API_BASE}/api/collections/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ definition, recipient_emails: recipientEmails, is_public: makePublic }),
+      body: JSON.stringify({
+        definition: { ...definition, intro_card_id: introCardId },
+        recipient_emails: recipientEmails,
+        is_public: makePublic,
+      }),
     });
     if (!resp.ok) {
       const data = await resp.json().catch(() => null);
@@ -86,6 +107,13 @@ export function CollectionShareModal({ definition, title, onClose }) {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // T5215: consent is a legal attestation (ProfileIntroSection/ConsentGate
+  // show the full "publicly visible" copy before recording it) -- this link
+  // only points the user there, it never grants consent itself.
+  const handleRequestIntroConsent = () => {
+    toast.info('Open your profile menu -> Manage Profile -> Player Intro to give consent.');
   };
 
   const handleSubmit = async () => {
@@ -176,6 +204,19 @@ export function CollectionShareModal({ definition, title, onClose }) {
                 )}
               </div>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Intro</label>
+            <IntroCardCarousel
+              cards={introCards}
+              profile={currentProfile}
+              selectedId={introCardId}
+              hasConsent={!!currentProfile?.introConsentAt}
+              onSelect={setIntroCardId}
+              onRequestConsent={handleRequestIntroConsent}
+              frozenNote="Frozen when you share -- changing your default card later won't change this link."
+            />
           </div>
 
           {error && <p className="text-red-400 text-sm">{error}</p>}

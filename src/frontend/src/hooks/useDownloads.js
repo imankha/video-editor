@@ -358,6 +358,28 @@ export function useDownloads(isOpen = false) {
     }
   }, []);
 
+  // T5215: attach/detach/clear a reel's intro card. Surgical, gesture-only
+  // PATCH (0 = no intro, null = inherit the profile default, <id> = that
+  // card) — mirrors renameDownload's optimistic-update + PATCH shape.
+  const setIntroCard = useCallback(async (downloadId, introCardId) => {
+    setDownloads(prev => prev.map(d =>
+      d.id === downloadId ? { ...d, intro_card_id: introCardId } : d
+    ));
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/intro`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intro_card_id: introCardId }),
+      });
+      if (!response.ok) throw new Error('Failed to set intro card');
+      return true;
+    } catch (err) {
+      console.error('[useDownloads] setIntroCard error:', err);
+      setError(err.message);
+      return false;
+    }
+  }, []);
+
   const markWatched = useCallback(async (downloadId) => {
     setDownloads(prev => prev.map(d =>
       d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
@@ -396,6 +418,7 @@ export function useDownloads(isOpen = false) {
     getDownloadUrl,
     getStreamingUrl,
     renameDownload,
+    setIntroCard,
     markWatched,
     setFilter,
 

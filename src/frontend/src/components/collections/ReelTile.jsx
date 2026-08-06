@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Play, Share2, Link2, MoreVertical, Download, Loader, Columns,
-  FolderOpen, ArrowRightLeft, Trash2, Pencil, Film,
+  FolderOpen, ArrowRightLeft, Trash2, Pencil, Film, Sparkles,
 } from 'lucide-react';
 import { RATIO } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
+import { IntroCardPicker } from '../introcards/IntroCardPicker';
 
 /**
  * ReelTile - a PUBLISHED reel as a poster tile (T5673).
@@ -73,6 +74,12 @@ export function ReelTile({
   onDelete,
   onRename,
   seasonRank,
+  // T5215: intro-card attachment picker (all reads/gestures owned by the panel).
+  introCards,
+  introProfile,
+  introHasConsent,
+  onSetIntro,
+  onRequestIntroConsent,
 }) {
   // Poster load lifecycle: 'loading' -> skeleton shimmer; 'loaded' -> poster;
   // 'error' -> branded fallback (the endpoint 404s when no poster exists).
@@ -81,6 +88,7 @@ export function ReelTile({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [menuPos, setMenuPos] = useState(null); // {top, left, flipped} for portal
+  const [introPickerOpen, setIntroPickerOpen] = useState(false);
   const menuRef = useRef(null);
   const kebabBtnRef = useRef(null);
   // T6300: reveal/interaction gate is CAPABILITY (pointer type), not the isMobile
@@ -280,6 +288,10 @@ export function ReelTile({
                   <Pencil size={20} className="text-gray-300 flex-shrink-0" />
                   <span className="text-gray-200">Rename</span>
                 </button>
+                <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
+                  <Sparkles size={20} className="text-gray-300 flex-shrink-0" />
+                  <span className="text-gray-200">Intro</span>
+                </button>
                 {showBeforeAfter && (
                   <>
                     <div className="my-1 border-t border-gray-700" />
@@ -342,6 +354,10 @@ export function ReelTile({
                 <Pencil size={18} className="text-gray-300 flex-shrink-0" />
                 <span className="text-gray-200">Rename</span>
               </button>
+              <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className={menuItemClass}>
+                <Sparkles size={18} className="text-gray-300 flex-shrink-0" />
+                <span className="text-gray-200">Intro</span>
+              </button>
               {showBeforeAfter && (
                 <button onClick={(e) => { onBeforeAfter(e, download); setMenuOpen(false); }} disabled={exportingBeforeAfter === download.id} className={menuItemClass}>
                   {exportingBeforeAfter === download.id
@@ -373,6 +389,18 @@ export function ReelTile({
             document.body
           )
         ) : null}
+
+      <IntroCardPicker
+        isOpen={introPickerOpen}
+        onClose={() => setIntroPickerOpen(false)}
+        title={`Intro for "${download.project_name || displayName}"`}
+        cards={introCards}
+        profile={introProfile}
+        selectedId={download.intro_card_id ?? null}
+        hasConsent={introHasConsent}
+        onSelect={(cardId) => onSetIntro(download, cardId)}
+        onRequestConsent={onRequestIntroConsent}
+      />
     </div>
   );
 }

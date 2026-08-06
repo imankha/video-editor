@@ -16,6 +16,7 @@ import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
 import { useMoveReels } from '../hooks/useMoveReels';
 import { useProfileStore } from '../stores/profileStore';
+import { useIntroCardStore } from '../stores/introCardStore';
 import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -65,6 +66,7 @@ export function DownloadsPanel({
     downloadFile,
     downloadingId,
     renameDownload,
+    setIntroCard,
     markWatched,
     formatDate,
   } = useDownloads(false);
@@ -196,6 +198,15 @@ export function DownloadsPanel({
   const currentProfileId = useProfileStore((state) => state.currentProfileId);
   const otherProfiles = profiles.filter((p) => p.id !== currentProfileId);
   const canMoveProfiles = profiles.length >= 2;
+
+  // T5215: the current profile's intro-card library, for the reel picker.
+  // Fetched when the panel opens (mirrors useCollections(isOpen)); the store
+  // dedupes concurrent/repeat calls.
+  const introCards = useIntroCardStore((state) => state.cards);
+  const fetchIntroCards = useIntroCardStore((state) => state.fetchCards);
+  useEffect(() => {
+    if (isOpen) fetchIntroCards();
+  }, [isOpen, fetchIntroCards]);
 
   // T6320: the story player's active-segment playhead shows the active profile's
   // sport ball (closing the T5130 gap for My Reels). Same read ProfileSportButton
@@ -390,6 +401,15 @@ export function DownloadsPanel({
     collections.patchMember(id, { project_name: name });
   };
 
+  // T5215: reel intro-card picker gestures. Consent is a legal attestation
+  // (ProfileIntroSection/ConsentGate show the full "publicly visible" copy
+  // before recording it) -- this link only points the user there, it never
+  // grants consent itself.
+  const handleSetIntro = (download, cardId) => setIntroCard(download.id, cardId);
+  const handleRequestIntroConsent = () => {
+    toast.info('Open your profile menu -> Manage Profile -> Player Intro to give consent.');
+  };
+
   // A compact metadata line for the tile scrim: date · duration · game-time.
   const reelMetaLine = (download) => [
     formatDate(download.created_at),
@@ -424,6 +444,11 @@ export function DownloadsPanel({
       onDelete={handleDelete}
       onRename={renameReel}
       seasonRank={download.season_rank}
+      introCards={introCards}
+      introProfile={currentProfile}
+      introHasConsent={!!currentProfile?.introConsentAt}
+      onSetIntro={handleSetIntro}
+      onRequestIntroConsent={handleRequestIntroConsent}
     />
   );
 

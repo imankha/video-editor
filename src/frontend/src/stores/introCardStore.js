@@ -143,7 +143,48 @@ export const useIntroCardStore = create((set, get) => ({
     return true;
   },
 
-  reset: () => set({ cards: [], isLoading: false, isInitialized: false, error: null }),
+  // T5215: the CURRENT profile's reel-length floor for the inherit-the-default
+  // intro resolution path. Lives on profile.sqlite (per-profile, like the
+  // default card itself), so — unlike the rest of this store — it is scoped
+  // to whichever profile is ACTIVE, not addressable by an arbitrary profile
+  // id (GET/PATCH /api/profiles/current/intro-min-duration).
+  minDuration: null, // null = not yet loaded; the endpoint's own default is 20.0
+  isMinDurationLoading: false,
+
+  fetchMinDuration: async () => {
+    set({ isMinDurationLoading: true });
+    try {
+      const response = await apiFetch(`${API_BASE}/api/profiles/current/intro-min-duration`);
+      if (!response.ok) throw new Error(`Failed to fetch intro duration threshold: ${response.status}`);
+      const data = await response.json();
+      set({ minDuration: data.intro_min_duration_seconds, isMinDurationLoading: false });
+    } catch (error) {
+      console.error('[IntroCardStore] Failed to fetch intro_min_duration_seconds:', error);
+      set({ isMinDurationLoading: false });
+    }
+  },
+
+  /**
+   * Surgical write (gesture: blur/Enter on the threshold input). Throws on a
+   * rejected (out-of-range) value so the caller's input can show the error —
+   * the store does NOT optimistically update on a value the server may 400.
+   */
+  updateMinDuration: async (seconds) => {
+    const response = await apiFetch(`${API_BASE}/api/profiles/current/intro-min-duration`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intro_min_duration_seconds: seconds }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.detail || `Failed to update intro duration threshold: ${response.status}`);
+    }
+    const data = await response.json();
+    set({ minDuration: data.intro_min_duration_seconds });
+    return data.intro_min_duration_seconds;
+  },
+
+  reset: () => set({ cards: [], isLoading: false, isInitialized: false, error: null, minDuration: null }),
 }));
 
 /**
