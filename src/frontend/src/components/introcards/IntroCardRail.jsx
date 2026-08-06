@@ -259,7 +259,6 @@ function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEdit
         hideText
         hideSize
         hideAlign
-        hideFooterNote
         collapseEffects
         colorSwatches={COLOR_SWATCHES}
       />

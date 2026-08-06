@@ -69,7 +69,6 @@ function CardHostPanel({ spec, onChange }) {
         hideText
         hideSize
         hideAlign
-        hideFooterNote
         collapseEffects
         colorSwatches={COLOR_SWATCHES}
       />

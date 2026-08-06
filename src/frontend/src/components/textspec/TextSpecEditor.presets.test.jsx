@@ -41,8 +41,8 @@ describe('TextSpecEditor — T5205 card-rail extensions', () => {
     expect(next.font).toBe(FontKey.ANTON);
   });
 
-  it('hideFooterNote suppresses the overlay-specific note', () => {
-    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} hideFooterNote />);
+  it('never renders the old "burned into the export" footer note (removed by user request)', () => {
+    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} />);
     expect(screen.queryByText(/burned into the exported video/i)).toBeNull();
   });
 

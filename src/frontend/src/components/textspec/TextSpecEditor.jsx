@@ -24,7 +24,6 @@
 //   hideAlign     -- omit the Align control (same reason: alignment is
 //                    composition-derived in the card editor).
 //   colorSwatches -- [hex]; render quick-pick swatches beside the custom picker.
-//   hideFooterNote-- omit the overlay-specific "burned into the export" note.
 //   collapseEffects-- tuck Shadow blur + Stroke width behind a collapsed
 //                    "Effects" disclosure (progressive disclosure). The card
 //                    editor opts in because those are expert dials that were
@@ -47,7 +46,7 @@ const ALIGN_LABELS = {
   [Align.RIGHT]: 'Right',
 };
 
-export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, hideFooterNote = false, collapseEffects = false }) {
+export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, collapseEffects = false }) {
   const emit = (patch) => onChange({ ...spec, ...patch });
 
   const shadowControl = (
@@ -203,13 +202,6 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
           {shadowControl}
           {strokeControl}
         </>
-      )}
-
-      {!hideFooterNote && (
-        <p className="text-xs text-amber-400/90 leading-snug">
-          Overlay text is burned into the exported video -- changing it means
-          re-exporting, like spotlights.
-        </p>
       )}
     </div>
   );
