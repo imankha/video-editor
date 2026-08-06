@@ -9,18 +9,27 @@ import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 const DRAG_THRESHOLD_PX = 4;
 
 /**
- * PosterMarkerLayer - the cover-photo (poster) marker on the overlay timeline (T5410).
+ * PosterMarkerLayer - the THUMBNAIL marker on the overlay timeline (T5410; UI term
+ * "thumbnail" since T6590 -- the data model still calls it poster_*).
  *
- * Pinned to the TOP RAIL of the video track (same band as the playhead), so it
- * never collides with the region drag handles below (RegionLayer occupies its
- * own band, bottom-anchored). Rendered as a sibling of RegionLayer inside
- * TimelineBase's children slot, absolutely positioned at top:0 using the SAME
- * EDGE_PADDING formula the playhead uses -- it stays aligned at any timelineScale.
+ * PLACEMENT (T6590 round 2 -- do NOT restore the old top-rail position): the
+ * marker is a FULL-HEIGHT vertical guide line with its draggable handle at the
+ * VERTICAL MIDDLE of the timeline. It used to be a chip pinned to the video
+ * track's TOP RAIL (same band as the playhead) with a negative `-top-3` offset.
+ * That had two defects: (1) CUT OFF -- the `.timeline-scroll-container`'s
+ * overflow clipped the negative-offset glyph; (2) OCCLUDED -- it shared the
+ * playhead's band, and setting the frame parks the playhead AT the marker, so the
+ * two were guaranteed to coincide exactly when the feature is used. top-0/bottom-0
+ * is never clipped, and the mid handle is out of the playhead's top band. The line
+ * is pointer-events-none (never blocks editing the lanes it crosses); only the
+ * handle is grabbable; z-30 keeps the handle above the playhead where they cross.
  *
  * Discoverability is the entire point of this surface (design gate, T5410):
- * visible at rest (never hover-gated), reachable via keyboard (role="slider"),
- * and sized to a 44px hit box on coarse pointers -- guards against the
- * hidden-affordance class of bug (T5910, T6300).
+ * visible AND draggable at rest (never hover-gated), reachable via keyboard
+ * (role="slider"), sized to a 44px hit box on coarse pointers -- guards against
+ * the hidden-affordance class of bug (T5910, T6300). Since T6590 deleted the
+ * "Use current frame" button, dragging this marker is the ONLY way to set the
+ * frame, so the tooltip/aria state the interaction, not a noun label.
  */
 export default function PosterMarkerLayer({
   visualTime,          // current marker position, in VISUAL (timeline) seconds
@@ -153,54 +162,70 @@ export default function PosterMarkerLayer({
   if (timelineDuration <= 0) return null;
 
   const sourceTimeLabel = formatTimeSimple(visualTimeToSourceTime(shownVisualTime));
-  // Copy names the CONSEQUENCE (what a share link shows), not the artefact (T6510).
+  // UI term is "thumbnail" (T6590); the model still calls it poster_*. The
+  // tooltip/aria STATE THE INTERACTION (drag to choose the frame), not a noun.
   const label = isUploaded
-    ? 'Preview image: custom image in use. This marker is inactive.'
+    ? 'Custom thumbnail image in use. This marker is inactive.'
     : isDragging
-      ? `Preview frame: ${sourceTimeLabel}`
-      : 'Preview frame — what people see when you share the link. The middle of the open-play slow-mo; drag to change, or use the panel below.';
+      ? `Thumbnail frame: ${sourceTimeLabel}`
+      : 'Drag to choose which frame is the thumbnail — the still people see when you share. Currently the middle of the open-play slow-mo.';
+
+  // T6630/T6590 round 2: the marker is a FULL-HEIGHT guide line (reads THROUGH the
+  // lanes like a secondary playhead) with the draggable handle lowered to the
+  // vertical MIDDLE of the timeline. The old `-top-3` chip was (a) CLIPPED by the
+  // `.timeline-scroll-container` overflow and (b) OCCLUDED by the playhead, which
+  // is worst exactly when the feature is used (setting the frame parks the
+  // playhead at the marker). top-0/bottom-0 is never clipped; the mid handle sits
+  // out of the playhead's top-rail band. Only the handle is pointer-interactive —
+  // the line is `pointer-events-none` so it never blocks editing the lanes beneath
+  // it. z-30 keeps the handle above the playhead line where they coincide.
+  const markerLeft = `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${positionPercent / 100})`;
 
   return (
-    <div
-      ref={trackRef}
-      data-testid="poster-marker"
-      role="slider"
-      aria-label="Preview image marker"
-      aria-valuetext={sourceTimeLabel}
-      aria-disabled={disabled}
-      tabIndex={disabled ? -1 : 0}
-      title={label}
-      className={`lever-handle absolute -top-3 z-30 flex flex-col items-center -translate-x-1/2 touch-none
-                  focus:outline-none focus:ring-2 focus:ring-cyan-300 rounded
-                  ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-grab active:cursor-grabbing pointer-events-auto'}`}
-      style={{
-        left: `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${positionPercent / 100})`,
-        width: `${hitSize}px`,
-      }}
-      onPointerDown={handlePointerDown}
-      onKeyDown={handleKeyDown}
-    >
+    <>
+      {/* Full-height guide line (visual only, never blocks the lanes it crosses) */}
       <div
-        className={`w-7 h-7 rounded-md border-2 flex items-center justify-center shadow-lg transition-transform
-          ${isUploaded
-            ? 'bg-gray-600 border-gray-400 opacity-60'
-            : isDragging
-              ? 'bg-cyan-400 border-cyan-200 scale-110'
-              : 'bg-cyan-500 border-cyan-300'}`}
-      >
-        {isUploaded
-          ? <ImageOff size={16} className="text-white" />
-          : <Image size={16} className="text-white" />}
-      </div>
-      <div
-        className={`w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent -mt-px
-          ${isUploaded ? 'border-t-gray-600' : isDragging ? 'border-t-cyan-400' : 'border-t-cyan-500'}`}
+        aria-hidden="true"
+        className={`absolute top-0 bottom-0 -translate-x-1/2 w-0.5 z-20 pointer-events-none
+          ${isUploaded ? 'bg-gray-500/50' : isDragging ? 'bg-cyan-300' : 'bg-cyan-400/70'}`}
+        style={{ left: markerLeft }}
       />
-      {isDragging && (
-        <div className="absolute -top-8 -translate-x-1/2 left-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded pointer-events-none whitespace-nowrap">
-          {sourceTimeLabel}
+      {/* Draggable handle at the vertical MIDDLE. Carries the position + hit-size +
+          slider semantics; only this (small) element is pointer-interactive. */}
+      <div
+        ref={trackRef}
+        data-testid="poster-marker"
+        role="slider"
+        aria-label="Thumbnail marker — drag to choose the thumbnail frame"
+        aria-valuetext={sourceTimeLabel}
+        aria-disabled={disabled}
+        tabIndex={disabled ? -1 : 0}
+        title={label}
+        className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center touch-none
+                    focus:outline-none focus:ring-2 focus:ring-cyan-300 rounded-md
+                    ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-grab active:cursor-grabbing pointer-events-auto'}`}
+        style={{ left: markerLeft, width: `${hitSize}px` }}
+        onPointerDown={handlePointerDown}
+        onKeyDown={handleKeyDown}
+      >
+        <div
+          className={`w-7 h-7 rounded-md border-2 flex items-center justify-center shadow-lg transition-transform
+            ${isUploaded
+              ? 'bg-gray-600 border-gray-400 opacity-60'
+              : isDragging
+                ? 'bg-cyan-400 border-cyan-200 scale-110'
+                : 'bg-cyan-500 border-cyan-300'}`}
+        >
+          {isUploaded
+            ? <ImageOff size={16} className="text-white" />
+            : <Image size={16} className="text-white" />}
         </div>
-      )}
-    </div>
+        {isDragging && (
+          <div className="absolute -top-8 -translate-x-1/2 left-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded pointer-events-none whitespace-nowrap">
+            {sourceTimeLabel}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
