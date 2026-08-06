@@ -69,8 +69,12 @@ POST_V023_COLUMNS = {
     # v035 (T6570 subtitle) adds intro_cards.subtitle_text. Unlike v034's whole-table case,
     #   the column-drop harness DOES synthesise this (table present, column gone), so the
     #   create/list/update hot paths are driven directly below (read + write column-guarded).
+    # v036 (T6620 null the dead intro_cards.title_text) adds NO column -> nothing to guard.
+    #   It is an UPDATE ... SET title_text = NULL (column-guarded, same PRAGMA check as every
+    #   other migration here) over an EXISTING column that has carried data since v034; no
+    #   hot read gains a new column name to fail on.
 }
-HEAD_VERSION_AUDITED = 35
+HEAD_VERSION_AUDITED = 36
 
 
 def _cleanup(user_id: str) -> None:
