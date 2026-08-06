@@ -335,8 +335,13 @@ class Position(BaseModel):
 
 class Shadow(BaseModel):
     """blur is EM-RELATIVE (fraction of the spec's own `size`, resolved as
-    spec.size * frame_h) — see the unit invariant block above. Zero magnitude
-    (blur=0) means no shadow; this is the default."""
+    spec.size * frame_h) — see the unit invariant block above. blur=0 AND
+    opacity=0 means no shadow; this is the default. T6620: "blur implies a
+    shadow" — when blur>0 but opacity is left at 0 (the Overlay rail exposes
+    only a blur slider), the renderers resolve a default opacity so the shadow
+    actually draws (text_render.py::_resolve_shadow_opacity, mirrored in
+    RichText.jsx). The resolution lives in the renderers, NOT here — the stored
+    spec keeps the raw opacity the user set."""
     blur: float = Field(default=0, ge=0, le=0.5)
     color: str = Field(default="#000000")
     opacity: float = Field(default=0, ge=0, le=1)

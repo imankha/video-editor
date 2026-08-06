@@ -15,7 +15,8 @@ card to card, so it belongs on the `intro_cards` row. That is the exact opposite
 of the Full Name (T6570), which IS a property of the athlete and therefore lives
 once on the profile. Do NOT repurpose `title_text` for it: a column named
 title_text holding a subtitle would mislead the next reader (and title_text is
-now the grandfathered legacy title override).
+DEAD as of T6620 — the title is the profile Full Name always; the column is no
+longer read and is nulled by v036).
 
 One purely additive, nullable column. NULL = no subtitle (the common case and
 every legacy row) -> the slot is omitted-and-logged by the renderer, never drawn

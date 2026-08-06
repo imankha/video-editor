@@ -28,9 +28,10 @@ Contract (task §D):
 
 Text sourcing (seam-critical — see intro_card_geometry's mapping note):
   - `text_elements` is STYLING ONLY. NEVER read its `.text` (always '').
-  - title text  = profile full name, passed in as field_values["full_name"]
-    (T6570); a card-level card["title_text"] is a GRANDFATHERED override for
-    pre-T6570 cards. styling = text_elements["title"].
+  - title text  = profile full name, passed in as field_values["full_name"],
+    ALWAYS (T6620). card["title_text"] is DEAD — no longer read (was a
+    pre-T6570 grandfathered override; nulled by migration v036).
+    styling = text_elements["title"].
   - fact{i} geometry (ORDINAL) <- shown_fields[i] (SEMANTIC): text =
     field_values[field] (omit+log if blank), styling = text_elements[field].
 """
@@ -375,11 +376,13 @@ def _select_elements(card: dict, field_values: dict, geo: dict, accent: str) -> 
     shown_fields = card.get("shown_fields") or []
     elements: list[dict] = []
 
-    # title: the PROFILE's full name (T6570) -- the name is a property of the
-    # athlete, not of a card. A card-level title_text is a GRANDFATHERED override
-    # for cards authored before T6570; a card created after it never sets one, so
-    # it always follows the profile. Styling keyed "title".
-    title_text = (card.get("title_text") or "").strip() or (field_values.get("full_name") or "").strip()
+    # title: the PROFILE's full name, ALWAYS (T6620) -- the name is a property of
+    # the athlete, not of a card. card.title_text (a pre-T6570 grandfathered
+    # override) is NO LONGER read: T6570 removed the only UI that could clear it,
+    # so a legacy value trapped the card on a stale name with no escape hatch.
+    # The column is now dead and is nulled by profile_db migration v036. Styling
+    # keyed "title".
+    title_text = (field_values.get("full_name") or "").strip()
     if "title" in slots:
         if title_text:
             elements.append({
@@ -387,7 +390,7 @@ def _select_elements(card: dict, field_values: dict, geo: dict, accent: str) -> 
                 "spec": _merge_spec(text_elements.get("title"), title_text, slots["title"], "title", accent),
             })
         else:
-            logger.info("[PlayerIntro] title omitted: profile full_name unset and no legacy title_text")
+            logger.info("[PlayerIntro] title omitted: profile full_name unset")
 
     # subtitle: FREE TEXT on the card (T6570) — a tournament name / sub-heading,
     # a property of THIS card (not the athlete). Orthogonal to composition; it

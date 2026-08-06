@@ -49,9 +49,10 @@ SEMANTIC, and the renderer maps between them. Read this before touching either.
   - The card's `text_elements` is **STYLING ONLY** (shipped v034 schema, T5195):
     T5205 writes `''` into every `text_elements[slot].text`. NEVER read the text
     from there or you render blank lines. Text sources:
-        * title    -> the PROFILE's Full Name (T6570), passed in as
-          `field_values["full_name"]`; `card["title_text"]` is a GRANDFATHERED
-          override for pre-T6570 cards. omit+log if blank.
+        * title    -> the PROFILE's Full Name, ALWAYS (T6620), passed in as
+          `field_values["full_name"]`. `card["title_text"]` is DEAD — no longer
+          read (was a pre-T6570 override; nulled by migration v036). omit+log
+          if blank.
         * subtitle -> the card's `subtitle_text` column (free text on THIS card,
           e.g. a tournament name; T6570 / migration v035). omit+log if blank.
         * factN    -> the PROFILE value for `shown_fields[N-1]` (omit+log if blank)

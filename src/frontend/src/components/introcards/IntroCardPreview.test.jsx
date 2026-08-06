@@ -24,10 +24,11 @@ describe('resolveFraming', () => {
 });
 
 describe('slotDisplayText', () => {
-  it('reads the title from the card and facts from the profile', () => {
+  it('reads the title from the profile full name (T6620) and facts from the profile', () => {
+    // T6620: the profile ALWAYS wins; a stored title_text is dead and ignored.
     const card = { title_text: 'CHAMPION' };
-    const profile = { position: 'Striker', class: '', team: 'Rovers' };
-    expect(slotDisplayText('title', card, profile)).toBe('CHAMPION');
+    const profile = { full_name: 'Jordan Vega', position: 'Striker', class: '', team: 'Rovers' };
+    expect(slotDisplayText('title', card, profile)).toBe('Jordan Vega');
     expect(slotDisplayText('position', card, profile)).toBe('Striker');
     expect(slotDisplayText('class', card, profile)).toBe('');
   });
@@ -45,24 +46,26 @@ describe('IntroCardPreview rendering', () => {
     expect(img.style.transform).toContain('scale(1.5)');
   });
 
-  it('renders the title text and a shown fact value; omits an unfilled fact', () => {
+  it('renders the title text (profile full name) and a shown fact value; omits an unfilled fact', () => {
+    // T6620: the title is the profile's full name; a stored title_text is ignored.
     const { container } = render(
       <IntroCardPreview
         card={{ ...baseCard, title_text: 'CHAMPION', shown_fields: ['position', 'class'] }}
-        profile={{ position: 'Striker', class: '' }}
+        profile={{ full_name: 'Jordan Vega', position: 'Striker', class: '' }}
         boxWidth={90}
         boxHeight={160}
         aspect="9:16"
       />
     );
-    expect(container.textContent).toContain('CHAMPION');
+    expect(container.textContent).toContain('Jordan Vega');
+    expect(container.textContent).not.toContain('CHAMPION'); // dead title_text never renders
     expect(container.textContent).toContain('Striker');
     // class is empty -> that line is omitted, never rendered blank.
   });
 
   it('renderSlots=false draws the backdrop + photo but no text (motion base layer)', () => {
     const { container } = render(
-      <IntroCardPreview card={{ ...baseCard, title_text: 'HELLO' }} profile={{}} boxWidth={90} boxHeight={160} aspect="9:16" renderSlots={false} />
+      <IntroCardPreview card={{ ...baseCard }} profile={{ full_name: 'HELLO' }} boxWidth={90} boxHeight={160} aspect="9:16" renderSlots={false} />
     );
     expect(container.textContent).not.toContain('HELLO');
   });

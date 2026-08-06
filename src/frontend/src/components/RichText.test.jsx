@@ -168,6 +168,25 @@ describe('RichText', () => {
     expect(expectedLargeBlurPx).toBeCloseTo(expectedSmallBlurPx * 2, 5);
   });
 
+  it('T6620: blur implies a shadow — blur>0 with opacity 0 still draws a shadow', () => {
+    // The Overlay rail exposes only a blur slider; a new block defaults to
+    // opacity 0. Dragging blur must not be inert: the effective opacity resolves
+    // to the shared default (0.6), so a textShadow is emitted.
+    const spec = baseSpec({ text: 'BLURSHADOW', size: 0.08, shadow: { blur: 0.1, color: '#000000', opacity: 0 } });
+    render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
+    const el = screen.getByText('BLURSHADOW');
+    expect(el.style.textShadow).not.toBe('none');
+    expect(el.style.textShadow).toContain('rgba(0, 0, 0, 0.6)'); // default opacity applied
+    const fontPx = spec.size * BOX_HEIGHT;
+    expect(el.style.textShadow).toContain(`${spec.shadow.blur * fontPx}px`);
+  });
+
+  it('T6620: no shadow when both blur and opacity are 0 (unchanged default)', () => {
+    const spec = baseSpec({ text: 'NOSHADOW', shadow: { blur: 0, color: '#000000', opacity: 0 } });
+    render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
+    expect(screen.getByText('NOSHADOW').style.textShadow).toBe('none');
+  });
+
   it('resolves strokePx from fontPx (em-relative), not from boxHeight directly', () => {
     const smallSpec = baseSpec({
       text: 'SMALLSTROKE',

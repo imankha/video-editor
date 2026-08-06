@@ -4,7 +4,8 @@
 //   - GEOMETRY is ORDINAL (title, fact1..3) and owns size/align/position/maxWidth.
 //   - STYLING is SEMANTIC (title/position/class/team) in text_elements and owns
 //     ONLY font/colour/shadow/stroke. `.text` is always '' — never read it.
-//   - TEXT: title <- card.title_text; factN <- profile[shown_fields[N-1]].
+//   - TEXT: title <- profile full_name ALWAYS (T6620; card.title_text is dead);
+//     factN <- profile[shown_fields[N-1]].
 //     A blank value OMITS the line (never a blank render).
 //   - Layout ALWAYS wins over anything stored on the styling spec.
 
@@ -21,15 +22,16 @@ const FACT_SHADOW = { blur: 0.05, color: '#000000', opacity: 0.5 };
 const NO_STROKE = { width: 0, color: '#000000' };
 
 /**
- * The card's TITLE text (T6570): the profile's full name — the name is a
- * property of the ATHLETE, not of a card. A card-level `title_text` is a
- * GRANDFATHERED override for cards authored before T6570; a card created after
- * it never sets one, so it always follows the profile. Mirrors
- * player_intro._select_elements so preview and export agree.
+ * The card's TITLE text: the profile's full name, ALWAYS — the name is a
+ * property of the ATHLETE, not of a card. T6620: the profile always wins.
+ * `card.title_text` (a pre-T6570 grandfathered override) is NO LONGER read —
+ * T6570 removed the only UI that could clear it, so a legacy value trapped the
+ * card on a stale name forever ("I added my player's name but it won't pull
+ * into the card"). The stored column is now dead and is nulled by migration
+ * v036. `card` is kept in the signature for call-site symmetry with the fact
+ * resolvers. Mirrors player_intro._select_elements so preview and export agree.
  */
 export function resolveTitleText(card, profile) {
-  const legacy = (card?.title_text || '').trim();
-  if (legacy) return legacy;
   return (profile?.full_name || '').trim();
 }
 
@@ -77,7 +79,7 @@ export function buildPreviewElements(card, profile, composition, aspect) {
   const accent = treatmentAccent(card?.treatment || 'gold');
   const out = [];
 
-  // Title — the profile's full name (T6570), title_text a legacy override;
+  // Title — the profile's full name, ALWAYS (T6620; title_text is dead);
   // styling keyed "title".
   const titleText = resolveTitleText(card, profile);
   if (slots[TITLE_SLOT] && titleText) {

@@ -35,6 +35,31 @@ export const FontKey = {
   PLAYFAIR: 'playfair',
 };
 
+// T6620: "blur implies a shadow." The Overlay text rail exposes ONLY a Shadow
+// blur slider (no opacity control), and a new overlay text block defaults to
+// shadow.opacity 0 — so both renderers, which gate the shadow on opacity > 0,
+// refused to draw anything however far the user dragged blur (the control was
+// inert by construction). Resolving a sensible default opacity when blur > 0 but
+// no explicit opacity was set makes the dialed-in shadow actually render.
+// Card slots carry their own opacity (> 0, see introCardPreviewElements.js) and
+// are unaffected. MUST stay in step with app/services/text_render.py
+// (DEFAULT_SHADOW_OPACITY) — the export burn-in — or a shadow shown in the
+// browser preview would vanish on export.
+export const DEFAULT_SHADOW_OPACITY = 0.6;
+
+/**
+ * Effective shadow opacity for rendering: the explicit opacity if set, else the
+ * "blur implies a shadow" default when blur > 0, else 0 (no shadow). Mirrors
+ * app/services/text_render.py::_resolve_shadow_opacity.
+ * @param {TextSpecShadow} shadow
+ * @returns {number}
+ */
+export function resolveShadowOpacity(shadow) {
+  if (!shadow) return 0;
+  if (shadow.opacity > 0) return shadow.opacity;
+  return shadow.blur > 0 ? DEFAULT_SHADOW_OPACITY : 0;
+}
+
 /**
  * @typedef {Object} TextSpecPosition
  * @property {number} x - Frame-relative: fraction of frame WIDTH. Anchor x, interpreted per align.

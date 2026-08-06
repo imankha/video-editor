@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react';
 
 import { resolveApiUrl } from '../config';
+import { resolveShadowOpacity } from '../constants/textSpec';
 
 // MUST go through resolveApiUrl. A bare '/api/...' resolves against the FRONTEND
 // origin, which in staging/prod is Cloudflare Pages, not the API — the SPA
@@ -229,8 +230,13 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   const fontWeight = fontEntry ? fontEntry.weight : 400;
   const fontVariationSettings = fontEntry && fontEntry.isVariable ? `'wght' ${fontEntry.weight}` : undefined;
 
-  const shadowRgba = hexToRgba(spec.shadow.color, spec.shadow.opacity);
-  const textShadow = spec.shadow.opacity > 0 ? `0 0 ${blurPx}px ${shadowRgba}` : 'none';
+  // T6620: "blur implies a shadow" — resolve the effective opacity (the explicit
+  // value, or a default when blur alone was set) so dragging Shadow blur on the
+  // Overlay rail is no longer inert. Mirrored in text_render.py so preview ==
+  // export.
+  const effectiveShadowOpacity = resolveShadowOpacity(spec.shadow);
+  const shadowRgba = hexToRgba(spec.shadow.color, effectiveShadowOpacity);
+  const textShadow = effectiveShadowOpacity > 0 ? `0 0 ${blurPx}px ${shadowRgba}` : 'none';
 
   const { ascentPx, descentPx } = useSettledFontMetricsPx(fontFamily, fontPx, fontWeight);
   const baselineY = topPx + ascentPx;

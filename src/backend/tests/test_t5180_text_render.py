@@ -234,6 +234,25 @@ class TestShadowStroke:
         )
         assert diff.sum() == 0, "shadow magnitude=0 still drew extra pixels beyond the fill"
 
+    def test_blur_alone_implies_a_shadow(self):
+        # T6620 (report item 1): the Overlay rail exposes ONLY a blur slider, and a
+        # new overlay block defaults to opacity 0 -- so dragging blur must still
+        # produce a shadow. "blur implies a shadow": blur>0 with opacity==0 draws
+        # at the default opacity, so the control is no longer inert.
+        fill_only = render_text_layer(_base_spec(text="X", size=0.15), FRAME_W, FRAME_H)
+        blur_only = render_text_layer(
+            _base_spec(text="X", size=0.15, shadow=Shadow(blur=0.08, color="#000000", opacity=0)),
+            FRAME_W,
+            FRAME_H,
+        )
+        diff = np.abs(np.array(blur_only).astype(int) - np.array(fill_only).astype(int))
+        assert diff.sum() > 0, "blur>0 with opacity 0 drew no shadow (control still inert)"
+        # The resolved opacity is the shared default (mirrors the frontend).
+        from app.services.text_render import DEFAULT_SHADOW_OPACITY, _resolve_shadow_opacity
+        assert _resolve_shadow_opacity(Shadow(blur=0.08, opacity=0)) == DEFAULT_SHADOW_OPACITY
+        assert _resolve_shadow_opacity(Shadow(blur=0, opacity=0)) == 0.0
+        assert _resolve_shadow_opacity(Shadow(blur=0.08, opacity=0.3)) == 0.3
+
     def test_stroke_on_changes_pixels_vs_fill_only(self):
         fill_only = render_text_layer(_base_spec(text="X", size=0.15), FRAME_W, FRAME_H)
         with_stroke = render_text_layer(

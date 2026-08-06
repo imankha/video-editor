@@ -88,17 +88,20 @@ def test_frame_photo_covers_exact_rect_and_keeps_alpha(photo, cutout):
     assert np.asarray(cut)[:, :, 3].min() == 0
 
 
-def test_select_elements_reads_title_text_not_text_elements_text():
+def test_select_elements_title_from_profile_ignores_text_elements_text_and_dead_title_text():
     # SEAM 1: text_elements is styling only; its .text ('WRONG') must be ignored.
+    # T6620: the title TEXT is the profile's full_name ALWAYS; a stored title_text
+    # ('DEAD') is no longer read (was a pre-T6570 override).
     card = _card(["position"], text_elements={
         "title": {"text": "WRONG", "font": "graduate", "color": "#ff0000",
                   "size": 0.1, "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8},
-    }, title_text="RIGHT")
+    }, title_text="DEAD")
+    fields = {**FIELDS, "full_name": "Jordan Vega"}
     from app.services.intro_card_geometry import geometry_for
     geo = geometry_for("hero", "9:16")
-    els = P._select_elements(card, FIELDS, geo, "#ffffff")
+    els = P._select_elements(card, fields, geo, "#ffffff")
     title = next(e for e in els if e["slot"] == "title")
-    assert title["spec"].text == "RIGHT"                 # from title_text
+    assert title["spec"].text == "Jordan Vega"           # profile full_name, NOT title_text/text_elements
     assert title["spec"].font.value == "graduate"        # styling from text_elements
     assert title["spec"].color == "#ff0000"
     # layout WINS over any stored position/size on the styling spec
@@ -118,16 +121,17 @@ def test_select_elements_title_from_profile_full_name():
     assert title["spec"].text == "Jordan Vega"
 
 
-def test_select_elements_legacy_title_text_grandfathers_over_full_name():
-    # A pre-T6570 card that stored a title_text keeps rendering it (override),
-    # even when the profile now has a full name.
+def test_select_elements_title_text_is_dead_profile_full_name_always_wins():
+    # T6620: a pre-T6570 card that stored a title_text no longer overrides the
+    # profile — the profile's full name ALWAYS wins (the override trap is gone,
+    # which is the whole point of the fix). Regression pin for report item 2.
     card = _card(["position"], title_text="Legacy Name")
     fields = {**FIELDS, "full_name": "Jordan Vega"}
     from app.services.intro_card_geometry import geometry_for
     geo = geometry_for("hero", "9:16")
     els = P._select_elements(card, fields, geo, "#ffffff")
     title = next(e for e in els if e["slot"] == "title")
-    assert title["spec"].text == "Legacy Name"
+    assert title["spec"].text == "Jordan Vega"
 
 
 def test_select_elements_renders_card_subtitle_when_present():
@@ -202,9 +206,15 @@ def test_content_hash_changes_on_pixel_edit_stable_on_rename(photo):
     els_r = P._select_elements(c_rename, FIELDS, geo, "#ffffff")
     assert P._content_hash(c_rename, FIELDS, photo, info, "hero", "9:16", els_r) == h1
 
-    c_edit = dict(c1, title_text="New Title")
+    # A real pixel edit: the subtitle is rendered (hero has a subtitle slot).
+    c_edit = dict(c1, subtitle_text="State Cup 2027")
     els_e = P._select_elements(c_edit, FIELDS, geo, "#ffffff")
     assert P._content_hash(c_edit, FIELDS, photo, info, "hero", "9:16", els_e) != h1
+
+    # T6620: the DEAD title_text affects NO pixels (never read) -> hash stable.
+    c_dead = dict(c1, title_text="Whatever New")
+    els_d = P._select_elements(c_dead, FIELDS, geo, "#ffffff")
+    assert P._content_hash(c_dead, FIELDS, photo, info, "hero", "9:16", els_d) == h1
 
 
 def test_render_band_is_grounded_at_base_and_fades_at_top():
@@ -323,9 +333,13 @@ def test_cache_hit_and_invalidation(photo, tmp_path, monkeypatch):
     n2 = len(list(cache.glob("*.mp4")))
     P.build_intro_card(dict(c1, name="x"), FIELDS, photo, info, str(o))  # rename -> hit
     n3 = len(list(cache.glob("*.mp4")))
-    P.build_intro_card(dict(c1, title_text="Zzz"), FIELDS, photo, info, str(o))  # edit -> miss
+    # T6620: a DEAD title_text edit changes no pixels -> still a HIT.
+    P.build_intro_card(dict(c1, title_text="Zzz"), FIELDS, photo, info, str(o))
     n4 = len(list(cache.glob("*.mp4")))
-    assert (n1, n2, n3, n4) == (1, 1, 1, 2)
+    # A real pixel edit (the rendered title text, via the profile full_name) -> miss.
+    P.build_intro_card(c1, {**FIELDS, "full_name": "Zzz Player"}, photo, info, str(o))
+    n5 = len(list(cache.glob("*.mp4")))
+    assert (n1, n2, n3, n4, n5) == (1, 1, 1, 1, 2)
 
 
 @requires_ffmpeg
