@@ -16,10 +16,14 @@ first time a user removes the photo).
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from app.database import column_exists
 from app.schemas import TextSpec
 from app.services.user_db import INTRO_FACT_FIELDS
+
+logger = logging.getLogger(__name__)
 
 # The facts a card may choose to show. Mirrors the profile's structured intro
 # fields (epic decision 3) — the VALUES live on the profile; a card records only
@@ -159,3 +163,164 @@ def validate_zoom(value: Any) -> float | None:
     if not (ZOOM_MIN <= float(value) <= ZOOM_MAX):
         raise ValueError(f"zoom must be within {ZOOM_MIN}..{ZOOM_MAX} (got {value})")
     return float(value)
+
+
+# ---------------------------------------------------------------------------
+# Attachment resolution (T5215) — ONE resolution order, used by every consumer
+# (reel egress reads, `GET /api/downloads` list, collection share serve). Two
+# implementations of this order is the single failure this task exists to
+# prevent, so the reel path and the collection path both import from here.
+# ---------------------------------------------------------------------------
+
+# Per-profile default for the duration gate (epic decision 2026-08-06); the
+# real stored value lives on `user_settings.intro_min_duration_seconds`
+# (profile_db v037) and is only ever missing in the deploy->migrate window or
+# on a legacy row, both of which degrade to this constant.
+DEFAULT_INTRO_MIN_DURATION_SECONDS = 20.0
+
+# Bounds for the user-editable threshold. Upper bound is generous for any real
+# reel while still catching a typo that would silently disable intros
+# profile-wide; out-of-range RAISES rather than clamps (never a silent fix).
+INTRO_MIN_DURATION_LOWER = 0.0  # exclusive
+INTRO_MIN_DURATION_UPPER = 300.0  # inclusive
+
+
+def resolve_intro_card_id(
+    intro_card_id: int | None,
+    reel_duration: float | None,
+    default_id: int | None,
+    min_duration: float,
+    *,
+    reel_id: int | None = None,
+) -> int | None:
+    """The SINGLE resolution order for an attachment value. Pure (no DB, no I/O
+    besides the warning log below) and read-only: never fabricates a card,
+    never rewrites the caller's row.
+
+      0                      -> None            (opted THIS reel/collection out, at ANY duration)
+      <positive id>          -> that id         (ALWAYS -- an explicit pick is never duration-gated)
+      NULL (inherit default) -> default_id       IF reel_duration is known and >= min_duration
+                              -> None             otherwise (short reel, or unknown duration)
+
+    `reel_duration` missing (None) while inheriting the default is treated as
+    "unknown -> no intro" (fail closed, matching the "short reels probably
+    don't want one" bias) -- but a NULL `final_videos.duration` on OUR OWN row
+    is an internal data bug, not an expected external state, so it is logged
+    at WARNING (with `reel_id` when the caller has one), exactly like the
+    dangling-card-id case below. It is never silently substituted and the row
+    is never self-repaired.
+    """
+    if intro_card_id == 0:
+        return None
+    if intro_card_id is not None:
+        return intro_card_id
+    # Inherit-the-default path -- the only branch the duration gate governs.
+    if reel_duration is None:
+        logger.warning(
+            "[intro] reel id=%s has no duration on its own final_videos row "
+            "(internal data bug) -- resolving inherit-the-default to no-intro "
+            "rather than guessing",
+            reel_id,
+        )
+        return None
+    if reel_duration >= min_duration:
+        return default_id
+    return None
+
+
+def _intro_cards_table_exists(cursor) -> bool:
+    cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='intro_cards'"
+    )
+    return cursor.fetchone() is not None
+
+
+def get_default_intro_card(cursor):
+    """The profile's default card row, or None if none is marked default or the
+    `intro_cards` table doesn't exist yet (deploy->migrate window, pre-v034)."""
+    if not _intro_cards_table_exists(cursor):
+        return None
+    cursor.execute("SELECT * FROM intro_cards WHERE is_default = 1 LIMIT 1")
+    return cursor.fetchone()
+
+
+def get_intro_min_duration(cursor) -> float:
+    """The profile's minimum-reel-duration threshold for the inherit-the-default
+    resolution path (T5215). Column-guarded (v037 deploy->migrate window) and
+    guarded again for a missing/legacy row -- both degrade to
+    `DEFAULT_INTRO_MIN_DURATION_SECONDS`, never a crash."""
+    if not column_exists(cursor, "user_settings", "intro_min_duration_seconds"):
+        return DEFAULT_INTRO_MIN_DURATION_SECONDS
+    cursor.execute("SELECT intro_min_duration_seconds FROM user_settings WHERE id = 1")
+    row = cursor.fetchone()
+    if row is None or row["intro_min_duration_seconds"] is None:
+        return DEFAULT_INTRO_MIN_DURATION_SECONDS
+    return float(row["intro_min_duration_seconds"])
+
+
+def validate_intro_min_duration(value: Any) -> float:
+    """Validate the per-profile minimum-reel-duration threshold (seconds).
+    `0 < value <= 300`. Out-of-range or non-numeric RAISES ValueError (-> 400)
+    -- never clamped silently (a typo here would silently misconfigure intros
+    profile-wide)."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError("intro_min_duration_seconds must be a number")
+    v = float(value)
+    if not (INTRO_MIN_DURATION_LOWER < v <= INTRO_MIN_DURATION_UPPER):
+        raise ValueError(
+            f"intro_min_duration_seconds must be within "
+            f"({INTRO_MIN_DURATION_LOWER}, {INTRO_MIN_DURATION_UPPER}] (got {value})"
+        )
+    return v
+
+
+def load_profile_cards(cursor) -> dict[int, dict]:
+    """Batch-load ``{id: {'name': ..., 'is_default': bool}}`` for every card on
+    this profile, for no-N+1 list resolution (`GET /api/downloads`, T5215).
+    Empty dict on a below-v034 profile (table absent) -- never per-row queries."""
+    if not _intro_cards_table_exists(cursor):
+        return {}
+    cursor.execute("SELECT id, name, is_default FROM intro_cards")
+    return {
+        row["id"]: {"name": row["name"], "is_default": bool(row["is_default"])}
+        for row in cursor.fetchall()
+    }
+
+
+def resolve_intro_card(
+    intro_card_id: int | None,
+    reel_duration: float | None,
+    profile_conn,
+    *,
+    reel_id: int | None = None,
+):
+    """DB-backed single-reel/collection resolution: loads this profile's
+    default card + duration threshold, applies `resolve_intro_card_id`, then
+    fetches the resolved id's row. Read-only -- no UPDATE, no fabrication.
+
+    A dangling id (the resolved id no longer exists -- e.g. the card was
+    deleted after a collection share froze it) logs a warning and resolves to
+    None, exactly like the reel-delete-cascade counterpart in
+    `routers/intro_cards.py`.
+    """
+    cursor = profile_conn.cursor()
+    default_row = get_default_intro_card(cursor)
+    default_id = default_row["id"] if default_row is not None else None
+    min_duration = get_intro_min_duration(cursor)
+
+    resolved_id = resolve_intro_card_id(
+        intro_card_id, reel_duration, default_id, min_duration, reel_id=reel_id,
+    )
+    if resolved_id is None:
+        return None
+
+    cursor.execute("SELECT * FROM intro_cards WHERE id = ?", (resolved_id,))
+    row = cursor.fetchone()
+    if row is None:
+        logger.warning(
+            "[intro] reel/collection references missing intro_card id=%s "
+            "(reel_id=%s) -- resolving to no-intro",
+            resolved_id, reel_id,
+        )
+        return None
+    return row

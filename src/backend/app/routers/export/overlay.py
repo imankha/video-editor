@@ -148,16 +148,26 @@ def _finalize_overlay_export(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # T5215: intro_card_id landed in v034; guarded here too, and needed
+        # BEFORE the prior-row read below (it's part of that SELECT).
+        _has_intro = column_exists(cursor, "final_videos", "intro_card_id")
+        intro_select = ", fv.intro_card_id" if _has_intro else ""
+
         # T4010: capture the PRIOR final the project currently points at so we can
         # atomically swap to the new version and clean up the old one after commit.
-        cursor.execute("""
-            SELECT fv.id, fv.filename
+        # T5215: also capture its intro_card_id -- this is what CARRIES the reel's
+        # attachment forward across the re-export's new version row (the top
+        # regression risk this task exists to prevent: a re-export must not
+        # silently drop the attachment). Read BEFORE any DELETE of this prior row.
+        cursor.execute(f"""
+            SELECT fv.id, fv.filename{intro_select}
             FROM projects p JOIN final_videos fv ON fv.id = p.final_video_id
             WHERE p.id = ?
         """, (project_id,))
         prior = cursor.fetchone()
         prior_final_id = prior['id'] if prior else None
         prior_filename = prior['filename'] if prior else None
+        prior_intro_card_id = prior['intro_card_id'] if (prior and _has_intro) else None
         # An active share still serves the old object straight from R2 -> keep both
         # its row and its object; otherwise the re-export replaces it in place.
         keep_prior = _prior_final_is_shared(prior_filename)
@@ -211,16 +221,21 @@ def _finalize_overlay_export(
         slowmo_cols = ", slowmo_section_start, slowmo_section_end" if _has_slowmo else ""
         slowmo_placeholders = ", ?, ?" if _has_slowmo else ""
         slowmo_values = (slowmo_start, slowmo_end) if _has_slowmo else ()
+        # T5215: carry the reel's attachment (captured above from the prior row,
+        # or NULL/inherit-default on a first-ever export) into the new version.
+        intro_cols = ", intro_card_id" if _has_intro else ""
+        intro_placeholders = ", ?" if _has_intro else ""
+        intro_values = (prior_intro_card_id,) if _has_intro else ()
         cursor.execute(f"""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
                 rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename{slowmo_cols})
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?{slowmo_placeholders})
+                poster_filename{slowmo_cols}{intro_cols})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?{slowmo_placeholders}{intro_placeholders})
         """, (project_id, output_filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
               rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
-              *slowmo_values))
+              *slowmo_values, *intro_values))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1621,14 +1636,23 @@ async def export_final(
                 detail="Project must have a working video before final export"
             )
 
+        # T5215: intro_card_id landed in v034; guarded (deploy->migrate window).
+        _has_intro = column_exists(cursor, "final_videos", "intro_card_id")
+        intro_select = ", intro_card_id" if _has_intro else ""
+
         # T4010: capture the PRIOR final the project points at, to swap atomically
         # and clean up the old version after commit (unless an active share serves it).
+        # T5215: also capture its intro_card_id -- carries the reel's attachment
+        # forward across this re-export's new version row (same regression the
+        # `_finalize_overlay_export` path above guards against).
         prior_final_id = project['final_video_id']
         prior_filename = None
+        prior_intro_card_id = None
         if prior_final_id:
-            cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (prior_final_id,))
+            cursor.execute(f"SELECT filename{intro_select} FROM final_videos WHERE id = ?", (prior_final_id,))
             prior_row = cursor.fetchone()
             prior_filename = prior_row['filename'] if prior_row else None
+            prior_intro_card_id = prior_row['intro_card_id'] if (prior_row and _has_intro) else None
         keep_prior = _prior_final_is_shared(prior_filename)
 
         # Generate unique filename using project name + UUID (no local storage)
@@ -1692,17 +1716,23 @@ async def export_final(
         # T3920: unified two-half in-match start (file-relative + prior-half durations)
         clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
 
+        # T5215: carry the reel's attachment (captured above from the prior row,
+        # or NULL/inherit-default on a first-ever export) into the new version.
+        intro_cols = ", intro_card_id" if _has_intro else ""
+        intro_placeholders = ", ?" if _has_intro else ""
+        intro_values = (prior_intro_card_id,) if _has_intro else ()
+
         # Create new final video entry with version number and source_type
-        cursor.execute("""
+        cursor.execute(f"""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
                 rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename, slowmo_section_start, slowmo_section_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+                poster_filename, slowmo_section_start, slowmo_section_end{intro_cols})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?{intro_placeholders})
         """, (project_id, filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
               rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
-              slowmo_start, slowmo_end))
+              slowmo_start, slowmo_end, *intro_values))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 
