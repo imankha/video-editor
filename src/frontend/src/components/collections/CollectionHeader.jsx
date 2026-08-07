@@ -6,7 +6,7 @@ import { formatDurationHuman } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 import { API_BASE } from '../../config';
-import { INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
+import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 import { Z } from '../../constants/zLayers';
 
 // Collection-level Download (stitched mp4) is still deferred to T3680.
@@ -55,6 +55,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
  * @param {number=}   leadingReelId   - representative reel id for collapsed row poster (T5673)
  * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
+ * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6);
+ *                                     shows the shared badge in the media slot's corner when intro_card_name is set
  */
 export function CollectionHeader({
   title,
@@ -73,6 +75,7 @@ export function CollectionHeader({
   onCopyLink,
   leadingReelId,
   onIntro,
+  introBadge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -136,6 +139,24 @@ export function CollectionHeader({
     </div>
   ) : null;
 
+  // T5215 round 6 item 3 (user, 2026-08-07): "I don't see an intro card
+  // badge on the collections which I do want" -- round 5 removed the
+  // title-row badge (too small to read there), but the user still wants
+  // SOME indicator. Mirrors the reel-tile treatment (round 5 item 3): a
+  // small corner badge on the collection's own VISUAL area (this media
+  // slot), not inline with the title text. Collections have no rank-number
+  // chip to sit next to, so it always takes the media slot's upper-left
+  // corner -- the same fallback spot the reel tile uses when there's no rank.
+  const introBadgeEl = introBadge?.intro_card_name ? (
+    <div
+      data-testid="intro-badge"
+      className="absolute top-0.5 left-0.5 px-0.5 py-0.5 bg-black/60 backdrop-blur-sm rounded flex items-center justify-center"
+      title="An intro plays before this collection"
+    >
+      <IntroIcon size={10} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
+    </div>
+  ) : null;
+
   return (
     <MediaCard
       media={
@@ -151,9 +172,12 @@ export function CollectionHeader({
                 e.target.parentElement.innerHTML = `<${Film} size={16} class="${REEL.accent}" />`;
               }}
             />
+            {introBadgeEl}
           </div>
         ) : (
-          <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted} />
+          <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted}>
+            {introBadgeEl}
+          </CardMedia>
         )
       }
       actions={actions}
@@ -162,9 +186,8 @@ export function CollectionHeader({
     >
       {/* T5215 round 5 (user, 2026-08-07): "no little image near game
           highlights since it's too small to help visually" -- the round-3
-          title-row badge is removed entirely (not resized). The reel-tile
-          badge (ReelTile.jsx) is the one surface that still reflects intro
-          attachment state. */}
+          title-row badge is removed entirely (not resized); item 3's
+          replacement badge lives in the media slot above instead. */}
       <h3 className="text-white text-sm font-medium truncate">
         {title}
       </h3>

@@ -8,6 +8,7 @@ import { GameAxisGroup } from './GameAxisGroup';
 import { CollectionCard } from './CollectionCard';
 import { SmartLockedCard } from './SmartLockedCard';
 import { toPlayerReels } from './playerReels';
+import { collectionIntroKey } from './introBadgeKey';
 
 const MIXES_NAME = 'Mixes & compilations';
 
@@ -29,6 +30,7 @@ const AXIS_LABEL = { game: 'By game', tournament: 'By tournament', month: 'By mo
  * @param {Function=} onShareCollection - (definition, title) => void (T3620)
  * @param {Function=} onCopyCollectionLink - (definition) => void (T3620)
  * @param {Function=} onIntroCollection - (definition, title) => void, the collection's OWN intro (T5215 round 2)
+ * @param {Object=} introBadgesByKey - {key: {intro_card_id, intro_card_name}}, batch-resolved (T5215 round 6)
  */
 export function CollectionsTab({
   collections,
@@ -37,6 +39,7 @@ export function CollectionsTab({
   onShareCollection,
   onCopyCollectionLink,
   onIntroCollection,
+  introBadgesByKey = {},
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
@@ -100,6 +103,7 @@ export function CollectionsTab({
         onShare={onShareCollection}
         onCopyLink={onCopyCollectionLink}
         onIntro={onIntroCollection}
+        introBadgesByKey={introBadgesByKey}
       />
     );
   };
@@ -152,6 +156,7 @@ export function CollectionsTab({
                   onShare={onShareCollection}
                   onCopyLink={onCopyCollectionLink}
                   onIntro={onIntroCollection}
+                  introBadge={introBadgesByKey[collectionIntroKey(definition)]}
                 />
               );
             }
@@ -246,6 +251,7 @@ export function CollectionsTab({
           onShare={onShareCollection}
           onCopyLink={onCopyCollectionLink}
           onIntro={onIntroCollection}
+          introBadgesByKey={introBadgesByKey}
         />
       )}
     </>
