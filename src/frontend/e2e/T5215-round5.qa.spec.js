@@ -145,6 +145,9 @@ test.describe('T5215 round 5 (real account)', () => {
     }
 
     // Explicit id reel -- must show its OWN card selected, not "No intro".
+    // Self-contained: attach a card first rather than assuming ambient DB
+    // state, since other specs in this suite (e.g. T5215-round6's "badge
+    // clears on No intro" repro) legitimately mutate the same reel's intro.
     await page.goto('/');
     await page.getByRole('button', { name: /My Reels/i }).first().click();
     await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first()).toBeVisible({ timeout: 15000 });
@@ -152,11 +155,35 @@ test.describe('T5215 round 5 (real account)', () => {
     test.skip(!opened2, 'no "at Legends Mar 28" group on this account');
     const tile2 = page.getByTestId('reel-card').filter({ hasText: 'Brilliant Dribble and Pass' }).first();
     const has2 = await tile2.isVisible().catch(() => false);
-    test.skip(!has2, 'no reel with an explicit intro on this account to verify against');
+    test.skip(!has2, 'no reel to verify against on this account');
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    const targetCard = cards[0];
+
     await tile2.hover();
     await tile2.getByRole('button', { name: /More actions/i }).click();
     await page.getByRole('button', { name: 'Intro' }).click();
-    const listbox2 = page.getByRole('listbox', { name: 'Intro card' });
+    let listbox2 = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox2).toBeVisible({ timeout: 10000 });
+    const setupOption = listbox2.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await setupOption.click();
+    const setupPatch = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    await page.getByRole('button', { name: 'OK' }).click();
+    await setupPatch;
+    await expect(listbox2).toHaveCount(0);
+
+    // Reopen and verify the same reel now shows ITS card selected.
+    await tile2.hover();
+    await tile2.getByRole('button', { name: /More actions/i }).click();
+    await page.getByRole('button', { name: 'Intro' }).click();
+    listbox2 = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox2).toBeVisible({ timeout: 10000 });
     const noIntro2 = listbox2.getByRole('option', { name: 'No intro' });
     await expect(noIntro2, '"No intro" must NOT be selected when an explicit card is attached')
