@@ -44,6 +44,26 @@ describe('ProfileSportButton', () => {
     expect(screen.getByTestId('manage-modal')).toBeTruthy();
   });
 
+  it('shows the profile intro photo instead of the sport glyph when one exists', () => {
+    h.profiles = [{ ...h.profiles[0], introPhotoUrl: 'https://r2/photo.png' }];
+    render(<ProfileSportButton />);
+
+    const img = screen.getByRole('button').querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://r2/photo.png');
+    expect(screen.getByRole('button').textContent).not.toContain('🏐');
+  });
+
+  it('falls back to the sport glyph when the photo object is gone (dead R2 key)', () => {
+    h.profiles = [{ ...h.profiles[0], introPhotoUrl: 'https://r2/deleted.png' }];
+    render(<ProfileSportButton />);
+
+    const img = screen.getByRole('button').querySelector('img');
+    fireEvent.error(img);
+
+    expect(screen.getByRole('button').querySelector('img')).toBeNull();
+    expect(screen.getByRole('button').textContent).toContain('🏐');
+  });
+
   it('renders nothing when unauthenticated or before profiles initialize', () => {
     h.auth = false;
     const { unmount } = render(<ProfileSportButton />);

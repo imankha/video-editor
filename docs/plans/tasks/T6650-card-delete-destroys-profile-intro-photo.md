@@ -21,8 +21,34 @@ tell what happened.
 | Object does not exist | Full paginated `list_objects_v2` over `dev/users/3ed03fb5.../profiles/` filtered to `/intro/`: **6 objects, all dated 2026-08-04**; the `66b98be0...png` key is absent |
 | Browser symptom | Presigned GET for that key returns **404** (HAR `Downloads/localhost.har`; Chrome masks the opaque `<img>` error as `ERR_BLOCKED_BY_ORB`) |
 
-The user must re-upload once this is fixed. **Do not "heal" by re-pointing the key at the surviving
-2026-08-04 object `5c8b0ffd563744188c15b85e4abef963.png`** — that is a different photo.
+**Do not "heal" by re-pointing the key at the surviving 2026-08-04 object
+`5c8b0ffd563744188c15b85e4abef963.png`** — that is a different photo.
+
+### Second half, observed by the user 2026-08-07 (~05:39): a card never learns the photo changed
+
+The user removed the broken photo and re-uploaded it. **The re-upload landed:** a fresh listing shows
+`.../intro/32fd37c7369d47af930647a247c29b82.png` at `2026-08-07T05:39:30Z`, 2,242,865 bytes — the same
+byte size as the Aug-4 `5c8b0ffd...png`, i.e. the same source image re-uploaded. This is empirical
+confirmation, on top of the code reading below, that the upload path works and the "unproven write"
+theory is wrong.
+
+They then opened the cards and **the card's photo was still broken** — the new key did not propagate.
+Mechanism, verified in the code:
+
+- A card stores a **snapshot copy** of the key (`introCardDefaults.js:57` at create,
+  `IntroCardRail.jsx:372` via "Use profile photo"). Nothing links the card back to the profile.
+- So re-uploading the profile photo mints a NEW key while every existing card keeps pointing at the
+  OLD one — which this bug's first half had already deleted from R2. The card renders
+  `<img src={card.previewUrl}>` (`IntroCardRail.jsx:344-348`) with no missing-object state, so a dead
+  key looks exactly like a slow-loading image.
+
+The user recovered by clicking **Remove** on the card, then **Use profile photo**, which re-snapshotted
+the current key and worked. Note that affordance is gated on `!hasPhoto` (`IntroCardRail.jsx:369`), so
+it only appears AFTER removing — a card with a broken photo cannot refresh in one click.
+
+**User verdict (do not relitigate):** that remove → "Use profile photo" recovery is acceptable
+behaviour and should NOT be redesigned. The fix's job is to stop destroying the object and to make a
+missing photo visible — not to replace this flow.
 
 ## Root cause
 
@@ -87,7 +113,10 @@ Whichever is chosen, two hardening items apply regardless:
 
 1. **A dangling key must not fail silently.** If a resolved `intro_photo_key` has no object, surface
    it (the user sees "photo missing, re-upload" rather than a broken thumbnail) and log it. Broken
-   `<img>` is not an error report.
+   `<img>` is not an error report. This applies to BOTH surfaces the user hit: the Edit Profile thumb
+   and the card photo control — the card one needs an `onError` state on the `<img>` at
+   `IntroCardRail.jsx:344`, and should offer the refresh in place rather than requiring Remove first
+   (keep the existing "Use profile photo" button; just stop hiding the only recovery behind `!hasPhoto`).
 2. **`intro_cards.py` delete is documented as "best-effort side effect"** — that is acceptable for an
    object the card owns, and unacceptable for one it merely references. Make the comment match the
    enforced rule.
@@ -127,7 +156,9 @@ to re-point it at a different object.
 
 ### Steps
 1. [ ] Reproduce on a real account: upload profile photo, create a card (image defaults to it), delete
-       the card, observe the profile photo object gone and the key still set.
+       the card, observe the profile photo object gone and the key still set. Second repro for the
+       staleness half: re-upload the profile photo and confirm an existing card still shows the old
+       (now dead) key.
 2. [ ] Pick option A or B and record the decision in this file.
 3. [ ] Implement the reference check (or copy-on-default) so a card delete cannot destroy an object
        another owner still references.
@@ -147,6 +178,10 @@ end-to-end — step 1 is the first job.
 - [ ] Deleting a card whose `image_key` is also the profile's `intro_photo_key` leaves the object intact
 - [ ] Deleting a card whose image nothing else references still removes the object (no orphan growth)
 - [ ] Duplicated cards sharing one key survive each other's deletion
-- [ ] A key with no object produces a visible, logged "photo missing" state, never a broken thumbnail
+- [ ] A key with no object produces a visible, logged "photo missing" state, never a broken thumbnail,
+      on BOTH the Edit Profile thumb and the card photo control
+- [ ] Removing the PROFILE photo does not destroy an object a card still references (the mirror of the
+      card-delete case, same shared-object rule)
+- [ ] The remove → "Use profile photo" recovery still works unchanged (user-approved behaviour)
 - [ ] T5230 compliance purge still deletes intro media unconditionally
 - [ ] Tests pass
