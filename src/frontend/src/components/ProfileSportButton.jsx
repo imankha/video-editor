@@ -34,6 +34,12 @@ export function ProfileSportButton() {
   // T5215 round 4: "if there is a profile image, a thumbnail of the profile
   // image should show up in the area under the profile indicator" -- profile
   // photo (T5190), not the intro CARD; only rendered when one is set.
+  // Round 5: "bigger and rectangular ... at its current size it's not
+  // meaningful" -- was a 32x32 circle. This photo IS the intro card's face
+  // photo, so reuse THAT feature's own aspect convention (CARD_ASPECTS.portrait,
+  // 9:16 -- the same ratio IntroCardCarousel's tiles/IntroCardPreview render
+  // at) rather than the unrelated square crop ProfileIntroSection's upload
+  // preview happens to use.
   const photoUrl = currentProfile?.introPhotoUrl;
 
   return (
@@ -59,7 +65,7 @@ export function ProfileSportButton() {
             src={photoUrl}
             alt=""
             aria-hidden
-            className="absolute top-full right-0 mt-1.5 w-8 h-8 rounded-full object-cover ring-2 ring-white/20 shadow pointer-events-none"
+            className="absolute top-full right-0 mt-1.5 w-14 h-[100px] rounded-lg object-cover ring-2 ring-white/20 shadow pointer-events-none"
           />
         )}
       </div>

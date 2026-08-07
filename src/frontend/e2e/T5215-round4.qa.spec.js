@@ -74,7 +74,7 @@ test.describe('T5215 round 4 (real account)', () => {
 
     await page.keyboard.press('Escape');
 
-    const thumb = page.locator('img[aria-hidden="true"][class*="rounded-full"]');
+    const thumb = page.locator('img[aria-hidden="true"][class*="rounded-lg"]');
     await expect(thumb, 'a rounded thumbnail must appear under the profile indicator').toBeVisible({ timeout: 10000 });
     expect(await thumb.getAttribute('src')).toBe(profileImgSrc);
     await saveEvidence(page, 'T5215-round4-photo-thumbnail');
@@ -83,7 +83,7 @@ test.describe('T5215 round 4 (real account)', () => {
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('button', { name: /switch sport or profile/i })).toBeVisible({ timeout: 20000 });
-    const thumbAfterReload = page.locator('img[aria-hidden="true"][class*="rounded-full"]');
+    const thumbAfterReload = page.locator('img[aria-hidden="true"][class*="rounded-lg"]');
     await expect(thumbAfterReload, 'the thumbnail must still show after reload').toBeVisible({ timeout: 10000 });
     expect(await thumbAfterReload.getAttribute('src')).toBe(profileImgSrc);
     await saveEvidence(page, 'T5215-round4-photo-thumbnail-after-reload');
@@ -126,7 +126,7 @@ test.describe('T5215 round 4 (real account)', () => {
     // rounded) + a <circle> head -- lucide's Sparkles is built entirely from
     // <path> elements with no <rect>, so this distinguishes the two shapes,
     // not just "some svg exists".
-    const badgeSvg = tile.locator('h3 svg').first();
+    const badgeSvg = tile.getByTestId('intro-badge').locator('svg').first();
     await expect(badgeSvg, 'the reel tile must show the intro badge').toBeVisible({ timeout: 10000 });
     const rectCount = await badgeSvg.locator('rect').count();
     const circleCount = await badgeSvg.locator('circle').count();
