@@ -53,13 +53,11 @@ export function OverlayMode({
   textOverlays = [],
   clipBoundaries = [],
   selectedTextId = null,
-  onAddText,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
   onSelectText,
   onDeleteText,
-  onToggleText,
   // T6630 round 2: whole-text-layer visibility toggle (label icon).
   textLayerHidden = false,
   onToggleTextLayer,
@@ -236,22 +234,21 @@ export function OverlayMode({
           >
             {/* Text Layer (T5225) -- FIRST overlay lane now (T6630 round 2): text
                 paints on top in the preview, so its lane sits directly under the
-                video ruler, above Detection and Highlight. */}
+                video ruler, above Detection and Highlight. T6630 round 3: TIMING
+                ONLY -- add/remove/settings live in the Text tab (OverlayModeView),
+                not here. */}
             <div className="mt-0.5 lg:mt-1">
               <TextLayer
                 blocks={textOverlays}
                 duration={duration}
                 visualDuration={visualDuration || duration}
-                currentTime={currentTime}
                 clipBoundaries={clipBoundaries}
                 selectedTextId={selectedTextId}
-                onAddText={onAddText}
                 onMoveTextStart={onMoveTextStart}
                 onMoveTextEnd={onMoveTextEnd}
                 onMoveTextBody={onMoveTextBody}
                 onSelectText={onSelectText}
                 onDeleteText={onDeleteText}
-                onToggleText={onToggleText}
                 visualTimeToSourceTime={visualTimeToSourceTime}
                 edgePadding={EDGE_PADDING}
               />
@@ -306,9 +303,11 @@ export function OverlayMode({
               />
             </div>
 
-            {/* Thumbnail marker (T5410; T6590 round 2) -- a full-height guide line
-                with its handle at the vertical MIDDLE (see PosterMarkerLayer's
-                docstring); no longer the clipped/occluded top-rail chip. */}
+            {/* Thumbnail marker (T5410; T6590 round 3) -- lives in the video track's
+                TOP band (user decision: "on top of the timeline and draggable").
+                Never clipped (positive top offset only) and never occluded by the
+                playhead (explicit z-40 + opaque halo) -- see PosterMarkerLayer's
+                docstring for the full reasoning. */}
             <PosterMarkerLayer
               visualTime={posterVisualTime}
               duration={duration}

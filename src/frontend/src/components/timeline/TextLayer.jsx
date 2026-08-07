@@ -1,4 +1,3 @@
-import { Trash2, Eye, EyeOff, Plus } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 import { snapToBoundary } from '../../utils/textSnapping';
@@ -23,16 +22,13 @@ export default function TextLayer({
   blocks = [],
   duration,
   visualDuration,
-  currentTime = 0,
   clipBoundaries = [],
   selectedTextId = null,
-  onAddText,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
   onSelectText,
   onDeleteText,
-  onToggleText,
   visualTimeToSourceTime = (t) => t,
   edgePadding = 20,
 }) {
@@ -49,9 +45,6 @@ export default function TextLayer({
   const isCoarsePointer = useIsCoarsePointer();
   const leverHitWidth = isCoarsePointer ? 44 : 32;
   const leverHitOffset = leverHitWidth / 2;
-  // T6610 item 2: 44px hit box on coarse pointers for the per-block controls
-  // (delete/toggle), 28px on fine pointers.
-  const controlHitClass = isCoarsePointer ? 'w-11 h-11' : 'w-7 h-7';
 
   const effectiveDuration = visualDuration || duration;
 
@@ -243,53 +236,15 @@ export default function TextLayer({
 
   if (!duration) return null;
 
-  const pixelPercentToTime = (percent) => {
-    const visualTime = (percent / 100) * effectiveDuration;
-    return visualTimeToSourceTime(visualTime);
-  };
-
-  const handleTrackClick = (e) => {
-    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-    if (e.target.closest('.lever-handle')) return;
-    if (!onAddText) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const usableWidth = rect.width - (edgePadding * 2);
-    const x = e.clientX - rect.left - edgePadding;
-    const clampedX = Math.max(0, Math.min(x, usableWidth));
-    const percentX = (clampedX / usableWidth) * 100;
-    const clickTime = pixelPercentToTime(percentX);
-
-    onAddText(clickTime);
-  };
-
+  // T6630 round 3 -- the lane is TIMING ONLY (user direction: add/remove/settings
+  // move into the Text tab, a single management surface). There is no longer a
+  // whole-lane click-to-add (that was part of the original "discombobulating"
+  // complaint -- stray clicks adding blocks) and no in-lane add button. Blocks are
+  // created and destroyed from the Text tab; this lane only positions/times them
+  // (drag the body, drag a lever, arrow-key nudge) and still supports keyboard
+  // Delete/Backspace on the focused block as a fast path.
   return (
-    // h-28 (was h-14): the per-block controls render BELOW the h-10 track via
-    // `top-full`; the extra lane height reserves clear space between them and the
-    // timeline's horizontal scrollbar at the container's bottom edge (T6610 item
-    // 2). Keep in sync with OverlayMode.getTotalLayerHeight() + the text label.
-    <div
-      className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2 cursor-pointer"
-      onClick={handleTrackClick}
-    >
-      {/* T6630 round 2 -- the "+ Add text" control lives INSIDE the text lane, in
-          context (the round-1 full-width button below the timeline, next to Add
-          Spotlight, was rejected). It sits in the previously-inert lower band so it
-          never overlaps a block/lever; it adds a block at the current playhead and
-          stops propagation so it does not ALSO fire the whole-lane click-to-add. */}
-      {onAddText && (
-        <button
-          type="button"
-          data-testid="add-text-in-lane"
-          onClick={(e) => { e.stopPropagation(); onAddText(currentTime); }}
-          className="absolute bottom-1 left-2 z-20 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium bg-cyan-600/90 hover:bg-cyan-500 text-white shadow coarse-pointer:min-h-11 transition-colors"
-          title="Add a text block at the playhead"
-        >
-          <Plus size={12} />
-          Add text
-        </button>
-      )}
-
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2">
       <div
         ref={trackRef}
         className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg"
@@ -377,35 +332,6 @@ export default function TextLayer({
                       : 'bg-gray-900 hover:bg-cyan-400'
                   }`}
                 />
-              </div>
-
-              {/* Toggle (mute/unmute) + Delete. T6610 item 2: the controls sit
-                  BELOW the lane, which on a zoomed timeline crowds the horizontal
-                  scrollbar -- the parent lane now reserves extra height beneath
-                  them (h-28) so there is clear separation, and each control meets
-                  the 44px coarse-pointer hit floor (isCoarsePointer ? 44 : 28,
-                  the PosterMarkerLayer precedent) with the icon centred. */}
-              <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 z-10 flex gap-2">
-                <button
-                  className={`${controlHitClass} flex items-center justify-center rounded transition-colors bg-gray-700 hover:bg-gray-600 text-white`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleText && onToggleText(block.id, block.enabled === false);
-                  }}
-                  title={block.enabled === false ? 'Show text' : 'Hide text (keep block)'}
-                >
-                  {block.enabled === false ? <EyeOff size={12} /> : <Eye size={12} />}
-                </button>
-                <button
-                  className={`${controlHitClass} flex items-center justify-center rounded transition-colors bg-red-600 hover:bg-red-700 text-white`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteText && onDeleteText(block.id);
-                  }}
-                  title="Delete text block"
-                >
-                  <Trash2 size={12} />
-                </button>
               </div>
             </div>
           );

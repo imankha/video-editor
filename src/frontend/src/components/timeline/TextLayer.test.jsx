@@ -53,20 +53,17 @@ function renderLayer(overrides = {}) {
   const onMoveTextStart = vi.fn();
   const onMoveTextEnd = vi.fn();
   const onMoveTextBody = vi.fn();
-  const onAddText = vi.fn();
   const onSelectText = vi.fn();
   const onDeleteText = vi.fn();
   const utils = render(
     <TextLayer
       blocks={[BLOCK]}
       duration={DURATION}
-      currentTime={0}
       clipBoundaries={[]}
       onMoveTextStart={onMoveTextStart}
       onMoveTextEnd={onMoveTextEnd}
       onMoveTextBody={onMoveTextBody}
       onSelectText={onSelectText}
-      onAddText={onAddText}
       onDeleteText={onDeleteText}
       {...overrides}
     />
@@ -75,13 +72,11 @@ function renderLayer(overrides = {}) {
   if (track) {
     track.getBoundingClientRect = () => WIDE_RECT();
   }
-  // T6630: the click-to-add target is now the FULL-height lane (the .text-track's
-  // parent), so tests that add via click must measure that element's rect.
   const lane = track ? track.parentElement : null;
   if (lane) {
     lane.getBoundingClientRect = () => WIDE_RECT();
   }
-  return { onMoveTextStart, onMoveTextEnd, onMoveTextBody, onSelectText, onAddText, onDeleteText, track, lane, ...utils };
+  return { onMoveTextStart, onMoveTextEnd, onMoveTextBody, onSelectText, onDeleteText, track, lane, ...utils };
 }
 
 beforeEach(() => setCoarse(false));
@@ -245,32 +240,29 @@ describe('TextLayer — body drag moves the whole block (T6610)', () => {
   });
 });
 
-describe('TextLayer — add is reachable across the WHOLE lane (T6630)', () => {
-  // The bug this guards: the onClick used to live on the h-10 `.text-track`
-  // strip inside the h-28 lane, so the lower ~72px was inert. Clicking LOW in
-  // the lane (on the lane element itself, BELOW the track strip) must add --
-  // a test that only clicked the top strip passed on the broken code.
-  it('a click LOW in the lane (the previously-inert lower band) adds a block', () => {
-    const { onAddText, lane } = renderLayer({ blocks: [] });
+describe('TextLayer — lane is TIMING ONLY, no add path (T6630 round 3)', () => {
+  // Round 2 put an add-on-click affordance in the lane (whole-lane click, then an
+  // in-lane "+ Add text" button). Round 3 removes BOTH: add/remove/settings moved
+  // entirely into the Text tab (TextManagementPanel) -- one add path, not two.
+  // These guard against either affordance quietly reappearing in the lane.
+  it('clicking empty lane space does not add a block (no onAddText prop, no click-to-add)', () => {
+    const { lane } = renderLayer({ blocks: [] });
     expect(lane).toBeTruthy();
-    // clientY=90 is in the lower band (track is only 40px tall); the handler is
-    // on the full-height lane, so this must still add. Lane is mocked 1000px
-    // wide, edgePadding 20 -> usable 960; x=500 -> (500-20)/960*10 = 5.0s.
-    fireEvent.click(lane, { clientX: 500, clientY: 90 });
-    expect(onAddText).toHaveBeenCalledTimes(1);
-    expect(onAddText.mock.calls.at(-1)[0]).toBeCloseTo(5.0, 5);
+    // Should not throw and should not select/move anything either -- the lane has
+    // no click handler at all now.
+    expect(() => fireEvent.click(lane, { clientX: 500, clientY: 90 })).not.toThrow();
   });
 
-  it('the click-to-add affordance stays visible even when blocks already exist', () => {
+  it('no in-lane "Add text" control is rendered', () => {
     renderLayer({ blocks: [BLOCK] });
-    expect(screen.getByText(/add text/i)).toBeTruthy();
+    expect(screen.queryByTestId('add-text-in-lane')).toBeNull();
+    expect(screen.queryByText(/add text/i)).toBeNull();
   });
 
-  it('clicking a per-block control (trash) never adds a block (guard preserved)', () => {
-    const { onAddText, onDeleteText } = renderLayer({ blocks: [BLOCK] });
-    fireEvent.click(screen.getByTitle('Delete text block'));
-    expect(onDeleteText).toHaveBeenCalledWith('t1');
-    expect(onAddText, 'a control click must not fall through to the lane add').not.toHaveBeenCalled();
+  it('no per-block eye/trash controls are rendered in the lane (moved to the Text tab)', () => {
+    renderLayer({ blocks: [BLOCK] });
+    expect(screen.queryByTitle('Delete text block')).toBeNull();
+    expect(screen.queryByTitle(/hide text|show text/i)).toBeNull();
   });
 });
 

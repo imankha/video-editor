@@ -10,12 +10,12 @@ import ExportButtonView from '../components/ExportButtonView';
 import OverlaySettingsCard from '../components/OverlaySettingsCard';
 import OverlaySettingsTabs from '../components/overlay/OverlaySettingsTabs';
 import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
+import TextManagementPanel from '../components/overlay/TextManagementPanel';
 import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Trash2 } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
-import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 
 /**
@@ -561,10 +561,6 @@ export function OverlayModeView({
     return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null);
   }, [posterMarkerTime, posterSlowmoSection, effectiveOverlayMetadata?.duration, duration]);
 
-  const selectedTextBlock = selectedTextId
-    ? textOverlays.find((b) => b.id === selectedTextId) || null
-    : null;
-
   // --- Overlay tab: spotlight/highlight tuning (poster moved to Thumbnail tab). ---
   const overlayPanel = (
     <OverlaySettingsCard
@@ -585,41 +581,23 @@ export function OverlayModeView({
     />
   );
 
-  // --- Text tab: the SHARED TextSpecEditor for the selected block, or an
-  // empty-state prompt. Always present (it is a tab, not a mounted-on-select
-  // rail), so selecting a block updates it in place without reflow. ---
-  const textPanel = selectedTextBlock ? (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-white">Edit Text</h3>
-        <button
-          onClick={() => onSelectText && onSelectText(null)}
-          className="text-gray-400 hover:text-white text-xs"
-        >
-          Done
-        </button>
-      </div>
-      <TextSpecEditor
-        spec={selectedTextBlock.spec}
-        onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedTextBlock.id, nextSpec)}
-      />
-      {/* T6630 -- delete right where the user already is; reuses the SINGLE
-          onDeleteText path (which clears the selection). */}
-      <button
-        onClick={() => onDeleteText && onDeleteText(selectedTextBlock.id)}
-        className="mt-3 w-full flex items-center justify-center gap-1.5 text-sm text-red-400 hover:text-red-300 border border-red-500/40 hover:border-red-500 rounded px-3 py-2 transition-colors"
-      >
-        <Trash2 size={14} />
-        Delete text
-      </button>
-    </div>
-  ) : (
-    <div className="flex flex-col items-start gap-2">
-      <p className="text-sm text-gray-300">No text block selected.</p>
-      <p className="text-xs text-gray-500">
-        Click a text block on the timeline to edit it, or use <span className="text-cyan-300">+ Add text</span> in the text lane to create one.
-      </p>
-    </div>
+  // --- Text tab: the SINGLE management surface (T6630 round 3, user direction).
+  // Always present (it is a tab, not a mounted-on-select rail): a list of every
+  // text element + the ONE Add control + a per-row Remove/visibility + the
+  // settings editor for the selected element (including the 9-slot position
+  // grid). Selecting a row sets the SAME selectedTextId the timeline/stage
+  // read -- one selection state, no second source of truth. ---
+  const textPanel = (
+    <TextManagementPanel
+      blocks={textOverlays}
+      selectedTextId={selectedTextId}
+      currentTime={currentTime}
+      onAddText={onAddText}
+      onSelectText={handleSelectText}
+      onDeleteText={onDeleteText}
+      onToggleText={onToggleText}
+      onUpdateTextSpec={onUpdateTextSpec}
+    />
   );
 
   // --- Thumbnail tab (T6590): the chosen still as FEEDBACK; the marker owns
@@ -847,13 +825,11 @@ export function OverlayModeView({
             textOverlays={textOverlays}
             clipBoundaries={clipBoundaries}
             selectedTextId={selectedTextId}
-            onAddText={onAddText}
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
             onMoveTextBody={onMoveTextBody}
             onSelectText={handleSelectText}
             onDeleteText={onDeleteText}
-            onToggleText={onToggleText}
             textLayerHidden={textLayerHidden}
             onToggleTextLayer={onToggleTextLayer}
               />
@@ -938,14 +914,12 @@ export function OverlayModeView({
                         textOverlays={textOverlays}
                         clipBoundaries={clipBoundaries}
                         selectedTextId={selectedTextId}
-                        onAddText={onAddText}
-                        onMoveTextStart={onMoveTextStart}
+                                    onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
                         onMoveTextBody={onMoveTextBody}
                         onSelectText={handleSelectText}
                         onDeleteText={onDeleteText}
-                        onToggleText={onToggleText}
-            textLayerHidden={textLayerHidden}
+                        textLayerHidden={textLayerHidden}
             onToggleTextLayer={onToggleTextLayer}
                       />
                     </div>
