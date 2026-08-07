@@ -188,20 +188,25 @@ test.describe('T5215 intro attachment (real account)', () => {
     const listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
 
-    const patchResp = page.waitForResponse(
-      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
-      { timeout: 10000 },
-    );
     const optionLocator = listbox.getByRole('option', {
       name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
     });
     await optionLocator.click();
+    // ROUND 3: SELECT -> PREVIEW -> CONFIRM. A card click only selects (and
+    // plays the motion preview) -- it must NOT commit or close the popup.
+    await expect(listbox, 'a card click must not close the popup (no commit-on-click)').toBeVisible();
+
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    await page.getByRole('button', { name: 'OK' }).click();
     const resp = await patchResp;
     expect(resp.status(), 'the intro PATCH must succeed').toBeLessThan(300);
     const body = await resp.json().catch(() => null);
     if (body) expect(body.intro_card_id).toBe(targetCard.id);
 
-    // Picker closes on select.
+    // Picker closes on OK.
     await expect(listbox).toHaveCount(0);
 
     // Reload the page (fresh app boot, same authenticated session cookie) then
@@ -251,14 +256,15 @@ test.describe('T5215 intro attachment (real account)', () => {
     let listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
 
-    const patchResp = page.waitForResponse(
-      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
-      { timeout: 10000 },
-    );
     const optionLocator = listbox.getByRole('option', {
       name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
     });
     await optionLocator.click();
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    await page.getByRole('button', { name: 'OK' }).click();
     await patchResp;
     await expect(listbox).toHaveCount(0);
 
@@ -314,11 +320,14 @@ test.describe('T5215 intro attachment (real account)', () => {
     const listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
 
+    // ROUND 3: "No intro" goes through the same select -> OK flow as a card.
+    await listbox.getByRole('option', { name: 'No intro' }).click();
+    await expect(listbox, 'selecting "No intro" must not close the popup (no commit-on-click)').toBeVisible();
     const patchResp = page.waitForResponse(
       (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
       { timeout: 10000 },
     );
-    await listbox.getByRole('option', { name: 'No intro' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
     const resp = await patchResp;
     expect(resp.status(), 'the "No intro" PATCH must succeed').toBeLessThan(300);
     const body = await resp.json().catch(() => null);
@@ -533,14 +542,16 @@ test.describe('T5215 intro attachment (real account)', () => {
 
     const listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
-    const patchResp = page.waitForResponse(
-      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
-      { timeout: 10000 },
-    );
     const optionLocator = listbox.getByRole('option', {
       name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
     });
     await clickChecked(page, optionLocator, 'card option in picker');
+    await expect(listbox, 'card click must not close the popup (no commit-on-click)').toBeVisible();
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    await clickChecked(page, page.getByRole('button', { name: 'OK' }), 'picker OK button');
     await patchResp;
     await expect(listbox).toHaveCount(0);
 
@@ -596,14 +607,16 @@ test.describe('T5215 intro attachment (real account)', () => {
     test.skip(cards.length === 0, 'no intro cards exist');
     const targetCard = cards[0];
 
-    const patchResp = page.waitForResponse(
-      (r) => /\/api\/collections\/intro/.test(r.url()) && r.request().method() === 'PATCH',
-      { timeout: 10000 },
-    );
     const optionLocator = listbox.getByRole('option', {
       name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
     });
     await clickChecked(page, optionLocator, 'collection card option');
+    await expect(listbox, 'card click must not close the popup (no commit-on-click)').toBeVisible();
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/collections\/intro/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    await clickChecked(page, page.getByRole('button', { name: 'OK' }), 'collection picker OK button');
     const resp = await patchResp;
     console.log(`[T5215 DIAG] PATCH ${resp.url()} -> ${resp.status()} body=${await resp.text().catch(() => '(unreadable)')}`);
     expect(resp.status(), 'the collection intro PATCH must succeed').toBeLessThan(300);
@@ -634,17 +647,193 @@ test.describe('T5215 intro attachment (real account)', () => {
     await clickChecked(page, headersAfter.first(), 'collection group header (reopened)');
     const kebabAfter = page.locator('.animate-slide-in-right').getByRole('button', { name: /More actions/i }).first();
     await clickChecked(page, kebabAfter, 'collection kebab (reopened)');
+    // The picker's listbox mounts SYNCHRONOUSLY on click, but its selection
+    // (collectionIntroSelectedId) resolves via a separate async GET that
+    // fires the same gesture -- wait for that round trip before reading
+    // aria-selected, or this races the network and flakes.
+    const reopenGetResp = page.waitForResponse(
+      (r) => /\/api\/collections\/intro\?/.test(r.url()) && r.request().method() === 'GET',
+      { timeout: 10000 },
+    );
     await clickChecked(page, page.getByRole('button', { name: 'Intro' }), '"Intro" item (reopened)');
+    await reopenGetResp;
 
     const listboxAfter = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listboxAfter).toBeVisible({ timeout: 10000 });
     const reopenedOption = listboxAfter.getByRole('option', {
       name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
     });
-    const ariaSelected = await reopenedOption.getAttribute('aria-selected');
-    console.log(`[T5215] collection intro reopened: card id=${targetCard.id} aria-selected="${ariaSelected}"`);
-    expect(ariaSelected, 'reopening the collection picker must mark the persisted selection').toBe('true');
+    // The network round trip is done (awaited above); React still needs a
+    // render tick to commit it into aria-selected -- poll rather than a bare
+    // getAttribute read.
+    await expect
+      .poll(() => reopenedOption.getAttribute('aria-selected'), {
+        timeout: 5000,
+        message: 'reopening the collection picker must mark the persisted selection',
+      })
+      .toBe('true');
+    console.log(`[T5215] collection intro reopened: card id=${targetCard.id} aria-selected="true"`);
 
     await saveEvidence(page, 'T5215-round2-collection-intro-reopened-after-reload');
+  });
+
+  // =========================================================================
+  // ROUND 3 (user, 2026-08-07), item 3: SELECT -> PREVIEW -> CONFIRM. A card
+  // click selects + plays the motion preview but must NEVER write by itself;
+  // exactly one write happens on OK, zero on Cancel/X/Escape; Enter commits.
+  // =========================================================================
+
+  test('ROUND 3: card click plays the motion preview and does not write; OK commits exactly one write', async ({ page }) => {
+    await openDrawer(page);
+    const hasReels = await expandFirstGroup(page);
+    test.skip(!hasReels, 'no published reels on this account/profile');
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    const targetCard = cards.find((c) => !c.is_default) || cards[0];
+
+    const tile = page.getByTestId('reel-card').first();
+    await clickChecked(page, tile.getByRole('button', { name: /More actions/i }), 'reel kebab');
+    const introItem = page.getByRole('button', { name: 'Intro' });
+    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
+    await clickChecked(page, introItem, '"Intro" menu item');
+
+    const listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+
+    // Count writes for the life of this test -- the user's exact requirement
+    // is "exactly one write per OK, zero on cancel".
+    let writeCount = 0;
+    page.on('response', (r) => {
+      if (/\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH') writeCount++;
+    });
+
+    const optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await clickChecked(page, optionLocator, 'card option (select + preview)');
+
+    // The motion preview overlay (T5205's MotionPreview, reused) must mount
+    // on the selected tile.
+    await expect(optionLocator.locator('[data-testid="motion-preview"]'), 'clicking a card must play its motion preview')
+      .toBeVisible({ timeout: 3000 });
+
+    // The popup must still be open and no write must have happened yet.
+    await expect(listbox, 'the popup must stay open after a card click').toBeVisible();
+    await page.waitForTimeout(300);
+    expect(writeCount, 'a card click alone must not write').toBe(0);
+
+    await saveEvidence(page, 'T5215-round3-motion-preview-playing');
+
+    // OK commits -- exactly once.
+    await clickChecked(page, page.getByRole('button', { name: 'OK' }), 'picker OK button');
+    await expect(listbox, 'OK must close the popup').toHaveCount(0);
+    await expect.poll(() => writeCount, { timeout: 10000 }).toBe(1);
+
+    // The badge (round 3 item 2) must appear immediately, no reload needed.
+    const badge = tile.locator('h3 svg').first();
+    await expect(badge, 'the reel tile must show the intro badge immediately after OK (no reload)').toBeVisible({ timeout: 10000 });
+
+    await saveEvidence(page, 'T5215-round3-ok-commits-badge-immediate');
+  });
+
+  test('ROUND 3: Cancel closes the popup with zero writes', async ({ page }) => {
+    await openDrawer(page);
+    const hasReels = await expandFirstGroup(page);
+    test.skip(!hasReels, 'no published reels on this account/profile');
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    const targetCard = cards[0];
+
+    const tile = page.getByTestId('reel-card').first();
+    await clickChecked(page, tile.getByRole('button', { name: /More actions/i }), 'reel kebab');
+    const introItem = page.getByRole('button', { name: 'Intro' });
+    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
+    await clickChecked(page, introItem, '"Intro" menu item');
+
+    const listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+
+    let writeCount = 0;
+    page.on('response', (r) => {
+      if (/\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH') writeCount++;
+    });
+
+    const optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await clickChecked(page, optionLocator, 'card option (select + preview)');
+    await expect(listbox).toBeVisible();
+
+    await clickChecked(page, page.getByRole('button', { name: 'Cancel' }), 'picker Cancel button');
+    await expect(listbox, 'Cancel must close the popup').toHaveCount(0);
+    await page.waitForTimeout(300);
+    expect(writeCount, 'Cancel must never write').toBe(0);
+
+    await saveEvidence(page, 'T5215-round3-cancel-no-write');
+  });
+
+  test('ROUND 3: Escape cancels with no write; Enter commits', async ({ page }) => {
+    await openDrawer(page);
+    const hasReels = await expandFirstGroup(page);
+    test.skip(!hasReels, 'no published reels on this account/profile');
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    const targetCard = cards.find((c) => !c.is_default) || cards[0];
+
+    const tile = page.getByTestId('reel-card').first();
+    await clickChecked(page, tile.getByRole('button', { name: /More actions/i }), 'reel kebab');
+    let introItem = page.getByRole('button', { name: 'Intro' });
+    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
+    await clickChecked(page, introItem, '"Intro" menu item');
+
+    let listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+
+    let writeCount = 0;
+    page.on('response', (r) => {
+      if (/\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH') writeCount++;
+    });
+
+    let optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await clickChecked(page, optionLocator, 'card option (select + preview)');
+    await expect(listbox).toBeVisible();
+
+    // Escape cancels -- must NOT commit.
+    await page.keyboard.press('Escape');
+    await expect(listbox, 'Escape must close the popup').toHaveCount(0);
+    await page.waitForTimeout(300);
+    expect(writeCount, 'Escape must never write').toBe(0);
+
+    // Reopen and use Enter to commit.
+    await clickChecked(page, tile.getByRole('button', { name: /More actions/i }), 'reel kebab (reopen)');
+    introItem = page.getByRole('button', { name: 'Intro' });
+    await clickChecked(page, introItem, '"Intro" menu item (reopen)');
+    listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+
+    optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await clickChecked(page, optionLocator, 'card option (select + preview, reopen)');
+    await expect(listbox).toBeVisible();
+
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    await page.keyboard.press('Enter');
+    await patchResp;
+    await expect(listbox, 'Enter must close the popup').toHaveCount(0);
+    expect(writeCount, 'Enter must commit exactly one write').toBe(1);
+
+    await saveEvidence(page, 'T5215-round3-escape-cancel-enter-commit');
   });
 });

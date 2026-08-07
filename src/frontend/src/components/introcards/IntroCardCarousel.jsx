@@ -31,10 +31,23 @@
 // Clicking any card tile — including the current default — sends that card's
 // EXPLICIT id (never re-emits null; the picker only ever calls onSelect with
 // 0 or a card id).
+//
+// ROUND 3 (user, 2026-08-07): "i need a bit more visual feedback... after i
+// select the card it plays its animation and i still need to click 'ok'".
+// A click here SELECTS (highlights) and, for a real card, PLAYS its motion
+// animation as a preview -- reusing T5205's MotionPreview verbatim, no second
+// animator. `onSelect` fires immediately on click as a DRAFT notification
+// (unchanged interface: CollectionShareModal already treats it as local
+// state, not a network write); the COMMIT-vs-cancel + OK/Escape/Enter
+// mechanics live one level up in IntroCardPicker (the modal host BOTH the
+// reel and collection-own-intro pickers use), which buffers the draft and
+// only calls its own onSelect (the real write) on OK.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertTriangle, Check, Star } from 'lucide-react';
 import { IntroCardPreview } from './IntroCardPreview';
+import { MotionPreview } from './MotionPreview';
+import { CARD_ASPECTS } from '../../utils/introCardGeometry';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 
 const TILE_W = 110;
@@ -63,6 +76,11 @@ export function IntroCardCarousel({
 }) {
   const sorted = useMemo(() => sortNewestFirst(cards || []), [cards]);
   const defaultCard = useMemo(() => sorted.find((c) => c.is_default) || null, [sorted]);
+  // Which card (if any) is currently PLAYING its motion preview -- a click
+  // starts it, MotionPreview's own onDone (or picking something else) clears
+  // it. Preview-only; the draft selection itself is `selectedId`, owned by
+  // the caller (round 3: IntroCardPicker buffers it until OK).
+  const [previewCardId, setPreviewCardId] = useState(null);
 
   // Three DISTINCT states (round 2, user 2026-08-06 — collapsing these into
   // one look is the presentation bug this rewrite fixes):
@@ -82,7 +100,13 @@ export function IntroCardCarousel({
         role="listbox"
         aria-label="Intro card"
       >
-        <NoIntroTile selected={isNone} onSelect={() => onSelect(0)} />
+        <NoIntroTile
+          selected={isNone}
+          onSelect={() => {
+            setPreviewCardId(null);
+            onSelect(0);
+          }}
+        />
 
         {sorted.map((card) => (
           <CardChoiceTile
@@ -93,7 +117,12 @@ export function IntroCardCarousel({
             inherited={isInherit && !!card.is_default && card.id === defaultCard?.id}
             isDefault={!!card.is_default}
             disabled={!hasConsent}
-            onSelect={() => onSelect(card.id)}
+            playing={previewCardId === card.id}
+            onSelect={() => {
+              setPreviewCardId(card.id);
+              onSelect(card.id);
+            }}
+            onPreviewDone={() => setPreviewCardId(null)}
           />
         ))}
       </div>
@@ -168,7 +197,7 @@ function NoIntroTile({ selected, onSelect }) {
   );
 }
 
-function CardChoiceTile({ card, profile, explicitlySelected, inherited, isDefault, disabled, onSelect }) {
+function CardChoiceTile({ card, profile, explicitlySelected, inherited, isDefault, disabled, playing, onSelect, onPreviewDone }) {
   const ariaSuffix = isDefault ? ' (your default)' : '';
   return (
     <button
@@ -190,6 +219,20 @@ function CardChoiceTile({ card, profile, explicitlySelected, inherited, isDefaul
       style={{ width: `${TILE_W}px`, height: `${TILE_H}px` }}
     >
       <IntroCardPreview card={card} profile={profile} boxWidth={TILE_W} boxHeight={TILE_H} />
+
+      {/* Round 3: a click SELECTS *and* PLAYS the card's own motion preview
+          -- T5205's MotionPreview reused verbatim, overlaid on top of the
+          static preview and self-clearing via onDone. */}
+      {playing && (
+        <MotionPreview
+          card={card}
+          profile={profile}
+          aspect={CARD_ASPECTS.portrait}
+          boxWidth={TILE_W}
+          boxHeight={TILE_H}
+          onDone={onPreviewDone}
+        />
+      )}
 
       {isDefault && (
         <span
