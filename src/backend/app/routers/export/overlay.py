@@ -439,7 +439,7 @@ def _get_text_overlays(cursor, working_video_id: int) -> list:
 
     T6630 round 4: each item is now a REGION -- `{id, startTime, endTime,
     elements: [{id, spec, enabled}, ...]}` -- not a standalone block (migrated
-    by profile_db v039; every write path in this file has produced the region
+    by profile_db v042; every write path in this file has produced the region
     shape since that migration).
 
     Separate read/save pair from highlights -- `_get_overlay_data`/`_save_overlay_data`
@@ -890,7 +890,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 #     contract byte-for-byte, so nothing about the
                 #     region-creation call changes. Its sole starter element
                 #     gets a DERIVED id `f"{data.id}_el0"`, mirroring the
-                #     v039 migration's own convention (a fresh region's first
+                #     v042 migration's own convention (a fresh region's first
                 #     element has no prior id to preserve).
                 #   - data.region_id names an EXISTING region: appends a NEW
                 #     ELEMENT into that region's `elements` list; `data.id` is

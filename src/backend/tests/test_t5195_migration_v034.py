@@ -128,12 +128,15 @@ def test_noop_column_on_missing_final_videos(tmp_path):
     assert "intro_cards" in tables
 
 
-def test_registry_head_is_v036():
+def test_registry_head_is_v042():
     from app.migrations.profile_db import MIGRATIONS
     # T6570 added v035 (intro_cards.subtitle_text); T6620 added v036 (null the
-    # dead intro_cards.title_text).
-    assert max(m.version for m in MIGRATIONS) == 36
+    # dead intro_cards.title_text); T6630 added v042 (text_overlays regions,
+    # renumbered from v039 -- sibling branches T5215/T6640 claimed v037/v038/
+    # v040/v041 first).
+    assert max(m.version for m in MIGRATIONS) == 42
     # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 35) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 36) == 1
+    assert sum(1 for m in MIGRATIONS if m.version == 42) == 1

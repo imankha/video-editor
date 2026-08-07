@@ -73,8 +73,11 @@ POST_V023_COLUMNS = {
     #   It is an UPDATE ... SET title_text = NULL (column-guarded, same PRAGMA check as every
     #   other migration here) over an EXISTING column that has carried data since v034; no
     #   hot read gains a new column name to fail on.
+    # v042 (T6630 text_overlays flat blocks -> regions, renumbered from v039) adds NO column
+    #   -> nothing to guard. It rewrites the JSON/msgpack SHAPE inside the existing
+    #   working_videos.text_overlays BLOB column; no hot read gains a new column name to fail on.
 }
-HEAD_VERSION_AUDITED = 36
+HEAD_VERSION_AUDITED = 42
 
 
 def _cleanup(user_id: str) -> None:

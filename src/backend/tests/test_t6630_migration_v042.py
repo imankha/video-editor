@@ -1,5 +1,5 @@
 """
-T6630 round 4 -- v039 profile_db migration: text_overlays flat blocks -> regions
+T6630 round 4 -- v042 profile_db migration: text_overlays flat blocks -> regions
 containing elements.
 
 Exercises the row-reading path WITH DATA under the migration runner's TUPLE row
@@ -10,13 +10,13 @@ test guards against.
 
 import sqlite3
 
-from app.migrations.profile_db.v039_text_overlays_regions import (
-    V039TextOverlaysRegions,
+from app.migrations.profile_db.v042_text_overlays_regions import (
+    V042TextOverlaysRegions,
 )
 from app.utils.encoding import decode_data, encode_data
 
 
-def _make_pre_v039_db(tmp_path):
+def _make_pre_v042_db(tmp_path):
     """working_videos WITH text_overlays in the OLD flat-block shape, tuple row
     factory -- mirrors exactly how migrations/__init__.py opens the connection."""
     db = tmp_path / "profile.sqlite"
@@ -50,7 +50,7 @@ def _old_block(block_id, text="GOAL", start=0.0, end=2.0, enabled=True):
 def test_noop_on_missing_working_videos_table(tmp_path):
     db = tmp_path / "profile.sqlite"
     conn = sqlite3.connect(str(db))  # no tables at all
-    V039TextOverlaysRegions().up(conn)  # must not raise
+    V042TextOverlaysRegions().up(conn)  # must not raise
 
 
 def test_noop_on_missing_text_overlays_column(tmp_path):
@@ -67,13 +67,13 @@ def test_noop_on_missing_text_overlays_column(tmp_path):
         )
     """)
     conn.commit()
-    V039TextOverlaysRegions().up(conn)  # must not raise
+    V042TextOverlaysRegions().up(conn)  # must not raise
 
 
 def test_converts_each_standalone_block_to_its_own_region_with_one_element(tmp_path):
     """The core transform: N flat blocks -> N regions, each with exactly one
     element. No grouping/guessing across blocks."""
-    conn = _make_pre_v039_db(tmp_path)
+    conn = _make_pre_v042_db(tmp_path)
     old = [_old_block("b1", text="GOAL", start=0.0, end=2.0),
            _old_block("b2", text="ASSIST", start=5.0, end=7.0, enabled=False)]
     conn.execute(
@@ -83,7 +83,7 @@ def test_converts_each_standalone_block_to_its_own_region_with_one_element(tmp_p
     )
     conn.commit()
 
-    V039TextOverlaysRegions().up(conn)
+    V042TextOverlaysRegions().up(conn)
 
     row = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 1").fetchone()
     regions = decode_data(row[0])  # positional index -- tuple row factory
@@ -104,7 +104,7 @@ def test_region_keeps_the_old_blocks_id(tmp_path):
     """The region's id equals the old standalone block's id (any stray
     reference to that id -- e.g. an in-flight action queued before reload --
     keeps pointing at the same timeline entity)."""
-    conn = _make_pre_v039_db(tmp_path)
+    conn = _make_pre_v042_db(tmp_path)
     conn.execute(
         "INSERT INTO working_videos (id, project_id, filename, version, text_overlays) "
         "VALUES (1, 100, 'test.mp4', 1, ?)",
@@ -112,7 +112,7 @@ def test_region_keeps_the_old_blocks_id(tmp_path):
     )
     conn.commit()
 
-    V039TextOverlaysRegions().up(conn)
+    V042TextOverlaysRegions().up(conn)
 
     row = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 1").fetchone()
     regions = decode_data(row[0])
@@ -122,7 +122,7 @@ def test_region_keeps_the_old_blocks_id(tmp_path):
 def test_idempotent_leaves_already_migrated_shape_untouched(tmp_path):
     """A row already in the new region/elements shape (re-run, or a fresh
     export written post-migration) is left byte-identical."""
-    conn = _make_pre_v039_db(tmp_path)
+    conn = _make_pre_v042_db(tmp_path)
     already_new = [{"id": "r1", "startTime": 0.0, "endTime": 2.0,
                      "elements": [{"id": "r1_el0", "spec": {"text": "X"}, "enabled": True},
                                   {"id": "r1_el1", "spec": {"text": "Y"}, "enabled": True}]}]
@@ -133,7 +133,7 @@ def test_idempotent_leaves_already_migrated_shape_untouched(tmp_path):
     )
     conn.commit()
 
-    V039TextOverlaysRegions().up(conn)
+    V042TextOverlaysRegions().up(conn)
 
     row = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 1").fetchone()
     regions = decode_data(row[0])
@@ -141,7 +141,7 @@ def test_idempotent_leaves_already_migrated_shape_untouched(tmp_path):
 
 
 def test_running_twice_is_a_noop_the_second_time(tmp_path):
-    conn = _make_pre_v039_db(tmp_path)
+    conn = _make_pre_v042_db(tmp_path)
     conn.execute(
         "INSERT INTO working_videos (id, project_id, filename, version, text_overlays) "
         "VALUES (1, 100, 'test.mp4', 1, ?)",
@@ -149,11 +149,11 @@ def test_running_twice_is_a_noop_the_second_time(tmp_path):
     )
     conn.commit()
 
-    V039TextOverlaysRegions().up(conn)
+    V042TextOverlaysRegions().up(conn)
     row_after_first = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 1").fetchone()
     first_regions = decode_data(row_after_first[0])
 
-    V039TextOverlaysRegions().up(conn)  # must not raise, must not re-wrap
+    V042TextOverlaysRegions().up(conn)  # must not raise, must not re-wrap
     row_after_second = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 1").fetchone()
     second_regions = decode_data(row_after_second[0])
 
@@ -164,7 +164,7 @@ def test_running_twice_is_a_noop_the_second_time(tmp_path):
 def test_skips_undecodable_blob_without_aborting_other_rows(tmp_path):
     """A row whose text_overlays won't decode is logged + skipped -- must NOT
     abort the migration for other rows (mirrors v027's best-effort contract)."""
-    conn = _make_pre_v039_db(tmp_path)
+    conn = _make_pre_v042_db(tmp_path)
     conn.execute(
         "INSERT INTO working_videos (id, project_id, filename, version, text_overlays) "
         "VALUES (1, 100, 'corrupt.mp4', 1, ?)",
@@ -177,7 +177,7 @@ def test_skips_undecodable_blob_without_aborting_other_rows(tmp_path):
     )
     conn.commit()
 
-    V039TextOverlaysRegions().up(conn)  # must not raise
+    V042TextOverlaysRegions().up(conn)  # must not raise
 
     good_row = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 2").fetchone()
     # Corrupt row is left as-is (still undecodable), good row migrated.
@@ -185,7 +185,7 @@ def test_skips_undecodable_blob_without_aborting_other_rows(tmp_path):
 
 
 def test_empty_and_null_text_overlays_are_left_alone(tmp_path):
-    conn = _make_pre_v039_db(tmp_path)
+    conn = _make_pre_v042_db(tmp_path)
     conn.execute(
         "INSERT INTO working_videos (id, project_id, filename, version, text_overlays) "
         "VALUES (1, 100, 'empty.mp4', 1, ?)",
@@ -197,7 +197,7 @@ def test_empty_and_null_text_overlays_are_left_alone(tmp_path):
     )
     conn.commit()
 
-    V039TextOverlaysRegions().up(conn)  # must not raise
+    V042TextOverlaysRegions().up(conn)  # must not raise
 
     row1 = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 1").fetchone()
     row2 = conn.execute("SELECT text_overlays FROM working_videos WHERE id = 2").fetchone()

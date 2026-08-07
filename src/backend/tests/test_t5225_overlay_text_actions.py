@@ -144,7 +144,7 @@ class TestAddTextCreatesRegion:
         assert region["endTime"] == 7.85
         assert len(region["elements"]) == 1
         element = region["elements"][0]
-        assert element["id"] == "txt_abc123_el0"  # derived id, mirrors v039's convention
+        assert element["id"] == "txt_abc123_el0"  # derived id, mirrors v042's convention
         assert element["enabled"] is True
         assert element["spec"]["text"] == "GOAL!"
 

@@ -1,15 +1,14 @@
 """
-v039: text_overlays: flat per-block records -> REGIONS containing ELEMENTS (T6630 round 4).
+v042: text_overlays: flat per-block records -> REGIONS containing ELEMENTS (T6630 round 4).
 
-Verified 2026-08-07: master profile_db head is v036
-(v036_null_dead_intro_card_title_text.py). Two sibling branches already claim
-the next two numbers -- feature/T5215-intro-attachment claims v037
-(v037_intro_min_duration.py), feature/T6640-cards-cannot-be-ugly claims v038
-(v038_null_dead_intro_card_text_elements.py) -- so this migration takes v039.
-The runner only applies versions GREATER than the DB's current user_version, so
-a duplicate/lower number would be silently skipped (the T6340 class of bug);
-RE-VERIFY this against master at merge time, since these three branches may
-land in any order.
+RENUMBERED 2026-08-07 (v039 -> v042): both sibling branches this migration was
+racing landed first -- feature/T5215-intro-attachment merged v037/v040/v041,
+feature/T6640-cards-cannot-be-ugly merged v038 -- bringing master's profile_db
+head to v041. This migration takes v042, the next free slot above the real
+merged head. The runner only applies versions GREATER than the DB's current
+user_version, so a duplicate/lower number would be silently skipped (the
+T6340 class of bug); RE-VERIFY this against master at merge time if any other
+sibling branch is still in flight.
 
 MODEL REFRAME (T6630 round 4, user direction 2026-08-07): "Adding a text
 element is not adding a text region. A text region can have multiple text
@@ -63,8 +62,8 @@ from ..base import BaseMigration
 logger = logging.getLogger(__name__)
 
 
-class V039TextOverlaysRegions(BaseMigration):
-    version = 39
+class V042TextOverlaysRegions(BaseMigration):
+    version = 42
     description = "Migrate working_videos.text_overlays: flat blocks -> regions containing elements (T6630 round 4)"
 
     def up(self, conn) -> None:
@@ -95,7 +94,7 @@ class V039TextOverlaysRegions(BaseMigration):
             try:
                 items = decode_data(blob)
             except Exception as e:
-                logger.warning(f"[v039] working_video {wv_id}: text_overlays decode failed, skipping: {e}")
+                logger.warning(f"[v042] working_video {wv_id}: text_overlays decode failed, skipping: {e}")
                 decode_failed += 1
                 continue
 
@@ -134,6 +133,6 @@ class V039TextOverlaysRegions(BaseMigration):
 
         if rows:
             logger.info(
-                f"[v039] text_overlays: {migrated} migrated, {already_new} already new-shape, "
+                f"[v042] text_overlays: {migrated} migrated, {already_new} already new-shape, "
                 f"{empty} empty, {decode_failed} decode-failed (of {len(rows)} candidates)"
             )
