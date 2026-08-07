@@ -132,14 +132,27 @@ export const useIntroCardStore = create((set, get) => ({
 
   /**
    * Delete a card (gesture: "Delete card"). The backend also nulls referencing
-   * reels and removes the R2 image.
+   * reels and removes the R2 image. T6640 round 2 invariant: if the deleted
+   * card WAS the default and others remain, the backend auto-promotes the
+   * newest remaining one IN THE SAME TRANSACTION and reports it as
+   * `promoted_default_id` — apply that surgically here (the only OTHER row
+   * that could have been the default is the one just deleted, so no other row
+   * needs touching) so the library shows the new Default badge without a
+   * reload, per the same "no window with the wrong default" guarantee the
+   * server enforces.
    */
   deleteCard: async (cardId) => {
     const response = await apiFetch(`${API_BASE}/api/intro-cards/${cardId}`, {
       method: 'DELETE',
     });
     if (!response.ok) return false;
-    set((state) => ({ cards: state.cards.filter((c) => c.id !== cardId) }));
+    const result = await response.json().catch(() => ({}));
+    const promotedId = result.promoted_default_id;
+    set((state) => ({
+      cards: state.cards
+        .filter((c) => c.id !== cardId)
+        .map((c) => (promotedId && c.id === promotedId ? { ...c, is_default: true } : c)),
+    }));
     return true;
   },
 

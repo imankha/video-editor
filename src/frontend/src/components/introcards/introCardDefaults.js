@@ -7,6 +7,31 @@
 
 import { DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEditorConstants';
 
+const GENERATED_NAME_RE = /^Intro Card (\d+)$/;
+
+/**
+ * The generated name for a brand-new card: "Intro Card N", N the LOWEST
+ * number not already used by one of this profile's cards with EXACTLY that
+ * name (T6640 round 2, user decision). Gap-filling, not `count + 1` — cards
+ * "Intro Card 1" and "Intro Card 3" exist -> the next is "Intro Card 2"
+ * (renaming a card frees its number). Cards with any OTHER name (including a
+ * user's own rename) don't occupy a slot in this sequence — names aren't
+ * unique in general, only this generator avoids repeating a number it can
+ * still see in use.
+ * @param {{name: string}[]} cards
+ */
+export function nextCardName(cards) {
+  const used = new Set(
+    (cards || [])
+      .map((c) => GENERATED_NAME_RE.exec(c.name || ''))
+      .filter(Boolean)
+      .map((m) => parseInt(m[1], 10)),
+  );
+  let n = 1;
+  while (used.has(n)) n += 1;
+  return `Intro Card ${n}`;
+}
+
 /**
  * Build the create payload for a brand-new card. Defaults `image_key` from the
  * profile's own intro photo (epic decision 3b). `shown_fields` empty -> a
