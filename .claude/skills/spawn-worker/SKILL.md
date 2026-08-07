@@ -1,9 +1,9 @@
 ---
 name: spawn-worker
-description: "Supervisor-side subroutine: spin up ONE permission-free container worker for a task and drive it to a pushed branch. Not a user command — /dotask (or any supervisor flow the user approved) invokes this once per task. Multiple workers run in parallel."
+description: "Supervisor-side subroutine: spin up ONE permission-free container worker for a task and drive it to a pushed branch via the status-file contract (no polling turns). Not a user command — /dotask (or any supervisor flow the user approved) invokes this per task, respecting the WIP limit of 1 (max 2 disjoint)."
 license: MIT
 author: video-editor
-version: 1.0.0
+version: 2.0.0
 user_invocable: false
 ---
 
@@ -33,6 +33,32 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    `up`s grab the same offset and the losers fail with "port is already allocated".
    Recovery from a poisoned worker: `docker rm -f reel-task-<SLUG>`, delete
    `C:\work\tasks\<SLUG>\.task-env`, re-run `up`. Only the step-3 drive calls parallelize.
+   After seeding, initialize the status file and the WAVE.md row (see /dotask step 3.5):
+   ```
+   echo "$(date -u +%FT%H:%M) SPAWNED <tier> <branch>" >> /c/work/tasks/<SLUG>/.dotask-status
+   ```
+
+2.5. **Status-file contract (the completion protocol — replaces polling).** The worker
+   appends ONE line to `/workspace/.dotask-status` after every stage; the checkout is
+   bind-mounted, so the supervisor reads it at `C:\work\tasks\<SLUG>\.dotask-status` with a
+   plain file read — never a `docker exec` probe, never a full-context "are you done?" turn.
+   Line format (worker MUST be told this in the kickoff; each stage's definition of done
+   includes writing its line):
+   ```
+   2026-08-06T14:31 STAGE_DONE impl 4f2c91a
+   2026-08-06T16:02 STAGE_DONE tests "9 relevant tests green: 6 feature + 3 regression"
+   2026-08-06T16:40 STAGE_DONE qa "evidence per criterion in qa/"
+   2026-08-06T17:40 BLOCKED "design gate: two card-layout options, need user pick"
+   2026-08-06T19:12 PUSHREADY feature/T5215-intro-attachment 7d10b3e
+   ```
+   - The worker's FINAL act is always `PUSHREADY <branch> <sha>` (commit done, QA evidence
+     complete, ready for the supervisor to `task.sh push`) or `BLOCKED <reason>`. A worker is
+     never "quietly finished".
+   - **Liveness rule:** exit-0 silence is meaningless (finished / quota-dead / auth-dead look
+     identical). The status file disambiguates: `PUSHREADY`/`BLOCKED` = done; a background
+     drive call that returned WITHOUT a new status line = the worker died mid-stage
+     (quota/auth) or ended its turn early — resume it (step 3 resume rules), don't forensically
+     re-read transcripts.
 
 3. **Drive** with headless CLI calls; ALWAYS `run_in_background: true` so other workers and
    the supervisor keep moving:
@@ -53,17 +79,26 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    failing tests, or Tier-S triviality). If the worker is deciding rather than executing, it
    stays on Opus. `-c` accepts `--model` / `--effort`, so a resumed session can switch tiers
    mid-task without losing context.
-   - First call: "Read /workspace/.dotask-kickoff.md and execute it. If design-gated, stop at
-     the approval gate and summarize the design + open questions."
-   - Continue the SAME worker session across stages with `claude -p -c "<next instruction>"`.
-     `-c` is safe because each container has its OWN ~/.claude volume (task.sh auth_volume);
-     in a container created before that fix (shared volume), `-c` resumes a RANDOM worker's
-     session — there, send a FRESH `claude -p` whose prompt is self-contained (name the
-     branch, commits, and kickoff path) instead of resuming.
-   - Workers share the user's subscription quota; a parallel wave can hit the session limit
-     mid-QA. On "session limit" output: wait, probe with a 1-word `claude -p`, then re-send.
-   - **Relay gates to the user**: surface design/decisions in the supervisor chat, get the
-     answer, pass it down with `-c`.
+   - First call: "Read /workspace/.dotask-kickoff.md and execute it. Append a status line to
+     /workspace/.dotask-status after every stage. If design-gated, stop at the approval gate,
+     write a BLOCKED line, and summarize the design + open questions."
+   - **Resume rules (`-c` vs fresh — the re-context tax is real):** `-c` re-uses the session
+     but after the prompt cache expires (~1h idle) it RE-WRITES the entire conversation as
+     cache-creation tokens (~the full context, 100-400k). So: continue with
+     `claude -p -c "<next instruction>"` only when the last worker activity was recent
+     (status-file timestamp < ~1h old). Otherwise send a FRESH `claude -p` seeded from files:
+     "Read /workspace/.dotask-kickoff.md and /workspace/.dotask-status. Branch <branch> has
+     commits through <sha>. Continue from the last STAGE_DONE line." (~5k tokens vs ~400k.)
+     `-c` is per-container-safe (own ~/.claude volume); pre-fix shared-volume containers
+     always get the fresh-seed form.
+   - **Worker turn budget ~300:** a worker grinding past ~300 turns without PUSHREADY is a
+     signal (mis-tiered task, stuck loop), not normal. Stop it, read the status file, and
+     either re-scope or resume fresh from the checkpoint — don't let it run to quota death.
+   - Workers share the user's subscription quota. On "session limit" output: write the time
+     down, wait for the reset, then resume via the fresh-seed form (the cache is dead by then
+     — never `-c` across a quota gap).
+   - **Relay gates to the user**: a BLOCKED status line surfaces the question in the
+     supervisor chat; get the answer, pass it down (recent cache: `-c`; else fresh-seed).
    - The clone carries `.claude/settings.json`, so the eslint/ruff PostToolUse hook runs
      inside the container too — the worker gets lint feedback automatically.
 
@@ -76,12 +111,19 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Write ALL meaningful tests**, not one smoke test: happy path, each edge case the task
      names, each failure mode touched, and a regression test pinning the original bug. If a
      case can't be tested, the report must say which and why — silence is not allowed.
-   - **Test-RUN scope is changed-code only** (writing broad, running narrow): execute the
-     task's tests + `npx vitest related --run <changed sources>` + the pytest modules for the
-     changed backend code + the e2e spec(s) for the changed flow. NEVER full suites in the
-     container — the Branch CI verdict in step 5 IS the full-suite sweep, and Master CI
-     re-runs it on merge. Fix loop: re-run the failing test + tests exercising the files the
-     fix touched, nothing more (`.claude/skills/run-tests/SKILL.md` § Scope policy).
+   - **Test-RUN scope is the RELEVANT SET — ~10 tests, curated, never everything** (writing
+     broad, running narrow). Procedure: first understand the CORNER of the code the change
+     lives in (the changed files + what directly consumes them, from the knowledge doc), then
+     NAME the set before running it — typically the tests written for this feature plus the
+     existing regression tests guarding that corner, plus the one e2e spec for the changed
+     flow. `npx vitest related --run <changed sources>` is a CANDIDATE FINDER, not a run
+     list — curate its output down to the relevant set. More complexity = a bigger relevant
+     set, chosen deliberately; NEVER a full suite, never a whole layer's tests, never "run
+     everything to be safe" — the Branch CI verdict in step 5 IS the full sweep, and Master
+     CI re-runs it on merge. The status line names the set: `STAGE_DONE tests "9 relevant:
+     6 feature + 2 corner regressions + 1 e2e"`. Fix loop: re-run the failing test + tests
+     exercising the files the fix touched, nothing more
+     (`.claude/skills/run-tests/SKILL.md` § Scope policy).
    - **Adversarial self-check**: re-read the task's acceptance criteria one by one and show
      evidence per criterion (test name or live-drive observation). Unverified criterion =
      task not done.
@@ -146,6 +188,12 @@ generated the kickoff, and checked file-ownership against other live workers. `S
 ## Worker rules (bake into every kickoff)
 - Follow the standard workflow at the task's TIER (CLAUDE.md § Task Tiers); stop at the
   architecture gate if design-gated.
+- **Append a status line to `/workspace/.dotask-status` after every stage** (format in step
+  2.5). Final act is always `PUSHREADY <branch> <sha>` or `BLOCKED <reason>` — never end
+  quietly.
+- **Run only the relevant test set (~10 tests) for the corner of the code you changed** —
+  feature tests + that corner's regression tests + one e2e spec. Never a full suite or a
+  whole layer; CI is the full sweep. Name the set in the status line.
 - Commit with EXPLICIT `git add <paths>` only — never `-A`/`-a`.
 - **NEVER `git push` / `gh pr create`.** The container has NO push creds BY DESIGN, and `task.sh`
   installs a pre-push guard that hard-aborts inside the container. Commit, then STOP and report
