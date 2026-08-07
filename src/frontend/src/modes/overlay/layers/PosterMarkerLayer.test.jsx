@@ -141,3 +141,47 @@ describe('PosterMarkerLayer (T5410)', () => {
     expect(onDragEnd).not.toHaveBeenCalled();
   });
 });
+
+describe('PosterMarkerLayer — revealOnActive scrolls itself into view (T6630 round 6 item 4)', () => {
+  /* ROOT CAUSE (live-debugged via a real browser, T6630 round 6): the marker
+   * was never a rendering/z-index bug -- it renders correctly (visible,
+   * opacity 1, z-40, valid coordinates) but its DEFAULT position can land
+   * past the right edge of the horizontally-scrollable timeline once the
+   * PRE-EXISTING auto-zoom (OverlayScreen.jsx, driven by detection-marker
+   * spacing, up to 500% -- unrelated to text lanes) widens the scrollable
+   * content far past the viewport, while the scroll container starts at
+   * scrollLeft: 0. document.elementFromPoint at the marker's own bounding-box
+   * center returned null in the real browser -- off-screen, not occluded. */
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('does NOT scroll on mount when revealOnActive is false (never fights the user\'s scroll on other tabs)', () => {
+    renderMarker({ revealOnActive: false });
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('scrolls itself into view when revealOnActive is true', () => {
+    renderMarker({ revealOnActive: true });
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ inline: 'center' })
+    );
+  });
+
+  it('scrolls when revealOnActive transitions from false to true (opening the Thumbnail tab)', () => {
+    const { rerender } = renderMarker({ revealOnActive: false });
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+    rerender(
+      <div className="timeline-scroll-container">
+        <PosterMarkerLayer
+          visualTime={4.85}
+          duration={DURATION}
+          visualDuration={DURATION}
+          revealOnActive
+        />
+      </div>
+    );
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+});

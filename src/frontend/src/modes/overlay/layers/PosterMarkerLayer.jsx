@@ -70,6 +70,21 @@ export default function PosterMarkerLayer({
   visualTimeToSourceTime = (t) => t,
   edgePadding = 20,
   disabled = false,
+  // T6630 round 6 item 4: true while the Thumbnail tab is the active tab.
+  // ROOT CAUSE (live-debugged, not guessed): the marker was never a
+  // rendering/z-index bug -- it renders correctly (visible, opacity 1,
+  // z-40, valid non-zero coordinates) but its DEFAULT position (the
+  // open-play window's midpoint) can land past the RIGHT EDGE of the
+  // horizontally-scrollable timeline once the timeline's pre-existing
+  // auto-zoom (OverlayScreen.jsx, driven by detection-marker spacing --
+  // unrelated to text lanes, up to 500%) widens the scrollable content far
+  // past the viewport, while the scroll container starts at scrollLeft: 0.
+  // `document.elementFromPoint` at the marker's own bounding-box center
+  // returned null -- off-screen, not occluded. Scroll it into view exactly
+  // when the user opens the tab that's actually about it (not on every
+  // mount -- that would yank the timeline away from wherever the user is
+  // looking on the Overlay/Text tabs for a marker they haven't asked about).
+  revealOnActive = false,
 }) {
   const trackRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -188,6 +203,17 @@ export default function PosterMarkerLayer({
         break;
     }
   }, [disabled, nudge, commitDrag, timelineDuration]);
+
+  // T6630 round 6 item 4: bring the marker into view the moment the tab
+  // it belongs to is opened -- see the revealOnActive prop doc above for
+  // the root-cause this closes. A pure view-layer scroll (not app state,
+  // not persistence), scoped to the transition into the active tab so it
+  // never fights the user's own scroll position on other tabs.
+  useEffect(() => {
+    if (revealOnActive) {
+      trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [revealOnActive]);
 
   if (timelineDuration <= 0) return null;
 

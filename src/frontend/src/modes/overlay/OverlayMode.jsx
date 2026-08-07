@@ -92,6 +92,9 @@ export function OverlayMode({
   posterUploaded = false,      // a custom image is in use -- marker renders inactive
   onPosterMarkerDragEnd,       // (sourceTime) => void
   isExportInFlight = false,
+  // T6630 round 6 item 4: true while the Thumbnail tab is active -- scrolls
+  // the marker into view (see PosterMarkerLayer's revealOnActive doc).
+  isThumbnailTabActive = false,
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
@@ -323,6 +326,7 @@ export function OverlayMode({
               visualTimeToSourceTime={visualTimeToSourceTime}
               edgePadding={EDGE_PADDING}
               disabled={isExportInFlight}
+              revealOnActive={isThumbnailTabActive}
             />
           </TimelineBase>
         </div>
