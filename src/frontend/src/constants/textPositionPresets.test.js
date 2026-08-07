@@ -60,43 +60,54 @@ describe('textPositionPresets — the 9 canonical anchors (T6630 round 3)', () =
   });
 });
 
-describe('pickDefaultPreset — a new element never spawns "Custom position" (T6630 round 4)', () => {
-  it('with no siblings, picks bottom-center (top priority)', () => {
+describe('pickDefaultPreset — a new element never spawns "Custom position" (T6630 round 4/7)', () => {
+  // T6630 round 7: fresh user direction changed the priority order from
+  // bottom-center-first to top-right-first ("Try to choose a not selected
+  // position in that region starting from the top right"), walking
+  // row-major from the top row, right-to-left within each row.
+  it('with no siblings, picks top-right (top priority)', () => {
     const preset = pickDefaultPreset([]);
-    expect(preset.vertical).toBe(VerticalSlot.BOTTOM);
-    expect(preset.horizontal).toBe(HorizontalSlot.MIDDLE);
+    expect(preset.vertical).toBe(VerticalSlot.TOP);
+    expect(preset.horizontal).toBe(HorizontalSlot.RIGHT);
   });
 
-  it('when bottom-center is taken by a sibling, falls back to center', () => {
-    const bottomCenter = POSITION_PRESETS.find((p) => p.vertical === VerticalSlot.BOTTOM && p.horizontal === HorizontalSlot.MIDDLE);
-    const preset = pickDefaultPreset([{ position: { x: bottomCenter.x, y: bottomCenter.y }, align: bottomCenter.align }]);
-    expect(preset.vertical).toBe(VerticalSlot.CENTER);
-    expect(preset.horizontal).toBe(HorizontalSlot.MIDDLE);
-  });
-
-  it('when bottom-center AND center are taken, falls back to top-center', () => {
-    const bc = POSITION_PRESETS.find((p) => p.vertical === VerticalSlot.BOTTOM && p.horizontal === HorizontalSlot.MIDDLE);
-    const cc = POSITION_PRESETS.find((p) => p.vertical === VerticalSlot.CENTER && p.horizontal === HorizontalSlot.MIDDLE);
-    const preset = pickDefaultPreset([
-      { position: { x: bc.x, y: bc.y }, align: bc.align },
-      { position: { x: cc.x, y: cc.y }, align: cc.align },
-    ]);
+  it('when top-right is taken by a sibling, falls back to top-center', () => {
+    const topRight = POSITION_PRESETS.find((p) => p.vertical === VerticalSlot.TOP && p.horizontal === HorizontalSlot.RIGHT);
+    const preset = pickDefaultPreset([{ position: { x: topRight.x, y: topRight.y }, align: topRight.align }]);
     expect(preset.vertical).toBe(VerticalSlot.TOP);
     expect(preset.horizontal).toBe(HorizontalSlot.MIDDLE);
   });
 
-  it('when all 9 slots are taken, still returns a preset (falls back to bottom-center, allows overlap)', () => {
+  it('when top-right AND top-center are taken, falls back to top-left', () => {
+    const tr = POSITION_PRESETS.find((p) => p.vertical === VerticalSlot.TOP && p.horizontal === HorizontalSlot.RIGHT);
+    const tc = POSITION_PRESETS.find((p) => p.vertical === VerticalSlot.TOP && p.horizontal === HorizontalSlot.MIDDLE);
+    const preset = pickDefaultPreset([
+      { position: { x: tr.x, y: tr.y }, align: tr.align },
+      { position: { x: tc.x, y: tc.y }, align: tc.align },
+    ]);
+    expect(preset.vertical).toBe(VerticalSlot.TOP);
+    expect(preset.horizontal).toBe(HorizontalSlot.LEFT);
+  });
+
+  it('when the entire top row is taken, falls back to center-right', () => {
+    const topRow = POSITION_PRESETS.filter((p) => p.vertical === VerticalSlot.TOP);
+    const preset = pickDefaultPreset(topRow.map((p) => ({ position: { x: p.x, y: p.y }, align: p.align })));
+    expect(preset.vertical).toBe(VerticalSlot.CENTER);
+    expect(preset.horizontal).toBe(HorizontalSlot.RIGHT);
+  });
+
+  it('when all 9 slots are taken, still returns a preset (falls back to top-right, allows overlap)', () => {
     const allSiblings = POSITION_PRESETS.map((p) => ({ position: { x: p.x, y: p.y }, align: p.align }));
     const preset = pickDefaultPreset(allSiblings);
     expect(preset).toBeTruthy();
-    expect(preset.vertical).toBe(VerticalSlot.BOTTOM);
-    expect(preset.horizontal).toBe(HorizontalSlot.MIDDLE);
+    expect(preset.vertical).toBe(VerticalSlot.TOP);
+    expect(preset.horizontal).toBe(HorizontalSlot.RIGHT);
   });
 
   it('a sibling with a non-preset (arbitrary/legacy) position does not block any slot', () => {
     const preset = pickDefaultPreset([{ position: { x: 0.37, y: 0.61 }, align: Align.CENTER }]);
-    expect(preset.vertical).toBe(VerticalSlot.BOTTOM);
-    expect(preset.horizontal).toBe(HorizontalSlot.MIDDLE);
+    expect(preset.vertical).toBe(VerticalSlot.TOP);
+    expect(preset.horizontal).toBe(HorizontalSlot.RIGHT);
   });
 
   it('a sibling with no position at all (undefined spec fields) does not crash', () => {
