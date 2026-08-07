@@ -297,6 +297,35 @@ describe('TextLayer — keyboard delete of the focused REGION (T6630 round 4)', 
   });
 });
 
+describe('TextLayer — visible delete button on the block (T6630 round 6 item 3)', () => {
+  // Additive to keyboard delete above (both call the SAME onDeleteTextRegion
+  // path), mirroring RegionLayer's highlight-mode Trash2 button.
+  it('renders a delete button per region, titled "Delete region"', () => {
+    renderLayer({ regions: [REGION] });
+    const trash = screen.getByTestId('text-delete-region-0');
+    expect(trash.getAttribute('title')).toBe('Delete region');
+  });
+
+  it('clicking it calls onDeleteTextRegion with the region id', () => {
+    const { onDeleteTextRegion } = renderLayer();
+    fireEvent.click(screen.getByTestId('text-delete-region-0'));
+    expect(onDeleteTextRegion).toHaveBeenCalledWith('t1');
+  });
+
+  it('clicking it does NOT also select the region (stopPropagation)', () => {
+    const { onSelectRegion } = renderLayer();
+    fireEvent.click(screen.getByTestId('text-delete-region-0'));
+    expect(onSelectRegion).not.toHaveBeenCalled();
+  });
+
+  it('clicking it does NOT also create a new region (stopPropagation to the track)', () => {
+    const onAddRegion = vi.fn();
+    renderLayer({ onAddRegion });
+    fireEvent.click(screen.getByTestId('text-delete-region-0'));
+    expect(onAddRegion).not.toHaveBeenCalled();
+  });
+});
+
 describe('TextLayer — one block per REGION, label shows first element + count (T6630 round 4)', () => {
   it('a single-element region labels with just that element\'s text', () => {
     renderLayer({ regions: [REGION] });

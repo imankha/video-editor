@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 import { snapToBoundary } from '../../utils/textSnapping';
 
@@ -323,6 +324,27 @@ export default function TextLayer({
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-1">
                   <span className="text-[10px] text-cyan-100 truncate">{regionLabel(region)}</span>
                 </div>
+              </div>
+
+              {/* T6630 round 6 item 3: a visible delete button, mirroring
+                  RegionLayer's highlight-mode Trash2 control -- keyboard
+                  Delete/Backspace (handleBlockKeyDown above) still works,
+                  this is an ADDITIONAL trigger for the SAME onDeleteTextRegion
+                  path, not a second delete implementation. stopPropagation so
+                  it never also selects/drags the block underneath it. */}
+              <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10">
+                <button
+                  type="button"
+                  data-testid={`text-delete-region-${region.index}`}
+                  className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white coarse-pointer:min-w-11 coarse-pointer:min-h-11 coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteTextRegion && onDeleteTextRegion(region.id);
+                  }}
+                  title="Delete region"
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
 
               {/* Start lever */}
