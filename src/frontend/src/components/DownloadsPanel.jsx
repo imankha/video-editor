@@ -17,6 +17,7 @@ import { useCollections } from '../hooks/useCollections';
 import { useMoveReels } from '../hooks/useMoveReels';
 import { useProfileStore } from '../stores/profileStore';
 import { useIntroCardStore } from '../stores/introCardStore';
+import { IntroCardPicker } from './introcards/IntroCardPicker';
 import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -159,6 +160,50 @@ export function DownloadsPanel({
   };
 
   const onShareCollection = (definition, title) => setSharingCollection({ definition, title });
+
+  // T5215 round 2: a collection's OWN attached intro (distinct from the SHARE
+  // dialog's frozen-at-creation choice above). {definition, title} of the
+  // collection currently open in the picker, or null. The definition's
+  // {scope, filter.tags, aspect_ratio} IS the collection's identity for this
+  // purpose -- GET/PATCH /api/collections/intro key off exactly those fields.
+  const [introCollectionTarget, setIntroCollectionTarget] = useState(null);
+  const [collectionIntroSelectedId, setCollectionIntroSelectedId] = useState(null);
+
+  const collectionIntroParams = ({ scope, filter, aspect_ratio }) => {
+    const params = new URLSearchParams({ scope_type: scope.type, aspect_ratio });
+    if (scope.type === 'game') params.set('game_id', scope.game_id);
+    if (filter?.tags?.length) params.set('tags', filter.tags.join(','));
+    return params.toString();
+  };
+
+  const onIntroCollection = async (definition, title) => {
+    setIntroCollectionTarget({ definition, title });
+    setCollectionIntroSelectedId(null); // cleared while the resolve is in flight
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/collections/intro?${collectionIntroParams(definition)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setCollectionIntroSelectedId(data.intro_card_id);
+      }
+    } catch (err) {
+      console.error('[DownloadsPanel] failed to resolve collection intro:', err);
+    }
+  };
+
+  const handleSetCollectionIntro = async (cardId) => {
+    if (!introCollectionTarget) return;
+    const params = collectionIntroParams(introCollectionTarget.definition);
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/collections/intro?${params}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intro_card_id: cardId }),
+      });
+      if (resp.ok) setCollectionIntroSelectedId(cardId);
+    } catch (err) {
+      console.error('[DownloadsPanel] failed to set collection intro:', err);
+    }
+  };
 
   const onCopyCollectionLink = async (definition) => {
     try {
@@ -497,6 +542,7 @@ export function DownloadsPanel({
             onPlayCollection={onPlayCollection}
             onShareCollection={onShareCollection}
             onCopyCollectionLink={onCopyCollectionLink}
+            onIntroCollection={onIntroCollection}
           />
         </div>
       </div>
@@ -534,6 +580,20 @@ export function DownloadsPanel({
           onClose={() => setSharingCollection(null)}
         />
       )}
+
+      {/* Collection's OWN intro picker (T5215 round 2) -- the SAME shared
+          carousel/picker as the reel kebab, not a second component. */}
+      <IntroCardPicker
+        isOpen={!!introCollectionTarget}
+        onClose={() => setIntroCollectionTarget(null)}
+        title={introCollectionTarget ? `Intro for "${introCollectionTarget.title}"` : ''}
+        cards={introCards}
+        profile={currentProfile}
+        selectedId={collectionIntroSelectedId}
+        hasConsent={!!currentProfile?.introConsentAt}
+        onSelect={handleSetCollectionIntro}
+        onRequestConsent={handleRequestIntroConsent}
+      />
 
       {/* Move-to-profile picker (T4850) */}
       {movingIds && (

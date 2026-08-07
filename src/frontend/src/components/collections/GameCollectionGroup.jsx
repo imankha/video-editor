@@ -34,6 +34,7 @@ import { compareGameTime } from '../../utils/timeFormat';
  * @param {Object=}  shareScope     - {type:'game', game_id} | {type:'mixes'} for share links (T3620)
  * @param {Function=} onShare       - (definition, title) => void
  * @param {Function=} onCopyLink    - (definition) => void
+ * @param {Function=} onIntro       - (definition, title) => void, the collection's OWN intro (T5215 round 2)
  */
 export function GameCollectionGroup({
   name,
@@ -47,6 +48,7 @@ export function GameCollectionGroup({
   shareScope,
   onShare,
   onCopyLink,
+  onIntro,
 }) {
   const ratioCounts = collection.ratio_counts || {};
   const ratioDurations = collection.ratio_durations || {};
@@ -118,6 +120,7 @@ export function GameCollectionGroup({
             onShare={onShare}
             onCopyLink={onCopyLink}
             leadingReelId={collection.leading_reel_id}
+            onIntro={onIntro}
           />
           {members
             ? (

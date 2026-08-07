@@ -28,6 +28,7 @@ const AXIS_LABEL = { game: 'By game', tournament: 'By tournament', month: 'By mo
  * @param {Function} onPlayCollection - (reels[], title) => void (opens the shared player)
  * @param {Function=} onShareCollection - (definition, title) => void (T3620)
  * @param {Function=} onCopyCollectionLink - (definition) => void (T3620)
+ * @param {Function=} onIntroCollection - (definition, title) => void, the collection's OWN intro (T5215 round 2)
  */
 export function CollectionsTab({
   collections,
@@ -35,6 +36,7 @@ export function CollectionsTab({
   onPlayCollection,
   onShareCollection,
   onCopyCollectionLink,
+  onIntroCollection,
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
@@ -97,6 +99,7 @@ export function CollectionsTab({
         shareScope={{ type: 'game', game_id: g.game_id }}
         onShare={onShareCollection}
         onCopyLink={onCopyCollectionLink}
+        onIntro={onIntroCollection}
       />
     );
   };
@@ -147,6 +150,7 @@ export function CollectionsTab({
                   }}
                   onShare={onShareCollection}
                   onCopyLink={onCopyCollectionLink}
+                  onIntro={onIntroCollection}
                 />
               );
             }
@@ -240,6 +244,7 @@ export function CollectionsTab({
           shareScope={{ type: 'mixes' }}
           onShare={onShareCollection}
           onCopyLink={onCopyCollectionLink}
+          onIntro={onIntroCollection}
         />
       )}
     </>

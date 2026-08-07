@@ -28,7 +28,13 @@ from app.database import get_db_connection
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
-from app.services.intro_cards import get_default_intro_card, resolve_intro_card
+from app.services.intro_cards import (
+    collection_intro_settings_key,
+    get_collection_intro_card_id,
+    get_default_intro_card,
+    resolve_intro_card,
+    set_collection_intro_card_id,
+)
 from app.services.materialization import open_profile_db_readonly
 from app.services.sharing_db import (
     create_collection_share,
@@ -694,6 +700,102 @@ def evaluate_collection_members(conn, definition: dict) -> list[dict]:
          "filename": r["filename"]}
         for r in rows
     ]
+
+
+# ---- collection's OWN attached intro (T5215 round 2) -----------------------
+# Distinct from a SHARE's frozen-at-creation choice above: this is a stored
+# attribute of the collection itself (the user, 2026-08-06: "I also want to
+# be able to add an intro card to compilations/collections"). Resolution order
+# + duration-gate semantics are documented in full on
+# `services.intro_cards.collection_intro_settings_key`.
+
+class UpdateCollectionIntroRequest(BaseModel):
+    intro_card_id: int | None
+
+
+def _collection_scope_and_definition(
+    scope_type: str, aspect_ratio: str, game_id: int | None, tags: str | None,
+) -> tuple[str, list[str] | None, dict]:
+    """Shared param parsing for both the GET and PATCH collection-intro
+    endpoints -- one place decides the tag list + the live-evaluation
+    definition shape, so the two routes can't drift on scope validation."""
+    if scope_type == "game" and game_id is None:
+        raise HTTPException(400, "game scope requires game_id")
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    definition = {
+        "scope": {"type": scope_type, **({"game_id": game_id} if scope_type == "game" else {})},
+        "filter": {"tags": tag_list} if tag_list else {},
+        "aspect_ratio": aspect_ratio,
+    }
+    return tag_list, definition
+
+
+@router.get("/intro")
+async def get_collection_intro(
+    scope_type: str, aspect_ratio: str,
+    game_id: int | None = None, tags: str | None = None,
+):
+    """Resolve a (scope, ratio) collection's OWN attached intro -- id (raw
+    stored value, for the picker's preselection) + name (resolved, what will
+    actually play; accounts for the duration gate on the inherit path)."""
+    tag_list, definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    key = collection_intro_settings_key(
+        scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
+    )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        raw_id = get_collection_intro_card_id(cursor, key)
+        # The duration gate on the inherit path uses the collection's LIVE
+        # TOTAL duration (all current members, NULL-excluded) -- the same
+        # quantity collections_summary's ratio_durations already computes,
+        # recomputed here rather than trusting a client-supplied number.
+        members = evaluate_collection_members(conn, definition)
+        durations = [m["duration"] for m in members if m["duration"] is not None]
+        total_duration = sum(durations) if durations else None
+        card = resolve_intro_card(raw_id, total_duration, conn)
+
+    return {
+        "intro_card_id": raw_id,
+        "intro_card_name": card["name"] if card else None,
+    }
+
+
+@router.patch("/intro")
+async def set_collection_intro(
+    body: UpdateCollectionIntroRequest,
+    scope_type: str, aspect_ratio: str,
+    game_id: int | None = None, tags: str | None = None,
+):
+    """Attach/detach/clear a collection's OWN intro. Surgical write to
+    `collection_settings` (no per-collection row exists otherwise). Same
+    consent gate + dangling-id rejection as the reel PATCH."""
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    intro_card_id = body.intro_card_id
+
+    if (intro_card_id is not None and intro_card_id != 0
+            and get_intro_consent(user_id, profile_id) is None):
+        raise HTTPException(
+            status_code=403,
+            detail="Parental consent is required before attaching an intro card.",
+        )
+
+    tag_list, _definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    key = collection_intro_settings_key(
+        scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
+    )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if intro_card_id is not None and intro_card_id != 0:
+            cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (intro_card_id,))
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Intro card not found")
+        set_collection_intro_card_id(cursor, key, intro_card_id)
+        conn.commit()
+
+    return {"success": True, "intro_card_id": intro_card_id}
 
 
 def _context_line(definition: dict) -> str:

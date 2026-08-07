@@ -324,3 +324,88 @@ def resolve_intro_card(
         )
         return None
     return row
+
+
+# ---------------------------------------------------------------------------
+# Collection-level attachment (T5215 round 2, 2026-08-06) -- a persistent
+# attribute of the COLLECTION ITSELF, distinct from a collection SHARE's
+# frozen-at-creation choice (routers/collections.py's `intro_card_id` on
+# `CollectionDefinition`). A collection has no persisted row of its own
+# (membership is evaluated LIVE, see `evaluate_collection_members`), so this
+# reuses the existing per-profile `collection_settings(key, value)` sparse
+# KV table (T3640, created v009 -- long before the v023 floor every live
+# profile DB already sits at or above, so it needs NO column_exists guard,
+# unlike every v024+ addition elsewhere in this task).
+#
+# RESOLUTION ORDER (explicit design call, mirrors the REEL behaviour at the
+# collection's own level -- see T5215 round-2 report for the full rationale):
+#   - The collection's OWN resolved intro governs the collection's playback
+#     experience. Per-MEMBER `final_videos.intro_card_id` attachments are NOT
+#     consulted while inside a collection's playback context -- they remain
+#     the deciding attachment ONLY when that same reel is watched standalone
+#     (its own single-reel view/share). "Most specific level wins outright"
+#     is exactly the reel rule (explicit id beats inherited default); applied
+#     one level up, the collection's own setting is the specific level for a
+#     collection VIEW, and per-member settings are simply out of scope there.
+#     REVERSIBLE: nothing here prevents a future task from instead compositing
+#     both if that turns out to be the wanted product behaviour -- flagged in
+#     the round-2 report, not read from the epic (ambiguous there).
+#   - The duration gate on a collection's OWN inherit-the-default path uses
+#     the collection's LIVE TOTAL duration (sum of its current members'
+#     durations -- exactly `collections_summary`'s own `ratio_durations`
+#     computation, not any single member's), against the SAME per-profile
+#     `intro_min_duration_seconds` a reel already uses. One threshold, one
+#     meaning: "is this playback long enough to want a default intro" --
+#     applied to whatever is actually about to play back-to-back.
+#   - Rendering this (actually prepending the collection's resolved card) is
+#     T5220's job, same as the reel side of this task -- T5215 only persists
+#     the attachment + resolves it for display.
+
+def collection_intro_settings_key(
+    scope_type: str, *, game_id: int | None = None,
+    tags: list[str] | None = None, aspect_ratio: str,
+) -> str:
+    """Canonical, stable identity string for a (scope, ratio) collection's OWN
+    intro attachment. Mirrors `routers/collections.py::_canonical_definition`'s
+    own scope/tags canonicalization (sorted tags) so the same collection
+    always maps to the same key regardless of client-sent tag order.
+    `aspect_ratio` is part of identity -- a game's 9:16 and 16:9 buckets are
+    different member sets with potentially different intro choices, same as
+    two separate `CollectionCard`s in the UI today.
+    """
+    if scope_type == "game":
+        if game_id is None:
+            raise ValueError("game scope requires game_id")
+        base = f"game:{game_id}"
+    elif scope_type == "mixes":
+        base = "mixes"
+    elif scope_type == "all":
+        base = f"tags:{','.join(sorted(set(tags)))}" if tags else "all"
+    else:
+        raise ValueError(f"unknown collection scope_type {scope_type!r}")
+    return f"intro:{base}:{aspect_ratio}"
+
+
+def get_collection_intro_card_id(cursor, key: str) -> int | None:
+    """Raw stored collection attachment: 0 (no intro) | None (no row =
+    inherit the profile default) | <id> (explicit). Mirrors a reel's
+    `final_videos.intro_card_id` semantics exactly, on collection_settings."""
+    cursor.execute("SELECT value FROM collection_settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    if row is None or row["value"] in (None, ""):
+        return None
+    return int(row["value"])
+
+
+def set_collection_intro_card_id(cursor, key: str, intro_card_id: int | None) -> None:
+    """Surgical write (gesture: picker selection). `None` DELETEs the row
+    (restores inherit -- an absent row IS the NULL state, never a stored
+    empty-string sentinel); `0`/`<id>` upserts the concrete value."""
+    if intro_card_id is None:
+        cursor.execute("DELETE FROM collection_settings WHERE key = ?", (key,))
+    else:
+        cursor.execute(
+            "INSERT INTO collection_settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(intro_card_id)),
+        )
