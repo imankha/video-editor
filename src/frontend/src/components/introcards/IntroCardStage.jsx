@@ -1,9 +1,13 @@
 // T5205 — the editor STAGE (presentational). Shows the card at a chosen aspect
 // (9:16 / 16:9 toggle), lets the user drag the photo to reframe and zoom it,
-// select a text slot by clicking it, and play the motion preview. The layout is
-// NOT named on the stage (T6570: the user does not want the layout named); the
-// causal signal lives as the rail's facts caption. Drag/zoom are transient here;
-// the container commits each ONCE on release.
+// and play the motion preview. The layout is NOT named on the stage (T6570:
+// the user does not want the layout named); the causal signal lives as the
+// rail's facts caption. Drag/zoom are transient here; the container commits
+// each ONCE on release.
+//
+// T6640: per-slot text SELECTION is gone from the stage — typography is
+// template-owned (decision 12), so there is nothing left to select a slot FOR
+// (the styling editor it used to open no longer exists on the card rail).
 //
 // Slot geometry, treatment colours and motion timing all come from T5210's shared
 // contract (via IntroCardPreview / introCardGeometry / MotionPreview) — this stage
@@ -15,7 +19,6 @@ import { IntroCardPreview, resolveFraming } from './IntroCardPreview';
 import { MotionPreview } from './MotionPreview';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor } from '../../utils/introCardGeometry';
-import { buildPreviewElements } from './introCardPreviewElements';
 import { ASPECT_OPTIONS } from './introCardEditorConstants';
 
 // Desktop caps. The card is the thing being designed (T6580), so it fills the
@@ -42,18 +45,6 @@ function boxFor(aspect, maxW, maxH) {
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
-/** A clickable hotspot rect for a rendered slot, from its (contract) layout spec. */
-function slotBox(spec, boxW, boxH) {
-  const width = spec.maxWidth * boxW;
-  const height = Math.max(spec.size * boxH * 1.3, 22);
-  const xPx = spec.position.x * boxW;
-  const top = spec.position.y * boxH;
-  let left = xPx;
-  if (spec.align === 'center') left = xPx - width / 2;
-  else if (spec.align === 'right') left = xPx - width;
-  return { left, top, width, height };
-}
-
 export function IntroCardStage({
   card,
   profile,
@@ -63,8 +54,6 @@ export function IntroCardStage({
   zoomDraft,
   onPhotoDragMove,
   onPhotoDragEnd,
-  selectedSlot,
-  onSelectSlot,
 }) {
   const aspectOpt = ASPECT_OPTIONS.find((a) => a.key === aspectRatio) || ASPECT_OPTIONS[0];
   const aspect = aspectOpt.key; // === CARD_ASPECTS key ('9:16' / '16:9')
@@ -105,9 +94,6 @@ export function IntroCardStage({
   const hasPhoto = !!card.image_key;
   const geo = geometryFor(composition, aspect);
   const photoRect = geo.photo;
-
-  // Rendered slots (title + shown/filled facts) -> stage hotspots for selection.
-  const elements = buildPreviewElements(effectiveCard, profile, composition, aspect);
 
   const [playing, setPlaying] = useState(false);
   const dragRef = useRef(null);
@@ -184,23 +170,6 @@ export function IntroCardStage({
             style={{ left: `${photoRectPx.left}px`, top: `${photoRectPx.top}px`, width: `${photoRectPx.width}px`, height: `${photoRectPx.height}px` }}
           />
         )}
-
-        {/* Slot-select hotspots ABOVE the drag surface: clicking text selects its
-            slot; clicking the photo elsewhere drags it. */}
-        {!playing && elements.map(({ slot, spec }) => {
-          const b = slotBox(spec, box.w, box.h);
-          const selected = slot === selectedSlot;
-          return (
-            <button
-              key={slot}
-              type="button"
-              aria-label={`Select ${slot}`}
-              onClick={() => onSelectSlot(slot)}
-              className={`absolute rounded ${selected ? 'ring-2 ring-blue-400' : 'hover:ring-1 hover:ring-white/40'}`}
-              style={{ left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px`, background: 'transparent' }}
-            />
-          );
-        })}
 
         {/* No composition NAME on the stage (T6570): the user does not want the
             layout named. The causal signal — that ticking facts re-lays-out the

@@ -13,9 +13,9 @@ import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor, INTRO_CARD_MOTION, STAGGER_ORDER } from '../../utils/introCardGeometry';
 import {
   treatmentBackgroundCss, photoStyleFor, scrimBackground,
-  bandStyleFor, photoTintCss, photoVignetteCss,
+  bandStyleFor, photoTintCss, photoVignetteCss, seamFadeCss,
 } from './introCardVisual';
-import { buildPreviewElements } from './introCardPreviewElements';
+import { useCardPreviewElements } from './introCardPreviewElements';
 import { resolveFraming } from './IntroCardPreview';
 
 export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDone }) {
@@ -35,8 +35,9 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
   const scrim = scrimBackground(composition, hasPhoto, treatment);
   const tint = hasPhoto ? photoTintCss(treatment) : null;
   const vignette = hasPhoto ? photoVignetteCss(treatment) : null;
+  const seam = hasPhoto ? seamFadeCss(geo.reflow, treatment) : null;
   const bandStyle = hasPhoto ? bandStyleFor(composition, treatment, boxWidth, boxHeight) : null;
-  const elements = buildPreviewElements(card, profile, composition, aspect);
+  const elements = useCardPreviewElements(card, profile, composition, aspect, boxWidth, boxHeight);
 
   const durationSec = card?.duration || 4.0;
 
@@ -105,6 +106,7 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
           </div>
           {tint && <div className="absolute inset-0 pointer-events-none" style={{ background: tint }} />}
           {vignette && <div className="absolute inset-0 pointer-events-none" style={{ background: vignette }} />}
+          {seam && <div className="absolute inset-0 pointer-events-none" style={{ background: seam }} />}
           {scrim && <div className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />}
         </div>
       )}

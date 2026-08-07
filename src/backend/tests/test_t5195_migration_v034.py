@@ -128,12 +128,24 @@ def test_noop_column_on_missing_final_videos(tmp_path):
     assert "intro_cards" in tables
 
 
-def test_registry_head_is_v036():
+def test_registry_head_is_v040():
     from app.migrations.profile_db import MIGRATIONS
     # T6570 added v035 (intro_cards.subtitle_text); T6620 added v036 (null the
-    # dead intro_cards.title_text).
-    assert max(m.version for m in MIGRATIONS) == 36
+    # dead intro_cards.title_text); T6640 added v038 (null the dead
+    # intro_cards.text_elements) and v040 (backfill exactly one default card).
+    assert max(m.version for m in MIGRATIONS) == 40
     # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 35) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 36) == 1
+    assert sum(1 for m in MIGRATIONS if m.version == 38) == 1
+    assert sum(1 for m in MIGRATIONS if m.version == 40) == 1
+    # Every registered migration is REACHABLE: the runner applies versions above a
+    # DB's user_version, so a class that never made it into MIGRATIONS is dead code
+    # (v040 shipped unregistered once -- CI caught it here).
+    registered = {m.version for m in MIGRATIONS}
+    assert {34, 35, 36, 38, 40} <= registered
+    # v037 / v039 belong to the sibling T5215 / T6630 branches. They must be
+    # renumbered ABOVE this head before they merge, or the runner skips them.
+    assert 37 not in registered
+    assert 39 not in registered

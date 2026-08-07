@@ -1,21 +1,31 @@
-"""Intro card geometry + motion timing + treatment palette — the shared contract (T5210).
+"""Intro card geometry + motion timing + treatment palette — the shared contract
+(T5210, measured layout + template typography added T6640).
 
-THE source of truth for everything the render engine (`player_intro.py`, this task)
-and the browser editor/preview (`T5205`) must agree on to the pixel:
+THE source of truth for everything the render engine (`player_intro.py`) and the
+browser editor/preview (`T5205`) must agree on to the pixel:
 
-  1. **Slot geometry** — where the photo and each text line sit, per composition
-     (`title-only` / `hero` / `broadcast` / `recruiting`) and per output aspect
-     (`9:16` / `16:9`). Normalised 0..1 so ONE stored card frames identically at
-     1080x1920 and 1920x1080 and in a small browser preview box.
-  2. **Motion timing** — the photo push-in, the per-element text stagger, and the
+  1. **Photo geometry** — where the photo sits, per composition (`title-only` /
+     `hero` / `broadcast` / `recruiting`) and per output aspect (`9:16` / `16:9`).
+     Normalised 0..1 so ONE stored card frames identically at 1080x1920 and
+     1920x1080 and in a small browser preview box.
+  2. **Text REFLOW + TYPOGRAPHY (T6640)** — the text stack is no longer a set of
+     fixed-y slots (that assumed a one-line title and let a wrapped long name
+     collide with the slot below it — the reported bug). Instead each
+     composition+aspect defines a REFLOW (anchor, column, rhythm gaps) and a
+     TYPOGRAPHY table of three ROLES (`title` / `primary` / `secondary`); the
+     shared `layout()` function below MEASURES each element's wrapped line count
+     (via the SAME wrap algorithm `text_render.wrap_lines` uses) and stacks the
+     block against the anchor. See "MEASURED LAYOUT" below for the full guarantee.
+  3. **Motion timing** — the photo push-in, the per-element text stagger, and the
      white-flash EXIT into the footage. Same numbers the browser preview animates
      with; two copies would silently drift.
-  3. **Treatment palette** — the `gold` / `dark` / `photo-forward` background +
-     accent the user picks from swatches. These ARE pixels, so they live in the
-     contract (not the engine): otherwise the editor hardcodes its own approximation
-     and the preview drifts from the export with nothing failing a test. The values
-     are adopted verbatim from T5205's `introCardEditorConstants.js` so the editor's
-     look does not change — the contract just makes them canonical.
+  4. **Treatment palette** — the `gold` / `dark` / `photo-forward` background,
+     accent, band and photo grade (decision 2b/T6580), plus (T6640) the flat
+     `seamColor` an inset photo's edge fades toward and the fixed `mutedColor`
+     ROLE colour non-accent text uses. These ARE pixels, so they live in the
+     contract (not the engine): otherwise the editor hardcodes its own
+     approximation and the preview drifts from the export with nothing failing a
+     test.
 
 Python is the source of truth. `src/frontend/src/utils/introCardGeometry.js` is a
 GENERATED mirror (regenerate with `python -m app.services.intro_card_geometry`) that
@@ -29,47 +39,51 @@ Coordinate convention (mirrors the TextSpec unit invariant in schemas.py):
   - A photo rect `{x, y, w, h}` is the region of the frame the framed photo fills;
     the card's `focal_x`/`focal_y`/`zoom` then frame the image WITHIN it, so one
     stored framing works at both aspects (epic decision 3b).
-  - A text slot `{x, y, maxWidth, size, align}` carries LAYOUT only. `x` is the
-    anchor read per `align` (left edge / centre), `y` is the block's TOP edge. The
-    card's per-slot TextSpec supplies the STYLING (font, colour, weight, shadow,
-    stroke); font SIZE and POSITION are layout-owned (composition-derived), never
-    stored on the card — that is what guarantees a consistent look with no empty
-    slots.
 
 ============================================================================
-THE MOST CONFUSABLE THING IN THIS DESIGN — geometry is ORDINAL, styling is
-SEMANTIC, and the renderer maps between them. Read this before touching either.
+T6640 — TEMPLATE-OWNED TYPOGRAPHY + MEASURED LAYOUT (epic decision 12)
 ============================================================================
-  - GEOMETRY slots are ORDINAL: `fact1`/`fact2`/`fact3` are the 1st/2nd/3rd fact
-    LINE's position on the card. Geometry is about WHERE a line sits, so the Nth
-    shown fact always uses `fact{N}`'s rect regardless of which fact it is.
-  - STYLING is keyed SEMANTICALLY in the card's `text_elements` blob — by
-    `title` / `position` / `class` / `team`, NOT by ordinal. Styling must follow
-    the FACT so un-ticking one fact never transfers its styling to another.
-  - The card's `text_elements` is **STYLING ONLY** (shipped v034 schema, T5195):
-    T5205 writes `''` into every `text_elements[slot].text`. NEVER read the text
-    from there or you render blank lines. Text sources:
-        * title    -> the PROFILE's Full Name, ALWAYS (T6620), passed in as
-          `field_values["full_name"]`. `card["title_text"]` is DEAD — no longer
-          read (was a pre-T6570 override; nulled by migration v036). omit+log
-          if blank.
-        * subtitle -> the card's `subtitle_text` column (free text on THIS card,
-          e.g. a tournament name; T6570 / migration v035). omit+log if blank.
-        * factN    -> the PROFILE value for `shown_fields[N-1]` (omit+log if blank)
-  - So the renderer walks:
-        for i, field in enumerate(card["shown_fields"]):
-            geo_slot = geometry.slots[f"fact{i+1}"]      # ORDINAL position
-            styling  = card["text_elements"].get(field)  # SEMANTIC styling (may be None)
-            value    = field_values.get(field)           # PROFILE value (omit if blank)
-    and for title/subtitle: geo_slot = slots["title"|"subtitle"], styling =
-    text_elements.get(...), text = full name / card["subtitle_text"].
-  - The `subtitle` slot is ORTHOGONAL to composition (like the treatment axis):
-    it is free text the user turns on and does NOT count toward the fact-count,
-    so adding a subtitle never changes which composition is derived.
+Decision 12 makes the TEMPLATE own font/colour/size/weight/shadow/stroke/spacing
+for cards — the user no longer styles a slot. That collapses the old per-slot
+SEMANTIC styling (`text_elements`) entirely: every element now gets its
+typography from a fixed ROLE, keyed off WHICH kind of line it is, never off which
+card it's on:
 
-Nothing here is stored on a card. Composition is derived from
-(`has_photo`, `shown_fields`) via `intro_cards.derive_composition`; this module only
-says how each derived composition is laid out, moves and coloured.
+    title     -> the name (Anton, large, treatment ACCENT colour)
+    primary   -> the FIRST shown fact (fact1 = e.g. position; Oswald, accent)
+    secondary -> the subtitle + any remaining facts (fact2, fact3; Oswald,
+                 smaller, the fixed MUTED_COLOR) — grouped with class/team
+                 per the visual hierarchy the task asked for.
+
+`ROLE_FOR_SLOT` is the (trivial, parity-tested) map from a rendered SLOT
+(`title`/`subtitle`/`fact1`/`fact2`/`fact3` — still ORDINAL, unchanged from
+T5210) to its ROLE. Colour resolves via `ROLE_COLOR` (`"accent"` -> the
+treatment's accent, `"muted"` -> the fixed `MUTED_COLOR`) so there is no
+reachable colour clash: the user picks a TREATMENT, never a colour.
+
+**Collision safety (the acute bug this design fixes):** a long two-word name
+wraps to 2 lines. The OLD contract stored every slot's `y` as a fixed fraction,
+so the second line ran into the slot below. The NEW `layout()` function instead
+MEASURES how many lines each element wraps to (title may also SHRINK, bounded to
+`typography.title.maxLines`, floored at `typography.title.minSize`) and stacks
+the block from an ANCHOR:
+  - `anchorMode: "bottom"` anchors the LAST element's baseline at `anchorFrac`;
+    elements are placed walking UP from there. A taller (2-line) title makes the
+    WHOLE block taller, but every element still ends at the SAME anchor, so the
+    elements BELOW the title never move — a longer title only grows upward into
+    empty space above it. This is what guarantees no collision regardless of
+    line count (the geometry parity test's invariance assertions pin this).
+  - `anchorMode: "center"` centres the block on `anchorFrac` (used where there is
+    nothing below the stack to protect, e.g. recruiting/16:9's side panel).
+
+`layout()` is intentionally the ONE place both `player_intro.py` and (its JS
+mirror, `introCardPreviewElements.js`) compute stack position — the CONTRACT
+DATA here (reflow params + role typography) is parity-tested byte-for-byte via
+the existing `@parity:*` JSON mechanism; the wrap ALGORITHM the two runtimes use
+to measure line counts is a separately-mirrored implementation
+(`text_render.wrap_lines` <-> `RichText.jsx`'s `wrapLines`), guarded by an
+extended Playwright parity spec (`e2e/T5180-text-parity.spec.js`). See
+`docs/plans/tasks/T6640-design.md` §2 for the full three-layer parity argument.
 """
 
 from __future__ import annotations
@@ -77,6 +91,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from app.services.fonts import load_font_for_render
 from app.services.intro_cards import (
     COMPOSITION_BROADCAST,
     COMPOSITION_HERO,
@@ -84,6 +99,7 @@ from app.services.intro_cards import (
     COMPOSITION_TITLE_ONLY,
     TREATMENTS,
 )
+from app.services.text_render import wrap_lines
 
 # Aspect keys. A card renders at whatever the target reel is; `9:16` covers every
 # portrait output and `16:9` every landscape one (a square reel resolves to
@@ -91,11 +107,11 @@ from app.services.intro_cards import (
 ASPECT_PORTRAIT = "9:16"
 ASPECT_LANDSCAPE = "16:9"
 
-# Text slots. `title` = the profile's Full Name (T6570); `subtitle` = free text
-# on the card (T6570; a tournament name etc.), ORTHOGONAL to composition;
-# `fact1..fact3` are the ORDINAL fact-line positions, filled IN ORDER from the
-# card's `shown_fields` with the VALUE read from the profile (see the mapping
-# note above).
+# Text slots — still ORDINAL (T5210): `title` = the profile's Full Name;
+# `subtitle` = free text on the card, ORTHOGONAL to composition; `fact1..fact3`
+# are the ORDINAL fact-line positions, filled IN ORDER from the card's
+# `shown_fields`. Unchanged by T6640 — only how each slot's TYPOGRAPHY and
+# POSITION are resolved changed (role-based + measured, not per-slot styling).
 SLOT_TITLE = "title"
 SLOT_SUBTITLE = "subtitle"
 SLOT_FACT1 = "fact1"
@@ -110,119 +126,185 @@ TREATMENT_PHOTO_FORWARD = "photo-forward"
 ALIGN_LEFT = "left"
 ALIGN_CENTER = "center"
 
+# T6640 typography roles. `title` and `primary` take the treatment ACCENT;
+# `secondary` (subtitle + fact2/fact3) takes the fixed MUTED_COLOR — never
+# per-treatment (supervisor decision: one fixed muted grey everywhere; simpler
+# and still reads on all three treatments per the design-gate matrix).
+ROLE_TITLE = "title"
+ROLE_PRIMARY = "primary"
+ROLE_SECONDARY = "secondary"
+MUTED_COLOR = "#c3cad6"
+
+# Which ROLE each ordinal SLOT resolves to. `fact1` is the PRIMARY fact (larger,
+# accented — the single most important stat); `fact2`/`fact3` are SECONDARY,
+# grouped visually with the subtitle (smaller, muted) rather than each having
+# independent styling — this is what gives the card real hierarchy instead of an
+# evenly-weighted list (task §C "no hierarchy below the name").
+ROLE_FOR_SLOT: dict[str, str] = {
+    SLOT_TITLE: ROLE_TITLE,
+    SLOT_SUBTITLE: ROLE_SECONDARY,
+    SLOT_FACT1: ROLE_PRIMARY,
+    SLOT_FACT2: ROLE_SECONDARY,
+    SLOT_FACT3: ROLE_SECONDARY,
+}
+
 # Full-bleed photo rect, reused where the photo backs the whole frame.
 _FULL_BLEED = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
 
-def _slot(x: float, y: float, max_width: float, size: float, align: str) -> dict:
-    return {"x": x, "y": y, "maxWidth": max_width, "size": size, "align": align}
+def _role_typo(
+    font: str, size: float, shadow: dict, *, min_size: float | None = None, max_lines: int | None = None
+) -> dict:
+    out = {"font": font, "size": size, "shadow": shadow}
+    if min_size is not None:
+        out["minSize"] = min_size
+    if max_lines is not None:
+        out["maxLines"] = max_lines
+    return out
+
+
+def _reflow(
+    *, anchor_x: float, align: str, max_width: float, anchor_mode: str, anchor_frac: float,
+    gap_after_title: float, gap_group: float, gap_line: float,
+    seam_side: str = "none", seam_feather: float = 0.0,
+) -> dict:
+    return {
+        "anchorX": anchor_x, "align": align, "maxWidth": max_width,
+        "anchorMode": anchor_mode, "anchorFrac": anchor_frac,
+        "gapAfterTitle": gap_after_title, "gapGroup": gap_group, "gapLine": gap_line,
+        "seamSide": seam_side, "seamFeather": seam_feather,
+    }
+
+
+# Shared role-typography building blocks. Title/primary/secondary read the SAME
+# fonts + shadow strengths across every composition (Anton title, Oswald facts —
+# T5180's original defaults), so only SIZE/rhythm vary by composition/aspect.
+_TITLE_SHADOW = {"blur": 0.05, "color": "#000000", "opacity": 0.6}
+_FACT_SHADOW = {"blur": 0.04, "color": "#000000", "opacity": 0.55}
+
+
+def _typography(title_size, title_min, primary_size, secondary_size, max_lines: int = 2) -> dict:
+    return {
+        ROLE_TITLE: _role_typo("anton", title_size, dict(_TITLE_SHADOW), min_size=title_min, max_lines=max_lines),
+        ROLE_PRIMARY: _role_typo("oswald", primary_size, dict(_FACT_SHADOW)),
+        ROLE_SECONDARY: _role_typo("oswald", secondary_size, dict(_FACT_SHADOW)),
+    }
 
 
 # =============================================================================
-# SLOT GEOMETRY  (composition -> aspect -> {photo, slots})
+# GEOMETRY  (composition -> aspect -> {photo, reflow, typography})
 # =============================================================================
-# Approved values (T5210 design gate; the subtitle slot + the title positions
-# that make room for it are RESTORED from commit c806e2a5, where they were
-# reviewed and approved, after being dropped when the subtitle was removed —
-# T6570 gives the subtitle a data source, so it comes back). The photo placement
-# is what separates the four looks:
-#   - title-only : a text-forward card; the photo (if any) is a full-bleed,
-#     scrimmed background, title + subtitle centred.
-#   - hero       : the photo IS the card (full-bleed push-in); a name + one fact
-#     sit in the lower third. 16:9 anchors the text left so the subject stays clear.
-#   - broadcast  : full-bleed photo + a lower-third band; name + two facts.
-#   - recruiting : the "profile" look — an INSET photo (top band at 9:16, left
-#     column at 16:9) with a denser three-fact stack beside/below it.
-# The `subtitle` slot is present in EVERY composition but ORTHOGONAL to it: an
-# empty subtitle is simply omitted (like an unticked fact), so a card without one
-# looks exactly as before; a card with one gets the sub-heading between the title
-# and the facts. Adding a subtitle NEVER changes the derived composition.
+# T6640 replaced the old fixed-y `slots` dict with `reflow` (anchor + rhythm) +
+# `typography` (role sizing); `layout()` below measures + stacks at render time.
+# Numbers here are the T6640 design-gate approved starting point (recruiting was
+# rendered through the real pixel path in the 12-card matrix; hero/broadcast/
+# title-only follow the same anchor-from-the-bottom principle, scaled from the
+# T5210 fixed-y values they replace, and are covered by the wrap-regression
+# matrix in tests/test_t5210_player_intro.py).
 GEOMETRY: dict[str, dict[str, dict]] = {
     COMPOSITION_TITLE_ONLY: {
+        # No facts (0). Title + optional subtitle, centred as one text-forward
+        # block — a full-bleed scrimmed photo (if any) sits behind it.
         ASPECT_PORTRAIT: {
             "photo": dict(_FULL_BLEED),
-            "slots": {
-                SLOT_TITLE: _slot(0.5, 0.40, 0.86, 0.072, ALIGN_CENTER),
-                SLOT_SUBTITLE: _slot(0.5, 0.50, 0.80, 0.034, ALIGN_CENTER),
-            },
+            "reflow": _reflow(
+                anchor_x=0.5, align=ALIGN_CENTER, max_width=0.86,
+                anchor_mode="center", anchor_frac=0.45,
+                gap_after_title=0.020, gap_group=0.020, gap_line=0.010,
+            ),
+            "typography": _typography(0.080, 0.058, 0.040, 0.036),
         },
         ASPECT_LANDSCAPE: {
             "photo": dict(_FULL_BLEED),
-            "slots": {
-                SLOT_TITLE: _slot(0.5, 0.38, 0.86, 0.135, ALIGN_CENTER),
-                SLOT_SUBTITLE: _slot(0.5, 0.60, 0.80, 0.060, ALIGN_CENTER),
-            },
+            "reflow": _reflow(
+                anchor_x=0.5, align=ALIGN_CENTER, max_width=0.86,
+                anchor_mode="center", anchor_frac=0.47,
+                gap_after_title=0.025, gap_group=0.025, gap_line=0.012,
+            ),
+            "typography": _typography(0.150, 0.100, 0.070, 0.062),
         },
     },
     COMPOSITION_HERO: {
+        # 1 fact (primary only). Bottom-anchored lower-third over a full-bleed
+        # photo push-in.
         ASPECT_PORTRAIT: {
             "photo": dict(_FULL_BLEED),
-            "slots": {
-                SLOT_TITLE: _slot(0.5, 0.72, 0.90, 0.066, ALIGN_CENTER),
-                SLOT_SUBTITLE: _slot(0.5, 0.795, 0.80, 0.030, ALIGN_CENTER),
-                SLOT_FACT1: _slot(0.5, 0.84, 0.80, 0.034, ALIGN_CENTER),
-            },
+            "reflow": _reflow(
+                anchor_x=0.5, align=ALIGN_CENTER, max_width=0.84,
+                anchor_mode="bottom", anchor_frac=0.90,
+                gap_after_title=0.014, gap_group=0.028, gap_line=0.010,
+            ),
+            "typography": _typography(0.072, 0.050, 0.040, 0.030, max_lines=2),
         },
         ASPECT_LANDSCAPE: {
             "photo": dict(_FULL_BLEED),
-            "slots": {
-                SLOT_TITLE: _slot(0.06, 0.66, 0.62, 0.120, ALIGN_LEFT),
-                SLOT_SUBTITLE: _slot(0.06, 0.80, 0.55, 0.050, ALIGN_LEFT),
-                SLOT_FACT1: _slot(0.06, 0.865, 0.55, 0.055, ALIGN_LEFT),
-            },
+            "reflow": _reflow(
+                anchor_x=0.06, align=ALIGN_LEFT, max_width=0.60,
+                anchor_mode="bottom", anchor_frac=0.93,
+                gap_after_title=0.018, gap_group=0.035, gap_line=0.012,
+            ),
+            "typography": _typography(0.125, 0.085, 0.062, 0.052),
         },
     },
     COMPOSITION_BROADCAST: {
+        # 2 facts (primary + one secondary). Bottom-anchored lower-third.
         ASPECT_PORTRAIT: {
             "photo": dict(_FULL_BLEED),
-            "slots": {
-                SLOT_TITLE: _slot(0.5, 0.66, 0.90, 0.062, ALIGN_CENTER),
-                SLOT_SUBTITLE: _slot(0.5, 0.735, 0.80, 0.028, ALIGN_CENTER),
-                SLOT_FACT1: _slot(0.5, 0.79, 0.80, 0.030, ALIGN_CENTER),
-                SLOT_FACT2: _slot(0.5, 0.845, 0.80, 0.030, ALIGN_CENTER),
-            },
+            "reflow": _reflow(
+                anchor_x=0.5, align=ALIGN_CENTER, max_width=0.84,
+                anchor_mode="bottom", anchor_frac=0.90,
+                gap_after_title=0.012, gap_group=0.026, gap_line=0.010,
+            ),
+            "typography": _typography(0.068, 0.048, 0.036, 0.028),
         },
         ASPECT_LANDSCAPE: {
             "photo": dict(_FULL_BLEED),
-            "slots": {
-                SLOT_TITLE: _slot(0.06, 0.62, 0.60, 0.110, ALIGN_LEFT),
-                SLOT_SUBTITLE: _slot(0.06, 0.75, 0.55, 0.045, ALIGN_LEFT),
-                SLOT_FACT1: _slot(0.06, 0.82, 0.42, 0.048, ALIGN_LEFT),
-                SLOT_FACT2: _slot(0.06, 0.89, 0.42, 0.048, ALIGN_LEFT),
-            },
+            "reflow": _reflow(
+                anchor_x=0.06, align=ALIGN_LEFT, max_width=0.58,
+                anchor_mode="bottom", anchor_frac=0.95,
+                gap_after_title=0.016, gap_group=0.032, gap_line=0.010,
+            ),
+            "typography": _typography(0.115, 0.078, 0.058, 0.044),
         },
     },
     COMPOSITION_RECRUITING: {
+        # 3 facts (primary + two secondary) — the densest composition, and the
+        # one from the reported bug. Portrait: inset photo TOP 56%, bottom-
+        # anchored text below it with a seam fade at the photo's bottom edge.
+        # Landscape: inset photo LEFT 52%, text panel RIGHT, centre-anchored
+        # (nothing below the stack to protect), seam fade at the photo's right
+        # edge. T6640 design-gate matrix (qa/matrix/*) proved this composition
+        # at both aspects x all 3 treatments x {short, long} name never collides.
         ASPECT_PORTRAIT: {
             "photo": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 0.56},
-            "slots": {
-                SLOT_TITLE: _slot(0.5, 0.60, 0.90, 0.058, ALIGN_CENTER),
-                SLOT_SUBTITLE: _slot(0.5, 0.665, 0.80, 0.028, ALIGN_CENTER),
-                SLOT_FACT1: _slot(0.5, 0.72, 0.80, 0.032, ALIGN_CENTER),
-                SLOT_FACT2: _slot(0.5, 0.79, 0.80, 0.032, ALIGN_CENTER),
-                SLOT_FACT3: _slot(0.5, 0.86, 0.80, 0.032, ALIGN_CENTER),
-            },
+            "reflow": _reflow(
+                anchor_x=0.5, align=ALIGN_CENTER, max_width=0.88,
+                anchor_mode="bottom", anchor_frac=0.94,
+                gap_after_title=0.012, gap_group=0.030, gap_line=0.008,
+                seam_side="bottom", seam_feather=0.16,
+            ),
+            "typography": _typography(0.076, 0.052, 0.044, 0.030),
         },
         ASPECT_LANDSCAPE: {
-            "photo": {"x": 0.0, "y": 0.0, "w": 0.46, "h": 1.0},
-            "slots": {
-                SLOT_TITLE: _slot(0.52, 0.20, 0.44, 0.095, ALIGN_LEFT),
-                SLOT_SUBTITLE: _slot(0.52, 0.33, 0.42, 0.042, ALIGN_LEFT),
-                SLOT_FACT1: _slot(0.52, 0.46, 0.42, 0.050, ALIGN_LEFT),
-                SLOT_FACT2: _slot(0.52, 0.60, 0.42, 0.050, ALIGN_LEFT),
-                SLOT_FACT3: _slot(0.52, 0.74, 0.42, 0.050, ALIGN_LEFT),
-            },
+            "photo": {"x": 0.0, "y": 0.0, "w": 0.52, "h": 1.0},
+            "reflow": _reflow(
+                anchor_x=0.575, align=ALIGN_LEFT, max_width=0.40,
+                anchor_mode="center", anchor_frac=0.50,
+                gap_after_title=0.020, gap_group=0.050, gap_line=0.012,
+                seam_side="right", seam_feather=0.18,
+            ),
+            "typography": _typography(0.150, 0.095, 0.072, 0.050),
         },
     },
 }
 
 
 # =============================================================================
-# TREATMENT PALETTE  (treatment -> {background, accent, band, photoMood})
+# TREATMENT PALETTE  (treatment -> {background, accent, band, photoMood, seamColor})
 # =============================================================================
 # A treatment must VISIBLY change the card even on a full-bleed photo, where the
 # `background` is hidden (T6580 item 4 — the "changing Style barely changes
-# anything" complaint). So each treatment OWNS four things, ALL here in the shared
+# anything" complaint). So each treatment OWNS these, ALL here in the shared
 # contract (never in the editor only) so the browser preview and the ffmpeg export
 # render the same pixels:
 #   - background : the radial/solid backdrop (hidden behind a full-bleed photo;
@@ -231,7 +313,7 @@ GEOMETRY: dict[str, dict[str, dict]] = {
 #     ffmpeg `geq`, d = hypot((x-cx)/ex, (y-cy)/ey), stops lerped by
 #     clip(d/lastStopPos, 0, 1)). `css` is the exact editor string, kept for a
 #     1:1 check.
-#   - accent     : the title's default colour.
+#   - accent     : the title's + primary fact's colour (T6640 ROLE_COLOR "accent").
 #   - band (B)   : a SOLID lower-third ground behind the text, so contrast stops
 #     depending on the photo AND the treatment differs on ANY footage. A vertical
 #     band filled with `color` at `opacity`, `heightFrac` of the frame HEIGHT tall
@@ -246,6 +328,11 @@ GEOMETRY: dict[str, dict[str, dict]] = {
 #     to the pixel. tint = {color, opacity}; vignette = {opacity, innerFrac}
 #     (transparent inside `innerFrac` of the half-diagonal, ramping to `opacity`
 #     at the corner). `null` = that grade is off.
+#   - seamColor (T6640): the flat colour an INSET photo's edge (`reflow.seamSide`)
+#     fades toward, so recruiting's photo/panel seam bleeds into the background
+#     instead of a hard 50/50 cut (task §C). Deliberately the treatment's own
+#     outer/solid background colour (not a separate pick) so the fade always
+#     matches what is actually behind it.
 #
 # Direction: B + C combined, gold pulled back (T6580 item 4, user-approved).
 TREATMENTS_CONTRACT: dict[str, dict] = {
@@ -267,6 +354,7 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
             "tint": {"color": "#5a3a12", "opacity": 0.22},   # warm/premium
             "vignette": {"opacity": 0.5, "innerFrac": 0.45, "extent": 0.78},
         },
+        "seamColor": "#0d0b06",
     },
     TREATMENT_DARK: {
         "background": {
@@ -285,6 +373,7 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
             "tint": {"color": "#16233a", "opacity": 0.26},   # cool/moody
             "vignette": {"opacity": 0.62, "innerFrac": 0.38, "extent": 0.74},
         },
+        "seamColor": "#05070b",
     },
     TREATMENT_PHOTO_FORWARD: {
         "background": {
@@ -295,6 +384,7 @@ TREATMENTS_CONTRACT: dict[str, dict] = {
         "accent": "#ffffff",
         "band": None,                                        # clean/natural — no band
         "photoMood": {"tint": None, "vignette": None},       # no grade
+        "seamColor": "#04060a",
     },
 }
 
@@ -349,8 +439,8 @@ def aspect_key(width: int, height: int) -> str:
 
 
 def geometry_for(composition: str, aspect: str) -> dict:
-    """Return `{photo, slots}` for a composition + aspect key. Unknown keys RAISE
-    (a drift bug, never a silent fallback)."""
+    """Return `{photo, reflow, typography}` for a composition + aspect key.
+    Unknown keys RAISE (a drift bug, never a silent fallback)."""
     try:
         return GEOMETRY[composition][aspect]
     except KeyError as e:
@@ -361,8 +451,8 @@ def geometry_for(composition: str, aspect: str) -> dict:
 
 
 def treatment_for(treatment: str) -> dict:
-    """Return `{background, accent, band, photoMood}` for a treatment key. Unknown
-    keys RAISE."""
+    """Return `{background, accent, band, photoMood, seamColor}` for a treatment
+    key. Unknown keys RAISE."""
     try:
         return TREATMENTS_CONTRACT[treatment]
     except KeyError as e:
@@ -374,6 +464,123 @@ def band_kind(composition: str) -> str:
     lower-third-over-photo looks, else `none`. Mirrored verbatim in JS
     (`bandKind`) so preview and export gate the band identically."""
     return "bottom" if composition in BAND_COMPOSITIONS else "none"
+
+
+# =============================================================================
+# MEASURED LAYOUT  (T6640) — the ONE function both renderers stack text with.
+# =============================================================================
+def _gap_between(prev_role: str | None, role: str, reflow: dict) -> float:
+    """Rhythm gap BEFORE `role`, given the role that preceded it (None = first
+    element). Deliberately UNEQUAL so the stack reads as GROUPS, not an evenly-
+    spaced list (task §C):
+      - after the title (whatever comes next: a subtitle or the primary fact) ->
+        `gapAfterTitle`, tight — a subtitle/leading fact reads as part of the
+        name's own block.
+      - secondary -> secondary (e.g. fact2 -> fact3) -> `gapLine`, tight — same
+        supporting-facts group.
+      - every other transition (entering or leaving the primary fact) ->
+        `gapGroup`, the largest gap — a new visual group starts.
+    """
+    if prev_role is None:
+        return 0.0
+    if prev_role == ROLE_TITLE:
+        return reflow["gapAfterTitle"]
+    if prev_role == ROLE_SECONDARY and role == ROLE_SECONDARY:
+        return reflow["gapLine"]
+    return reflow["gapGroup"]
+
+
+def _fit_title(text: str, typo: dict, frame_w: int, frame_h: int, max_width_frac: float) -> tuple[float, int]:
+    """Shrink-to-fit the title role: reduce `size` in small steps until it wraps
+    to <= `typography.title.maxLines`, floored at `minSize` (task §A shrink-to-fit
+    — bounds the block height by construction). Returns (size_frac, line_count)."""
+    size = typo["size"]
+    min_size = typo["minSize"]
+    max_lines = typo["maxLines"]
+    max_px = max_width_frac * frame_w
+    step = 0.002
+    while size > min_size:
+        px = max(round(size * frame_h), 1)
+        font = load_font_for_render(typo["font"], px)
+        lines = wrap_lines(text, font, max_px)
+        if len(lines) <= max_lines:
+            return size, len(lines)
+        size = round(size - step, 4)
+    px = max(round(min_size * frame_h), 1)
+    font = load_font_for_render(typo["font"], px)
+    return min_size, len(wrap_lines(text, font, max_px))
+
+
+def _count_lines(text: str, size_frac: float, font_key: str, frame_w: int, frame_h: int, max_width_frac: float) -> int:
+    px = max(round(size_frac * frame_h), 1)
+    font = load_font_for_render(font_key, px)
+    return len(wrap_lines(text, font, max_width_frac * frame_w))
+
+
+def _advance_frac(size_frac: float, font_key: str, frame_h: int) -> float:
+    """Line advance (ascent + descent, the face's OWN metrics — never a hard-coded
+    multiplier, matching text_render's rule) as a fraction of frame height."""
+    px = max(round(size_frac * frame_h), 1)
+    ascent, descent = load_font_for_render(font_key, px).getmetrics()
+    return (ascent + descent) / frame_h
+
+
+def layout(
+    composition: str, aspect: str, elements: list[tuple[str, str]], accent: str, frame_w: int, frame_h: int,
+) -> dict[str, dict]:
+    """Compute the measured, anchored text stack for `elements` — an ORDERED list
+    of `(slot, text)` pairs already filtered to the slots that will actually
+    render (blank facts/subtitle/title already excluded by the caller), in
+    STAGGER_ORDER.
+
+    Returns `{slot: {x, y, size, align, maxWidth, font, color, shadow}}` — every
+    field `_merge_spec`/`mergeSpec` need to build a full TextSpec directly; the
+    caller no longer reads any per-card styling.
+
+    Collision guarantee (see the module docstring's T6640 section): the block is
+    placed against `reflow.anchorMode`/`anchorFrac`. For `"bottom"`, every
+    element's position is `anchorFrac - (height of everything from here to the
+    end of the stack)` — so a taller title only pushes elements ABOVE it (the
+    title itself) upward; elements below the title are unaffected by its line
+    count. This holds regardless of whether the two renderers agree on the exact
+    title line count (a robustness margin on top of the wrap-algorithm parity in
+    `text_render.wrap_lines` <-> `RichText.jsx`'s mirrored `wrapLines`).
+    """
+    geo = geometry_for(composition, aspect)
+    reflow = geo["reflow"]
+    typo = geo["typography"]
+
+    measured = []  # (slot, role, rt, size, lines, advance, gap)
+    prev_role: str | None = None
+    for slot, text in elements:
+        role = ROLE_FOR_SLOT[slot]
+        rt = typo[role]
+        if role == ROLE_TITLE:
+            size, lines = _fit_title(text, rt, frame_w, frame_h, reflow["maxWidth"])
+        else:
+            size = rt["size"]
+            lines = _count_lines(text, size, rt["font"], frame_w, frame_h, reflow["maxWidth"])
+        advance = _advance_frac(size, rt["font"], frame_h)
+        gap = _gap_between(prev_role, role, reflow)
+        measured.append((slot, role, rt, size, lines, advance, gap))
+        prev_role = role
+
+    total = sum(m[4] * m[5] for m in measured) + sum(m[6] for m in measured)
+    mode, frac = reflow["anchorMode"], reflow["anchorFrac"]
+    top = (frac - total) if mode == "bottom" else (frac - total / 2)
+
+    out: dict[str, dict] = {}
+    y = top
+    for slot, role, rt, size, lines, advance, gap in measured:
+        y += gap
+        color = accent if role in (ROLE_TITLE, ROLE_PRIMARY) else MUTED_COLOR
+        out[slot] = {
+            "x": reflow["anchorX"], "y": y, "size": size, "align": reflow["align"],
+            "maxWidth": reflow["maxWidth"], "font": rt["font"], "color": color,
+            "shadow": rt["shadow"],
+        }
+        y += lines * advance
+    return out
 
 
 # =============================================================================
@@ -395,6 +602,8 @@ def contract_as_dict() -> dict:
         "staggerOrder": list(STAGGER_ORDER),
         "aspects": {"portrait": ASPECT_PORTRAIT, "landscape": ASPECT_LANDSCAPE},
         "bandCompositions": list(BAND_COMPOSITIONS),
+        "roleForSlot": ROLE_FOR_SLOT,
+        "mutedColor": MUTED_COLOR,
     }
 
 
@@ -409,14 +618,17 @@ def render_js_mirror() -> str:
     stagger = json.dumps(c["staggerOrder"])
     aspects = json.dumps(c["aspects"], indent=2, sort_keys=True)
     band_compositions = json.dumps(c["bandCompositions"])
+    role_for_slot = json.dumps(c["roleForSlot"], indent=2, sort_keys=True)
+    muted_color = json.dumps(c["mutedColor"])
     return f"""// GENERATED FROM app/services/intro_card_geometry.py — do not hand-edit.
 // Regenerate: cd src/backend && .venv/Scripts/python.exe -m app.services.intro_card_geometry
 // Parity is enforced by src/backend/tests/test_t5210_geometry_parity.py.
 //
-// Shared intro-card slot geometry + motion timing + treatment palette (T5210).
-// See the Python module for the coordinate convention, the ordinal-geometry /
-// semantic-styling mapping, and rationale. The editor (T5205) reads THESE numbers
-// so its live preview + motion + treatment swatches match the render engine.
+// Shared intro-card slot geometry + motion timing + treatment palette (T5210,
+// measured layout + template typography T6640). See the Python module for the
+// coordinate convention and the T6640 role/reflow/layout() rationale. The editor
+// (T5205) reads THESE numbers so its live preview + motion + treatment swatches
+// match the render engine.
 
 export const CARD_ASPECTS = /* @parity:aspects:start */ {aspects} /* @parity:aspects:end */;
 
@@ -430,6 +642,14 @@ export const STAGGER_ORDER = /* @parity:staggerOrder:start */ {stagger} /* @pari
 
 export const BAND_COMPOSITIONS = /* @parity:bandCompositions:start */ {band_compositions} /* @parity:bandCompositions:end */;
 
+// T6640: ordinal SLOT -> typography ROLE (title/primary/secondary). Mirrors
+// `intro_card_geometry.ROLE_FOR_SLOT` exactly.
+export const ROLE_FOR_SLOT = /* @parity:roleForSlot:start */ {role_for_slot} /* @parity:roleForSlot:end */;
+
+// T6640: the fixed colour every "secondary"-role element uses (subtitle,
+// fact2, fact3) — one flat muted grey across all three treatments.
+export const MUTED_COLOR = /* @parity:mutedColor:start */ {muted_color} /* @parity:mutedColor:end */;
+
 /**
  * Resolve an output frame size to its contract aspect key. Mirrors
  * `intro_card_geometry.aspect_key` on the backend (landscape/square -> 16:9).
@@ -442,8 +662,9 @@ export function aspectKey(width, height) {{
 }}
 
 /**
- * `{{photo, slots}}` for a composition + aspect key. Throws on an unknown key
- * (a drift bug, never a silent fallback) to match the Python accessor.
+ * `{{photo, reflow, typography}}` for a composition + aspect key. Throws on an
+ * unknown key (a drift bug, never a silent fallback) to match the Python
+ * accessor.
  * @param {{string}} composition one of COMPOSITION.* (introCardComposition.js)
  * @param {{string}} aspect one of CARD_ASPECTS.*
  */
@@ -459,7 +680,8 @@ export function geometryFor(composition, aspect) {{
 }}
 
 /**
- * `{{background, accent}}` for a treatment key. Throws on an unknown key.
+ * `{{background, accent, band, photoMood, seamColor}}` for a treatment key.
+ * Throws on an unknown key.
  * @param {{string}} treatment one of TREATMENTS (introCardComposition.js)
  */
 export function treatmentFor(treatment) {{

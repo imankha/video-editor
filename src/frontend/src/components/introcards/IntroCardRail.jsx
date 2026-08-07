@@ -1,42 +1,35 @@
-// T5205 / T6540 — the editor RIGHT RAIL (presentational + small local input
-// drafts). Information design (T6540): the rail is organised into two tiers a
+// T5205 / T6540 / T6640 — the editor RIGHT RAIL (presentational + small local
+// input drafts). Information design (T6540): the rail is organised into tiers a
 // first-time user can scan without reading every label —
 //   CONTENT ("On the card"): which facts show (the composition axis), captioned
 //     so ticking a fact reads as cause -> effect (WITHOUT naming a layout; T6570
 //     — the user does not want the layout named).
 //   PHOTO: the photo as ONE object — thumbnail, replace/remove, AND zoom together
 //     (drag stays on the stage; the indirect controls live here, not split off).
-//   STYLE: the look — treatment + the selected slot's typography, grouped in one
-//     panel so it reads as secondary to the content decision above.
-// White section headings vs grey mini-labels give the hierarchy; expert dials
-// (shadow/stroke) sit behind the shared editor's collapsed "Effects" disclosure.
-// Styling edits go through the SHARED TextSpecEditor (T5225) — one editor.
+//   STYLE: the treatment (gold/dark/photo-forward) — the ONE visual choice left.
+//
+// T6640 (epic decision 12) removed the per-slot text STYLING editor (font,
+// custom colour picker, swatches, shadow, stroke) from this rail entirely —
+// typography is now TEMPLATE-owned, derived from the treatment in the shared
+// contract, so there is nothing left for a per-slot styling control to edit.
+// The subtitle keeps its own free-text input (content, not styling). This does
+// NOT touch the shared `TextSpecEditor` component (owned by T6630 while in
+// flight) — the Overlay text rail still uses it with full font/colour/shadow/
+// stroke control; only the IMPORT here is removed.
 
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
-import { TextSpecEditor } from '../textspec/TextSpecEditor';
 import { useProfileStore } from '../../stores';
-import {
-  FACT_SLOTS,
-  SLOT_META,
-  TITLE_SLOT,
-  SUBTITLE_SLOT,
-  TREATMENTS,
-  COLOR_SWATCHES,
-} from './introCardEditorConstants';
+import { FACT_SLOTS, SLOT_META, TREATMENTS } from './introCardEditorConstants';
 import { treatmentAccent, treatmentBackgroundCss, treatmentBand } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
 
 export function IntroCardRail({
   card,
   profile,
-  selectedSlot,
-  onSelectSlot,
   onToggleFact,
   onSetTreatment,
   onCommitSubtitle,
-  specForSlot,
-  onUpdateSlotSpec,
   onImageChanged,
   onEditProfile,
   onError,
@@ -45,13 +38,6 @@ export function IntroCardRail({
   onZoomRelease,
 }) {
   const shown = card.shown_fields || [];
-  // Slots available to style: the title (profile Full Name), the subtitle (free
-  // text — always offered so the user can turn one on), plus every shown fact.
-  const slotOptions = [TITLE_SLOT, SUBTITLE_SLOT, ...FACT_SLOTS.filter((f) => shown.includes(f))];
-  const activeSlot = slotOptions.includes(selectedSlot) ? selectedSlot : TITLE_SLOT;
-  // Title + subtitle are always present, so there is always more than one slot to
-  // pick between — the picker always renders (the one-slot special case is gone).
-  const hasSlotChoice = slotOptions.length > 1;
 
   return (
     <div className="w-full lg:w-[360px] lg:shrink-0 lg:min-h-0 lg:overflow-y-auto space-y-3 lg:pr-1">
@@ -98,6 +84,14 @@ export function IntroCardRail({
         </div>
       </section>
 
+      {/* Subtitle — the ONE free-text field (T6570), a property of THIS card
+          (e.g. a tournament name), unlike the title (the athlete's Full Name,
+          from the profile). CONTENT, not styling — the user always keeps it. */}
+      <section>
+        <SectionHeading>Subtitle</SectionHeading>
+        <SubtitleInput value={card.subtitle_text || ''} onCommit={onCommitSubtitle} />
+      </section>
+
       {/* PHOTO — one object: thumbnail + replace/remove + zoom, all together. */}
       <section>
         <SectionHeading>Photo</SectionHeading>
@@ -112,91 +106,52 @@ export function IntroCardRail({
         />
       </section>
 
-      {/* STYLE tier — the look. Treatment + typography read as refinements,
-          secondary to the content decision above; the heading alone sets them
-          apart (a box or divider only added scroll height). */}
+      {/* STYLE tier — the ONE visual choice left (T6640/decision 12): the
+          treatment. Font, colour, size, weight, shadow, stroke and spacing are
+          TEMPLATE-owned from here — no control on this rail can produce a
+          colour or font clash. */}
       <section>
         <SectionHeading>Style</SectionHeading>
-        <div className="space-y-3">
-          {/* Treatment — independent of composition (decision 2b). No mini-label:
-              each swatch is captioned (Gold / Dark / Photo forward), so a group
-              label just added a row of scroll for no information. */}
-          <div>
-            <div className="flex gap-2" role="group" aria-label="Treatment">
-              {TREATMENTS.map((t) => {
-                const active = card.treatment === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => onSetTreatment(t.key)}
-                    className={`flex-1 flex flex-col items-center gap-1 p-2 rounded border transition-colors coarse-pointer:min-h-[44px] ${
-                      active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                  >
-                    {/* A mini card: backdrop + the treatment's lower-third BAND
-                        (T6580 item 4 — what actually grounds the text and makes
-                        the three visibly differ) with the accent bar on it.
-                        Photo-forward has no band, so its accent sits on the plain
-                        backdrop. */}
+        {/* Treatment — independent of composition (decision 2b). No mini-label:
+            each swatch is captioned (Gold / Dark / Photo forward), so a group
+            label just added a row of scroll for no information. */}
+        <div className="flex gap-2" role="group" aria-label="Treatment">
+          {TREATMENTS.map((t) => {
+            const active = card.treatment === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onSetTreatment(t.key)}
+                className={`flex-1 flex flex-col items-center gap-1 p-2 rounded border transition-colors coarse-pointer:min-h-[44px] ${
+                  active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                {/* A mini card: backdrop + the treatment's lower-third BAND
+                    (T6580 item 4 — what actually grounds the text and makes
+                    the three visibly differ) with the accent bar on it.
+                    Photo-forward has no band, so its accent sits on the plain
+                    backdrop. */}
+                <span
+                  className="relative w-full h-8 rounded flex items-end justify-center overflow-hidden"
+                  style={{ background: treatmentBackgroundCss(t.key) }}
+                >
+                  {treatmentBand(t.key) && (
                     <span
-                      className="relative w-full h-8 rounded flex items-end justify-center overflow-hidden"
-                      style={{ background: treatmentBackgroundCss(t.key) }}
-                    >
-                      {treatmentBand(t.key) && (
-                        <span
-                          className="absolute inset-x-0 bottom-0 h-1/2"
-                          style={{ background: treatmentBand(t.key).color, opacity: treatmentBand(t.key).opacity }}
-                        />
-                      )}
-                      <span
-                        className="relative block w-3/5 h-1.5 rounded-sm mb-1"
-                        style={{ background: treatmentAccent(t.key) }}
-                      />
-                    </span>
-                    <span className="text-xs text-gray-200">{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Selected slot's text + typography. The slot picker appears only when
-              there is more than one slot to choose between. */}
-          <div>
-            <MiniLabel>{hasSlotChoice ? 'Text' : `${SLOT_META[activeSlot].label} style`}</MiniLabel>
-            {hasSlotChoice && (
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {slotOptions.map((slot) => {
-                  const active = slot === activeSlot;
-                  return (
-                    <button
-                      key={slot}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => onSelectSlot(slot)}
-                      className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors coarse-pointer:min-h-[44px] ${
-                        active ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {SLOT_META[slot].label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <SlotEditor
-              slot={activeSlot}
-              card={card}
-              profile={profile}
-              specForSlot={specForSlot}
-              onUpdateSlotSpec={onUpdateSlotSpec}
-              onEditProfile={onEditProfile}
-              onCommitSubtitle={onCommitSubtitle}
-            />
-          </div>
+                      className="absolute inset-x-0 bottom-0 h-1/2"
+                      style={{ background: treatmentBand(t.key).color, opacity: treatmentBand(t.key).opacity }}
+                    />
+                  )}
+                  <span
+                    className="relative block w-3/5 h-1.5 rounded-sm mb-1"
+                    style={{ background: treatmentAccent(t.key) }}
+                  />
+                </span>
+                <span className="text-xs text-gray-200">{t.label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -210,62 +165,6 @@ export function IntroCardRail({
 /** Primary rail heading (white, semibold) — the top of the hierarchy. */
 function SectionHeading({ children }) {
   return <h3 className="text-sm font-semibold text-white mb-1.5">{children}</h3>;
-}
-
-/** Secondary group label (grey, uppercase) — subordinate to a SectionHeading. */
-function MiniLabel({ children }) {
-  return (
-    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{children}</span>
-  );
-}
-
-/**
- * Athlete Name slot (key `title`) -> the profile's Full Name, read-only here and
- * edited on the profile (T6620: no per-card text box, the profile always wins).
- * Subtitle -> the one free-text field on the card. Fact slot -> the profile value
- * (read-only here; edited on the profile), or an inline prompt. All share the
- * styling editor below.
- */
-function SlotEditor({ slot, card, profile, specForSlot, onUpdateSlotSpec, onEditProfile, onCommitSubtitle }) {
-  const meta = SLOT_META[slot];
-  const spec = specForSlot(slot);
-  const value = slotDisplayText(slot, card, profile);
-  // Three kinds of text source: the SUBTITLE is the one FREE-TEXT field (a
-  // property of THIS card); the TITLE is the profile's Full Name and the FACTS
-  // are profile values (both read-only here, edited on the profile). T6570.
-  const isTitle = slot === TITLE_SLOT;
-  const isSubtitle = slot === SUBTITLE_SLOT;
-  const sourceLabel = isTitle ? 'Full name' : meta.label;
-
-  return (
-    <div className="space-y-3">
-      {isSubtitle ? (
-        <SubtitleInput value={card.subtitle_text || ''} onCommit={onCommitSubtitle} />
-      ) : value ? (
-        <div className="text-xs text-gray-400">
-          {sourceLabel}: <span className="text-gray-200">{value}</span> (edit on the profile)
-        </div>
-      ) : (
-        <p className="text-xs text-amber-400/90">
-          No {sourceLabel.toLowerCase()} on this profile yet.{' '}
-          <button type="button" onClick={onEditProfile} className="underline hover:text-amber-300">
-            Add it
-          </button>
-          .
-        </p>
-      )}
-
-      <TextSpecEditor
-        spec={spec}
-        onChange={(next) => onUpdateSlotSpec(slot, next)}
-        hideText
-        hideSize
-        hideAlign
-        collapseEffects
-        colorSwatches={COLOR_SWATCHES}
-      />
-    </div>
-  );
 }
 
 /**

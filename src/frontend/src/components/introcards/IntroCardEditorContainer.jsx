@@ -5,29 +5,30 @@
 // store (no reactive useEffect writes).
 //
 // Transient interaction state that legitimately lives in React: the aspect
-// toggle, the selected slot, the in-progress photo drag / zoom slider (which
-// commit ONCE on release), and the title-text draft (commits on blur). None of
-// these hold canonical API data.
+// toggle, the in-progress photo drag / zoom slider (which commit ONCE on
+// release), and the title-text draft (commits on blur). None of these hold
+// canonical API data.
+//
+// T6640: per-slot text STYLING is gone (decision 12 — typography is template-
+// owned), so the selected-slot state + the debounced text_elements write it
+// drove are gone too; there is nothing left to select a slot FOR.
 
-import { useRef, useState, useCallback, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { ArrowLeft, Star, Pencil } from 'lucide-react';
 import { useIntroCardStore, useProfileStore } from '../../stores';
 import { RATIO } from '../../constants/aspectRatios';
 import { IntroCardStage } from './IntroCardStage';
 import { IntroCardRail } from './IntroCardRail';
 import { ConsentGate } from './ConsentGate';
-import { defaultSlotSpec } from './introCardDefaults';
-import { treatmentAccent } from './introCardVisual';
-import { TITLE_SLOT, FACT_SLOTS } from './introCardEditorConstants';
+import { FACT_SLOTS } from './introCardEditorConstants';
 
-export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile }) {
+export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile, onSetDefault }) {
   const updateCard = useIntroCardStore((s) => s.updateCard);
   const patchCardLocal = useIntroCardStore((s) => s.patchCardLocal);
   const fetchCards = useIntroCardStore((s) => s.fetchCards);
   const setIntroConsent = useProfileStore((s) => s.setIntroConsent);
 
   const [aspectRatio, setAspectRatio] = useState(RATIO.PORTRAIT);
-  const [selectedSlot, setSelectedSlot] = useState(TITLE_SLOT);
   const [error, setError] = useState(null);
 
   // Transient drag/zoom overrides (null = show the persisted value). Committed
@@ -36,10 +37,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
   const [zoomDraft, setZoomDraft] = useState(null);
 
   const hasConsent = !!profile?.introConsentAt;
-
-  // Debounced text_elements write (styling changes): one field, one timer.
-  // Typing/dragging a colour does not hit the API on every event.
-  const textElementsTimer = useRef(null);
 
   // A gesture: apply the change to the store optimistically (instant preview),
   // then persist ONLY that field. `localFields` lets a caller carry a UI-only
@@ -59,27 +56,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
       fetchCards({ force: true });
     }
   }, [updateCard, patchCardLocal, fetchCards, card.id]);
-
-  // Debounced variant for text styling: optimistic locally NOW, network write
-  // coalesced. One field (text_elements) -> one timer.
-  const patchDebounced = useCallback((fields) => {
-    setError(null);
-    patchCardLocal(card.id, fields);
-    if (textElementsTimer.current) clearTimeout(textElementsTimer.current);
-    textElementsTimer.current = setTimeout(() => {
-      textElementsTimer.current = null;
-      updateCard(card.id, fields).then((updated) => {
-        if (!updated) {
-          setError('Could not save the change. Please try again.');
-          fetchCards({ force: true });
-        }
-      });
-    }, 300);
-  }, [updateCard, patchCardLocal, fetchCards, card.id]);
-
-  useEffect(() => () => {
-    if (textElementsTimer.current) clearTimeout(textElementsTimer.current);
-  }, []);
 
   // --- Facts (composition axis) ------------------------------------------
   // shown_fields is ORDINAL: fact{N} geometry is the Nth entry, so the array
@@ -118,21 +94,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
     if (trimmed === (card.subtitle_text || '')) return;
     patch({ subtitle_text: trimmed });
   }, [card.subtitle_text, patch]);
-
-  // --- Slot styling (text_elements) --------------------------------------
-  // Rebase on the LIVE (optimistic) card.text_elements so editing slot B within
-  // the debounce window never drops slot A's just-applied change. Stored spec is
-  // styling only -> text forced to '' (real text comes from title_text/profile).
-  const updateSlotSpec = useCallback((slot, nextSpec) => {
-    const nextElements = { ...(card.text_elements || {}), [slot]: { ...nextSpec, text: '' } };
-    patchDebounced({ text_elements: nextElements });
-  }, [card.text_elements, patchDebounced]);
-
-  const specForSlot = useCallback((slot) => {
-    // Fall back to the SAME default styling the renderer applies to an unstyled
-    // slot (accent depends on the treatment), so the rail shows the true look.
-    return card.text_elements?.[slot] || defaultSlotSpec(slot, treatmentAccent(card.treatment));
-  }, [card.text_elements, card.treatment]);
 
   // --- Photo framing (focal + zoom) --------------------------------------
   const onPhotoDragMove = useCallback((focal) => setDragFocal(focal), []);
@@ -175,7 +136,7 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2 mb-3">
+      <div data-testid="card-breadcrumb" className="flex items-center gap-2 mb-3">
         <button
           type="button"
           onClick={onBack}
@@ -185,6 +146,29 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
         </button>
         <span className="text-gray-600 flex-shrink-0">/</span>
         <CardNameInput value={card.name || ''} onCommit={commitName} />
+
+        {/* Default status — DERIVED from card.is_default, never a stored name
+            (T6640 round 2: a stored "Default" label would drift the moment
+            another card is promoted or this one is renamed). A badge when
+            this IS the default; a promote action when it isn't — never both,
+            so there is always exactly one thing to look at here. */}
+        {card.is_default ? (
+          <span
+            className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-400/10 text-[11px] font-semibold text-yellow-300"
+            title="This is the default intro card"
+          >
+            <Star size={11} fill="currentColor" /> Default
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onSetDefault}
+            className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium text-gray-300 border border-gray-600 hover:border-yellow-400 hover:text-yellow-300 coarse-pointer:min-h-[32px]"
+            title="Plays before any reel that hasn't been given a specific card"
+          >
+            <Star size={11} /> Set as default
+          </button>
+        )}
       </div>
 
       {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
@@ -202,19 +186,13 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           zoomDraft={zoomDraft}
           onPhotoDragMove={onPhotoDragMove}
           onPhotoDragEnd={onPhotoDragEnd}
-          selectedSlot={selectedSlot}
-          onSelectSlot={setSelectedSlot}
         />
         <IntroCardRail
           card={card}
           profile={profile}
-          selectedSlot={selectedSlot}
-          onSelectSlot={setSelectedSlot}
           onToggleFact={toggleFact}
           onSetTreatment={setTreatment}
           onCommitSubtitle={commitSubtitle}
-          specForSlot={specForSlot}
-          onUpdateSlotSpec={updateSlotSpec}
           onImageChanged={onImageChanged}
           onEditProfile={onEditProfile}
           onError={setError}
@@ -228,9 +206,19 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
 }
 
 /**
- * The card's library label (card.name). Draft + commit-on-blur, same discipline
- * as the title/fact inputs: typing never hits the API, and a blank rename is
- * ignored (name is required server-side).
+ * The card's library label (card.name), editable right where it's shown (T6640
+ * round 2: "I need a way to rename the card" — the breadcrumb is the one place
+ * the name already appears, so it's the thing the user edits, not a field
+ * buried in the rail). Draft + commit-on-blur/Enter, same discipline as the
+ * title/fact inputs: typing never hits the API. A blank/whitespace-only commit
+ * is REJECTED (not saved) and the input snaps back to the last real name —
+ * names aren't required to be unique, but an empty one would make the
+ * breadcrumb unreadable, so "restore" (not "allow empty") is the choice here.
+ *
+ * The border is visible AT REST (not hover-only, T6300: an editable field's
+ * affordance must be discoverable without hovering it first) plus a small
+ * pencil, since inline text next to plain nav breadcrumbs ("Cards /") would
+ * otherwise read as another static label.
  */
 function CardNameInput({ value, onCommit }) {
   const [draft, setDraft] = useState(value);
@@ -245,20 +233,31 @@ function CardNameInput({ value, onCommit }) {
   const commit = () => {
     if (!dirty) return;
     setDirty(false);
-    setLastValue(draft);
-    onCommit(draft);
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      // Reject empty/whitespace-only: restore the last real name rather than
+      // persist a blank breadcrumb.
+      setDraft(lastValue);
+      return;
+    }
+    setLastValue(trimmed);
+    setDraft(trimmed);
+    onCommit(trimmed);
   };
 
   return (
-    <input
-      type="text"
-      aria-label="Card name"
-      value={draft}
-      onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-      className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white border-b border-transparent hover:border-gray-600 focus:border-blue-500 focus:outline-none"
-    />
+    <label className="flex items-center gap-1 min-w-0 flex-1 group">
+      <input
+        type="text"
+        aria-label="Card name"
+        value={draft}
+        onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+        className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white border-b border-gray-600 hover:border-gray-400 focus:border-blue-500 focus:outline-none"
+      />
+      <Pencil size={12} className="flex-shrink-0 text-gray-500 group-hover:text-gray-300" />
+    </label>
   );
 }
 

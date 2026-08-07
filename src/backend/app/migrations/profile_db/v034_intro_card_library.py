@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS intro_cards (
     focal_x           REAL,                 -- NULL = inherit the profile's framing (decision 3b)
     focal_y           REAL,                 -- NULL = inherit
     zoom              REAL,                 -- NULL = inherit
-    text_elements     BLOB,                 -- msgpack: { slot_name: TextSpec }  STYLING ONLY
+    text_elements     BLOB,                 -- DEAD as of T6640: typography is TEMPLATE-owned (ROLE_FOR_SLOT), never read. Was per-slot user styling; nulled by v038. Do NOT reintroduce per-slot styling semantics.
     duration          REAL NOT NULL DEFAULT 4.0,
     is_default        INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT DEFAULT (datetime('now')),

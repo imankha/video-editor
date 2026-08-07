@@ -1,49 +1,42 @@
-// T5205 — factories for a new card and a slot's default STYLING spec.
+// T5205 / T6640 — factory for a new card's create payload.
 //
-// A stored `text_elements[slot]` is a STYLING-ONLY TextSpec (epic data model,
-// T5210 contract): its `.text` is not authoritative (the title's text is the
-// profile's Full Name (T6570), a fact's text is the profile field), and its
-// `.size`/`.align`/`.position`/`.maxWidth` are neutral placeholders that the
-// composition geometry OVERRIDES at render/preview time. What the editor owns
-// here is font / colour / shadow / stroke — the styling the rail edits.
+// T6640 (decision 12): typography is TEMPLATE-owned, so there is no more
+// per-slot STYLING spec to default (`text_elements` is dead — see
+// `intro_card_geometry.ROLE_FOR_SLOT`). `defaultSlotSpec` was deleted along
+// with the per-slot styling editor it fed (`IntroCardRail.jsx`).
 
-import { Animation } from '../../constants/textSpec';
-import { defaultStyling } from './introCardPreviewElements';
-import { SLOT_META, PLACEHOLDER_SLOT_GEOMETRY, DEFAULT_SIZE, DEFAULT_ALIGN, DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEditorConstants';
-import { treatmentAccent } from './introCardVisual';
+import { DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEditorConstants';
+
+const GENERATED_NAME_RE = /^Intro Card (\d+)$/;
 
 /**
- * A default styling spec for a slot — the SAME font/colour/shadow the renderer
- * applies to an unstyled slot (introCardPreviewElements.defaultStyling), so the
- * rail shows the true defaults and persisting them changes nothing visible.
- * Size/align/position are placeholders (layout-owned by the composition).
- * @param {string} slot one of ALL_SLOTS
- * @param {string} [accent] treatment accent (the title's default colour)
+ * The generated name for a brand-new card: "Intro Card N", N the LOWEST
+ * number not already used by one of this profile's cards with EXACTLY that
+ * name (T6640 round 2, user decision). Gap-filling, not `count + 1` — cards
+ * "Intro Card 1" and "Intro Card 3" exist -> the next is "Intro Card 2"
+ * (renaming a card frees its number). Cards with any OTHER name (including a
+ * user's own rename) don't occupy a slot in this sequence — names aren't
+ * unique in general, only this generator avoids repeating a number it can
+ * still see in use.
+ * @param {{name: string}[]} cards
  */
-export function defaultSlotSpec(slot, accent = treatmentAccent(DEFAULT_TREATMENT)) {
-  const kind = SLOT_META[slot]?.kind || 'fact';
-  const styling = defaultStyling(kind, accent);
-  return {
-    text: '', // styling-only: real text is the profile full name / the profile fact
-    font: styling.font,
-    color: styling.color,
-    size: DEFAULT_SIZE,
-    align: DEFAULT_ALIGN,
-    position: { ...PLACEHOLDER_SLOT_GEOMETRY.position },
-    maxWidth: PLACEHOLDER_SLOT_GEOMETRY.maxWidth,
-    shadow: styling.shadow ? { ...styling.shadow } : { blur: 0, color: '#000000', opacity: 0 },
-    stroke: { width: 0, color: '#000000' },
-    animation: Animation.NONE,
-  };
+export function nextCardName(cards) {
+  const used = new Set(
+    (cards || [])
+      .map((c) => GENERATED_NAME_RE.exec(c.name || ''))
+      .filter(Boolean)
+      .map((m) => parseInt(m[1], 10)),
+  );
+  let n = 1;
+  while (used.has(n)) n += 1;
+  return `Intro Card ${n}`;
 }
 
 /**
- * Build the create payload for a brand-new card. `text_elements` starts EMPTY —
- * the renderer/preview apply the default styling for every slot, so a fresh card
- * looks finished without persisting redundant specs; a spec is written only when
- * the user actually restyles a slot. Defaults `image_key` from the profile's own
- * intro photo (epic decision 3b). `shown_fields` empty -> a fresh card is
- * title-only until the user ticks a fact (the composition rule made visible).
+ * Build the create payload for a brand-new card. Defaults `image_key` from the
+ * profile's own intro photo (epic decision 3b). `shown_fields` empty -> a
+ * fresh card is title-only until the user ticks a fact (the composition rule
+ * made visible).
  * @param {{name: string, profile: object}} args
  */
 export function buildCreateFields({ name, profile }) {
@@ -55,7 +48,6 @@ export function buildCreateFields({ name, profile }) {
     treatment: DEFAULT_TREATMENT,
     shown_fields: [],
     image_key: profile?.introPhotoKey || null,
-    text_elements: {},
     duration: DEFAULT_DURATION,
   };
 }

@@ -130,8 +130,11 @@ function resolveFontFamily(fontKey, manifest) {
  * Setting the SAME two numbers as an explicit `line-height` in RichText's
  * textStyle (below) forces the browser's line box advance to match the
  * backend's, instead of trusting the browser's own "normal" guess.
+ *
+ * Exported (T6640) so `introCardPreviewElements.js`'s measured card-layout
+ * mirror can compute a role's line ADVANCE the same way, outside a component.
  */
-function measureFontMetricsPx(fontFamily, fontPx, fontWeight = 400) {
+export function measureFontMetricsPx(fontFamily, fontPx, fontWeight = 400) {
   try {
     // Fresh canvas/context per call (cheap relative to a text layout) — no
     // reason to memoize one across renders.
@@ -159,6 +162,63 @@ function measureFontMetricsPx(fontFamily, fontPx, fontWeight = 400) {
   return { ascentPx: fontPx * 0.8, descentPx: fontPx * 0.2 };
 }
 
+// T6640 — the ONE wrap algorithm both renderers must agree on to the LINE COUNT
+// (a card's text stack is positioned from MEASURED line counts, so a divergence
+// here is a collision-safety bug, not a cosmetic one — see
+// docs/plans/tasks/T6640-design.md §2a). This is the line-for-line JS twin of
+// the backend's greedy word-wrap (`text_render.py::_wrap_paragraph`/
+// `_wrap_text`, exposed as the public `wrap_lines`): honour explicit `\n`
+// first, then greedily pack words onto each line, measuring with the SAME
+// canvas 2D `measureText().width` this module already trusts for font metrics
+// (never a mid-word break, matching the backend). Falls back to ONE unsplit
+// line when canvas is unavailable (e.g. jsdom in unit tests, or measurement
+// throwing) — no wrapping, not a crash; the browser's own overflow handling
+// (the stage's `overflow: hidden`) still bounds it.
+function wrapParagraph(text, measureWidth, maxPx) {
+  const words = text.split(' ');
+  const lines = [];
+  let current = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const candidate = `${current} ${words[i]}`;
+    if (measureWidth(candidate) <= maxPx) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      current = words[i];
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+
+/**
+ * Wrap `text` to `maxPx` using `fontFamily`/`fontPx`/`fontWeight`, mirroring
+ * the backend's greedy algorithm exactly (see module comment above). Exported
+ * for the T6640 card layout mirror (`introCardPreviewElements.js`), which
+ * calls this with the SAME inputs `text_render.wrap_lines` receives so both
+ * runtimes measure the same line count for a card's text stack.
+ */
+export function wrapLines(text, fontFamily, fontPx, fontWeight, maxPx) {
+  let measureWidth;
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    ctx.font = `${fontWeight} ${fontPx}px ${fontFamily}`;
+    measureWidth = (s) => ctx.measureText(s).width;
+    // Smoke-test the context actually measures (jsdom's real objection
+    // surfaces here, not at construction).
+    measureWidth('x');
+  } catch {
+    return text.split('\n');
+  }
+  const lines = [];
+  for (const paragraph of text.split('\n')) {
+    lines.push(...wrapParagraph(paragraph, measureWidth, maxPx));
+  }
+  return lines;
+}
+
 // Canvas 2D measureText() against a custom @font-face returns APPROXIMATE
 // metrics (Anton@154px measured fontBoundingBoxAscent=137) for SOME NUMBER
 // of animation frames even AFTER `document.fonts.ready` has resolved and
@@ -176,8 +236,17 @@ function measureFontMetricsPx(fontFamily, fontPx, fontWeight = 400) {
 // (i.e. it has stopped changing) — genuinely stable, not just "waited long
 // enough". `maxFrames` bounds it in case a family never stabilizes (e.g.
 // canvas unavailable), so this can't hang forever.
-function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, maxFrames = 30) {
-  const [metrics, setMetrics] = useState(() => measureFontMetricsPx(fontFamily, fontPx, fontWeight));
+// T6640: also computes the WRAPPED lines (via `wrapLines` above) once metrics
+// settle — line-count depends on the same font-selection settle point as the
+// ascent/descent metrics (both read from the same canvas `ctx.font`), so
+// recomputing wrap alongside metrics (not on a separate timer) keeps the two
+// from settling at different moments.
+function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthPx, maxFrames = 30) {
+  const measure = () => ({
+    ...measureFontMetricsPx(fontFamily, fontPx, fontWeight),
+    lines: wrapLines(text, fontFamily, fontPx, fontWeight, maxWidthPx),
+  });
+  const [metrics, setMetrics] = useState(measure);
 
   useEffect(() => {
     // jsdom (unit tests) has no FontFaceSet API — the initial measurement
@@ -191,7 +260,7 @@ function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, maxFrames = 30)
       let frame = 0;
       const step = () => {
         if (cancelled) return;
-        const current = measureFontMetricsPx(fontFamily, fontPx, fontWeight);
+        const current = measure();
         const key = `${current.ascentPx}:${current.descentPx}`;
         if (key === previous || frame >= maxFrames) {
           setMetrics(current);
@@ -207,7 +276,8 @@ function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, maxFrames = 30)
       cancelled = true;
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [fontFamily, fontPx, fontWeight, maxFrames]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontFamily, fontPx, fontWeight, text, maxWidthPx, maxFrames]);
 
   return metrics;
 }
@@ -238,7 +308,7 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   const shadowRgba = hexToRgba(spec.shadow.color, effectiveShadowOpacity);
   const textShadow = effectiveShadowOpacity > 0 ? `0 0 ${blurPx}px ${shadowRgba}` : 'none';
 
-  const { ascentPx, descentPx } = useSettledFontMetricsPx(fontFamily, fontPx, fontWeight);
+  const { ascentPx, descentPx, lines } = useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, spec.text, maxWidthPx);
   const baselineY = topPx + ascentPx;
   // Matches the backend's line advance exactly (design §6 step 2:
   // `line_advance = ascent + descent`, never the browser's own guess at
@@ -312,7 +382,7 @@ export function RichText({ spec, boxWidth, boxHeight }) {
     <div style={stageStyle}>
       <div style={wrapperStyle}>
         <span style={textStyle} data-baseline-y={baselineY}>
-          {suppressInWordBreaks(spec.text)}
+          {suppressInWordBreaks(lines.join('\n'))}
         </span>
       </div>
     </div>

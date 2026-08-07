@@ -1,9 +1,11 @@
-// T5205 — factories for a new card / slot styling spec.
+// T5205 / T6640 — factory for a new card's create payload.
+//
+// `defaultSlotSpec` was deleted (T6640): typography is TEMPLATE-owned, so
+// there is no more per-slot styling default to test here.
 
 import { describe, it, expect } from 'vitest';
-import { buildCreateFields, defaultSlotSpec } from './introCardDefaults';
-import { TITLE_SLOT, DEFAULT_TREATMENT, PLACEHOLDER_SLOT_GEOMETRY } from './introCardEditorConstants';
-import { DEFAULT_TITLE_FONT, DEFAULT_FACT_FONT } from './introCardPreviewElements';
+import { buildCreateFields, nextCardName } from './introCardDefaults';
+import { DEFAULT_TREATMENT } from './introCardEditorConstants';
 
 describe('buildCreateFields', () => {
   it('starts a fresh card as title-only (no facts) and sets NO title_text (T6570: title = profile Full Name)', () => {
@@ -16,9 +18,8 @@ describe('buildCreateFields', () => {
     expect(fields.treatment).toBe(DEFAULT_TREATMENT);
   });
 
-  it('leaves text_elements EMPTY so the renderer/preview apply default styling', () => {
-    // No redundant specs persisted; a slot spec is written only when restyled.
-    expect(buildCreateFields({ name: 'x', profile: {} }).text_elements).toEqual({});
+  it('sends no text_elements (T6640: the column is dead; the template supplies styling)', () => {
+    expect(buildCreateFields({ name: 'x', profile: {} }).text_elements).toBeUndefined();
   });
 
   it('defaults image_key from the profile photo (epic decision 3b), null when none', () => {
@@ -28,20 +29,33 @@ describe('buildCreateFields', () => {
   });
 });
 
-describe('defaultSlotSpec', () => {
-  it('uses the renderer default fonts per kind (anton title / oswald fact)', () => {
-    expect(defaultSlotSpec(TITLE_SLOT).font).toBe(DEFAULT_TITLE_FONT);
-    expect(defaultSlotSpec('team').font).toBe(DEFAULT_FACT_FONT);
+describe('nextCardName (T6640 round 2 — "Intro Card N", gap-filling)', () => {
+  it('starts at 1 for an empty library', () => {
+    expect(nextCardName([])).toBe('Intro Card 1');
   });
 
-  it('colours the title with the treatment accent it is given', () => {
-    expect(defaultSlotSpec(TITLE_SLOT, '#abcdef').color).toBe('#abcdef');
+  it('increments past every generated name already in use', () => {
+    const cards = [{ name: 'Intro Card 1' }, { name: 'Intro Card 2' }];
+    expect(nextCardName(cards)).toBe('Intro Card 3');
   });
 
-  it('is styling-only: text empty and size/position are the layout placeholders', () => {
-    const spec = defaultSlotSpec('position');
-    expect(spec.text).toBe('');
-    expect(spec.position).toEqual(PLACEHOLDER_SLOT_GEOMETRY.position);
-    expect(spec.maxWidth).toBe(PLACEHOLDER_SLOT_GEOMETRY.maxWidth);
+  it('fills the gap left by a renamed/deleted card, not count + 1', () => {
+    const cards = [{ name: 'Intro Card 1' }, { name: 'Intro Card 3' }];
+    expect(nextCardName(cards)).toBe('Intro Card 2');
+  });
+
+  it('ignores cards with any other name — a user rename frees its number without colliding', () => {
+    const cards = [{ name: 'Intro Card 1' }, { name: 'Highlight reel intro' }, { name: 'Stafford card' }];
+    expect(nextCardName(cards)).toBe('Intro Card 2');
+  });
+
+  it('is stable when the library has zero generated-named cards', () => {
+    const cards = [{ name: 'Big Game' }, { name: 'Season Opener' }];
+    expect(nextCardName(cards)).toBe('Intro Card 1');
+  });
+
+  it('handles a null/undefined cards list', () => {
+    expect(nextCardName(undefined)).toBe('Intro Card 1');
+    expect(nextCardName(null)).toBe('Intro Card 1');
   });
 });

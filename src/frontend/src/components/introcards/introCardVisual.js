@@ -105,6 +105,25 @@ export function photoStyleFor(rect, framing, boxW, boxH) {
 }
 
 /**
+ * T6640 (task §C "hard 50/50 seam") — a CSS `linear-gradient` from transparent
+ * to the treatment's flat `seamColor`, covering the photo rect's inset edge
+ * (`reflow.seamSide`), so an inset photo (recruiting) bleeds into the panel
+ * instead of a hard cut. Mirrors `player_intro._render_seam_fade` — same flat
+ * target colour, same fade fraction, so preview and export match. Returns
+ * `null` when the composition has no seam (full-bleed compositions).
+ * @param {{seamSide: string, seamFeather: number}} reflow
+ * @param {string} treatment
+ */
+export function seamFadeCss(reflow, treatment) {
+  const { seamSide, seamFeather } = reflow || {};
+  if (!seamSide || seamSide === 'none' || !seamFeather) return null;
+  const seamColor = treatmentFor(treatment).seamColor;
+  const solidFrom = Math.round((1 - seamFeather) * 100);
+  const direction = seamSide === 'right' ? 'to right' : 'to bottom';
+  return `linear-gradient(${direction}, transparent ${solidFrom}%, ${seamColor} 100%)`;
+}
+
+/**
  * The legibility scrim over the photo, mirroring `player_intro._render_scrim` /
  * `_scrim_kind`: `dim` = uniform wash under centred text (title-only), `bottom` =
  * a transparent->dark lower gradient (hero/broadcast), none for recruiting (text

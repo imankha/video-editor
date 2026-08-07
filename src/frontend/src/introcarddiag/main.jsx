@@ -4,19 +4,34 @@ import { IntroCardEditorContainer } from '../components/introcards/IntroCardEdit
 import { useIntroCardStore, useProfileStore, useCurrentProfile } from '../stores';
 
 /**
- * T5205 — DEV-ONLY real-browser harness for the intro card editor.
+ * T5205 / T6640 — DEV-ONLY real-browser harness for the intro card editor.
  *
- * Mounts the REAL IntroCardEditorContainer (+ Stage + Rail + shared
- * TextSpecEditor) driven by the REAL Zustand stores, with only the NETWORK
- * actions stubbed to stay local (no backend in the sandbox — same constraint
- * and precedent as T5643/T5610's harnesses). Every gesture therefore exercises
- * the real optimistic-store path, the real focal/zoom math against the real
- * boundingBox, and the real Tailwind layout.
+ * Mounts the REAL IntroCardEditorContainer (+ Stage + Rail) driven by the REAL
+ * Zustand stores, with only the NETWORK actions stubbed to stay local (no
+ * backend in the sandbox — same constraint and precedent as T5643/T5610's
+ * harnesses). Every gesture therefore exercises the real optimistic-store
+ * path, the real focal/zoom math against the real boundingBox, and the real
+ * Tailwind layout. T6640 removed the per-slot styling editor from the card
+ * rail (the shared `TextSpecEditor` no longer mounts here at all — decision 12
+ * makes typography template-owned); it is still used by the Overlay text rail
+ * elsewhere in the app.
  *
- * Slot GEOMETRY + MOTION are T5210's contract and intentionally not exercised
- * here (the stage omits slot text until that mirror lands) — this harness proves
- * the pre-contract surface only.
+ * T6640 round 2 — an optional `window.__INTRODIAG_CONFIG__` (set via
+ * `page.addInitScript` BEFORE navigation, so it exists when this module's
+ * top-level code runs) lets a test configure the exact scenario from a COLD
+ * page load (fonts not yet fetched), which matters because the preview/export
+ * parity bug this harness caught (T6640) is a font-settle TIMING race —
+ * mutating the store AFTER mount can land on an already-warm font and
+ * silently fail to reproduce it. All fields optional; defaults reproduce the
+ * harness's original T5205 scenario unchanged. (URL query params were tried
+ * first but this dev server's SPA history fallback intermittently swallows
+ * them before this module runs; an init-script global sidesteps that
+ * entirely.)
+ *   fullName            -> profile.full_name (the card title)
+ *   shown                -> card.shown_fields (array, any of position/class/team)
+ *   positionValue/classValue/teamValue -> profile fact values
  */
+const diagConfig = (typeof window !== 'undefined' && window.__INTRODIAG_CONFIG__) || {};
 
 // A wide (landscape) photo so a portrait 9:16 box has horizontal overflow to
 // pan: left half is red, right half blue, with a marker dot, so a drag's
@@ -32,15 +47,15 @@ const PHOTO = 'data:image/svg+xml;utf8,' + encodeURIComponent(
 const MOCK_CARD = {
   id: 1,
   name: 'Stafford intro',
-  shown_fields: ['position'],
-  treatment: 'gold',
+  shown_fields: diagConfig.shown || ['position'],
+  treatment: diagConfig.treatment || 'gold',
   // T6570: no title_text — the title resolves from the profile's Full Name below.
   image_key: 'intro/mock.png',
   image_cutout_key: null,
   focal_x: 0.5,
   focal_y: 0.5,
   zoom: 1.0,
-  text_elements: {}, // empty -> default styling applied, like a fresh card
+  // text_elements dropped (T6640): dead column, typography is template-owned.
   duration: 3.0,
   is_default: true,
   composition: 'hero',
@@ -56,10 +71,10 @@ const MOCK_PROFILE = {
   introConsentAt: '2026-08-05T00:00:00Z', // consented -> skip the gate
   introPhotoKey: 'intro/mock.png',
   introPhotoUrl: PHOTO,
-  full_name: 'CHAMPION', // T6570: the card title reads from here, not a text box
-  position: 'Midfielder 6-8-10',
-  class: '', // deliberately empty -> exercises the "unfilled fact" prompt
-  team: 'Riverside FC',
+  full_name: diagConfig.fullName || 'CHAMPION', // T6570: the card title reads from here, not a text box
+  position: diagConfig.positionValue ?? 'Midfielder 6-8-10',
+  class: diagConfig.classValue ?? '', // deliberately empty by default -> exercises the "unfilled fact" prompt
+  team: diagConfig.teamValue ?? 'Riverside FC',
 };
 
 // Seed stores + stub network actions (keep the real optimistic patchCardLocal).

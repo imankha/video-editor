@@ -73,8 +73,18 @@ POST_V023_COLUMNS = {
     #   It is an UPDATE ... SET title_text = NULL (column-guarded, same PRAGMA check as every
     #   other migration here) over an EXISTING column that has carried data since v034; no
     #   hot read gains a new column name to fail on.
+    # v038 (T6640 null the dead intro_cards.text_elements) adds NO column -> nothing to
+    #   guard. Same shape as v036: an UPDATE over an EXISTING column that has carried data
+    #   since v034, table-guarded, so no hot read gains a new column name to fail on.
+    # v040 (T6640 backfill exactly one default intro card) adds NO column -> nothing to
+    #   guard. It only UPDATEs intro_cards.is_default, which v034 created alongside the
+    #   table, and it is table-guarded; a below-head DB without intro_cards returns early.
+    #   No hot read gains a new column name, so the deploy->migrate window is unchanged.
+    # (v037 and v039 belong to the sibling T5215 / T6630 branches, not present here; audit
+    #   them on their own merges -- and note they must be RENUMBERED above 40 first, or the
+    #   runner's version > current rule skips them silently.)
 }
-HEAD_VERSION_AUDITED = 36
+HEAD_VERSION_AUDITED = 40
 
 
 def _cleanup(user_id: str) -> None:

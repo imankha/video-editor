@@ -113,6 +113,15 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_px: float) -> list[s
     return lines
 
 
+def wrap_lines(text: str, font: ImageFont.FreeTypeFont, max_px: float) -> list[str]:
+    """Public alias of this module's greedy word-wrap (T6640). This is the ONE
+    wrap algorithm both the card render engine (via `intro_card_geometry.layout`,
+    for measured reflow) and the browser preview (`RichText.jsx`'s mirrored
+    `wrapLines`) must agree on to the LINE COUNT, since a card's text stack is
+    positioned from measured line counts. See `_wrap_text` for the algorithm."""
+    return _wrap_text(text, font, max_px)
+
+
 def render_text_layer(spec: TextSpec, frame_w: int, frame_h: int) -> Image.Image:
     """Render `spec` into an RGBA transparent layer sized (frame_w, frame_h).
 

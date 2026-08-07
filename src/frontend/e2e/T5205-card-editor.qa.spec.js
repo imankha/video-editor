@@ -5,26 +5,27 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 /**
  * T5205 — REAL BROWSER (chromium) proof of the intro card editor's pre-contract
  * surface: the pointer/visual behaviour jsdom passes falsely (photo drag + zoom,
- * aspect preview toggle, slot selection, live composition, treatment
- * independence).
+ * live composition, treatment independence).
  *
  * Driven through a dev-only harness (/introcarddiag.html) that mounts the REAL
- * IntroCardEditorContainer + Stage + Rail + shared TextSpecEditor on the REAL
- * Zustand stores with only network actions stubbed (no backend in the sandbox —
- * same constraint + precedent as T5643/T5610). See src/introcarddiag/main.jsx.
+ * IntroCardEditorContainer + Stage + Rail on the REAL Zustand stores with only
+ * network actions stubbed (no backend in the sandbox — same constraint +
+ * precedent as T5643/T5610). See src/introcarddiag/main.jsx.
  *
  * A full loginAsRealUser live-drive was NOT possible here (no backend/Postgres in
  * the container); this harness is the codebase's established substitute and
  * exercises the real components with real Tailwind + real geometry.
  *
- * Acceptance-criterion map (task doc T5205), buildable-now subset:
+ * Acceptance-criterion map (task doc T5205 + T6640), buildable-now subset:
  *   AC "no template picker; ticking facts re-composes live"      -> test 2
  *   AC "treatment changes look, NOT composition; 3rd fact vice versa" -> test 2
  *   AC "removing photo -> title-only; re-adding restores"        -> test 2
  *   AC "ticked-but-unfilled fact prompts inline"                 -> test 3
  *   AC "photo drag + zoom; same setting frames 9:16 AND 16:9"    -> test 4
- *   AC "select a slot and change font/size/colour/align live"    -> test 5
- * (slot geometry + motion preview await the T5210 contract and are out of scope.)
+ *   AC (T6640) "no rail control can produce a colour or font clash" -> test 5
+ * (slot text styling / slot selection were REMOVED by T6640 — decision 12
+ * makes typography template-owned, so there is nothing left to select a slot
+ * for; motion preview timing is exercised in test 6.)
  *
  * Run: cd src/frontend && npx playwright test e2e/T5205-card-editor.qa.spec.js
  */
@@ -132,31 +133,28 @@ test.describe('T5205 intro card editor (real browser)', () => {
     await saveEvidence(page, 'T5205-04c-zoom');
   });
 
-  test('5: text slots render at the contract geometry and restyle live', async ({ page }) => {
-    // Title + the shown fact are drawn on the stage (post-rebase: geometry fed).
+  test('5: text renders at template typography; the rail exposes no styling control (T6640)', async ({ page }) => {
+    // Title + the shown fact are drawn on the stage from TEMPLATE typography —
+    // decision 12 removed per-slot styling, so there is no colour/font/size/
+    // align/shadow/stroke control left anywhere on the card rail (acceptance
+    // criterion: "no control that can produce a colour or font clash").
     await expect(page.locator(PREVIEW)).toContainText('CHAMPION');
     await expect(page.locator(PREVIEW)).toContainText('Midfielder');
 
-    // A colour swatch applies to the selected (title) slot. Size/align are NOT in
-    // the card rail — they are layout-owned by the composition (contract).
+    await expect(page.getByText('Font', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Custom color')).toHaveCount(0);
+    await expect(page.getByLabel('Shadow blur')).toHaveCount(0);
+    await expect(page.getByLabel('Stroke width')).toHaveCount(0);
     await expect(page.getByLabel('Size')).toHaveCount(0);
     await expect(page.getByLabel('Align')).toHaveCount(0);
-    await page.getByLabel('Color #FFD66B').click();
-    await expect(page.getByLabel('Color #FFD66B')).toHaveAttribute('aria-pressed', 'true');
-    await saveEvidence(page, 'T5205-05-slot-styling');
+    // Clicking rendered text on the stage does nothing (T6640 removed slot
+    // selection along with the styling editor it used to open) — no rail
+    // control reacts to it, confirmed by there being no "Select …" affordance.
+    await expect(page.getByRole('button', { name: /^Select /i })).toHaveCount(0);
+    await saveEvidence(page, 'T5205-05-no-styling-controls');
   });
 
-  test('6: clicking a slot on the stage selects it', async ({ page }) => {
-    // The shown fact (position) renders; clicking its hotspot selects that slot,
-    // reflected by the rail's slot button becoming pressed.
-    const positionSlotBtn = page.getByRole('button', { name: 'Position', exact: true });
-    await expect(positionSlotBtn).toHaveAttribute('aria-pressed', 'false');
-    await page.getByRole('button', { name: 'Select position' }).click();
-    await expect(positionSlotBtn).toHaveAttribute('aria-pressed', 'true');
-    await saveEvidence(page, 'T5205-06-slot-click-select');
-  });
-
-  test('7: motion preview plays from the shared timing constants', async ({ page }) => {
+  test('6: motion preview plays from the shared timing constants', async ({ page }) => {
     const button = page.locator('[data-testid="motion-preview-button"]');
     await button.click();
 
