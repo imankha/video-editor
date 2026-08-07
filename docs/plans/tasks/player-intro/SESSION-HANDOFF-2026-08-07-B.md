@@ -50,24 +50,24 @@ docker exec -d -u dev reel-task-t6630 bash -lc 'cd /workspace && claude -p --res
 docker exec -d -u dev reel-task-t5215 bash -lc 'cd /workspace && claude -p --resume ea8322fc-4645-45b4-83b8-541467ee09a7 --model sonnet "<prompt>" > /tmp/log 2>&1'
 ```
 
-### T5215 — intro attachment (`reel-task-t5215`, :5176/:8003) — round 3, item 3 IN FLIGHT
-
-> **READ THIS FIRST:** a run was still executing when this handoff was written (06:36 UTC). It is
-> detached from that session and will have finished on its own. Its report is at
-> **`/tmp/round3-nudge2.output`** in the container (`docker exec -u dev reel-task-t5215 bash -lc 'cat
-> /tmp/round3-nudge2.output'`). An EMPTY file means it is still running; a file ending in
-> `Not logged in` or a session-limit line means it died — see §6, re-seed and resume rather than
-> assuming the work below is done. Check `git log --oneline -3` in the container before briefing.
-- Pushed: round 1 only. Container-local: `b6d466fa`, `383ad0d7`, `6bbe16fb` (round 2),
-  **`32f00a88`** (z-order via zLayers DROPDOWN rung), **`7b991780`** (badges: collection cards get one,
-  reel badge appears without reload). Items 1 and 2 of round 3 are DONE.
-- **Item 3 unfinished and was RED**: `T5215-intro-attachment.qa.spec.js:197` —
-  *"a card click must not close the popup (no commit-on-click)"*. Uncommitted work in
-  `IntroCardPicker.jsx`, `IntroCardCarousel.jsx`, and that spec. Brief: `/tmp/round3.md` +
-  `/tmp/round3-nudge.md` in-container.
-- Wanted: card click SELECTS + plays the T5205 motion preview (reuse it, no second animator), popup
-  stays open, explicit **OK** commits (the one surgical write moves to OK), Cancel/X/Esc = no write,
-  Enter = OK, both hosts of the shared picker, badge appears immediately after OK.
+### T5215 — intro attachment (`reel-task-t5215`, :5176/:8003) — **ROUND 3 COMPLETE, awaiting user test**
+- Pushed: round 1 only. Container-local, clean tree: `b6d466fa`, `383ad0d7`, `6bbe16fb` (round 2),
+  **`32f00a88`** z-order (kebab dropdown moved to the existing `Z.DROPDOWN` rung — one shared panel
+  raised, not N siblings lowered), **`7b991780`** badges (new `GET /api/collections/intro/batch`, no
+  N+1; `PATCH /downloads/{id}/intro` now returns the resolved `intro_card_name` so the reel badge
+  appears with no reload), **`f214a85b`** picker SELECT → PREVIEW → CONFIRM (draft buffered in
+  `draftId`; the one surgical write fires only on OK; Cancel/X/backdrop/Esc = zero writes; Enter = OK;
+  T5205's `MotionPreview` reused verbatim).
+- Worker evidence: 14/14 e2e green against the real account, run twice for stability. Write counts
+  measured live — card click 0 PATCH, OK exactly 1, Cancel 0, Esc 0, reopen+Enter exactly 1.
+- It also fixed a real bug found on the way: the collection host's async-resolved `selectedId` could
+  land after the picker opened and be clobbered by the initial `null` draft — late `selectedId` updates
+  are now adopted until the user touches a tile.
+- **:5176 verified serving round-3 code by the supervisor** (not just the worker's claim): served
+  `IntroCardPicker.jsx` contains `draftId` / `selectDraft` / `lastSeenSelectedId`, `IntroCardCarousel.jsx`
+  contains `MotionPreview`, and `:8003/api/collections/intro/batch` answers **401 not 404** (route
+  exists, auth-gated) with uvicorn started 06:10 UTC, after the 05:46 backend commit.
+- **Next:** user tests :5176. If noteless → renumber v037 per §2, push, Branch CI, merge.
 
 ### T6630 + T6590 — one branch (`reel-task-t6630`, :5175/:8002) — round 4 COMPLETE, awaiting user test
 - Pushed: round 1 only (`8946f9ab`). Container-local: rounds 2-3 (`20e1d1ca`, `f0157917`, `5705b476`,
@@ -158,8 +158,10 @@ redesign it.** The user's photo currently resolves to a live object again (they 
 
 ## 8. NEXT, IN ORDER
 
-1. Resume **max 2 workers**: T5215 (finish round-3 item 3) and T6630 only if the user returns notes.
-2. Hand the user :5175 (T6630 round 4) to test — **restart Vite and curl-verify a code token first**.
+1. **Both workers are IDLE and both rounds are complete** — do not resume either without user notes.
+   The ball is with the user on two ports.
+2. User tests **:5176 (T5215 round 3, verified serving)** and **:5175 (T6630 round 4)**. Before handing
+   over :5175, **restart Vite and curl-verify a real code token** — :5176 has already been verified.
 3. When a branch goes noteless: renumber its migration per §2, push, Branch CI, merge, delete branch.
 4. **T5220 (prepend at egress) is still the epic's missing end** — nothing built so far plays anywhere
    until it ships. T6460 (CI cancel-on-push) remains open.
