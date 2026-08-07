@@ -4,68 +4,120 @@ import TextManagementPanel from './TextManagementPanel';
 
 afterEach(() => cleanup());
 
-const BLOCK_A = { id: 'a', index: 0, startTime: 1, endTime: 3, spec: { text: 'GOAL', align: 'center', position: { x: 0.5, y: 0.4 } }, enabled: true };
-const BLOCK_B = { id: 'b', index: 1, startTime: 5, endTime: 7, spec: { text: 'ASSIST', align: 'center', position: { x: 0.5, y: 0.4 } }, enabled: false };
+const REGION_A = {
+  id: 'r1', index: 0, startTime: 0, endTime: 2,
+  elements: [{ id: 'a1', spec: { text: 'GOAL' }, enabled: true }],
+};
+const REGION_B_TWO_ELEMENTS = {
+  id: 'r2', index: 1, startTime: 5, endTime: 7,
+  elements: [
+    { id: 'b1', spec: { text: 'First' }, enabled: true },
+    { id: 'b2', spec: { text: 'Second' }, enabled: false },
+  ],
+};
 
-describe('TextManagementPanel — the single Text-tab management surface (T6630 round 3)', () => {
-  it('the Add control adds at the CURRENT PLAYHEAD time (single add path)', () => {
-    const onAddText = vi.fn();
-    render(<TextManagementPanel blocks={[]} currentTime={4.5} onAddText={onAddText} />);
-    fireEvent.click(screen.getByTestId('text-tab-add'));
-    expect(onAddText).toHaveBeenCalledWith(4.5);
+describe('TextManagementPanel — two-column layout, region+element management (T6630 round 4)', () => {
+  it('the ONE "Add region" control creates a new time span, at the current playhead', () => {
+    const onAddRegion = vi.fn();
+    render(<TextManagementPanel regions={[]} currentTime={4.5} onAddRegion={onAddRegion} />);
+    fireEvent.click(screen.getByTestId('text-tab-add-region'));
+    expect(onAddRegion).toHaveBeenCalledWith(4.5);
   });
 
-  it('shows an empty state with no blocks', () => {
-    render(<TextManagementPanel blocks={[]} />);
-    expect(screen.getByText(/no text elements yet/i)).toBeTruthy();
+  it('shows an empty state with no regions', () => {
+    render(<TextManagementPanel regions={[]} />);
+    expect(screen.getByText(/no text yet/i)).toBeTruthy();
   });
 
-  it('lists every block with its text and start time', () => {
-    render(<TextManagementPanel blocks={[BLOCK_A, BLOCK_B]} />);
-    expect(screen.getByTestId('text-tab-row-0').textContent).toContain('GOAL');
-    expect(screen.getByTestId('text-tab-row-1').textContent).toContain('ASSIST');
+  it('lists every region with its time range and every element nested inside it', () => {
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} />);
+    expect(screen.getByTestId('text-tab-region-0')).toBeTruthy();
+    expect(screen.getByTestId('text-tab-region-1')).toBeTruthy();
+    expect(screen.getByTestId('text-tab-element-a1').textContent).toContain('GOAL');
+    expect(screen.getByTestId('text-tab-element-b1').textContent).toContain('First');
+    expect(screen.getByTestId('text-tab-element-b2').textContent).toContain('Second');
   });
 
-  it('clicking a row selects it (same selection state the timeline/stage read)', () => {
-    const onSelectText = vi.fn();
-    render(<TextManagementPanel blocks={[BLOCK_A, BLOCK_B]} onSelectText={onSelectText} />);
-    fireEvent.click(screen.getByTestId('text-tab-row-1'));
-    expect(onSelectText).toHaveBeenCalledWith('b');
+  it('clicking a region selects it', () => {
+    const onSelectRegion = vi.fn();
+    render(<TextManagementPanel regions={[REGION_A]} onSelectRegion={onSelectRegion} />);
+    fireEvent.click(screen.getByTestId('text-tab-region-0').querySelector('[role="button"]'));
+    expect(onSelectRegion).toHaveBeenCalledWith('r1');
   });
 
-  it('the per-row trash removes that block WITHOUT selecting it (no fall-through to select)', () => {
-    const onSelectText = vi.fn();
+  it('clicking an element selects it (distinct from selecting the region)', () => {
+    const onSelectElement = vi.fn();
+    render(<TextManagementPanel regions={[REGION_B_TWO_ELEMENTS]} onSelectElement={onSelectElement} />);
+    fireEvent.click(screen.getByTestId('text-tab-element-b2'));
+    expect(onSelectElement).toHaveBeenCalledWith('b2');
+  });
+
+  it('the per-region "Add text" control appends an ELEMENT into THAT region (not a new region)', () => {
+    const onAddElement = vi.fn();
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} onAddElement={onAddElement} />);
+    fireEvent.click(screen.getByTestId('text-tab-add-element-1')); // region B (index 1)
+    expect(onAddElement).toHaveBeenCalledWith('r2');
+  });
+
+  it('the per-region trash removes the whole REGION without selecting it', () => {
+    const onSelectRegion = vi.fn();
+    const onDeleteTextRegion = vi.fn();
+    render(<TextManagementPanel regions={[REGION_A]} onSelectRegion={onSelectRegion} onDeleteTextRegion={onDeleteTextRegion} />);
+    fireEvent.click(screen.getByTitle('Delete region (and all its text)'));
+    expect(onDeleteTextRegion).toHaveBeenCalledWith('r1');
+    expect(onSelectRegion).not.toHaveBeenCalled();
+  });
+
+  it('the per-element trash removes only that ELEMENT without selecting it', () => {
+    const onSelectElement = vi.fn();
     const onDeleteText = vi.fn();
-    render(<TextManagementPanel blocks={[BLOCK_A]} onSelectText={onSelectText} onDeleteText={onDeleteText} />);
+    render(<TextManagementPanel regions={[REGION_A]} onSelectElement={onSelectElement} onDeleteText={onDeleteText} />);
     fireEvent.click(screen.getByTitle('Delete text block'));
-    expect(onDeleteText).toHaveBeenCalledWith('a');
-    expect(onSelectText).not.toHaveBeenCalled();
+    expect(onDeleteText).toHaveBeenCalledWith('a1');
+    expect(onSelectElement).not.toHaveBeenCalled();
   });
 
-  it('the per-row eye toggles visibility without selecting', () => {
-    const onSelectText = vi.fn();
+  it('the per-element eye toggles that element\'s visibility without selecting it', () => {
+    const onSelectElement = vi.fn();
     const onToggleText = vi.fn();
-    // BLOCK_A is enabled -- clicking its eye should hide it (new enabled=false).
-    render(<TextManagementPanel blocks={[BLOCK_A]} onSelectText={onSelectText} onToggleText={onToggleText} />);
+    render(<TextManagementPanel regions={[REGION_A]} onSelectElement={onSelectElement} onToggleText={onToggleText} />);
     fireEvent.click(screen.getByTitle(/hide text/i));
-    expect(onToggleText).toHaveBeenCalledWith('a', false);
-    expect(onSelectText).not.toHaveBeenCalled();
+    expect(onToggleText).toHaveBeenCalledWith('a1', false);
+    expect(onSelectElement).not.toHaveBeenCalled();
   });
 
-  it('shows the settings editor (with the position grid) only for the SELECTED block', () => {
-    const { rerender } = render(<TextManagementPanel blocks={[BLOCK_A]} selectedTextId={null} />);
+  it('shows the settings editor (with the position grid) ONLY for the selected ELEMENT', () => {
+    const { rerender } = render(<TextManagementPanel regions={[REGION_A]} selectedRegionId={null} selectedElementId={null} />);
     expect(screen.queryByTestId('text-position-grid')).toBeNull();
+    expect(screen.getByText(/select a text element/i)).toBeTruthy();
 
-    rerender(<TextManagementPanel blocks={[BLOCK_A]} selectedTextId="a" onUpdateTextSpec={() => {}} />);
+    rerender(<TextManagementPanel regions={[REGION_A]} selectedRegionId="r1" selectedElementId="a1" onUpdateTextSpec={() => {}} />);
     expect(screen.getByTestId('text-position-grid')).toBeTruthy();
   });
 
-  it('editing the position grid for the selected block calls onUpdateTextSpec with that block id', () => {
+  it('selecting a region WITHOUT an element does not show settings for a wrong element', () => {
+    // Region selected but selectedElementId belongs to a DIFFERENT region --
+    // must not accidentally show that element's settings.
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} selectedRegionId="r1" selectedElementId="b1" />);
+    expect(screen.queryByTestId('text-position-grid')).toBeNull();
+  });
+
+  it('editing the position grid for the selected element calls onUpdateTextSpec with that element id', () => {
     const onUpdateTextSpec = vi.fn();
-    render(<TextManagementPanel blocks={[BLOCK_A]} selectedTextId="a" onUpdateTextSpec={onUpdateTextSpec} />);
+    render(<TextManagementPanel regions={[REGION_A]} selectedRegionId="r1" selectedElementId="a1" onUpdateTextSpec={onUpdateTextSpec} />);
     fireEvent.click(screen.getByTestId('text-position-top-left'));
     expect(onUpdateTextSpec).toHaveBeenCalledTimes(1);
-    expect(onUpdateTextSpec.mock.calls[0][0]).toBe('a');
+    expect(onUpdateTextSpec.mock.calls[0][0]).toBe('a1');
     expect(onUpdateTextSpec.mock.calls[0][1].position).toEqual({ x: 0.08, y: 0.08 });
+  });
+
+  it('the settings column has its OWN element (fixed box) independent of the list column', () => {
+    // Structural check that the two-column layout exists (round 4 item 3):
+    // a dedicated settings container that isn't inside the region list.
+    render(<TextManagementPanel regions={[REGION_A]} />);
+    const list = screen.getByTestId('text-region-list');
+    const settings = screen.getByTestId('text-settings-panel');
+    expect(list.contains(settings)).toBe(false);
+    expect(settings.contains(list)).toBe(false);
   });
 });

@@ -74,3 +74,46 @@ export function matchPreset(position, align) {
 export function presetKey(vertical, horizontal) {
   return `${vertical}-${horizontal}`;
 }
+
+// T6630 round 4: default preset priority for a NEWLY CREATED element (user
+// direction: "there should be a default position already chosen so i can see
+// the text on the screen" -- a new element must NEVER spawn as "Custom
+// position"). Bottom-center first, then center, then top-center (supervisor
+// call, reversible); if a region already has elements sitting in all three,
+// cascade through the remaining 6 slots (row-major) so a preset is ALWAYS
+// picked, never left unset.
+const _PRIORITY_KEYS = [
+  presetKey(VerticalSlot.BOTTOM, HorizontalSlot.MIDDLE),
+  presetKey(VerticalSlot.CENTER, HorizontalSlot.MIDDLE),
+  presetKey(VerticalSlot.TOP, HorizontalSlot.MIDDLE),
+];
+const _ALL_KEYS_BOTTOM_FIRST = [
+  ..._PRIORITY_KEYS,
+  ...POSITION_PRESETS
+    .map((p) => presetKey(p.vertical, p.horizontal))
+    .filter((k) => !_PRIORITY_KEYS.includes(k)),
+];
+const _PRESET_BY_KEY = new Map(POSITION_PRESETS.map((p) => [presetKey(p.vertical, p.horizontal), p]));
+
+/**
+ * Pick a default preset for a newly created element, given its SIBLING
+ * elements' current specs (elements already in the same region). Skips
+ * presets already occupied by a sibling (matched via `matchPreset`, so an
+ * arbitrary/legacy sibling position is simply not counted as "taken"). Always
+ * returns a preset -- falls back to bottom-center (allowing overlap) in the
+ * extreme case where all 9 slots are already taken.
+ * @param {Array<{position?: {x:number,y:number}, align?: string}>} siblingSpecs
+ * @returns {{vertical: string, horizontal: string, x: number, y: number, align: string}}
+ */
+export function pickDefaultPreset(siblingSpecs = []) {
+  const takenKeys = new Set(
+    siblingSpecs
+      .map((spec) => matchPreset(spec?.position, spec?.align))
+      .filter(Boolean)
+      .map((p) => presetKey(p.vertical, p.horizontal))
+  );
+  for (const key of _ALL_KEYS_BOTTOM_FIRST) {
+    if (!takenKeys.has(key)) return _PRESET_BY_KEY.get(key);
+  }
+  return _PRESET_BY_KEY.get(_PRIORITY_KEYS[0]);
+}
