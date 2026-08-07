@@ -5,7 +5,6 @@ import { ratioGlyph, ratioLabel } from '../../constants/aspectRatios';
 import { formatDurationHuman } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
-import { API_BASE } from '../../config';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 import { Z } from '../../constants/zLayers';
 
@@ -37,8 +36,6 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * wired in T3620 (onShare/onCopyLink); Download stays disabled until T3680. The
  * max-duration slider is hidden until "Max Duration".
  *
- * T5673 item 2: leading reel poster shown in media slot (collapsed row visual).
- *
  * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
  * @param {number}    reelCount
@@ -53,7 +50,6 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {boolean=}  playLoading
  * @param {Function=} onShare        - open the share modal (T3620); omitted => disabled
  * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
- * @param {number=}   leadingReelId   - representative reel id for collapsed row poster (T5673)
  * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
  * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6);
  *                                     shows the shared badge in the media slot's corner when intro_card_name is set
@@ -73,7 +69,6 @@ export function CollectionHeader({
   playLoading,
   onShare,
   onCopyLink,
-  leadingReelId,
   onIntro,
   introBadge,
 }) {
@@ -160,25 +155,9 @@ export function CollectionHeader({
   return (
     <MediaCard
       media={
-        leadingReelId ? (
-          <div className={`relative w-10 h-10 rounded-md overflow-hidden ${REEL.bgMuted}`}>
-            <img
-              src={`${API_BASE}/api/downloads/${leadingReelId}/poster.jpg`}
-              alt=""
-              loading="lazy"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = `<${Film} size={16} class="${REEL.accent}" />`;
-              }}
-            />
-            {introBadgeEl}
-          </div>
-        ) : (
-          <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted}>
-            {introBadgeEl}
-          </CardMedia>
-        )
+        <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted}>
+          {introBadgeEl}
+        </CardMedia>
       }
       actions={actions}
       footer={footer}

@@ -122,7 +122,6 @@ export function GameCollectionGroup({
             shareDefinition={shareScope ? { scope: shareScope, filter: {}, aspect_ratio: ratio } : undefined}
             onShare={onShare}
             onCopyLink={onCopyLink}
-            leadingReelId={collection.leading_reel_id}
             onIntro={onIntro}
             introBadge={shareScope ? introBadgesByKey[collectionIntroKey({ scope: shareScope, filter: {}, aspect_ratio: ratio })] : undefined}
           />

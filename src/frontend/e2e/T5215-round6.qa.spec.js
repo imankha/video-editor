@@ -11,7 +11,9 @@ import { saveEvidence } from './helpers/qa.js';
  *      tiles actually render from.
  *   2. The small thumbnail the user saw on the collection header is the
  *      PRE-EXISTING, unrelated T5673 leading-reel-poster feature -- verified
- *      live via DOM inspection, not intro-related, not touched.
+ *      live via DOM inspection, not intro-related. Held off pending
+ *      confirmation at the time; round 7 confirmed + removed it (see
+ *      e2e/T5215-round7.qa.spec.js).
  *   3. A NEW media-slot corner badge for the collection's OWN intro
  *      attachment (distinct from the removed round-5 title-row badge),
  *      reusing GET /api/collections/intro/batch.
@@ -111,29 +113,14 @@ test.describe('T5215 round 6 (real account)', () => {
       .toHaveCount(0);
   });
 
-  test('item 2: the collection-row thumbnail is the T5673 leading-reel poster, not intro-related', async ({ page }) => {
-    await openDrawer(page);
-    const opened = await openGameGroup(page, 'Legends');
-    test.skip(!opened, 'no "at Legends Mar 28" group on this account');
-
-    const header = page.locator('.animate-slide-in-right').getByText('Game Highlights').first();
-    const visible = await header.isVisible().catch(() => false);
-    test.skip(!visible, '"Game Highlights" card not present on this account');
-    const cardRoot = header.locator('xpath=ancestor::div[contains(@class,"flex items-center gap-3")]').first();
-
-    // Verified live (round 6 investigation): this <img> points at
-    // /api/downloads/{leadingReelId}/poster.jpg -- the T5673 feature, no
-    // relation to intro cards. Documented here as a standing regression
-    // guard: if this ever starts pointing at an intro-card asset, that
-    // would mean the two features got conflated and should fail loudly.
-    // Scoped to THIS card's root -- the page also has an unrelated
-    // "Continue where you left off" project poster elsewhere.
-    const posterImg = cardRoot.locator('img[src*="/poster.jpg"]').first();
-    await expect(posterImg, 'the collection row thumbnail is the leading-reel poster').toBeVisible({ timeout: 10000 });
-    const src = await posterImg.getAttribute('src');
-    expect(src, 'poster src must reference a downloads (reel) id, not an intro-card asset').toMatch(/\/api\/downloads\/\d+\/poster\.jpg/);
-    await saveEvidence(page, 'T5215-round6-leading-reel-poster-confirmed');
-  });
+  // item 2's original test asserted the T5673 leading-reel poster WAS
+  // present (correctly identified live, not intro-related, left alone --
+  // see this file's header comment). Round 7 (user, 2026-08-07): "i want
+  // the intro badge on collections, i didn't want the frame thumbnail" --
+  // the user confirmed the poster itself should go. It's removed entirely
+  // now; the standing regression guard for the single remaining media-slot
+  // path (Film icon + intro badge, no poster) lives in
+  // e2e/T5215-round7.qa.spec.js.
 
   test('item 3: collection media-slot badge reflects the collection\'s own intro attachment', async ({ page }) => {
     await openDrawer(page);

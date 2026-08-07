@@ -20,7 +20,6 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * @param {Object=}  shareDefinition - base {scope, filter, aspect_ratio} for share links (T3620)
  * @param {Function=} onShare        - (definition, title) => void
  * @param {Function=} onCopyLink     - (definition) => void
- * @param {number=}  leadingReelId   - representative reel id for collapsed row poster (T5673)
  * @param {Function=} onIntro        - (definition, title) => void, the collection's OWN intro (T5215 round 2)
  * @param {Object=} introBadge      - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6)
  */
@@ -36,7 +35,6 @@ export function CollectionCard({
   shareDefinition,
   onShare,
   onCopyLink,
-  leadingReelId,
   onIntro,
   introBadge,
 }) {
@@ -105,7 +103,6 @@ export function CollectionCard({
       playLoading={playLoading}
       onShare={onShare && shareDefinition ? () => onShare(buildDefinition(), playTitle || title) : undefined}
       onCopyLink={onCopyLink && shareDefinition ? () => onCopyLink(buildDefinition()) : undefined}
-      leadingReelId={leadingReelId}
       onIntro={onIntro && shareDefinition ? () => onIntro(shareDefinition, playTitle || title) : undefined}
       introBadge={introBadge}
     />
