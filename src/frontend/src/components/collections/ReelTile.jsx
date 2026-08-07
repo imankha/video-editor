@@ -190,15 +190,42 @@ export function ReelTile({
         <span className={`absolute top-2.5 right-11 z-20 w-3 h-3 rounded-full ${unwatchedStyle.dot} ring-2 ring-black/40`} title="New" />
       )}
 
-      {/* Top Play rank badge (T5679) */}
-      {seasonRank && seasonRank <= 20 && (
-        <div
-          className="absolute top-1.5 left-1.5 z-20 px-2 py-0.5 bg-cyan-500/90 text-black text-xs font-bold rounded-md"
-          title={`Ranked #${seasonRank} of your reels this season`}
-          aria-label={`Ranked #${seasonRank} of your reels this season`}
-        >
-          #{seasonRank}
+      {/* Top Play rank badge (T5679) + intro badge (T5215 round 5 item 3, user:
+          "next to the number if there is a number and in the upper left if
+          there is not ... the same size as the number"). Was inline with the
+          name text in the bottom scrim (round 2) -- moved here so it reads as
+          a corner state marker, not part of the title. Same INTRO_BADGE.text
+          colour + download.intro_card_name gate as before; only position/size
+          changed (visibility correctness is item 2, verified separately). */}
+      {seasonRank && seasonRank <= 20 ? (
+        <div className="absolute top-1.5 left-1.5 z-20 flex items-center gap-1">
+          <div
+            className="px-2 py-0.5 bg-cyan-500/90 text-black text-xs font-bold rounded-md"
+            title={`Ranked #${seasonRank} of your reels this season`}
+            aria-label={`Ranked #${seasonRank} of your reels this season`}
+          >
+            #{seasonRank}
+          </div>
+          {download.intro_card_name && (
+            <div
+              data-testid="intro-badge"
+              className="px-1 py-0.5 bg-black/60 backdrop-blur-sm rounded-md flex items-center justify-center"
+              title="An intro plays before this reel"
+            >
+              <IntroIcon size={14} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
+            </div>
+          )}
         </div>
+      ) : (
+        download.intro_card_name && (
+          <div
+            data-testid="intro-badge"
+            className="absolute top-1.5 left-1.5 z-20 px-1 py-0.5 bg-black/60 backdrop-blur-sm rounded-md flex items-center justify-center"
+            title="An intro plays before this reel"
+          >
+            <IntroIcon size={14} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
+          </div>
+        )
       )}
 
       {/* Bottom scrim: name (or rename input) + metadata */}
@@ -219,20 +246,6 @@ export function ReelTile({
           />
         ) : (
           <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
-            {/* T5215 round 2: an intro plays on this reel — the SAME icon +
-                colour as the picker's "Selected"/"Following" badges (see
-                constants/introBadge.js), so seeing this here and recognizing
-                it there is the same glyph, not a lookalike. Sits inside the
-                scrim's guaranteed-dark gradient, so it reads on a bright
-                thumbnail exactly as reliably as on a dark one. */}
-            {download.intro_card_name && (
-              <IntroIcon
-                size={11}
-                fill="currentColor"
-                aria-hidden="true"
-                className={`inline-block -mt-0.5 mr-1 ${INTRO_BADGE.text}`}
-              />
-            )}
             {displayName}
           </h3>
         )}

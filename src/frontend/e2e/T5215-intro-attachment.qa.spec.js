@@ -567,10 +567,10 @@ test.describe('T5215 intro attachment (real account)', () => {
 
     const tileAfterReload = page.getByTestId('reel-card').first();
     await tileAfterReload.scrollIntoViewIfNeeded();
-    // The badge is the shared INTRO_BADGE icon (Sparkles) rendered inline
-    // before the reel title inside the tile's bottom scrim -- assert on the
-    // svg's presence rather than a text label (it is icon-only on the tile).
-    const badge = tileAfterReload.locator('h3 svg').first();
+    // The badge (round 5: moved to the top-left corner, next to rank when
+    // present) carries a stable testid so this assertion survives future
+    // repositioning -- assert on presence, not DOM location.
+    const badge = tileAfterReload.getByTestId('intro-badge');
     await expect(badge, 'the reel tile must show the intro badge after reload').toBeVisible({ timeout: 10000 });
 
     await saveEvidence(page, 'T5215-round2-thumbnail-badge');
@@ -732,7 +732,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     await expect.poll(() => writeCount, { timeout: 10000 }).toBe(1);
 
     // The badge (round 3 item 2) must appear immediately, no reload needed.
-    const badge = tile.locator('h3 svg').first();
+    const badge = tile.getByTestId('intro-badge');
     await expect(badge, 'the reel tile must show the intro badge immediately after OK (no reload)').toBeVisible({ timeout: 10000 });
 
     await saveEvidence(page, 'T5215-round3-ok-commits-badge-immediate');
