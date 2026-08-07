@@ -360,6 +360,16 @@ class OverlayAction(BaseModel):
     - delete_keyframe: Delete a keyframe
     - set_effect_type: Change the highlight effect type
     - set_highlight_color: Change the highlight color for new highlights
+    - add_text: Create a text REGION (+ its first ELEMENT) when data.region_id
+      is absent/unknown; append a new ELEMENT to an EXISTING region when
+      data.region_id names one (T6630 round 4 -- see the branch for the full
+      region/element split)
+    - move_text_edge: Update a text REGION's start/end time
+    - update_text_spec: Replace one text ELEMENT's whole TextSpec
+    - toggle_text: Enable/disable one text ELEMENT
+    - delete_text: Delete one text ELEMENT (deletes its region too if that was
+      the region's last element)
+    - delete_text_region: Delete a text REGION and all of its elements
     """
     action: str
     target: OverlayActionTarget | None = None
@@ -427,12 +437,17 @@ def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_t
 def _get_text_overlays(cursor, working_video_id: int) -> list:
     """Read the current `text_overlays` blob for a working video (T5225).
 
+    T6630 round 4: each item is now a REGION -- `{id, startTime, endTime,
+    elements: [{id, spec, enabled}, ...]}` -- not a standalone block (migrated
+    by profile_db v039; every write path in this file has produced the region
+    shape since that migration).
+
     Separate read/save pair from highlights -- `_get_overlay_data`/`_save_overlay_data`
     never touch `text_overlays` (design SS1.2/SS5.2), so text and highlight actions
     don't have to share a decode/encode path. NEVER falls back to [] on a decode
     error: every text action does read-modify-write of the whole blob, so a
     swallowed decode failure here would let the next gesture persist an empty
-    list and silently erase every text block (same rule as _get_overlay_data's
+    list and silently erase every text region (same rule as _get_overlay_data's
     highlights read, T4210 / CLAUDE.md "No Silent Fallbacks for Internal Data").
     """
     cursor.execute("SELECT text_overlays FROM working_videos WHERE id = ?", (working_video_id,))
@@ -460,12 +475,23 @@ def _save_text_overlays(cursor, working_video_id: int, text_overlays: list, new_
     """, (encode_data(text_overlays), new_version, working_video_id))
 
 
-def _find_text_index(text_overlays: list, block_id: str) -> int:
-    """Find index of a text block by id. Returns -1 if not found."""
-    for i, block in enumerate(text_overlays):
-        if block.get('id') == block_id:
+def _find_text_index(text_overlays: list, region_id: str) -> int:
+    """Find index of a text REGION by id. Returns -1 if not found."""
+    for i, region in enumerate(text_overlays):
+        if region.get('id') == region_id:
             return i
     return -1
+
+
+def _find_text_element(text_overlays: list, element_id: str) -> tuple:
+    """Find (region_idx, element_idx) of a text ELEMENT by id, searching
+    across every region's `elements` list (T6630 round 4). Returns (-1, -1)
+    if not found in any region."""
+    for ri, region in enumerate(text_overlays):
+        for ei, element in enumerate(region.get('elements', [])):
+            if element.get('id') == element_id:
+                return ri, ei
+    return -1, -1
 
 
 def _find_region_index(highlights: list, region_id: str) -> int:
@@ -850,56 +876,100 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
             elif action.action == "add_text":
-                # T5225: create a text block. Client-provided id (optimistic
-                # create, mirrors create_region); spec is re-validated as a
-                # WHOLE TextSpec (never stored malformed -- ValidationError is
-                # a ValueError subclass, so it 400s via the except below).
-                if not action.data or action.data.start_time is None:
-                    raise ValueError("add_text requires data.start_time")
-                if not action.data.id:
+                # T6630 round 4: a text REGION is a time span containing N
+                # ELEMENTS that all render simultaneously during it. This ONE
+                # action still creates EITHER kind of thing (no second add
+                # path), distinguished by whether `data.region_id` names an
+                # EXISTING region -- reusing OverlayActionData.region_id, the
+                # same field create_region already uses for its optimistic-id
+                # role, so no new wire field was needed:
+                #
+                #   - data.region_id ABSENT (or names a region that doesn't
+                #     exist): creates a NEW REGION. `data.id` becomes the
+                #     REGION's id -- this matches the pre-round-4 wire
+                #     contract byte-for-byte, so nothing about the
+                #     region-creation call changes. Its sole starter element
+                #     gets a DERIVED id `f"{data.id}_el0"`, mirroring the
+                #     v039 migration's own convention (a fresh region's first
+                #     element has no prior id to preserve).
+                #   - data.region_id names an EXISTING region: appends a NEW
+                #     ELEMENT into that region's `elements` list; `data.id` is
+                #     that ELEMENT's client-minted id. start_time/end_time are
+                #     ignored here -- adding an element never changes the
+                #     region's timing.
+                if not action.data or not action.data.id:
                     raise ValueError("add_text requires data.id")
                 if not action.data.spec:
                     raise ValueError("add_text requires data.spec")
 
                 validated_spec = TextSpec(**action.data.spec)
                 text_overlays = _get_text_overlays(cursor, working_video_id)
-                new_text_block = {
-                    "id": action.data.id,
-                    "spec": validated_spec.model_dump(mode="json"),
-                    "startTime": action.data.start_time,
-                    "endTime": action.data.end_time if action.data.end_time is not None else (action.data.start_time + 2.0),
-                    "enabled": True,
-                }
-                text_overlays.append(new_text_block)
+
+                target_region_id = action.data.region_id
+                region_idx = _find_text_index(text_overlays, target_region_id) if target_region_id else -1
+
+                if region_idx != -1:
+                    new_element = {
+                        "id": action.data.id,
+                        "spec": validated_spec.model_dump(mode="json"),
+                        "enabled": True,
+                    }
+                    text_overlays[region_idx]["elements"].append(new_element)
+                    logger.info(
+                        f"[Overlay Action] Added text element {action.data.id} "
+                        f"to region {target_region_id}"
+                    )
+                else:
+                    if action.data.start_time is None:
+                        raise ValueError("add_text requires data.start_time when creating a new region")
+                    region_id = action.data.id
+                    new_region = {
+                        "id": region_id,
+                        "startTime": action.data.start_time,
+                        "endTime": action.data.end_time if action.data.end_time is not None else (action.data.start_time + 2.0),
+                        "elements": [{
+                            "id": f"{region_id}_el0",
+                            "spec": validated_spec.model_dump(mode="json"),
+                            "enabled": True,
+                        }],
+                    }
+                    text_overlays.append(new_region)
+                    logger.info(f"[Overlay Action] Added text region {region_id}")
+
                 _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
                 conn.commit()
-                logger.info(f"[Overlay Action] Added text block {action.data.id}")
                 return JSONResponse({"success": True, "version": new_version, "region_id": None})
 
             elif action.action == "move_text_edge":
-                # Partial update of start_time and/or end_time (mirrors update_region).
+                # T6630 round 4: targets a REGION -- the timeline's addressable
+                # unit is the region, not an element. Moves/resizes the
+                # region's time span; every element inside keeps its own spec
+                # untouched. Partial update of start_time and/or end_time
+                # (mirrors update_region).
                 if not action.target or not action.target.id:
                     raise ValueError("move_text_edge requires target.id")
 
                 text_overlays = _get_text_overlays(cursor, working_video_id)
                 idx = _find_text_index(text_overlays, action.target.id)
                 if idx == -1:
-                    raise ValueError(f"Text block {action.target.id} not found")
+                    raise ValueError(f"Text region {action.target.id} not found")
 
-                block = text_overlays[idx]
+                region = text_overlays[idx]
                 if action.data:
                     if action.data.start_time is not None:
-                        block['startTime'] = action.data.start_time
+                        region['startTime'] = action.data.start_time
                     if action.data.end_time is not None:
-                        block['endTime'] = action.data.end_time
+                        region['endTime'] = action.data.end_time
                 _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
                 conn.commit()
-                logger.info(f"[Overlay Action] Moved text block {action.target.id} edge")
+                logger.info(f"[Overlay Action] Moved text region {action.target.id} edge")
                 return JSONResponse({"success": True, "version": new_version, "region_id": None})
 
             elif action.action == "update_text_spec":
-                # Whole-spec replace, debounced client-side (design SS4/O4):
-                # entity-surgical (one block per call), re-validated atomically.
+                # T6630 round 4: targets an ELEMENT (searches across every
+                # region). Whole-spec replace, debounced client-side (design
+                # SS4/O4): entity-surgical (one element per call), re-validated
+                # atomically.
                 if not action.target or not action.target.id:
                     raise ValueError("update_text_spec requires target.id")
                 if not action.data or not action.data.spec:
@@ -907,52 +977,83 @@ async def overlay_action(project_id: int, action: OverlayAction):
 
                 validated_spec = TextSpec(**action.data.spec)
                 text_overlays = _get_text_overlays(cursor, working_video_id)
-                idx = _find_text_index(text_overlays, action.target.id)
-                if idx == -1:
-                    raise ValueError(f"Text block {action.target.id} not found")
+                ri, ei = _find_text_element(text_overlays, action.target.id)
+                if ri == -1:
+                    raise ValueError(f"Text element {action.target.id} not found")
 
-                text_overlays[idx]['spec'] = validated_spec.model_dump(mode="json")
+                text_overlays[ri]['elements'][ei]['spec'] = validated_spec.model_dump(mode="json")
                 _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
                 conn.commit()
-                logger.info(f"[Overlay Action] Updated text spec for {action.target.id}")
+                logger.info(f"[Overlay Action] Updated text spec for element {action.target.id}")
                 return JSONResponse({"success": True, "version": new_version, "region_id": None})
 
             elif action.action == "toggle_text":
+                # T6630 round 4: targets an ELEMENT (searches across every region).
                 if not action.target or not action.target.id:
                     raise ValueError("toggle_text requires target.id")
                 if not action.data or action.data.enabled is None:
                     raise ValueError("toggle_text requires data.enabled")
 
                 text_overlays = _get_text_overlays(cursor, working_video_id)
-                idx = _find_text_index(text_overlays, action.target.id)
-                if idx == -1:
-                    raise ValueError(f"Text block {action.target.id} not found")
+                ri, ei = _find_text_element(text_overlays, action.target.id)
+                if ri == -1:
+                    raise ValueError(f"Text element {action.target.id} not found")
 
-                text_overlays[idx]['enabled'] = action.data.enabled
+                text_overlays[ri]['elements'][ei]['enabled'] = action.data.enabled
                 _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
                 conn.commit()
-                logger.info(f"[Overlay Action] Toggled text block {action.target.id} to {action.data.enabled}")
+                logger.info(f"[Overlay Action] Toggled text element {action.target.id} to {action.data.enabled}")
                 return JSONResponse({"success": True, "version": new_version, "region_id": None})
 
             elif action.action == "delete_text":
+                # T6630 round 4: deletes an ELEMENT (searches across every
+                # region). A region always has >=1 element in the UI's model,
+                # so deleting the LAST element of a region deletes the region
+                # too -- no empty-region records are ever stored. To delete a
+                # region and all its elements in ONE gesture, use
+                # delete_text_region instead of calling this per element.
                 if not action.target or not action.target.id:
                     raise ValueError("delete_text requires target.id")
 
                 text_overlays = _get_text_overlays(cursor, working_video_id)
-                idx = _find_text_index(text_overlays, action.target.id)
-                if idx == -1:
+                ri, ei = _find_text_element(text_overlays, action.target.id)
+                if ri == -1:
                     # Idempotent: mirrors delete_keyframe's no-op (overlay.py
-                    # ~line 780) -- the gesture's postcondition ("no block with
-                    # this id") already holds.
+                    # ~line 780) -- the gesture's postcondition ("no element
+                    # with this id") already holds.
                     logger.info(
                         f"[Overlay Action] delete_text {action.target.id}: already "
+                        f"absent (no-op)"
+                    )
+                else:
+                    del text_overlays[ri]['elements'][ei]
+                    if not text_overlays[ri]['elements']:
+                        del text_overlays[ri]
+                    _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
+                    conn.commit()
+                    logger.info(f"[Overlay Action] Deleted text element {action.target.id}")
+                return JSONResponse({"success": True, "version": new_version, "region_id": None})
+
+            elif action.action == "delete_text_region":
+                # T6630 round 4: deletes a REGION and every element inside it
+                # in ONE surgical write (the lane's keyboard Delete/Backspace
+                # on the focused region-block uses this, not N delete_text
+                # calls -- one user gesture, one persist).
+                if not action.target or not action.target.id:
+                    raise ValueError("delete_text_region requires target.id")
+
+                text_overlays = _get_text_overlays(cursor, working_video_id)
+                idx = _find_text_index(text_overlays, action.target.id)
+                if idx == -1:
+                    logger.info(
+                        f"[Overlay Action] delete_text_region {action.target.id}: already "
                         f"absent (no-op)"
                     )
                 else:
                     del text_overlays[idx]
                     _save_text_overlays(cursor, working_video_id, text_overlays, new_version)
                     conn.commit()
-                    logger.info(f"[Overlay Action] Deleted text block {action.target.id}")
+                    logger.info(f"[Overlay Action] Deleted text region {action.target.id}")
                 return JSONResponse({"success": True, "version": new_version, "region_id": None})
 
             else:
@@ -2355,10 +2456,39 @@ def _probe_working_video_dims(user_id: str, working_filename: str) -> tuple[int,
     )
 
 
+def _flatten_text_regions(text_overlays: list) -> list:
+    """Flatten text REGIONS into the flat per-ELEMENT block shape the render
+    pipeline already understands (T6630 round 4 -- a region is a time span
+    containing N elements that render simultaneously; the renderer only ever
+    knows how to draw ONE spec at a time). Each element becomes an individual
+    block carrying its REGION's timing: `{spec, startTime, endTime, enabled}`
+    -- exactly the shape `_rasterize_text_layers` consumed BEFORE the
+    region/element reframe, so `text_render.py`/`render_text_layer` and every
+    line below this function's call site are UNCHANGED. This is the ONE
+    flatten point; nothing downstream needs to know regions exist.
+    """
+    flat = []
+    for region in text_overlays or []:
+        start = region.get('startTime')
+        end = region.get('endTime')
+        for element in region.get('elements', []):
+            flat.append({
+                'spec': element.get('spec'),
+                'startTime': start,
+                'endTime': end,
+                'enabled': element.get('enabled', True),
+            })
+    return flat
+
+
 def _rasterize_text_layers(user_id: str, text_overlays: list, working_filename: str) -> list:
-    """Rasterise each ENABLED text block ONCE at the working video's exact
+    """Rasterise each ENABLED text ELEMENT ONCE at the working video's exact
     frame dims (design SS6.1/SS6.2) and PNG-encode it, so both render loops
     (Modal + local) blend IDENTICAL bytes -- never re-rasterising per frame.
+
+    `text_overlays` arrives as REGIONS (T6630 round 4); `_flatten_text_regions`
+    unwraps them into the SAME flat per-block shape this function always
+    consumed, so everything below is untouched.
 
     Runs app-side (this process can import Pillow/text_render; the Modal image
     cannot) so the Modal boundary only ever needs `cv2.imdecode` -- no Pillow
@@ -2370,6 +2500,7 @@ def _rasterize_text_layers(user_id: str, text_overlays: list, working_filename: 
     from ...schemas import TextSpec
     from ...services.text_render import render_text_layer
 
+    text_overlays = _flatten_text_regions(text_overlays)
     enabled = [b for b in text_overlays if b.get('enabled', True)]
     if not enabled:
         return []
@@ -2680,12 +2811,17 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         region.get('keyframes') and len(region.get('keyframes', [])) > 0
         for region in highlight_regions
     )
-    # T5225: a project with text blocks but no highlight keyframes must NOT take
+    # T5225: a project with text but no highlight keyframes must NOT take
     # the no-keyframes copy shortcut below -- that path R2-copies the working
     # video verbatim and would silently drop the text (the bug the design's
-    # audit found, SS6.5). enabled=True is the default when the key is absent
-    # (matches the text-block shape written by add_text).
-    has_text = any(block.get('enabled', True) for block in text_overlays)
+    # audit found, SS6.5). T6630 round 4: `text_overlays` is now REGIONS, and
+    # a region itself carries no `enabled` key (only its ELEMENTS do) -- so
+    # this must check the FLATTENED elements, or `.get('enabled', True)`
+    # would default every region to enabled=True regardless of whether every
+    # element inside it is actually disabled. Reuses the SAME flatten helper
+    # _rasterize_text_layers uses, so both readers agree on "is there
+    # anything to draw."
+    has_text = any(el.get('enabled', True) for el in _flatten_text_regions(text_overlays))
 
     # A region the user ENABLED but that carries no keyframes renders nothing,
     # so the export silently drops a spotlight the editor was showing. Regions

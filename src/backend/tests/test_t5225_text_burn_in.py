@@ -25,12 +25,29 @@ import pytest
 from app.routers.export.overlay import (
     _blend_text_layers,
     _decode_text_layers,
+    _flatten_text_regions,
     _rasterize_text_layers,
 )
 from app.modal_functions.video_processing import (
     _blend_text_layers as modal_blend_text_layers,
     _decode_text_layers as modal_decode_text_layers,
 )
+
+
+def _region(region_id, start=0.0, end=2.0, elements=None):
+    """A text REGION (T6630 round 4) -- the shape `_rasterize_text_layers` and
+    `has_text` consume post-migration. `elements` defaults to one enabled
+    element with a minimal valid TextSpec."""
+    if elements is None:
+        elements = [{
+            "id": f"{region_id}_el0",
+            "enabled": True,
+            "spec": {
+                "text": "GOAL", "font": "anton", "size": 0.08, "color": "#FFFFFF",
+                "align": "center", "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8,
+            },
+        }]
+    return {"id": region_id, "startTime": start, "endTime": end, "elements": elements}
 
 
 def _make_png_layer(start, end, color_bgr=(0, 255, 0), size=(20, 20), alpha=255):
@@ -131,16 +148,7 @@ class TestRasterizeTextLayersDimsProbe:
         monkeypatch.setattr(
             "app.database.get_working_videos_path", lambda: tmp_path
         )
-        text_overlays = [{
-            "id": "txt1",
-            "enabled": True,
-            "startTime": 0.0,
-            "endTime": 2.0,
-            "spec": {
-                "text": "GOAL", "font": "anton", "size": 0.08, "color": "#FFFFFF",
-                "align": "center", "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8,
-            },
-        }]
+        text_overlays = [_region("txt1")]
         with pytest.raises(RuntimeError, match="could not determine working video dims"):
             _rasterize_text_layers("test-user", text_overlays, "does_not_exist.mp4")
 
@@ -159,13 +167,7 @@ class TestRasterizeTextLayersDimsProbe:
             "app.routers.export.overlay._ffprobe_remote_dims",
             lambda url: (640, 360),
         )
-        text_overlays = [{
-            "id": "txt1", "enabled": True, "startTime": 0.0, "endTime": 2.0,
-            "spec": {
-                "text": "GOAL", "font": "anton", "size": 0.08, "color": "#FFFFFF",
-                "align": "center", "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8,
-            },
-        }]
+        text_overlays = [_region("txt1")]
         layers = _rasterize_text_layers("test-user", text_overlays, "does_not_exist.mp4")
         assert len(layers) == 1
 
@@ -177,14 +179,41 @@ class TestRasterizeTextLayersDimsProbe:
             raise AssertionError("must not probe when there are no enabled blocks")
         monkeypatch.setattr("app.database.get_working_videos_path", _boom)
 
-        text_overlays = [{
-            "id": "txt1", "enabled": False, "startTime": 0.0, "endTime": 2.0,
+        text_overlays = [_region("txt1", elements=[{
+            "id": "txt1_el0", "enabled": False,
             "spec": {
                 "text": "x", "font": "anton", "size": 0.08, "color": "#FFFFFF",
                 "align": "center", "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8,
             },
-        }]
+        }])]
         assert _rasterize_text_layers("test-user", text_overlays, "irrelevant.mp4") == []
+
+    def test_a_region_with_multiple_elements_rasterises_each_one(self, tmp_path, monkeypatch):
+        """T6630 round 4: a single region with N elements produces N rasterised
+        layers, each carrying the REGION's shared timing (the flatten point's
+        core contract)."""
+        monkeypatch.setattr(
+            "app.database.get_working_videos_path", lambda: tmp_path
+        )
+        monkeypatch.setattr(
+            "app.routers.export.overlay.generate_presigned_url",
+            lambda user_id, path, **kw: "https://example.invalid/fake-presigned-url",
+        )
+        monkeypatch.setattr(
+            "app.routers.export.overlay._ffprobe_remote_dims",
+            lambda url: (640, 360),
+        )
+        spec = {
+            "text": "GOAL", "font": "anton", "size": 0.08, "color": "#FFFFFF",
+            "align": "center", "position": {"x": 0.5, "y": 0.5}, "maxWidth": 0.8,
+        }
+        text_overlays = [_region("r1", start=3.0, end=6.0, elements=[
+            {"id": "r1_el0", "enabled": True, "spec": {**spec, "text": "GOAL"}},
+            {"id": "r1_el1", "enabled": True, "spec": {**spec, "text": "ASSIST", "position": {"x": 0.2, "y": 0.8}}},
+        ])]
+        layers = _rasterize_text_layers("test-user", text_overlays, "does_not_exist.mp4")
+        assert len(layers) == 2
+        assert all(layer["startTime"] == 3.0 and layer["endTime"] == 6.0 for layer in layers)
 
 
 class TestHasTextGate:
@@ -192,27 +221,50 @@ class TestHasTextGate:
     `has_keyframes or has_text`, else a text-only project silently R2-copies
     the raw working video and drops the text. Unit-level (the boolean
     computation itself), not a full render -- the full render path is covered
-    by the mandatory rendered-video QA pass."""
+    by the mandatory rendered-video QA pass.
 
-    def test_enabled_text_block_makes_has_text_true(self):
-        text_overlays = [{"id": "t1", "enabled": True}]
-        has_text = any(block.get('enabled', True) for block in text_overlays)
-        assert has_text is True
+    T6630 round 4: `text_overlays` is REGIONS now, and a region itself carries
+    no `enabled` key (only its ELEMENTS do) -- overlay.py's real `has_text`
+    line flattens first (`_flatten_text_regions`) before checking `enabled`,
+    exactly like these tests do, so a region with every element disabled
+    (not the region record itself) correctly reads as has_text=False."""
 
-    def test_all_disabled_text_blocks_makes_has_text_false(self):
-        text_overlays = [{"id": "t1", "enabled": False}]
-        has_text = any(block.get('enabled', True) for block in text_overlays)
-        assert has_text is False
+    def _has_text(self, text_overlays):
+        return any(el.get('enabled', True) for el in _flatten_text_regions(text_overlays))
 
-    def test_missing_enabled_key_defaults_true(self):
+    def test_enabled_element_makes_has_text_true(self):
+        text_overlays = [_region("r1", elements=[{"id": "r1_el0", "enabled": True, "spec": {}}])]
+        assert self._has_text(text_overlays) is True
+
+    def test_all_disabled_elements_in_the_only_region_makes_has_text_false(self):
+        text_overlays = [_region("r1", elements=[{"id": "r1_el0", "enabled": False, "spec": {}}])]
+        assert self._has_text(text_overlays) is False
+
+    def test_one_enabled_element_among_disabled_ones_makes_has_text_true(self):
+        """Multiple elements in one region (the round-4 model): ANY enabled
+        element anywhere is enough."""
+        text_overlays = [_region("r1", elements=[
+            {"id": "r1_el0", "enabled": False, "spec": {}},
+            {"id": "r1_el1", "enabled": True, "spec": {}},
+        ])]
+        assert self._has_text(text_overlays) is True
+
+    def test_missing_enabled_key_on_an_element_defaults_true(self):
         """Matches the shape add_text actually writes (enabled always present),
-        but defends the default for any hand-seeded/legacy row missing it."""
-        text_overlays = [{"id": "t1"}]
-        has_text = any(block.get('enabled', True) for block in text_overlays)
-        assert has_text is True
+        but defends the default for any hand-seeded/legacy element missing it."""
+        text_overlays = [_region("r1", elements=[{"id": "r1_el0", "spec": {}}])]
+        assert self._has_text(text_overlays) is True
+
+    def test_a_region_record_itself_having_no_enabled_key_does_not_force_true(self):
+        """Regression guard for the exact round-4 landmine: `region.get('enabled',
+        True)` (checking the REGION, not its elements) would ALWAYS default to
+        True since regions never carry that key -- has_text must check elements."""
+        text_overlays = [_region("r1", elements=[{"id": "r1_el0", "enabled": False, "spec": {}}])]
+        assert "enabled" not in text_overlays[0]  # confirms the region itself has no such key
+        assert self._has_text(text_overlays) is False
 
     def test_empty_text_overlays_makes_has_text_false(self):
-        assert any(block.get('enabled', True) for block in []) is False
+        assert self._has_text([]) is False
 
 
 class TestModalInlineParity:
