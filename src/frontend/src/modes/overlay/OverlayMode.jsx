@@ -49,15 +49,15 @@ export function OverlayMode({
   // Highlight interaction
   onHighlightChange,
   onHighlightComplete,
-  // T5225: Overlay text blocks (from useTextOverlays in OverlayScreen)
+  // T5225 / T6630 round 4: Overlay text REGIONS (from useTextOverlays in OverlayScreen)
   textOverlays = [],
   clipBoundaries = [],
-  selectedTextId = null,
+  selectedRegionId = null,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
-  onSelectText,
-  onDeleteText,
+  onSelectRegion,
+  onDeleteTextRegion,
   // T6630 round 2: whole-text-layer visibility toggle (label icon).
   textLayerHidden = false,
   onToggleTextLayer,
@@ -235,20 +235,21 @@ export function OverlayMode({
             {/* Text Layer (T5225) -- FIRST overlay lane now (T6630 round 2): text
                 paints on top in the preview, so its lane sits directly under the
                 video ruler, above Detection and Highlight. T6630 round 3: TIMING
-                ONLY -- add/remove/settings live in the Text tab (OverlayModeView),
-                not here. */}
+                ONLY -- add/remove/settings live in the Text tab (OverlayModeView).
+                T6630 round 4: one block per REGION (a time span that can contain
+                multiple elements); the lane's addressable unit is the region. */}
             <div className="mt-0.5 lg:mt-1">
               <TextLayer
-                blocks={textOverlays}
+                regions={textOverlays}
                 duration={duration}
                 visualDuration={visualDuration || duration}
                 clipBoundaries={clipBoundaries}
-                selectedTextId={selectedTextId}
+                selectedRegionId={selectedRegionId}
                 onMoveTextStart={onMoveTextStart}
                 onMoveTextEnd={onMoveTextEnd}
                 onMoveTextBody={onMoveTextBody}
-                onSelectText={onSelectText}
-                onDeleteText={onDeleteText}
+                onSelectRegion={onSelectRegion}
+                onDeleteTextRegion={onDeleteTextRegion}
                 visualTimeToSourceTime={visualTimeToSourceTime}
                 edgePadding={EDGE_PADDING}
               />

@@ -176,16 +176,20 @@ export function OverlayModeView({
   onFillOpacityChange,
   onDimStrengthChange,
 
-  // T5225: Overlay text blocks
+  // T5225 / T6630 round 4: Overlay text REGIONS (each containing N elements)
   textOverlays = [],
   clipBoundaries = [],
-  selectedTextId = null,
-  onAddText,
+  selectedRegionId = null,
+  selectedElementId = null,
+  onAddRegion,
+  onAddElement,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
-  onSelectText,
+  onSelectRegion,
+  onSelectElement,
   onDeleteText,
+  onDeleteTextRegion,
   onToggleText,
   onUpdateTextSpec,
 
@@ -264,16 +268,17 @@ export function OverlayModeView({
   const mobileFs = isMobile && mobileExpanded;
 
   // T6630 round 2: the three-tab settings section (Overlay | Text | Thumbnail).
-  // Default "overlay". Selecting a text block forces the Text tab (see
-  // handleSelectText below) so the on-screen panel updates in place — the panel
-  // has a CONSTANT height, so this never reflows the timeline.
+  // Default "overlay". Selecting a text region (T6630 round 4: the timeline
+  // lane's addressable unit) forces the Text tab (see handleSelectRegion
+  // below) so the on-screen panel updates in place — the panel has a CONSTANT
+  // height, so this never reflows the timeline.
   const [activeTab, setActiveTab] = useState('overlay');
-  // Gesture-based tab switch: a block-select click flips to the Text tab. Passing
-  // null (deselect / "Done") does not change the tab. No reactive useEffect.
-  const handleSelectText = useCallback((id) => {
-    onSelectText && onSelectText(id);
+  // Gesture-based tab switch: a region-select click flips to the Text tab.
+  // Passing null (deselect) does not change the tab. No reactive useEffect.
+  const handleSelectRegion = useCallback((id, elementId) => {
+    onSelectRegion && onSelectRegion(id, elementId);
     if (id) setActiveTab('text');
-  }, [onSelectText]);
+  }, [onSelectRegion]);
 
   // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
   // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
@@ -468,7 +473,7 @@ export function OverlayModeView({
               videoMetadata={effectiveOverlayMetadata}
               textOverlays={textOverlays}
               currentTime={currentTime}
-              selectedTextId={selectedTextId}
+              selectedRegionId={selectedRegionId}
               zoom={zoom}
               panOffset={panOffset}
               isFullscreen={isFullscreen}
@@ -581,20 +586,29 @@ export function OverlayModeView({
     />
   );
 
-  // --- Text tab: the SINGLE management surface (T6630 round 3, user direction).
-  // Always present (it is a tab, not a mounted-on-select rail): a list of every
-  // text element + the ONE Add control + a per-row Remove/visibility + the
-  // settings editor for the selected element (including the 9-slot position
-  // grid). Selecting a row sets the SAME selectedTextId the timeline/stage
-  // read -- one selection state, no second source of truth. ---
+  // --- Text tab: the SINGLE management surface (T6630 round 3/4, user
+  // direction). Always present (it is a tab, not a mounted-on-select rail): a
+  // list of REGIONS, each showing its ELEMENTS (a region is a time span
+  // containing N elements that render simultaneously), the ONE "Add region"
+  // control, a per-region "+ Add text" (element), per-element Remove/
+  // visibility, and the settings editor (incl. the 9-slot position grid) for
+  // the selected element. Selecting a region/element sets the SAME
+  // selectedRegionId/selectedElementId the timeline/stage read -- one
+  // selection state, no second source of truth. Two-column layout (list left,
+  // settings right, round 4 item 3) so adding a row never moves the settings
+  // panel. ---
   const textPanel = (
     <TextManagementPanel
-      blocks={textOverlays}
-      selectedTextId={selectedTextId}
+      regions={textOverlays}
+      selectedRegionId={selectedRegionId}
+      selectedElementId={selectedElementId}
       currentTime={currentTime}
-      onAddText={onAddText}
-      onSelectText={handleSelectText}
+      onAddRegion={onAddRegion}
+      onAddElement={onAddElement}
+      onSelectRegion={handleSelectRegion}
+      onSelectElement={onSelectElement}
       onDeleteText={onDeleteText}
+      onDeleteTextRegion={onDeleteTextRegion}
       onToggleText={onToggleText}
       onUpdateTextSpec={onUpdateTextSpec}
     />
@@ -824,12 +838,12 @@ export function OverlayModeView({
             isExportInFlight={settingsDisabled}
             textOverlays={textOverlays}
             clipBoundaries={clipBoundaries}
-            selectedTextId={selectedTextId}
+            selectedRegionId={selectedRegionId}
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
             onMoveTextBody={onMoveTextBody}
-            onSelectText={handleSelectText}
-            onDeleteText={onDeleteText}
+            onSelectRegion={handleSelectRegion}
+            onDeleteTextRegion={onDeleteTextRegion}
             textLayerHidden={textLayerHidden}
             onToggleTextLayer={onToggleTextLayer}
               />
@@ -913,12 +927,12 @@ export function OverlayModeView({
                         isExportInFlight={settingsDisabled}
                         textOverlays={textOverlays}
                         clipBoundaries={clipBoundaries}
-                        selectedTextId={selectedTextId}
-                                    onMoveTextStart={onMoveTextStart}
+                        selectedRegionId={selectedRegionId}
+                        onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
                         onMoveTextBody={onMoveTextBody}
-                        onSelectText={handleSelectText}
-                        onDeleteText={onDeleteText}
+                        onSelectRegion={handleSelectRegion}
+                        onDeleteTextRegion={onDeleteTextRegion}
                         textLayerHidden={textLayerHidden}
             onToggleTextLayer={onToggleTextLayer}
                       />

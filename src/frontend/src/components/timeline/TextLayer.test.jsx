@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import TextLayer from './TextLayer';
 
 /**
- * T5225 — Stage 3 (test-first). `TextLayer.jsx` does not exist yet.
- *
- * Design (docs/plans/tasks/T5225-design.md §3.1): a near-clone of RegionLayer's
- * pointer-event mechanics (see RegionLayer.touch.test.jsx / RegionLayer.jsx),
- * NOT a new drag idiom:
- *   - pointerdown -> setPointerCapture -> drag state { blockId, type, pointerId }
+ * T5225 base + T6630 round 4 reframe: the lane now shows one block per text
+ * REGION (a time span that can contain multiple ELEMENTS, all rendering
+ * simultaneously during it). This lane is TIMING ONLY -- add/remove/settings
+ * live in the Text tab; a near-clone of RegionLayer's pointer-event mechanics
+ * (design §3.1), NOT a new drag idiom:
+ *   - pointerdown -> setPointerCapture -> drag state { regionId, type, pointerId }
  *   - window pointermove {passive:false} / pointerup / pointercancel, guarded by pointerId
  *   - touch-action:none (`touch-none`) + `.lever-handle` class on each lever
  *   - data-testid="text-lever-start-{i}" / "text-lever-end-{i}"
@@ -19,15 +19,14 @@ import TextLayer from './TextLayer';
 
 const DURATION = 10;
 
-const BLOCK = {
+const REGION = {
   id: 't1',
   index: 0,
   startTime: 2,
   endTime: 4,
   visualStartPercent: 20,
   visualWidthPercent: 20,
-  spec: { text: 'GOAL' },
-  enabled: true,
+  elements: [{ id: 'el1', spec: { text: 'GOAL' }, enabled: true }],
 };
 
 let coarse = false;
@@ -53,18 +52,18 @@ function renderLayer(overrides = {}) {
   const onMoveTextStart = vi.fn();
   const onMoveTextEnd = vi.fn();
   const onMoveTextBody = vi.fn();
-  const onSelectText = vi.fn();
-  const onDeleteText = vi.fn();
+  const onSelectRegion = vi.fn();
+  const onDeleteTextRegion = vi.fn();
   const utils = render(
     <TextLayer
-      blocks={[BLOCK]}
+      regions={[REGION]}
       duration={DURATION}
       clipBoundaries={[]}
       onMoveTextStart={onMoveTextStart}
       onMoveTextEnd={onMoveTextEnd}
       onMoveTextBody={onMoveTextBody}
-      onSelectText={onSelectText}
-      onDeleteText={onDeleteText}
+      onSelectRegion={onSelectRegion}
+      onDeleteTextRegion={onDeleteTextRegion}
       {...overrides}
     />
   );
@@ -76,7 +75,7 @@ function renderLayer(overrides = {}) {
   if (lane) {
     lane.getBoundingClientRect = () => WIDE_RECT();
   }
-  return { onMoveTextStart, onMoveTextEnd, onMoveTextBody, onSelectText, onDeleteText, track, lane, ...utils };
+  return { onMoveTextStart, onMoveTextEnd, onMoveTextBody, onSelectRegion, onDeleteTextRegion, track, lane, ...utils };
 }
 
 beforeEach(() => setCoarse(false));
@@ -101,8 +100,8 @@ describe('TextLayer — pointer-draggable edge levers (T5225)', () => {
     fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'touch', clientX: 500, clientY: 20 });
 
     expect(onMoveTextStart).toHaveBeenCalled();
-    const [blockId, newTime] = onMoveTextStart.mock.calls.at(-1);
-    expect(blockId).toBe('t1');
+    const [regionId, newTime] = onMoveTextStart.mock.calls.at(-1);
+    expect(regionId).toBe('t1');
     expect(typeof newTime).toBe('number');
 
     // pointerup ends the drag: later moves are ignored.
@@ -120,8 +119,8 @@ describe('TextLayer — pointer-draggable edge levers (T5225)', () => {
     fireEvent.pointerMove(window, { pointerId: 2, pointerType: 'touch', clientX: 620, clientY: 20 });
 
     expect(onMoveTextEnd).toHaveBeenCalled();
-    const [blockId] = onMoveTextEnd.mock.calls.at(-1);
-    expect(blockId).toBe('t1');
+    const [regionId] = onMoveTextEnd.mock.calls.at(-1);
+    expect(regionId).toBe('t1');
   });
 
   it('ignores pointermove from a different pointerId (second finger) mid-drag', () => {
@@ -165,12 +164,12 @@ describe('TextLayer — pointer-draggable edge levers (T5225)', () => {
   });
 });
 
-describe('TextLayer — body drag moves the whole block (T6610)', () => {
+describe('TextLayer — body drag moves the whole region (T6610, region-scoped)', () => {
   it('body pointerdown + move drives onMoveTextBody with commit=false (no persist mid-drag)', () => {
     const { onMoveTextBody } = renderLayer();
     const body = screen.getByTestId('text-block-body-0');
 
-    // Grab the block body at x=280 (inside the [2,4] block: px 212..404).
+    // Grab the block body at x=280 (inside the [2,4] region: px 212..404).
     fireEvent.pointerDown(body, { pointerId: 1, pointerType: 'mouse', clientX: 280, clientY: 20 });
     fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 400, clientY: 20 });
 
@@ -208,7 +207,7 @@ describe('TextLayer — body drag moves the whole block (T6610)', () => {
     fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 302, clientY: 20 });
     fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 302, clientY: 20 });
 
-    expect(onMoveTextBody, 'a click must not move the block').not.toHaveBeenCalled();
+    expect(onMoveTextBody, 'a click must not move the region').not.toHaveBeenCalled();
   });
 
   it('pressing a LEVER never invokes the body-move path (resize vs move hit-test)', () => {
@@ -220,10 +219,10 @@ describe('TextLayer — body drag moves the whole block (T6610)', () => {
     fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 400, clientY: 20 });
 
     expect(onMoveTextStart, 'lever still resizes').toHaveBeenCalled();
-    expect(onMoveTextBody, 'lever press never moves the whole block').not.toHaveBeenCalled();
+    expect(onMoveTextBody, 'lever press never moves the whole region').not.toHaveBeenCalled();
   });
 
-  it('ArrowRight / ArrowLeft nudge the block and each commits once (keyboard equivalent)', () => {
+  it('ArrowRight / ArrowLeft nudge the region and each commits once (keyboard equivalent)', () => {
     const { onMoveTextBody } = renderLayer();
     const body = screen.getByTestId('text-block-body-0');
 
@@ -245,39 +244,79 @@ describe('TextLayer — lane is TIMING ONLY, no add path (T6630 round 3)', () =>
   // in-lane "+ Add text" button). Round 3 removes BOTH: add/remove/settings moved
   // entirely into the Text tab (TextManagementPanel) -- one add path, not two.
   // These guard against either affordance quietly reappearing in the lane.
-  it('clicking empty lane space does not add a block (no onAddText prop, no click-to-add)', () => {
-    const { lane } = renderLayer({ blocks: [] });
+  it('clicking empty lane space does not add a region (no click-to-add)', () => {
+    const { lane } = renderLayer({ regions: [] });
     expect(lane).toBeTruthy();
-    // Should not throw and should not select/move anything either -- the lane has
-    // no click handler at all now.
     expect(() => fireEvent.click(lane, { clientX: 500, clientY: 90 })).not.toThrow();
   });
 
   it('no in-lane "Add text" control is rendered', () => {
-    renderLayer({ blocks: [BLOCK] });
+    renderLayer({ regions: [REGION] });
     expect(screen.queryByTestId('add-text-in-lane')).toBeNull();
     expect(screen.queryByText(/add text/i)).toBeNull();
   });
 
   it('no per-block eye/trash controls are rendered in the lane (moved to the Text tab)', () => {
-    renderLayer({ blocks: [BLOCK] });
+    renderLayer({ regions: [REGION] });
     expect(screen.queryByTitle('Delete text block')).toBeNull();
     expect(screen.queryByTitle(/hide text|show text/i)).toBeNull();
   });
 });
 
-describe('TextLayer — keyboard delete of the focused block (T6630)', () => {
-  it('Delete removes the focused block via the single onDeleteText path', () => {
-    const { onDeleteText } = renderLayer();
+describe('TextLayer — keyboard delete of the focused REGION (T6630 round 4)', () => {
+  it('Delete removes the focused region via the single onDeleteTextRegion path', () => {
+    const { onDeleteTextRegion } = renderLayer();
     const body = screen.getByTestId('text-block-body-0');
     fireEvent.keyDown(body, { key: 'Delete' });
-    expect(onDeleteText).toHaveBeenCalledWith('t1');
+    expect(onDeleteTextRegion).toHaveBeenCalledWith('t1');
   });
 
-  it('Backspace also removes the focused block', () => {
-    const { onDeleteText } = renderLayer();
+  it('Backspace also removes the focused region', () => {
+    const { onDeleteTextRegion } = renderLayer();
     const body = screen.getByTestId('text-block-body-0');
     fireEvent.keyDown(body, { key: 'Backspace' });
-    expect(onDeleteText).toHaveBeenCalledWith('t1');
+    expect(onDeleteTextRegion).toHaveBeenCalledWith('t1');
+  });
+});
+
+describe('TextLayer — one block per REGION, label shows first element + count (T6630 round 4)', () => {
+  it('a single-element region labels with just that element\'s text', () => {
+    renderLayer({ regions: [REGION] });
+    const body = screen.getByTestId('text-block-body-0');
+    expect(body.textContent).toBe('GOAL');
+  });
+
+  it('a multi-element region labels "first +N" (e.g. "My Text +2")', () => {
+    const multiRegion = {
+      ...REGION,
+      elements: [
+        { id: 'el1', spec: { text: 'My Text' }, enabled: true },
+        { id: 'el2', spec: { text: 'Second' }, enabled: true },
+        { id: 'el3', spec: { text: 'Third' }, enabled: true },
+      ],
+    };
+    renderLayer({ regions: [multiRegion] });
+    const body = screen.getByTestId('text-block-body-0');
+    expect(body.textContent).toBe('My Text +2');
+  });
+
+  it('clicking the block body selects the REGION (not an element)', () => {
+    const { onSelectRegion } = renderLayer();
+    const body = screen.getByTestId('text-block-body-0');
+    // A sub-threshold pointer down+up on the body is a CLICK -- selection is
+    // handled by the wrapper div's onClick (see the click-in-place test above
+    // for the pointer-drag path); simulate the click directly here.
+    fireEvent.click(body.parentElement);
+    expect(onSelectRegion).toHaveBeenCalledWith('t1');
+  });
+
+  it('a region with every element disabled dims (lower opacity) but still renders', () => {
+    const allDisabledRegion = {
+      ...REGION,
+      elements: [{ id: 'el1', spec: { text: 'Hidden' }, enabled: false }],
+    };
+    renderLayer({ regions: [allDisabledRegion] });
+    const body = screen.getByTestId('text-block-body-0');
+    expect(body.className).toContain('bg-opacity-10');
   });
 });

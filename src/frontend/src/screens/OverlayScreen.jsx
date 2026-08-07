@@ -317,15 +317,19 @@ export function OverlayScreen({
 
   const {
     textOverlaysWithLayout,
-    selectedTextId,
-    setSelectedTextId,
-    addText,
-    moveTextStart,
-    moveTextEnd,
-    moveTextBlock,
-    updateTextSpec,
-    toggleText,
-    deleteText,
+    selectedRegionId,
+    selectedElementId,
+    selectRegion,
+    selectElement,
+    addRegion,
+    addElement,
+    moveRegionStart,
+    moveRegionEnd,
+    moveRegionBlock,
+    updateElementSpec,
+    toggleElement,
+    deleteElement,
+    deleteRegion,
     restoreTextOverlays,
   } = useTextOverlays();
 
@@ -942,69 +946,90 @@ export function OverlayScreen({
   }, [setHighlightShape, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // =========================================
-  // TEXT OVERLAY WRAPPED HANDLERS (T5225)
+  // TEXT OVERLAY WRAPPED HANDLERS (T5225; T6630 round 4 REGION/ELEMENT reframe)
   // =========================================
-  // Same gesture -> optimistic local mutate -> surgical POST pattern as the
-  // highlight handlers above. Every useTextOverlays mutator RETURNS the
+  // A REGION is a time span; it CONTAINS N ELEMENTS that render simultaneously
+  // during it (user direction: "adding a text element is not adding a text
+  // region"). Same gesture -> optimistic local mutate -> surgical POST pattern
+  // as the highlight handlers above. Every useTextOverlays mutator RETURNS the
   // updated/new/removed entity, so these read that return value directly --
   // never a stale re-read of `textOverlays` (T5644 landmine, design §5.1).
 
-  const wrappedAddText = useCallback((clickTime) => {
-    const newBlock = addText(clickTime, DEFAULT_TEXT_SPEC);
-    if (newBlock && canSyncActions) {
+  // The ONE "create a new time span" gesture (Text tab's "Add region"; also
+  // used for the very-first add). Creates a region + its first element in one
+  // call, server-side too (add_text with no region_id).
+  const wrappedAddRegion = useCallback((clickTime) => {
+    const newRegion = addRegion(clickTime, DEFAULT_TEXT_SPEC);
+    if (newRegion && canSyncActions) {
+      const el = newRegion.elements[0];
       dispatchOverlayAction('createText', () =>
-        overlayActions.createText(projectId, newBlock.id, newBlock.spec, newBlock.startTime, newBlock.endTime));
+        overlayActions.createText(projectId, newRegion.id, el.spec, newRegion.startTime, newRegion.endTime));
     }
     setOverlayChangedSinceExport(true);
-    if (newBlock) setSelectedTextId(newBlock.id);
-    return newBlock?.id ?? null;
-  }, [addText, projectId, canSyncActions, setOverlayChangedSinceExport, setSelectedTextId]);
+    if (newRegion) selectRegion(newRegion.id, newRegion.elements[0].id);
+    return newRegion?.id ?? null;
+  }, [addRegion, projectId, canSyncActions, setOverlayChangedSinceExport, selectRegion]);
+
+  // "Add text" WITH a region already selected: appends a new ELEMENT into
+  // that region -- the region's timing is untouched, no second time span is
+  // created (the bug this replaces: "only the second one showed up" because
+  // each add used to create its OWN disjoint span).
+  const wrappedAddElement = useCallback((regionId) => {
+    const newElement = addElement(regionId, DEFAULT_TEXT_SPEC);
+    if (newElement && canSyncActions) {
+      dispatchOverlayAction('createText', () =>
+        overlayActions.createText(projectId, newElement.id, newElement.spec, undefined, undefined, regionId));
+    }
+    setOverlayChangedSinceExport(true);
+    if (newElement) selectElement(newElement.id);
+    return newElement?.id ?? null;
+  }, [addElement, projectId, canSyncActions, setOverlayChangedSinceExport, selectElement]);
 
   const wrappedMoveTextStart = useCallback((id, newStartTime) => {
-    const updated = moveTextStart(id, newStartTime);
+    const updated = moveRegionStart(id, newStartTime);
     if (updated && canSyncActions) {
       dispatchOverlayAction('moveTextEdgeStart', () =>
         overlayActions.moveTextEdge(projectId, id, updated.startTime, null));
     }
     setOverlayChangedSinceExport(true);
-  }, [moveTextStart, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [moveRegionStart, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedMoveTextEnd = useCallback((id, newEndTime) => {
-    const updated = moveTextEnd(id, newEndTime);
+    const updated = moveRegionEnd(id, newEndTime);
     if (updated && canSyncActions) {
       dispatchOverlayAction('moveTextEdgeEnd', () =>
         overlayActions.moveTextEdge(projectId, id, null, updated.endTime));
     }
     setOverlayChangedSinceExport(true);
-  }, [moveTextEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [moveRegionEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
-  // T6610: move the WHOLE block in time (body drag / keyboard nudge), duration
+  // T6610: move the WHOLE region in time (body drag / keyboard nudge), duration
   // preserved. Optimistic local move on every drag tick (`commit=false`, no
   // network write -- the drag stays smooth); exactly ONE surgical persist fires
   // on drag END / each keypress (`commit=true`), reusing the SAME move_text_edge
   // write path as the levers, now carrying BOTH edges. No reactive persistence:
   // the write is bound to the pointerup/keydown gesture, never a useEffect.
   const wrappedMoveTextBody = useCallback((id, newStartTime, commit) => {
-    const updated = moveTextBlock(id, newStartTime);
+    const updated = moveRegionBlock(id, newStartTime);
     if (!updated) return;
     setOverlayChangedSinceExport(true);
     if (commit && canSyncActions) {
       dispatchOverlayAction('moveTextBody', () =>
         overlayActions.moveTextEdge(projectId, id, updated.startTime, updated.endTime));
     }
-  }, [moveTextBlock, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [moveRegionBlock, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Debounced whole-spec persistence (design O4: entity-surgical, ~250ms,
   // never per-keystroke). Local state updates optimistically on EVERY change
   // so the live preview tracks each keystroke; only the network write waits.
-  // Keyed PER BLOCK ID (a Map, not one shared timer): a single shared timer
-  // would let editing block B within the debounce window cancel block A's
+  // Keyed PER ELEMENT ID (a Map, not one shared timer): a single shared timer
+  // would let editing element B within the debounce window cancel element A's
   // still-pending write, silently dropping A's edit (reviewer finding). Each
-  // block's debounce is independent, so switching the selected block never
-  // cancels another block's scheduled POST.
+  // element's debounce is independent, so switching the selected element never
+  // cancels another element's scheduled POST.
   const updateTextSpecTimersRef = useRef(new Map());
   const wrappedUpdateTextSpec = useCallback((id, nextSpec) => {
-    const updated = updateTextSpec(id, nextSpec);
+    const updated = updateElementSpec(id, nextSpec);
     setOverlayChangedSinceExport(true);
     if (!updated || !canSyncActions) return;
 
@@ -1016,7 +1041,7 @@ export function OverlayScreen({
       timers.delete(id);
       dispatchOverlayAction('updateTextSpec', () => overlayActions.updateTextSpec(projectId, id, nextSpec));
     }, 250));
-  }, [updateTextSpec, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [updateElementSpec, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   useEffect(() => () => {
     updateTextSpecTimersRef.current.forEach(clearTimeout);
@@ -1024,31 +1049,52 @@ export function OverlayScreen({
   }, []);
 
   const wrappedToggleText = useCallback((id, enabled) => {
-    const updated = toggleText(id, enabled);
+    const updated = toggleElement(id, enabled);
     if (updated && canSyncActions) {
       dispatchOverlayAction('toggleText', () => overlayActions.toggleText(projectId, id, enabled));
     }
     setOverlayChangedSinceExport(true);
-  }, [toggleText, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [toggleElement, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedDeleteText = useCallback((id) => {
-    // Cancel any pending debounced spec write for this block -- otherwise it
-    // fires after the block is gone and 400s against update_text_spec (harmless
-    // but noisy; the delete already achieves the user's intent).
+    // Cancel any pending debounced spec write for this element -- otherwise it
+    // fires after the element is gone and 400s against update_text_spec
+    // (harmless but noisy; the delete already achieves the user's intent).
     const timers = updateTextSpecTimersRef.current;
     if (timers.has(id)) {
       clearTimeout(timers.get(id));
       timers.delete(id);
     }
-    // T6630 note: deleteText() (useTextOverlays) already clears selectedTextId
-    // when the removed block is the selected one, so the Edit Text rail closes
-    // cleanly with no extra clear here (single source of truth for selection).
-    const removed = deleteText(id);
+    // deleteElement() (useTextOverlays) already clears the selection when the
+    // removed element (or its now-empty region) was selected -- single source
+    // of truth, no extra clear here.
+    const removed = deleteElement(id);
     if (removed && canSyncActions) {
       dispatchOverlayAction('deleteText', () => overlayActions.deleteText(projectId, id));
     }
     setOverlayChangedSinceExport(true);
-  }, [deleteText, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [deleteElement, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  // Deletes a REGION and every element inside it in ONE gesture (the timeline
+  // lane's keyboard Delete/Backspace on the focused region-block uses this --
+  // the lane is TIMING ONLY and its addressable unit is the region).
+  const wrappedDeleteTextRegion = useCallback((id) => {
+    const timers = updateTextSpecTimersRef.current;
+    // Cancel any pending per-element debounced writes for elements in this
+    // region -- they'd otherwise fire against a region that's already gone.
+    const region = textOverlaysWithLayout.find((r) => r.id === id);
+    (region?.elements || []).forEach((el) => {
+      if (timers.has(el.id)) {
+        clearTimeout(timers.get(el.id));
+        timers.delete(el.id);
+      }
+    });
+    const removed = deleteRegion(id);
+    if (removed && canSyncActions) {
+      dispatchOverlayAction('deleteTextRegion', () => overlayActions.deleteTextRegion(projectId, id));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [deleteRegion, projectId, canSyncActions, setOverlayChangedSinceExport, textOverlaysWithLayout]);
 
   // Wrapped handler: poster (preview-image) marker drag-end / "Use current
   // frame" (T5410). Fires the surgical poster-time write ONCE per gesture --
@@ -1485,16 +1531,20 @@ export function OverlayScreen({
       framingOutdated={framingOutdated}
       // T5676: lock the Overlay Settings card during an in-flight overlay export
       settingsDisabled={isOverlayExporting}
-      // T5225: Overlay text blocks
+      // T5225 / T6630 round 4: Overlay text REGIONS (each containing N elements)
       textOverlays={textOverlaysWithLayout}
       clipBoundaries={clipBoundaries}
-      selectedTextId={selectedTextId}
-      onAddText={wrappedAddText}
+      selectedRegionId={selectedRegionId}
+      selectedElementId={selectedElementId}
+      onAddRegion={wrappedAddRegion}
+      onAddElement={wrappedAddElement}
       onMoveTextStart={wrappedMoveTextStart}
       onMoveTextEnd={wrappedMoveTextEnd}
       onMoveTextBody={wrappedMoveTextBody}
-      onSelectText={setSelectedTextId}
+      onSelectRegion={selectRegion}
+      onSelectElement={selectElement}
       onDeleteText={wrappedDeleteText}
+      onDeleteTextRegion={wrappedDeleteTextRegion}
       onToggleText={wrappedToggleText}
       onUpdateTextSpec={wrappedUpdateTextSpec}
     />
