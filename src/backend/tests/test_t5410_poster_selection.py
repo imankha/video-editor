@@ -4,7 +4,8 @@ Covers:
 - open_play_window: slow-mo / no-slow-mo / too-short-after-skip / end-margin /
   section past duration. Pure arithmetic, the whole algorithm.
 - select_poster_frame: marker honoured verbatim (including outside the
-  window); unset -> midpoint.
+  window); unset -> 2s into the window, clamped to the window's end (T6630
+  round 7; was the window's midpoint).
 - generate_poster_at_export: sets poster_filename/poster_frame_time/
   poster_source ('auto' vs 'overlay'); poster failure never fails export
   (T4110 barrier explicitly asserted); NO detection call anywhere.
@@ -92,11 +93,21 @@ def test_window_exact_min_window_boundary_not_degraded():
 
 
 # ---------------------------------------------------------------------------
-# select_poster_frame: marker verbatim (even outside window); else midpoint
+# select_poster_frame: marker verbatim (even outside window); else 2s into
+# the window, clamped to its end (T6630 round 7; was the window's midpoint)
 # ---------------------------------------------------------------------------
 
-def test_select_frame_unset_marker_is_midpoint():
-    assert select_poster_frame((2.0, 6.0), None) == 4.0
+def test_select_frame_unset_marker_is_two_seconds_into_window():
+    # Window width 8.0 -- start+2.0 (4.0) and the midpoint (6.0) DIFFER here,
+    # so this discriminates the two rules (a window where they coincided
+    # would pass either way and not actually verify the change).
+    assert select_poster_frame((2.0, 10.0), None) == 4.0
+
+
+def test_select_frame_unset_marker_clamps_to_window_end_when_shorter_than_two_seconds():
+    # Windows can be as short as MIN_WINDOW_SECONDS (0.5) -- start+2.0 must
+    # not return a time outside the window.
+    assert select_poster_frame((2.0, 2.3), None) == 2.3
 
 
 def test_select_frame_marker_honoured_verbatim_inside_window():
@@ -162,15 +173,16 @@ async def test_generate_poster_at_export_auto_source_no_marker(db):
         )
 
     assert result == "auto.mp4.jpg"
-    # window = open_play_window((2,6), 10.0) = (4.0, 6.0) -> midpoint 5.0
-    grab.assert_called_once_with(USER_ID, "auto.mp4", 5.0)
+    # window = open_play_window((2,6), 10.0) = (4.0, 6.0) -> start+2.0 (6.0),
+    # clamped to end (6.0) -> 6.0 (T6630 round 7; was the midpoint, 5.0).
+    grab.assert_called_once_with(USER_ID, "auto.mp4", 6.0)
 
     row = _connect(db).execute(
         "SELECT poster_filename, poster_frame_time, poster_source FROM final_videos WHERE id = ?",
         (fv_id,),
     ).fetchone()
     assert row["poster_filename"] == "auto.mp4.jpg"
-    assert row["poster_frame_time"] == pytest.approx(5.0)
+    assert row["poster_frame_time"] == pytest.approx(6.0)
     assert row["poster_source"] == "auto"
 
 
@@ -349,7 +361,9 @@ def test_backfill_force_skips_override_sources(db):
     # skip-if-exists heal path, so it is genuinely regenerated (never
     # 'overlay'/'upload' -- those are skipped above regardless of `force`).
     assert set(res["generated"]) == {1}
-    grab.assert_called_once_with(USER_ID, "auto.mp4", pytest.approx(4.85))
+    # No slow-mo section -> window = (0.0, 9.7); start+2.0 (2.0), clamped to
+    # end (9.7) -> 2.0 (T6630 round 7; was the midpoint, 4.85).
+    grab.assert_called_once_with(USER_ID, "auto.mp4", pytest.approx(2.0))
 
 
 # ---------------------------------------------------------------------------

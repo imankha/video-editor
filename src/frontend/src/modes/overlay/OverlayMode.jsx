@@ -112,10 +112,11 @@ export function OverlayMode({
     return '15.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (7rem) + padding
   };
 
-  // T5410: default marker position (no override yet) = midpoint of the
-  // open-play window, computed client-side from the SAME algorithm the
-  // export-time selector uses (posterWindow.js mirrors poster.py exactly) --
-  // never a guessed default that could diverge from what export picks.
+  // T5410: default marker position (no override yet) = 2 seconds into the
+  // open-play window, clamped to its end (T6630 round 7; was the window's
+  // midpoint), computed client-side from the SAME algorithm the export-time
+  // selector uses (posterWindow.js mirrors poster.py exactly) -- never a
+  // guessed default that could diverge from what export picks.
   const effectiveDuration = visualDuration || duration || 0;
   const posterVisualTime = (() => {
     if (!effectiveDuration) return 0;

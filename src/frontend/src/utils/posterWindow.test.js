@@ -47,8 +47,14 @@ describe('posterWindow', () => {
   });
 
   describe('selectPosterFrame', () => {
-    it('unset marker -> midpoint', () => {
-      expect(selectPosterFrame([2.0, 6.0], null)).toBe(4.0);
+    it('unset marker -> 2s into the window (T6630 round 7; was the midpoint)', () => {
+      // Window width 8.0 -- start+2.0 (4.0) and the midpoint (6.0) DIFFER
+      // here, so this discriminates the two rules.
+      expect(selectPosterFrame([2.0, 10.0], null)).toBe(4.0);
+    });
+
+    it('unset marker clamps to the window end when shorter than 2s', () => {
+      expect(selectPosterFrame([2.0, 2.3], null)).toBe(2.3);
     });
 
     it('marker honoured verbatim inside the window', () => {

@@ -8,7 +8,8 @@ Covers:
 - read_clip_segments_for_project / load_project_clip_segments read the project's
   latest working clips in sort order (real DB)
 - backfill reconstructs segments per final video (SAME policy as live export,
-  T5410: open_play_window + midpoint, no ranking)
+  T5410: open_play_window, no ranking; T6630 round 7: 2s into the window
+  rather than the midpoint)
 - poster failure never fails the export (finalize best-effort preserved)
 
 T5410 note: the byte-size "clearest frame in the first half" reel policy this
@@ -470,15 +471,16 @@ def test_backfill_prefers_frozen_section(db):
 
     assert set(res["generated"]) == {88}
     # window = open_play_window((1.5, 5.5), 10.0) = (3.5, min(5.5, 9.7)) = (3.5, 5.5)
-    # -> midpoint 4.5
-    assert seen["t"] == pytest.approx(4.5)
+    # -> start+2.0 (5.5), clamped to end (5.5) -> 5.5 (T6630 round 7; was
+    # the midpoint, 4.5).
+    assert seen["t"] == pytest.approx(5.5)
     reconstruct.assert_not_called()  # frozen columns win; no reconstruction
 
     row = _connect(db).execute(
         "SELECT poster_filename, poster_frame_time, poster_source FROM final_videos WHERE id = 88"
     ).fetchone()
     assert row["poster_filename"] == "f.mp4.jpg"
-    assert row["poster_frame_time"] == pytest.approx(4.5)
+    assert row["poster_frame_time"] == pytest.approx(5.5)
     assert row["poster_source"] == "auto"
 
 
@@ -517,13 +519,14 @@ def test_backfill_reconstructs_and_heals_when_unfrozen(db):
 
     assert set(res["generated"]) == {77}
     # Reconstructed section (2.0, 6.0) -> window = (4.0, min(6.0, 9.7)) = (4.0, 6.0)
-    # -> midpoint 5.0
-    assert seen["t"] == pytest.approx(5.0)
+    # -> start+2.0 (6.0), clamped to end (6.0) -> 6.0 (T6630 round 7; was
+    # the midpoint, 5.0).
+    assert seen["t"] == pytest.approx(6.0)
     # ...and healed the frozen columns on the row.
     row = _connect(db).execute(
         "SELECT slowmo_section_start, slowmo_section_end, poster_frame_time, poster_source "
         "FROM final_videos WHERE id = 77"
     ).fetchone()
     assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (2.0, 6.0)
-    assert row["poster_frame_time"] == pytest.approx(5.0)
+    assert row["poster_frame_time"] == pytest.approx(6.0)
     assert row["poster_source"] == "auto"

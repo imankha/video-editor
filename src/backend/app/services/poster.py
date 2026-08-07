@@ -328,18 +328,25 @@ def select_poster_frame(
     window: tuple[float, float], user_marker_time: float | None,
 ) -> float:
     """The poster frame's time (final-video seconds): the user's overlay marker
-    when set, else the window's midpoint.
+    when set, else 2 seconds into the open-play window.
 
     The marker is honoured VERBATIM, never clamped into the window -- a
-    deliberate spotlight-frame pick is a decision, not an error. Within the
-    window every pixel/box feature the study measured was noise
-    (|Spearman| <= 0.23), so absent a marker the midpoint is the honest,
-    deterministic pick (no fabricated ranking).
+    deliberate spotlight-frame pick is a decision, not an error; the user is
+    expected to move the marker to set it, but may not always (T6630 round
+    7). Within the window every pixel/box feature the study measured was
+    noise (|Spearman| <= 0.23), so absent a marker there is no ranking to
+    honor -- T6630 round 7 user direction moved the deterministic no-marker
+    default from the window's midpoint to `start + 2.0`, clamped to `end` so
+    a window shorter than 2s (windows can be as short as MIN_WINDOW_SECONDS)
+    never returns a time outside it. This does not collide with
+    SPOTLIGHT_SKIP_SECONDS above (which already skips the first 2s of a
+    slow-mo section before the window even starts) -- it is 2s relative to
+    the WINDOW's own start, consistent with that skip's own reasoning.
     """
     if user_marker_time is not None:
         return user_marker_time
     start, end = window
-    return start + (end - start) / 2.0
+    return min(start + 2.0, end)
 
 
 def _accumulate_clip_boundary_offsets(
@@ -552,7 +559,7 @@ def _set_slowmo_section(final_video_id: int, section: tuple[float, float] | None
 
 def get_project_poster_marker_time(project_id: int | None) -> float | None:
     """The user's pre-export poster marker time (final-video seconds), or None
-    (no override -> select_poster_frame falls back to the window midpoint).
+    (no override -> select_poster_frame falls back to 2s into the window).
 
     Column-guarded for the deploy->migrate window (v032 not yet applied) --
     mirrors the T6030 pattern (never raises "no such column" on a hot path).
@@ -685,7 +692,7 @@ async def generate_poster_at_export(
     is realized as a pure time-window gate on the already-frozen slow-mo
     section (open_play_window); within the window the frame is either the
     user's overlay marker (honoured verbatim, never clamped) or the
-    deterministic midpoint (select_poster_frame).
+    deterministic 2-seconds-into-the-window default (select_poster_frame).
 
     Runs AFTER _finalize_overlay_export returns (the final video + its row both
     exist) and BEFORE the sync-then-announce barrier, so poster_filename/
