@@ -7,10 +7,15 @@
 // mental connection"). Purple/violet is already this feature's accent
 // elsewhere (the consent checkbox + focus rings in ProfileIntroSection.jsx),
 // so it reads as "intro" rather than colliding with an unrelated meaning.
+//
+// Round 4 (user, 2026-08-07): "a little intro card icon (maybe a box the
+// shape of the aspect ratio with a face silhouette inside)" — swapped the
+// generic Sparkles for a purpose-built glyph (components/shared/IntroCardIcon).
+// Only the glyph changed here; every call site picks it up automatically.
 
-import { Sparkles } from 'lucide-react';
+import { IntroCardIcon } from '../components/shared/IntroCardIcon';
 
-export const INTRO_BADGE_ICON = Sparkles;
+export const INTRO_BADGE_ICON = IntroCardIcon;
 
 // Every value is a COMPLETE Tailwind class string on purpose (mirrors
 // constants/zLayers.js's own rule) — Tailwind's JIT scanner only generates
