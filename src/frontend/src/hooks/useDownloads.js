@@ -369,6 +369,15 @@ export function useDownloads(isOpen = false) {
   // the badge dark until the next full reload/refetch, exactly the gap the
   // user reported. The PATCH response now returns the resolved name too;
   // apply it from the response, not a second guess made on the client.
+  //
+  // Round 6: this only ever updated `downloads` (the flat gallery array) --
+  // most reel tiles are actually rendered from useCollections()'s SEPARATE
+  // `members` cache (collapsed game/mix groups), which this write never
+  // touched, so a badge inside a collapsed group stayed stale until reload
+  // (user: "switched the intro card for a reel to 'no intro' and didn't see
+  // the intro badge go away"). Return the resolved fields so the caller can
+  // patch that second cache too (mirrors the existing rename gesture, which
+  // already calls collections.patchMember after renameDownload).
   const setIntroCard = useCallback(async (downloadId, introCardId) => {
     setDownloads(prev => prev.map(d =>
       d.id === downloadId ? { ...d, intro_card_id: introCardId } : d
@@ -384,11 +393,11 @@ export function useDownloads(isOpen = false) {
       setDownloads(prev => prev.map(d =>
         d.id === downloadId ? { ...d, intro_card_name } : d
       ));
-      return true;
+      return { success: true, intro_card_id: introCardId, intro_card_name };
     } catch (err) {
       console.error('[useDownloads] setIntroCard error:', err);
       setError(err.message);
-      return false;
+      return { success: false };
     }
   }, []);
 

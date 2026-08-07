@@ -452,7 +452,21 @@ export function DownloadsPanel({
   // (ProfileIntroSection/ConsentGate show the full "publicly visible" copy
   // before recording it) -- this link only points the user there, it never
   // grants consent itself.
-  const handleSetIntro = (download, cardId) => setIntroCard(download.id, cardId);
+  //
+  // Round 6: mirrors renameReel above -- setIntroCard only updates the flat
+  // `downloads` array, but most reel tiles render from useCollections()'s
+  // separate `members` cache (collapsed game/mix groups), which never saw
+  // this write, so the badge stayed stale there until reload. Patch that
+  // cache too once the server has resolved the real name.
+  const handleSetIntro = async (download, cardId) => {
+    const result = await setIntroCard(download.id, cardId);
+    if (result.success) {
+      collections.patchMember(download.id, {
+        intro_card_id: result.intro_card_id,
+        intro_card_name: result.intro_card_name,
+      });
+    }
+  };
   const handleRequestIntroConsent = () => {
     toast.info('Open your profile menu -> Manage Profile -> Player Intro to give consent.');
   };
