@@ -57,15 +57,22 @@ async function tab(id) {
 function visiblePanel() {
   return page.locator('[data-testid="overlay-settings-tabs"]:visible').first();
 }
+async function regionCount() {
+  return page.locator('[data-testid^="text-block-body-"]').count();
+}
 // See round4 spec's identical helper doc comment for why this polls instead
 // of trusting one read (the region list settles well after the text-track
-// DOM mounts).
-async function waitForRegionListSettled(panel, { maxWaitMs = 15000, pollMs = 500 } = {}) {
+// DOM mounts). T6630 round 6: polls the TIMELINE's own blocks (unfiltered by
+// playhead), not the Text tab panel's list -- round 6 item 2 scopes that
+// panel to the region(s) under the CURRENT playhead, so it can legitimately
+// settle at 0/1 while real regions still exist (and are still loading)
+// elsewhere in time.
+async function waitForRegionListSettled({ maxWaitMs = 15000, pollMs = 500 } = {}) {
   let last = -1;
   let stableFor = 0;
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
-    const count = await panel.locator('[data-testid^="text-tab-region-"]').count();
+    const count = await regionCount();
     if (count === last) {
       stableFor += pollMs;
       if (stableFor >= 1000) return count;
@@ -116,20 +123,21 @@ test.beforeAll(async ({ browser }) => {
   console.log('R5-EVIDENCE video ready:', vok);
   await pauseVideo();
 
-  // Known-clean slate, same as round 4's beforeAll.
-  await tab('text');
-  const panel = visiblePanel();
-  const settledCount = await waitForRegionListSettled(panel);
+  // Known-clean slate, same as round 4's beforeAll. T6630 round 6: cleanup
+  // now goes through the TIMELINE's own delete buttons (text-delete-region-*,
+  // item 3), not the Text tab panel's list -- see waitForRegionListSettled's
+  // doc comment for why the panel-based version stopped being reliable.
+  const settledCount = await waitForRegionListSettled();
   console.log('R5-EVIDENCE region list settled at count:', settledCount);
   for (let i = 0; i < 20; i++) {
-    const trash = panel.getByTitle('Delete region (and all its text)').first();
+    const trash = page.locator('[data-testid^="text-delete-region-"]').first();
     if ((await trash.count()) === 0) break;
     await trash.click();
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(300);
   }
-  const leftoverRegionCards = await panel.locator('[data-testid^="text-tab-region-"]').count();
-  console.log('R5-EVIDENCE region cards after cleanup:', leftoverRegionCards);
-  expect(leftoverRegionCards, 'cleanup left no leftover regions before this spec adds its own').toBe(0);
+  const leftover = await regionCount();
+  console.log('R5-EVIDENCE timeline regions after cleanup:', leftover);
+  expect(leftover, 'cleanup left no leftover regions before this spec adds its own').toBe(0);
 });
 
 test.afterAll(async () => { await page?.context()?.close(); });
@@ -174,8 +182,18 @@ test('R5-2: a freshly-created region\'s OWN seed element is editable immediately
   await clickTextTrackAt(0.6);
   await page.waitForTimeout(500);
 
+  // T6630 round 6 item 2: the panel now shows only the region under the
+  // playhead / selected -- creating this SECOND region moves selection (and
+  // the playhead) to it, so R5-1's region drops out of view here. Confirmed
+  // via the TIMELINE (unfiltered) that both regions really do exist.
+  expect(await regionCount(), 'both regions exist on the timeline').toBe(2);
   const regionCards = await panel.locator('[data-testid^="text-tab-region-"]').count();
-  expect(regionCards, 'exactly one MORE region exists (R5-1\'s + this one)').toBe(2);
+  expect(regionCards, 'the panel shows only the newly-selected region').toBe(1);
+  // wrappedAddRegion seeks the playhead to the new region's own startTime --
+  // confirms that half of round 6's item-2 fix (the OTHER half, selecting
+  // it back via the timeline after reload, is exercised further down).
+  const regionStartTime = await page.evaluate(() => document.querySelector('video')?.currentTime ?? null);
+  expect(regionStartTime).toBeGreaterThan(0);
 
   // Capture console + toast activity from this point forward only.
   const consoleErrors = [];
@@ -210,9 +228,22 @@ test('R5-2: a freshly-created region\'s OWN seed element is editable immediately
   await page.locator('.text-track').first().waitFor({ timeout: 60000 });
   await ensureVideoReady();
   await pauseVideo();
+  await waitForRegionListSettled();
+  // T6630 round 6 item 2: a fresh reload restores neither playhead position
+  // nor selection -- the (now playhead-scoped) panel needs the region
+  // SELECTED to show it. Click the region's own TIMELINE block (labeled
+  // with its element's text, regionLabel() in TextLayer.jsx) rather than
+  // raw-seeking video.currentTime: a raw seek raced the working-video
+  // source's own multi-stage swap after reload (still mid-swap well after
+  // "region list settled" per round4/5's own documented "10s+" restore
+  // chain) and got silently reset before the panel check ran. Selecting via
+  // the timeline goes through the app's own selectRegion path (already
+  // fixed to work in the SAME tick, round 6's other bug fix) and sidesteps
+  // the video-element race entirely.
+  await page.locator('[data-testid^="text-block-body-"]', { hasText: 'ROUND 5 FIX' }).click();
+  await page.waitForTimeout(300);
   await tab('text');
   const reloadedPanel = visiblePanel();
-  await waitForRegionListSettled(reloadedPanel);
   await expect(reloadedPanel.getByText('ROUND 5 FIX')).toBeVisible({ timeout: 10000 });
   await saveEvidence(page, 'R5-2-edit-persisted-after-reload');
 });

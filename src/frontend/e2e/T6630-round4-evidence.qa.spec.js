@@ -65,24 +65,30 @@ function visiblePanel() {
 async function regionCount() {
   return page.locator('[data-testid^="text-block-body-"]').count();
 }
-// The Text tab's region list depends on TWO async chains that don't finish
-// with the video/text-track DOM mounting: (1) working-video metadata must
+// The text region list depends on TWO async chains that don't finish with
+// the video/text-track DOM mounting: (1) working-video metadata must
 // resolve before the gated overlay-data fetch even fires (OverlayScreen's
 // `shouldLoad = ... && effectiveDuration && ...`), and (2) a SEPARATE
 // "fresh export" restore path can re-fire afterward. Traced empirically: the
-// panel did not reach its true, backend-matching count until ~10s+ after
+// list did not reach its true, backend-matching count until ~10s+ after
 // navigation. A fixed short wait races this and reads a partially-loaded (or
 // stale, pre-restore) list -- diagnosed via a one-off console-trace spec
 // after cleanup silently left real leftover regions behind on 3 consecutive
 // runs (each logged "0 leftover" while the backend still held N-1 stale
 // regions from the run before). Poll until the count stops moving instead of
 // trusting one read.
-async function waitForRegionListSettled(panel, { maxWaitMs = 15000, pollMs = 500 } = {}) {
+//
+// T6630 round 6: polls the TIMELINE's own blocks (regionCount(), unfiltered
+// by playhead), not the Text tab panel's list -- round 6 item 2 scopes that
+// panel to the region(s) under the CURRENT playhead, so it can legitimately
+// settle at 0/1 while real regions still exist (and are still loading)
+// elsewhere in time.
+async function waitForRegionListSettled({ maxWaitMs = 15000, pollMs = 500 } = {}) {
   let last = -1;
   let stableFor = 0;
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
-    const count = await panel.locator('[data-testid^="text-tab-region-"]').count();
+    const count = await regionCount();
     if (count === last) {
       stableFor += pollMs;
       if (stableFor >= 1000) return count;
@@ -93,6 +99,19 @@ async function waitForRegionListSettled(panel, { maxWaitMs = 15000, pollMs = 500
     await page.waitForTimeout(pollMs);
   }
   return last;
+}
+// T6630 round 6: region creation is timeline-click-only (the Settings-tab
+// "Add region" button this spec originally used is REMOVED -- round 6 item
+// 1, explicit user direction: "adding and removing regions is done on the
+// timeline"). Click real screen coordinates within the text lane's TRACK at
+// `fraction` of its width -- via the locator's own .click({position}) (not
+// a raw page.mouse.click at a pre-computed box) so Playwright scrolls the
+// track into view first.
+async function clickTextTrackAt(fraction) {
+  const track = page.locator('.text-track').first();
+  await track.scrollIntoViewIfNeeded();
+  const box = await track.boundingBox();
+  await track.click({ position: { x: box.width * fraction, y: box.height / 2 } });
 }
 
 test.beforeAll(async ({ browser }) => {
@@ -131,25 +150,22 @@ test.beforeAll(async ({ browser }) => {
   // real UI (works regardless of whether that data predates the v039
   // migration -- delete-by-id doesn't care about internal shape) so this
   // spec's own adds are unambiguous, real DB-loaded-record writes.
-  await tab('text');
-  const panel = visiblePanel();
-  // Wait for the region list to actually SETTLE (see waitForRegionListSettled's
-  // doc comment) rather than a fixed short wait -- the restore chain can still
-  // be in flight well after the video/text-track DOM has mounted.
-  const settledCount = await waitForRegionListSettled(panel);
-  console.log('R4-EVIDENCE region list settled at count:', settledCount);
+  //
+  // T6630 round 6: cleanup now goes through the TIMELINE's own delete
+  // buttons (text-delete-region-*, item 3), not the Text tab panel's list --
+  // round 6 item 2 scopes that panel to the region(s) under the CURRENT
+  // playhead, so a leftover region elsewhere in time would be invisible to
+  // (and undeletable via) the old panel-based loop.
+  await waitForRegionListSettled();
   for (let i = 0; i < 20; i++) {
-    const trash = panel.getByTitle('Delete region (and all its text)').first();
+    const trash = page.locator('[data-testid^="text-delete-region-"]').first();
     if ((await trash.count()) === 0) break;
     await trash.click();
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(300);
   }
-  // Measure the panel's own region cards, not regionCount() -- regionCount()
-  // reads TIMELINE blocks, a separate render surface that (per the race just
-  // guarded above) is not guaranteed to reflect the same instant.
-  const leftoverRegionCards = await panel.locator('[data-testid^="text-tab-region-"]').count();
-  console.log('R4-EVIDENCE region cards after cleanup:', leftoverRegionCards);
-  expect(leftoverRegionCards, 'cleanup left no leftover regions before this spec adds its own').toBe(0);
+  const leftover = await regionCount();
+  console.log('R4-EVIDENCE timeline regions after cleanup:', leftover);
+  expect(leftover, 'cleanup left no leftover regions before this spec adds its own').toBe(0);
 });
 
 test.afterAll(async () => { await page?.context()?.close(); });
@@ -159,7 +175,9 @@ test('G1: two elements in ONE region render SIMULTANEOUSLY on the real stage', a
   await tab('text');
   const panel = visiblePanel();
 
-  await panel.getByTestId('text-tab-add-region').click();
+  // T6630 round 6: region creation is timeline-click-only now (the
+  // Settings-tab button this used is removed, item 1).
+  await clickTextTrackAt(0.2);
   await page.waitForTimeout(400);
   expect(await regionCount()).toBe(1);
 
@@ -235,9 +253,31 @@ test('G3: adding a region/element does NOT move the settings panel (measured bbo
   const panel = visiblePanel();
   const settings = panel.getByTestId('text-settings-panel');
 
+  // T6630 round 6: region creation is timeline-click-only now (item 1).
+  // clickTextTrackAt scrolls to bring the (below-the-fold) timeline into
+  // view. That scroll happens on an INNER container, not the document
+  // (window.scrollTo(0,0) is a confirmed no-op here) -- and it moves the
+  // settings panel's VIEWPORT-relative position (boundingBox() is always
+  // viewport-relative) without moving the panel in the page's own flow at
+  // all. scrollIntoViewIfNeeded() on a fixed anchor isn't reliably
+  // deterministic either once the panel (round 6 item 5 made its height
+  // responsive) is taller than the viewport -- Chromium can pick either
+  // edge to align to depending on current position. Force the actual
+  // scrollable container's scrollTop to a known 0 directly instead --
+  // unambiguous, not an alignment heuristic.
+  const resetScroll = () => page.evaluate(() => {
+    // Zero EVERY scrollable element on the page -- harmless no-op on
+    // anything not actually scrolled, and doesn't require guessing which
+    // ancestor is "the" page-level scroll container.
+    document.querySelectorAll('*').forEach((el) => {
+      if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight + 1) el.scrollTop = 0;
+    });
+  });
+  await resetScroll();
   const before = await settings.boundingBox();
-  await panel.getByTestId('text-tab-add-region').click();
+  await clickTextTrackAt(0.5);
   await page.waitForTimeout(400);
+  await resetScroll();
   const after = await settings.boundingBox();
 
   console.log('G3 settings bbox before:', JSON.stringify(before), 'after:', JSON.stringify(after));
