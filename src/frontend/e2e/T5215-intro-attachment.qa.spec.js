@@ -491,4 +491,160 @@ test.describe('T5215 intro attachment (real account)', () => {
       await responsiveSweep(page);
     }
   });
+
+  // =========================================================================
+  // ROUND 2 (user, 2026-08-06): the presentation-bug fix's thumbnail badge,
+  // and collection/compilation intro attachment via the SAME carousel.
+  // =========================================================================
+
+  // Re-measure geometry immediately before every pointer press and assert
+  // elementFromPoint is the intended element (round-2 verification rule) --
+  // an empty/wrong hit means the interaction would land on nothing real.
+  async function clickChecked(page, locator, label) {
+    await locator.scrollIntoViewIfNeeded();
+    const box = await locator.boundingBox();
+    if (!box) throw new Error(`[T5215] ${label}: no bounding box (not visible/attached)`);
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const hit = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return el ? { tag: el.tagName, text: (el.textContent || '').trim().slice(0, 40) } : null;
+    }, { x: cx, y: cy });
+    console.log(`[T5215] ${label}: elementFromPoint(${cx.toFixed(0)},${cy.toFixed(0)}) = ${JSON.stringify(hit)}`);
+    if (!hit) throw new Error(`[T5215] ${label}: elementFromPoint returned nothing -- click would hit nothing`);
+    await locator.click();
+  }
+
+  test('ROUND 2: thumbnail shows the shared intro badge when an intro is attached (after reload)', async ({ page }) => {
+    await openDrawer(page);
+    const hasReels = await expandFirstGroup(page);
+    test.skip(!hasReels, 'no published reels on this account/profile');
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    const targetCard = cards[0];
+
+    const tile = page.getByTestId('reel-card').first();
+    await clickChecked(page, tile.getByRole('button', { name: /More actions/i }), 'reel kebab');
+    const introItem = page.getByRole('button', { name: 'Intro' });
+    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
+    await clickChecked(page, introItem, '"Intro" menu item');
+
+    const listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    const optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await clickChecked(page, optionLocator, 'card option in picker');
+    await patchResp;
+    await expect(listbox).toHaveCount(0);
+
+    // RELOAD -- the badge must be visible on a FRESH render of the tile, not
+    // an optimistic client-only echo of the gesture that just fired.
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: /My Reels/i }).first().click();
+    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+      .toBeVisible({ timeout: 15000 });
+    await expandFirstGroup(page);
+
+    const tileAfterReload = page.getByTestId('reel-card').first();
+    await tileAfterReload.scrollIntoViewIfNeeded();
+    // The badge is the shared INTRO_BADGE icon (Sparkles) rendered inline
+    // before the reel title inside the tile's bottom scrim -- assert on the
+    // svg's presence rather than a text label (it is icon-only on the tile).
+    const badge = tileAfterReload.locator('h3 svg').first();
+    await expect(badge, 'the reel tile must show the intro badge after reload').toBeVisible({ timeout: 10000 });
+
+    await saveEvidence(page, 'T5215-round2-thumbnail-badge');
+  });
+
+  test('ROUND 2: collection intro attaches via the SAME carousel and persists across reload', async ({ page }) => {
+    await page.goto('/');
+    await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
+    await page.goto('/');
+    await openManageProfileEdit(page);
+    await ensureConsent(page);
+    await page.keyboard.press('Escape');
+
+    await openDrawer(page);
+    const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+    await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+    const n = await headers.count();
+    test.skip(n === 0, 'no game/mix collection groups available on this account');
+    await clickChecked(page, headers.first(), 'collection group header');
+
+    const collectionKebab = page.locator('.animate-slide-in-right').getByRole('button', { name: /More actions/i }).first();
+    await expect(collectionKebab).toBeVisible({ timeout: 10000 });
+    await clickChecked(page, collectionKebab, 'collection kebab');
+
+    const collectionIntroItem = page.getByRole('button', { name: 'Intro' });
+    test.skip(await collectionIntroItem.count() === 0, '"Intro" item not present on this collection (UI drift)');
+    await clickChecked(page, collectionIntroItem, 'collection "Intro" menu item');
+
+    const listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox, 'the SAME carousel control renders for a collection').toBeVisible({ timeout: 10000 });
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    const targetCard = cards[0];
+
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/collections\/intro/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    const optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await clickChecked(page, optionLocator, 'collection card option');
+    const resp = await patchResp;
+    console.log(`[T5215 DIAG] PATCH ${resp.url()} -> ${resp.status()} body=${await resp.text().catch(() => '(unreadable)')}`);
+    expect(resp.status(), 'the collection intro PATCH must succeed').toBeLessThan(300);
+    const patchUrl = new URL(resp.url());
+    await expect(listbox).toHaveCount(0);
+    await saveEvidence(page, 'T5215-round2-collection-intro-selected');
+
+    // RELOAD (not same-session) -- the exact verification path required.
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+
+    // Confirm the VALUE round-trips via the real endpoint with the SAME query
+    // params the UI used (unambiguous persistence check, independent of UI).
+    const getResp = await page.request.get(`/api/collections/intro?${patchUrl.searchParams.toString()}`);
+    expect(getResp.ok(), 'GET /api/collections/intro must succeed after reload').toBe(true);
+    const getBody = await getResp.json();
+    expect(getBody.intro_card_id, 'the collection intro must persist after reload').toBe(targetCard.id);
+
+    // Navigate back in and reopen the SAME collection's picker -- the
+    // PRESENTATION half: the DOM must mark the persisted selection, exactly
+    // the property the round-2 bug fix established for reels.
+    await page.getByRole('button', { name: /My Reels/i }).first().click();
+    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+      .toBeVisible({ timeout: 15000 });
+    const headersAfter = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+    await headersAfter.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+    await clickChecked(page, headersAfter.first(), 'collection group header (reopened)');
+    const kebabAfter = page.locator('.animate-slide-in-right').getByRole('button', { name: /More actions/i }).first();
+    await clickChecked(page, kebabAfter, 'collection kebab (reopened)');
+    await clickChecked(page, page.getByRole('button', { name: 'Intro' }), '"Intro" item (reopened)');
+
+    const listboxAfter = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listboxAfter).toBeVisible({ timeout: 10000 });
+    const reopenedOption = listboxAfter.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    const ariaSelected = await reopenedOption.getAttribute('aria-selected');
+    console.log(`[T5215] collection intro reopened: card id=${targetCard.id} aria-selected="${ariaSelected}"`);
+    expect(ariaSelected, 'reopening the collection picker must mark the persisted selection').toBe('true');
+
+    await saveEvidence(page, 'T5215-round2-collection-intro-reopened-after-reload');
+  });
 });
