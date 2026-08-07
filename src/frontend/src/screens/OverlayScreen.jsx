@@ -50,8 +50,11 @@ import { clipGameClock } from '../utils/timeFormat';
 // T5225: a newly clicked-to-add text block needs SOME starting spec so it's
 // immediately visible/editable -- mirrors addHighlightRegion materializing
 // seed keyframes so the user sees something on screen before their first edit.
+// No `text` field: useTextOverlays.js's addRegion/addElement always compute
+// an individually-identifying placeholder ("Text region N, element M",
+// T6630 round 7 item 3) and override whatever's here, same as position/align
+// below -- a static default here would be dead code.
 const DEFAULT_TEXT_SPEC = {
-  text: 'Your text',
   font: FontKey.ANTON,
   size: 0.06,
   color: '#FFFFFF',

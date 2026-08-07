@@ -100,7 +100,7 @@ export default function useTextOverlays() {
   // `spec.align` are overridden with a DEFAULT PRESET (round 4 item 2: a new
   // element must never spawn as "Custom position" -- the user must see text
   // on screen immediately). A fresh region has no siblings, so this is always
-  // bottom-center (pickDefaultPreset's top priority).
+  // top-right (pickDefaultPreset's top priority, round 7 direction).
   const addRegion = useCallback((clickTime, spec) => {
     const startTime = Math.max(0, clickTime);
     const endTime = duration != null
@@ -108,7 +108,16 @@ export default function useTextOverlays() {
       : startTime + DEFAULT_TEXT_DURATION;
 
     const preset = pickDefaultPreset([]);
-    const elementSpec = { ...spec, position: { x: preset.x, y: preset.y }, align: preset.align };
+    // T6630 round 7 item 3: "instead of 'Your text' it should say 'text
+    // region 1, element 1' ... so they are all individual" -- a static
+    // default collided across every new region/element, making multiple
+    // blank ones indistinguishable before the user types real text. N is
+    // this region's 1-based position among ALL regions; a fresh region's
+    // seed is always element 1 within it. Placeholder seed content, not a
+    // persistent label field -- overrides whatever spec.text the caller
+    // passed, same as position/align already do below.
+    const regionLabel = `Text region ${textOverlays.length + 1}, element 1`;
+    const elementSpec = { ...spec, text: regionLabel, position: { x: preset.x, y: preset.y }, align: preset.align };
     const regionId = generateRegionId();
     // T6630 round 5 bug fix: the backend's add_text new-region branch NEVER
     // uses a client-sent element id -- it derives the seed element's id
@@ -132,18 +141,23 @@ export default function useTextOverlays() {
 
     setTextOverlays(prev => [...prev, newRegion]);
     return newRegion;
-  }, [duration]);
+  }, [duration, textOverlays]);
 
   // Appends a NEW ELEMENT into an EXISTING region -- the region's timing is
   // untouched, and NO sibling element's spec/enabled is ever read-modified
   // (only the new element is added to the array; every existing element
   // object is carried over by reference, unchanged).
   const addElement = useCallback((regionId, spec) => {
-    const region = textOverlays.find(r => r.id === regionId);
-    if (!region) return null;
+    const regionIndex = textOverlays.findIndex(r => r.id === regionId);
+    if (regionIndex === -1) return null;
+    const region = textOverlays[regionIndex];
 
     const preset = pickDefaultPreset(region.elements.map(el => el.spec));
-    const elementSpec = { ...spec, position: { x: preset.x, y: preset.y }, align: preset.align };
+    // T6630 round 7 item 3: same individually-identifying default as
+    // addRegion above -- N is THIS region's 1-based position among all
+    // regions, M is the new element's 1-based position within it.
+    const elementLabel = `Text region ${regionIndex + 1}, element ${region.elements.length + 1}`;
+    const elementSpec = { ...spec, text: elementLabel, position: { x: preset.x, y: preset.y }, align: preset.align };
     const newElement = { id: generateElementId(), spec: elementSpec, enabled: true };
 
     const updatedRegion = { ...region, elements: [...region.elements, newElement] };

@@ -46,7 +46,10 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     expect(region.endTime).toBeGreaterThan(region.startTime);
     expect(region.elements).toHaveLength(1);
     expect(region.elements[0].enabled).toBe(true);
-    expect(region.elements[0].spec.text).toBe('GOAL');
+    // T6630 round 7 item 3: the seed element's text is a computed,
+    // individually-identifying placeholder -- NOT whatever baseSpec()
+    // passed in (overridden, same as position/align already were).
+    expect(region.elements[0].spec.text).toBe('Text region 1, element 1');
 
     const inState = result.current.textOverlays.find((r) => r.id === region.id);
     expect(inState).toBeTruthy();
@@ -62,9 +65,10 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     // addRegion must override it, not pass it through.
     act(() => { region = result.current.addRegion(0, baseSpec()); });
 
-    // bottom-center is pickDefaultPreset's top priority for a fresh region.
-    expect(region.elements[0].spec.position).toEqual({ x: 0.5, y: 0.82 });
-    expect(region.elements[0].spec.align).toBe('center');
+    // T6630 round 7: top-right is pickDefaultPreset's top priority now
+    // (fresh user direction, was bottom-center in round 4).
+    expect(region.elements[0].spec.position).toEqual({ x: 0.92, y: 0.08 });
+    expect(region.elements[0].spec.align).toBe('right');
   });
 
   it('addRegion assigns a client-minted id distinct across two adds (optimistic create)', () => {
@@ -101,6 +105,20 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
 
     expect(region.elements[0].id).toBe(`${region.id}_el0`);
   });
+
+  it('T6630 round 7 item 3: each new region gets an individually-identifying default label, not a static collision-prone one', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let first, second, third;
+    act(() => { first = result.current.addRegion(0, baseSpec()); });
+    act(() => { second = result.current.addRegion(3, baseSpec()); });
+    act(() => { third = result.current.addRegion(6, baseSpec()); });
+
+    expect(first.elements[0].spec.text).toBe('Text region 1, element 1');
+    expect(second.elements[0].spec.text).toBe('Text region 2, element 1');
+    expect(third.elements[0].spec.text).toBe('Text region 3, element 1');
+  });
 });
 
 describe('useTextOverlays - addElement appends into an EXISTING region (T6630 round 4)', () => {
@@ -121,6 +139,23 @@ describe('useTextOverlays - addElement appends into an EXISTING region (T6630 ro
     expect(updatedRegion.elements).toHaveLength(2);
     expect(updatedRegion.startTime).toBe(region.startTime); // timing unchanged
     expect(updatedRegion.endTime).toBe(region.endTime);
+  });
+
+  it('T6630 round 7 item 3: an appended element gets "Text region N, element M" -- N by array position, M by count within the region', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let regionA, regionB;
+    act(() => { regionA = result.current.addRegion(0, baseSpec()); }); // region 1
+    act(() => { regionB = result.current.addRegion(5, baseSpec()); }); // region 2
+
+    let secondInB;
+    act(() => { secondInB = result.current.addElement(regionB.id, baseSpec()); });
+    expect(secondInB.spec.text).toBe('Text region 2, element 2'); // regionB is array index 1 -> N=2; 2nd element -> M=2
+
+    let secondInA;
+    act(() => { secondInA = result.current.addElement(regionA.id, baseSpec()); });
+    expect(secondInA.spec.text).toBe('Text region 1, element 2'); // regionA is array index 0 -> N=1
   });
 
   it('THE BUG THIS GUARDS: two elements added into the SAME region share ONE time window (both render together)', () => {
@@ -159,17 +194,17 @@ describe('useTextOverlays - addElement appends into an EXISTING region (T6630 ro
     expect(firstAfter.enabled).toBe(true); // untouched
   });
 
-  it('addElement picks the NEXT available default preset (bottom-center taken -> center)', () => {
+  it('addElement picks the NEXT available default preset (top-right taken -> top-center)', () => {
     const { result } = renderHook(() => useTextOverlays());
     act(() => result.current.initializeWithDuration(10));
 
     let region;
-    act(() => { region = result.current.addRegion(0, baseSpec()); }); // takes bottom-center
+    act(() => { region = result.current.addRegion(0, baseSpec()); }); // takes top-right (round 7 priority)
 
     let element;
     act(() => { element = result.current.addElement(region.id, baseSpec()); });
 
-    expect(element.spec.position).toEqual({ x: 0.5, y: 0.45 }); // center-middle
+    expect(element.spec.position).toEqual({ x: 0.5, y: 0.08 }); // top-middle
     expect(element.spec.align).toBe('center');
   });
 
@@ -320,6 +355,10 @@ describe('useTextOverlays - updateElementSpec targets ONE element (T6630 round 4
     const { result } = renderHook(() => useTextOverlays());
     act(() => result.current.initializeWithDuration(10));
 
+    // addRegion/addElement override spec.text with a computed placeholder
+    // (round 7 item 3) -- the 'First'/'Second' passed in here never survive
+    // creation; only updateElementSpec (a different mutator, unaffected)
+    // respects an explicit spec verbatim, which is what this test checks.
     let region;
     act(() => { region = result.current.addRegion(0, baseSpec({ text: 'First' })); });
     let second;
@@ -328,7 +367,7 @@ describe('useTextOverlays - updateElementSpec targets ONE element (T6630 round 4
     act(() => { result.current.updateElementSpec(second.id, baseSpec({ text: 'Second Edited' })); });
 
     const first = result.current.textOverlays[0].elements.find((el) => el.id !== second.id);
-    expect(first.spec.text).toBe('First'); // untouched
+    expect(first.spec.text).toBe('Text region 1, element 1'); // untouched (its own computed default, not "First")
   });
 });
 
