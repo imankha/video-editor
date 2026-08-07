@@ -87,6 +87,16 @@ export function IntroCardCarousel({
   const isExplicit = selectedId !== null && selectedId !== 0;
   const isNone = selectedId === 0;
   const isInherit = selectedId === null;
+  // Round 5 (user, 2026-08-07): "when I first try to attach an intro card to
+  // a card that doesn't have one, ... 'no intro' should [read as] selected."
+  // The RAW value stays null (never rewritten here -- that would corrupt the
+  // inherit-vs-explicit-none distinction resolve_intro_card_id's pinned
+  // matrix relies on); this only changes which tile shows the "Selected"
+  // PRESENTATION when inheriting resolves to nothing anyway -- i.e. there is
+  // no profile default to inherit, so "follow the default" and "no intro"
+  // are behaviourally identical right now. When a default DOES exist, the
+  // inherit state keeps its own distinct "Following" look (unchanged).
+  const isInheritWithNothingToInherit = isInherit && !defaultCard;
   const explicitCard = isExplicit ? sorted.find((c) => c.id === selectedId) : null;
   // What will actually PLAY (for the exposure notice) — explicit card, or the
   // default when inheriting and one exists.
@@ -101,7 +111,7 @@ export function IntroCardCarousel({
         aria-label="Intro card"
       >
         <NoIntroTile
-          selected={isNone}
+          selected={isNone || isInheritWithNothingToInherit}
           onSelect={() => {
             setPreviewCardId(null);
             onSelect(0);
