@@ -78,6 +78,29 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     expect(first.id).not.toBe(second.id);
     expect(result.current.textOverlays).toHaveLength(2);
   });
+
+  it('T6630 round 5 regression: the seed element id MATCHES the backend\'s own derivation, not a random client id', () => {
+    /* Bug: the backend's add_text new-region branch (overlay.py) NEVER uses
+     * a client-sent element id for a brand-new region -- it derives the
+     * seed element's id itself as `${region_id}_el0` (region_id = the id
+     * this same addRegion call sends as the region's own id). addRegion
+     * used to call generateElementId() instead, minting a DIFFERENT id than
+     * what the server actually stored. selectedElementId (set from THIS
+     * return value) then pointed at an id the backend had never heard of --
+     * every edit to a freshly created region's first element (before a
+     * second element existed) 404'd with "Text element {id} not found" and
+     * silently fired the generic "That highlight change didn't save" toast
+     * (overlayActionStore.js's rejection text is generic across action
+     * types). Pin the derivation so a future edit can't reintroduce a
+     * client-random id here. */
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(2, baseSpec()); });
+
+    expect(region.elements[0].id).toBe(`${region.id}_el0`);
+  });
 });
 
 describe('useTextOverlays - addElement appends into an EXISTING region (T6630 round 4)', () => {
@@ -429,6 +452,33 @@ describe('useTextOverlays - selection (T6630 round 4)', () => {
 
     expect(result.current.selectedRegionId).toBeNull();
     expect(result.current.selectedElementId).toBeNull();
+  });
+
+  it('T6630 round 5 regression: selectRegion(id, elementId, knownRegion) selects a JUST-CREATED region in the SAME tick', () => {
+    /* Bug: wrappedAddRegion (OverlayScreen.jsx) calls addRegion() then
+     * immediately selectRegion(newRegion.id, ...) in the SAME event handler.
+     * Without `knownRegion`, selectRegion looks `newRegion.id` up in the
+     * `textOverlays` this useCallback closed over -- a snapshot from BEFORE
+     * addRegion's setState, so the just-added region isn't in it yet (React
+     * state is never synchronously fresh within the tick that set it, the
+     * same trap T5644 already guards every mutator against by returning the
+     * entity directly). The lookup silently missed, `selectedElementId`
+     * landed on null, and the settings panel showed "Select a text element"
+     * instead of the brand-new element's settings -- right after creating
+     * it. This test calls both in ONE act() to reproduce the real same-tick
+     * sequence (the OTHER selection tests above call addRegion in its own
+     * act(), which flushes the state update first and never hit this bug). */
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => {
+      region = result.current.addRegion(0, baseSpec());
+      result.current.selectRegion(region.id, region.elements[0].id, region);
+    });
+
+    expect(result.current.selectedRegionId).toBe(region.id);
+    expect(result.current.selectedElementId).toBe(region.elements[0].id);
   });
 });
 

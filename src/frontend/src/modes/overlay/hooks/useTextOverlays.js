@@ -49,13 +49,25 @@ export default function useTextOverlays() {
   // element to show settings for the moment a region is selected (design:
   // "selecting a region exposes all of its elements... selecting an element
   // exposes its settings").
-  const selectRegion = useCallback((regionId, elementId = null) => {
+  // T6630 round 5 bug fix: `knownRegion` lets a caller that just MINTED a
+  // region (addRegion's return value, not yet visible in the `textOverlays`
+  // this callback closed over) select it in the SAME tick. Without it,
+  // wrappedAddRegion's `selectRegion(newRegion.id, newRegion.elements[0].id)`
+  // looked `newRegion.id` up in a `textOverlays` snapshot from BEFORE
+  // addRegion's setState -- found nothing, and silently fell through to
+  // `setSelectedElementId(null)` (T5644 pattern: React state is never
+  // synchronously fresh within the tick that set it; a stale-closure lookup
+  // is the same trap the T5644 fix already guards every OTHER mutator
+  // against by returning the entity directly instead of re-reading state).
+  // Every other caller (selecting an EXISTING, already-rendered region) is
+  // unaffected -- it omits `knownRegion` and keeps the original lookup.
+  const selectRegion = useCallback((regionId, elementId = null, knownRegion = null) => {
     setSelectedRegionId(regionId);
     if (!regionId) {
       setSelectedElementId(null);
       return;
     }
-    const region = textOverlays.find((r) => r.id === regionId);
+    const region = knownRegion || textOverlays.find((r) => r.id === regionId);
     if (elementId && region?.elements.some((el) => el.id === elementId)) {
       setSelectedElementId(elementId);
     } else {
@@ -86,9 +98,22 @@ export default function useTextOverlays() {
 
     const preset = pickDefaultPreset([]);
     const elementSpec = { ...spec, position: { x: preset.x, y: preset.y }, align: preset.align };
-    const element = { id: generateElementId(), spec: elementSpec, enabled: true };
+    const regionId = generateRegionId();
+    // T6630 round 5 bug fix: the backend's add_text new-region branch NEVER
+    // uses a client-sent element id -- it derives the seed element's id
+    // itself as `${region_id}_el0` (overlay.py, mirroring v039's migration
+    // convention), because `data.id` on that wire call names the REGION, not
+    // the element. Calling generateElementId() here mints a DIFFERENT id
+    // than the one the backend actually stores, so this element's own local
+    // state (selectedElementId, held here) pointed at an id the server had
+    // never heard of -- every edit to a freshly created region's first
+    // element (before a second element existed) 404'd with "Text element
+    // {id} not found" and silently fired the generic "didn't save" toast.
+    // Deriving the SAME id client-side means both sides agree without a
+    // round trip -- no wire contract change needed.
+    const element = { id: `${regionId}_el0`, spec: elementSpec, enabled: true };
     const newRegion = {
-      id: generateRegionId(),
+      id: regionId,
       startTime,
       endTime: Math.max(endTime, startTime + MIN_TEXT_DURATION),
       elements: [element],

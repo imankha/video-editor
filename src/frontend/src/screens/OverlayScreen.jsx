@@ -978,7 +978,7 @@ export function OverlayScreen({
         overlayActions.createText(projectId, newRegion.id, el.spec, newRegion.startTime, newRegion.endTime));
     }
     setOverlayChangedSinceExport(true);
-    if (newRegion) selectRegion(newRegion.id, newRegion.elements[0].id);
+    if (newRegion) selectRegion(newRegion.id, newRegion.elements[0].id, newRegion);
     return newRegion?.id ?? null;
   }, [addRegion, projectId, canSyncActions, setOverlayChangedSinceExport, selectRegion]);
 

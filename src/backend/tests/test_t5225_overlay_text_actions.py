@@ -291,6 +291,39 @@ class TestUpdateTextSpec:
         assert element["spec"]["text"] == "NEW TEXT"
         assert element["spec"]["color"] == "#00FF00"
 
+    def test_update_text_spec_on_a_freshly_created_regions_own_seed_element(
+        self, project_with_working_video
+    ):
+        """T6630 round 5 regression: a brand-new region's FIRST edit (type
+        text / move preset) before any second element exists must not 404.
+
+        This must NOT read the element id back from stored state (that was
+        already covered by test_update_text_spec_targets_an_element_across_
+        regions above, and passed even while the real bug shipped -- the bug
+        was client-side: useTextOverlays.js's addRegion minted its OWN
+        random id for the seed element instead of the derived id the backend
+        actually stores, so the id the frontend held in selectedElementId
+        never matched anything server-side). Compute the id the FIXED
+        frontend now computes independently (`${region_id}_el0`, matching
+        overlay.py's own derivation) and use THAT directly, mirroring the
+        real wire sequence with no extra round trip.
+        """
+        project_id = project_with_working_video
+        region_id = "txt_seed_edit"
+        _add_region(project_id, region_id)
+        frontend_derived_element_id = f"{region_id}_el0"
+
+        resp = _post(project_id, {
+            "action": "update_text_spec",
+            "target": {"id": frontend_derived_element_id},
+            "data": {"spec": _valid_spec(text="EDITED SEED")},
+        })
+        assert resp.status_code == 200, resp.text  # NOT a 404 "Text element ... not found"
+
+        regions = _stored_text_overlays(project_id)
+        assert regions[0]["elements"][0]["id"] == frontend_derived_element_id
+        assert regions[0]["elements"][0]["spec"]["text"] == "EDITED SEED"
+
     def test_update_text_spec_invalid_spec_returns_400(self, project_with_working_video):
         project_id = project_with_working_video
         _add_region(project_id, "txt_edit2")
