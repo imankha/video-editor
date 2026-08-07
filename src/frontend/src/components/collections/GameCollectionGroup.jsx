@@ -7,7 +7,6 @@ import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { REEL } from '../../config/themeColors';
 import { RATIO_ORDER, splitByAspect } from '../../constants/aspectRatios';
 import { compareGameTime } from '../../utils/timeFormat';
-import { collectionIntroKey } from './introBadgeKey';
 
 /**
  * GameCollectionGroup - Container for one scope's collections (T3610 §0B).
@@ -36,7 +35,6 @@ import { collectionIntroKey } from './introBadgeKey';
  * @param {Function=} onShare       - (definition, title) => void
  * @param {Function=} onCopyLink    - (definition) => void
  * @param {Function=} onIntro       - (definition, title) => void, the collection's OWN intro (T5215 round 2)
- * @param {Object=} introBadgesByKey - {key: {intro_card_id, intro_card_name}}, batch-resolved (T5215 round 3)
  */
 export function GameCollectionGroup({
   name,
@@ -51,7 +49,6 @@ export function GameCollectionGroup({
   onShare,
   onCopyLink,
   onIntro,
-  introBadgesByKey = {},
 }) {
   const ratioCounts = collection.ratio_counts || {};
   const ratioDurations = collection.ratio_durations || {};
@@ -124,7 +121,6 @@ export function GameCollectionGroup({
             onCopyLink={onCopyLink}
             leadingReelId={collection.leading_reel_id}
             onIntro={onIntro}
-            introBadge={shareScope ? introBadgesByKey[collectionIntroKey({ scope: shareScope, filter: {}, aspect_ratio: ratio })] : undefined}
           />
           {members
             ? (

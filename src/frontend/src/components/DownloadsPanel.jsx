@@ -18,8 +18,6 @@ import { useMoveReels } from '../hooks/useMoveReels';
 import { useProfileStore } from '../stores/profileStore';
 import { useIntroCardStore } from '../stores/introCardStore';
 import { IntroCardPicker } from './introcards/IntroCardPicker';
-import { collectionIntroKey } from './collections/introBadgeKey';
-import { RATIO_ORDER } from '../constants/aspectRatios';
 import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -203,76 +201,11 @@ export function DownloadsPanel({
       });
       if (resp.ok) {
         setCollectionIntroSelectedId(cardId);
-        // T5215 round 3: the header badge must appear immediately, not only
-        // after the next batch fetch/reload -- resolve this ONE collection's
-        // fresh state (id -> name) and merge it into the batch map in place.
-        const key = collectionIntroKey(introCollectionTarget.definition);
-        const getResp = await apiFetch(`${API_BASE}/api/collections/intro?${params}`);
-        if (getResp.ok) {
-          const fresh = await getResp.json();
-          setIntroBadgesByKey((prev) => ({ ...prev, [key]: { key, ...fresh } }));
-        }
       }
     } catch (err) {
       console.error('[DownloadsPanel] failed to set collection intro:', err);
     }
   };
-
-  // T5215 round 3: batch-resolve every VISIBLE collection's OWN intro badge in
-  // ONE request (mirrors the reel list's no-N+1 discipline) -- fires whenever
-  // the collections summary changes (new/changed reels can add or drop an
-  // eligible (scope, ratio) bucket). Read-only refetch, not a write, so this
-  // is an ordinary data-loading effect, not the banned reactive-persistence
-  // pattern (nothing here calls a PATCH).
-  const [introBadgesByKey, setIntroBadgesByKey] = useState({});
-  useEffect(() => {
-    const summary = collections.summary;
-    const items = [];
-    (summary?.smart_collections || []).forEach((sc) => {
-      RATIO_ORDER.forEach((ratio) => {
-        if (sc.ratio_eligible?.[ratio]) {
-          items.push({ scope_type: 'all', tags: sc.tags || null, aspect_ratio: ratio });
-        }
-      });
-    });
-    (summary?.games || []).forEach((g) => {
-      RATIO_ORDER.forEach((ratio) => {
-        if (g.ratio_eligible?.[ratio]) {
-          items.push({ scope_type: 'game', game_id: g.game_id, aspect_ratio: ratio });
-        }
-      });
-    });
-    if (summary?.mixes) {
-      RATIO_ORDER.forEach((ratio) => {
-        if (summary.mixes.ratio_eligible?.[ratio]) {
-          items.push({ scope_type: 'mixes', aspect_ratio: ratio });
-        }
-      });
-    }
-    if (items.length === 0) { setIntroBadgesByKey({}); return; }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        // GET (not POST): this is a pure read, no collection_settings row is
-        // ever written here -- keeping it a GET is what lets this fetch live
-        // in a plain data-loading effect without the reactive-persistence
-        // lint rule (which flags non-GET verbs in effects as a likely
-        // write-as-side-effect) misreading it as a banned pattern.
-        const resp = await apiFetch(
-          `${API_BASE}/api/collections/intro/batch?items=${encodeURIComponent(JSON.stringify(items))}`,
-        );
-        if (!resp.ok || cancelled) return;
-        const { results } = await resp.json();
-        const map = {};
-        results.forEach((r) => { map[r.key] = r; });
-        if (!cancelled) setIntroBadgesByKey(map);
-      } catch (err) {
-        console.error('[DownloadsPanel] failed to batch-resolve collection intro badges:', err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [collections.summary]);
 
   const onCopyCollectionLink = async (definition) => {
     try {
@@ -612,7 +545,6 @@ export function DownloadsPanel({
             onShareCollection={onShareCollection}
             onCopyCollectionLink={onCopyCollectionLink}
             onIntroCollection={onIntroCollection}
-            introBadgesByKey={introBadgesByKey}
           />
         </div>
       </div>
