@@ -174,7 +174,7 @@ def validate_zoom(value: Any) -> float | None:
 
 # Per-profile default for the duration gate (epic decision 2026-08-06); the
 # real stored value lives on `user_settings.intro_min_duration_seconds`
-# (profile_db v037) and is only ever missing in the deploy->migrate window or
+# (profile_db v041) and is only ever missing in the deploy->migrate window or
 # on a legacy row, both of which degrade to this constant.
 DEFAULT_INTRO_MIN_DURATION_SECONDS = 20.0
 
@@ -246,7 +246,7 @@ def get_default_intro_card(cursor):
 
 def get_intro_min_duration(cursor) -> float:
     """The profile's minimum-reel-duration threshold for the inherit-the-default
-    resolution path (T5215). Column-guarded (v037 deploy->migrate window) and
+    resolution path (T5215). Column-guarded (v041 deploy->migrate window) and
     guarded again for a missing/legacy row -- both degrade to
     `DEFAULT_INTRO_MIN_DURATION_SECONDS`, never a crash."""
     if not column_exists(cursor, "user_settings", "intro_min_duration_seconds"):

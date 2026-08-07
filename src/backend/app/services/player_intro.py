@@ -48,14 +48,8 @@ import numpy as np
 from PIL import Image
 
 from app.schemas import TextSpec
-from app.services.intro_card_geometry import (
-    MOTION,
-    STAGGER_ORDER,
-    aspect_key,
-    band_kind,
-    geometry_for,
-    treatment_for,
-)
+from app.services.intro_card_geometry import MOTION, STAGGER_ORDER, aspect_key, band_kind, geometry_for, treatment_for
+from app.services.intro_card_geometry import layout as compute_layout
 from app.services.intro_cards import derive_composition
 from app.services.text_render import render_text_layer
 
@@ -69,16 +63,9 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_intro_cards"
 # Bump whenever the RENDERER (filtergraph, defaults, motion wiring) changes so
 # stale cached cards from an old build rebuild. Distinct from the card's content
 # hash, which changes when the user edits the card.
-_CARD_VERSION = "v2-treatment-band"  # T6580 item 4: band + photo grade added
-
-# Default per-slot styling used ONLY when the card left a slot unstyled
-# (text_elements has no entry). A shadow keeps text legible over a photo. The
-# title borrows the treatment accent; facts stay near-white.
-_DEFAULT_TITLE_FONT = "anton"
-_DEFAULT_FACT_FONT = "oswald"
-_FACT_DEFAULT_COLOR = "#ffffff"
-_TITLE_SHADOW = {"blur": 0.06, "color": "#000000", "opacity": 0.55}
-_FACT_SHADOW = {"blur": 0.05, "color": "#000000", "opacity": 0.5}
+# T6640: template-owned typography + measured layout replaced per-slot styling
+# (text_elements is no longer read) -- every existing cache entry is stale.
+_CARD_VERSION = "v3-template-typography"
 
 
 # =============================================================================
@@ -289,6 +276,39 @@ def _render_vignette(v: dict | None, w: int, h: int) -> Image.Image | None:
     return Image.fromarray(rgba, "RGBA")
 
 
+def _render_seam_fade(
+    rect: dict, side: str, frac: float, target_hex: str, w: int, h: int,
+) -> Image.Image | None:
+    """T6640 (task §C "hard 50/50 seam"): a static RGBA overlay, sized to the
+    PHOTO RECT, that fades from transparent to `target_hex` (the treatment's own
+    background colour) at one edge — an inset photo (recruiting) then reads as
+    bleeding into the panel instead of a hard cut. A FLAT target colour (not a
+    per-pixel sample of the painted background) is deliberate: the browser
+    preview mirrors this with one CSS `linear-gradient(transparent, seamColor)`
+    (`introCardVisual.seamFadeCss`) — using the identical flat colour on both
+    sides is what keeps preview and export pixel-equivalent at the seam, which a
+    per-pixel Python-side gradient sample could not guarantee. `side`: 'right'
+    (recruiting/16:9, panel to the right of the photo) | 'bottom'
+    (recruiting/9:16, panel below) | 'none' (no seam -> None, no-op)."""
+    if side == "none" or frac <= 0:
+        return None
+    rw, rh = max(round(rect["w"] * w), 1), max(round(rect["h"] * h), 1)
+    r, g, b = _hex_to_rgb(target_hex)
+    rgba = np.zeros((rh, rw, 4), dtype=np.uint8)
+    rgba[..., 0], rgba[..., 1], rgba[..., 2] = r, g, b
+    if side == "right":
+        fade_w = max(int(rw * frac), 1)
+        ramp = np.zeros(rw, dtype=np.float64)
+        ramp[rw - fade_w:] = np.linspace(0.0, 255.0, fade_w)
+        rgba[..., 3] = ramp[None, :].astype(np.uint8)
+    else:  # "bottom"
+        fade_h = max(int(rh * frac), 1)
+        ramp = np.zeros(rh, dtype=np.float64)
+        ramp[rh - fade_h:] = np.linspace(0.0, 255.0, fade_h)
+        rgba[..., 3] = ramp[:, None].astype(np.uint8)
+    return Image.fromarray(rgba, "RGBA")
+
+
 def _render_band(band: dict | None, w: int, h: int) -> Image.Image | None:
     """A solid lower-third ground behind the text: `heightFrac` of the frame tall,
     filled at `opacity`, with the top `featherFrac` of the band fading in (no hard
@@ -339,92 +359,74 @@ def _even(n: int) -> int:
     return n if n % 2 == 0 else n + 1
 
 
-def _default_styling(kind: str, accent: str) -> dict:
-    if kind == "title":
-        return {"font": _DEFAULT_TITLE_FONT, "color": accent, "shadow": dict(_TITLE_SHADOW)}
-    return {"font": _DEFAULT_FACT_FONT, "color": _FACT_DEFAULT_COLOR, "shadow": dict(_FACT_SHADOW)}
+def _select_elements(
+    card: dict, field_values: dict, composition: str, aspect: str, accent: str,
+    frame_w: int, frame_h: int,
+) -> list[dict]:
+    """Resolve the SHOWN text elements in STAGGER_ORDER, then compute their
+    MEASURED layout in one pass (T6640 `intro_card_geometry.layout`). A slot with
+    blank text is OMITTED and logged (never drawn blank). Returns dicts with the
+    rendered TextSpec and the stagger index.
 
-
-def _merge_spec(styling: dict | None, text: str, slot: dict, kind: str, accent: str) -> TextSpec:
-    """Build a full TextSpec = card STYLING (font/colour/shadow/stroke) + slot
-    LAYOUT (size/position/maxWidth/align) + the resolved TEXT. Layout always wins
-    over anything stored on the styling spec, so the composition owns placement."""
-    base = dict(styling) if styling else _default_styling(kind, accent)
-    spec = {
-        "text": text,
-        "font": base.get("font", _DEFAULT_TITLE_FONT if kind == "title" else _DEFAULT_FACT_FONT),
-        "color": base.get("color", accent if kind == "title" else _FACT_DEFAULT_COLOR),
-        "size": slot["size"],
-        "align": slot["align"],
-        "position": {"x": slot["x"], "y": slot["y"]},
-        "maxWidth": slot["maxWidth"],
-        "animation": "none",
-    }
-    if base.get("shadow"):
-        spec["shadow"] = base["shadow"]
-    if base.get("stroke"):
-        spec["stroke"] = base["stroke"]
-    return TextSpec.model_validate(spec)
-
-
-def _select_elements(card: dict, field_values: dict, geo: dict, accent: str) -> list[dict]:
-    """Resolve the SHOWN text elements in STAGGER_ORDER. A slot with blank text is
-    OMITTED and logged (never drawn blank). Returns dicts with the rendered TextSpec
-    and the stagger index."""
-    slots = geo["slots"]
-    text_elements = card.get("text_elements") or {}
+    T6640: `text_elements` (the old per-slot STYLING blob) is NO LONGER READ —
+    decision 12 makes the TEMPLATE own every element's font/colour/shadow via a
+    fixed ROLE (`intro_card_geometry.ROLE_FOR_SLOT`); position/size are MEASURED,
+    not a fixed per-slot lookup, so a wrapped title can never collide with the
+    slot below it.
+    """
     shown_fields = card.get("shown_fields") or []
-    elements: list[dict] = []
+    texts: dict[str, str] = {}
 
     # title: the PROFILE's full name, ALWAYS (T6620) -- the name is a property of
     # the athlete, not of a card. card.title_text (a pre-T6570 grandfathered
     # override) is NO LONGER read: T6570 removed the only UI that could clear it,
     # so a legacy value trapped the card on a stale name with no escape hatch.
-    # The column is now dead and is nulled by profile_db migration v036. Styling
-    # keyed "title".
+    # The column is now dead and is nulled by profile_db migration v036.
     title_text = (field_values.get("full_name") or "").strip()
-    if "title" in slots:
-        if title_text:
-            elements.append({
-                "slot": "title",
-                "spec": _merge_spec(text_elements.get("title"), title_text, slots["title"], "title", accent),
-            })
-        else:
-            logger.info("[PlayerIntro] title omitted: profile full_name unset")
+    if title_text:
+        texts["title"] = title_text
+    else:
+        logger.info("[PlayerIntro] title omitted: profile full_name unset")
 
     # subtitle: FREE TEXT on the card (T6570) — a tournament name / sub-heading,
     # a property of THIS card (not the athlete). Orthogonal to composition; it
-    # never counts toward the fact-count. styling keyed "subtitle" (fact-like
-    # default). .get() column-guards the read for a pre-v035 card row.
+    # never counts toward the fact-count. .get() column-guards the read for a
+    # pre-v035 card row.
     subtitle_text = (card.get("subtitle_text") or "").strip()
-    if "subtitle" in slots:
-        if subtitle_text:
-            elements.append({
-                "slot": "subtitle",
-                "spec": _merge_spec(text_elements.get("subtitle"), subtitle_text, slots["subtitle"], "subtitle", accent),
-            })
-        else:
-            logger.info("[PlayerIntro] subtitle omitted: card has no subtitle_text")
+    if subtitle_text:
+        texts["subtitle"] = subtitle_text
+    else:
+        logger.info("[PlayerIntro] subtitle omitted: card has no subtitle_text")
 
-    # facts: ORDINAL geometry slot fact{i+1} <- SEMANTIC field shown_fields[i]
+    # facts: ORDINAL slot fact{i+1} <- SEMANTIC field shown_fields[i]
     for i, field in enumerate(shown_fields):
         slot_key = f"fact{i + 1}"
-        if slot_key not in slots:
-            logger.warning(f"[PlayerIntro] no geometry slot {slot_key} for field {field!r}; skipping")
-            continue
         value = (field_values.get(field) or "").strip()
         if not value:
             logger.info(f"[PlayerIntro] fact {field!r} omitted: profile value unset")
             continue
-        elements.append({
-            "slot": slot_key,
-            "spec": _merge_spec(text_elements.get(field), value, slots[slot_key], "fact", accent),
-        })
+        texts[slot_key] = value
 
-    # Stagger index = position in the shared STAGGER_ORDER (title, fact1..3).
-    order = {name: idx for idx, name in enumerate(STAGGER_ORDER)}
-    for el in elements:
-        el["stagger"] = order.get(el["slot"], 0)
+    # Stack in STAGGER_ORDER (title, subtitle, fact1..3) -- present slots only.
+    ordered = [(slot, texts[slot]) for slot in STAGGER_ORDER if slot in texts]
+    positions = compute_layout(composition, aspect, ordered, accent, frame_w, frame_h)
+
+    order_index = {name: idx for idx, name in enumerate(STAGGER_ORDER)}
+    elements: list[dict] = []
+    for slot, text in ordered:
+        pos = positions[slot]
+        spec = TextSpec.model_validate({
+            "text": text,
+            "font": pos["font"],
+            "color": pos["color"],
+            "size": pos["size"],
+            "align": pos["align"],
+            "position": {"x": pos["x"], "y": pos["y"]},
+            "maxWidth": pos["maxWidth"],
+            "shadow": pos["shadow"],
+            "animation": "none",
+        })
+        elements.append({"slot": slot, "spec": spec, "stagger": order_index[slot]})
     return elements
 
 
@@ -503,7 +505,7 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
     treatment = treatment_for(card["treatment"])
     accent = treatment["accent"]
 
-    elements = _select_elements(card, field_values, geo, accent)
+    elements = _select_elements(card, field_values, composition, aspect, accent, w, h)
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="rb_intro_build_"))
     try:
@@ -565,6 +567,23 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
                 parts.append(f"[{idx}:v]format=rgba[{name}]")
                 parts.append(f"{last}[{name}]overlay=x={px}:y={py}[with{name}]")
                 last = f"[with{name}]"
+                idx += 1
+
+            # --- Seam fade (T6640, task §C "hard 50/50 seam"): recruiting's
+            # inset photo fades to the treatment's own background colour at its
+            # inner edge, so the photo bleeds into the panel instead of a hard
+            # cut. Static PNG, same seamSide/seamFeather/seamColor the browser
+            # preview's CSS gradient reads (introCardVisual.seamFadeCss). -------
+            seam_side = geo["reflow"].get("seamSide", "none")
+            seam_feather = geo["reflow"].get("seamFeather", 0.0)
+            seam_img = _render_seam_fade(rect, seam_side, seam_feather, treatment["seamColor"], w, h)
+            if seam_img is not None:
+                seam_png = tmp_dir / "seam.png"
+                seam_img.save(seam_png)
+                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", seam_png.as_posix()]
+                parts.append(f"[{idx}:v]format=rgba[seam]")
+                parts.append(f"{last}[seam]overlay=x={px}:y={py}[withseam]")
+                last = "[withseam]"
                 idx += 1
 
             # --- Text ground: a treatment BAND (T6580 item 4) grounds the text in
@@ -629,9 +648,9 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
         cmd = ["ffmpeg", "-y", *inputs]
         audio_idx = idx
         if info["has_audio"]:
-            layout = "mono" if info["a_channels"] == 1 else "stereo"
+            audio_layout = "mono" if info["a_channels"] == 1 else "stereo"
             cmd += ["-f", "lavfi", "-i",
-                    f"anullsrc=channel_layout={layout}:sample_rate={info['a_rate']}"]
+                    f"anullsrc=channel_layout={audio_layout}:sample_rate={info['a_rate']}"]
 
         cmd += ["-filter_complex", filter_complex, "-map", "[v]"]
         if info["has_audio"]:
@@ -666,9 +685,10 @@ def _get_or_build_card(card: dict, field_values: dict, image_path: str | None, i
     composition = derive_composition(image_path is not None, card.get("shown_fields") or [])
     aspect = aspect_key(info["width"], info["height"])
     try:
-        geo = geometry_for(composition, aspect)
         accent = treatment_for(card["treatment"])["accent"]
-        elements = _select_elements(card, field_values, geo, accent)
+        elements = _select_elements(
+            card, field_values, composition, aspect, accent, info["width"], info["height"],
+        )
     except Exception as e:
         logger.error(f"[PlayerIntro] cannot resolve card layout: {e}", exc_info=True)
         return None

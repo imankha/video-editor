@@ -1063,7 +1063,7 @@ def ensure_database():
                 focal_x           REAL,
                 focal_y           REAL,
                 zoom              REAL,
-                text_elements     BLOB,
+                text_elements     BLOB,  -- DEAD (T6640): typography is TEMPLATE-owned via ROLE_FOR_SLOT; never read. Was per-slot user styling; nulled by v038. Kept only so old rows still open.
                 duration          REAL NOT NULL DEFAULT 4.0,
                 is_default        INTEGER NOT NULL DEFAULT 0,
                 created_at        TEXT DEFAULT (datetime('now')),
@@ -1251,12 +1251,12 @@ def ensure_database():
 
         # User settings - persisted preferences (synced to R2)
         # Uses JSON for flexible settings storage without schema changes
-        # intro_min_duration_seconds (T5215, profile_db v037): the reel-length
+        # intro_min_duration_seconds (T5215, profile_db v041): the reel-length
         # floor below which the default intro card is not applied on the
         # inherit-the-default resolution path (app.services.intro_cards.
         # resolve_intro_card_id). A typed column, not settings_json -- it is
         # read on every reel resolution and edited via a dedicated endpoint.
-        # Kept in step with migrations/profile_db/v037_intro_min_duration.py so
+        # Kept in step with migrations/profile_db/v041_intro_min_duration.py so
         # a fresh profile gets the column here and an existing one gets it there.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_settings (

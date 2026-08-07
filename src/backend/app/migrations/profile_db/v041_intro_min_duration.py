@@ -1,13 +1,11 @@
 """
-v037: Add `user_settings.intro_min_duration_seconds` — the per-profile reel-length
+v041: Add `user_settings.intro_min_duration_seconds` — the per-profile reel-length
 floor below which the default intro card is not applied (T5215).
 
-Verified 2026-08-06: master profile_db head is v036
-(v036_null_dead_intro_card_title_text.py, T6620, merged); no unmerged sibling
-branch claims v037. The runner applies ONLY versions GREATER than the DB's
-current user_version, so a duplicate number is silently skipped and this column
-would never get created (the T6340 class of bug) -- re-verify at implementation
-time, not just here.
+RENUMBERED 2026-08-07 from v037 to v041: master profile_db head advanced to v040
+(T6640's default-card backfill) while this branch was in flight, so v037-v039
+are now claimed/skipped-forever territory (the T6345 bug class) — re-verify at
+implementation time, not just here.
 
 WHY: T5215's resolution helper (`app.services.intro_cards.resolve_intro_card_id`)
 gates the "inherit the profile's default" path (`intro_card_id IS NULL`) on the
@@ -26,7 +24,10 @@ column disturbs nothing.
 Default 20.0 (seconds), matching the acceptance criterion. `NOT NULL DEFAULT`
 backfills the existing singleton row for free -- no separate data pass needed.
 
-Idempotent: only adds the column when missing (mirrors v024/v025/v032).
+Idempotent: only adds the column when missing (mirrors v024/v025/v032). This
+means it is safe to re-apply on a container DB already stamped at the old v37
+user_version -- the column will already exist and this becomes a no-op ALTER
+skip, not a duplicate-column error.
 
 Row-factory note: the migration runner hands ``up(conn)`` a TUPLE row factory
 (not ``sqlite3.Row``), so `PRAGMA table_info` rows are indexed POSITIONALLY
@@ -42,8 +43,8 @@ from ..base import BaseMigration
 logger = logging.getLogger(__name__)
 
 
-class V037IntroMinDuration(BaseMigration):
-    version = 37
+class V041IntroMinDuration(BaseMigration):
+    version = 41
     description = "Add user_settings.intro_min_duration_seconds (T5215 duration-gated default intro)"
 
     def up(self, conn) -> None:
@@ -59,4 +60,4 @@ class V037IntroMinDuration(BaseMigration):
                 "ALTER TABLE user_settings ADD COLUMN "
                 "intro_min_duration_seconds REAL NOT NULL DEFAULT 20.0"
             )
-            logger.info("[v037] added user_settings.intro_min_duration_seconds")
+            logger.info("[v041] added user_settings.intro_min_duration_seconds")

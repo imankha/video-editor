@@ -93,6 +93,20 @@ function strokeSpec(font) {
   };
 }
 
+// T6640 §2c — a WRAPPING two-word title (the exact shape of the reported card
+// bug: a long name must wrap to 2 lines, never overflow one). Narrow maxWidth
+// forces a wrap at the SAME word boundary the greedy algorithm on both sides
+// chooses (RichText.jsx's `wrapLines` <-> text_render.py's `wrap_lines`, T6640
+// §2a). No PII: an invented two-word name, not the real minor's.
+function wrappingTitleSpec(font) {
+  return {
+    ...fillSpec(font),
+    text: 'Anastasia Wintergreen',
+    size: 0.1,
+    maxWidth: 0.45,
+  };
+}
+
 // The db_sync middleware requires a session for every non-allowlisted /api/*
 // route (AUTH_ALLOWLIST_PREFIXES does NOT include /api/test — seams stay
 // behind auth like everything else, matching the T4120 precedent of logging
@@ -355,6 +369,43 @@ test.describe('T5180 text engine parity — backend renderer vs RichText.jsx', (
         // Em-relative: strokePx = spec.stroke.width * fontPx (gate Q1, design §7).
         const expectedStrokePx = spec.stroke.width * computed.fontSize;
         expect(Math.abs(strokePx - expectedStrokePx)).toBeLessThanOrEqual(1); // 1px rounding slack
+      });
+
+      test(`wrapping title — identical line breaks (T6640 §2c) — font=${font} ${w}x${h}`, async ({ page }) => {
+        // The load-bearing runtime check for T6640: both renderers must wrap
+        // "Anastasia Wintergreen" to the SAME line count at the SAME word
+        // boundary. A divergence (e.g. one side breaking after "Anastasia",
+        // the other overflowing on one line, or breaking mid-word) inflates
+        // the aggregate tight-ink bbox width AND/OR height well past
+        // TOL_BOX_FRACTION -- this is the SAME box/baseline machinery the
+        // fill-only test above uses, just with text that forces a real wrap
+        // instead of staying on one line.
+        await authenticateForSeams(page);
+        const spec = wrappingTitleSpec(font);
+
+        const backend = await backendRenderBbox(page, spec, w, h);
+        const [bMinX, bMinY, bMaxX, bMaxY] = backend.bbox;
+        const backendWidth = bMaxX - bMinX;
+        const backendHeight = bMaxY - bMinY;
+        const backendBaseline = backend.baseline_y;
+
+        const { box: frontendBox } = await mountRichTextAndMeasure(page, spec, w, h);
+        expect(frontendBox, 'RichText did not render a measurable box').not.toBeNull();
+        const frontendBaseline = await page
+          .locator('[data-baseline-y]')
+          .first()
+          .evaluate((el) => parseFloat(el.getAttribute('data-baseline-y')));
+
+        // A single line at this size/font would be roughly HALF this height
+        // (sanity check that the wrap actually happened on BOTH sides, not
+        // just that the two sides happen to agree on some other failure mode).
+        const fontPxApprox = spec.size * h;
+        expect(backendHeight).toBeGreaterThan(fontPxApprox * 1.3);
+        expect(frontendBox.height).toBeGreaterThan(fontPxApprox * 1.3);
+
+        expect(Math.abs(backendWidth - frontendBox.width)).toBeLessThanOrEqual(TOL_BOX_FRACTION * w);
+        expect(Math.abs(backendHeight - frontendBox.height)).toBeLessThanOrEqual(TOL_BOX_FRACTION * h);
+        expect(Math.abs(backendBaseline - frontendBaseline)).toBeLessThanOrEqual(TOL_BASELINE_FRACTION * h);
       });
     }
   }

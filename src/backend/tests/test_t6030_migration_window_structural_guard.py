@@ -57,7 +57,7 @@ POST_V023_COLUMNS = {
     "working_clips": ["rotation"],                                                       # v029
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
-    "user_settings": ["intro_min_duration_seconds"],                                     # v037
+    "user_settings": ["intro_min_duration_seconds"],                                     # v041
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
     # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
@@ -77,14 +77,25 @@ POST_V023_COLUMNS = {
     #   It is an UPDATE ... SET title_text = NULL (column-guarded, same PRAGMA check as every
     #   other migration here) over an EXISTING column that has carried data since v034; no
     #   hot read gains a new column name to fail on.
-    # v037 (T5215 intro_min_duration_seconds) adds user_settings.intro_min_duration_seconds.
-    #   The read (services.intro_cards.get_intro_min_duration) is column_exists-guarded and
-    #   degrades to DEFAULT_INTRO_MIN_DURATION_SECONDS; the write
+    # v038 (T6640 null the dead intro_cards.text_elements) adds NO column -> nothing to
+    #   guard. Same shape as v036: an UPDATE over an EXISTING column that has carried data
+    #   since v034, table-guarded, so no hot read gains a new column name to fail on.
+    # v040 (T6640 backfill exactly one default intro card) adds NO column -> nothing to
+    #   guard. It only UPDATEs intro_cards.is_default, which v034 created alongside the
+    #   table, and it is table-guarded; a below-head DB without intro_cards returns early.
+    #   No hot read gains a new column name, so the deploy->migrate window is unchanged.
+    # v041 (T5215 intro_min_duration_seconds, renumbered from v037 on merging master) adds
+    #   user_settings.intro_min_duration_seconds. The read
+    #   (services.intro_cards.get_intro_min_duration) is column_exists-guarded and degrades
+    #   to DEFAULT_INTRO_MIN_DURATION_SECONDS; the write
     #   (routers.profiles.update_current_intro_min_duration) is column_exists-guarded and
     #   refuses with 503 rather than naming a nonexistent column. See
     #   test_profile_intro_min_duration below.
+    # (v039 belongs to the sibling T6630 branch, not present here; audit it on its own
+    #   merge -- and note it must be RENUMBERED above 41 first, or the runner's
+    #   version > current rule skips it silently.)
 }
-HEAD_VERSION_AUDITED = 37
+HEAD_VERSION_AUDITED = 41
 
 
 def _cleanup(user_id: str) -> None:

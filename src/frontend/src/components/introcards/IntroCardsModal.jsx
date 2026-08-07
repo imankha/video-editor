@@ -14,7 +14,7 @@ import { useIntroCardStore, useCurrentProfile } from '../../stores';
 import { Z } from '../../constants/zLayers';
 import { IntroCardGrid } from './IntroCardGrid';
 import { IntroCardEditorContainer } from './IntroCardEditorContainer';
-import { buildCreateFields } from './introCardDefaults';
+import { buildCreateFields, nextCardName } from './introCardDefaults';
 
 export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
   const profile = useCurrentProfile();
@@ -50,7 +50,7 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     if (busy) return;
     setBusy(true);
     try {
-      const name = `New card ${cards.length + 1}`;
+      const name = nextCardName(cards);
       const created = await createCard(buildCreateFields({ name, profile }));
       if (created) setEditingId(created.id);
     } finally {
@@ -126,6 +126,7 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
               profile={profile}
               onBack={() => setEditingId(null)}
               onEditProfile={onEditProfile}
+              onSetDefault={() => setDefault(editingCard.id)}
             />
           ) : editingId && !editingCard ? (
             // The edited card vanished (deleted elsewhere) — fall back to the grid.

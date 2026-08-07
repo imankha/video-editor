@@ -1,12 +1,13 @@
 """
 T5215 -- Intro attachment: resolution helper, reel PATCH, re-export
 carry-forward, cross-profile move (no carry), collection freeze, consent gate,
-no-N+1 list, and the v037 migration.
+no-N+1 list, and the v041 migration (renumbered from v037 on merging master,
+which had advanced to v040 via T6640 while this branch was in flight).
 
 Design: docs/plans/tasks/T5215-design.md. Acceptance criteria mapping:
   resolve_intro_card_id matrix (NULL/0/id + duration gate) .. TestResolveIntroCardIdMatrix
   threshold storage + validation ............................ TestThresholdStorage
-  v037 migration (fresh DB + upgrade + idempotent) ........... TestMigrationV037
+  v041 migration (fresh DB + upgrade + idempotent) ........... TestMigrationV041
   re-export preserves attachment (THE important test) ........ TestReExportCarriesIntroCardId,
                                                                  test_export_final_endpoint_carries_intro_card_id
   cross-profile move never carries the attachment ............ TestMoveToProfileDoesNotCarryIntro
@@ -218,10 +219,10 @@ class TestProfileThresholdEndpoint:
 
 
 # ===========================================================================
-# 3. Migration v037
+# 3. Migration v041
 # ===========================================================================
 
-class TestMigrationV037:
+class TestMigrationV041:
     def test_fresh_db_has_column_with_default(self, db):
         conn = _connect(db)
         row = conn.execute(
@@ -230,7 +231,7 @@ class TestMigrationV037:
         assert row["intro_min_duration_seconds"] == 20.0
         conn.close()
 
-    def test_runner_applies_v037_to_a_below_head_db(self, tmp_path):
+    def test_runner_applies_v041_to_a_below_head_db(self, tmp_path):
         db_path = tmp_path / "legacy.sqlite"
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
@@ -241,18 +242,18 @@ class TestMigrationV037:
             )
         """)
         conn.execute("INSERT INTO user_settings (id) VALUES (1)")
-        conn.execute("PRAGMA user_version = 36")
+        conn.execute("PRAGMA user_version = 40")
         conn.commit()
 
         from app.migrations.profile_db import RUNNER
         applied = RUNNER.run(conn, "sqlite")
-        assert any(m.version == 37 for m in applied)
+        assert any(m.version == 41 for m in applied)
 
         cols = {r[1] for r in conn.execute("PRAGMA table_info(user_settings)").fetchall()}
         assert "intro_min_duration_seconds" in cols
         row = conn.execute("SELECT intro_min_duration_seconds FROM user_settings WHERE id = 1").fetchone()
         assert row[0] == 20.0
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 37
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 41
         conn.close()
 
     def test_idempotent_rerun(self, tmp_path):
@@ -265,8 +266,8 @@ class TestMigrationV037:
         conn.execute("INSERT INTO user_settings (id) VALUES (1)")
         conn.commit()
 
-        from app.migrations.profile_db.v037_intro_min_duration import V037IntroMinDuration
-        m = V037IntroMinDuration()
+        from app.migrations.profile_db.v041_intro_min_duration import V041IntroMinDuration
+        m = V041IntroMinDuration()
         m.up(conn)
         m.up(conn)  # must not raise
         conn.commit()
@@ -274,12 +275,12 @@ class TestMigrationV037:
         assert "intro_min_duration_seconds" in cols
         conn.close()
 
-    def test_v037_is_still_the_free_version(self):
+    def test_v041_is_still_the_free_version(self):
         """Guards against a future duplicate-version regression (the runner
-        silently skips a duplicate). If this fails, someone added another v037."""
+        silently skips a duplicate). If this fails, someone added another v041."""
         from app.migrations.profile_db import MIGRATIONS
         versions = [m.version for m in MIGRATIONS]
-        assert versions.count(37) == 1
+        assert versions.count(41) == 1
         assert versions == sorted(versions)
 
 

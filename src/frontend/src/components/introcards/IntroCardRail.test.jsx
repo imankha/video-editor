@@ -1,24 +1,21 @@
-// T5205 — the editor rail: facts drive composition, treatment is independent,
-// unfilled facts prompt inline, and styling routes through the shared editor.
+// T5205 / T6640 — the editor rail: facts drive composition, treatment is
+// independent, unfilled facts prompt inline, subtitle is content (not
+// styling), and NO control here can produce a font/colour clash (decision 12
+// removed the per-slot styling editor entirely).
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { IntroCardRail } from './IntroCardRail';
-import { defaultSlotSpec } from './introCardDefaults';
 
 afterEach(cleanup);
 
 function renderRail(overrides = {}) {
   const props = {
-    card: { id: 1, name: 'C', treatment: 'gold', shown_fields: [], title_text: 'HI', text_elements: {}, image_key: null },
+    card: { id: 1, name: 'C', treatment: 'gold', shown_fields: [], image_key: null },
     profile: { id: 'p', position: '', class: '', team: '' },
-    selectedSlot: 'title',
-    onSelectSlot: vi.fn(),
     onToggleFact: vi.fn(),
     onSetTreatment: vi.fn(),
-    onCommitTitle: vi.fn(),
-    specForSlot: (slot) => defaultSlotSpec(slot),
-    onUpdateSlotSpec: vi.fn(),
+    onCommitSubtitle: vi.fn(),
     onImageChanged: vi.fn(),
     onEditProfile: vi.fn(),
     onError: vi.fn(),
@@ -37,7 +34,7 @@ describe('IntroCardRail', () => {
 
   it('a shown fact with no profile value prompts to add it, linking back to the profile', () => {
     const props = renderRail({
-      card: { id: 1, name: 'C', treatment: 'gold', shown_fields: ['team'], title_text: 'HI', text_elements: {}, image_key: null },
+      card: { id: 1, name: 'C', treatment: 'gold', shown_fields: ['team'], image_key: null },
     });
     const addButtons = screen.getAllByText('Add it');
     expect(addButtons.length).toBeGreaterThan(0);
@@ -57,14 +54,20 @@ describe('IntroCardRail', () => {
     expect(screen.getByText(/Anyone with the share link can see this card/i)).toBeTruthy();
   });
 
-  it('editing styling routes through onUpdateSlotSpec for the selected slot', () => {
+  it('typing a subtitle and blurring calls onCommitSubtitle (content, not styling)', () => {
     const props = renderRail();
-    // The title slot is selected; picking a colour swatch emits a styling update
-    // (size/align are layout-owned by the contract and not shown here).
-    fireEvent.click(screen.getByLabelText('Color #FFD66B'));
-    expect(props.onUpdateSlotSpec).toHaveBeenCalled();
-    expect(props.onUpdateSlotSpec.mock.calls.at(-1)[0]).toBe('title');
-    // No size/align controls in the card rail.
+    const input = screen.getByPlaceholderText('e.g. State Cup 2027');
+    fireEvent.change(input, { target: { value: 'State Cup 2027' } });
+    fireEvent.blur(input);
+    expect(props.onCommitSubtitle).toHaveBeenCalledWith('State Cup 2027');
+  });
+
+  it('T6640: exposes no font, colour or effects control (template owns all typography)', () => {
+    renderRail();
+    expect(screen.queryByText('Font')).toBeNull();
+    expect(screen.queryByLabelText('Custom color')).toBeNull();
+    expect(screen.queryByLabelText('Shadow blur')).toBeNull();
+    expect(screen.queryByLabelText('Stroke width')).toBeNull();
     expect(screen.queryByLabelText('Size')).toBeNull();
     expect(screen.queryByLabelText('Align')).toBeNull();
   });

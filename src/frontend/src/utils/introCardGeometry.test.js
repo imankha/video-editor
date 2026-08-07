@@ -33,12 +33,20 @@ describe('aspectKey (mirrors backend intro_card_geometry.aspect_key)', () => {
 });
 
 describe('geometryFor', () => {
-  it('every derived composition has geometry at both aspects', () => {
+  it('every derived composition has photo + reflow + typography (all 3 roles) at both aspects (T6640)', () => {
+    // T6640: static per-slot `slots` was replaced by `reflow` (anchor/rhythm)
+    // + `typography` (role sizing) — the ACTUAL slot count/position is now
+    // MEASURED at render time (`layout()`), not enumerated in the contract, so
+    // every composition defines the SAME 3 roles regardless of fact density.
     for (const comp of ALL_COMPOSITIONS) {
       for (const aspect of ALL_ASPECTS) {
         const geo = geometryFor(comp, aspect);
         expect(geo.photo).toBeDefined();
-        expect(geo.slots).toBeDefined();
+        expect(geo.reflow).toBeDefined();
+        expect(geo.reflow.anchorMode).toMatch(/^(bottom|center)$/);
+        expect(geo.typography.title).toBeDefined();
+        expect(geo.typography.primary).toBeDefined();
+        expect(geo.typography.secondary).toBeDefined();
       }
     }
   });
@@ -61,19 +69,13 @@ describe('geometryFor', () => {
     expect(() => geometryFor(COMPOSITION.HERO, '1:1')).toThrow();
   });
 
-  it('fact-slot count matches the derived density', () => {
-    const expected = {
-      [COMPOSITION.TITLE_ONLY]: 0,
-      [COMPOSITION.HERO]: 1,
-      [COMPOSITION.BROADCAST]: 2,
-      [COMPOSITION.RECRUITING]: 3,
-    };
+  it('title typography is bounded (minSize <= size, maxLines >= 1) — the T6640 shrink-to-fit bound', () => {
     for (const comp of ALL_COMPOSITIONS) {
       for (const aspect of ALL_ASPECTS) {
-        const factSlots = Object.keys(geometryFor(comp, aspect).slots).filter((s) =>
-          s.startsWith('fact'),
-        );
-        expect(factSlots).toHaveLength(expected[comp]);
+        const { title } = geometryFor(comp, aspect).typography;
+        expect(title.minSize).toBeGreaterThan(0);
+        expect(title.minSize).toBeLessThanOrEqual(title.size);
+        expect(title.maxLines).toBeGreaterThanOrEqual(1);
       }
     }
   });

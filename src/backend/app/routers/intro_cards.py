@@ -161,9 +161,16 @@ async def list_intro_cards():
 
 @router.post("")
 async def create_intro_card(request: CreateIntroCardRequest):
-    """Create a card and return the stored row. Never sets `is_default` — the
-    first card is not auto-promoted (symmetric with delete-leaves-no-default);
-    the user picks the default explicitly via POST /{id}/default."""
+    """Create a card and return the stored row.
+
+    T6640 round 2 invariant: a profile with any intro cards always has EXACTLY
+    ONE default. The profile's FIRST card becomes the default automatically
+    (no user action needed); every card after that is created non-default —
+    the user promotes one explicitly via POST /{id}/default. (The matching
+    other half of the invariant — a deleted default auto-promotes the newest
+    remaining card, and a profile with zero cards has no default — lives in
+    `delete_intro_card` below.)
+    """
     try:
         shown_fields = validate_shown_fields(request.shown_fields)
         treatment = validate_treatment(request.treatment)
@@ -197,11 +204,19 @@ async def create_intro_card(request: CreateIntroCardRequest):
             values,
         )
         card_id = cursor.lastrowid
+        # First card for this profile -> default, atomically with the insert
+        # (same transaction, one commit below). Every later card starts non-
+        # default; COUNT == 1 after this insert means this row is the only one.
+        cursor.execute("SELECT COUNT(*) FROM intro_cards")
+        is_first_card = cursor.fetchone()[0] == 1
+        if is_first_card:
+            cursor.execute("UPDATE intro_cards SET is_default = 1 WHERE id = ?", (card_id,))
         conn.commit()
         row = _fetch_card(cursor, card_id)
 
     logger.info(
         f"Created intro card {card_id} for profile {get_current_profile_id()}"
+        + (" (first card -> default)" if is_first_card else "")
     )
     return _serialize(row)
 
@@ -294,10 +309,15 @@ async def delete_intro_card(card_id: int):
 
     In ONE transaction: null out `final_videos.intro_card_id` for reels that
     reference this card (so they fall back to the default rather than a ghost
-    id) and delete the row. Deleting the default leaves the profile with NO
-    default — correct, not auto-repaired. The R2 image is removed after the DB
-    commit (a leaked object is a lesser evil than a row pointing at a 404, and
-    T5230's purge is a backstop).
+    id), delete the row, and — T6640 round 2 invariant — if the deleted card
+    WAS the default and other cards remain, auto-promote the NEWEST remaining
+    card (`created_at DESC, id DESC`) to default in the SAME transaction. A
+    profile with any cards always has exactly one default; there is never a
+    window where cards exist but none is flagged. Deleting the LAST card
+    leaves genuinely no default (nothing to promote) — the only state where
+    that's possible. The R2 image is removed after the DB commit (a leaked
+    object is a lesser evil than a row pointing at a 404, and T5230's purge is
+    a backstop).
 
     The UPDATE naming `intro_card_id` is column_exists-guarded (deploy→migrate
     window discipline), and the guard is LOAD-BEARING: `ensure_database()`
@@ -317,6 +337,7 @@ async def delete_intro_card(card_id: int):
         if row is None:
             raise HTTPException(status_code=404, detail="intro card not found")
         image_key = row["image_key"]
+        was_default = bool(row["is_default"])
 
         # Same transaction: detach referencing reels, then delete the card.
         if column_exists(cursor, "final_videos", "intro_card_id"):
@@ -325,6 +346,16 @@ async def delete_intro_card(card_id: int):
                 (card_id,),
             )
         cursor.execute("DELETE FROM intro_cards WHERE id = ?", (card_id,))
+
+        promoted_id = None
+        if was_default:
+            cursor.execute(
+                "SELECT id FROM intro_cards ORDER BY created_at DESC, id DESC LIMIT 1"
+            )
+            newest = cursor.fetchone()
+            if newest is not None:
+                promoted_id = newest["id"]
+                cursor.execute("UPDATE intro_cards SET is_default = 1 WHERE id = ?", (promoted_id,))
         conn.commit()
 
     # R2 image removal is a best-effort side effect after the row is gone.
@@ -338,5 +369,9 @@ async def delete_intro_card(card_id: int):
                 f"Intro card {card_id} image_key not deletable (foreign prefix): {image_key}"
             )
 
-    logger.info(f"Deleted intro card {card_id} for profile {profile_id}")
-    return {"success": True}
+    logger.info(
+        f"Deleted intro card {card_id} for profile {profile_id}"
+        + (f" (was default -> promoted {promoted_id})" if was_default and promoted_id else
+           " (was default, no cards remain -> no default)" if was_default else "")
+    )
+    return {"success": True, "promoted_default_id": promoted_id}
