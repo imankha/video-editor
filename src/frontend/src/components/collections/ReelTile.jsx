@@ -8,6 +8,7 @@ import { RATIO } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 import { IntroCardPicker } from '../introcards/IntroCardPicker';
+import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 
 /**
  * ReelTile - a PUBLISHED reel as a poster tile (T5673).
@@ -217,7 +218,23 @@ export function ReelTile({
             className={`w-full text-white text-xs font-medium bg-black/40 border-b ${REEL.border} outline-none`}
           />
         ) : (
-          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">{displayName}</h3>
+          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
+            {/* T5215 round 2: an intro plays on this reel — the SAME icon +
+                colour as the picker's "Selected"/"Following" badges (see
+                constants/introBadge.js), so seeing this here and recognizing
+                it there is the same glyph, not a lookalike. Sits inside the
+                scrim's guaranteed-dark gradient, so it reads on a bright
+                thumbnail exactly as reliably as on a dark one. */}
+            {download.intro_card_name && (
+              <IntroIcon
+                size={11}
+                fill="currentColor"
+                aria-hidden="true"
+                className={`inline-block -mt-0.5 mr-1 ${INTRO_BADGE.text}`}
+              />
+            )}
+            {displayName}
+          </h3>
         )}
         {metaLine && (
           <div className="mt-0.5 text-[11px] text-gray-300 truncate">{metaLine}</div>

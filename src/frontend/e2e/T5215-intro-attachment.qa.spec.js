@@ -223,6 +223,82 @@ test.describe('T5215 intro attachment (real account)', () => {
     await saveEvidence(page, 'T5215-AC-b-selection-persists-after-reload');
   });
 
+  test('BUG REPRO (round 2): reopening the picker after RELOAD must visibly mark the stored selection', async ({ page }) => {
+    // User report, verbatim: "i selected an intro card for a reel, left, and
+    // cliked intro on it again and had no indication that an intro had been
+    // selected." Criterion b above only proves the VALUE round-trips through
+    // GET /api/downloads -- it never re-opens the visual picker. This test
+    // closes that gap: select -> RELOAD (not same-session) -> navigate back
+    // in -> reopen the picker -> assert the DOM actually marks the selection.
+    await openDrawer(page);
+    const hasReels = await expandFirstGroup(page);
+    test.skip(!hasReels, 'no published reels on this account/profile');
+
+    const cardsResp = await page.request.get('/api/intro-cards');
+    const { cards } = await cardsResp.json();
+    test.skip(cards.length === 0, 'no intro cards exist');
+    // Prefer a NON-default card so the assertion isolates the SELECTION
+    // indicator from the separate "Your default" star badge.
+    const targetCard = cards.find((c) => !c.is_default) || cards[0];
+
+    const tile = page.getByTestId('reel-card').first();
+    await tile.hover();
+    await tile.getByRole('button', { name: /More actions/i }).click();
+    const introItem = page.getByRole('button', { name: 'Intro' });
+    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
+    await introItem.click();
+
+    let listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+
+    const patchResp = page.waitForResponse(
+      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
+      { timeout: 10000 },
+    );
+    const optionLocator = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    await optionLocator.click();
+    await patchResp;
+    await expect(listbox).toHaveCount(0);
+
+    // RELOAD -- the exact path the user took ("left"), not a same-session reopen.
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+
+    // Confirm the VALUE side independently (same as criterion b) before
+    // touching the UI, so a failure below is unambiguously presentation-only.
+    const dl = await page.request.get('/api/downloads');
+    const dlBody = await dl.json();
+    const persistedReel = dlBody.downloads.find((d) => d.intro_card_id === targetCard.id);
+    expect(persistedReel, 'PERSISTENCE: the value must round-trip after reload').toBeTruthy();
+
+    // Navigate back into My Reels and reopen the SAME reel's picker.
+    await page.getByRole('button', { name: /My Reels/i }).first().click();
+    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+      .toBeVisible({ timeout: 15000 });
+    await expandFirstGroup(page);
+    const tileAfterReload = page.getByTestId('reel-card').first();
+    await tileAfterReload.hover();
+    await tileAfterReload.getByRole('button', { name: /More actions/i }).click();
+    await page.getByRole('button', { name: 'Intro' }).click();
+
+    listbox = page.getByRole('listbox', { name: 'Intro card' });
+    await expect(listbox).toBeVisible({ timeout: 10000 });
+    await saveEvidence(page, 'T5215-BUG-repro-picker-reopened-after-reload');
+
+    // PRESENTATION assertion: the tile for the persisted card must report
+    // aria-selected="true" -- this is the DOM-level fact the "unmistakable"
+    // requirement rests on (a screenshot alone can't be asserted on).
+    const reopenedOption = listbox.getByRole('option', {
+      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
+    });
+    const ariaSelected = await reopenedOption.getAttribute('aria-selected');
+    console.log(`[T5215 BUG REPRO] persisted card id=${targetCard.id} aria-selected="${ariaSelected}" (value round-tripped: ${!!persistedReel})`);
+    expect(ariaSelected, 'PRESENTATION: the picker must mark the stored selection as aria-selected on reopen').toBe('true');
+  });
+
   test('c: selecting "No intro" persists as no intro', async ({ page }) => {
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
