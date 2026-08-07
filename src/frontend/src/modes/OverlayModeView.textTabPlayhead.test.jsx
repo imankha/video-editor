@@ -104,18 +104,48 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     expect(firstTextTab().getAttribute('title')).toMatch(/no text region/i);
   });
 
-  it('a SELECTED region still shows even when the playhead is NOT inside its range (matches TextOverlayPreview.jsx\'s own selectedRegionId short-circuit)', () => {
-    // Diagnosed live: a freshly created/selected region renders on the video
-    // stage via TextOverlayPreview's selectedRegionId short-circuit even
-    // before the playhead has settled exactly inside its range, but a
-    // range-only Text tab filter showed "no region here" for that SAME
-    // region at that SAME instant -- a real, user-visible mismatch between
-    // what's on screen and what the settings panel claims is there.
+  it('T6630 round 7 item 1: a SELECTED region does NOT show once the playhead leaves its range -- no exception for selection', () => {
+    // Round 6 copied TextOverlayPreview.jsx's selectedRegionId short-circuit
+    // into this filter too (a just-created region needs to show
+    // immediately). Round 7 user direction removed that exception for the
+    // SETTINGS panel specifically: "when my playhead was not over any text
+    // region i expect disabled and empty text settings" -- even if that
+    // region is still the selected one. (TextOverlayPreview.jsx's OWN
+    // filter, the actual video burn-in, keeps its short-circuit --
+    // unaffected by this, a separate call site.) Region create/select both
+    // seek the playhead into range, so a legitimately-just-selected region
+    // still shows via the range check alone -- this test is the case where
+    // the playhead has since moved AWAY, which must now hide it.
     render(<OverlayModeView {...baseProps({ currentTime: 3.5, selectedRegionId: 'r1' })} />); // outside REGION_EARLY [0,2) but selected
     const textTab = firstTextTab();
-    expect(textTab.getAttribute('title')).toBeNull(); // NOT dimmed
+    expect(textTab.getAttribute('title')).toMatch(/no text region/i); // dimmed
     fireEvent.click(textTab);
+    expect(screen.queryByText('EARLY')).toBeNull();
+    expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
+  });
+
+  it('T6630 round 7 item 1 bug fix: a sub-millisecond float gap just BELOW startTime still shows the region (creation-seek quantization)', () => {
+    // Live-debugged: wrappedAddRegion's own `seek(newRegion.startTime)` can
+    // leave React's currentTime a HAIR below region.startTime (observed
+    // ~0.0000007s in a real browser -- the video element's reported
+    // currentTime after a programmatic seek is not bit-identical to the
+    // requested value). A bare `<=` permanently hid a just-created region's
+    // own settings since the video was paused and currentTime never moved
+    // again. The fix is a small EPSILON tolerance, not a re-introduction of
+    // the removed selectedRegionId exception.
+    const justBelowStart = REGION_EARLY.startTime - 0.0000007;
+    render(<OverlayModeView {...baseProps({ currentTime: justBelowStart })} />);
+    fireEvent.click(firstTextTab());
     expect(screen.getAllByText('EARLY').length).toBeGreaterThan(0);
+  });
+
+  it('T6630 round 7 item 1: the epsilon tolerance stays far below one video frame -- a real 0.1s gap outside the range still hides the region', () => {
+    // Guards against the epsilon fix accidentally widening "the playhead is
+    // over this region" into any perceptible range.
+    render(<OverlayModeView {...baseProps({ currentTime: REGION_EARLY.startTime - 0.1 })} />);
+    fireEvent.click(firstTextTab());
+    expect(screen.queryByText('EARLY')).toBeNull();
+    expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
   });
 
   it('the Text tab button reads enabled when a region IS under the playhead', () => {

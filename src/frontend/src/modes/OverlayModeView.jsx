@@ -274,39 +274,53 @@ export function OverlayModeView({
   // height, so this never reflows the timeline.
   const [activeTab, setActiveTab] = useState('overlay');
 
-  // T6630 round 6 item 2: "all text settings should be for the text regions
-  // the playhead is currently on" -- the SAME filter that drives what
-  // actually burns in on screen (TextOverlayPreview.jsx:46-49), reused here
-  // rather than reinvented (including its selectedRegionId short-circuit --
-  // "so editing is visible even while the playhead sits outside the range",
-  // that component's own docstring -- a just-created/selected region must
-  // show here too, not just a region the raw currentTime happens to be
-  // inside; diagnosed live when a freshly created region rendered on the
-  // video stage via that short-circuit but the Text tab -- built from a
-  // range-only check -- showed "no region here" for the SAME region at the
-  // SAME instant). Regions CAN overlap, so this is a list (0, 1, or N),
-  // each independently selectable, same as before -- only the SOURCE list
-  // handed to TextManagementPanel changes.
+  // T6630 round 6/7 item 2/1: "all text settings should be for the text
+  // regions the playhead is currently on" -- STRICT playhead scoping for
+  // the SETTINGS panel, deliberately NOT the selectedRegionId short-circuit
+  // TextOverlayPreview.jsx's own burn-in filter uses (that one intentionally
+  // keeps a region rendering on-screen while you're actively editing it,
+  // even if the playhead nudges outside it -- correct THERE, a separate
+  // call site for the actual video preview). Round 7 user direction: "when
+  // my playhead was not over any text region i expect disabled and empty
+  // text settings" -- no exception for whatever was last selected. The
+  // round-6 rationale for copying the short-circuit here (a just-created
+  // region needs to show immediately) is still handled correctly WITHOUT
+  // it: region creation and region selection both explicitly seek the
+  // playhead into range (wrappedAddRegion / handleSelectRegion below), so a
+  // selected region's range legitimately contains currentTime by the time
+  // this filter runs. Regions CAN overlap, so this is a list (0, 1, or N).
+  // T6630 round 7 item 1 (found during live verification of the strict-scoping
+  // fix below, not in the original report): a region's own creation-time seek
+  // (wrappedAddRegion's `seek(newRegion.startTime)`) can land React's
+  // `currentTime` state a HAIR (sub-millisecond, observed ~0.0000007s) below
+  // `region.startTime` -- the video element's own currentTime after a
+  // programmatic seek is not bit-identical to the requested time. Round 6's
+  // now-removed selectedRegionId short-circuit accidentally absorbed this;
+  // a bare `<=` here would otherwise permanently hide a just-created region's
+  // own settings (currentTime never moves again once the video is paused).
+  // EPSILON matches textPositionPresets.js's existing tolerance convention --
+  // far below one video frame (~0.033s at 30fps), so it cannot widen "the
+  // playhead is over this region" into any perceptible range.
+  const PLAYHEAD_EPSILON = 0.01;
   const activeTextRegionsAtPlayhead = useMemo(
-    () => textOverlays.filter((region) => {
-      if (region.id === selectedRegionId) return true;
-      return region.startTime <= currentTime && currentTime < region.endTime;
-    }),
-    [textOverlays, currentTime, selectedRegionId]
+    () => textOverlays.filter((region) =>
+      region.startTime - PLAYHEAD_EPSILON <= currentTime && currentTime < region.endTime + PLAYHEAD_EPSILON),
+    [textOverlays, currentTime]
   );
 
   // Gesture-based tab switch: a region-select click flips to the Text tab.
   // Passing null (deselect) does not change the tab. No reactive useEffect.
   //
-  // T6630 round 6: selecting a region whose range does NOT contain the
+  // T6630 round 6/7: selecting a region whose range does NOT contain the
   // current playhead (e.g. clicking an existing block elsewhere on the
-  // timeline) must also move the playhead INTO it. The Text tab filter's
-  // selectedRegionId short-circuit (above) already keeps it showing even
-  // without this, but the STAGE PREVIEW needs currentTime actually near the
-  // region to display it in context -- selecting something you can't see
-  // rendering on the video is a confusing edit experience. Region CREATION
-  // already seeks (wrappedAddRegion, OverlayScreen.jsx) -- this covers the
-  // SELECT-an-EXISTING-region path, the other way into this same gesture.
+  // timeline) must also move the playhead INTO it -- round 7 removed the
+  // Text tab filter's selectedRegionId short-circuit (above), so this seek
+  // is now the ONLY thing that makes a just-selected region's settings
+  // actually show up (strict playhead scoping, no exception for selection).
+  // It also keeps the STAGE PREVIEW showing the region in context -- editing
+  // something you can't see rendering on the video is confusing regardless.
+  // Region CREATION already seeks (wrappedAddRegion, OverlayScreen.jsx) --
+  // this covers the SELECT-an-EXISTING-region path, the other way in.
   const handleSelectRegion = useCallback((id, elementId) => {
     onSelectRegion && onSelectRegion(id, elementId);
     if (id) {
@@ -594,9 +608,10 @@ export function OverlayModeView({
   // T5676: Overlay tuning controls — beside the video on desktop, stacked above
   // the Add Spotlight button on mobile. Extracted from ExportButtonView.
   // T6510: the SOURCE-time of the frame the preview image will use -- the user's
-  // marker if set, else the export-time window midpoint (openPlayWindow +
-  // selectPosterFrame mirror poster.py exactly, so the shown still matches what
-  // export picks). Feeds PosterFramePreview so the user SEES the actual frame.
+  // marker if set, else the export-time default (T6630 round 7: 2s into the
+  // open-play window, clamped to its end; openPlayWindow + selectPosterFrame
+  // mirror poster.py exactly, so the shown still matches what export picks).
+  // Feeds PosterFramePreview so the user SEES the actual frame.
   const posterFrameSourceTime = useMemo(() => {
     if (posterMarkerTime != null) return posterMarkerTime;
     const dur = effectiveOverlayMetadata?.duration || duration || 0;
