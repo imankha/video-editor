@@ -37,6 +37,27 @@ cd src/backend && .venv/Scripts/python.exe run_tests.py  # All tests
 cd src/backend && pytest tests/test_clips.py -v          # Specific file
 ```
 
+## Model Policy (driver = Sonnet, expert = Opus)
+
+Interactive sessions in this project default to **Sonnet** (settings.local.json). Sonnet owns
+everything mechanical: orchestration, bookkeeping (PLAN.md, WAVE.md, status files, commits),
+running the relevant test set, driving containers, and implementation that follows a clear spec.
+
+**Escalate to the [expert agent](.claude/agents/expert.md) (Opus) — don't grind.** Spawn it,
+passing the relevant `.claude/knowledge/` doc name(s) and a precise question, whenever:
+
+- root-causing a bug whose mechanism isn't obvious from the first read of the code
+- an architecture/design decision has real tradeoffs (schema, persistence, new pattern)
+- the problem involves async timing, persistence/sync (CAS, R2 versioning), or concurrency
+- performance analysis beyond an obvious hot spot
+- **one focused attempt at a fix has failed** — a second Sonnet guess costs more than the
+  escalation; never attempt a third without the expert's verdict
+
+The expert returns analysis/design only; this session implements it. The design-gated agents
+(architect, code-expert, reviewer) are pinned to Opus in their frontmatter and stay strong
+regardless of the session model. Container workers keep their own tier-based model flags
+(spawn-worker SKILL).
+
 ## Task Rules
 
 ### Never Skip (ALL tasks, including bug fixes)

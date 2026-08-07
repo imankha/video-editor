@@ -2,6 +2,7 @@
 name: code-expert
 description: Audits the codebase before implementation begins, mapping entry points, data flow, similar patterns, dependencies, and bug smells for a task. Invoke at Task Start (Stage 1), before architecture or implementation, whenever a task needs a code audit. Read-only.
 tools: Read, Grep, Glob
+model: opus
 ---
 
 # Code Expert Agent

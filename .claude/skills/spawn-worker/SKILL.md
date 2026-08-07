@@ -65,15 +65,15 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    ```
    docker exec -u dev reel-task-<SLUG> bash -lc 'cd /workspace && claude -p <MODEL_FLAGS> "<instruction>"'
    ```
-   **Pick `<MODEL_FLAGS>` from the task's TIER** (quota control — the default is Opus at
-   `xhigh`, which is right for design work and wasteful for spec-following):
+   **Pick `<MODEL_FLAGS>` from the task's TIER** (quota control — always pass the flag
+   EXPLICITLY; never rely on the account/session default, which varies):
 
    | Tier | Stage | Flags | Why |
    |------|-------|-------|-----|
    | S | all | `--model sonnet --effort low` | <10 LOC, no decisions to make |
-   | M | all | *(none — Opus, default effort)* | no Architect ⇒ the implementor IS making design calls |
-   | L | up to the design gate | *(none — Opus)* | architecture is the expensive part |
-   | L | after design approval | `--model sonnet` on the `-c` resume | the design doc + failing tests ARE the spec |
+   | M | all | `--model opus` | no Architect ⇒ the implementor IS making design calls |
+   | L | up to the design gate | `--model opus` | architecture is the expensive part |
+   | L | after design approval | `--model sonnet` on the resume | the design doc + failing tests ARE the spec |
 
    The rule behind the table: **cheap model iff a spec exists upstream** (approved design doc,
    failing tests, or Tier-S triviality). If the worker is deciding rather than executing, it
