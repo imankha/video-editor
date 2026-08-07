@@ -977,6 +977,13 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       } else {
         console.log(`[VIDEO] Loaded in ${elapsed}ms (${durationStr}s video)`);
       }
+      // T6630: the element just proved it has playable data for the current
+      // src — that is the authoritative "it's working now" signal. A prior
+      // handleError() may have set `error` from an earlier failed attempt
+      // (e.g. a retry or a fallback URL swap that later succeeded); leaving
+      // it set would show a stuck "failed to load" banner over a working
+      // video. Clear it so the error reflects current reality, not history.
+      setError(null);
       setVideoElementReady();
       // T1400: playable signal — cold-load measurement endpoint. Also
       // check for range overbuffer here: a fast load can still buffer far

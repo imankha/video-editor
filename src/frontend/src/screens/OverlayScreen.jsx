@@ -556,6 +556,18 @@ export function OverlayScreen({
     }
   }, [effectiveOverlayVideoUrl, effectiveOverlayMetadata, loadVideoFromUrl, loadVideoFromStreamingUrl]);
 
+  // T6630: the video element reaching "has playable data" for the current src
+  // is the authoritative signal that loading actually worked right now. If a
+  // working-video load attempt failed earlier (or a fallback URL took a retry
+  // to land) but the player is now showing frames, `workingVideoLoadError`
+  // must not keep the "failed to load" banner up over a working video.
+  useEffect(() => {
+    if (!isVideoElementLoading && videoUrl && (workingVideoLoadError || workingVideoMissing)) {
+      setWorkingVideoLoadError(null);
+      setWorkingVideoMissing(false);
+    }
+  }, [isVideoElementLoading, videoUrl, workingVideoLoadError, workingVideoMissing]);
+
   // Initialize highlight regions when duration available
   useEffect(() => {
     const highlightDuration = effectiveOverlayMetadata?.duration || duration;
