@@ -16,6 +16,10 @@ import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
 import { useMoveReels } from '../hooks/useMoveReels';
 import { useProfileStore } from '../stores/profileStore';
+import { useIntroCardStore } from '../stores/introCardStore';
+import { IntroCardPicker } from './introcards/IntroCardPicker';
+import { collectionIntroKey } from './collections/introBadgeKey';
+import { RATIO_ORDER } from '../constants/aspectRatios';
 import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -65,6 +69,7 @@ export function DownloadsPanel({
     downloadFile,
     downloadingId,
     renameDownload,
+    setIntroCard,
     markWatched,
     formatDate,
   } = useDownloads(false);
@@ -158,6 +163,121 @@ export function DownloadsPanel({
 
   const onShareCollection = (definition, title) => setSharingCollection({ definition, title });
 
+  // T5215 round 2: a collection's OWN attached intro (distinct from the SHARE
+  // dialog's frozen-at-creation choice above). {definition, title} of the
+  // collection currently open in the picker, or null. The definition's
+  // {scope, filter.tags, aspect_ratio} IS the collection's identity for this
+  // purpose -- GET/PATCH /api/collections/intro key off exactly those fields.
+  const [introCollectionTarget, setIntroCollectionTarget] = useState(null);
+  const [collectionIntroSelectedId, setCollectionIntroSelectedId] = useState(null);
+
+  const collectionIntroParams = ({ scope, filter, aspect_ratio }) => {
+    const params = new URLSearchParams({ scope_type: scope.type, aspect_ratio });
+    if (scope.type === 'game') params.set('game_id', scope.game_id);
+    if (filter?.tags?.length) params.set('tags', filter.tags.join(','));
+    return params.toString();
+  };
+
+  const onIntroCollection = async (definition, title) => {
+    setIntroCollectionTarget({ definition, title });
+    setCollectionIntroSelectedId(null); // cleared while the resolve is in flight
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/collections/intro?${collectionIntroParams(definition)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setCollectionIntroSelectedId(data.intro_card_id);
+      }
+    } catch (err) {
+      console.error('[DownloadsPanel] failed to resolve collection intro:', err);
+    }
+  };
+
+  const handleSetCollectionIntro = async (cardId) => {
+    if (!introCollectionTarget) return;
+    const params = collectionIntroParams(introCollectionTarget.definition);
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/collections/intro?${params}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intro_card_id: cardId }),
+      });
+      if (resp.ok) {
+        setCollectionIntroSelectedId(cardId);
+        // T5215 round 6: the media-slot badge (item 3) must appear
+        // immediately, not only after the next batch fetch/reload --
+        // resolve this ONE collection's fresh state (id -> name) and merge
+        // it into the batch map in place.
+        const key = collectionIntroKey(introCollectionTarget.definition);
+        const getResp = await apiFetch(`${API_BASE}/api/collections/intro?${params}`);
+        if (getResp.ok) {
+          const fresh = await getResp.json();
+          setIntroBadgesByKey((prev) => ({ ...prev, [key]: { key, ...fresh } }));
+        }
+      }
+    } catch (err) {
+      console.error('[DownloadsPanel] failed to set collection intro:', err);
+    }
+  };
+
+  // T5215 round 6 item 3 (round 3 originally; round 5 deleted this as dead
+  // code once its only consumer -- the title-row badge -- was removed; user,
+  // 2026-08-07, asked for a DIFFERENT collection-badge surface, so the fetch
+  // comes back to feed that). Batch-resolve every VISIBLE collection's OWN
+  // intro badge in ONE request (mirrors the reel list's no-N+1 discipline)
+  // -- fires whenever the collections summary changes (new/changed reels can
+  // add or drop an eligible (scope, ratio) bucket). Read-only refetch, not a
+  // write, so this is an ordinary data-loading effect, not the banned
+  // reactive-persistence pattern (nothing here calls a PATCH).
+  const [introBadgesByKey, setIntroBadgesByKey] = useState({});
+  useEffect(() => {
+    const summary = collections.summary;
+    const items = [];
+    (summary?.smart_collections || []).forEach((sc) => {
+      RATIO_ORDER.forEach((ratio) => {
+        if (sc.ratio_eligible?.[ratio]) {
+          items.push({ scope_type: 'all', tags: sc.tags || null, aspect_ratio: ratio });
+        }
+      });
+    });
+    (summary?.games || []).forEach((g) => {
+      RATIO_ORDER.forEach((ratio) => {
+        if (g.ratio_eligible?.[ratio]) {
+          items.push({ scope_type: 'game', game_id: g.game_id, aspect_ratio: ratio });
+        }
+      });
+    });
+    if (summary?.mixes) {
+      RATIO_ORDER.forEach((ratio) => {
+        if (summary.mixes.ratio_eligible?.[ratio]) {
+          items.push({ scope_type: 'mixes', aspect_ratio: ratio });
+        }
+      });
+    }
+    if (items.length === 0) { setIntroBadgesByKey({}); return; }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        // GET (not POST): this is a pure read, no collection_settings row is
+        // ever written here -- keeping it a GET is what lets this fetch live
+        // in a plain data-loading effect without the reactive-persistence
+        // lint rule (which flags non-GET verbs in effects as a likely
+        // write-as-side-effect) misreading it as a banned pattern.
+        const resp = await apiFetch(
+          `${API_BASE}/api/collections/intro/batch?items=${encodeURIComponent(JSON.stringify(items))}`,
+        );
+        if (!resp.ok || cancelled) return;
+        const { results } = await resp.json();
+        const map = {};
+        results.forEach((r) => { map[r.key] = r; });
+        if (!cancelled) setIntroBadgesByKey(map);
+      } catch (err) {
+        console.error('[DownloadsPanel] failed to batch-resolve collection intro badges:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [collections.summary]);
+
   const onCopyCollectionLink = async (definition) => {
     try {
       const resp = await apiFetch(`${API_BASE}/api/collections/share`, {
@@ -196,6 +316,15 @@ export function DownloadsPanel({
   const currentProfileId = useProfileStore((state) => state.currentProfileId);
   const otherProfiles = profiles.filter((p) => p.id !== currentProfileId);
   const canMoveProfiles = profiles.length >= 2;
+
+  // T5215: the current profile's intro-card library, for the reel picker.
+  // Fetched when the panel opens (mirrors useCollections(isOpen)); the store
+  // dedupes concurrent/repeat calls.
+  const introCards = useIntroCardStore((state) => state.cards);
+  const fetchIntroCards = useIntroCardStore((state) => state.fetchCards);
+  useEffect(() => {
+    if (isOpen) fetchIntroCards();
+  }, [isOpen, fetchIntroCards]);
 
   // T6320: the story player's active-segment playhead shows the active profile's
   // sport ball (closing the T5130 gap for My Reels). Same read ProfileSportButton
@@ -390,6 +519,29 @@ export function DownloadsPanel({
     collections.patchMember(id, { project_name: name });
   };
 
+  // T5215: reel intro-card picker gestures. Consent is a legal attestation
+  // (ProfileIntroSection/ConsentGate show the full "publicly visible" copy
+  // before recording it) -- this link only points the user there, it never
+  // grants consent itself.
+  //
+  // Round 6: mirrors renameReel above -- setIntroCard only updates the flat
+  // `downloads` array, but most reel tiles render from useCollections()'s
+  // separate `members` cache (collapsed game/mix groups), which never saw
+  // this write, so the badge stayed stale there until reload. Patch that
+  // cache too once the server has resolved the real name.
+  const handleSetIntro = async (download, cardId) => {
+    const result = await setIntroCard(download.id, cardId);
+    if (result.success) {
+      collections.patchMember(download.id, {
+        intro_card_id: result.intro_card_id,
+        intro_card_name: result.intro_card_name,
+      });
+    }
+  };
+  const handleRequestIntroConsent = () => {
+    toast.info('Open your profile menu -> Manage Profile -> Player Intro to give consent.');
+  };
+
   // A compact metadata line for the tile scrim: date · duration · game-time.
   const reelMetaLine = (download) => [
     formatDate(download.created_at),
@@ -424,6 +576,11 @@ export function DownloadsPanel({
       onDelete={handleDelete}
       onRename={renameReel}
       seasonRank={download.season_rank}
+      introCards={introCards}
+      introProfile={currentProfile}
+      introHasConsent={!!currentProfile?.introConsentAt}
+      onSetIntro={handleSetIntro}
+      onRequestIntroConsent={handleRequestIntroConsent}
     />
   );
 
@@ -472,6 +629,8 @@ export function DownloadsPanel({
             onPlayCollection={onPlayCollection}
             onShareCollection={onShareCollection}
             onCopyCollectionLink={onCopyCollectionLink}
+            onIntroCollection={onIntroCollection}
+            introBadgesByKey={introBadgesByKey}
           />
         </div>
       </div>
@@ -509,6 +668,20 @@ export function DownloadsPanel({
           onClose={() => setSharingCollection(null)}
         />
       )}
+
+      {/* Collection's OWN intro picker (T5215 round 2) -- the SAME shared
+          carousel/picker as the reel kebab, not a second component. */}
+      <IntroCardPicker
+        isOpen={!!introCollectionTarget}
+        onClose={() => setIntroCollectionTarget(null)}
+        title={introCollectionTarget ? `Intro for "${introCollectionTarget.title}"` : ''}
+        cards={introCards}
+        profile={currentProfile}
+        selectedId={collectionIntroSelectedId}
+        hasConsent={!!currentProfile?.introConsentAt}
+        onSelect={handleSetCollectionIntro}
+        onRequestConsent={handleRequestIntroConsent}
+      />
 
       {/* Move-to-profile picker (T4850) */}
       {movingIds && (

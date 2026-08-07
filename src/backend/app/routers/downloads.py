@@ -22,6 +22,13 @@ from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
+from app.services.intro_cards import (
+    DEFAULT_INTRO_MIN_DURATION_SECONDS,
+    get_intro_min_duration,
+    load_profile_cards,
+    resolve_intro_card,
+    resolve_intro_card_id,
+)
 from app.services.materialization import (
     ProfileDBRefreshFailed,
     _open_profile_db,
@@ -30,6 +37,7 @@ from app.services.materialization import (
 )
 from app.services.poster import poster_basename, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
+from app.services.user_db import get_intro_consent
 from app.storage import (
     R2_ENABLED,
     VideoServeOutcome,
@@ -226,6 +234,8 @@ class DownloadItem(BaseModel):
     clip_game_start_time: float | None = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
     season_rank: int | None = None  # T5679: 1-indexed rank among ACTUALLY-RANKED reels (match_count > 0), top-20 only. NULL for unranked (seeded-only) or rank > 20 reels.
     leading_reel_id: int | None = None  # Representative reel id for collapsed rows (T5673 item 2)
+    intro_card_id: int | None = None  # RAW stored attachment (T5215): 0 = opted out, NULL = inherit default, <id> = explicit. NOT the resolved id -- the picker needs the raw value to preselect the current choice.
+    intro_card_name: str | None = None  # RESOLVED card name -- what will actually play (accounts for the duration gate); None if nothing will play
     # Game grouping info
     watched_at: str | None = None  # ISO timestamp when first played in gallery
     game_ids: list[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -284,6 +294,12 @@ async def list_downloads(
             params.append(aspect_ratio)
         extra = (" AND " + " AND ".join(conditions)) if conditions else ""
 
+        # T5215: intro_card_id landed in v034; guarded (not assumed present) the
+        # same way every other new-column hot read in this file is -- a profile
+        # DB in the deploy->migrate window must not 500 the gallery.
+        _has_intro = column_exists(cursor, "final_videos", "intro_card_id")
+        intro_select = ", fv.intro_card_id" if _has_intro else ""
+
         base_query = f"""
             SELECT
                 fv.id,
@@ -304,7 +320,7 @@ async def list_downloads(
                 fv.quality_score,
                 fv.clip_count,
                 fv.clip_game_start_time,
-                fv.match_count
+                fv.match_count{intro_select}
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
@@ -313,6 +329,19 @@ async def list_downloads(
         """
         cursor.execute(base_query, params)
         rows = cursor.fetchall()
+
+        # T5215: batch-load the card map + default + threshold ONCE for the
+        # whole list (no N+1 per tile) -- resolution happens in memory below,
+        # per row, via the SAME resolve_intro_card_id every other consumer uses.
+        if _has_intro:
+            intro_card_map = load_profile_cards(cursor)
+            intro_default_id = next(
+                (cid for cid, c in intro_card_map.items() if c["is_default"]), None
+            )
+            intro_min_duration = get_intro_min_duration(cursor)
+        else:
+            intro_card_map, intro_default_id = {}, None
+            intro_min_duration = DEFAULT_INTRO_MIN_DURATION_SECONDS
 
         # game_id / mixes filter via the shared router helper (T3630: collections
         # are SINGLE-CLIP reels only -- route_collection sends multi-clip reels to
@@ -538,6 +567,28 @@ async def list_downloads(
             duration = row['fv_duration']
             tag_list = decode_data(row['tags']) or []
 
+            # T5215: raw stored attachment (for the picker's preselection) +
+            # in-memory resolution via the SAME single resolution order every
+            # consumer uses (no per-tile query -- intro_card_map/default/
+            # threshold were batch-loaded once above).
+            raw_intro_card_id = row['intro_card_id'] if _has_intro else None
+            resolved_intro_id = (
+                resolve_intro_card_id(
+                    raw_intro_card_id, duration, intro_default_id, intro_min_duration,
+                    reel_id=row['id'],
+                )
+                if _has_intro else None
+            )
+            intro_card_info = (
+                intro_card_map.get(resolved_intro_id) if resolved_intro_id is not None else None
+            )
+            if resolved_intro_id is not None and intro_card_info is None:
+                logger.warning(
+                    "[intro] reel id=%s resolved to missing intro_card id=%s -- "
+                    "showing no intro", row['id'], resolved_intro_id,
+                )
+            intro_card_name = intro_card_info['name'] if intro_card_info else None
+
             # Append 'Z' to indicate UTC so JavaScript parses correctly
             # SQLite stores as 'YYYY-MM-DD HH:MM:SS' but JS needs timezone info
             created_at_utc = row['created_at']
@@ -581,7 +632,9 @@ async def list_downloads(
                 game_ids=game_ids,
                 game_names=game_names,
                 game_dates=game_dates,
-                group_key=group_key
+                group_key=group_key,
+                intro_card_id=raw_intro_card_id,
+                intro_card_name=intro_card_name,
             ))
 
 
@@ -970,6 +1023,78 @@ async def rename_download(download_id: int, body: dict):
         return {"success": True, "name": name}
 
 
+class IntroAttachRequest(BaseModel):
+    """Surgical reel-intro attachment (T5215). `intro_card_id` is REQUIRED (not
+    defaulted) so the client always states exact intent -- there is no
+    "unspecified" case for this endpoint, only 0 / null / an id."""
+    intro_card_id: int | None
+
+
+@router.patch("/{download_id}/intro")
+async def set_download_intro(download_id: int, body: IntroAttachRequest):
+    """Attach/detach/clear a reel's intro card (T5215). Gesture-only, surgical
+    single-column write on the reel's CURRENT `final_videos` row.
+
+      0    -> explicit "no intro" (never gated by consent -- detaching/opting
+              out is always allowed)
+      null -> restore inherit-the-profile-default (also never gated)
+      <id> -> attach that card; requires (a) parental consent recorded for
+              this profile and (b) the id to reference a real card in THIS
+              profile -- a dangling id is never persisted from a gesture.
+    """
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    intro_card_id = body.intro_card_id
+
+    if (intro_card_id is not None and intro_card_id != 0
+            and get_intro_consent(user_id, profile_id) is None):
+        raise HTTPException(
+            status_code=403,
+            detail="Parental consent is required before attaching an intro card.",
+        )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        if not column_exists(cursor, "final_videos", "intro_card_id"):
+            raise HTTPException(
+                status_code=503,
+                detail="Intro attachment is not available yet for this profile "
+                       "(pending migration).",
+            )
+
+        cursor.execute(
+            "SELECT id, duration FROM final_videos WHERE id = ? AND published_at IS NOT NULL",
+            (download_id,),
+        )
+        reel_row = cursor.fetchone()
+        if reel_row is None:
+            raise HTTPException(status_code=404, detail="Download not found")
+
+        if intro_card_id is not None and intro_card_id != 0:
+            cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (intro_card_id,))
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Intro card not found")
+
+        cursor.execute(
+            "UPDATE final_videos SET intro_card_id = ? WHERE id = ?",
+            (intro_card_id, download_id),
+        )
+        conn.commit()
+
+        # T5215 round 3: return the RESOLVED name too, not just the raw id --
+        # the frontend's optimistic update needs it to show the thumbnail
+        # badge immediately (no reload), and only the server can resolve it
+        # correctly (accounts for the duration gate on the inherit path).
+        card = resolve_intro_card(intro_card_id, reel_row["duration"], conn, reel_id=download_id)
+
+    return {
+        "success": True,
+        "intro_card_id": intro_card_id,
+        "intro_card_name": card["name"] if card else None,
+    }
+
+
 async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = None):
     """Proxy a published reel's poster object with a FRESH presign per request.
 
@@ -1128,6 +1253,13 @@ _MOVED_REEL_CARRY_COLUMNS = (
     # T4890: the first-frame poster is per-profile media too; carry the frozen ref
     # and copy the object (below) so the moved reel's share link still unfurls.
     "poster_filename",
+    # T5215: `intro_card_id` is DELIBERATELY ABSENT here. Intro cards are
+    # per-profile (epic decision 7) -- a source card id is meaningless (and
+    # potentially collides with an unrelated card) in the target profile. This
+    # is the one `final_videos` INSERT writer that must NOT carry the
+    # attachment forward; omitting the column lets the target row default to
+    # NULL, i.e. inherit the TARGET profile's own default (decision 4: "no
+    # dangling cross-profile ids"). Do not "helpfully" add it to this tuple.
 )
 
 

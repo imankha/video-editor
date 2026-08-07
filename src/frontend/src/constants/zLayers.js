@@ -24,7 +24,16 @@
  * THE LADDER (low → high)
  * -----------------------
  *   DROPDOWN          z-40    page-level popovers: dropdowns, drawers, side panels,
- *                             tooltips, drawer backdrops.
+ *                             tooltips, drawer backdrops. This IS the rung for an
+ *                             in-card kebab/action MENU that is NOT portaled to
+ *                             document.body (e.g. CollectionHeader's "..." menu) —
+ *                             don't confuse it with the OUT-OF-SCOPE local badges
+ *                             below: an open menu is content the user is actively
+ *                             reading/clicking, so it must clear every sibling tile
+ *                             control (T5215 round 3 — a card's own Play button,
+ *                             bare z-30, was painting over CollectionHeader's menu
+ *                             because the menu was left at a bare z-10 instead of
+ *                             this rung).
  *   MODAL             z-50    standard modal dialogs + their backdrops; tile kebab
  *                             menus portaled to body.
  *   OVERLAY_BACKDROP  z-[60]  the opaque backdrop beneath a fullscreen player or a

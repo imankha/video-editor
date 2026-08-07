@@ -8,6 +8,7 @@ import { GameAxisGroup } from './GameAxisGroup';
 import { CollectionCard } from './CollectionCard';
 import { SmartLockedCard } from './SmartLockedCard';
 import { toPlayerReels } from './playerReels';
+import { collectionIntroKey } from './introBadgeKey';
 
 const MIXES_NAME = 'Mixes & compilations';
 
@@ -28,6 +29,8 @@ const AXIS_LABEL = { game: 'By game', tournament: 'By tournament', month: 'By mo
  * @param {Function} onPlayCollection - (reels[], title) => void (opens the shared player)
  * @param {Function=} onShareCollection - (definition, title) => void (T3620)
  * @param {Function=} onCopyCollectionLink - (definition) => void (T3620)
+ * @param {Function=} onIntroCollection - (definition, title) => void, the collection's OWN intro (T5215 round 2)
+ * @param {Object=} introBadgesByKey - {key: {intro_card_id, intro_card_name}}, batch-resolved (T5215 round 6)
  */
 export function CollectionsTab({
   collections,
@@ -35,6 +38,8 @@ export function CollectionsTab({
   onPlayCollection,
   onShareCollection,
   onCopyCollectionLink,
+  onIntroCollection,
+  introBadgesByKey = {},
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
@@ -97,6 +102,8 @@ export function CollectionsTab({
         shareScope={{ type: 'game', game_id: g.game_id }}
         onShare={onShareCollection}
         onCopyLink={onCopyCollectionLink}
+        onIntro={onIntroCollection}
+        introBadgesByKey={introBadgesByKey}
       />
     );
   };
@@ -130,6 +137,11 @@ export function CollectionsTab({
         <div key={`smart:${sc.key}`} className="mb-3">
           {RATIO_ORDER.map((ratio) => {
             if (sc.ratio_eligible?.[ratio]) {
+              const definition = {
+                scope: { type: 'all' },
+                filter: sc.tags ? { tags: sc.tags } : {},
+                aspect_ratio: ratio,
+              };
               return (
                 <CollectionCard
                   key={ratio}
@@ -140,13 +152,11 @@ export function CollectionsTab({
                   hasNullDurations={sc.has_null_durations}
                   requestMembers={reqSmart(sc)}
                   onPlay={onPlay}
-                  shareDefinition={{
-                    scope: { type: 'all' },
-                    filter: sc.tags ? { tags: sc.tags } : {},
-                    aspect_ratio: ratio,
-                  }}
+                  shareDefinition={definition}
                   onShare={onShareCollection}
                   onCopyLink={onCopyCollectionLink}
+                  onIntro={onIntroCollection}
+                  introBadge={introBadgesByKey[collectionIntroKey(definition)]}
                 />
               );
             }
@@ -240,6 +250,8 @@ export function CollectionsTab({
           shareScope={{ type: 'mixes' }}
           onShare={onShareCollection}
           onCopyLink={onCopyCollectionLink}
+          onIntro={onIntroCollection}
+          introBadgesByKey={introBadgesByKey}
         />
       )}
     </>

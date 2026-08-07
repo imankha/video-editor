@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import set_current_profile_id
+from app.services.intro_cards import get_intro_min_duration, validate_intro_min_duration
 from app.services.intro_media import (
     InvalidImageError,
     delete_intro_image,
@@ -256,6 +257,55 @@ async def switch_profile(request: SwitchProfileRequest):
     logger.info(f"Switched to profile {request.profileId} for user {user_id}")
 
     return {"profileId": request.profileId}
+
+
+class UpdateIntroMinDurationRequest(BaseModel):
+    intro_min_duration_seconds: float
+
+
+@router.get("/current/intro-min-duration")
+async def get_current_intro_min_duration():
+    """The active profile's reel-length floor for the inherit-the-default intro
+    resolution path (T5215). Lives on profile.sqlite (per-profile, like the
+    default card itself -- epic decision 7), NOT the cross-profile registry in
+    user.sqlite, so this is scoped to the CURRENT profile only (resolved via
+    the request's profile context), unlike the other routes in this file."""
+    from app.database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        value = get_intro_min_duration(cursor)
+    return {"intro_min_duration_seconds": value}
+
+
+@router.patch("/current/intro-min-duration")
+async def update_current_intro_min_duration(request: UpdateIntroMinDurationRequest):
+    """Surgical, gesture-only write of the current profile's intro-duration
+    threshold. `0 < value <= 300` seconds; out-of-range is REJECTED with a
+    clear 400, never clamped silently (CLAUDE.md: no silent fallback for
+    internal data -- a typo here would silently misconfigure intros
+    profile-wide)."""
+    from app.database import column_exists, get_db_connection
+
+    try:
+        value = validate_intro_min_duration(request.intro_min_duration_seconds)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if not column_exists(cursor, "user_settings", "intro_min_duration_seconds"):
+            raise HTTPException(
+                status_code=503,
+                detail="Intro duration settings are not available yet for this "
+                       "profile (pending migration).",
+            )
+        cursor.execute(
+            "UPDATE user_settings SET intro_min_duration_seconds = ? WHERE id = 1",
+            (value,),
+        )
+        conn.commit()
+    return {"intro_min_duration_seconds": value}
 
 
 @router.put("/{profile_id}")

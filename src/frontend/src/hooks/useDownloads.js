@@ -358,6 +358,49 @@ export function useDownloads(isOpen = false) {
     }
   }, []);
 
+  // T5215: attach/detach/clear a reel's intro card. Surgical, gesture-only
+  // PATCH (0 = no intro, null = inherit the profile default, <id> = that
+  // card) — mirrors renameDownload's optimistic-update + PATCH shape.
+  //
+  // Round 3: the optimistic update ALSO sets intro_card_id eagerly (so the
+  // picker's own preselection state is right immediately), but the THUMBNAIL
+  // BADGE keys off the RESOLVED intro_card_name, which only the server can
+  // compute (duration gate on the inherit path) -- setting the id alone left
+  // the badge dark until the next full reload/refetch, exactly the gap the
+  // user reported. The PATCH response now returns the resolved name too;
+  // apply it from the response, not a second guess made on the client.
+  //
+  // Round 6: this only ever updated `downloads` (the flat gallery array) --
+  // most reel tiles are actually rendered from useCollections()'s SEPARATE
+  // `members` cache (collapsed game/mix groups), which this write never
+  // touched, so a badge inside a collapsed group stayed stale until reload
+  // (user: "switched the intro card for a reel to 'no intro' and didn't see
+  // the intro badge go away"). Return the resolved fields so the caller can
+  // patch that second cache too (mirrors the existing rename gesture, which
+  // already calls collections.patchMember after renameDownload).
+  const setIntroCard = useCallback(async (downloadId, introCardId) => {
+    setDownloads(prev => prev.map(d =>
+      d.id === downloadId ? { ...d, intro_card_id: introCardId } : d
+    ));
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/intro`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intro_card_id: introCardId }),
+      });
+      if (!response.ok) throw new Error('Failed to set intro card');
+      const { intro_card_name } = await response.json();
+      setDownloads(prev => prev.map(d =>
+        d.id === downloadId ? { ...d, intro_card_name } : d
+      ));
+      return { success: true, intro_card_id: introCardId, intro_card_name };
+    } catch (err) {
+      console.error('[useDownloads] setIntroCard error:', err);
+      setError(err.message);
+      return { success: false };
+    }
+  }, []);
+
   const markWatched = useCallback(async (downloadId) => {
     setDownloads(prev => prev.map(d =>
       d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
@@ -396,6 +439,7 @@ export function useDownloads(isOpen = false) {
     getDownloadUrl,
     getStreamingUrl,
     renameDownload,
+    setIntroCard,
     markWatched,
     setFilter,
 

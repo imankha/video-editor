@@ -18,7 +18,7 @@ game_ids/tags BLOBs are on-disk storage only, decoded in Python here).
 import json
 import logging
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,11 +28,19 @@ from app.database import get_db_connection
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
+from app.services.intro_cards import (
+    collection_intro_settings_key,
+    get_collection_intro_card_id,
+    get_default_intro_card,
+    resolve_intro_card,
+    set_collection_intro_card_id,
+)
 from app.services.materialization import open_profile_db_readonly
 from app.services.sharing_db import (
     create_collection_share,
     find_collection_share,
 )
+from app.services.user_db import get_intro_consent
 from app.storage import APP_ENV, generate_presigned_url_global
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
@@ -595,6 +603,12 @@ class CollectionDefinition(BaseModel):
     aspect_ratio: Literal["9:16", "16:9"]
     budget_sec: float | None = None
     title: str | None = None          # server overwrites with a frozen title
+    # T5215: the CLIENT's raw picker choice at share-creation time -- 0 (no
+    # intro), an explicit card id, or None/omitted ("use my current default").
+    # The server resolves this to a CONCRETE value (id or 0, never None) and
+    # freezes THAT into the stored definition (see `_canonical_definition`) so
+    # a later default change never retroactively changes an existing link.
+    intro_card_id: int | None = None
 
 
 class CollectionShareRequest(BaseModel):
@@ -688,15 +702,170 @@ def evaluate_collection_members(conn, definition: dict) -> list[dict]:
     ]
 
 
+# ---- collection's OWN attached intro (T5215 round 2) -----------------------
+# Distinct from a SHARE's frozen-at-creation choice above: this is a stored
+# attribute of the collection itself (the user, 2026-08-06: "I also want to
+# be able to add an intro card to compilations/collections"). Resolution order
+# + duration-gate semantics are documented in full on
+# `services.intro_cards.collection_intro_settings_key`.
+
+class UpdateCollectionIntroRequest(BaseModel):
+    intro_card_id: int | None
+
+
+def _collection_scope_and_definition(
+    scope_type: str, aspect_ratio: str, game_id: int | None, tags: str | None,
+) -> tuple[str, list[str] | None, dict]:
+    """Shared param parsing for both the GET and PATCH collection-intro
+    endpoints -- one place decides the tag list + the live-evaluation
+    definition shape, so the two routes can't drift on scope validation."""
+    if scope_type == "game" and game_id is None:
+        raise HTTPException(400, "game scope requires game_id")
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    definition = {
+        "scope": {"type": scope_type, **({"game_id": game_id} if scope_type == "game" else {})},
+        "filter": {"tags": tag_list} if tag_list else {},
+        "aspect_ratio": aspect_ratio,
+    }
+    return tag_list, definition
+
+
+@router.get("/intro")
+async def get_collection_intro(
+    scope_type: str, aspect_ratio: str,
+    game_id: int | None = None, tags: str | None = None,
+):
+    """Resolve a (scope, ratio) collection's OWN attached intro -- id (raw
+    stored value, for the picker's preselection) + name (resolved, what will
+    actually play; accounts for the duration gate on the inherit path)."""
+    tag_list, definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    key = collection_intro_settings_key(
+        scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
+    )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        raw_id = get_collection_intro_card_id(cursor, key)
+        # The duration gate on the inherit path uses the collection's LIVE
+        # TOTAL duration (all current members, NULL-excluded) -- the same
+        # quantity collections_summary's ratio_durations already computes,
+        # recomputed here rather than trusting a client-supplied number.
+        members = evaluate_collection_members(conn, definition)
+        durations = [m["duration"] for m in members if m["duration"] is not None]
+        total_duration = sum(durations) if durations else None
+        card = resolve_intro_card(raw_id, total_duration, conn)
+
+    return {
+        "intro_card_id": raw_id,
+        "intro_card_name": card["name"] if card else None,
+    }
+
+
+@router.patch("/intro")
+async def set_collection_intro(
+    body: UpdateCollectionIntroRequest,
+    scope_type: str, aspect_ratio: str,
+    game_id: int | None = None, tags: str | None = None,
+):
+    """Attach/detach/clear a collection's OWN intro. Surgical write to
+    `collection_settings` (no per-collection row exists otherwise). Same
+    consent gate + dangling-id rejection as the reel PATCH."""
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    intro_card_id = body.intro_card_id
+
+    if (intro_card_id is not None and intro_card_id != 0
+            and get_intro_consent(user_id, profile_id) is None):
+        raise HTTPException(
+            status_code=403,
+            detail="Parental consent is required before attaching an intro card.",
+        )
+
+    tag_list, _definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    key = collection_intro_settings_key(
+        scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
+    )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if intro_card_id is not None and intro_card_id != 0:
+            cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (intro_card_id,))
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Intro card not found")
+        set_collection_intro_card_id(cursor, key, intro_card_id)
+        conn.commit()
+
+    return {"success": True, "intro_card_id": intro_card_id}
+
+
+class CollectionIntroBatchItem(BaseModel):
+    scope_type: str
+    game_id: int | None = None
+    tags: list[str] | None = None
+    aspect_ratio: str
+
+
+@router.get("/intro/batch")
+async def get_collection_intro_batch(items: str):
+    """Batch-resolve MANY collections' OWN attached intro in ONE round trip
+    (T5215 round 3 -- the Collections tab renders N cards; badging every one
+    of them must not fire N separate requests). GET, not POST: this is a pure
+    read (no `collection_settings` row is ever written here) -- keeping it a
+    GET is also what lets the frontend call it from a plain data-loading
+    useEffect without tripping the reactive-persistence lint rule, which
+    flags non-GET verbs inside effects as a likely write-as-side-effect bug
+    (CLAUDE.md's gesture-based persistence rule); a GET is unambiguous either
+    way. `items` is a JSON-encoded array (querystring-safe for a small list;
+    a real POST body isn't idiomatic for a request that mutates nothing).
+    Each result echoes the item's OWN canonical key so the client can match
+    by key rather than trusting array position. The duration-gating member
+    scan only runs for a bucket that is actually on the inherit path (no
+    stored row) -- an explicit id or an explicit 0 never needs it, so most
+    buckets cost one KV lookup only."""
+    try:
+        raw_items = json.loads(items)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"items must be a JSON array: {e}") from None
+    parsed_items = [CollectionIntroBatchItem(**it) for it in raw_items]
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        results = []
+        for item in parsed_items:
+            tag_list, definition = _collection_scope_and_definition(
+                item.scope_type, item.aspect_ratio, item.game_id,
+                ",".join(item.tags) if item.tags else None,
+            )
+            key = collection_intro_settings_key(
+                item.scope_type, game_id=item.game_id, tags=tag_list,
+                aspect_ratio=item.aspect_ratio,
+            )
+            raw_id = get_collection_intro_card_id(cursor, key)
+            total_duration = None
+            if raw_id is None:
+                members = evaluate_collection_members(conn, definition)
+                durations = [m["duration"] for m in members if m["duration"] is not None]
+                total_duration = sum(durations) if durations else None
+            card = resolve_intro_card(raw_id, total_duration, conn)
+            results.append({
+                "key": key,
+                "intro_card_id": raw_id,
+                "intro_card_name": card["name"] if card else None,
+            })
+
+    return {"results": results}
+
+
 def _context_line(definition: dict) -> str:
     if definition["scope"]["type"] == "game":
         return "This link always shows the current reels for this game."
     return "This link always shows the current top reels."
 
 
-def _evaluated_share_members(share: dict) -> tuple[dict, list]:
-    """(definition, evaluated members in playback order) for a collection share.
-    Empty members on unavailable sharer DB - never raises."""
+def _evaluated_share_members(share: dict) -> tuple[dict, list, Any]:
+    """(definition, evaluated members in playback order, resolved intro card row
+    or None) for a collection share. Empty members + None intro on an
+    unavailable sharer DB - never raises."""
     definition = share["collection_definition"]
     if isinstance(definition, str):
         definition = json.loads(definition)
@@ -706,16 +875,27 @@ def _evaluated_share_members(share: dict) -> tuple[dict, list]:
         logger.warning(
             f"[collection-share] sharer DB unavailable for token={share['share_token']}"
         )
-        return definition, []
+        return definition, [], None
     try:
         members = evaluate_collection_members(conn, definition)
+        # T5215: the frozen value is ALWAYS concrete (id or 0) for a share
+        # created by this task's `/share` endpoint, never NULL -- so the
+        # duration gate is structurally unreachable here; collections are
+        # never duration-gated, by construction. A share frozen BEFORE this
+        # field existed has no `intro_card_id` key at all -- default that to 0
+        # (no intro) rather than None, so a legacy link stays exactly as it
+        # was (no retroactively-invented attachment, no spurious "unknown
+        # duration" warning for a value that was never meant to be resolved).
+        intro_card = resolve_intro_card(
+            definition.get("intro_card_id", 0), reel_duration=None, profile_conn=conn,
+        )
     finally:
         conn.close()
 
     budget = definition.get("budget_sec")
     if budget:
         members = select_within_budget(members, budget)
-    return definition, members
+    return definition, members, intro_card
 
 
 def first_member_poster_key(share: dict) -> str | None:
@@ -725,7 +905,7 @@ def first_member_poster_key(share: dict) -> str | None:
     the same reel playback opens with."""
     from app.services.poster import poster_basename, poster_rel_path
 
-    _, members = _evaluated_share_members(share)
+    _, members, _ = _evaluated_share_members(share)
     if not members:
         return None
     rel = poster_rel_path(poster_basename(members[0]["filename"]))
@@ -742,13 +922,18 @@ def resolve_collection_share(share: dict) -> dict:
     from app.services.poster import poster_basename, poster_rel_path
     from app.storage import r2_head_object_global
 
-    definition, members = _evaluated_share_members(share)
+    definition, members, intro_card = _evaluated_share_members(share)
     title = definition.get("title") or "Highlights"
     base = {
         "title": title,
         "context_line": _context_line(definition),
         "aspect_ratio": definition["aspect_ratio"],
     }
+    # T5215: id + name now; T5220 adds the presigned pre-roll payload.
+    intro_fields = (
+        {"intro_card_id": intro_card["id"], "intro_card_name": intro_card["name"]}
+        if intro_card is not None else {}
+    )
 
     uid, pid = share["sharer_user_id"], share["sharer_profile_id"]
     out_members = []
@@ -783,7 +968,7 @@ def resolve_collection_share(share: dict) -> dict:
                 "poster_height": _i(meta.get("height")),
             }
 
-    return {**base, "members": out_members, **poster_fields}
+    return {**base, "members": out_members, **poster_fields, **intro_fields}
 
 
 # ---- create endpoint (authenticated sharer) -------------------------------
@@ -838,9 +1023,17 @@ def _build_collection_title(conn, d: CollectionDefinition) -> str:
     return title
 
 
-def _canonical_definition(d: CollectionDefinition, title: str) -> dict:
+def _canonical_definition(d: CollectionDefinition, title: str, intro_card_id: int) -> dict:
     """Canonical (dedup-stable) JSONB definition: sorted tags, omitted None
-    fields, title + budget folded in (both are part of link identity)."""
+    fields, title + budget folded in (both are part of link identity).
+
+    `intro_card_id` is the ALREADY-RESOLVED concrete value (T5215) -- the
+    caller (`create_collection_share_endpoint`) turns the client's raw picker
+    choice (id / 0 / "use my default") into a concrete id-or-0 BEFORE calling
+    this, so the frozen JSONB never stores NULL and a later default change can
+    never retroactively move an existing link. Always included (part of link
+    identity, like title/budget) so `find_collection_share` dedup correctly
+    treats two different intros as two different links."""
     scope: dict = {"type": d.scope.type}
     if d.scope.type == "game":
         scope["game_id"] = d.scope.game_id
@@ -852,7 +1045,8 @@ def _canonical_definition(d: CollectionDefinition, title: str) -> dict:
         filt["min_rating"] = d.filter.min_rating
 
     out: dict = {"scope": scope, "filter": filt,
-                 "aspect_ratio": d.aspect_ratio, "title": title}
+                 "aspect_ratio": d.aspect_ratio, "title": title,
+                 "intro_card_id": intro_card_id}
     if d.budget_sec is not None:
         out["budget_sec"] = round(float(d.budget_sec), 3)
     return out
@@ -869,9 +1063,32 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
     if d.scope.type == "game" and d.scope.game_id is None:
         raise HTTPException(400, "game scope requires game_id")
 
+    # T5215: an EXPLICIT card pick requires consent (mirrors the reel PATCH --
+    # "use my default"/None and 0/no-intro are never gated, same as detaching).
+    if (d.intro_card_id is not None and d.intro_card_id != 0
+            and get_intro_consent(user_id, profile_id) is None):
+        raise HTTPException(
+            status_code=403,
+            detail="Parental consent is required before attaching an intro card.",
+        )
+
     with get_db_connection() as conn:
         title = _build_collection_title(conn, d)
-    definition = _canonical_definition(d, title)
+        cursor = conn.cursor()
+        # T5215: freeze the picker choice to a CONCRETE value NOW (id or 0,
+        # never NULL) -- this is what makes "changing the default later does
+        # not retroactively change an existing shared link" true.
+        if d.intro_card_id is None:
+            default_row = get_default_intro_card(cursor)
+            concrete_intro_id = default_row["id"] if default_row is not None else 0
+        elif d.intro_card_id == 0:
+            concrete_intro_id = 0
+        else:
+            cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (d.intro_card_id,))
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Intro card not found")
+            concrete_intro_id = d.intro_card_id
+    definition = _canonical_definition(d, title, concrete_intro_id)
 
     recipient_emails = body.recipient_emails
     if not recipient_emails:

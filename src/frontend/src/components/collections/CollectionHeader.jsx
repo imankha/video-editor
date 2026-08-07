@@ -5,7 +5,8 @@ import { ratioGlyph, ratioLabel } from '../../constants/aspectRatios';
 import { formatDurationHuman } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
-import { API_BASE } from '../../config';
+import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
+import { Z } from '../../constants/zLayers';
 
 // Collection-level Download (stitched mp4) is still deferred to T3680.
 // Share / Copy link are wired in T3620 (onShare / onCopyLink props).
@@ -35,8 +36,6 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * wired in T3620 (onShare/onCopyLink); Download stays disabled until T3680. The
  * max-duration slider is hidden until "Max Duration".
  *
- * T5673 item 2: leading reel poster shown in media slot (collapsed row visual).
- *
  * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
  * @param {number}    reelCount
@@ -51,7 +50,9 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {boolean=}  playLoading
  * @param {Function=} onShare        - open the share modal (T3620); omitted => disabled
  * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
- * @param {number=}   leadingReelId   - representative reel id for collapsed row poster (T5673)
+ * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
+ * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6);
+ *                                     shows the shared badge in the media slot's corner when intro_card_name is set
  */
 export function CollectionHeader({
   title,
@@ -68,7 +69,8 @@ export function CollectionHeader({
   playLoading,
   onShare,
   onCopyLink,
-  leadingReelId,
+  onIntro,
+  introBadge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -107,11 +109,14 @@ export function CollectionHeader({
       <div className="relative" ref={menuRef}>
         <CardIconButton icon={MoreVertical} onClick={() => setMenuOpen((o) => !o)} title="More actions" />
         {menuOpen && (
-          <div className="absolute right-0 mt-1 z-10 w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1">
+          <div className={`absolute right-0 mt-1 ${Z.DROPDOWN} w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1`}>
             <MenuItem icon={Play} label="Play all"
               onClick={() => { setMenuOpen(false); onPlayAll(); }} />
             <MenuItem icon={Clock} label="Max Duration"
               onClick={() => { setMenuOpen(false); onToggleSlider(); }} />
+            <MenuItem icon={IntroIcon} label="Intro"
+              disabled={!onIntro} title={onIntro ? undefined : 'Coming soon'}
+              onClick={onIntro ? () => { setMenuOpen(false); onIntro(); } : undefined} />
             <div className="my-1 border-t border-gray-600" />
             <MenuItem icon={Share2} label="Share"
               disabled={!onShare} title={onShare ? undefined : 'Coming soon'}
@@ -129,31 +134,42 @@ export function CollectionHeader({
     </div>
   ) : null;
 
+  // T5215 round 6 item 3 (user, 2026-08-07): "I don't see an intro card
+  // badge on the collections which I do want" -- round 5 removed the
+  // title-row badge (too small to read there), but the user still wants
+  // SOME indicator. Mirrors the reel-tile treatment (round 5 item 3): a
+  // small corner badge on the collection's own VISUAL area (this media
+  // slot), not inline with the title text. Collections have no rank-number
+  // chip to sit next to, so it always takes the media slot's upper-left
+  // corner -- the same fallback spot the reel tile uses when there's no rank.
+  const introBadgeEl = introBadge?.intro_card_name ? (
+    <div
+      data-testid="intro-badge"
+      className="absolute top-0.5 left-0.5 px-0.5 py-0.5 bg-black/60 backdrop-blur-sm rounded flex items-center justify-center"
+      title="An intro plays before this collection"
+    >
+      <IntroIcon size={10} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
+    </div>
+  ) : null;
+
   return (
     <MediaCard
       media={
-        leadingReelId ? (
-          <div className={`relative w-10 h-10 rounded-md overflow-hidden ${REEL.bgMuted}`}>
-            <img
-              src={`${API_BASE}/api/downloads/${leadingReelId}/poster.jpg`}
-              alt=""
-              loading="lazy"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = `<${Film} size={16} class="${REEL.accent}" />`;
-              }}
-            />
-          </div>
-        ) : (
-          <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted} />
-        )
+        <CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted}>
+          {introBadgeEl}
+        </CardMedia>
       }
       actions={actions}
       footer={footer}
       stacked
     >
-      <h3 className="text-white text-sm font-medium truncate">{title}</h3>
+      {/* T5215 round 5 (user, 2026-08-07): "no little image near game
+          highlights since it's too small to help visually" -- the round-3
+          title-row badge is removed entirely (not resized); item 3's
+          replacement badge lives in the media slot above instead. */}
+      <h3 className="text-white text-sm font-medium truncate">
+        {title}
+      </h3>
       <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
         <span className={`${REEL.accent} text-sm leading-none`} title={ratioLabel(ratio)}>
           {ratioGlyph(ratio)}

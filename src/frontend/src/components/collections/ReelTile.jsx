@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Play, Share2, Link2, MoreVertical, Download, Loader, Columns,
-  FolderOpen, ArrowRightLeft, Trash2, Pencil, Film,
+  FolderOpen, ArrowRightLeft, Trash2, Pencil, Film, Sparkles,
 } from 'lucide-react';
 import { RATIO } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
+import { IntroCardPicker } from '../introcards/IntroCardPicker';
+import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 
 /**
  * ReelTile - a PUBLISHED reel as a poster tile (T5673).
@@ -73,6 +75,12 @@ export function ReelTile({
   onDelete,
   onRename,
   seasonRank,
+  // T5215: intro-card attachment picker (all reads/gestures owned by the panel).
+  introCards,
+  introProfile,
+  introHasConsent,
+  onSetIntro,
+  onRequestIntroConsent,
 }) {
   // Poster load lifecycle: 'loading' -> skeleton shimmer; 'loaded' -> poster;
   // 'error' -> branded fallback (the endpoint 404s when no poster exists).
@@ -81,6 +89,7 @@ export function ReelTile({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [menuPos, setMenuPos] = useState(null); // {top, left, flipped} for portal
+  const [introPickerOpen, setIntroPickerOpen] = useState(false);
   const menuRef = useRef(null);
   const kebabBtnRef = useRef(null);
   // T6300: reveal/interaction gate is CAPABILITY (pointer type), not the isMobile
@@ -181,15 +190,42 @@ export function ReelTile({
         <span className={`absolute top-2.5 right-11 z-20 w-3 h-3 rounded-full ${unwatchedStyle.dot} ring-2 ring-black/40`} title="New" />
       )}
 
-      {/* Top Play rank badge (T5679) */}
-      {seasonRank && seasonRank <= 20 && (
-        <div
-          className="absolute top-1.5 left-1.5 z-20 px-2 py-0.5 bg-cyan-500/90 text-black text-xs font-bold rounded-md"
-          title={`Ranked #${seasonRank} of your reels this season`}
-          aria-label={`Ranked #${seasonRank} of your reels this season`}
-        >
-          #{seasonRank}
+      {/* Top Play rank badge (T5679) + intro badge (T5215 round 5 item 3, user:
+          "next to the number if there is a number and in the upper left if
+          there is not ... the same size as the number"). Was inline with the
+          name text in the bottom scrim (round 2) -- moved here so it reads as
+          a corner state marker, not part of the title. Same INTRO_BADGE.text
+          colour + download.intro_card_name gate as before; only position/size
+          changed (visibility correctness is item 2, verified separately). */}
+      {seasonRank && seasonRank <= 20 ? (
+        <div className="absolute top-1.5 left-1.5 z-20 flex items-center gap-1">
+          <div
+            className="px-2 py-0.5 bg-cyan-500/90 text-black text-xs font-bold rounded-md"
+            title={`Ranked #${seasonRank} of your reels this season`}
+            aria-label={`Ranked #${seasonRank} of your reels this season`}
+          >
+            #{seasonRank}
+          </div>
+          {download.intro_card_name && (
+            <div
+              data-testid="intro-badge"
+              className="px-1 py-0.5 bg-black/60 backdrop-blur-sm rounded-md flex items-center justify-center"
+              title="An intro plays before this reel"
+            >
+              <IntroIcon size={14} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
+            </div>
+          )}
         </div>
+      ) : (
+        download.intro_card_name && (
+          <div
+            data-testid="intro-badge"
+            className="absolute top-1.5 left-1.5 z-20 px-1 py-0.5 bg-black/60 backdrop-blur-sm rounded-md flex items-center justify-center"
+            title="An intro plays before this reel"
+          >
+            <IntroIcon size={14} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
+          </div>
+        )
       )}
 
       {/* Bottom scrim: name (or rename input) + metadata */}
@@ -209,7 +245,9 @@ export function ReelTile({
             className={`w-full text-white text-xs font-medium bg-black/40 border-b ${REEL.border} outline-none`}
           />
         ) : (
-          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">{displayName}</h3>
+          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
+            {displayName}
+          </h3>
         )}
         {metaLine && (
           <div className="mt-0.5 text-[11px] text-gray-300 truncate">{metaLine}</div>
@@ -280,6 +318,10 @@ export function ReelTile({
                   <Pencil size={20} className="text-gray-300 flex-shrink-0" />
                   <span className="text-gray-200">Rename</span>
                 </button>
+                <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
+                  <Sparkles size={20} className="text-gray-300 flex-shrink-0" />
+                  <span className="text-gray-200">Intro</span>
+                </button>
                 {showBeforeAfter && (
                   <>
                     <div className="my-1 border-t border-gray-700" />
@@ -342,6 +384,10 @@ export function ReelTile({
                 <Pencil size={18} className="text-gray-300 flex-shrink-0" />
                 <span className="text-gray-200">Rename</span>
               </button>
+              <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className={menuItemClass}>
+                <Sparkles size={18} className="text-gray-300 flex-shrink-0" />
+                <span className="text-gray-200">Intro</span>
+              </button>
               {showBeforeAfter && (
                 <button onClick={(e) => { onBeforeAfter(e, download); setMenuOpen(false); }} disabled={exportingBeforeAfter === download.id} className={menuItemClass}>
                   {exportingBeforeAfter === download.id
@@ -373,6 +419,18 @@ export function ReelTile({
             document.body
           )
         ) : null}
+
+      <IntroCardPicker
+        isOpen={introPickerOpen}
+        onClose={() => setIntroPickerOpen(false)}
+        title={`Intro for "${download.project_name || displayName}"`}
+        cards={introCards}
+        profile={introProfile}
+        selectedId={download.intro_card_id ?? null}
+        hasConsent={introHasConsent}
+        onSelect={(cardId) => onSetIntro(download, cardId)}
+        onRequestConsent={onRequestIntroConsent}
+      />
     </div>
   );
 }

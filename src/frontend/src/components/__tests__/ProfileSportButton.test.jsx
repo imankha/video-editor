@@ -55,4 +55,15 @@ describe('ProfileSportButton', () => {
     render(<ProfileSportButton />);
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('shows a photo thumbnail under the button when the profile has one, none otherwise', () => {
+    const { container, rerender } = render(<ProfileSportButton />);
+    expect(container.querySelector('img')).toBeNull(); // no introPhotoUrl on the fixture profile
+
+    h.profiles = [{ ...h.profiles[0], introPhotoUrl: 'https://r2/photo.jpg' }];
+    rerender(<ProfileSportButton />);
+    const img = container.querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img.src).toBe('https://r2/photo.jpg');
+  });
 });
