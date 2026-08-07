@@ -51,6 +51,13 @@ docker exec -d -u dev reel-task-t5215 bash -lc 'cd /workspace && claude -p --res
 ```
 
 ### T5215 — intro attachment (`reel-task-t5215`, :5176/:8003) — round 3, item 3 IN FLIGHT
+
+> **READ THIS FIRST:** a run was still executing when this handoff was written (06:36 UTC). It is
+> detached from that session and will have finished on its own. Its report is at
+> **`/tmp/round3-nudge2.output`** in the container (`docker exec -u dev reel-task-t5215 bash -lc 'cat
+> /tmp/round3-nudge2.output'`). An EMPTY file means it is still running; a file ending in
+> `Not logged in` or a session-limit line means it died — see §6, re-seed and resume rather than
+> assuming the work below is done. Check `git log --oneline -3` in the container before briefing.
 - Pushed: round 1 only. Container-local: `b6d466fa`, `383ad0d7`, `6bbe16fb` (round 2),
   **`32f00a88`** (z-order via zLayers DROPDOWN rung), **`7b991780`** (badges: collection cards get one,
   reel badge appears without reload). Items 1 and 2 of round 3 are DONE.
