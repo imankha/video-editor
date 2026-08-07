@@ -34,10 +34,15 @@ describe('TextManagementPanel — two-column layout, region+element management (
     expect(screen.getByText(/no text region under the playhead/i)).toBeTruthy();
   });
 
-  it('lists every region with its time range and every element nested inside it', () => {
+  it('lists every region with its time range and every element nested inside it (expanded)', () => {
+    // T6630 round 7 item 2: with 2+ regions and none selected, both default
+    // collapsed -- expand each via its chevron toggle before checking
+    // elements are nested underneath.
     render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} />);
     expect(screen.getByTestId('text-tab-region-0')).toBeTruthy();
     expect(screen.getByTestId('text-tab-region-1')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('text-tab-region-toggle-0'));
+    fireEvent.click(screen.getByTestId('text-tab-region-toggle-1'));
     expect(screen.getByTestId('text-tab-element-a1').textContent).toContain('GOAL');
     expect(screen.getByTestId('text-tab-element-b1').textContent).toContain('First');
     expect(screen.getByTestId('text-tab-element-b2').textContent).toContain('Second');
@@ -59,7 +64,9 @@ describe('TextManagementPanel — two-column layout, region+element management (
 
   it('the per-region "Add text" control appends an ELEMENT into THAT region (not a new region)', () => {
     const onAddElement = vi.fn();
-    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} onAddElement={onAddElement} />);
+    // Select region B so it's expanded by default (round 7 item 2: the
+    // selected region always expands regardless of how many are active).
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} selectedRegionId="r2" onAddElement={onAddElement} />);
     fireEvent.click(screen.getByTestId('text-tab-add-element-1')); // region B (index 1)
     expect(onAddElement).toHaveBeenCalledWith('r2');
   });
@@ -124,5 +131,51 @@ describe('TextManagementPanel — two-column layout, region+element management (
     const settings = screen.getByTestId('text-settings-panel');
     expect(list.contains(settings)).toBe(false);
     expect(settings.contains(list)).toBe(false);
+  });
+});
+
+describe('TextManagementPanel — expand/collapse tree per region (T6630 round 7 item 2)', () => {
+  // User: "depending on where the playhead is, we should show all of the
+  // text regions it's over and a click down tree style all of the text
+  // elements in that region with the option to add a text to that region."
+  it('a SINGLE active region auto-expands (its elements are visible without clicking anything)', () => {
+    render(<TextManagementPanel regions={[REGION_A]} />);
+    expect(screen.getByTestId('text-tab-element-a1')).toBeTruthy();
+    expect(screen.getByTestId('text-tab-region-toggle-0').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('with SEVERAL active regions and none selected, they default COLLAPSED', () => {
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} />);
+    expect(screen.queryByTestId('text-tab-element-a1')).toBeNull();
+    expect(screen.queryByTestId('text-tab-element-b1')).toBeNull();
+    expect(screen.getByTestId('text-tab-region-toggle-0').getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByTestId('text-tab-region-toggle-1').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('the SELECTED region among several always expands regardless of the collapsed default', () => {
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} selectedRegionId="r2" />);
+    expect(screen.queryByTestId('text-tab-element-a1')).toBeNull(); // r1 not selected -> collapsed
+    expect(screen.getByTestId('text-tab-element-b1')).toBeTruthy(); // r2 selected -> expanded
+  });
+
+  it('clicking the chevron toggle expands a collapsed region', () => {
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} />);
+    expect(screen.queryByTestId('text-tab-element-a1')).toBeNull();
+    fireEvent.click(screen.getByTestId('text-tab-region-toggle-0'));
+    expect(screen.getByTestId('text-tab-element-a1')).toBeTruthy();
+  });
+
+  it('clicking the chevron toggle collapses an expanded (single-active) region', () => {
+    render(<TextManagementPanel regions={[REGION_A]} />);
+    expect(screen.getByTestId('text-tab-element-a1')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('text-tab-region-toggle-0'));
+    expect(screen.queryByTestId('text-tab-element-a1')).toBeNull();
+  });
+
+  it('clicking the chevron does NOT also select the region (stopPropagation)', () => {
+    const onSelectRegion = vi.fn();
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} onSelectRegion={onSelectRegion} />);
+    fireEvent.click(screen.getByTestId('text-tab-region-toggle-0'));
+    expect(onSelectRegion).not.toHaveBeenCalled();
   });
 });
