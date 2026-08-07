@@ -148,9 +148,15 @@ def _finalize_overlay_export(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # T5215: intro_card_id landed in v034; guarded here too, and needed
-        # BEFORE the prior-row read below (it's part of that SELECT).
-        _has_intro = column_exists(cursor, "final_videos", "intro_card_id")
+        # T5215/T6030: intro_card_id (v034) and slowmo_section_start (v025)
+        # both live on final_videos and are guarded for the deploy->migrate
+        # window -- one PRAGMA table_info fetch covers both flags instead of
+        # two independent column_exists() probes (each runs its own PRAGMA;
+        # a per-call probe here is a real perf concern -- see
+        # test_finalize_guard_is_one_probe_not_per_row). intro_card_id is
+        # needed BEFORE the prior-row read below (it's part of that SELECT).
+        _final_videos_cols = {row[1] for row in cursor.execute("PRAGMA table_info(final_videos)").fetchall()}
+        _has_intro = "intro_card_id" in _final_videos_cols
         intro_select = ", fv.intro_card_id" if _has_intro else ""
 
         # T4010: capture the PRIOR final the project currently points at so we can
@@ -217,7 +223,7 @@ def _finalize_overlay_export(
         # a nonexistent column. NULL is the v025 default and the backfill is what
         # populates them, so a window-era row is simply left unfrozen until the migrate
         # runs (poster capture then reconstructs the section from live clips at publish).
-        _has_slowmo = column_exists(cursor, "final_videos", "slowmo_section_start")
+        _has_slowmo = "slowmo_section_start" in _final_videos_cols
         slowmo_cols = ", slowmo_section_start, slowmo_section_end" if _has_slowmo else ""
         slowmo_placeholders = ", ?, ?" if _has_slowmo else ""
         slowmo_values = (slowmo_start, slowmo_end) if _has_slowmo else ()
