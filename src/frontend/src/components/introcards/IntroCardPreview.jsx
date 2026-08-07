@@ -15,7 +15,7 @@ import {
   treatmentBackgroundCss, photoStyleFor, scrimBackground,
   bandStyleFor, photoTintCss, photoVignetteCss, seamFadeCss,
 } from './introCardVisual';
-import { buildPreviewElements, resolveTitleText } from './introCardPreviewElements';
+import { useCardPreviewElements, resolveTitleText } from './introCardPreviewElements';
 
 /**
  * Resolve the effective photo framing for a card. Card focal/zoom win; a NULL on
@@ -66,7 +66,11 @@ export function IntroCardPreview({
   const vignette = hasPhoto ? photoVignetteCss(treatment) : null;
   const seam = hasPhoto ? seamFadeCss(geo.reflow, treatment) : null;
   const bandStyle = hasPhoto ? bandStyleFor(composition, treatment, boxWidth, boxHeight) : null;
-  const elements = renderSlots ? buildPreviewElements(card, profile, composition, aspect, boxWidth, boxHeight) : [];
+  // Hooks can't be conditional: compute unconditionally (settle-aware, T6640
+  // round 2 — see introCardPreviewElements.useCardPreviewElements), discard
+  // when renderSlots is false (MotionPreview's static base layer).
+  const settledElements = useCardPreviewElements(card, profile, composition, aspect, boxWidth, boxHeight);
+  const elements = renderSlots ? settledElements : [];
 
   return (
     <div

@@ -7,7 +7,7 @@ T5240 luma-evidence approach.
 """
 
 import subprocess
-from itertools import pairwise
+from itertools import combinations, pairwise
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +15,10 @@ import pytest
 from PIL import Image
 
 from app.services import player_intro as P
+from app.services.fonts import load_font_for_render
+from app.services.intro_cards import derive_composition
+from app.services.text_render import wrap_lines
+from app.services.user_db import INTRO_FACT_FIELDS
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -227,18 +231,29 @@ def test_content_hash_changes_on_pixel_edit_stable_on_rename(photo):
 # (_select_elements, with real card/profile dicts and the caption text from
 # the reported bug), so a regression in the seam between the two (e.g. a bad
 # STAGGER_ORDER filter, a role misassignment) would be caught here too.
+#
+# T6640 ROUND 2 — the reported live-preview collision used Position OFF /
+# Class+Team ON, a FACT SUBSET this matrix's first version never rendered (it
+# only tried the maximal shown_fields per composition — ["position"] for hero,
+# ["position","class"] for broadcast — never ["class","team"] or any other
+# non-canonical-order subset). "Which facts" changes which ORDINAL slot each
+# value lands in (fact1 <- shown_fields[0], not always "position"), and layout()
+# doesn't care WHICH field text a slot holds -- but the SELECTION seam
+# (_select_elements enumerating shown_fields) does, so this is now EXHAUSTIVE
+# over every reachable subset (2**3 = 8, including the empty/title-only one),
+# at both aspects, with the long wrapping name.
 # =============================================================================
-@pytest.mark.parametrize("comp,shown,aspect,w,h", [
-    ("title-only", [], "9:16", _W916, _H916),
-    ("title-only", [], "16:9", _W169, _H169),
-    ("hero", ["position"], "9:16", _W916, _H916),
-    ("hero", ["position"], "16:9", _W169, _H169),
-    ("broadcast", ["position", "class"], "9:16", _W916, _H916),
-    ("broadcast", ["position", "class"], "16:9", _W169, _H169),
-    ("recruiting", ["position", "class", "team"], "9:16", _W916, _H916),
-    ("recruiting", ["position", "class", "team"], "16:9", _W169, _H169),
-])
-def test_select_elements_wrap_never_collides_matrix(comp, shown, aspect, w, h):
+_ALL_FACT_SUBSETS = [
+    list(combo)
+    for r in range(len(INTRO_FACT_FIELDS) + 1)
+    for combo in combinations(INTRO_FACT_FIELDS, r)
+]
+
+
+@pytest.mark.parametrize("shown", _ALL_FACT_SUBSETS, ids=lambda s: "+".join(s) or "none")
+@pytest.mark.parametrize("aspect,w,h", [("9:16", _W916, _H916), ("16:9", _W169, _H169)])
+def test_select_elements_wrap_never_collides_matrix(shown, aspect, w, h):
+    comp = derive_composition(True, shown)
     card = _card(shown, title_text=None)
     # Invented long two-word name (NO PII) -- the exact shape of the reported bug.
     fields = {**FIELDS, "full_name": "Anastasia Wintergreen"}
@@ -248,8 +263,6 @@ def test_select_elements_wrap_never_collides_matrix(comp, shown, aspect, w, h):
     for el in els:
         spec = el["spec"]
         px = max(round(spec.size * h), 1)
-        from app.services.fonts import load_font_for_render
-        from app.services.text_render import wrap_lines
         font = load_font_for_render(spec.font.value, px)
         lines = len(wrap_lines(spec.text, font, spec.maxWidth * w))
         ascent, descent = font.getmetrics()
@@ -261,7 +274,7 @@ def test_select_elements_wrap_never_collides_matrix(comp, shown, aspect, w, h):
     intervals.sort(key=lambda t: t[1])
     for (slot_a, _, end_a), (slot_b, start_b, _) in pairwise(intervals):
         assert start_b >= end_a - 1e-6, (
-            f"{comp}/{aspect}: {slot_a} [ends {end_a:.4f}] collides with {slot_b} [starts {start_b:.4f}]"
+            f"{comp}/{aspect}/shown={shown}: {slot_a} [ends {end_a:.4f}] collides with {slot_b} [starts {start_b:.4f}]"
         )
 
 

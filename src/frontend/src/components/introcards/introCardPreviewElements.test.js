@@ -136,3 +136,67 @@ describe('buildPreviewElements — ordinal geometry <- semantic fields, template
     expect(els).toEqual([]);
   });
 });
+
+// =============================================================================
+// T6640 round 2 — exhaustive FACT SUBSET matrix (the acceptance criterion).
+// The reported live-preview collision used Position OFF / Class+Team ON, a
+// subset the original matrix never exercised (it only ever tried the maximal
+// shown_fields per composition). Every combination of {position, class, team}
+// on/off (2**3 = 8) is a first-class user action (unchecking a fact in the
+// rail), so every one is exercised here, at both aspects, with the long
+// wrapping name. jsdom has no real <canvas> (wrapLines falls back to
+// text.split('\n')), so an explicit '\n' forces deterministic 2-line wrapping
+// -- same technique as the invariance test above; real-canvas wrap agreement
+// is proven separately by the backend matrix (real PIL fonts) and the runtime
+// Playwright parity spec.
+// =============================================================================
+import { deriveComposition, SHOWN_FIELDS } from '../../utils/introCardComposition';
+
+function allSubsets(items) {
+  return items.reduce(
+    (subsets, item) => subsets.concat(subsets.map((s) => [...s, item])),
+    [[]],
+  );
+}
+
+describe('buildPreviewElements — exhaustive fact-subset x aspect matrix never collides', () => {
+  const LONG_NAME = 'Anastasia\nWintergreen'; // invented, no PII; \n forces the jsdom-fallback wrap
+  const longCard = { treatment: 'gold' };
+  const longProfile = {
+    full_name: LONG_NAME, position: 'Midfielder', class: '2031', team: 'West Coast ECNL',
+  };
+
+  for (const shown of allSubsets(SHOWN_FIELDS)) {
+    for (const aspect of ['9:16', '16:9']) {
+      const label = shown.length ? shown.join('+') : 'none';
+      it(`shown=[${label}] aspect=${aspect} — no overlap, stays in frame`, () => {
+        const composition = deriveComposition(true, shown);
+        const els = buildPreviewElements(
+          { ...longCard, shown_fields: shown }, longProfile, composition, aspect, FRAME_W, FRAME_H,
+        );
+        expect(els.length).toBeGreaterThan(0); // title always renders (full_name set)
+
+        // Re-derive each element's rendered height EXACTLY as layout()/
+        // advanceFrac did: jsdom has no real <canvas>, so measureFontMetricsPx
+        // falls back to ascent=size*0.8, descent=size*0.2 (RichText.jsx) --
+        // their sum is exactly `size`, so advanceFrac === size in this
+        // environment. Line count comes from the literal '\n' baked into
+        // spec.text by the wrap (jsdom's wrapLines fallback), matching what
+        // layout() itself measured when it positioned this element.
+        const intervals = els.map((el) => {
+          const lines = el.spec.text.split('\n').length;
+          const y0 = el.spec.position.y;
+          const y1 = y0 + lines * el.spec.size;
+          return { slot: el.slot, y0, y1 };
+        });
+        intervals.sort((a, b) => a.y0 - b.y0);
+        for (let i = 0; i < intervals.length; i++) {
+          expect(intervals[i].y0).toBeGreaterThanOrEqual(-1e-6);
+        }
+        for (let i = 1; i < intervals.length; i++) {
+          expect(intervals[i].y0).toBeGreaterThanOrEqual(intervals[i - 1].y1 - 1e-6);
+        }
+      });
+    }
+  }
+});

@@ -15,7 +15,7 @@ import {
   treatmentBackgroundCss, photoStyleFor, scrimBackground,
   bandStyleFor, photoTintCss, photoVignetteCss, seamFadeCss,
 } from './introCardVisual';
-import { buildPreviewElements } from './introCardPreviewElements';
+import { useCardPreviewElements } from './introCardPreviewElements';
 import { resolveFraming } from './IntroCardPreview';
 
 export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDone }) {
@@ -37,7 +37,7 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, onDo
   const vignette = hasPhoto ? photoVignetteCss(treatment) : null;
   const seam = hasPhoto ? seamFadeCss(geo.reflow, treatment) : null;
   const bandStyle = hasPhoto ? bandStyleFor(composition, treatment, boxWidth, boxHeight) : null;
-  const elements = buildPreviewElements(card, profile, composition, aspect, boxWidth, boxHeight);
+  const elements = useCardPreviewElements(card, profile, composition, aspect, boxWidth, boxHeight);
 
   const durationSec = card?.duration || 4.0;
 
