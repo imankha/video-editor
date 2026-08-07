@@ -31,23 +31,38 @@ export function ProfileSportButton() {
   const sport = currentProfile?.sport;
   const sportLabel = sportDisplayName(sport) || 'sport';
   const color = currentProfile?.color || '#3B82F6';
+  // T5215 round 4: "if there is a profile image, a thumbnail of the profile
+  // image should show up in the area under the profile indicator" -- profile
+  // photo (T5190), not the intro CARD; only rendered when one is set.
+  const photoUrl = currentProfile?.introPhotoUrl;
 
   return (
     <>
-      <button
-        onClick={() => setShowManageModal(true)}
-        title={`${sportLabel} — switch sport or profile`}
-        aria-label={`${sportLabel}. Switch sport or profile.`}
-        className="flex items-center gap-2 h-[38px] px-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-        style={{ boxShadow: `inset 0 0 0 1.5px ${color}66` }}
-      >
-        <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
-        {currentProfile?.name && (
-          <span className="hidden sm:inline text-sm text-white font-medium max-w-[120px] truncate">
-            {currentProfile.name}
-          </span>
+      <div className="relative inline-block">
+        <button
+          onClick={() => setShowManageModal(true)}
+          title={`${sportLabel} — switch sport or profile`}
+          aria-label={`${sportLabel}. Switch sport or profile.`}
+          className="flex items-center gap-2 h-[38px] px-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+          style={{ boxShadow: `inset 0 0 0 1.5px ${color}66` }}
+        >
+          <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
+          {currentProfile?.name && (
+            <span className="hidden sm:inline text-sm text-white font-medium max-w-[120px] truncate">
+              {currentProfile.name}
+            </span>
+          )}
+        </button>
+
+        {photoUrl && (
+          <img
+            src={photoUrl}
+            alt=""
+            aria-hidden
+            className="absolute top-full right-0 mt-1.5 w-8 h-8 rounded-full object-cover ring-2 ring-white/20 shadow pointer-events-none"
+          />
         )}
-      </button>
+      </div>
 
       <ManageProfilesModal
         isOpen={showManageModal}
