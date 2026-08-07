@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, ImageOff } from 'lucide-react';
 import { formatTimeSimple } from '../../../components/shared/clipConstants';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
+import { computeFollowScrollTarget } from '../../../components/timeline/TimelineBase';
 
 // Pointer travel (px) below which a pointerdown->up is a CLICK, not a drag, and
 // commits nothing. Small enough that any intended drag clears it, large enough
@@ -101,6 +102,10 @@ export default function PosterMarkerLayer({
   const movedRef = useRef(false);
   const isCoarsePointer = useIsCoarsePointer();
   const hitSize = isCoarsePointer ? 44 : 32;
+  // T6630 round 7 item 6: set the moment the user does anything WITH the
+  // marker (drag, nudge, Home/End -- see commitDrag) -- see the mount-reveal
+  // effect below for why this permanently stops the initial-load auto-follow.
+  const hasInteractedRef = useRef(false);
 
   const timelineDuration = visualDuration || duration || 0;
   const shownVisualTime = isDragging && dragVisualTime != null ? dragVisualTime : visualTime;
@@ -108,8 +113,24 @@ export default function PosterMarkerLayer({
     ? Math.max(0, Math.min(100, (shownVisualTime / timelineDuration) * 100))
     : 0;
 
+  // T6630 round 7 item 5 bug fix (live-debugged, not guess-patched): this
+  // used to measure against `.closest('.timeline-scroll-container')` -- the
+  // OUTER, viewport-CLIPPED scroll box (e.g. 1070px wide at typical zoom).
+  // But the marker's own CSS position (`left: markerLeft` below) is a
+  // percentage of its DIRECT PARENT -- the timeline's FULL SCALED content
+  // width (e.g. 3381px at 316% zoom, TimelineBase.jsx's "Scaled timeline
+  // content" div), the SAME reference element TextLayer.jsx/RegionLayer.jsx
+  // already use for their own pixel-to-time math. Two different reference
+  // widths for drag-input (time from pointer) vs render-output (pixel from
+  // time) meant every drag OVERSHOOT by roughly (fullWidth/clippedWidth)x --
+  // confirmed live via a real drag: moving the pointer 400px dragged the
+  // marker's rendered position 412px further than the pointer, landing it
+  // outside document.elementFromPoint at the actual cursor position, and at
+  // a large enough drag this pushes it clean off the scrolled-out-of-view
+  // portion of the timeline ("the marker just disappears"). Fixed by
+  // measuring against the SAME full-width parent the render uses.
   const pixelToVisualTime = useCallback((clientX) => {
-    const container = trackRef.current?.closest('.timeline-scroll-container') || trackRef.current;
+    const container = trackRef.current?.parentElement || trackRef.current;
     if (!container) return 0;
     const rect = container.getBoundingClientRect();
     const usableWidth = rect.width - edgePadding * 2;
@@ -120,8 +141,38 @@ export default function PosterMarkerLayer({
   }, [edgePadding, timelineDuration]);
 
   const commitDrag = useCallback((newVisualTime) => {
+    hasInteractedRef.current = true;
     if (onDragEnd) onDragEnd(newVisualTime);
   }, [onDragEnd]);
+
+  // T6630 round 7 item 5 (corrected per user direction: "the marker should
+  // move just like the playhead") -- reuse the playhead's OWN auto-scroll-
+  // follow math (`computeFollowScrollTarget`, TimelineBase.jsx, already
+  // shared/exported) so dragging the marker keeps the timeline scrolled to
+  // follow it near an edge, exactly like the playhead's own follow-scroll.
+  // Operates on the SCROLLABLE VIEWPORT ancestor (`.timeline-scroll-
+  // container`) -- a DIFFERENT reference element than pixelToVisualTime's
+  // full-width parent above (that one is position MATH; this one is scroll
+  // POSITION -- the same fullWidth/clippedWidth distinction as the item 5
+  // reference-frame fix, just applied to a different calculation).
+  const followScroll = useCallback((newVisualTime) => {
+    const scrollContainer = trackRef.current?.closest('.timeline-scroll-container');
+    if (!scrollContainer) return;
+    const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+    if (maxScroll <= 0) return;
+    const percent = timelineDuration > 0
+      ? Math.max(0, Math.min(100, (newVisualTime / timelineDuration) * 100))
+      : 0;
+    const target = computeFollowScrollTarget({
+      scrollLeft: scrollContainer.scrollLeft,
+      scrollWidth: scrollContainer.scrollWidth,
+      clientWidth: scrollContainer.clientWidth,
+      maxScroll,
+      progress: percent,
+      edgePadding,
+    });
+    if (target !== scrollContainer.scrollLeft) scrollContainer.scrollLeft = target;
+  }, [timelineDuration, edgePadding]);
 
   const handlePointerDown = useCallback((e) => {
     if (disabled) return;
@@ -145,7 +196,11 @@ export default function PosterMarkerLayer({
       }
       // Only track the pointer once it's a real drag -- a sub-threshold jitter
       // must not visually nudge the marker off its committed frame.
-      if (movedRef.current) setDragVisualTime(pixelToVisualTime(e.clientX));
+      if (movedRef.current) {
+        const newTime = pixelToVisualTime(e.clientX);
+        setDragVisualTime(newTime);
+        followScroll(newTime);
+      }
     };
     const handlePointerUp = (e) => {
       const moved = movedRef.current;
@@ -172,7 +227,7 @@ export default function PosterMarkerLayer({
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
     };
-  }, [isDragging, pixelToVisualTime, commitDrag]);
+  }, [isDragging, pixelToVisualTime, followScroll, commitDrag]);
 
   const nudge = useCallback((deltaSeconds) => {
     if (disabled) return;
@@ -204,16 +259,56 @@ export default function PosterMarkerLayer({
     }
   }, [disabled, nudge, commitDrag, timelineDuration]);
 
-  // T6630 round 6 item 4: bring the marker into view the moment the tab
-  // it belongs to is opened -- see the revealOnActive prop doc above for
-  // the root-cause this closes. A pure view-layer scroll (not app state,
-  // not persistence), scoped to the transition into the active tab so it
-  // never fights the user's own scroll position on other tabs.
+  // T6630 round 6 item 4 + round 7 item 6: bring the marker into view (a)
+  // on first load, BEFORE the user has interacted with the marker itself,
+  // and (b) whenever the user actively opens the tab this marker belongs to
+  // -- see the revealOnActive prop doc above for the root-cause this closes.
+  // Round 7's report ("the marker isn't visible on the initial screen") is
+  // the SAME class of bug as round 6's tab-open case: the DEFAULT position
+  // can land past the timeline's pre-existing auto-zoom-widened scroll
+  // viewport before the user has touched anything. The default TIME is
+  // correct and untouched here -- only its initial SCROLL VISIBILITY needed
+  // fixing.
+  //
+  // TRACKS `visualTime` too (live-debugged, not guessed): the round 7 item 6
+  // correction changed the no-marker default from the window's MIDPOINT to
+  // 2s into the window -- a value far more sensitive to WHICH window is
+  // used. `posterSlowmoSection` (OverlayMode.jsx) can arrive in a LATER
+  // render than `duration` (async data), so the marker's computed position
+  // can jump (e.g. from "2s absolute" against a placeholder no-slowmo
+  // window to "slowmoStart+2s" once real section data lands) AFTER a
+  // mount-only reveal already fired and latched -- silently stranding the
+  // marker off-screen again with no second chance. Re-revealing on every
+  // `visualTime` change is safe ONLY until the user does something WITH the
+  // marker (`hasInteractedRef`, set in commitDrag -- covers drag, arrow-key
+  // nudge, and Home/End): once they have, further auto-follow would fight
+  // their own choice instead of settling async data, so it stops for good.
+  //
+  // ONE bounded follow-up reveal (~900ms later) on top of the immediate one:
+  // live-verified this component has NO visibility into the timeline's own
+  // auto-zoom (`timelineScale` in OverlayScreen.jsx, driven by DETECTION
+  // marker spacing -- an entirely separate async load this component isn't
+  // passed as a prop). That zoom can widen the scrollable content AFTER
+  // this reveal already centered the marker at the narrower pre-zoom width,
+  // pushing it back out of view with nothing here to react to (zoom isn't
+  // one of this effect's dependencies). A delayed re-check catches the
+  // common case without deep prop-threading; still skipped once interacted.
   useEffect(() => {
-    if (revealOnActive) {
-      trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (timelineDuration <= 0) return;
+    if (hasInteractedRef.current) {
+      if (revealOnActive) {
+        trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+      return;
     }
-  }, [revealOnActive]);
+    trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    const retryTimer = setTimeout(() => {
+      if (!hasInteractedRef.current) {
+        trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }, 900);
+    return () => clearTimeout(retryTimer);
+  }, [revealOnActive, timelineDuration, visualTime]);
 
   if (timelineDuration <= 0) return null;
 
