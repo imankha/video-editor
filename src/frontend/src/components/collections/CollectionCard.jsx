@@ -22,6 +22,7 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * @param {Function=} onCopyLink     - (definition) => void
  * @param {number=}  leadingReelId   - representative reel id for collapsed row poster (T5673)
  * @param {Function=} onIntro        - (definition, title) => void, the collection's OWN intro (T5215 round 2)
+ * @param {Object=} introBadge      - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 3)
  */
 export function CollectionCard({
   title,
@@ -37,6 +38,7 @@ export function CollectionCard({
   onCopyLink,
   leadingReelId,
   onIntro,
+  introBadge,
 }) {
   const cap = budgetCap(ratioDuration);
   const [budget, setBudget] = useState(() => defaultBudget(cap)); // all clips
@@ -105,6 +107,7 @@ export function CollectionCard({
       onCopyLink={onCopyLink && shareDefinition ? () => onCopyLink(buildDefinition()) : undefined}
       leadingReelId={leadingReelId}
       onIntro={onIntro && shareDefinition ? () => onIntro(shareDefinition, playTitle || title) : undefined}
+      introBadge={introBadge}
     />
   );
 }

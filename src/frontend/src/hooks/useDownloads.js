@@ -361,6 +361,14 @@ export function useDownloads(isOpen = false) {
   // T5215: attach/detach/clear a reel's intro card. Surgical, gesture-only
   // PATCH (0 = no intro, null = inherit the profile default, <id> = that
   // card) — mirrors renameDownload's optimistic-update + PATCH shape.
+  //
+  // Round 3: the optimistic update ALSO sets intro_card_id eagerly (so the
+  // picker's own preselection state is right immediately), but the THUMBNAIL
+  // BADGE keys off the RESOLVED intro_card_name, which only the server can
+  // compute (duration gate on the inherit path) -- setting the id alone left
+  // the badge dark until the next full reload/refetch, exactly the gap the
+  // user reported. The PATCH response now returns the resolved name too;
+  // apply it from the response, not a second guess made on the client.
   const setIntroCard = useCallback(async (downloadId, introCardId) => {
     setDownloads(prev => prev.map(d =>
       d.id === downloadId ? { ...d, intro_card_id: introCardId } : d
@@ -372,6 +380,10 @@ export function useDownloads(isOpen = false) {
         body: JSON.stringify({ intro_card_id: introCardId }),
       });
       if (!response.ok) throw new Error('Failed to set intro card');
+      const { intro_card_name } = await response.json();
+      setDownloads(prev => prev.map(d =>
+        d.id === downloadId ? { ...d, intro_card_name } : d
+      ));
       return true;
     } catch (err) {
       console.error('[useDownloads] setIntroCard error:', err);

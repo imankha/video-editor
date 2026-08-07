@@ -6,7 +6,7 @@ import { formatDurationHuman } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 import { API_BASE } from '../../config';
-import { INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
+import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 import { Z } from '../../constants/zLayers';
 
 // Collection-level Download (stitched mp4) is still deferred to T3680.
@@ -55,6 +55,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
  * @param {number=}   leadingReelId   - representative reel id for collapsed row poster (T5673)
  * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
+ * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 3);
+ *                                     shows the shared badge in the title row when intro_card_name is set
  */
 export function CollectionHeader({
   title,
@@ -73,6 +75,7 @@ export function CollectionHeader({
   onCopyLink,
   leadingReelId,
   onIntro,
+  introBadge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -160,7 +163,21 @@ export function CollectionHeader({
       footer={footer}
       stacked
     >
-      <h3 className="text-white text-sm font-medium truncate">{title}</h3>
+      <h3 className="text-white text-sm font-medium truncate">
+        {/* T5215 round 3: this collection has an intro that will play -- the
+            SAME icon + colour as the reel thumbnail badge and the picker's
+            "Selected"/"Following" badges (constants/introBadge.js), so the
+            mental link holds across every surface. */}
+        {introBadge?.intro_card_name && (
+          <IntroIcon
+            size={12}
+            fill="currentColor"
+            aria-hidden="true"
+            className={`inline-block -mt-0.5 mr-1 ${INTRO_BADGE.text}`}
+          />
+        )}
+        {title}
+      </h3>
       <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
         <span className={`${REEL.accent} text-sm leading-none`} title={ratioLabel(ratio)}>
           {ratioGlyph(ratio)}

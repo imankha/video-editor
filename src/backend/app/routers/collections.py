@@ -798,6 +798,64 @@ async def set_collection_intro(
     return {"success": True, "intro_card_id": intro_card_id}
 
 
+class CollectionIntroBatchItem(BaseModel):
+    scope_type: str
+    game_id: int | None = None
+    tags: list[str] | None = None
+    aspect_ratio: str
+
+
+@router.get("/intro/batch")
+async def get_collection_intro_batch(items: str):
+    """Batch-resolve MANY collections' OWN attached intro in ONE round trip
+    (T5215 round 3 -- the Collections tab renders N cards; badging every one
+    of them must not fire N separate requests). GET, not POST: this is a pure
+    read (no `collection_settings` row is ever written here) -- keeping it a
+    GET is also what lets the frontend call it from a plain data-loading
+    useEffect without tripping the reactive-persistence lint rule, which
+    flags non-GET verbs inside effects as a likely write-as-side-effect bug
+    (CLAUDE.md's gesture-based persistence rule); a GET is unambiguous either
+    way. `items` is a JSON-encoded array (querystring-safe for a small list;
+    a real POST body isn't idiomatic for a request that mutates nothing).
+    Each result echoes the item's OWN canonical key so the client can match
+    by key rather than trusting array position. The duration-gating member
+    scan only runs for a bucket that is actually on the inherit path (no
+    stored row) -- an explicit id or an explicit 0 never needs it, so most
+    buckets cost one KV lookup only."""
+    try:
+        raw_items = json.loads(items)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"items must be a JSON array: {e}") from None
+    parsed_items = [CollectionIntroBatchItem(**it) for it in raw_items]
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        results = []
+        for item in parsed_items:
+            tag_list, definition = _collection_scope_and_definition(
+                item.scope_type, item.aspect_ratio, item.game_id,
+                ",".join(item.tags) if item.tags else None,
+            )
+            key = collection_intro_settings_key(
+                item.scope_type, game_id=item.game_id, tags=tag_list,
+                aspect_ratio=item.aspect_ratio,
+            )
+            raw_id = get_collection_intro_card_id(cursor, key)
+            total_duration = None
+            if raw_id is None:
+                members = evaluate_collection_members(conn, definition)
+                durations = [m["duration"] for m in members if m["duration"] is not None]
+                total_duration = sum(durations) if durations else None
+            card = resolve_intro_card(raw_id, total_duration, conn)
+            results.append({
+                "key": key,
+                "intro_card_id": raw_id,
+                "intro_card_name": card["name"] if card else None,
+            })
+
+    return {"results": results}
+
+
 def _context_line(definition: dict) -> str:
     if definition["scope"]["type"] == "game":
         return "This link always shows the current reels for this game."

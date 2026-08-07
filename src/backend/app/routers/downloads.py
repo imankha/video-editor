@@ -26,6 +26,7 @@ from app.services.intro_cards import (
     DEFAULT_INTRO_MIN_DURATION_SECONDS,
     get_intro_min_duration,
     load_profile_cards,
+    resolve_intro_card,
     resolve_intro_card_id,
 )
 from app.services.materialization import (
@@ -1063,10 +1064,11 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
             )
 
         cursor.execute(
-            "SELECT id FROM final_videos WHERE id = ? AND published_at IS NOT NULL",
+            "SELECT id, duration FROM final_videos WHERE id = ? AND published_at IS NOT NULL",
             (download_id,),
         )
-        if cursor.fetchone() is None:
+        reel_row = cursor.fetchone()
+        if reel_row is None:
             raise HTTPException(status_code=404, detail="Download not found")
 
         if intro_card_id is not None and intro_card_id != 0:
@@ -1080,7 +1082,17 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
         )
         conn.commit()
 
-    return {"success": True, "intro_card_id": intro_card_id}
+        # T5215 round 3: return the RESOLVED name too, not just the raw id --
+        # the frontend's optimistic update needs it to show the thumbnail
+        # badge immediately (no reload), and only the server can resolve it
+        # correctly (accounts for the duration gate on the inherit path).
+        card = resolve_intro_card(intro_card_id, reel_row["duration"], conn, reel_id=download_id)
+
+    return {
+        "success": True,
+        "intro_card_id": intro_card_id,
+        "intro_card_name": card["name"] if card else None,
+    }
 
 
 async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = None):
