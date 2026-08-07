@@ -4,11 +4,15 @@ import PositionPresetGrid from './PositionPresetGrid';
 import { formatTimeSimple } from '../shared/clipConstants';
 
 /**
- * TextManagementPanel (T6630 round 3/4) -- the Text tab's body. The SINGLE
- * surface for add/remove/settings, per the user's direction ("let users add
- * and remove text elements in the Text tab, as well as specify settings for
- * the selected text there"). The timeline lane (TextLayer.jsx) is TIMING
- * ONLY -- no in-lane add, no whole-lane click-to-add.
+ * TextManagementPanel (T6630 round 3/4/5) -- the Text tab's body: element
+ * management (add/remove ELEMENTS within a region) and settings for the
+ * selected element, per the user's direction ("let users add and remove
+ * text elements in the Text tab, as well as specify settings for the
+ * selected text there"). The "Add region" button here is a secondary
+ * affordance -- round 5 moved whole-REGION *creation* (and the selection
+ * that follows it) back onto the timeline lane (TextLayer.jsx's own
+ * onAddRegion click handler), per fresh user direction that adding/
+ * selecting a region belongs on the timeline, not in settings.
  *
  * MODEL (round 4): a REGION is a time span; it CONTAINS N elements, all
  * rendering simultaneously during it ("a text region can have multiple text

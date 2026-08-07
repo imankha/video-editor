@@ -839,6 +839,7 @@ export function OverlayModeView({
             textOverlays={textOverlays}
             clipBoundaries={clipBoundaries}
             selectedRegionId={selectedRegionId}
+            onAddTextRegion={onAddRegion}
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
             onMoveTextBody={onMoveTextBody}
@@ -928,6 +929,7 @@ export function OverlayModeView({
                         textOverlays={textOverlays}
                         clipBoundaries={clipBoundaries}
                         selectedRegionId={selectedRegionId}
+                        onAddTextRegion={onAddRegion}
                         onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
                         onMoveTextBody={onMoveTextBody}

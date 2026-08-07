@@ -239,18 +239,36 @@ describe('TextLayer — body drag moves the whole region (T6610, region-scoped)'
   });
 });
 
-describe('TextLayer — lane is TIMING ONLY, no add path (T6630 round 3)', () => {
-  // Round 2 put an add-on-click affordance in the lane (whole-lane click, then an
-  // in-lane "+ Add text" button). Round 3 removes BOTH: add/remove/settings moved
-  // entirely into the Text tab (TextManagementPanel) -- one add path, not two.
-  // These guard against either affordance quietly reappearing in the lane.
-  it('clicking empty lane space does not add a region (no click-to-add)', () => {
-    const { lane } = renderLayer({ regions: [] });
-    expect(lane).toBeTruthy();
-    expect(() => fireEvent.click(lane, { clientX: 500, clientY: 90 })).not.toThrow();
+describe('TextLayer — region CREATION moved back onto the timeline (T6630 round 5)', () => {
+  // Round 3 removed click-to-add ("add/remove/settings move into the Text
+  // tab"). Round 5 reverses that specific call per user direction: "Adding/
+  // selecting a text region is something that is done on the timeline, not
+  // in settings." Mirrors RegionLayer's highlight-mode handleTrackClick.
+  // Element management (add an element to an EXISTING region, per-element
+  // eye/trash) stays in the Text tab -- only whole-REGION creation moved.
+  it('clicking empty track space calls onAddRegion with the clicked time', () => {
+    const onAddRegion = vi.fn();
+    const { track } = renderLayer({ regions: [], onAddRegion });
+    fireEvent.click(track, { clientX: 500, clientY: 20 }); // 500/1000 usable width -> ~5s of 10s
+    expect(onAddRegion).toHaveBeenCalledTimes(1);
+    expect(onAddRegion.mock.calls[0][0]).toBeCloseTo(5, 0);
   });
 
-  it('no in-lane "Add text" control is rendered', () => {
+  it('is a no-op (never throws) when onAddRegion is not provided', () => {
+    const { track } = renderLayer({ regions: [], onAddRegion: undefined });
+    expect(() => fireEvent.click(track, { clientX: 500, clientY: 20 })).not.toThrow();
+  });
+
+  it('clicking an EXISTING region body selects it and does NOT also fire onAddRegion', () => {
+    const onAddRegion = vi.fn();
+    const { onSelectRegion } = renderLayer({ regions: [REGION], onAddRegion });
+    const body = screen.getByTestId('text-block-body-0');
+    fireEvent.click(body);
+    expect(onSelectRegion).toHaveBeenCalledWith('t1');
+    expect(onAddRegion).not.toHaveBeenCalled();
+  });
+
+  it('no in-lane "Add text" control is rendered (element management stays in the Text tab)', () => {
     renderLayer({ regions: [REGION] });
     expect(screen.queryByTestId('add-text-in-lane')).toBeNull();
     expect(screen.queryByText(/add text/i)).toBeNull();

@@ -41,6 +41,7 @@ export default function TextLayer({
   visualDuration,
   clipBoundaries = [],
   selectedRegionId = null,
+  onAddRegion,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
@@ -252,19 +253,34 @@ export default function TextLayer({
     });
   }, [pixelToTimeValue]);
 
+  // T6630 round 5 -- user direction reversed round 3's "Text tab only" call:
+  // "Adding/selecting a text region is something that is done on the
+  // timeline, not in settings." Mirrors RegionLayer's highlight-mode
+  // handleTrackClick (mode === 'highlight' -> onAddRegion(time)): a click on
+  // EMPTY track area creates a region at that time. Existing region bodies
+  // and levers already stopPropagation on their own onClick/onPointerDown
+  // (see handleBodyPointerDown above and the lever handlers below), so a
+  // click there never reaches this handler -- no extra target checks needed.
+  const handleTrackClick = useCallback((e) => {
+    if (!onAddRegion) return;
+    const time = pixelToTimeValue(e.clientX);
+    onAddRegion(time);
+  }, [onAddRegion, pixelToTimeValue]);
+
   if (!duration) return null;
 
-  // T6630 round 3 -- the lane is TIMING ONLY (user direction: add/remove/settings
-  // move into the Text tab, a single management surface). There is no longer a
-  // whole-lane click-to-add and no in-lane add button. Regions are created and
-  // destroyed from the Text tab; this lane only positions/times them (drag the
-  // body, drag a lever, arrow-key nudge) and still supports keyboard
-  // Delete/Backspace on the focused region as a fast path.
+  // T6630 round 5 -- the lane is TIMING *and* CREATION: a click on empty
+  // track area adds a region there (see handleTrackClick above), matching
+  // how the highlight lane already works. Element management (add/remove
+  // elements within a region, settings) still lives entirely in the Text
+  // tab -- only whole-region creation moved back to the timeline. This lane
+  // also still supports keyboard Delete/Backspace on the focused region.
   return (
     <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2">
       <div
         ref={trackRef}
-        className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg"
+        className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg cursor-pointer"
+        onClick={handleTrackClick}
       >
         <div className="absolute inset-0 bg-cyan-900 bg-opacity-10 rounded-r-lg" />
 

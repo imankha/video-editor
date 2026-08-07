@@ -53,6 +53,10 @@ export function OverlayMode({
   textOverlays = [],
   clipBoundaries = [],
   selectedRegionId = null,
+  // T6630 round 5: region CREATION moved back onto the timeline lane (see
+  // TextLayer's onAddRegion) -- named distinctly from onAddHighlightRegion
+  // since both lanes live in this same component.
+  onAddTextRegion,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
@@ -245,6 +249,7 @@ export function OverlayMode({
                 visualDuration={visualDuration || duration}
                 clipBoundaries={clipBoundaries}
                 selectedRegionId={selectedRegionId}
+                onAddRegion={onAddTextRegion}
                 onMoveTextStart={onMoveTextStart}
                 onMoveTextEnd={onMoveTextEnd}
                 onMoveTextBody={onMoveTextBody}
