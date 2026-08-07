@@ -7,6 +7,7 @@ import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 import { API_BASE } from '../../config';
 import { INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
+import { Z } from '../../constants/zLayers';
 
 // Collection-level Download (stitched mp4) is still deferred to T3680.
 // Share / Copy link are wired in T3620 (onShare / onCopyLink props).
@@ -110,7 +111,7 @@ export function CollectionHeader({
       <div className="relative" ref={menuRef}>
         <CardIconButton icon={MoreVertical} onClick={() => setMenuOpen((o) => !o)} title="More actions" />
         {menuOpen && (
-          <div className="absolute right-0 mt-1 z-10 w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1">
+          <div className={`absolute right-0 mt-1 ${Z.DROPDOWN} w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1`}>
             <MenuItem icon={Play} label="Play all"
               onClick={() => { setMenuOpen(false); onPlayAll(); }} />
             <MenuItem icon={Clock} label="Max Duration"
