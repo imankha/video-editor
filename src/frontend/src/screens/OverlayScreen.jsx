@@ -967,9 +967,9 @@ export function OverlayScreen({
   // updated/new/removed entity, so these read that return value directly --
   // never a stale re-read of `textOverlays` (T5644 landmine, design §5.1).
 
-  // The ONE "create a new time span" gesture (Text tab's "Add region"; also
-  // used for the very-first add). Creates a region + its first element in one
-  // call, server-side too (add_text with no region_id).
+  // The ONE "create a new time span" gesture (the text timeline lane's
+  // click-to-add, round 5/6 item 1). Creates a region + its first element in
+  // one call, server-side too (add_text with no region_id).
   const wrappedAddRegion = useCallback((clickTime) => {
     const newRegion = addRegion(clickTime, DEFAULT_TEXT_SPEC);
     if (newRegion && canSyncActions) {
@@ -978,9 +978,16 @@ export function OverlayScreen({
         overlayActions.createText(projectId, newRegion.id, el.spec, newRegion.startTime, newRegion.endTime));
     }
     setOverlayChangedSinceExport(true);
-    if (newRegion) selectRegion(newRegion.id, newRegion.elements[0].id, newRegion);
+    if (newRegion) {
+      selectRegion(newRegion.id, newRegion.elements[0].id, newRegion);
+      // T6630 round 6 item 2: the Text tab now only shows the region(s)
+      // active AT THE PLAYHEAD -- a newly created region must also move the
+      // playhead into it, or the force-switch-to-Text-tab gesture below
+      // would land on a tab that immediately reads as empty/disabled.
+      seek(newRegion.startTime);
+    }
     return newRegion?.id ?? null;
-  }, [addRegion, projectId, canSyncActions, setOverlayChangedSinceExport, selectRegion]);
+  }, [addRegion, projectId, canSyncActions, setOverlayChangedSinceExport, selectRegion, seek]);
 
   // "Add text" WITH a region already selected: appends a new ELEMENT into
   // that region -- the region's timing is untouched, no second time span is
@@ -993,7 +1000,7 @@ export function OverlayScreen({
         overlayActions.createText(projectId, newElement.id, newElement.spec, undefined, undefined, regionId));
     }
     setOverlayChangedSinceExport(true);
-    if (newElement) selectElement(newElement.id);
+    if (newElement) selectElement(newElement.id, newElement.regionId);
     return newElement?.id ?? null;
   }, [addElement, projectId, canSyncActions, setOverlayChangedSinceExport, selectElement]);
 

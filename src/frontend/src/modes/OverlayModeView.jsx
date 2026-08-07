@@ -273,12 +273,50 @@ export function OverlayModeView({
   // below) so the on-screen panel updates in place — the panel has a CONSTANT
   // height, so this never reflows the timeline.
   const [activeTab, setActiveTab] = useState('overlay');
+
+  // T6630 round 6 item 2: "all text settings should be for the text regions
+  // the playhead is currently on" -- the SAME filter that drives what
+  // actually burns in on screen (TextOverlayPreview.jsx:46-49), reused here
+  // rather than reinvented (including its selectedRegionId short-circuit --
+  // "so editing is visible even while the playhead sits outside the range",
+  // that component's own docstring -- a just-created/selected region must
+  // show here too, not just a region the raw currentTime happens to be
+  // inside; diagnosed live when a freshly created region rendered on the
+  // video stage via that short-circuit but the Text tab -- built from a
+  // range-only check -- showed "no region here" for the SAME region at the
+  // SAME instant). Regions CAN overlap, so this is a list (0, 1, or N),
+  // each independently selectable, same as before -- only the SOURCE list
+  // handed to TextManagementPanel changes.
+  const activeTextRegionsAtPlayhead = useMemo(
+    () => textOverlays.filter((region) => {
+      if (region.id === selectedRegionId) return true;
+      return region.startTime <= currentTime && currentTime < region.endTime;
+    }),
+    [textOverlays, currentTime, selectedRegionId]
+  );
+
   // Gesture-based tab switch: a region-select click flips to the Text tab.
   // Passing null (deselect) does not change the tab. No reactive useEffect.
+  //
+  // T6630 round 6: selecting a region whose range does NOT contain the
+  // current playhead (e.g. clicking an existing block elsewhere on the
+  // timeline) must also move the playhead INTO it. The Text tab filter's
+  // selectedRegionId short-circuit (above) already keeps it showing even
+  // without this, but the STAGE PREVIEW needs currentTime actually near the
+  // region to display it in context -- selecting something you can't see
+  // rendering on the video is a confusing edit experience. Region CREATION
+  // already seeks (wrappedAddRegion, OverlayScreen.jsx) -- this covers the
+  // SELECT-an-EXISTING-region path, the other way into this same gesture.
   const handleSelectRegion = useCallback((id, elementId) => {
     onSelectRegion && onSelectRegion(id, elementId);
-    if (id) setActiveTab('text');
-  }, [onSelectRegion]);
+    if (id) {
+      setActiveTab('text');
+      const region = textOverlays.find((r) => r.id === id);
+      if (region && !(region.startTime <= currentTime && currentTime < region.endTime)) {
+        seek && seek(region.startTime);
+      }
+    }
+  }, [onSelectRegion, textOverlays, currentTime, seek]);
 
   // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
   // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
@@ -586,24 +624,21 @@ export function OverlayModeView({
     />
   );
 
-  // --- Text tab: the SINGLE management surface (T6630 round 3/4, user
-  // direction). Always present (it is a tab, not a mounted-on-select rail): a
-  // list of REGIONS, each showing its ELEMENTS (a region is a time span
-  // containing N elements that render simultaneously), the ONE "Add region"
-  // control, a per-region "+ Add text" (element), per-element Remove/
-  // visibility, and the settings editor (incl. the 9-slot position grid) for
-  // the selected element. Selecting a region/element sets the SAME
-  // selectedRegionId/selectedElementId the timeline/stage read -- one
-  // selection state, no second source of truth. Two-column layout (list left,
-  // settings right, round 4 item 3) so adding a row never moves the settings
-  // panel. ---
+  // --- Text tab: element management (add/remove ELEMENTS, settings) for the
+  // region(s) ACTIVE AT THE PLAYHEAD (T6630 round 6 item 2 -- see
+  // activeTextRegionsAtPlayhead above). Region CREATE/DELETE live entirely on
+  // the timeline lane (round 5/6 item 1/3). A per-region "+ Add text"
+  // (element), per-element Remove/visibility, and the settings editor (incl.
+  // the 9-slot position grid) for the selected element. Selecting a region/
+  // element sets the SAME selectedRegionId/selectedElementId the timeline/
+  // stage read -- one selection state, no second source of truth.
+  // Two-column layout (list left, settings right, round 4 item 3) so adding
+  // a row never moves the settings panel. ---
   const textPanel = (
     <TextManagementPanel
-      regions={textOverlays}
+      regions={activeTextRegionsAtPlayhead}
       selectedRegionId={selectedRegionId}
       selectedElementId={selectedElementId}
-      currentTime={currentTime}
-      onAddRegion={onAddRegion}
       onAddElement={onAddElement}
       onSelectRegion={handleSelectRegion}
       onSelectElement={onSelectElement}
@@ -636,6 +671,7 @@ export function OverlayModeView({
       overlayPanel={overlayPanel}
       textPanel={textPanel}
       thumbnailPanel={thumbnailPanel}
+      disabledTabIds={activeTextRegionsAtPlayhead.length === 0 ? ['text'] : []}
     />
   );
 
@@ -836,6 +872,7 @@ export function OverlayModeView({
             posterUploaded={posterUploaded}
             onPosterMarkerDragEnd={onPosterMarkerDragEnd}
             isExportInFlight={settingsDisabled}
+            isThumbnailTabActive={activeTab === 'thumbnail'}
             textOverlays={textOverlays}
             clipBoundaries={clipBoundaries}
             selectedRegionId={selectedRegionId}
@@ -926,6 +963,7 @@ export function OverlayModeView({
                         posterUploaded={posterUploaded}
                         onPosterMarkerDragEnd={onPosterMarkerDragEnd}
                         isExportInFlight={settingsDisabled}
+                        isThumbnailTabActive={activeTab === 'thumbnail'}
                         textOverlays={textOverlays}
                         clipBoundaries={clipBoundaries}
                         selectedRegionId={selectedRegionId}

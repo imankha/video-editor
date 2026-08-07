@@ -4,21 +4,24 @@ import PositionPresetGrid from './PositionPresetGrid';
 import { formatTimeSimple } from '../shared/clipConstants';
 
 /**
- * TextManagementPanel (T6630 round 3/4/5) -- the Text tab's body: element
+ * TextManagementPanel (T6630 round 3/4/5/6) -- the Text tab's body: element
  * management (add/remove ELEMENTS within a region) and settings for the
  * selected element, per the user's direction ("let users add and remove
  * text elements in the Text tab, as well as specify settings for the
- * selected text there"). The "Add region" button here is a secondary
- * affordance -- round 5 moved whole-REGION *creation* (and the selection
- * that follows it) back onto the timeline lane (TextLayer.jsx's own
- * onAddRegion click handler), per fresh user direction that adding/
- * selecting a region belongs on the timeline, not in settings.
+ * selected text there"). Whole-REGION creation AND deletion live entirely on
+ * the timeline lane (TextLayer.jsx's onAddRegion click handler + its
+ * per-block delete button) -- round 6 removed the "Add region" button that
+ * used to live here too ("adding and removing regions is done on the
+ * timeline", explicit user direction after round 5 kept it as a hedge).
  *
  * MODEL (round 4): a REGION is a time span; it CONTAINS N elements, all
  * rendering simultaneously during it ("a text region can have multiple text
- * elements"). The left list shows regions, each with its own nested elements
- * and a per-region "+ Add text" (adds an ELEMENT into that region, timing
- * unchanged); "+ Add region" (top) creates a brand new time span.
+ * elements"). The left list shows the region(s) ACTIVE at the playhead (round
+ * 6 item 2 -- caller filters `regions` to OverlayScreen's own
+ * TextOverlayPreview.jsx:46-48 half-open-range test before passing it in, so
+ * this component itself stays a dumb renderer of whatever list it's given),
+ * each with its own nested elements and a per-region "+ Add text" (adds an
+ * ELEMENT into that region, timing unchanged).
  *
  * LAYOUT (round 4 item 3): TWO COLUMNS -- the region/element list on the
  * left scrolls independently; the settings column on the right is a FIXED
@@ -36,8 +39,6 @@ export default function TextManagementPanel({
   regions = [],
   selectedRegionId = null,
   selectedElementId = null,
-  currentTime = 0,
-  onAddRegion,
   onAddElement,
   onSelectRegion,
   onSelectElement,
@@ -55,19 +56,8 @@ export default function TextManagementPanel({
     <div className="flex flex-col lg:flex-row gap-4 lg:h-full">
       {/* LEFT: region list, each showing its elements. Independent scroll. */}
       <div className="lg:w-2/5 flex flex-col gap-3 lg:overflow-y-auto lg:pr-1" data-testid="text-region-list">
-        {/* The ONE "new time span" gesture. Element-append lives per-region below. */}
-        <button
-          type="button"
-          data-testid="text-tab-add-region"
-          onClick={() => onAddRegion && onAddRegion(currentTime)}
-          className="w-full flex items-center justify-center gap-1.5 rounded px-3 py-2 text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white transition-colors coarse-pointer:min-h-11"
-        >
-          <Plus size={14} />
-          Add region
-        </button>
-
         {regions.length === 0 ? (
-          <p className="text-xs text-gray-500">No text yet — add a region above.</p>
+          <p className="text-xs text-gray-500">No text region under the playhead — click the timeline to add one.</p>
         ) : (
           regions.map((region) => {
             const isRegionSelected = region.id === selectedRegionId;

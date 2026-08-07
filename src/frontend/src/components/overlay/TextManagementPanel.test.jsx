@@ -16,17 +16,22 @@ const REGION_B_TWO_ELEMENTS = {
   ],
 };
 
-describe('TextManagementPanel — two-column layout, region+element management (T6630 round 4)', () => {
-  it('the ONE "Add region" control creates a new time span, at the current playhead', () => {
-    const onAddRegion = vi.fn();
-    render(<TextManagementPanel regions={[]} currentTime={4.5} onAddRegion={onAddRegion} />);
-    fireEvent.click(screen.getByTestId('text-tab-add-region'));
-    expect(onAddRegion).toHaveBeenCalledWith(4.5);
+describe('TextManagementPanel — two-column layout, region+element management (T6630 round 4/6)', () => {
+  // T6630 round 6 item 1: region creation/deletion moved ENTIRELY onto the
+  // timeline lane (explicit user direction: "adding and removing regions is
+  // done on the timeline") -- no "Add region" control here anymore, and no
+  // onAddRegion/currentTime props (the caller filters `regions` to the
+  // playhead-active set BEFORE handing it to this component -- round 6
+  // item 2 -- so this component never needs to know the playhead itself).
+  it('no "Add region" control is rendered', () => {
+    render(<TextManagementPanel regions={[]} />);
+    expect(screen.queryByTestId('text-tab-add-region')).toBeNull();
+    expect(screen.queryByText(/add region/i)).toBeNull();
   });
 
-  it('shows an empty state with no regions', () => {
+  it('shows an empty state (no region under the playhead) with no regions', () => {
     render(<TextManagementPanel regions={[]} />);
-    expect(screen.getByText(/no text yet/i)).toBeTruthy();
+    expect(screen.getByText(/no text region under the playhead/i)).toBeTruthy();
   });
 
   it('lists every region with its time range and every element nested inside it', () => {

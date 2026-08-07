@@ -75,13 +75,24 @@ export default function useTextOverlays() {
     }
   }, [textOverlays]);
 
-  const selectElement = useCallback((elementId) => {
+  // T6630 round 6 bug fix (same T5644 stale-closure trap as selectRegion's
+  // own `knownRegion` fix): wrappedAddElement calls addElement() then
+  // immediately selectElement(newElement.id) in the SAME tick. Without
+  // `knownRegionId`, the textOverlays.find() below looked the new element
+  // up in a snapshot from BEFORE addElement's own setState -- found
+  // nothing, and fell through to `setSelectedRegionId(null)`, silently
+  // clearing selection (and, after round 6 item 2, dropping the region out
+  // of the Text tab's playhead-scoped view: it no longer matched
+  // selectedRegionId AND had never needed to before, since the range check
+  // alone used to be enough). addElement's return value already carries
+  // regionId, so the caller can just pass it through.
+  const selectElement = useCallback((elementId, knownRegionId = null) => {
     if (!elementId) {
       setSelectedElementId(null);
       return;
     }
-    const region = textOverlays.find((r) => r.elements.some((el) => el.id === elementId));
-    setSelectedRegionId(region?.id ?? null);
+    const regionId = knownRegionId || textOverlays.find((r) => r.elements.some((el) => el.id === elementId))?.id || null;
+    setSelectedRegionId(regionId);
     setSelectedElementId(elementId);
   }, [textOverlays]);
 

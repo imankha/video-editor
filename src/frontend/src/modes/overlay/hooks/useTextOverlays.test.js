@@ -441,6 +441,39 @@ describe('useTextOverlays - selection (T6630 round 4)', () => {
     expect(result.current.selectedElementId).toBe(region.elements[0].id);
   });
 
+  it('T6630 round 6 regression: selectElement(id, knownRegionId) selects a JUST-ADDED element in the SAME tick', () => {
+    /* Bug: wrappedAddElement (OverlayScreen.jsx) calls addElement() then
+     * immediately selectElement(newElement.id) in the SAME event handler --
+     * the identical T5644 stale-closure trap selectRegion's knownRegion fix
+     * already guards against, but in a SECOND call site. Without
+     * knownRegionId, selectElement looked the just-added element up in the
+     * `textOverlays` this useCallback closed over -- a snapshot from BEFORE
+     * addElement's own setState, so the lookup missed and selectedRegionId
+     * silently landed on null. Appending a second element into an existing
+     * region (the "G1 multi-element" gesture) then failed to keep that
+     * region selected -- and after round 6 item 2 scoped the Text tab to
+     * the playhead/selection, a null selectedRegionId also dropped the
+     * region out of the panel entirely (diagnosed via a real-browser E2E
+     * regression: G1's "add a second element" step suddenly showed 0
+     * elements in the panel). Reproduced here by calling both in ONE
+     * act() (the other selectElement test above calls addRegion in its own
+     * act(), which flushes state first and never hits this bug). */
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec()); });
+
+    let newElement;
+    act(() => {
+      newElement = result.current.addElement(region.id, baseSpec({ text: 'SECOND' }));
+      result.current.selectElement(newElement.id, newElement.regionId);
+    });
+
+    expect(result.current.selectedRegionId).toBe(region.id);
+    expect(result.current.selectedElementId).toBe(newElement.id);
+  });
+
   it('selectRegion(null) clears both selections', () => {
     const { result } = renderHook(() => useTextOverlays());
     act(() => result.current.initializeWithDuration(10));
