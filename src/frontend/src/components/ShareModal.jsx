@@ -84,9 +84,17 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
           setPublicLink(`${window.location.origin}/shared/${data.shares[0].share_token}`);
         }
         fetchExistingShares();
+      } else {
+        // Revert the optimistic toggle instead of leaving the switch ON with
+        // a permanent "Creating link..." ghost state -- a silent failure here
+        // previously looked identical to "still working" forever, with no
+        // error and no way to retry (found live during T5220 QA).
+        setIsPublic(false);
+        toast.error('Could not create a public link', { message: 'Please try again.' });
       }
     } catch {
-      // Non-critical
+      setIsPublic(false);
+      toast.error('Could not create a public link', { message: 'Please try again.' });
     } finally {
       setCreatingPublicLink(false);
     }

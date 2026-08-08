@@ -28,6 +28,7 @@ share resolve, or export (epic decision 9, design §11 R2/R3).
 
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
 from dataclasses import dataclass, field
@@ -37,6 +38,7 @@ from app.services.intro_cards import resolve_intro_card
 from app.services.materialization import open_profile_db_readonly
 from app.services.user_db import get_all_intro_facts, get_all_intro_full_names
 from app.storage import download_from_r2_global, generate_presigned_url_global
+from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +197,29 @@ def resolve_intro_for_reel(
         return None
 
     card = dict(card)
+    # `shown_fields` is stored as a JSON TEXT column (json.dumps on write,
+    # routers/intro_cards.py) and `text_elements` as a msgpack BLOB
+    # (encode_data on write) -- a REAL `SELECT *` row carries both raw and
+    # they must be decoded HERE, once, mirroring routers/intro_cards.py's own
+    # serializer exactly, or every consumer downstream (this function's own
+    # facts-check below, _card_payload's playback JSON) either silently
+    # iterates JSON-string characters instead of field names, or -- for
+    # text_elements -- crashes FastAPI's response serialization with a
+    # UnicodeDecodeError on the raw msgpack bytes (found live, T5220 QA).
+    # Defensive isinstance checks (not unconditional decode): tests construct
+    # `card` as a plain dict with these fields ALREADY decoded (a real list /
+    # real dict), and re-decoding an already-native value throws TypeError.
+    raw_shown_fields = card.get("shown_fields")
+    if isinstance(raw_shown_fields, (str, bytes)):
+        card["shown_fields"] = json.loads(raw_shown_fields) if raw_shown_fields else []
+    else:
+        card["shown_fields"] = raw_shown_fields or []
+
+    raw_text_elements = card.get("text_elements")
+    if isinstance(raw_text_elements, bytes):
+        card["text_elements"] = decode_data(raw_text_elements) or {}
+    else:
+        card["text_elements"] = raw_text_elements or {}
 
     field_values = _load_field_values(user_id, profile_id)
     shown_fields = card.get("shown_fields") or []
@@ -225,7 +250,19 @@ def _card_payload(card) -> dict:
     useCardPreviewElements already consume (design §5.4): image_key,
     treatment, shown_fields, text_elements, subtitle_text, focal_x/y, zoom,
     duration -- plus `id`/`name` for identification. `card` may be a
-    sqlite3.Row or a plain dict (tests pass dicts directly).
+    sqlite3.Row or a plain dict (tests pass dicts directly), and its
+    `shown_fields`/`text_elements` may be RAW (a fresh `SELECT *` row --
+    e.g. `routers/collections.py::_evaluated_share_members`'s frozen
+    resolution, which never routes through this module's own
+    `resolve_intro_for_reel` normalization) or already-decoded (a caller
+    that pre-normalized). Decode defensively at this actual serialization
+    boundary rather than trusting every caller to remember to: `shown_fields`
+    is `json.dumps`-stored TEXT (routers/intro_cards.py), `text_elements` is
+    an `encode_data` msgpack BLOB -- passing either through raw crashed
+    FastAPI's response serialization with a UnicodeDecodeError on the raw
+    msgpack bytes (found live, T5220 QA, single-reel share path; the
+    collection-share path shares this exact function and was equally
+    exposed, just not yet hit).
 
     `subtitle_text` (Reviewer finding, T5220 Stage 4.5): the burn path
     (`player_intro.build_intro_card`) renders it from the full card row, and
@@ -241,14 +278,22 @@ def _card_payload(card) -> dict:
         except (KeyError, IndexError):
             return default
 
+    shown_fields = g("shown_fields") or []
+    if isinstance(shown_fields, (str, bytes)):
+        shown_fields = json.loads(shown_fields) if shown_fields else []
+
+    text_elements = g("text_elements") or {}
+    if isinstance(text_elements, bytes):
+        text_elements = decode_data(text_elements) or {}
+
     return {
         "id": g("id"),
         "name": g("name"),
         "image_key": g("image_key"),
         "image_cutout_key": g("image_cutout_key"),
         "treatment": g("treatment"),
-        "shown_fields": g("shown_fields") or [],
-        "text_elements": g("text_elements") or {},
+        "shown_fields": shown_fields,
+        "text_elements": text_elements,
         "subtitle_text": g("subtitle_text"),
         "focal_x": g("focal_x"),
         "focal_y": g("focal_y"),
