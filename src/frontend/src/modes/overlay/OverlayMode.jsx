@@ -104,12 +104,12 @@ export function OverlayMode({
   );
 
   // Calculate total layer height for playhead line
-  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-28=7rem, T6610)
+  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-24=6rem, T6630 round 8 item 4; was h-28=7rem since T6610)
   const getTotalLayerHeight = () => {
     if (hasDetectionData) {
-      return '17.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem) + Text (7rem)
+      return '16.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem) + Text (6rem)
     }
-    return '15.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (7rem) + padding
+    return '14.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (6rem) + padding
   };
 
   // T5410: default marker position (no override yet) = the open-play window's
@@ -170,7 +170,7 @@ export function OverlayMode({
           Detection label's show/hide-with-slash idiom below. Whole-layer hide is a
           view-only toggle (memory), never persisted. */}
       <div
-        className={`mt-0.5 lg:mt-1 h-28 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-24 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
           textLayerHidden ? 'bg-gray-900 hover:bg-gray-800' : 'bg-cyan-900/30 hover:bg-cyan-900/40'
         }`}
         title={textLayerHidden ? 'Show text layer' : 'Hide text layer'}

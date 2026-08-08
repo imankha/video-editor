@@ -276,8 +276,18 @@ export default function TextLayer({
   // elements within a region, settings) still lives entirely in the Text
   // tab -- only whole-region creation moved back to the timeline. This lane
   // also still supports keyboard Delete/Backspace on the focused region.
+  //
+  // ROW HEIGHT (T6630 round 8 item 4): was h-28 (112px), sized at T6610 for
+  // per-block delete AND toggle controls to clear the scrollbar; the toggle
+  // moved into the Text tab in a later round (T6630 round 3) and never
+  // shrank the row back, leaving ~46px of dead space below the lone delete
+  // button on desktop (measured live). h-24 (96px) is the smallest step
+  // that still clears the delete button's WORST case -- its
+  // coarse-pointer 44px hit box (measured live: content bottom 89px) --
+  // with a small margin, same proportion RegionLayer's h-20 keeps for its
+  // own (non-enlarged) delete button.
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-28 pb-2">
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-24 pb-2">
       <div
         ref={trackRef}
         className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg cursor-pointer"
