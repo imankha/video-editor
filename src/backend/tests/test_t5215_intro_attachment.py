@@ -253,7 +253,10 @@ class TestMigrationV041:
         assert "intro_min_duration_seconds" in cols
         row = conn.execute("SELECT intro_min_duration_seconds FROM user_settings WHERE id = 1").fetchone()
         assert row[0] == 20.0
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 41
+        # A below-v041 DB run through the full registry also picks up v042 (T6630,
+        # text_overlays regions) -- a genuine no-op here since this fixture has no
+        # working_videos table, but the runner still advances user_version past it.
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 42
         conn.close()
 
     def test_idempotent_rerun(self, tmp_path):
