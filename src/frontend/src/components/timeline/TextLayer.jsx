@@ -277,17 +277,19 @@ export default function TextLayer({
   // tab -- only whole-region creation moved back to the timeline. This lane
   // also still supports keyboard Delete/Backspace on the focused region.
   //
-  // ROW HEIGHT (T6630 round 8 item 4): was h-28 (112px), sized at T6610 for
-  // per-block delete AND toggle controls to clear the scrollbar; the toggle
-  // moved into the Text tab in a later round (T6630 round 3) and never
-  // shrank the row back, leaving ~46px of dead space below the lone delete
-  // button on desktop (measured live). h-24 (96px) is the smallest step
-  // that still clears the delete button's WORST case -- its
-  // coarse-pointer 44px hit box (measured live: content bottom 89px) --
-  // with a small margin, same proportion RegionLayer's h-20 keeps for its
-  // own (non-enlarged) delete button.
+  // ROW HEIGHT (T6630 round 9): round 8 item 4 shrank h-28 -> h-24, but sized
+  // it for the delete button's coarse-pointer 44px hit box -- a case that
+  // shouldn't have existed (see the "dropped the coarse-pointer 44px
+  // enlargement" comment on the delete button below: that enlargement never
+  // matched RegionLayer's OWN destructive delete button, which T5430
+  // deliberately leaves un-enlarged). With the button's real size now
+  // IDENTICAL on desktop and touch (measured live: content bottom 66px in
+  // both), h-20 (80px) is RegionLayer's own row-height token for this same
+  // track+button shape (RegionLayer: h-12 track + button = 72px content in
+  // an h-20 row) -- reusing it here keeps content bottom -> row bottom
+  // margin consistent across both lanes instead of a new one-off value.
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-24 pb-2">
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-20 pb-2">
       <div
         ref={trackRef}
         className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg cursor-pointer"
@@ -341,12 +343,19 @@ export default function TextLayer({
                   Delete/Backspace (handleBlockKeyDown above) still works,
                   this is an ADDITIONAL trigger for the SAME onDeleteTextRegion
                   path, not a second delete implementation. stopPropagation so
-                  it never also selects/drags the block underneath it. */}
+                  it never also selects/drags the block underneath it.
+                  T6630 round 9: dropped the coarse-pointer 44px enlargement --
+                  RegionLayer's own destructive delete button (T5430) is
+                  INTENTIONALLY not enlarged on touch to avoid fat-finger
+                  deletion, so this button was never actually mirroring it;
+                  the mismatch also forced the row taller than its content
+                  (round 8 item 4 sized the row for this button's touch
+                  hit-box, which no longer exists). */}
               <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10">
                 <button
                   type="button"
                   data-testid={`text-delete-region-${region.index}`}
-                  className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white coarse-pointer:min-w-11 coarse-pointer:min-h-11 coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center"
+                  className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteTextRegion && onDeleteTextRegion(region.id);
