@@ -1,0 +1,4 @@
+2026-08-07T23:52 SPAWNED L feature/T5220-intro-egress
+2026-08-07T23:55 CODE-EXPERT L feature/T5220-intro-egress — branch created; read task+EPIC+knowledge; T6360 TODO(no branch)=>T5220 owns routing+serve-helper; T4945 TODO=>seam only
+2026-08-08T00:00 DESIGN L feature/T5220-intro-egress — code map complete; MotionPreview reusable for DOM pre-roll; ShareModal is Scope F gap; spawning Architect for design doc
+2026-08-08T00:07 BLOCKED L feature/T5220-intro-egress — DESIGN GATE: docs/plans/tasks/T5220-design.md written, decision-complete. Awaiting user approval. 3 open questions (Q1 edge-fn intro fidelity, Q2 public facts exposure, Q3 owner-download inherited default).
