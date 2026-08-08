@@ -38,6 +38,7 @@ from .v036_null_dead_intro_card_title_text import V036NullDeadIntroCardTitleText
 from .v038_null_dead_intro_card_text_elements import V038NullDeadIntroCardTextElements
 from .v040_backfill_intro_card_default import V040BackfillIntroCardDefault
 from .v041_intro_min_duration import V041IntroMinDuration
+from .v042_text_overlays_regions import V042TextOverlaysRegions
 
 MIGRATIONS = [
     V001Baseline(),
@@ -79,6 +80,7 @@ MIGRATIONS = [
     V038NullDeadIntroCardTextElements(),
     V040BackfillIntroCardDefault(),
     V041IntroMinDuration(),
+    V042TextOverlaysRegions(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

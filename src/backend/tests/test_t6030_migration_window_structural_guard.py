@@ -91,11 +91,11 @@ POST_V023_COLUMNS = {
     #   (routers.profiles.update_current_intro_min_duration) is column_exists-guarded and
     #   refuses with 503 rather than naming a nonexistent column. See
     #   test_profile_intro_min_duration below.
-    # (v039 belongs to the sibling T6630 branch, not present here; audit it on its own
-    #   merge -- and note it must be RENUMBERED above 41 first, or the runner's
-    #   version > current rule skips it silently.)
+    # v042 (T6630 text_overlays flat blocks -> regions, renumbered from v039) adds NO column
+    #   -> nothing to guard. It rewrites the JSON/msgpack SHAPE inside the existing
+    #   working_videos.text_overlays BLOB column; no hot read gains a new column name to fail on.
 }
-HEAD_VERSION_AUDITED = 41
+HEAD_VERSION_AUDITED = 42
 
 
 def _cleanup(user_id: str) -> None:

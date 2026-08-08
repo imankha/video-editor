@@ -187,67 +187,93 @@ export async function setHighlightShape(projectId, highlightShape) {
 /**
  * T5225: create a new Overlay text block.
  * @param {number} projectId
- * @param {string} id - Client-generated text block id (optimistic create, mirrors createRegion's regionId)
+ * T6630 round 4: a text REGION is a time span containing N ELEMENTS that all
+ * render simultaneously during it. This ONE call creates EITHER kind of
+ * thing, matching the backend's add_text branch split:
+ *   - regionId omitted/null: creates a NEW REGION. `id` becomes the
+ *     REGION's id (startTime/endTime required).
+ *   - regionId set to an EXISTING region's id: appends a new ELEMENT into
+ *     that region; `id` is the ELEMENT's id (startTime/endTime ignored --
+ *     adding an element never changes the region's timing).
+ * @param {number} projectId
+ * @param {string} id - Client-generated id (region id, or element id when regionId is set)
  * @param {Object} spec - The full TextSpec
- * @param {number} startTime
- * @param {number} endTime
+ * @param {number} [startTime] - Required when creating a new region
+ * @param {number} [endTime] - Required when creating a new region
+ * @param {string|null} [regionId] - Existing region to append an element into
  * @returns {Promise<{success: boolean, version: number}>}
  */
-export async function createText(projectId, id, spec, startTime, endTime) {
-  return sendAction(projectId, 'add_text', null, {
-    id,
-    spec,
-    start_time: startTime,
-    end_time: endTime,
-  });
+export async function createText(projectId, id, spec, startTime, endTime, regionId = null) {
+  const data = { id, spec };
+  if (startTime !== undefined) data.start_time = startTime;
+  if (endTime !== undefined) data.end_time = endTime;
+  if (regionId) data.region_id = regionId;
+  return sendAction(projectId, 'add_text', null, data);
 }
 
 /**
- * T5225: move a text block's start and/or end edge (lever drag).
+ * T6630 round 4: move a text REGION's start and/or end edge (lever drag /
+ * body drag). Targets the region, not an element -- every element inside
+ * keeps its own spec untouched.
  * @param {number} projectId
- * @param {string} id
+ * @param {string} regionId
  * @param {number|null} startTime
  * @param {number|null} endTime
  * @returns {Promise<{success: boolean, version: number}>}
  */
-export async function moveTextEdge(projectId, id, startTime = null, endTime = null) {
+export async function moveTextEdge(projectId, regionId, startTime = null, endTime = null) {
   const data = {};
   if (startTime !== null) data.start_time = startTime;
   if (endTime !== null) data.end_time = endTime;
-  return sendAction(projectId, 'move_text_edge', { id }, data);
+  return sendAction(projectId, 'move_text_edge', { id: regionId }, data);
 }
 
 /**
- * T5225: replace a text block's WHOLE TextSpec (design O4 -- entity-surgical,
- * debounced by the caller, never per-keystroke).
+ * T6630 round 4: replace one text ELEMENT's WHOLE TextSpec (design O4 --
+ * entity-surgical, debounced by the caller, never per-keystroke). Searched
+ * across every region server-side.
  * @param {number} projectId
- * @param {string} id
+ * @param {string} elementId
  * @param {Object} spec - The full, updated TextSpec
  * @returns {Promise<{success: boolean, version: number}>}
  */
-export async function updateTextSpec(projectId, id, spec) {
-  return sendAction(projectId, 'update_text_spec', { id }, { spec });
+export async function updateTextSpec(projectId, elementId, spec) {
+  return sendAction(projectId, 'update_text_spec', { id: elementId }, { spec });
 }
 
 /**
- * T5225: enable/disable a text block without deleting it.
+ * T6630 round 4: enable/disable one text ELEMENT without deleting it.
  * @param {number} projectId
- * @param {string} id
+ * @param {string} elementId
  * @param {boolean} enabled
  * @returns {Promise<{success: boolean, version: number}>}
  */
-export async function toggleText(projectId, id, enabled) {
-  return sendAction(projectId, 'toggle_text', { id }, { enabled });
+export async function toggleText(projectId, elementId, enabled) {
+  return sendAction(projectId, 'toggle_text', { id: elementId }, { enabled });
 }
 
 /**
- * T5225: delete a text block by id. Idempotent server-side if already absent.
+ * T6630 round 4: delete one text ELEMENT by id. Idempotent server-side if
+ * already absent. Deletes the parent REGION too if this was its last
+ * element (a region always has >=1 element in the UI's model).
  * @param {number} projectId
- * @param {string} id
+ * @param {string} elementId
  * @returns {Promise<{success: boolean, version: number}>}
  */
-export async function deleteText(projectId, id) {
-  return sendAction(projectId, 'delete_text', { id });
+export async function deleteText(projectId, elementId) {
+  return sendAction(projectId, 'delete_text', { id: elementId });
+}
+
+/**
+ * T6630 round 4: delete a text REGION and every element inside it in ONE
+ * surgical write (the timeline lane's keyboard delete on the focused
+ * region-block uses this, not N per-element deletes).
+ * @param {number} projectId
+ * @param {string} regionId
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function deleteTextRegion(projectId, regionId) {
+  return sendAction(projectId, 'delete_text_region', { id: regionId });
 }
 
 /**

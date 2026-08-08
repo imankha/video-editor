@@ -251,10 +251,12 @@ def test_backfill_generates_heals_skips_and_is_idempotent(db):
     assert set(res["already_present"]) == {2}
     assert set(res["skipped_gone"]) == {3}
     # T5410: backfill resolves the reel's frozen/reconstructed slow-mo section,
-    # applies open_play_window + midpoint (no ranking), and grabs that ONE frame.
-    # r1 has no project rows here (unreconstructable section=None) -> whole-clip-
-    # minus-margin window: open_play_window(None, 10.0) = (0.0, 9.7) -> midpoint 4.85.
-    gen.assert_called_once_with(USER_ID, "r1.mp4", pytest.approx(4.85))
+    # applies open_play_window + the default-frame selector (no ranking), and
+    # grabs that ONE frame. r1 has no project rows here (unreconstructable
+    # section=None) -> whole-clip-minus-margin window: open_play_window(None, 10.0)
+    # = (0.0, 9.7) -> T6630 round 7 changed the default from the window midpoint
+    # to start + 2.0 (clamped to end): min(0.0 + 2.0, 9.7) = 2.0.
+    gen.assert_called_once_with(USER_ID, "r1.mp4", pytest.approx(2.0))
 
     # Columns healed/set for r1 + r2 (r1 gets the full poster_source/frame_time
     # write; r2's heal-only path only sets poster_filename, per design).
@@ -263,7 +265,7 @@ def test_backfill_generates_heals_skips_and_is_idempotent(db):
                 "SELECT id, poster_filename, poster_frame_time, poster_source FROM final_videos"
             ).fetchall()}
     assert rows[1]["poster_filename"] == "r1.mp4.jpg"
-    assert rows[1]["poster_frame_time"] == pytest.approx(4.85)
+    assert rows[1]["poster_frame_time"] == pytest.approx(2.0)
     assert rows[1]["poster_source"] == "auto"
     assert rows[2]["poster_filename"] == "r2.mp4.jpg"
     assert rows[3]["poster_filename"] is None and rows[4]["poster_filename"] is None

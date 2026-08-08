@@ -13,7 +13,7 @@ import './index.css'
 import { installResponsivenessMonitor } from './utils/responsiveness.js'
 import { installClientLogger } from './utils/clientLogger.js'
 import { setupActionTracking } from './utils/analytics.js'
-import { setupPwaUpdatePrompt } from './utils/pwaUpdate.js'
+import { setupPwaUpdatePrompt, evictStaleDevServiceWorker } from './utils/pwaUpdate.js'
 
 // T1650: Capture console.error/warn before anything else runs
 installClientLogger();
@@ -21,7 +21,20 @@ setupActionTracking();
 
 console.info(`[Build] ${__COMMIT_HASH__} (#${__APP_BUILD__})`);
 installResponsivenessMonitor();
-setupPwaUpdatePrompt();
+
+// T6630 round 4: the PWA update-gate machinery is PROD-ONLY. A dev server
+// must never register a service worker -- and must actively evict any SW
+// left controlling this origin from a past `vite build && vite preview`
+// session, which otherwise intercepts every fetch (including cross-origin R2
+// URLs) and can serve a stale cached bundle ("I don't see any of your
+// changes"). See evictStaleDevServiceWorker's docstring for the full
+// mechanism. import.meta.env.DEV is Vite's build-time flag (mirrors the
+// /debug/rich-text gate below) -- always false in a deployed build.
+if (import.meta.env.DEV) {
+  evictStaleDevServiceWorker();
+} else {
+  setupPwaUpdatePrompt();
+}
 
 // T5674: The floating global report trigger sits at the same safe bottom-right
 // corner (bottom-20 clears the player control bar) on every screen. On the editor

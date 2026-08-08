@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setupPwaUpdatePrompt } from './pwaUpdate';
+import { setupPwaUpdatePrompt, evictStaleDevServiceWorker } from './pwaUpdate';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 const { registerSWMock } = vi.hoisted(() => ({ registerSWMock: vi.fn() }));
@@ -210,5 +210,52 @@ describe('setupPwaUpdatePrompt', () => {
       expect(registration.unregister).toHaveBeenCalledTimes(1);
       expect(reloadSpy).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('evictStaleDevServiceWorker (T6630 round 4)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('unregisters every existing service worker registration', async () => {
+    const reg1 = { unregister: vi.fn().mockResolvedValue(true) };
+    const reg2 = { unregister: vi.fn().mockResolvedValue(true) };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistrations: vi.fn().mockResolvedValue([reg1, reg2]) },
+    });
+
+    await evictStaleDevServiceWorker();
+
+    expect(reg1.unregister).toHaveBeenCalledTimes(1);
+    expect(reg2.unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears every cache (a stale SW\'s precache can outlive the SW itself)', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistrations: vi.fn().mockResolvedValue([]) },
+    });
+    const deleteMock = vi.fn().mockResolvedValue(true);
+    global.caches = { keys: vi.fn().mockResolvedValue(['workbox-precache-v1', 'other-cache']), delete: deleteMock };
+
+    await evictStaleDevServiceWorker();
+
+    expect(deleteMock).toHaveBeenCalledWith('workbox-precache-v1');
+    expect(deleteMock).toHaveBeenCalledWith('other-cache');
+  });
+
+  it('is a no-op (never throws) when serviceWorker is unsupported', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: undefined });
+    await expect(evictStaleDevServiceWorker()).resolves.not.toThrow();
+  });
+
+  it('never throws even if getRegistrations itself rejects', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistrations: vi.fn().mockRejectedValue(new Error('boom')) },
+    });
+    await expect(evictStaleDevServiceWorker()).resolves.not.toThrow();
   });
 });

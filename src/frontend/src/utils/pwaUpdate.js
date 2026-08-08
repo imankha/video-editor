@@ -21,6 +21,51 @@ const SW_ACTIVATE_TIMEOUT_MS = 3500;
 const SW_INSTALL_TIMEOUT_MS = 10 * 1000;
 
 /**
+ * T6630 round 4: DEV must never run under a service worker, and must
+ * ACTIVELY EVICT any SW already controlling this origin.
+ *
+ * vite-plugin-pwa's dev-mode registration is already a no-op today
+ * (`devOptions` is unset in vite.config.js, so `virtual:pwa-register`'s
+ * `registerSW` in dev resolves to an empty async function that never calls
+ * `navigator.serviceWorker.register` -- confirmed by inspecting the served
+ * dev virtual module). So the CURRENT dev server never installs a SW itself.
+ *
+ * The actual bug: a REAL service worker from a past `vite build && vite
+ * preview` (or any prior production-like session) on this SAME origin/port
+ * persists in the browser's storage indefinitely and keeps CONTROLLING this
+ * page even after switching back to `vite dev` -- a controlling SW
+ * intercepts EVERY fetch a page under its scope makes, cross-origin included
+ * (Cloudflare R2 presigned URLs), with whatever stale cached logic it shipped
+ * with. That is the mechanism behind "head fetch threw: Failed to fetch" on
+ * an otherwise-healthy single dev server, and behind "I don't see any of your
+ * changes" (a controlling SW can serve a stale cached bundle instead of the
+ * dev server's live one). `setupPwaUpdatePrompt` is PROD-ONLY (see
+ * `main.jsx`'s `import.meta.env.DEV` gate); this is dev's counterpart --
+ * called unconditionally on every dev load so a stale SW never survives a
+ * reload once this fix has shipped.
+ */
+export async function evictStaleDevServiceWorker() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((r) => r.unregister()));
+    if (registrations.length > 0) {
+      console.info(`[DevSW] evicted ${registrations.length} stale service worker registration(s)`);
+    }
+  } catch (e) {
+    console.warn('[DevSW] failed to evict service worker registrations:', e);
+  }
+  if (typeof caches !== 'undefined') {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    } catch (e) {
+      console.warn('[DevSW] failed to clear caches:', e);
+    }
+  }
+}
+
+/**
  * Tbug40p: the update gate is driven by the truth comparison
  * (appVersion.checkServerVersion: serverBuild > clientBuild). This module does not
  * raise the gate off `registration.waiting` — a waiting service worker, by itself,

@@ -4,7 +4,11 @@ Covers:
 - open_play_window: slow-mo / no-slow-mo / too-short-after-skip / end-margin /
   section past duration. Pure arithmetic, the whole algorithm.
 - select_poster_frame: marker honoured verbatim (including outside the
-  window); unset -> midpoint.
+  window); unset -> the window's own start when `section` is set (T6630
+  round 8; was always +2s into the window, which stacked with
+  SPOTLIGHT_SKIP_SECONDS and landed the default ~4s past the section's
+  start), else 2s into the window clamped to its end (no-section case,
+  unchanged from round 7).
 - generate_poster_at_export: sets poster_filename/poster_frame_time/
   poster_source ('auto' vs 'overlay'); poster failure never fails export
   (T4110 barrier explicitly asserted); NO detection call anywhere.
@@ -92,27 +96,52 @@ def test_window_exact_min_window_boundary_not_degraded():
 
 
 # ---------------------------------------------------------------------------
-# select_poster_frame: marker verbatim (even outside window); else midpoint
+# select_poster_frame: marker verbatim (even outside window); unset ->
+# window.start when `section` is set (T6630 round 8), else 2s into the
+# window clamped to its end (no-section case, unchanged from round 7)
 # ---------------------------------------------------------------------------
 
-def test_select_frame_unset_marker_is_midpoint():
-    assert select_poster_frame((2.0, 6.0), None) == 4.0
+def test_select_frame_unset_marker_no_section_is_two_seconds_into_window():
+    # No slow-mo section -> window.start is the clip's literal frame 0 (never
+    # skip-adjusted), so the +2.0 "don't pick frame 0" push still applies.
+    # Window width 8.0 -- start+2.0 (4.0) and the midpoint (6.0) DIFFER here,
+    # so this discriminates the two rules (a window where they coincided
+    # would pass either way and not actually verify the change).
+    assert select_poster_frame((2.0, 10.0), None, None) == 4.0
+
+
+def test_select_frame_unset_marker_no_section_clamps_to_window_end_when_shorter_than_two_seconds():
+    # Windows can be as short as MIN_WINDOW_SECONDS (0.5) -- start+2.0 must
+    # not return a time outside the window.
+    assert select_poster_frame((2.0, 2.3), None, None) == 2.3
+
+
+def test_select_frame_unset_marker_with_section_is_window_start():
+    # A slow-mo section is present -> window.start already IS
+    # section.start + SPOTLIGHT_SKIP_SECONDS (past the contested/occluded
+    # opening frames). Round 7 also added +2.0 here, which stacked to ~4s
+    # past the section's start; round 8 (live user report: "6s instead of
+    # ~2s") drops the second push -- window.start is the settled point
+    # already, use it directly.
+    section = (1.5, 20.0)
+    window = (3.5, 10.0)  # open_play_window(section, ...) would yield this
+    assert select_poster_frame(window, None, section) == 3.5
 
 
 def test_select_frame_marker_honoured_verbatim_inside_window():
-    assert select_poster_frame((2.0, 6.0), 3.3) == 3.3
+    assert select_poster_frame((2.0, 6.0), 3.3, None) == 3.3
 
 
 def test_select_frame_marker_honoured_verbatim_outside_window():
     # A deliberate spotlight-frame pick is a decision, not an error -- NOT
     # clamped into the window.
-    assert select_poster_frame((2.0, 6.0), 0.1) == 0.1
-    assert select_poster_frame((2.0, 6.0), 99.0) == 99.0
+    assert select_poster_frame((2.0, 6.0), 0.1, None) == 0.1
+    assert select_poster_frame((2.0, 6.0), 99.0, None) == 99.0
 
 
 def test_select_frame_marker_zero_is_honoured_not_treated_as_falsy():
     # 0.0 is a valid marker time -- must not be treated as "unset" (falsy trap).
-    assert select_poster_frame((2.0, 6.0), 0.0) == 0.0
+    assert select_poster_frame((2.0, 6.0), 0.0, None) == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -162,15 +191,18 @@ async def test_generate_poster_at_export_auto_source_no_marker(db):
         )
 
     assert result == "auto.mp4.jpg"
-    # window = open_play_window((2,6), 10.0) = (4.0, 6.0) -> midpoint 5.0
-    grab.assert_called_once_with(USER_ID, "auto.mp4", 5.0)
+    # window = open_play_window((2,6), 10.0) = (4.0, 6.0) -> section is set,
+    # so the default is the window's own start, 4.0 (T6630 round 8; round 7
+    # had this at start+2.0=6.0, which stacked with the slow-mo skip already
+    # baked into window.start).
+    grab.assert_called_once_with(USER_ID, "auto.mp4", 4.0)
 
     row = _connect(db).execute(
         "SELECT poster_filename, poster_frame_time, poster_source FROM final_videos WHERE id = ?",
         (fv_id,),
     ).fetchone()
     assert row["poster_filename"] == "auto.mp4.jpg"
-    assert row["poster_frame_time"] == pytest.approx(5.0)
+    assert row["poster_frame_time"] == pytest.approx(4.0)
     assert row["poster_source"] == "auto"
 
 
@@ -349,7 +381,9 @@ def test_backfill_force_skips_override_sources(db):
     # skip-if-exists heal path, so it is genuinely regenerated (never
     # 'overlay'/'upload' -- those are skipped above regardless of `force`).
     assert set(res["generated"]) == {1}
-    grab.assert_called_once_with(USER_ID, "auto.mp4", pytest.approx(4.85))
+    # No slow-mo section -> window = (0.0, 9.7); start+2.0 (2.0), clamped to
+    # end (9.7) -> 2.0 (T6630 round 7; was the midpoint, 4.85).
+    grab.assert_called_once_with(USER_ID, "auto.mp4", pytest.approx(2.0))
 
 
 # ---------------------------------------------------------------------------

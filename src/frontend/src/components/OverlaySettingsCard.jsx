@@ -1,7 +1,6 @@
-import { Check, ImageOff } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
-import PosterFramePreview from './PosterFramePreview';
 
 /**
  * OverlaySettingsCard - Pure presentational card of Overlay-mode tuning controls.
@@ -37,17 +36,12 @@ export default function OverlaySettingsCard({
   isHighlightEnabled,
   disabled = false,
   className = '',
-  // T5410 / T6510: preview-image (poster) controls
-  posterMarkerTimeLabel,       // formatted time string of the current marker, or null
-  posterUploaded = false,      // grandfathered custom upload in use (read-only, T6510)
-  posterPreviewVideoUrl,       // overlay working-video URL to grab the still from
-  posterPreviewTime = 0,       // source-time seconds of the chosen frame
-  onUseCurrentFrameAsCover,
-  onRemoveUpload,              // T6510: "Use a frame instead" -- reverts a grandfathered upload
 }) {
+  // T6630 round 2: the thumbnail (poster) preview + its controls moved OUT of this
+  // card into the dedicated "Thumbnail" tab (ThumbnailPanel). This card is now the
+  // "Overlay" tab body: spotlight/highlight tuning only.
   return (
-    <div className={`bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4 ${className}`}>
-      <div className="text-sm font-medium text-gray-300 mb-3">Overlay Settings</div>
+    <div className={`space-y-4 ${className}`}>
 
       {/* Highlight Color */}
       <div className="flex items-center justify-between">
@@ -215,75 +209,11 @@ export default function OverlaySettingsCard({
         </>
       )}
 
-      {/* Preview image (T5410, made a frame-only choice in T6510): the still a
-          share link unfurls to. Honest copy -- it is the middle of the open-play
-          slow-mo, or the frame you picked; never "AI-picked" / "smart". The name
-          says the CONSEQUENCE, not the artefact, which is the only reason a user
-          should care. T6510 removed uploading: the preview is ALWAYS a frame from
-          the reel, we SHOW the chosen still, and dragging the timeline pin moves
-          it. Existing custom uploads are grandfathered (read-only) with a one-way
-          "Use a frame instead" switch. */}
-      <div className="border-t border-gray-700 pt-3 space-y-2">
-        <div className="flex flex-col">
-          <span
-            className="text-sm font-medium text-gray-200"
-            title="This image is what people see when you share the link."
-          >
-            Preview image
-          </span>
-          <span className="text-xs text-gray-400">
-            {posterUploaded
-              ? 'Custom image in use'
-              : posterMarkerTimeLabel
-                ? `Frame you picked · ${posterMarkerTimeLabel}`
-                : 'The middle of the open-play slow-mo. Drag the pin on the timeline to change it.'}
-          </span>
-        </div>
-
-        {/* Show the ACTUAL chosen still (the heart of T6510). A grandfathered
-            custom upload has no reel frame to grab, so it keeps the text state
-            plus the one-way switch below. */}
-        {posterUploaded ? (
-          <div
-            data-testid="poster-custom-placeholder"
-            className="w-full aspect-video rounded-md bg-gray-900 border border-gray-700 flex flex-col items-center justify-center gap-1 text-gray-500"
-          >
-            <ImageOff size={20} />
-            <span className="text-xs">Custom image in use</span>
-          </div>
-        ) : (
-          <PosterFramePreview videoUrl={posterPreviewVideoUrl} sourceTime={posterPreviewTime} />
-        )}
-
-        <div className="flex flex-wrap gap-1.5 items-center">
-          {!posterUploaded && (
-            <button
-              onClick={() => onUseCurrentFrameAsCover?.()}
-              disabled={disabled}
-              className={`
-                px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600
-                coarse-pointer:min-h-11 transition-all
-                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-              `}
-            >
-              Use current frame
-            </button>
-          )}
-          {posterUploaded && (
-            <button
-              onClick={() => onRemoveUpload?.()}
-              disabled={disabled}
-              className={`
-                px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600
-                coarse-pointer:min-h-11 transition-all
-                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-              `}
-            >
-              Use a frame instead
-            </button>
-          )}
-        </div>
-      </div>
+      {!isHighlightEnabled && (
+        <p className="text-xs text-gray-500">
+          Add a spotlight on the timeline to tune its color, shape, and dimming here.
+        </p>
+      )}
     </div>
   );
 }

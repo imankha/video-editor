@@ -32,12 +32,26 @@ export function openPlayWindow(section, finalDuration) {
 }
 
 /**
+ * T6630 round 8: absent a marker, default to the window's own start when
+ * `section` is set (that start already IS `section.start +
+ * SPOTLIGHT_SKIP_SECONDS` -- already past the contested/occluded opening
+ * frames, no second push needed); otherwise (no section, window starts at
+ * the clip's literal frame 0) default to 2 seconds into the window, clamped
+ * to `end` so a window shorter than 2s never returns a time outside it.
+ * Round 7's original "+2s into the window, always" stacked with the skip
+ * above and landed ~4s past the section's start (e.g. section at 1.5s ->
+ * default at 5.5s, live-reported as "6s instead of ~2s"). Mirrors
+ * poster.py's select_poster_frame EXACTLY.
+ *
  * @param {[number, number]} window
  * @param {number | null} userMarkerTime - honoured verbatim when set.
+ * @param {[number, number] | null} section - the SAME section `window` was
+ *   built from (see openPlayWindow), or null.
  * @returns {number} the poster frame's time.
  */
-export function selectPosterFrame(window, userMarkerTime) {
+export function selectPosterFrame(window, userMarkerTime, section) {
   if (userMarkerTime != null) return userMarkerTime;
   const [start, end] = window;
-  return start + (end - start) / 2;
+  if (section) return start;
+  return Math.min(start + 2.0, end);
 }

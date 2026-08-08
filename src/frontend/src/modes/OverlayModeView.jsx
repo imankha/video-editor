@@ -8,12 +8,14 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
 import OverlaySettingsCard from '../components/OverlaySettingsCard';
+import OverlaySettingsTabs from '../components/overlay/OverlaySettingsTabs';
+import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
+import TextManagementPanel from '../components/overlay/TextManagementPanel';
 import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
 import { Minimize, Maximize, RotateCcw } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
-import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 
 /**
@@ -174,16 +176,20 @@ export function OverlayModeView({
   onFillOpacityChange,
   onDimStrengthChange,
 
-  // T5225: Overlay text blocks
+  // T5225 / T6630 round 4: Overlay text REGIONS (each containing N elements)
   textOverlays = [],
   clipBoundaries = [],
-  selectedTextId = null,
-  onAddText,
+  selectedRegionId = null,
+  selectedElementId = null,
+  onAddRegion,
+  onAddElement,
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
-  onSelectText,
+  onSelectRegion,
+  onSelectElement,
   onDeleteText,
+  onDeleteTextRegion,
   onToggleText,
   onUpdateTextSpec,
 
@@ -229,6 +235,9 @@ export function OverlayModeView({
   // Layers
   selectedLayer,
   onLayerSelect,
+  // T6630 round 2: whole-text-layer visibility toggle (label icon + preview gate)
+  textLayerHidden = false,
+  onToggleTextLayer,
 
   // Export
   exportButtonRef,
@@ -257,6 +266,71 @@ export function OverlayModeView({
   // them (T4880); the inline scrollable layout keeps every control reachable.
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
+
+  // T6630 round 2: the three-tab settings section (Overlay | Text | Thumbnail).
+  // Default "overlay". Selecting a text region (T6630 round 4: the timeline
+  // lane's addressable unit) forces the Text tab (see handleSelectRegion
+  // below) so the on-screen panel updates in place — the panel has a CONSTANT
+  // height, so this never reflows the timeline.
+  const [activeTab, setActiveTab] = useState('overlay');
+
+  // T6630 round 6/7 item 2/1: "all text settings should be for the text
+  // regions the playhead is currently on" -- STRICT playhead scoping for
+  // the SETTINGS panel, deliberately NOT the selectedRegionId short-circuit
+  // TextOverlayPreview.jsx's own burn-in filter uses (that one intentionally
+  // keeps a region rendering on-screen while you're actively editing it,
+  // even if the playhead nudges outside it -- correct THERE, a separate
+  // call site for the actual video preview). Round 7 user direction: "when
+  // my playhead was not over any text region i expect disabled and empty
+  // text settings" -- no exception for whatever was last selected. The
+  // round-6 rationale for copying the short-circuit here (a just-created
+  // region needs to show immediately) is still handled correctly WITHOUT
+  // it: region creation and region selection both explicitly seek the
+  // playhead into range (wrappedAddRegion / handleSelectRegion below), so a
+  // selected region's range legitimately contains currentTime by the time
+  // this filter runs. Regions CAN overlap, so this is a list (0, 1, or N).
+  // T6630 round 7 item 1 (found during live verification of the strict-scoping
+  // fix below, not in the original report): a region's own creation-time seek
+  // (wrappedAddRegion's `seek(newRegion.startTime)`) can land React's
+  // `currentTime` state a HAIR (sub-millisecond, observed ~0.0000007s) below
+  // `region.startTime` -- the video element's own currentTime after a
+  // programmatic seek is not bit-identical to the requested time. Round 6's
+  // now-removed selectedRegionId short-circuit accidentally absorbed this;
+  // a bare `<=` here would otherwise permanently hide a just-created region's
+  // own settings (currentTime never moves again once the video is paused).
+  // EPSILON matches textPositionPresets.js's existing tolerance convention --
+  // far below one video frame (~0.033s at 30fps), so it cannot widen "the
+  // playhead is over this region" into any perceptible range.
+  const PLAYHEAD_EPSILON = 0.01;
+  const activeTextRegionsAtPlayhead = useMemo(
+    () => textOverlays.filter((region) =>
+      region.startTime - PLAYHEAD_EPSILON <= currentTime && currentTime < region.endTime + PLAYHEAD_EPSILON),
+    [textOverlays, currentTime]
+  );
+
+  // Gesture-based tab switch: a region-select click flips to the Text tab.
+  // Passing null (deselect) does not change the tab. No reactive useEffect.
+  //
+  // T6630 round 6/7: selecting a region whose range does NOT contain the
+  // current playhead (e.g. clicking an existing block elsewhere on the
+  // timeline) must also move the playhead INTO it -- round 7 removed the
+  // Text tab filter's selectedRegionId short-circuit (above), so this seek
+  // is now the ONLY thing that makes a just-selected region's settings
+  // actually show up (strict playhead scoping, no exception for selection).
+  // It also keeps the STAGE PREVIEW showing the region in context -- editing
+  // something you can't see rendering on the video is confusing regardless.
+  // Region CREATION already seeks (wrappedAddRegion, OverlayScreen.jsx) --
+  // this covers the SELECT-an-EXISTING-region path, the other way in.
+  const handleSelectRegion = useCallback((id, elementId) => {
+    onSelectRegion && onSelectRegion(id, elementId);
+    if (id) {
+      setActiveTab('text');
+      const region = textOverlays.find((r) => r.id === id);
+      if (region && !(region.startTime <= currentTime && currentTime < region.endTime)) {
+        seek && seek(region.startTime);
+      }
+    }
+  }, [onSelectRegion, textOverlays, currentTime, seek]);
 
   // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
   // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
@@ -444,14 +518,14 @@ export function OverlayModeView({
               isDisabled={!showPlayerBoxes}
             />
           ),
-          effectiveOverlayMetadata && textOverlays.length > 0 && (
+          effectiveOverlayMetadata && !textLayerHidden && textOverlays.length > 0 && (
             <TextOverlayPreview
               key="text-preview"
               videoRef={videoRef}
               videoMetadata={effectiveOverlayMetadata}
               textOverlays={textOverlays}
               currentTime={currentTime}
-              selectedTextId={selectedTextId}
+              selectedRegionId={selectedRegionId}
               zoom={zoom}
               panOffset={panOffset}
               isFullscreen={isFullscreen}
@@ -534,17 +608,20 @@ export function OverlayModeView({
   // T5676: Overlay tuning controls — beside the video on desktop, stacked above
   // the Add Spotlight button on mobile. Extracted from ExportButtonView.
   // T6510: the SOURCE-time of the frame the preview image will use -- the user's
-  // marker if set, else the export-time window midpoint (openPlayWindow +
-  // selectPosterFrame mirror poster.py exactly, so the shown still matches what
-  // export picks). Feeds PosterFramePreview so the user SEES the actual frame.
+  // marker if set, else the export-time default (T6630 round 8: the open-play
+  // window's own start, or 2s into it when there's no slow-mo section;
+  // openPlayWindow + selectPosterFrame mirror poster.py exactly, so the shown
+  // still matches what export picks). Feeds PosterFramePreview so the user
+  // SEES the actual frame.
   const posterFrameSourceTime = useMemo(() => {
     if (posterMarkerTime != null) return posterMarkerTime;
     const dur = effectiveOverlayMetadata?.duration || duration || 0;
     if (!dur) return 0;
-    return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null);
+    return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null, posterSlowmoSection);
   }, [posterMarkerTime, posterSlowmoSection, effectiveOverlayMetadata?.duration, duration]);
 
-  const overlaySettingsCard = (
+  // --- Overlay tab: spotlight/highlight tuning (poster moved to Thumbnail tab). ---
+  const overlayPanel = (
     <OverlaySettingsCard
       highlightColor={highlightColor}
       onHighlightColorChange={onHighlightColorChange}
@@ -560,49 +637,59 @@ export function OverlayModeView({
       onHighlightEffectTypeChange={onHighlightEffectTypeChange}
       isHighlightEnabled={highlightRegions.length > 0}
       disabled={settingsDisabled}
+    />
+  );
+
+  // --- Text tab: element management (add/remove ELEMENTS, settings) for the
+  // region(s) ACTIVE AT THE PLAYHEAD (T6630 round 6 item 2 -- see
+  // activeTextRegionsAtPlayhead above). Region CREATE/DELETE live entirely on
+  // the timeline lane (round 5/6 item 1/3). A per-region "+ Add text"
+  // (element), per-element Remove/visibility, and the settings editor (incl.
+  // the 9-slot position grid) for the selected element. Selecting a region/
+  // element sets the SAME selectedRegionId/selectedElementId the timeline/
+  // stage read -- one selection state, no second source of truth.
+  // Two-column layout (list left, settings right, round 4 item 3) so adding
+  // a row never moves the settings panel. ---
+  const textPanel = (
+    <TextManagementPanel
+      regions={activeTextRegionsAtPlayhead}
+      selectedRegionId={selectedRegionId}
+      selectedElementId={selectedElementId}
+      onAddElement={onAddElement}
+      onSelectRegion={handleSelectRegion}
+      onSelectElement={onSelectElement}
+      onDeleteText={onDeleteText}
+      onDeleteTextRegion={onDeleteTextRegion}
+      onToggleText={onToggleText}
+      onUpdateTextSpec={onUpdateTextSpec}
+    />
+  );
+
+  // --- Thumbnail tab (T6590): the chosen still as FEEDBACK; the marker owns
+  // setting the frame (no "Use current frame" button). ---
+  const thumbnailPanel = (
+    <ThumbnailPanel
       posterMarkerTimeLabel={
         !posterUploaded && posterMarkerTime != null ? formatTimeSimple(posterMarkerTime) : null
       }
       posterUploaded={posterUploaded}
       posterPreviewVideoUrl={effectiveOverlayVideoUrl}
       posterPreviewTime={posterFrameSourceTime}
-      onUseCurrentFrameAsCover={() => onPosterMarkerDragEnd?.(currentTime)}
       onRemoveUpload={onRemoveUpload}
+      disabled={settingsDisabled}
     />
   );
 
-  // T5225: the shared TextSpec editor rail, shown when a text block is
-  // selected on the timeline. Same component T5205's card editor will reuse
-  // (design §4.1) -- this screen only supplies the host (spec in, surgical
-  // update_text_spec out via onUpdateTextSpec, debounced by the caller).
-  const selectedTextBlock = selectedTextId
-    ? textOverlays.find((b) => b.id === selectedTextId) || null
-    : null;
-
-  const textEditorCard = selectedTextBlock ? (
-    // T6480: this rail hosts the SHARED TextSpecEditor, whose control + label
-    // colours (text-gray-400 labels, gray-800 inputs, amber footer) are tuned for
-    // a DARK surface -- the same surface the card editor gives it. The overlay
-    // screen's other panels are light glass (bg-white/10 over the purple app bg),
-    // which rendered those labels bright-on-bright (the reported bug). We fix it
-    // host-side -- a dark glass panel here -- rather than darkening the shared
-    // component, which would invert the bug in the (already-dark) card editor.
-    <div className="bg-gray-900/85 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-gray-700 mt-3">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-white">Edit Text</h3>
-        <button
-          onClick={() => onSelectText && onSelectText(null)}
-          className="text-gray-400 hover:text-white text-xs"
-        >
-          Done
-        </button>
-      </div>
-      <TextSpecEditor
-        spec={selectedTextBlock.spec}
-        onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedTextBlock.id, nextSpec)}
-      />
-    </div>
-  ) : null;
+  const settingsTabs = (
+    <OverlaySettingsTabs
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      overlayPanel={overlayPanel}
+      textPanel={textPanel}
+      thumbnailPanel={thumbnailPanel}
+      disabledTabIds={activeTextRegionsAtPlayhead.length === 0 ? ['text'] : []}
+    />
+  );
 
   return (
     <>
@@ -733,10 +820,12 @@ export function OverlayModeView({
                 {controlsEl}
               </div>
               {/* Settings column — reclaimed pillarbox width, desktop only. Mobile
-                  renders its own copy above the Add Spotlight button (below). */}
+                  renders its own copy above the Add Spotlight button (below). The
+                  three-tab section (Overlay | Text | Thumbnail) has a constant
+                  height, so selecting a block swaps the Text tab in place without
+                  moving the timeline (T6630 round 2). */}
               <div className="hidden lg:block lg:flex-1 lg:min-w-0">
-                {overlaySettingsCard}
-                {textEditorCard}
+                {settingsTabs}
               </div>
             </div>
           )}
@@ -799,16 +888,18 @@ export function OverlayModeView({
             posterUploaded={posterUploaded}
             onPosterMarkerDragEnd={onPosterMarkerDragEnd}
             isExportInFlight={settingsDisabled}
+            isThumbnailTabActive={activeTab === 'thumbnail'}
             textOverlays={textOverlays}
             clipBoundaries={clipBoundaries}
-            selectedTextId={selectedTextId}
-            onAddText={onAddText}
+            selectedRegionId={selectedRegionId}
+            onAddTextRegion={onAddRegion}
             onMoveTextStart={onMoveTextStart}
             onMoveTextEnd={onMoveTextEnd}
             onMoveTextBody={onMoveTextBody}
-            onSelectText={onSelectText}
-            onDeleteText={onDeleteText}
-            onToggleText={onToggleText}
+            onSelectRegion={handleSelectRegion}
+            onDeleteTextRegion={onDeleteTextRegion}
+            textLayerHidden={textLayerHidden}
+            onToggleTextLayer={onToggleTextLayer}
               />
             ) : isLoading ? (
               <div className="animate-pulse">
@@ -888,16 +979,18 @@ export function OverlayModeView({
                         posterUploaded={posterUploaded}
                         onPosterMarkerDragEnd={onPosterMarkerDragEnd}
                         isExportInFlight={settingsDisabled}
+                        isThumbnailTabActive={activeTab === 'thumbnail'}
                         textOverlays={textOverlays}
                         clipBoundaries={clipBoundaries}
-                        selectedTextId={selectedTextId}
-                        onAddText={onAddText}
+                        selectedRegionId={selectedRegionId}
+                        onAddTextRegion={onAddRegion}
                         onMoveTextStart={onMoveTextStart}
                         onMoveTextEnd={onMoveTextEnd}
                         onMoveTextBody={onMoveTextBody}
-                        onSelectText={onSelectText}
-                        onDeleteText={onDeleteText}
-                        onToggleText={onToggleText}
+                        onSelectRegion={handleSelectRegion}
+                        onDeleteTextRegion={onDeleteTextRegion}
+                        textLayerHidden={textLayerHidden}
+            onToggleTextLayer={onToggleTextLayer}
                       />
                     </div>
                   )}
@@ -943,12 +1036,11 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Overlay Settings — mobile only (stacked above Add Spotlight). Desktop
-            renders the card beside the video in the two-column stage row (T5676). */}
+        {/* Settings tabs — mobile only (stacked above Add Spotlight). Desktop
+            renders the tabbed section beside the video in the two-column stage row. */}
         {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
           <div className="lg:hidden mt-6">
-            {overlaySettingsCard}
-            {textEditorCard}
+            {settingsTabs}
           </div>
         )}
 
