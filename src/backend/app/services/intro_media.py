@@ -18,6 +18,14 @@ still lands correctly.
 
 The re-encode shape mirrors ``routers/export/overlay.py``'s poster upload, the
 closest precedent in the codebase.
+
+NO BIOMETRICS (T5230 compliance): this module decode-verifies and re-encodes an
+image — it MUST NEVER run face recognition, facial templating, landmarking, or
+any biometric identifier extraction on the photo (2025 COPPA amendment +
+BIPA/CCPA; the subject is a minor). The only image analysis permitted anywhere
+in the intro pipeline is background SEGMENTATION for the T5200 cut-out, which is
+not recognition. Enforced by the static guardrail test
+``tests/test_t5230_intro_compliance.py::test_no_face_recognition_in_intro_pipeline``.
 """
 
 import logging

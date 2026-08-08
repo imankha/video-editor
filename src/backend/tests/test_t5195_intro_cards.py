@@ -49,9 +49,16 @@ def db(tmp_path):
     set_current_profile_id(PROFILE_ID)
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
-         patch("app.database.R2_ENABLED", False):
+         patch("app.database.R2_ENABLED", False), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch("app.storage.R2_ENABLED", False):
         from app.database import ensure_database, get_database_path
+        from app.services.user_db import set_intro_consent
         ensure_database()
+        # T5230: card creation is now gated on a parental-consent attestation.
+        # These tests exercise card CRUD, not the consent gate, so record consent
+        # up front (the gate itself is covered by test_t5230_intro_compliance.py).
+        set_intro_consent(USER_ID, PROFILE_ID, "2026-08-08T00:00:00")
         yield get_database_path()
 
 

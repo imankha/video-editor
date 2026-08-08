@@ -9,6 +9,24 @@ to a named editor gesture (create card, rename, set default, delete).
 Storage-layer only — no editor UI (T5205) and no rendering (T5210). The shared
 composition/validation rules live in `app/services/intro_cards.py`; this router
 never inlines them.
+
+CHILDREN'S-DATA COMPLIANCE (T5230): an intro card holds a minor's likeness and
+parent-typed facts that become publicly visible when shared, so two guardrails
+bind every card path here:
+  1. NO BIOMETRICS, EVER. Nothing in the intro pipeline may run face
+     recognition, facial templating, or any biometric identifier extraction on
+     the photo (2025 COPPA amendment + BIPA/CCPA). The player cut-out (T5200)
+     is background SEGMENTATION, not recognition — that is the only image
+     analysis permitted. Enforced by the static guardrail test
+     `test_t5230_intro_compliance.py::test_no_face_recognition_in_intro_pipeline`.
+  2. CONSENT GATE. Card creation (`create_intro_card` below) is blocked (403)
+     until the profile has a parental-consent attestation (`intro_consent_at`,
+     T5190); attach-time gates live in downloads/collections (also 403). The raw
+     photo upload (`profiles.upload_intro_image`) is intentionally NOT gated:
+     per EPIC.md § Compliance posture the risk is PUBLIC EXPOSURE, not storage —
+     the photo sits in a private per-profile R2 prefix (SSE + access control)
+     and only becomes shareable once a card is created (gated here) and attached
+     (gated in downloads/collections).
 """
 
 import json
@@ -30,6 +48,7 @@ from app.services.intro_cards import (
     validate_zoom,
 )
 from app.services.intro_media import delete_intro_image
+from app.services.user_db import get_intro_consent
 from app.storage import generate_presigned_url_global
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
@@ -170,7 +189,27 @@ async def create_intro_card(request: CreateIntroCardRequest):
     other half of the invariant — a deleted default auto-promotes the newest
     remaining card, and a profile with zero cards has no default — lives in
     `delete_intro_card` below.)
+
+    T5230 consent gate: a card is a minor's likeness + parent-typed facts made
+    shareable, so creation is refused (403, never a silent no-op) until the
+    profile has a recorded parental-consent attestation (`intro_consent_at`,
+    T5190). 403 (not 400) matches the pre-existing attach-time gates in
+    downloads/collections — the whole consent surface fails the same way, so the
+    frontend handles one status. (The raw photo upload is intentionally not
+    gated — see the module docstring: storage in a private prefix is not the
+    exposure risk; card creation is the first point that leads to sharing.)
     """
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    if get_intro_consent(user_id, profile_id) is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Parental consent is required before creating an intro card. "
+                "The parent or guardian must attest to using this player's likeness."
+            ),
+        )
+
     try:
         shown_fields = validate_shown_fields(request.shown_fields)
         treatment = validate_treatment(request.treatment)

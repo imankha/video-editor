@@ -12,6 +12,13 @@ Nothing here stores derived state. `composition` is computed on every read from
 the canonical `(has_photo, shown_fields)`; there is deliberately NO
 template/layout column (storing it would be redundant state that drifts the
 first time a user removes the photo).
+
+NO BIOMETRICS (T5230 compliance): the intro pipeline never runs face
+recognition / facial templating / biometric identifier extraction on the
+minor's photo (2025 COPPA amendment + BIPA/CCPA). Composition is derived purely
+from the count of parent-chosen facts, never from anything detected in the
+image. Enforced by the static guardrail test in
+`tests/test_t5230_intro_compliance.py`.
 """
 
 from __future__ import annotations

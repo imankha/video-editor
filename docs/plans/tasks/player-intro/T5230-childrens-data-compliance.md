@@ -1,6 +1,6 @@
 # T5230: Children's-data compliance hardening
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7 | **Complexity:** 4
 **Epic:** [Player Intro + Rich Text](EPIC.md) — gates public launch
 
@@ -82,9 +82,26 @@ test. Ties into T5190 (consent field, DOB) and T5220 (warning). **Must ship befo
 exposed publicly.** Get a human sign-off on the legal copy.
 
 ## Acceptance criteria
-- [ ] Grad-year default; DOB opt-in and app-encrypted if stored.
-- [ ] Consent attestation gate enforced before intro use.
-- [ ] Intro fields + photo/cut-out included in privacy export AND account/intro deletion.
-- [ ] Public-exposure warning present (verified with T5220).
-- [ ] No face-recognition in any intro path (guardrail note/test).
-- [ ] Privacy policy updated + human-reviewed.
+- [x] Grad-year default; DOB opt-in and app-encrypted if stored. **Satisfied by absence** — no DOB/birthdate/age/height/school field exists anywhere in the schema (verified: `INTRO_FACT_FIELDS == ('position','class','team')`, `class` = grad year free text). Per CLAUDE.md no speculative code was built; guarded by `test_no_dob_or_biometric_field_in_intro_schema`. Contingency: a future DOB feature must be app-encrypted on top of R2 SSE.
+- [x] Consent attestation gate enforced before intro use. `create_intro_card` refuses (**403**) unless `get_intro_consent` is set; attach-time gates already existed in downloads/collections (also 403). Raw photo upload is intentionally NOT gated — see reviewer decision below.
+- [x] Intro fields + photo/cut-out included in privacy export AND account/intro deletion. Export wired in `privacy.py`; purge already covers R2 `intro/` via whole-prefix `delete_user_r2_data` — **verified against a real R2 object key** by `test_purge_deletes_r2_intro_object` (T6090 lesson).
+- [ ] Public-exposure warning present (verified with T5220). **PENDING on T5220** (branch `feature/T5220-intro-egress`, not yet merged as of 2026-08-08 — `IntroExposureNotice.jsx`/`intro_egress.py` absent). T5220 owns that UI; this task did not touch its files. Privacy-policy copy DOES describe the public-visibility risk.
+- [x] No face-recognition in any intro path (guardrail note/test). Notes added to `intro_cards.py` router+service and `intro_media.py`; static grep guardrail `test_no_face_recognition_in_intro_pipeline` (with a red-first self-check). Note: `player_intro.py` inline comment deliberately SKIPPED because it is a T5220-owned file — the guardrail test greps it (read-only) so it is still covered.
+- [ ] Privacy policy updated + human-reviewed. Copy DRAFTED in `docs/legal/privacy-policy.md` + `PrivacyPolicy.jsx` (player-intro collection/sharing + parent-consent basis). **DRAFT pending human/attorney sign-off — not self-certified.**
+
+## Progress Log
+
+**2026-08-08 (T5230 implementation, M-tier)**
+- Code Expert audit confirmed: consent gate absent on card CREATE (only attach); purge already covers R2 `intro/` + user.sqlite KV via whole-prefix delete + rmtree (T6090-clean); export missing all intro data; NO DOB field anywhere.
+- Implemented: consent gate on `create_intro_card` (400); export of `intro_cards` rows + free text + `intro_consent_at`/position/class/team/full_name/photo_key (incl. uncached-profile KV via `get_all_intro_*`); no-biometrics notes; `tests/test_t5230_intro_compliance.py` (9 tests, all green) covering consent gate, export, real-R2-object purge proof, biometric grep guardrail (+ red-first self-check), DOB-absence guardrail.
+- Privacy policy: intro-card collection/sharing + parent-consent basis added to md + jsx, flagged DRAFT for attorney review.
+- Knowledge doc `backend-services.md` § Intro card library updated with the compliance guarantees.
+- **DOB clause satisfied by absence** — no speculative encryption scaffolding built (CLAUDE.md).
+- **Public-exposure-warning criterion pending on T5220** (unmerged); T5220's files untouched.
+- Legal copy is a DRAFT pending human sign-off.
+
+**Reviewer round (fresh-context, M-tier) — resolved:**
+- Confirmed SOUND: purge/export completeness (whole-prefix R2 delete provably covers `intro/`; export degrades safely), the biometric grep guardrail (genuinely red-capable, doesn't match prose), consent-gate profile scoping.
+- **MAJOR raised:** photo upload (`profiles.upload_intro_image`) ingests the minor's photo with no consent gate. **DECISION: declined, by design.** EPIC.md § Compliance posture is explicit — *"the real risk is PUBLIC EXPOSURE, not storage"* — and enumerates the photo's protections as SSE + per-profile access control + the public-exposure warning, deliberately NOT a consent gate on upload. The photo lands in a private per-profile prefix and only becomes shareable once a card is created (now gated) and attached (already gated). Gating upload would also break T5190's shipped upload contract and exceed this task's "block card creation (at minimum)" scope. Rationale recorded in `intro_cards.py` module docstring + knowledge doc. Left as an OPTIONAL future defense-in-depth hardening for the supervisor to weigh, not implemented here.
+- **MINOR (status code):** create-gate changed from the kickoff's literal 400 to **403** so the whole consent surface (create + 3 attach gates) fails identically and the frontend handles one status. Deliberate, documented deviation from the kickoff's "400".
+- MINOR (export of uncached-profile card free-text): acknowledged as an inherent local-cache export boundary (KV consent/facts still export; R2 objects still listed); not a regression.
