@@ -66,4 +66,32 @@ describe('ProfileSportButton', () => {
     expect(img).toBeTruthy();
     expect(img.src).toBe('https://r2/photo.jpg');
   });
+
+  // The R2 object can be gone while the key survives (T6650: deleting an intro
+  // card hard-deletes the object the profile photo also points at). Without the
+  // guard this renders a permanent broken-image icon in the header.
+  it('hides the thumbnail when the photo object is gone (dead R2 key)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    h.profiles = [{ ...h.profiles[0], introPhotoUrl: 'https://r2/dead.jpg' }];
+    const { container } = render(<ProfileSportButton />);
+
+    fireEvent.error(container.querySelector('img'));
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(warn).toHaveBeenCalled();               // dangling key is reported, not swallowed
+    expect(screen.getByRole('button')).toBeTruthy(); // the button itself still works
+    warn.mockRestore();
+  });
+
+  it('retries after a re-upload, since suppression is keyed on the URL', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    h.profiles = [{ ...h.profiles[0], introPhotoUrl: 'https://r2/dead.jpg' }];
+    const { container, rerender } = render(<ProfileSportButton />);
+    fireEvent.error(container.querySelector('img'));
+    expect(container.querySelector('img')).toBeNull();
+
+    h.profiles = [{ ...h.profiles[0], introPhotoUrl: 'https://r2/fresh.jpg' }];
+    rerender(<ProfileSportButton />);
+    expect(container.querySelector('img')?.src).toBe('https://r2/fresh.jpg');
+  });
 });

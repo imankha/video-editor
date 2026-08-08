@@ -24,6 +24,7 @@ export function ProfileSportButton() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
 
   const [showManageModal, setShowManageModal] = useState(false);
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState(null);
 
   if (!isAuthenticated || !isInitialized) return null;
 
@@ -41,6 +42,14 @@ export function ProfileSportButton() {
   // at) rather than the unrelated square crop ProfileIntroSection's upload
   // preview happens to use.
   const photoUrl = currentProfile?.introPhotoUrl;
+  // The R2 object behind this key can genuinely be gone: deleting an intro card
+  // hard-deletes the SAME object the profile photo points at (T6650), leaving a
+  // dangling key. Without this guard the header renders a permanent broken-image
+  // icon. Keyed on the URL, not a boolean, so a re-upload (new URL) retries
+  // instead of staying suppressed for the session.
+  // Scope note: this only hides the broken thumbnail. The user-visible "photo
+  // missing" state, and repairing the dangling key, belong to T6650.
+  const showPhoto = !!photoUrl && failedPhotoUrl !== photoUrl;
 
   return (
     <>
@@ -60,11 +69,15 @@ export function ProfileSportButton() {
           )}
         </button>
 
-        {photoUrl && (
+        {showPhoto && (
           <img
             src={photoUrl}
             alt=""
             aria-hidden
+            onError={() => {
+              console.warn(`[ProfileSportButton] intro photo failed to load, hiding thumbnail: ${photoUrl}`);
+              setFailedPhotoUrl(photoUrl);
+            }}
             className="absolute top-full right-0 mt-1.5 w-14 h-[100px] rounded-lg object-cover ring-2 ring-white/20 shadow pointer-events-none"
           />
         )}
