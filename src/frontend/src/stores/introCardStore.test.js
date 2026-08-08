@@ -43,6 +43,19 @@ describe('introCardStore', () => {
     expect(JSON.parse(opts.body)).toEqual({ name: 'New', treatment: 'gold' });
   });
 
+  it('createCard throws the backend detail message on failure (T5230 consent-gate 403)', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ detail: 'Parental consent is required before creating an intro card.' }, false, 403),
+    );
+
+    await expect(
+      useIntroCardStore.getState().createCard({ name: 'New', treatment: 'gold' }),
+    ).rejects.toThrow('Parental consent is required before creating an intro card.');
+
+    // A blocked create must not silently add a phantom row.
+    expect(useIntroCardStore.getState().cards).toEqual([]);
+  });
+
   it('updateCard sends ONLY the changed field (surgical) and replaces the row', async () => {
     useIntroCardStore.setState({ cards: [{ id: 3, name: 'Old', title_text: 'keep' }] });
     const updated = { id: 3, name: 'New', title_text: 'keep' };

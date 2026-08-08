@@ -51,7 +51,12 @@ export const useIntroCardStore = create((set, get) => ({
   },
 
   /**
-   * Create a card (gesture: "Add card"). Returns the created row or null.
+   * Create a card (gesture: "Add card"). Returns the created row. Throws on
+   * failure (e.g. the T5230 consent-gate 403) WITH the backend's actual
+   * `detail` message -- a prior version swallowed the response and returned
+   * null, so a blocked create was a silent no-op with no error shown
+   * anywhere (found live, T5230 QA: the consent gate itself worked, nothing
+   * told the user why nothing happened). Callers must catch and surface it.
    */
   createCard: async (fields) => {
     const response = await apiFetch(`${API_BASE}/api/intro-cards`, {
@@ -59,7 +64,10 @@ export const useIntroCardStore = create((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fields),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.detail || `Failed to create card (${response.status})`);
+    }
     const card = await response.json();
     set((state) => ({ cards: [card, ...state.cards] }));
     return card;

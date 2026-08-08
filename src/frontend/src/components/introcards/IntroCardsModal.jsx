@@ -15,6 +15,7 @@ import { Z } from '../../constants/zLayers';
 import { IntroCardGrid } from './IntroCardGrid';
 import { IntroCardEditorContainer } from './IntroCardEditorContainer';
 import { buildCreateFields, nextCardName } from './introCardDefaults';
+import { toast } from '../shared/Toast';
 
 export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
   const profile = useCurrentProfile();
@@ -52,7 +53,9 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     try {
       const name = nextCardName(cards);
       const created = await createCard(buildCreateFields({ name, profile }));
-      if (created) setEditingId(created.id);
+      setEditingId(created.id);
+    } catch (err) {
+      toast.error('Could not create card', { message: err.message });
     } finally {
       setBusy(false);
     }
@@ -76,7 +79,9 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
         text_elements: card.text_elements || {},
         duration: card.duration,
       });
-      if (created) setEditingId(created.id);
+      setEditingId(created.id);
+    } catch (err) {
+      toast.error('Could not duplicate card', { message: err.message });
     } finally {
       setBusy(false);
     }
