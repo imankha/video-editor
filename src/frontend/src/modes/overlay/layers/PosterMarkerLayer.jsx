@@ -315,11 +315,16 @@ export default function PosterMarkerLayer({
   const sourceTimeLabel = formatTimeSimple(visualTimeToSourceTime(shownVisualTime));
   // UI term is "thumbnail" (T6590); the model still calls it poster_*. The
   // tooltip/aria STATE THE INTERACTION (drag to choose the frame), not a noun.
+  // T6630 round 8: the resting-state copy used to claim "the middle of the
+  // open-play slow-mo" unconditionally -- stale since round 7 moved the
+  // default off the midpoint (and this component has no way to know WHERE
+  // the marker sits without re-deriving it); state the actual current time
+  // instead, which this component already computes for the chip's own label.
   const label = isUploaded
     ? 'Custom thumbnail image in use. This marker is inactive.'
     : isDragging
       ? `Thumbnail frame: ${sourceTimeLabel}`
-      : 'Drag to choose which frame is the thumbnail — the still people see when you share. Currently the middle of the open-play slow-mo.';
+      : `Drag to choose which frame is the thumbnail — the still people see when you share. Currently at ${sourceTimeLabel}.`;
 
   // T6590 round 3: the marker lives in the VIDEO TRACK's top band -- see the
   // component docstring for the full CUT-OFF / OCCLUDED reasoning. `top-0` on

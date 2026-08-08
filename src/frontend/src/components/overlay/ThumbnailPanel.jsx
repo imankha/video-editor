@@ -1,5 +1,6 @@
 import { ImageOff } from 'lucide-react';
 import PosterFramePreview from '../PosterFramePreview';
+import { formatTimeSimple } from '../shared/clipConstants';
 
 /**
  * ThumbnailPanel (T6590) — the "Thumbnail" tab body. Shows the still a share link
@@ -24,6 +25,11 @@ export default function ThumbnailPanel({
   onRemoveUpload,
   disabled = false,
 }) {
+  // T6630 round 8: no marker set -> the frame shown is the computed DEFAULT
+  // (posterWindow.js's selectPosterFrame), never literally "the middle" --
+  // that was stale copy from before round 7 replaced the midpoint default.
+  // Show the actual time instead of a location claim that can be wrong.
+  const autoLabel = `Auto-picked · ${formatTimeSimple(posterPreviewTime)}. Drag the thumbnail marker on the timeline to change it.`;
   return (
     <div className="space-y-3">
       <div className="flex flex-col">
@@ -38,7 +44,7 @@ export default function ThumbnailPanel({
             ? 'Custom image in use'
             : posterMarkerTimeLabel
               ? `Frame you picked · ${posterMarkerTimeLabel}`
-              : 'The middle of the open-play slow-mo. Drag the thumbnail marker on the timeline to change it.'}
+              : autoLabel}
         </span>
       </div>
 
