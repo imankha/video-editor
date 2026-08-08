@@ -48,6 +48,12 @@ describe('TextManagementPanel — two-column layout, region+element management (
     expect(screen.getByTestId('text-tab-element-b2').textContent).toContain('Second');
   });
 
+  it('T6630 round 8 item 5: each region header shows its 1-based ordinal alongside the time range', () => {
+    render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} />);
+    expect(screen.getByTestId('text-tab-region-0').textContent).toContain('Region 1');
+    expect(screen.getByTestId('text-tab-region-1').textContent).toContain('Region 2');
+  });
+
   it('clicking a region selects it', () => {
     const onSelectRegion = vi.fn();
     render(<TextManagementPanel regions={[REGION_A]} onSelectRegion={onSelectRegion} />);

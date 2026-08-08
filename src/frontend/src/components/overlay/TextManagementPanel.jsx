@@ -118,7 +118,14 @@ export default function TextManagementPanel({
                     {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </button>
                   <span className="flex-1 min-w-0 text-xs text-gray-400">
-                    {formatTimeSimple(region.startTime)}–{formatTimeSimple(region.endTime)}
+                    {/* T6630 round 8 item 5: the region's ordinal number
+                        alongside its time range -- user hand-annotated
+                        "R1"/"R2" on consecutive rows showing only the time
+                        range, with no way to tell them apart at a glance.
+                        `region.index` is 0-based (useTextOverlays.js's
+                        textOverlaysWithLayout, SAME source TextLayer.jsx's
+                        on-lane blocks use), so +1 for a 1-based label. */}
+                    Region {region.index + 1} · {formatTimeSimple(region.startTime)}–{formatTimeSimple(region.endTime)}
                   </span>
                   <button
                     type="button"
