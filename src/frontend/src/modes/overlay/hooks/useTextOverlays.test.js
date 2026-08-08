@@ -49,7 +49,7 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     // T6630 round 7 item 3: the seed element's text is a computed,
     // individually-identifying placeholder -- NOT whatever baseSpec()
     // passed in (overridden, same as position/align already were).
-    expect(region.elements[0].spec.text).toBe('Text region 1, element 1');
+    expect(region.elements[0].spec.text).toBe('1.1');
 
     const inState = result.current.textOverlays.find((r) => r.id === region.id);
     expect(inState).toBeTruthy();
@@ -115,9 +115,9 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     act(() => { second = result.current.addRegion(3, baseSpec()); });
     act(() => { third = result.current.addRegion(6, baseSpec()); });
 
-    expect(first.elements[0].spec.text).toBe('Text region 1, element 1');
-    expect(second.elements[0].spec.text).toBe('Text region 2, element 1');
-    expect(third.elements[0].spec.text).toBe('Text region 3, element 1');
+    expect(first.elements[0].spec.text).toBe('1.1');
+    expect(second.elements[0].spec.text).toBe('2.1');
+    expect(third.elements[0].spec.text).toBe('3.1');
   });
 });
 
@@ -141,7 +141,7 @@ describe('useTextOverlays - addElement appends into an EXISTING region (T6630 ro
     expect(updatedRegion.endTime).toBe(region.endTime);
   });
 
-  it('T6630 round 7 item 3: an appended element gets "Text region N, element M" -- N by array position, M by count within the region', () => {
+  it('T6630 round 8: an appended element gets bare "N.M" -- N by array position, M by count within the region', () => {
     const { result } = renderHook(() => useTextOverlays());
     act(() => result.current.initializeWithDuration(10));
 
@@ -151,11 +151,11 @@ describe('useTextOverlays - addElement appends into an EXISTING region (T6630 ro
 
     let secondInB;
     act(() => { secondInB = result.current.addElement(regionB.id, baseSpec()); });
-    expect(secondInB.spec.text).toBe('Text region 2, element 2'); // regionB is array index 1 -> N=2; 2nd element -> M=2
+    expect(secondInB.spec.text).toBe('2.2'); // regionB is array index 1 -> N=2; 2nd element -> M=2
 
     let secondInA;
     act(() => { secondInA = result.current.addElement(regionA.id, baseSpec()); });
-    expect(secondInA.spec.text).toBe('Text region 1, element 2'); // regionA is array index 0 -> N=1
+    expect(secondInA.spec.text).toBe('1.2'); // regionA is array index 0 -> N=1
   });
 
   it('THE BUG THIS GUARDS: two elements added into the SAME region share ONE time window (both render together)', () => {
@@ -367,7 +367,7 @@ describe('useTextOverlays - updateElementSpec targets ONE element (T6630 round 4
     act(() => { result.current.updateElementSpec(second.id, baseSpec({ text: 'Second Edited' })); });
 
     const first = result.current.textOverlays[0].elements.find((el) => el.id !== second.id);
-    expect(first.spec.text).toBe('Text region 1, element 1'); // untouched (its own computed default, not "First")
+    expect(first.spec.text).toBe('1.1'); // untouched (its own computed default, not "First")
   });
 });
 

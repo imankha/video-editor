@@ -14,8 +14,8 @@
 //   span); this spec proves the tree affordance itself (expand/collapse,
 //   per-region scoping of "+ Add text") against a single active region.
 // Item 3: a freshly created region/element gets an individually-identifying
-//   default label ("Text region N, element M"), not the old static
-//   "Your text".
+//   default label (bare "N.M" as of T6630 round 8, was "Text region N,
+//   element M"), not the old static "Your text".
 // Item 4: a freshly created element always has a position preset selected
 //   (never "Custom position"), and the priority order now starts top-right.
 // Item 5: dragging the thumbnail marker a large distance keeps it visible
@@ -336,7 +336,8 @@ test('R7-3/4: a freshly created region/element gets an individually-identifying 
   console.log('R7-3 fresh element label:', JSON.stringify(labelText));
 
   expect(labelText, 'never the old static default').not.toMatch(/^your text/i);
-  expect(labelText, 'matches "Text region N, element M"').toMatch(/^Text region \d+, element \d+/i);
+  // T6630 round 8 dropped the words "Text"/"region"/"element" -- bare "N.M".
+  expect(labelText, 'matches bare "N.M"').toMatch(/^\d+\.\d+/);
 
   await saveEvidence(page, 'R7-3-dynamic-default-label');
 

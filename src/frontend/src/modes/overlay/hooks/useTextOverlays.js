@@ -116,7 +116,9 @@ export default function useTextOverlays() {
     // seed is always element 1 within it. Placeholder seed content, not a
     // persistent label field -- overrides whatever spec.text the caller
     // passed, same as position/align already do below.
-    const regionLabel = `Text region ${textOverlays.length + 1}, element 1`;
+    // T6630 round 8: drop the words "Text"/"region"/"element" per user
+    // direction ("just those coordinates") -- bare "N.M".
+    const regionLabel = `${textOverlays.length + 1}.1`;
     const elementSpec = { ...spec, text: regionLabel, position: { x: preset.x, y: preset.y }, align: preset.align };
     const regionId = generateRegionId();
     // T6630 round 5 bug fix: the backend's add_text new-region branch NEVER
@@ -156,7 +158,8 @@ export default function useTextOverlays() {
     // T6630 round 7 item 3: same individually-identifying default as
     // addRegion above -- N is THIS region's 1-based position among all
     // regions, M is the new element's 1-based position within it.
-    const elementLabel = `Text region ${regionIndex + 1}, element ${region.elements.length + 1}`;
+    // T6630 round 8: bare "N.M" (see addRegion's comment above).
+    const elementLabel = `${regionIndex + 1}.${region.elements.length + 1}`;
     const elementSpec = { ...spec, text: elementLabel, position: { x: preset.x, y: preset.y }, align: preset.align };
     const newElement = { id: generateElementId(), spec: elementSpec, enabled: true };
 

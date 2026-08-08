@@ -51,9 +51,9 @@ import { clipGameClock } from '../utils/timeFormat';
 // immediately visible/editable -- mirrors addHighlightRegion materializing
 // seed keyframes so the user sees something on screen before their first edit.
 // No `text` field: useTextOverlays.js's addRegion/addElement always compute
-// an individually-identifying placeholder ("Text region N, element M",
-// T6630 round 7 item 3) and override whatever's here, same as position/align
-// below -- a static default here would be dead code.
+// an individually-identifying placeholder ("N.M", T6630 round 7 item 3 /
+// round 8 bare-coordinates format) and override whatever's here, same as
+// position/align below -- a static default here would be dead code.
 const DEFAULT_TEXT_SPEC = {
   font: FontKey.ANTON,
   size: 0.06,
