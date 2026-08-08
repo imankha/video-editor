@@ -139,8 +139,10 @@ def test_zero_intro_card_id_explicit_opt_out_carries_no_intro():
 def test_intro_payload_shape_matches_motion_preview_contract():
     """The serialized `intro.card` carries the fields MotionPreview/
     resolveFraming/useCardPreviewElements already consume (design §5.4) --
-    image_key, treatment, shown_fields, text_elements, focal_x/y, zoom,
-    duration."""
+    image_key, treatment, shown_fields, text_elements, subtitle_text,
+    focal_x/y, zoom, duration. `subtitle_text` (Stage 4.5 reviewer finding):
+    the burn path and the DOM preview both render it, so a missing key here
+    would silently drop a user-set subtitle from every playback surface."""
     from app.routers.collections import resolve_collection_share
 
     definition = {"title": "Hero", "aspect_ratio": "9:16", "scope": {"type": "mixes"},
@@ -152,5 +154,5 @@ def test_intro_payload_shape_matches_motion_preview_contract():
 
     card = payload["intro"]["card"]
     for field in ("image_key", "treatment", "shown_fields", "text_elements",
-                  "focal_x", "focal_y", "zoom", "duration"):
+                  "subtitle_text", "focal_x", "focal_y", "zoom", "duration"):
         assert field in card, f"intro.card missing '{field}' MotionPreview needs"

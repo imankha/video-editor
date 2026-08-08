@@ -240,6 +240,12 @@ def _resolve_share_video_intro(share: dict, *, mode: str):
     `mode`: "playback" (share GET, presigned previewUrl) or "burn" (share
     download, local image path for `compose_serve_time`).
 
+    `mode="playback"` also stamps the reel's own `aspect_ratio` onto the
+    returned payload as `aspect` (Stage 4.5 reviewer finding) -- without it
+    `IntroPreRoll` has no way to know a landscape reel's intro card should
+    render 16:9 rather than defaulting to 9:16, and would show a
+    letterboxed portrait card ahead of a landscape video.
+
     NEVER raises: any failure (DB unreachable, row missing, resolution error)
     degrades to None and logs -- a share resolve/download must never break
     because of the intro.
@@ -256,16 +262,19 @@ def _resolve_share_video_intro(share: dict, *, mode: str):
         return None
     try:
         row = conn.execute(
-            "SELECT intro_card_id, duration FROM final_videos WHERE id = ?",
+            "SELECT intro_card_id, duration, aspect_ratio FROM final_videos WHERE id = ?",
             (share["video_id"],),
         ).fetchone()
         if row is None:
             return None
-        return resolve_intro_for_reel(
+        payload = resolve_intro_for_reel(
             share["sharer_user_id"], share["sharer_profile_id"],
             row["intro_card_id"], row["duration"], share["video_id"],
             mode=mode, profile_conn=conn,
         )
+        if mode == "playback" and payload is not None and row["aspect_ratio"]:
+            payload["aspect"] = row["aspect_ratio"]
+        return payload
     except Exception as e:
         logger.error(
             f"[shares] intro resolution failed for share_token={share.get('share_token')}: {e}",

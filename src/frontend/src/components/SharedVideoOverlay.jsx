@@ -117,7 +117,11 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           />
           <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
           {introShowing && (
-            <IntroPreRoll intro={share.intro} onDone={() => setIntroShowing(false)} />
+            <IntroPreRoll
+              intro={share.intro}
+              aspect={share.intro?.aspect}
+              onDone={() => setIntroShowing(false)}
+            />
           )}
         </div>
         <SharePageInstallBanner />

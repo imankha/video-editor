@@ -221,9 +221,18 @@ def resolve_intro_for_reel(
 def _card_payload(card) -> dict:
     """The subset of a card row MotionPreview/resolveFraming/
     useCardPreviewElements already consume (design §5.4): image_key,
-    treatment, shown_fields, text_elements, focal_x/y, zoom, duration --
-    plus `id`/`name` for identification. `card` may be a sqlite3.Row or a
-    plain dict (tests pass dicts directly)."""
+    treatment, shown_fields, text_elements, subtitle_text, focal_x/y, zoom,
+    duration -- plus `id`/`name` for identification. `card` may be a
+    sqlite3.Row or a plain dict (tests pass dicts directly).
+
+    `subtitle_text` (Reviewer finding, T5220 Stage 4.5): the burn path
+    (`player_intro.build_intro_card`) renders it from the full card row, and
+    the DOM preview (`introCardPreviewElements.js`) reads `card.subtitle_text`
+    directly -- omitting it here would have silently dropped a user-set
+    subtitle from every playback surface while still showing it on download,
+    exactly the download-vs-playback divergence the "one preview component"
+    architecture exists to prevent.
+    """
     def g(key, default=None):
         try:
             return card[key]
@@ -238,6 +247,7 @@ def _card_payload(card) -> dict:
         "treatment": g("treatment"),
         "shown_fields": g("shown_fields") or [],
         "text_elements": g("text_elements") or {},
+        "subtitle_text": g("subtitle_text"),
         "focal_x": g("focal_x"),
         "focal_y": g("focal_y"),
         "zoom": g("zoom"),
