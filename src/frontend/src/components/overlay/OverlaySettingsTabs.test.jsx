@@ -198,3 +198,46 @@ describe('OverlaySettingsTabs — responsive body height (T6630 round 6 item 5)'
     expect(parseInt(panel.style.height, 10)).toBe(768);
   });
 });
+
+describe('OverlaySettingsTabs — Thumbnail tab icon color matches the marker (T6630 round 8 item 3)', () => {
+  it('the Thumbnail icon is cyan even when the tab is NOT active', () => {
+    render(
+      <OverlaySettingsTabs
+        activeTab="overlay"
+        overlayPanel={<div>overlay content</div>}
+        textPanel={<div>text content</div>}
+        thumbnailPanel={<div>thumbnail content</div>}
+      />
+    );
+    const icon = screen.getByTestId('overlay-tab-thumbnail').querySelector('svg');
+    expect(icon.getAttribute('class')).toMatch(/text-cyan-400/);
+  });
+
+  it('the Thumbnail icon stays cyan when the tab IS active (not just the border)', () => {
+    render(
+      <OverlaySettingsTabs
+        activeTab="thumbnail"
+        overlayPanel={<div>overlay content</div>}
+        textPanel={<div>text content</div>}
+        thumbnailPanel={<div>thumbnail content</div>}
+      />
+    );
+    const icon = screen.getByTestId('overlay-tab-thumbnail').querySelector('svg');
+    expect(icon.getAttribute('class')).toMatch(/text-cyan-400/);
+  });
+
+  it('the Overlay and Text icons do NOT get the cyan treatment', () => {
+    render(
+      <OverlaySettingsTabs
+        activeTab="overlay"
+        overlayPanel={<div>overlay content</div>}
+        textPanel={<div>text content</div>}
+        thumbnailPanel={<div>thumbnail content</div>}
+      />
+    );
+    const overlayIcon = screen.getByTestId('overlay-tab-overlay').querySelector('svg');
+    const textIcon = screen.getByTestId('overlay-tab-text').querySelector('svg');
+    expect(overlayIcon.getAttribute('class') || '').not.toMatch(/text-cyan-400/);
+    expect(textIcon.getAttribute('class') || '').not.toMatch(/text-cyan-400/);
+  });
+});

@@ -116,7 +116,16 @@ export default function OverlaySettingsTabs({
                     : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              <Icon size={14} />
+              <Icon
+                size={14}
+                // T6630 round 8 item 3: the Thumbnail tab's icon always
+                // renders in the SAME cyan as the timeline's thumbnail
+                // marker (PosterMarkerLayer's cyan-400/500 chip), not just
+                // on this tab's own active border -- so the icon reads as
+                // "this is the thing that marker is" even when the tab
+                // isn't selected.
+                className={id === 'thumbnail' ? 'text-cyan-400' : undefined}
+              />
               <span>{label}</span>
             </button>
           );
