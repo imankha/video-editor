@@ -236,6 +236,7 @@ class DownloadItem(BaseModel):
     leading_reel_id: int | None = None  # Representative reel id for collapsed rows (T5673 item 2)
     intro_card_id: int | None = None  # RAW stored attachment (T5215): 0 = opted out, NULL = inherit default, <id> = explicit. NOT the resolved id -- the picker needs the raw value to preselect the current choice.
     intro_card_name: str | None = None  # RESOLVED card name -- what will actually play (accounts for the duration gate); None if nothing will play
+    resolved_intro_has_photo: bool = False  # T5220 Scope F: the RESOLVED card has a photo -- ShareModal's public-exposure notice gate
     # Game grouping info
     watched_at: str | None = None  # ISO timestamp when first played in gallery
     game_ids: list[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -588,6 +589,7 @@ async def list_downloads(
                     "showing no intro", row['id'], resolved_intro_id,
                 )
             intro_card_name = intro_card_info['name'] if intro_card_info else None
+            resolved_intro_has_photo = bool(intro_card_info and intro_card_info.get('has_photo'))
 
             # Append 'Z' to indicate UTC so JavaScript parses correctly
             # SQLite stores as 'YYYY-MM-DD HH:MM:SS' but JS needs timezone info
@@ -635,6 +637,7 @@ async def list_downloads(
                 group_key=group_key,
                 intro_card_id=raw_intro_card_id,
                 intro_card_name=intro_card_name,
+                resolved_intro_has_photo=resolved_intro_has_photo,
             ))
 
 
@@ -668,13 +671,17 @@ def generate_download_filename(project_name: str) -> str:
 @router.get("/{download_id}/file")
 async def download_file(download_id: int):
     """
-    Download a final video file with the branded outro burned in at serve time.
+    Download a final video file with the player intro + branded outro composed
+    at serve time.
 
-    T3950: the outro is appended on-the-fly via ffmpeg concat so stored files
-    carry no outro and existing reels automatically get attribution. The card is
-    cached per resolution/fps in the system temp dir so repeat downloads are fast.
-    Non-fatal: any card/concat failure logs loudly and serves the original file --
-    a download must never break because of branding.
+    T3950 shipped the outro this way; T5220 (Scope A/E) folds the player intro
+    into the SAME single ffmpeg concat pass via `compose_serve_time` --
+    `[intro?][reel][outro?]`, not two sequential passes. Stored files carry
+    neither card baked in; both are resolved LIVE from this profile's current
+    attachment on every download, so changing the attached card changes the
+    NEXT download with no re-export. Non-fatal at every rung (design §4.2): any
+    card/concat failure logs loudly and still serves a playable file -- a
+    download must never break because of branding.
     """
     import shutil as _shutil
 
@@ -684,7 +691,7 @@ async def download_file(download_id: int):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT fv.filename, fv.name as project_name
+            SELECT fv.filename, fv.name as project_name, fv.intro_card_id, fv.duration
             FROM final_videos fv
             WHERE fv.id = ?
         """, (download_id,))
@@ -697,13 +704,26 @@ async def download_file(download_id: int):
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
         from app.analytics import record_milestone
-        record_milestone(get_current_user_id(), "video_downloaded", {"video_id": download_id})
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+        record_milestone(user_id, "video_downloaded", {"video_id": download_id})
 
         download_filename = generate_download_filename(row['project_name'])
         dl_headers = {
             "Content-Disposition": f'attachment; filename="{download_filename}"',
             "Cache-Control": "no-cache",
         }
+        intro_card_id = row['intro_card_id']
+        reel_duration = row['duration']
+
+        def _resolve_download_intro():
+            # Resolves its OWN read-only profile connection (never the ambient
+            # `conn` above -- that closes when this `with` block exits, well
+            # before a StreamingResponse's generator body actually runs).
+            from app.services.intro_egress import resolve_intro_for_reel
+            return resolve_intro_for_reel(
+                user_id, profile_id, intro_card_id, reel_duration, download_id,
+            )
 
         # ---- R2 path: download to temp, append outro, stream result ----
         if R2_ENABLED:
@@ -725,13 +745,13 @@ async def download_file(download_id: int):
                 )
                 raise HTTPException(status_code=404, detail="Video file not found in storage")
 
-            logger.info("[Download] Streaming from R2 with branded outro")
+            logger.info("[Download] Streaming from R2 with composed intro/outro")
 
-            async def _stream_with_outro_r2():
-                tmp_dir = tempfile.mkdtemp(prefix="rb_dl_outro_")
+            async def _stream_composed_r2():
+                tmp_dir = tempfile.mkdtemp(prefix="rb_dl_compose_")
                 try:
                     original_path = os.path.join(tmp_dir, "original.mp4")
-                    out_path = os.path.join(tmp_dir, "with_outro.mp4")
+                    out_path = os.path.join(tmp_dir, "composed.mp4")
 
                     async with httpx.AsyncClient(
                         timeout=httpx.Timeout(120.0, connect=10.0)
@@ -754,14 +774,21 @@ async def download_file(download_id: int):
                                 fout.write(chunk)
 
                     serve_path = original_path
+                    intro = await asyncio.to_thread(_resolve_download_intro)
                     try:
-                        from app.services.branded_outro import append_branded_outro
-                        if await asyncio.to_thread(append_branded_outro, original_path, out_path):
+                        from app.services.serve_time_video import compose_serve_time
+                        if await asyncio.to_thread(
+                            compose_serve_time, original_path, out_path,
+                            intro=intro, outro=True,
+                        ):
                             serve_path = out_path
                     except Exception as exc:
                         logger.error(
-                            f"[Download] Outro append failed for download_id={download_id}: {exc}"
+                            f"[Download] Compose failed for download_id={download_id}: {exc}"
                         )
+                    finally:
+                        if intro is not None:
+                            intro.cleanup()
 
                     with open(serve_path, "rb") as fin:
                         while True:
@@ -773,7 +800,7 @@ async def download_file(download_id: int):
                     _shutil.rmtree(tmp_dir, ignore_errors=True)
 
             return StreamingResponse(
-                _stream_with_outro_r2(),
+                _stream_composed_r2(),
                 media_type="video/mp4",
                 headers=dl_headers,
             )
@@ -786,19 +813,26 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Serving local file as: {download_filename}")
 
-        async def _stream_with_outro_local():
-            tmp_dir = tempfile.mkdtemp(prefix="rb_dl_outro_")
+        async def _stream_composed_local():
+            tmp_dir = tempfile.mkdtemp(prefix="rb_dl_compose_")
             try:
-                out_path = os.path.join(tmp_dir, "with_outro.mp4")
+                out_path = os.path.join(tmp_dir, "composed.mp4")
                 serve_path = str(file_path)
+                intro = await asyncio.to_thread(_resolve_download_intro)
                 try:
-                    from app.services.branded_outro import append_branded_outro
-                    if await asyncio.to_thread(append_branded_outro, str(file_path), out_path):
+                    from app.services.serve_time_video import compose_serve_time
+                    if await asyncio.to_thread(
+                        compose_serve_time, str(file_path), out_path,
+                        intro=intro, outro=True,
+                    ):
                         serve_path = out_path
                 except Exception as exc:
                     logger.error(
-                        f"[Download] Outro append failed for download_id={download_id}: {exc}"
+                        f"[Download] Compose failed for download_id={download_id}: {exc}"
                     )
+                finally:
+                    if intro is not None:
+                        intro.cleanup()
 
                 with open(serve_path, "rb") as fin:
                     while True:
@@ -810,7 +844,7 @@ async def download_file(download_id: int):
                 _shutil.rmtree(tmp_dir, ignore_errors=True)
 
         return StreamingResponse(
-            _stream_with_outro_local(),
+            _stream_composed_local(),
             media_type="video/mp4",
             headers=dl_headers,
         )

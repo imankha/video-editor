@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
+import { IntroExposureNotice } from './introcards/IntroExposureNotice';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 
-export function ShareModal({ videoId, videoName, onClose }) {
+export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -83,9 +84,17 @@ export function ShareModal({ videoId, videoName, onClose }) {
           setPublicLink(`${window.location.origin}/shared/${data.shares[0].share_token}`);
         }
         fetchExistingShares();
+      } else {
+        // Revert the optimistic toggle instead of leaving the switch ON with
+        // a permanent "Creating link..." ghost state -- a silent failure here
+        // previously looked identical to "still working" forever, with no
+        // error and no way to retry (found live during T5220 QA).
+        setIsPublic(false);
+        toast.error('Could not create a public link', { message: 'Please try again.' });
       }
     } catch {
-      // Non-critical
+      setIsPublic(false);
+      toast.error('Could not create a public link', { message: 'Please try again.' });
     } finally {
       setCreatingPublicLink(false);
     }
@@ -255,6 +264,11 @@ export function ShareModal({ videoId, videoName, onClose }) {
               </div>
             )}
           </div>
+
+          {/* T5220 Scope F: this reel's resolved intro card includes a photo --
+              same amber notice IntroCardCarousel shows in the picker (single
+              source of the exposure wording, T5230). */}
+          {hasIntroPhoto && <IntroExposureNotice />}
 
           {/* Error */}
           {error && (

@@ -347,9 +347,11 @@ class TestGetSharedVideoBackgroundsAnalytics:
             resp = client.get(f"/api/shared/{token}")
         assert resp.status_code == 200
         data = resp.json()
-        # Response shape is pre-T4840 plus `sport` (T5130): the publishing
-        # profile sport, frozen on the shares row as sharer_default_sport,
-        # drives the sport-ball playhead on the public viewer.
+        # Response shape is pre-T4840 plus `sport` (T5130) plus `intro` (T5220):
+        # the publishing profile sport, frozen on the shares row as
+        # sharer_default_sport, drives the sport-ball playhead on the public
+        # viewer; `intro` (nullable) carries the resolved intro-card payload
+        # for the DOM pre-roll, per T5220 design section 5.4.
         assert data["video_name"] == "Test Video"
         assert data["video_url"] == "https://r2.example.com/video.mp4"
         assert data["is_public"] is True
@@ -357,7 +359,7 @@ class TestGetSharedVideoBackgroundsAnalytics:
             "share_token", "video_name", "video_duration", "video_url",
             "is_public", "shared_at",
             "video_poster_url", "video_poster_width", "video_poster_height",
-            "sport",
+            "sport", "intro",
         }
         # No poster in this fixture: r2_head_object_global returns None -> all None.
         assert data["video_poster_url"] is None

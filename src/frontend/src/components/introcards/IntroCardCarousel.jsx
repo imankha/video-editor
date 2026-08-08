@@ -44,8 +44,9 @@
 // only calls its own onSelect (the real write) on OK.
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Check, Star } from 'lucide-react';
+import { Check, Star } from 'lucide-react';
 import { IntroCardPreview } from './IntroCardPreview';
+import { IntroExposureNotice } from './IntroExposureNotice';
 import { MotionPreview } from './MotionPreview';
 import { CARD_ASPECTS } from '../../utils/introCardGeometry';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
@@ -164,11 +165,7 @@ export function IntroCardCarousel({
       )}
 
       {showsExposureNotice && (
-        <p className="flex items-start gap-1.5 text-xs text-amber-400/90 leading-snug">
-          <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
-          This card includes a photo — it will be publicly visible to anyone
-          with this {frozenNote ? 'link' : "reel's link"}.
-        </p>
+        <IntroExposureNotice linkLabel={frozenNote ? 'link' : "reel's link"} />
       )}
 
       {frozenNote && (

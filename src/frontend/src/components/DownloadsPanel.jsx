@@ -656,6 +656,7 @@ export function DownloadsPanel({
         <ShareModal
           videoId={sharingDownload.id}
           videoName={sharingDownload.project_name}
+          hasIntroPhoto={!!sharingDownload.resolved_intro_has_photo}
           onClose={() => setSharingDownload(null)}
         />
       )}

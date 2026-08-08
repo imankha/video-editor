@@ -1,0 +1,8 @@
+2026-08-07T23:52 SPAWNED L feature/T5220-intro-egress
+2026-08-07T23:55 CODE-EXPERT L feature/T5220-intro-egress — branch created; read task+EPIC+knowledge; T6360 TODO(no branch)=>T5220 owns routing+serve-helper; T4945 TODO=>seam only
+2026-08-08T00:00 DESIGN L feature/T5220-intro-egress — code map complete; MotionPreview reusable for DOM pre-roll; ShareModal is Scope F gap; spawning Architect for design doc
+2026-08-08T00:07 BLOCKED L feature/T5220-intro-egress — DESIGN GATE: docs/plans/tasks/T5220-design.md written, decision-complete. Awaiting user approval. 3 open questions (Q1 edge-fn intro fidelity, Q2 public facts exposure, Q3 owner-download inherited default).
+2026-08-08T01:03 APPROVED L feature/T5220-intro-egress — design doc approved; Q1=hand-rolled DOM intro on edge page, Q2=facts exposure confirmed intended, Q3=keep burning inherited default on owner download
+2026-08-08T01:03 APPROVED L feature/T5220-intro-egress — design approved by user; Q1=hand-rolled DOM edge intro, Q2=facts exposure intended, Q3=keep burning inherited default. Proceeding to Stage 3 Test First.
+2026-08-08T01:04 TEST-FIRST L feature/T5220-intro-egress — Tester agent spawned (background) to write failing tests per design §12
+2026-08-08T01:09 TEST-FIRST-DONE L feature/T5220-intro-egress — 5 failing test files created (ffmpeg_concat, serve_time, collection_intro, share_download, IntroPreRoll), all confirmed RED for the right reason. Pre-existing Postgres test-DB migration issue (schema_migrations dirty, shares_share_type_check) blocks 2 of 4 backend files + pre-existing test_shares.py - predates T5220, noted not fixed. Proceeding to Stage 4 Implementation.

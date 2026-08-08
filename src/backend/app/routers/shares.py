@@ -13,10 +13,13 @@ shared_router (/api/shared):
 
 import asyncio
 import logging
+import os
+import tempfile
 from datetime import datetime
 from typing import Union
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
@@ -88,6 +91,12 @@ class ShareDetailResponse(BaseModel):
     # viewer render the sport-ball scrub handle without a live cross-user read.
     # None for a sharer whose sport is unknown -> the viewer keeps the plain dot.
     sport: str | None = None
+    # T5220 Scope B: the sharer's LIVE intro attachment, serialized as the
+    # {card, previewUrl, field_values, profile} payload IntroPreRoll/
+    # MotionPreview already consume (design §5.4). None when nothing resolves
+    # (opted out, no card, or the resolution failed non-fatally) -- the
+    # frontend simply does not mount a pre-roll.
+    intro: dict | None = None
 
 
 class ShareListItem(BaseModel):
@@ -215,6 +224,65 @@ def _recap_r2_key(share: dict) -> str:
         f"/profiles/{share['sharer_profile_id']}"
         f"/recaps/{share['game_id']}.mp4"
     )
+
+
+def _resolve_share_video_intro(share: dict, *, mode: str):
+    """LIVE-resolve the sharer's CURRENT intro attachment for a share's video
+    (design §3 rows 2/3, the asymmetric-by-design counterpart to the
+    collection path's FROZEN resolution). Opens the sharer's profile.sqlite
+    read-only, reads `final_videos.intro_card_id`/`duration` for THIS video
+    (the reel's live values, never the share row's own frozen
+    `video_duration` snapshot -- the duration GATE must see the same value
+    the owner-download path would), then delegates to the same
+    `resolve_intro_for_reel` cross-DB assembly every burn/playback egress
+    path uses so paths 1/2/3 never diverge in how they read facts.
+
+    `mode`: "playback" (share GET, presigned previewUrl) or "burn" (share
+    download, local image path for `compose_serve_time`).
+
+    `mode="playback"` also stamps the reel's own `aspect_ratio` onto the
+    returned payload as `aspect` (Stage 4.5 reviewer finding) -- without it
+    `IntroPreRoll` has no way to know a landscape reel's intro card should
+    render 16:9 rather than defaulting to 9:16, and would show a
+    letterboxed portrait card ahead of a landscape video.
+
+    NEVER raises: any failure (DB unreachable, row missing, resolution error)
+    degrades to None and logs -- a share resolve/download must never break
+    because of the intro.
+    """
+    from app.services.intro_egress import resolve_intro_for_reel
+    from app.services.materialization import open_profile_db_readonly
+
+    conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    if conn is None:
+        logger.info(
+            f"[shares] could not open sharer profile DB for intro resolution "
+            f"(share_token={share.get('share_token')}) -- serving without intro"
+        )
+        return None
+    try:
+        row = conn.execute(
+            "SELECT intro_card_id, duration, aspect_ratio FROM final_videos WHERE id = ?",
+            (share["video_id"],),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = resolve_intro_for_reel(
+            share["sharer_user_id"], share["sharer_profile_id"],
+            row["intro_card_id"], row["duration"], share["video_id"],
+            mode=mode, profile_conn=conn,
+        )
+        if mode == "playback" and payload is not None and row["aspect_ratio"]:
+            payload["aspect"] = row["aspect_ratio"]
+        return payload
+    except Exception as e:
+        logger.error(
+            f"[shares] intro resolution failed for share_token={share.get('share_token')}: {e}",
+            exc_info=True,
+        )
+        return None
+    finally:
+        conn.close()
 
 
 def _recap_poster_r2_key(share: dict) -> str:
@@ -768,6 +836,7 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
     # T4890: absolute, unauthenticated poster URL (same access model as video_url)
     # so the edge share page can emit og:image/twitter:image + <video poster>.
     poster_url, poster_w, poster_h = _resolve_poster(share)
+    intro = await asyncio.to_thread(_resolve_share_video_intro, share, mode="playback")
 
     return ShareDetailResponse(
         share_token=share["share_token"],
@@ -780,6 +849,94 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
         is_public=bool(share["is_public"]),
         shared_at=share["shared_at"],
         sport=share["sharer_default_sport"],
+        intro=intro,
+    )
+
+
+@shared_router.get("/{share_token}/download")
+async def download_shared_video(share_token: str, request: Request):
+    """T5220 Scope C: the share-download egress that closes the pre-existing
+    gap (`SharedVideoOverlay.handleDownload` used to `fetch(share.video_url)`
+    directly at the raw R2 object -- no outro, no intro). Token-gated
+    identically to `get_shared_video`; streams the SAME composed
+    `[intro?][reel][outro?]` a burn download gets via `compose_serve_time`,
+    resolved LIVE from the sharer's current attachment (never the caller's).
+    Non-fatal at every rung -- HTTP 200 whenever the reel itself is readable.
+    """
+    share = get_share_by_token(share_token)
+    if not share:
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This share has been revoked")
+
+    if not share["is_public"]:
+        email = _get_email_from_request(request)
+        if not email or email.lower() != share["recipient_email"].lower():
+            raise HTTPException(403, "Access denied")
+
+    presigned_url = generate_presigned_url_global(_build_video_r2_key(share))
+    if not presigned_url:
+        raise HTTPException(status_code=404, detail="Video file not found in storage")
+
+    from .downloads import generate_download_filename
+    download_filename = generate_download_filename(share["video_name"])
+    dl_headers = {
+        "Content-Disposition": f'attachment; filename="{download_filename}"',
+        "Cache-Control": "no-cache",
+    }
+
+    async def _stream_shared_composed():
+        import shutil as _shutil
+
+        import httpx
+
+        tmp_dir = tempfile.mkdtemp(prefix="rb_share_dl_compose_")
+        try:
+            original_path = os.path.join(tmp_dir, "original.mp4")
+            out_path = os.path.join(tmp_dir, "composed.mp4")
+
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(120.0, connect=10.0)
+            ) as client, client.stream("GET", presigned_url) as response:
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"R2 returned {response.status_code}",
+                    )
+                with open(original_path, "wb") as fout:
+                    async for chunk in response.aiter_bytes(1024 * 1024):
+                        fout.write(chunk)
+
+            serve_path = original_path
+            intro = await asyncio.to_thread(_resolve_share_video_intro, share, mode="burn")
+            try:
+                from app.services.serve_time_video import compose_serve_time
+                if await asyncio.to_thread(
+                    compose_serve_time, original_path, out_path,
+                    intro=intro, outro=True,
+                ):
+                    serve_path = out_path
+            except Exception as exc:
+                logger.error(
+                    f"[shares] compose failed for share_token={share_token}: {exc}"
+                )
+            finally:
+                if intro is not None:
+                    intro.cleanup()
+
+            with open(serve_path, "rb") as fin:
+                while True:
+                    chunk = fin.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            _shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return StreamingResponse(
+        _stream_shared_composed(),
+        media_type="video/mp4",
+        headers=dl_headers,
     )
 
 

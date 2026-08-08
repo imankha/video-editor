@@ -78,6 +78,7 @@ _TEST_USER_IDS = (
     "user-1", "user-2", "test-user-1", "test-user", "user-a", "user-b", "user-c",
     "other-admin", "target-user", "other-regular",
     "claimer-user", "claimer-b",  # T5730 claim-flow tests
+    "t5220-dl-sharer", "t5220-dl-recipient",  # T5220 share-download gating tests
 )
 
 
