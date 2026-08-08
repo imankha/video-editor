@@ -3,6 +3,7 @@ import { AlertCircle, Loader, Lock, FolderOpen, Share2, Check } from 'lucide-rea
 import { Button } from './shared/Button';
 import { BrandedEndCard } from './BrandedEndCard';
 import { CollectionPlayer } from './collections/CollectionPlayer';
+import { IntroPreRoll } from './introcards/IntroPreRoll';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
@@ -22,6 +23,12 @@ export function SharedCollectionView({ token }) {
   const [copied, setCopied] = useState(false);
   const [showEndCard, setShowEndCard] = useState(false);
   const [playerKey, setPlayerKey] = useState(0);
+  // Gates CollectionPlayer's mount behind the intro pre-roll (design §5.4,
+  // §9): ONE pre-roll before the FIRST member, not per-member -- CollectionPlayer
+  // (whose own <video autoPlay> has no pause hook) simply does not mount until
+  // the pre-roll's onDone fires. No `intro` on the collection payload -> starts
+  // false, CollectionPlayer mounts immediately (today's behavior unchanged).
+  const [introShowing, setIntroShowing] = useState(false);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -40,6 +47,7 @@ export function SharedCollectionView({ token }) {
             fetch(body.members[0].presigned_url, { headers: { Range: 'bytes=0-524287' } }).catch(() => {});
           }
           setData(body);
+          if (body.intro) setIntroShowing(true);
           setState(body.members?.length ? 'ready' : 'empty');
         } else if (resp.status === 403) {
           setState('forbidden');
@@ -110,13 +118,22 @@ export function SharedCollectionView({ token }) {
 
     return (
       <>
-        <CollectionPlayer
-          key={playerKey}
-          reels={reels}
-          title={data.title}
-          onClose={handleClose}
-          onEnded={() => setShowEndCard(true)}
-        />
+        {introShowing ? (
+          <IntroPreRoll
+            intro={data.intro}
+            aspect={data.aspect_ratio}
+            onDone={() => setIntroShowing(false)}
+            positionClassName="fixed inset-0 z-[85]"
+          />
+        ) : (
+          <CollectionPlayer
+            key={playerKey}
+            reels={reels}
+            title={data.title}
+            onClose={handleClose}
+            onEnded={() => setShowEndCard(true)}
+          />
+        )}
         <BrandedEndCard
           visible={showEndCard}
           onReplay={handleReplay}

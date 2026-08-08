@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.services.intro_cards import resolve_intro_card
+from app.services.materialization import open_profile_db_readonly
 from app.services.user_db import get_all_intro_facts, get_all_intro_full_names
 from app.storage import download_from_r2_global, generate_presigned_url_global
 
@@ -104,6 +105,37 @@ def _presign_card_image(card: dict) -> str | None:
     return generate_presigned_url_global(key)
 
 
+def build_intro_playback_payload(card: dict, field_values: dict) -> dict | None:
+    """Serialize an already-resolved card + field_values into the
+    `{card, previewUrl, field_values, profile}` shape `MotionPreview`/
+    `resolveFraming`/`useCardPreviewElements` already consume (design §5.4).
+
+    The ONE place both LIVE playback resolution (this module's own
+    `resolve_intro_for_reel(mode="playback")`, single-reel shares) and FROZEN
+    playback resolution (`routers/collections.py::resolve_collection_share`,
+    which already has its resolved card row and never re-resolves it) build
+    this payload, so the two never diverge in shape.
+
+    Non-fatal: returns None on a presign failure, logged.
+    """
+    try:
+        preview_url = _presign_card_image(dict(card))
+    except Exception as e:
+        logger.error(f"[intro_egress] playback presign failed: {e}", exc_info=True)
+        return None
+    return {
+        "card": _card_payload(card),
+        "previewUrl": preview_url,
+        "field_values": field_values,
+        # Minimal framing profile MotionPreview/resolveFraming fall back to
+        # when the card's own focal_x/focal_y/zoom are unset (design §5.4) --
+        # there is no backend `profiles` framing column to synthesize this
+        # from, so an empty object is the honest "no profile-level override"
+        # shape; the card's own stored framing is authoritative either way.
+        "profile": {},
+    }
+
+
 def resolve_intro_for_reel(
     user_id: str,
     profile_id: str,
@@ -117,10 +149,13 @@ def resolve_intro_for_reel(
     """Resolve the LIVE intro attachment for one reel, cross-DB assembled.
 
     `profile_conn`: an already-open connection to the reel's profile.sqlite
-    (read-only for shares, the owner's live connection for downloads). When
-    omitted, opens the profile owner's own DB via `get_db_connection()` (the
-    request-scoped ambient connection) -- used by the owner-download path,
-    which already runs inside that request context.
+    (the caller's live connection for downloads, or a readonly one it already
+    opened for a share). When omitted, this helper opens ITS OWN read-only
+    connection via `open_profile_db_readonly(user_id, profile_id)` -- keyed
+    on the EXPLICIT `user_id`/`profile_id` arguments, never the ambient
+    request's ContextVar, since the share paths resolve the SHARER's profile
+    from a request that carries a different (or no) user context. Closed
+    before returning either way.
 
     mode="burn": downloads the card image (cutout-preferred) to a temp path
       under a NEW owning tempdir; returns an `IntroSpec` the caller MUST
@@ -134,16 +169,27 @@ def resolve_intro_for_reel(
     share playback/download (paths 2/3) -- design §3's asymmetric-by-design
     LIVE resolution (vs. the collection's FROZEN resolution, T5215).
     """
+    owned_conn = None
     try:
         if profile_conn is not None:
-            card = resolve_intro_card(intro_card_id, reel_duration, profile_conn, reel_id=reel_id)
+            conn = profile_conn
         else:
-            from app.database import get_db_connection
-            with get_db_connection() as conn:
-                card = resolve_intro_card(intro_card_id, reel_duration, conn, reel_id=reel_id)
+            # No caller-supplied connection: open the profile DB explicitly by
+            # (user_id, profile_id) -- NEVER the ambient get_db_connection(),
+            # which resolves the CURRENT REQUEST's user context and would
+            # silently resolve the wrong profile (or raise) for the share
+            # paths, which are resolving the SHARER's profile from a request
+            # that carries no (or a different) user context. Read-only: this
+            # helper never needs to write the resolved profile's data.
+            owned_conn = open_profile_db_readonly(user_id, profile_id)
+            conn = owned_conn
+        card = resolve_intro_card(intro_card_id, reel_duration, conn, reel_id=reel_id)
     except Exception as e:
         logger.error(f"[intro_egress] card resolution failed for reel_id={reel_id}: {e}", exc_info=True)
         return None
+    finally:
+        if owned_conn is not None:
+            owned_conn.close()
 
     if card is None:
         return None
@@ -157,22 +203,7 @@ def resolve_intro_for_reel(
         )
 
     if mode == "playback":
-        try:
-            preview_url = _presign_card_image(dict(card))
-        except Exception as e:
-            logger.error(f"[intro_egress] playback presign failed for reel_id={reel_id}: {e}", exc_info=True)
-            return None
-        return {
-            "card": _card_payload(card),
-            "previewUrl": preview_url,
-            "field_values": field_values,
-            # Minimal framing profile MotionPreview/resolveFraming fall back to
-            # when the card's own focal_x/focal_y/zoom are unset (design §5.4) --
-            # there is no backend `profiles` framing column to synthesize this
-            # from, so an empty object is the honest "no profile-level override"
-            # shape; the card's own stored framing is authoritative either way.
-            "profile": {},
-        }
+        return build_intro_playback_payload(card, field_values)
 
     # mode == "burn"
     tempdir = tempfile.mkdtemp(prefix="rb_intro_egress_")

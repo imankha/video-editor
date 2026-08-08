@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
+import { IntroExposureNotice } from './introcards/IntroExposureNotice';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 
-export function ShareModal({ videoId, videoName, onClose }) {
+export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -255,6 +256,11 @@ export function ShareModal({ videoId, videoName, onClose }) {
               </div>
             )}
           </div>
+
+          {/* T5220 Scope F: this reel's resolved intro card includes a photo --
+              same amber notice IntroCardCarousel shows in the picker (single
+              source of the exposure wording, T5230). */}
+          {hasIntroPhoto && <IntroExposureNotice />}
 
           {/* Error */}
           {error && (

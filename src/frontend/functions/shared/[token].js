@@ -64,6 +64,70 @@ function originOf(url) {
   }
 }
 
+// T5220 Scope B (design §5.3): the edge page hand-rolls its OWN simplified DOM
+// intro card -- it cannot mount React/MotionPreview, so it mirrors the
+// SAME split it already makes for the outro (a hand-authored `.ec-*` end-card
+// alongside the React `BrandedEndCard`). Photo + full name + resolved facts
+// as plain styled text, CSS-keyframe push-in/fade/flash sourced from the
+// SAME motion numbers the contract uses conceptually (not pixel-identical to
+// the render/MotionPreview -- accepted per design §11 R4, the same
+// compromise the shipped outro already makes here). Gated on `share.intro`
+// being present; absent -> today's immediate autoplay, byte-for-byte.
+function renderIntroCard(intro) {
+  if (!intro) return { html: "", css: "", js: "", hasIntro: false };
+
+  const card = intro.card || {};
+  const fieldValues = intro.field_values || {};
+  const fullName = escapeHtml(fieldValues.full_name || "");
+  const photoUrl = intro.previewUrl ? escapeHtml(intro.previewUrl) : "";
+  const durationSec = typeof card.duration === "number" && card.duration > 0 ? card.duration : 4.0;
+
+  const shownFields = Array.isArray(card.shown_fields) ? card.shown_fields : [];
+  const facts = shownFields
+    .map((f) => (fieldValues[f] || "").trim())
+    .filter(Boolean)
+    .map((v) => `<div class="ic-fact">${escapeHtml(v)}</div>`)
+    .join("");
+
+  const photoDiv = photoUrl
+    ? `<div class="ic-photo" style="background-image:url('${photoUrl}')"></div>`
+    : "";
+
+  const html = `<div id="intro-card" style="--ic-dur:${durationSec}s">
+${photoDiv}
+<div class="ic-scrim"></div>
+<div class="ic-text">
+<div class="ic-name">${fullName}</div>
+${facts}
+</div>
+<div class="ic-flash"></div>
+</div>`;
+
+  const css = `
+#intro-card{position:absolute;inset:0;z-index:30;background:#000;overflow:hidden;transition:opacity .2s}
+#intro-card.hide{opacity:0;pointer-events:none}
+.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center;animation:icPush var(--ic-dur) ease-out forwards}
+.ic-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1) 40%,rgba(0,0,0,.8))}
+.ic-text{position:absolute;left:20px;right:20px;bottom:36px;opacity:0;animation:icFade .6s ease-out .4s forwards}
+.ic-name{font-size:28px;font-weight:700;color:#fff;line-height:1.2}
+.ic-fact{font-size:15px;color:#d1d5db;margin-top:4px}
+.ic-flash{position:absolute;inset:0;background:#fff;opacity:0;animation:icFlash .35s ease-in forwards;animation-delay:calc(var(--ic-dur) - .35s)}
+@keyframes icPush{from{transform:scale(1.08)}to{transform:scale(1)}}
+@keyframes icFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes icFlash{0%{opacity:0}70%{opacity:1}100%{opacity:0}}
+`;
+
+  const js = `
+var ic=document.getElementById("intro-card");
+if(ic){
+var icDur=(parseFloat(getComputedStyle(ic).getPropertyValue("--ic-dur"))||4)*1000;
+setTimeout(function(){ic.classList.add("hide");v.play()},icDur+60);
+}
+`;
+
+  return { html, css, js, hasIntro: true };
+}
+
 // Build the self-contained share page. Pure function of the share JSON so it is
 // unit-testable without the Workers runtime. Target: < 15KB.
 export function renderSharePage(share) {
@@ -76,6 +140,11 @@ export function renderSharePage(share) {
     : "";
   const appHome = "https://app.reelballers.com/";
   const desc = `${name} -- shared from Reel Ballers.`;
+  const introCard = renderIntroCard(share.intro);
+  // The video autoplays immediately UNLESS an intro pre-roll is showing --
+  // playback then starts, from 0, once the intro's own setTimeout calls
+  // v.play() (design §5.3's "shown BEFORE it starts").
+  const videoAutoplayAttr = introCard.hasIntro ? "" : " autoplay";
 
   // T4890: first-frame poster for the unfurl card + instant first paint. Crawlers
   // don't run JS and need an ABSOLUTE URL, which the API supplies (presigned R2).
@@ -143,7 +212,7 @@ footer{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 .dl{display:inline-flex;align-items:center;gap:6px;color:#9ca3af}
 .cta{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;background:#22d3ee;color:#03151a;font-weight:600}
-</style>
+${introCard.css}</style>
 </head>
 <body>
 <header>
@@ -151,7 +220,8 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 <span class="brand">REEL BALLERS</span>
 </header>
 <main>
-<video id="v" src="${videoUrl}"${posterAttr} autoplay muted playsinline controls preload="auto"></video>
+<video id="v" src="${videoUrl}"${posterAttr}${videoAutoplayAttr} muted playsinline controls preload="auto"></video>
+${introCard.html}
 <button id="unmute" type="button">Tap to unmute</button>
 <div id="end-card" role="region" aria-label="End of video">
 <div class="ec-lr">
@@ -172,6 +242,7 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 <script>
 (function(){
 var v=document.getElementById("v"),b=document.getElementById("unmute"),ec=document.getElementById("end-card"),rp=document.getElementById("emblem");
+${introCard.js}
 function hide(){b.style.display="none"}
 if(!v.muted)hide();
 b.addEventListener("click",function(){v.muted=false;v.play();hide()});

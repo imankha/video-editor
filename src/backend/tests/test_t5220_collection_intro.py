@@ -26,7 +26,7 @@ Key semantics under test (design §3 row 4 + §12):
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -65,7 +65,12 @@ def _members(n=2):
 
 @pytest.fixture(autouse=True)
 def _patch_shared_deps():
-    with patch("app.routers.collections.open_profile_db_readonly", return_value=object()), \
+    # A real `open_profile_db_readonly` return is a `conn` the caller always
+    # `.close()`s in a `finally` -- a bare `object()` stand-in can't support
+    # that real contract, so this needs a MagicMock (conn itself is never
+    # otherwise touched: `evaluate_collection_members`/`resolve_intro_card`
+    # are both mocked below and ignore it).
+    with patch("app.routers.collections.open_profile_db_readonly", return_value=MagicMock()), \
          patch("app.routers.collections.evaluate_collection_members", return_value=_members()), \
          patch("app.routers.collections.select_within_budget", side_effect=lambda members, budget: members), \
          patch("app.routers.collections.generate_presigned_url_global", return_value="https://r2.example/vid.mp4"), \

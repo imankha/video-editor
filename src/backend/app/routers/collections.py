@@ -35,13 +35,14 @@ from app.services.intro_cards import (
     resolve_intro_card,
     set_collection_intro_card_id,
 )
+from app.services.intro_egress import _load_field_values, build_intro_playback_payload
 from app.services.materialization import open_profile_db_readonly
 from app.services.sharing_db import (
     create_collection_share,
     find_collection_share,
 )
 from app.services.user_db import get_intro_consent
-from app.storage import APP_ENV, generate_presigned_url_global
+from app.storage import APP_ENV, generate_presigned_url_global, r2_head_object_global
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
 
@@ -920,7 +921,6 @@ def resolve_collection_share(share: dict) -> dict:
     R2 fallback) and presign each member. Read-only: never writes the sharer DB.
     Empty / DB-evicted membership -> still 200 with empty members + the title."""
     from app.services.poster import poster_basename, poster_rel_path
-    from app.storage import r2_head_object_global
 
     definition, members, intro_card = _evaluated_share_members(share)
     title = definition.get("title") or "Highlights"
@@ -929,11 +929,22 @@ def resolve_collection_share(share: dict) -> dict:
         "context_line": _context_line(definition),
         "aspect_ratio": definition["aspect_ratio"],
     }
-    # T5215: id + name now; T5220 adds the presigned pre-roll payload.
-    intro_fields = (
-        {"intro_card_id": intro_card["id"], "intro_card_name": intro_card["name"]}
-        if intro_card is not None else {}
-    )
+    # T5215: id + name (preselection / display). T5220 (Scope B, design §3 row
+    # 4): the FROZEN card also serializes the full pre-roll payload
+    # ({card, previewUrl, field_values, profile}) under a single top-level
+    # `intro` key -- ONCE for the whole share, not per member (first-segment
+    # semantics: the pre-roll plays before the FIRST member, then
+    # `CollectionPlayer` chains members as today). No resolution change here
+    # -- `intro_card` above is already the frozen resolved row
+    # (`_evaluated_share_members`, T5215); this only serializes it.
+    intro_fields = {}
+    if intro_card is not None:
+        intro_fields["intro_card_id"] = intro_card["id"]
+        intro_fields["intro_card_name"] = intro_card["name"]
+        field_values = _load_field_values(share["sharer_user_id"], share["sharer_profile_id"])
+        intro_payload = build_intro_playback_payload(intro_card, field_values)
+        if intro_payload is not None:
+            intro_fields["intro"] = intro_payload
 
     uid, pid = share["sharer_user_id"], share["sharer_profile_id"]
     out_members = []

@@ -61,10 +61,15 @@ describe('IntroPreRoll', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('passes the intro card/profile/previewUrl through to MotionPreview', () => {
+  it('reassembles the split payload into the card/profile shape MotionPreview reads facts/photo from', () => {
+    // MotionPreview reads the photo off `card.previewUrl` (not a sibling prop)
+    // and the facts off `profile.full_name`/`profile[shownField]` (not
+    // `field_values`) -- see introCardPreviewElements.js. The backend payload
+    // splits those into separate keys, so the wrapper must merge them back or
+    // the pre-roll silently renders with no photo and no name/facts.
     render(<IntroPreRoll intro={SAMPLE_INTRO} onDone={() => {}} />);
     const call = MotionPreview.mock.calls[0][0];
-    expect(call.card).toEqual(SAMPLE_INTRO.card);
-    expect(call.profile).toEqual(SAMPLE_INTRO.profile);
+    expect(call.card).toEqual({ ...SAMPLE_INTRO.card, previewUrl: SAMPLE_INTRO.previewUrl });
+    expect(call.profile).toEqual({ ...SAMPLE_INTRO.profile, ...SAMPLE_INTRO.field_values });
   });
 });

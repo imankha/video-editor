@@ -275,14 +275,20 @@ def validate_intro_min_duration(value: Any) -> float:
 
 
 def load_profile_cards(cursor) -> dict[int, dict]:
-    """Batch-load ``{id: {'name': ..., 'is_default': bool}}`` for every card on
-    this profile, for no-N+1 list resolution (`GET /api/downloads`, T5215).
+    """Batch-load ``{id: {'name': ..., 'is_default': bool, 'has_photo': bool}}``
+    for every card on this profile, for no-N+1 list resolution
+    (`GET /api/downloads`, T5215; `has_photo` added T5220 for the share-modal
+    exposure notice, Scope F -- same batched query, one extra column).
     Empty dict on a below-v034 profile (table absent) -- never per-row queries."""
     if not _intro_cards_table_exists(cursor):
         return {}
-    cursor.execute("SELECT id, name, is_default FROM intro_cards")
+    cursor.execute("SELECT id, name, is_default, image_key FROM intro_cards")
     return {
-        row["id"]: {"name": row["name"], "is_default": bool(row["is_default"])}
+        row["id"]: {
+            "name": row["name"],
+            "is_default": bool(row["is_default"]),
+            "has_photo": bool(row["image_key"]),
+        }
         for row in cursor.fetchall()
     }
 

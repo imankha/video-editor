@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, AlertCircle, Loader, Lock, Download, Share2 } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
 import { BrandedEndCard } from './BrandedEndCard';
+import { IntroPreRoll } from './introcards/IntroPreRoll';
 import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
@@ -14,6 +15,12 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   const [share, setShare] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showEndCard, setShowEndCard] = useState(false);
+  // Gates autoplay behind the intro pre-roll (design §5.4): starts true
+  // whenever a share carries an `intro` payload, so `<MediaPlayer autoPlay>`
+  // does not start underneath it; IntroPreRoll's onDone flips it off. No
+  // `intro` on the share -> starts false, today's immediate-autoplay behavior
+  // is unchanged.
+  const [introShowing, setIntroShowing] = useState(false);
   // Bumped on Replay: remounts MediaPlayer so playback restarts from 0
   // (same pattern as SharedCollectionView's playerKey).
   const [playKey, setPlayKey] = useState(0);
@@ -34,6 +41,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
             fetch(data.video_url, { headers: { Range: 'bytes=0-524287' } }).catch(() => {});
           }
           setShare(data);
+          if (data.intro) setIntroShowing(true);
           setState('ready');
         } else if (resp.status === 403) {
           setState('forbidden');
@@ -74,7 +82,10 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   if (state === 'ready' && share) {
     const handleDownload = async () => {
       try {
-        const resp = await fetch(share.video_url);
+        // T5220 Scope C: the composed (intro/outro) egress, not the raw R2
+        // URL -- closes the pre-existing "share download has no outro either"
+        // gap in the same move.
+        const resp = await apiFetch(`${API_BASE}/api/shared/${shareToken}/download`);
         if (!resp.ok) return;
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
@@ -99,12 +110,15 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           <MediaPlayer
             key={playKey}
             src={share.video_url}
-            autoPlay={!showEndCard}
+            autoPlay={!showEndCard && !introShowing}
             onClose={onClose}
             onEnded={() => setShowEndCard(true)}
             sport={share.sport}
           />
           <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
+          {introShowing && (
+            <IntroPreRoll intro={share.intro} onDone={() => setIntroShowing(false)} />
+          )}
         </div>
         <SharePageInstallBanner />
         {isAuthenticated && (

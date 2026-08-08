@@ -179,6 +179,65 @@ describe('renderSharePage', () => {
     expect(html).toContain('<title>Shared Video | Reel Ballers</title>');
   });
 
+  describe('intro pre-roll (T5220 Scope B, design §5.3)', () => {
+    const intro = {
+      card: { image_key: 'k.png', shown_fields: ['position', 'team'], duration: 3.5 },
+      previewUrl: 'https://r2.example.com/card.jpg',
+      field_values: { full_name: 'Jordan Vega', position: 'Point Guard', team: 'Hawks' },
+    };
+
+    it('absent intro -> today\'s immediate autoplay, no intro-card markup', () => {
+      const html = renderSharePage(share);
+      expect(html).toMatch(/<video[^>]*\bautoplay\b/);
+      expect(html).not.toContain('id="intro-card"');
+    });
+
+    it('present intro -> video has no autoplay attribute; an intro-card renders instead', () => {
+      const html = renderSharePage({ ...share, intro });
+      expect(html).not.toMatch(/<video[^>]*\bautoplay\b/);
+      expect(html).toContain('id="intro-card"');
+      expect(html).toContain('Jordan Vega');
+      expect(html).toContain('Point Guard');
+      expect(html).toContain('Hawks');
+      expect(html).toContain(escapeHtml(intro.previewUrl));
+      expect(html).toContain('--ic-dur:3.5s');
+    });
+
+    it('a shown_field with no value is omitted, never a blank line', () => {
+      const html = renderSharePage({
+        ...share,
+        intro: { ...intro, field_values: { full_name: 'Jordan Vega', position: '' } },
+      });
+      expect(html).toContain('Jordan Vega');
+      expect(html).not.toContain('<div class="ic-fact"></div>');
+    });
+
+    it('no photo -> no background-image div, card still renders (title-only)', () => {
+      const html = renderSharePage({ ...share, intro: { ...intro, previewUrl: null } });
+      expect(html).toContain('id="intro-card"');
+      expect(html).not.toContain('class="ic-photo"');
+    });
+
+    it('escapes hostile facts/name so intro-card XSS is impossible', () => {
+      const hostile = {
+        ...intro,
+        field_values: { full_name: `<script>alert(1)</script>`, position: `"><img src=x onerror=alert(2)>` },
+      };
+      const html = renderSharePage({ ...share, intro: hostile });
+      expect(html).not.toContain('<script>alert(1)');
+      expect(html).not.toContain('<img src=x');
+      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+      const scriptOpens = (html.match(/<script/g) || []).length;
+      expect(scriptOpens).toBe(1);
+    });
+
+    it('stays well under the 15KB budget even with an intro', () => {
+      const html = renderSharePage({ ...share, intro });
+      const bytes = new TextEncoder().encode(html).length;
+      expect(bytes).toBeLessThan(15 * 1024);
+    });
+  });
+
   describe('branded end-card (T3950 playback compositing)', () => {
     it('CTA has exact spec text and correct UTM href', () => {
       const html = renderSharePage(share);
