@@ -106,19 +106,20 @@ async def test_revert_no_marker_regenerates_auto_and_overwrites_key(db):
     # the R2 frame grab/upload is stubbed. That the grab fires at the
     # deterministic basename is the proof the object is regenerated -- NOT a
     # local-only reset (bug 1). No slow-mo section -> window (0, 10-0.3) ->
-    # midpoint 4.85.
+    # T6630 round 7 changed the default from the window midpoint to
+    # start + 2.0 (clamped to end): min(0.0 + 2.0, 9.7) = 2.0.
     with patch.object(poster_mod, "_grab_and_store_poster_frame", return_value="auto.mp4.jpg") as grab:
         stored = await revert_to_auto_poster(USER_ID, pid, fv_id, "auto.mp4")
 
     assert stored == "auto.mp4.jpg"
-    grab.assert_called_once_with(USER_ID, "auto.mp4", pytest.approx(4.85))
+    grab.assert_called_once_with(USER_ID, "auto.mp4", pytest.approx(2.0))
 
     row = _connect(db).execute(
         "SELECT poster_filename, poster_frame_time, poster_source FROM final_videos WHERE id = ?",
         (fv_id,),
     ).fetchone()
     assert row["poster_filename"] == "auto.mp4.jpg"
-    assert row["poster_frame_time"] == pytest.approx(4.85)
+    assert row["poster_frame_time"] == pytest.approx(2.0)
     # The whole point: poster_source is no longer 'upload', so backfill_posters
     # no longer skips the reel.
     assert row["poster_source"] == "auto"

@@ -27,6 +27,7 @@ yet. Every test below fails on import, which is the correct RED state for Stage 
 The Implementor makes this file pass without editing it.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -623,10 +624,16 @@ class TestNoTextOverlayLeftover:
         )
 
     def test_no_source_file_imports_text_overlay(self):
+        # Word-boundary match on the two exact dead symbols -- a plain substring check
+        # false-positives on legitimately-named identifiers that happen to CONTAIN
+        # "TextOverlay" as a prefix of a longer word, e.g. T6630's
+        # `V0..TextOverlaysRegions` migration class (text_overlays flat blocks ->
+        # regions) and the `text_overlays` DB column name it operates on.
+        dead_symbol_re = re.compile(r"\bTextOverlay\b|\bTextOverlaysData\b")
         backend_app_dir = Path(__file__).resolve().parent.parent / "app"
         offenders = []
         for py_file in backend_app_dir.rglob("*.py"):
             text = py_file.read_text(encoding="utf-8", errors="ignore")
-            if "TextOverlay" in text and py_file.name != "schemas.py":
+            if dead_symbol_re.search(text) and py_file.name != "schemas.py":
                 offenders.append(str(py_file))
         assert not offenders, f"dead TextOverlay references remain in: {offenders}"
