@@ -48,6 +48,9 @@ import numpy as np
 from PIL import Image
 
 from app.schemas import TextSpec
+from app.services.ffmpeg_concat import escape_filter_path as _escape_filter_path
+from app.services.ffmpeg_concat import probe_media as _probe_media
+from app.services.ffmpeg_concat import run as _run
 from app.services.intro_card_geometry import MOTION, STAGGER_ORDER, aspect_key, band_kind, geometry_for, treatment_for
 from app.services.intro_card_geometry import layout as compute_layout
 from app.services.intro_cards import derive_composition
@@ -69,120 +72,10 @@ _CARD_VERSION = "v3-template-typography"
 
 
 # =============================================================================
-# ffmpeg helpers — copied from branded_outro (2nd use; extract a shared module on
-# the 3rd, per the "abstract on the third duplication" rule + T5210 gate Q4).
-# =============================================================================
-def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, check=True)
-
-
-def _escape_filter_path(path: str) -> str:
-    """Escape a filesystem path for use inside an ffmpeg filtergraph value (a
-    colon separates filter options, so a Windows drive letter breaks parsing).
-    No-op on POSIX paths."""
-    return path.replace("\\", "/").replace(":", "\\:")
-
-
-def _probe_media(path: str) -> dict:
-    """Probe the video+audio stream params we must match for a clean concat.
-    Raises on a failed probe (we must not guess dimensions for a concat)."""
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-show_entries",
-        "stream=index,codec_type,codec_name,width,height,r_frame_rate,"
-        "avg_frame_rate,pix_fmt,sample_aspect_ratio,time_base,sample_rate,channels",
-        "-show_entries", "format=duration",
-        "-of", "json", path,
-    ]
-    data = json.loads(_run(cmd).stdout)
-    streams = data.get("streams", [])
-    vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
-    astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
-    if not vstream:
-        raise RuntimeError(f"no video stream in {path}")
-
-    fps_str = vstream.get("avg_frame_rate") or vstream.get("r_frame_rate") or "30/1"
-    if fps_str in ("0/0", "0/1", "N/A", None):
-        fps_str = vstream.get("r_frame_rate") or "30/1"
-
-    sar = vstream.get("sample_aspect_ratio") or "1:1"
-    if sar in ("0:1", "N/A", None):
-        sar = "1:1"
-
-    time_base = vstream.get("time_base") or "1/15360"
-    try:
-        timescale = int(time_base.split("/")[1])
-    except (ValueError, IndexError):
-        timescale = 15360
-
-    return {
-        "width": int(vstream["width"]),
-        "height": int(vstream["height"]),
-        "fps_str": fps_str,
-        "pix_fmt": vstream.get("pix_fmt") or "yuv420p",
-        "sar": sar.replace(":", "/"),
-        "timescale": timescale,
-        "duration": float(data.get("format", {}).get("duration") or 0.0),
-        "has_audio": astream is not None,
-        "a_codec": (astream or {}).get("codec_name") or "aac",
-        "a_rate": int((astream or {}).get("sample_rate") or 48000),
-        "a_channels": int((astream or {}).get("channels") or 2),
-    }
-
-
-def _concat_copy(card_path: str, main_path: str, out_path: str) -> None:
-    """Fast PREPEND: concat demuxer, stream copy (only the card was encoded). The
-    card comes FIRST in the list — the intro plays before the reel."""
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        list_path = f.name
-        for p in (card_path, main_path):
-            f.write(f"file '{os.path.abspath(p)}'\n")
-    try:
-        _run([
-            "ffmpeg", "-y",
-            "-fflags", "+genpts",
-            "-f", "concat", "-safe", "0", "-i", list_path,
-            "-c", "copy",
-            "-avoid_negative_ts", "make_zero",
-            "-movflags", "+faststart",
-            out_path,
-        ])
-    finally:
-        try:
-            os.remove(list_path)
-        except OSError:
-            pass
-
-
-def _concat_reencode(card_path: str, main_path: str, out_path: str, has_audio: bool) -> None:
-    """Robust PREPEND fallback: re-encode concat (card first), used only when the
-    stream-copy join fails validation."""
-    if has_audio:
-        fc = "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]"
-        maps = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "128k"]
-    else:
-        fc = "[0:v][1:v]concat=n=2:v=1:a=0[v]"
-        maps = ["-map", "[v]", "-an"]
-    _run([
-        "ffmpeg", "-y",
-        "-i", card_path, "-i", main_path,
-        "-filter_complex", fc, *maps,
-        "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
-        "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        out_path,
-    ])
-
-
-def _validate_concat(out_path: str, expected_min: float) -> bool:
-    """Sanity-check the joined file: probes cleanly and is at least expected length."""
-    try:
-        info = _probe_media(out_path)
-        return info["duration"] >= expected_min
-    except Exception as e:
-        logger.warning(f"[PlayerIntro] concat validation probe failed: {e}")
-        return False
-
-
+# ffmpeg probe/run/escape helpers -- imported from the shared ffmpeg_concat
+# module (T5220 strangler-fig move; was a byte-for-byte 2nd-use copy of
+# branded_outro's helpers, now the single 3rd-use extraction point). See the
+# module-level import aliases above.
 # =============================================================================
 # Pixel helpers (background / scrim / photo framing) — Pillow, exact + testable.
 # =============================================================================
@@ -756,27 +649,18 @@ def prepend_intro_card(card_path: str, main_path: str, out_path: str) -> bool:
 
     Provided for T5220's egress callers; the card is expected to have been built
     with `build_intro_card(info=_probe_media(main_path))` so the copy join works.
+
+    Delegates the actual join to the shared `ffmpeg_concat.concat_segments`
+    (card-first order: `[card_path, main_path]`) -- T5220 strangler-fig move,
+    same copy -> validate -> re-encode -> validate ladder as before.
     """
     try:
         main = _probe_media(main_path)
-        card = _probe_media(card_path)
-        expected_min = main["duration"] + card["duration"] * 0.6
-        try:
-            _concat_copy(card_path, main_path, out_path)
-            if _validate_concat(out_path, expected_min):
-                logger.info("[PlayerIntro] prepended (copy)")
-                return True
-            logger.warning("[PlayerIntro] stream-copy prepend failed validation; re-encoding")
-        except subprocess.CalledProcessError as e:
-            logger.warning(
-                f"[PlayerIntro] stream-copy prepend failed; re-encoding. "
-                f"{e.stderr[-400:] if e.stderr else e}"
-            )
-        _concat_reencode(card_path, main_path, out_path, main["has_audio"])
-        if _validate_concat(out_path, expected_min):
-            logger.info("[PlayerIntro] prepended (re-encode fallback)")
+        from app.services.ffmpeg_concat import concat_segments
+        if concat_segments([card_path, main_path], out_path, main):
+            logger.info("[PlayerIntro] prepended")
             return True
-        logger.error("[PlayerIntro] re-encode prepend also failed validation; no intro")
+        logger.error("[PlayerIntro] concat failed; no intro")
         return False
     except subprocess.CalledProcessError as e:
         stderr = e.stderr[-600:] if e.stderr else str(e)

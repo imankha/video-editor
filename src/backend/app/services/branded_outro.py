@@ -33,12 +33,15 @@ export, surfacing a warning. A visible card-less "success" beats a lost reel.
 """
 
 import hashlib
-import json
 import logging
 import os
 import subprocess
 import tempfile
 from pathlib import Path
+
+from app.services.ffmpeg_concat import escape_filter_path as _escape_filter_path
+from app.services.ffmpeg_concat import probe_media as _probe_media
+from app.services.ffmpeg_concat import run as _run
 
 logger = logging.getLogger(__name__)
 
@@ -119,20 +122,6 @@ def outro_enabled() -> bool:
     )
 
 
-def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, check=True)
-
-
-def _escape_filter_path(path: str) -> str:
-    """Escape a filesystem path for use inside an ffmpeg filtergraph value.
-
-    A colon separates filter options, so a Windows drive letter (`C:/...`)
-    breaks parsing. Backslash-escape the colon; forward slashes are already
-    fine. No-op on POSIX paths (prod/container), needed for local Windows dev.
-    """
-    return path.replace("\\", "/").replace(":", "\\:")
-
-
 def _card_cache_key(info: dict) -> str:
     """16-char hex key for the params that determine card content and compatibility."""
     key = (
@@ -172,60 +161,6 @@ def _get_or_build_card(info: dict) -> str | None:
         except OSError:
             pass
         return None
-
-
-def _probe_media(path: str) -> dict:
-    """Probe the video+audio stream params we must match for a clean concat.
-
-    Returns width/height/fps_str/pix_fmt/sar/timescale/duration plus audio info
-    (has_audio, a_codec, a_rate, a_channels). Raises on a failed probe -- we must
-    not guess dimensions for a concat (a mismatch corrupts the join).
-    """
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-show_entries",
-        "stream=index,codec_type,codec_name,width,height,r_frame_rate,"
-        "avg_frame_rate,pix_fmt,sample_aspect_ratio,time_base,sample_rate,channels",
-        "-show_entries", "format=duration",
-        "-of", "json", path,
-    ]
-    data = json.loads(_run(cmd).stdout)
-    streams = data.get("streams", [])
-    vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
-    astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
-    if not vstream:
-        raise RuntimeError(f"no video stream in {path}")
-
-    # Prefer avg_frame_rate; fall back to r_frame_rate. Keep it as a fraction string
-    # so we pass the exact rate (e.g. 30000/1001) through to the card, not a rounded float.
-    fps_str = vstream.get("avg_frame_rate") or vstream.get("r_frame_rate") or "30/1"
-    if fps_str in ("0/0", "0/1", "N/A", None):
-        fps_str = vstream.get("r_frame_rate") or "30/1"
-
-    sar = vstream.get("sample_aspect_ratio") or "1:1"
-    if sar in ("0:1", "N/A", None):
-        sar = "1:1"
-
-    # timebase like "1/15360" -> timescale 15360, matched on the card so -c copy joins cleanly.
-    time_base = vstream.get("time_base") or "1/15360"
-    try:
-        timescale = int(time_base.split("/")[1])
-    except (ValueError, IndexError):
-        timescale = 15360
-
-    return {
-        "width": int(vstream["width"]),
-        "height": int(vstream["height"]),
-        "fps_str": fps_str,
-        "pix_fmt": vstream.get("pix_fmt") or "yuv420p",
-        "sar": sar.replace(":", "/"),
-        "timescale": timescale,
-        "duration": float(data.get("format", {}).get("duration") or 0.0),
-        "has_audio": astream is not None,
-        "a_codec": (astream or {}).get("codec_name") or "aac",
-        "a_rate": int((astream or {}).get("sample_rate") or 48000),
-        "a_channels": int((astream or {}).get("channels") or 2),
-    }
 
 
 def _reveal_alpha() -> str:
@@ -387,61 +322,6 @@ def _build_outro_card(card_path: str, info: dict) -> None:
             pass
 
 
-def _concat_copy(main_path: str, card_path: str, out_path: str) -> None:
-    """Fast append: concat demuxer with stream copy (only the card was encoded)."""
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        list_path = f.name
-        for p in (main_path, card_path):
-            f.write(f"file '{os.path.abspath(p)}'\n")
-    try:
-        _run([
-            "ffmpeg", "-y",
-            "-fflags", "+genpts",
-            "-f", "concat", "-safe", "0", "-i", list_path,
-            "-c", "copy",
-            "-avoid_negative_ts", "make_zero",
-            "-movflags", "+faststart",
-            out_path,
-        ])
-    finally:
-        try:
-            os.remove(list_path)
-        except OSError:
-            pass
-
-
-def _concat_reencode(main_path: str, card_path: str, out_path: str, has_audio: bool) -> None:
-    """Robust fallback: re-encode concat via the concat filter.
-
-    Slower (re-encodes the main video), used only when the stream-copy join fails
-    validation -- e.g. a frontend-rendered final with an incompatible H.264 profile.
-    """
-    if has_audio:
-        fc = "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]"
-        maps = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "128k"]
-    else:
-        fc = "[0:v][1:v]concat=n=2:v=1:a=0[v]"
-        maps = ["-map", "[v]", "-an"]
-    _run([
-        "ffmpeg", "-y",
-        "-i", main_path, "-i", card_path,
-        "-filter_complex", fc, *maps,
-        "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
-        "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        out_path,
-    ])
-
-
-def _validate_concat(out_path: str, expected_min: float) -> bool:
-    """Sanity-check the joined file: probes cleanly and is at least expected length."""
-    try:
-        info = _probe_media(out_path)
-        return info["duration"] >= expected_min
-    except Exception as e:
-        logger.warning(f"[BrandedOutro] concat validation probe failed: {e}")
-        return False
-
-
 def append_branded_outro(in_path: str, out_path: str) -> bool:
     """Append the branded outro to `in_path`, writing the result to `out_path`.
 
@@ -451,6 +331,10 @@ def append_branded_outro(in_path: str, out_path: str) -> bool:
 
     The outro card is cached per (resolution/fps/format) in _CARD_CACHE_DIR so
     repeated download requests for the same reel don't re-encode the card each time.
+
+    Delegates the actual join to the shared `ffmpeg_concat.concat_segments`
+    (main-first order: `[in_path, card_path]`) -- T5220 strangler-fig move,
+    same copy -> validate -> re-encode -> validate ladder as before.
     """
     if not outro_enabled():
         return False
@@ -464,25 +348,14 @@ def append_branded_outro(in_path: str, out_path: str) -> bool:
         if card_path is None:
             return False
 
-        expected_min = info["duration"] + OUTRO_DURATION * 0.6
-
-        try:
-            _concat_copy(in_path, card_path, out_path)
-            if _validate_concat(out_path, expected_min):
-                logger.info(
-                    f"[BrandedOutro] appended (copy) {info['width']}x{info['height']} "
-                    f"@ {info['fps_str']} audio={info['has_audio']}"
-                )
-                return True
-            logger.warning("[BrandedOutro] stream-copy join failed validation; re-encoding")
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"[BrandedOutro] stream-copy concat failed; re-encoding. {e.stderr[-400:] if e.stderr else e}")
-
-        _concat_reencode(in_path, card_path, out_path, info["has_audio"])
-        if _validate_concat(out_path, expected_min):
-            logger.info("[BrandedOutro] appended (re-encode fallback)")
+        from app.services.ffmpeg_concat import concat_segments
+        if concat_segments([in_path, card_path], out_path, info):
+            logger.info(
+                f"[BrandedOutro] appended {info['width']}x{info['height']} "
+                f"@ {info['fps_str']} audio={info['has_audio']}"
+            )
             return True
-        logger.error("[BrandedOutro] re-encode concat also failed validation; shipping card-less")
+        logger.error("[BrandedOutro] concat failed; shipping card-less")
         return False
 
     except subprocess.CalledProcessError as e:

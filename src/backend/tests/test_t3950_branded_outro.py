@@ -188,10 +188,13 @@ def test_render_time_only_no_persistence_imports():
     banned = ("user_db", "database", "get_db_connection", "queries", ".pg")
     offenders = [m for m in imported for b in banned if b in m]
     assert not offenders, f"branded_outro must not import persistence layers: {offenders}"
-    # The ONLY app dependency is R2 storage (render I/O). No DB/persistence anywhere.
+    # The ONLY app dependencies are R2 storage (render I/O) and the shared
+    # ffmpeg_concat probe/join helpers (T5220 strangler-fig extraction of the
+    # byte-duplicated concat code -- itself pure render-time, no DB/persistence).
     app_imports = {m for m in imported if m.startswith("app.")}
-    assert app_imports <= {"app.storage", "app.storage.download_from_r2",
-                           "app.storage.upload_to_r2"}, app_imports
+    allowed_prefixes = ("app.storage", "app.services.ffmpeg_concat")
+    offenders2 = [m for m in app_imports if not m.startswith(allowed_prefixes)]
+    assert not offenders2, app_imports
 
 
 def test_card_cache_is_reused(tmp_path, tmp_video, monkeypatch):
