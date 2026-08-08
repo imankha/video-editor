@@ -37,6 +37,27 @@ cd src/backend && .venv/Scripts/python.exe run_tests.py  # All tests
 cd src/backend && pytest tests/test_clips.py -v          # Specific file
 ```
 
+## Model Policy (driver = Sonnet, expert = Opus)
+
+Interactive sessions in this project default to **Sonnet** (settings.local.json). Sonnet owns
+everything mechanical: orchestration, bookkeeping (PLAN.md, WAVE.md, status files, commits),
+running the relevant test set, driving containers, and implementation that follows a clear spec.
+
+**Escalate to the [expert agent](.claude/agents/expert.md) (Opus) — don't grind.** Spawn it,
+passing the relevant `.claude/knowledge/` doc name(s) and a precise question, whenever:
+
+- root-causing a bug whose mechanism isn't obvious from the first read of the code
+- an architecture/design decision has real tradeoffs (schema, persistence, new pattern)
+- the problem involves async timing, persistence/sync (CAS, R2 versioning), or concurrency
+- performance analysis beyond an obvious hot spot
+- **one focused attempt at a fix has failed** — a second Sonnet guess costs more than the
+  escalation; never attempt a third without the expert's verdict
+
+The expert returns analysis/design only; this session implements it. The design-gated agents
+(architect, code-expert, reviewer) are pinned to Opus in their frontmatter and stay strong
+regardless of the session model. Container workers keep their own tier-based model flags
+(spawn-worker SKILL).
+
 ## Task Rules
 
 ### Never Skip (ALL tasks, including bug fixes)
@@ -62,7 +83,7 @@ Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostTo
 
 ### Test Scope Policy (all tiers)
 
-Local/worker test runs are **changed-code only**: the task's tests + `npx vitest related --run <changed sources>` + pytest modules for the changed backend code + the e2e spec(s) for the changed flow. Never run full suites locally to "confirm no regressions" — Branch CI is the mandatory CI verdict and Master CI re-runs everything on every merge to master.
+Local/worker test runs are the **RELEVANT SET (~10 tests), curated — never everything**. First understand the corner of the code the change lives in (changed files + their direct consumers), then name the set before running it: the tests written for this feature + the existing regression tests guarding that corner + the e2e spec for the changed flow. `npx vitest related --run <changed sources>` is a candidate finder, not a run list — curate its output. More complexity means a bigger relevant set, chosen deliberately; never a full suite, never a whole layer, never "run everything to be safe" — Branch CI is the mandatory full-sweep verdict and Master CI re-runs everything on every merge to master.
 
 **Branch CI is layer-scoped (T6405).** Its `changes` job diffs against master and skips the whole frontend job when no `src/frontend/**` (or `scripts/**`) file changed, and the whole backend job when no `src/backend/**` file changed; a change to `branch-ci.yml` itself runs both. **Within a job the suite still runs IN FULL** — the scoping is per LAYER, never per test file. Selecting individual test files from the diff is explicitly rejected: Python's import graph means a `storage.py` change is exercised by tests that never name storage (anything importing `app.main`), so file-name selection silently skips real regressions. Sound intra-suite selection needs coverage data (testmon), not path matching. Bias the filter toward RUNNING — shared paths trip both layers. Fix loop: a failing test gets fixed, then re-run that test + tests exercising the files the fix touched; already-passed tests whose subject code didn't change are not re-run. Details: `.claude/skills/run-tests/SKILL.md`.
 
