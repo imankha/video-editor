@@ -194,6 +194,8 @@ def resolve_intro_for_reel(
     if card is None:
         return None
 
+    card = dict(card)
+
     field_values = _load_field_values(user_id, profile_id)
     shown_fields = card.get("shown_fields") or []
     if shown_fields and not any(field_values.get(f) for f in shown_fields):
@@ -208,7 +210,7 @@ def resolve_intro_for_reel(
     # mode == "burn"
     tempdir = tempfile.mkdtemp(prefix="rb_intro_egress_")
     try:
-        image_path = _download_card_image(dict(card), user_id, profile_id, tempdir)
+        image_path = _download_card_image(card, user_id, profile_id, tempdir)
     except Exception as e:
         logger.error(f"[intro_egress] card image download failed for reel_id={reel_id}: {e}", exc_info=True)
         import shutil
