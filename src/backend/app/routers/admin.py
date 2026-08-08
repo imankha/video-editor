@@ -831,9 +831,11 @@ async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
     run returns immediately and executes in the background -- GET this same path to
     poll `running`/`last_result`.
 
-    The frame is chosen by `select_poster_frame` -- 2 seconds into the open-play
-    window (T6630 round 7; was the window's midpoint), or the user's pre-export
-    marker (T5410). It is NOT the first frame; that was the pre-T5410 behaviour.
+    The frame is chosen by `select_poster_frame` -- the open-play window's own
+    start (already past the slow-mo skip margin), or 2 seconds into it when
+    there's no slow-mo section (T6630 round 8; was always +2s, which stacked
+    with the skip), or the user's pre-export marker (T5410). It is NOT the
+    first frame; that was the pre-T5410 behaviour.
 
     `force=true` REGENERATES posters for ALL published reels, not just ones missing
     a poster -- this is how legacy posters are upgraded to the current selection.

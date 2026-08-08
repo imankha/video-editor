@@ -112,11 +112,13 @@ export function OverlayMode({
     return '15.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (7rem) + padding
   };
 
-  // T5410: default marker position (no override yet) = 2 seconds into the
-  // open-play window, clamped to its end (T6630 round 7; was the window's
-  // midpoint), computed client-side from the SAME algorithm the export-time
-  // selector uses (posterWindow.js mirrors poster.py exactly) -- never a
-  // guessed default that could diverge from what export picks.
+  // T5410: default marker position (no override yet) = the open-play window's
+  // own start (already past the slow-mo skip margin), or 2 seconds into it
+  // when there's no slow-mo section (T6630 round 8; was always "+2s into the
+  // window", which stacked with the slow-mo skip -- see selectPosterFrame),
+  // computed client-side from the SAME algorithm the export-time selector
+  // uses (posterWindow.js mirrors poster.py exactly) -- never a guessed
+  // default that could diverge from what export picks.
   const effectiveDuration = visualDuration || duration || 0;
   const posterVisualTime = (() => {
     if (!effectiveDuration) return 0;
@@ -124,7 +126,7 @@ export function OverlayMode({
       return sourceTimeToVisualTime ? sourceTimeToVisualTime(posterMarkerTime) : posterMarkerTime;
     }
     const window = openPlayWindow(posterSlowmoSection, duration || effectiveDuration);
-    const defaultSourceTime = selectPosterFrame(window, null);
+    const defaultSourceTime = selectPosterFrame(window, null, posterSlowmoSection);
     return sourceTimeToVisualTime ? sourceTimeToVisualTime(defaultSourceTime) : defaultSourceTime;
   })();
 

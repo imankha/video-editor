@@ -608,15 +608,16 @@ export function OverlayModeView({
   // T5676: Overlay tuning controls — beside the video on desktop, stacked above
   // the Add Spotlight button on mobile. Extracted from ExportButtonView.
   // T6510: the SOURCE-time of the frame the preview image will use -- the user's
-  // marker if set, else the export-time default (T6630 round 7: 2s into the
-  // open-play window, clamped to its end; openPlayWindow + selectPosterFrame
-  // mirror poster.py exactly, so the shown still matches what export picks).
-  // Feeds PosterFramePreview so the user SEES the actual frame.
+  // marker if set, else the export-time default (T6630 round 8: the open-play
+  // window's own start, or 2s into it when there's no slow-mo section;
+  // openPlayWindow + selectPosterFrame mirror poster.py exactly, so the shown
+  // still matches what export picks). Feeds PosterFramePreview so the user
+  // SEES the actual frame.
   const posterFrameSourceTime = useMemo(() => {
     if (posterMarkerTime != null) return posterMarkerTime;
     const dur = effectiveOverlayMetadata?.duration || duration || 0;
     if (!dur) return 0;
-    return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null);
+    return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null, posterSlowmoSection);
   }, [posterMarkerTime, posterSlowmoSection, effectiveOverlayMetadata?.duration, duration]);
 
   // --- Overlay tab: spotlight/highlight tuning (poster moved to Thumbnail tab). ---

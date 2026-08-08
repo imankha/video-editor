@@ -47,27 +47,40 @@ describe('posterWindow', () => {
   });
 
   describe('selectPosterFrame', () => {
-    it('unset marker -> 2s into the window (T6630 round 7; was the midpoint)', () => {
+    it('unset marker, no section -> 2s into the window (T6630 round 7; was the midpoint)', () => {
+      // No slow-mo section -> window.start is the clip's literal frame 0
+      // (never skip-adjusted), so the +2.0 "don't pick frame 0" push applies.
       // Window width 8.0 -- start+2.0 (4.0) and the midpoint (6.0) DIFFER
       // here, so this discriminates the two rules.
-      expect(selectPosterFrame([2.0, 10.0], null)).toBe(4.0);
+      expect(selectPosterFrame([2.0, 10.0], null, null)).toBe(4.0);
     });
 
-    it('unset marker clamps to the window end when shorter than 2s', () => {
-      expect(selectPosterFrame([2.0, 2.3], null)).toBe(2.3);
+    it('unset marker, no section, clamps to the window end when shorter than 2s', () => {
+      expect(selectPosterFrame([2.0, 2.3], null, null)).toBe(2.3);
+    });
+
+    it('unset marker, WITH section -> the window\'s own start (T6630 round 8)', () => {
+      // Section present -> window.start already IS section.start +
+      // SPOTLIGHT_SKIP_SECONDS (past the contested/occluded opening
+      // frames). Round 7 also added +2.0 here, stacking to ~4s past the
+      // section's start; round 8 (live report: "6s instead of ~2s") drops
+      // the second push.
+      const section = [1.5, 20.0];
+      const window = [3.5, 10.0]; // openPlayWindow(section, ...) would yield this
+      expect(selectPosterFrame(window, null, section)).toBe(3.5);
     });
 
     it('marker honoured verbatim inside the window', () => {
-      expect(selectPosterFrame([2.0, 6.0], 3.3)).toBe(3.3);
+      expect(selectPosterFrame([2.0, 6.0], 3.3, null)).toBe(3.3);
     });
 
     it('marker honoured verbatim OUTSIDE the window (not clamped)', () => {
-      expect(selectPosterFrame([2.0, 6.0], 0.1)).toBe(0.1);
-      expect(selectPosterFrame([2.0, 6.0], 99.0)).toBe(99.0);
+      expect(selectPosterFrame([2.0, 6.0], 0.1, null)).toBe(0.1);
+      expect(selectPosterFrame([2.0, 6.0], 99.0, null)).toBe(99.0);
     });
 
     it('marker 0.0 is honoured, not treated as unset (falsy trap)', () => {
-      expect(selectPosterFrame([2.0, 6.0], 0.0)).toBe(0.0);
+      expect(selectPosterFrame([2.0, 6.0], 0.0, null)).toBe(0.0);
     });
   });
 });

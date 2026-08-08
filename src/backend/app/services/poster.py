@@ -326,26 +326,41 @@ def open_play_window(
 
 def select_poster_frame(
     window: tuple[float, float], user_marker_time: float | None,
+    section: tuple[float, float] | None,
 ) -> float:
     """The poster frame's time (final-video seconds): the user's overlay marker
-    when set, else 2 seconds into the open-play window.
+    when set, else the window's own start when the window's start already
+    absorbed the SPOTLIGHT_SKIP_SECONDS safety margin, else 2 seconds into
+    the window.
 
     The marker is honoured VERBATIM, never clamped into the window -- a
     deliberate spotlight-frame pick is a decision, not an error; the user is
     expected to move the marker to set it, but may not always (T6630 round
     7). Within the window every pixel/box feature the study measured was
     noise (|Spearman| <= 0.23), so absent a marker there is no ranking to
-    honor -- T6630 round 7 user direction moved the deterministic no-marker
-    default from the window's midpoint to `start + 2.0`, clamped to `end` so
-    a window shorter than 2s (windows can be as short as MIN_WINDOW_SECONDS)
-    never returns a time outside it. This does not collide with
-    SPOTLIGHT_SKIP_SECONDS above (which already skips the first 2s of a
-    slow-mo section before the window even starts) -- it is 2s relative to
-    the WINDOW's own start, consistent with that skip's own reasoning.
+    honor.
+
+    `section` (the SAME slow-mo section `window` was built from, or None)
+    tells us whether `window.start` already IS `section.start +
+    SPOTLIGHT_SKIP_SECONDS` -- i.e. already past the contested/occluded
+    opening frames. T6630 round 7 added a "+2s into the window" default
+    reasoning it was independent of that skip ("relative to the window's
+    own start"); live round-8 user testing showed the two skips STACK to
+    ~4s past the section's start (e.g. section starting at 1.5s put the
+    default at 5.5s, not the expected ~2s -- confirmed via real drafts'
+    `poster_slowmo_section`). Fix: when `section` is set, `window.start`
+    IS the settled point already -- use it directly, no second push. Only
+    the no-section window (starts at the clip's literal frame 0, never
+    skip-adjusted) still gets the `+2.0` push so the default isn't the
+    very first frame, clamped to `end` so a window shorter than 2s
+    (windows can be as short as MIN_WINDOW_SECONDS) never returns a time
+    outside it.
     """
     if user_marker_time is not None:
         return user_marker_time
     start, end = window
+    if section is not None:
+        return start
     return min(start + 2.0, end)
 
 
@@ -559,7 +574,7 @@ def _set_slowmo_section(final_video_id: int, section: tuple[float, float] | None
 
 def get_project_poster_marker_time(project_id: int | None) -> float | None:
     """The user's pre-export poster marker time (final-video seconds), or None
-    (no override -> select_poster_frame falls back to 2s into the window).
+    (no override -> select_poster_frame falls back to its window-start default).
 
     Column-guarded for the deploy->migrate window (v032 not yet applied) --
     mirrors the T6030 pattern (never raises "no such column" on a hot path).
@@ -692,7 +707,7 @@ async def generate_poster_at_export(
     is realized as a pure time-window gate on the already-frozen slow-mo
     section (open_play_window); within the window the frame is either the
     user's overlay marker (honoured verbatim, never clamped) or the
-    deterministic 2-seconds-into-the-window default (select_poster_frame).
+    deterministic window-start default (select_poster_frame).
 
     Runs AFTER _finalize_overlay_export returns (the final video + its row both
     exist) and BEFORE the sync-then-announce barrier, so poster_filename/
@@ -702,7 +717,7 @@ async def generate_poster_at_export(
     """
     try:
         window = open_play_window(section, final_duration)
-        t = select_poster_frame(window, user_marker_time)
+        t = select_poster_frame(window, user_marker_time, section)
         source = "overlay" if user_marker_time is not None else "auto"
         stored = await asyncio.to_thread(_grab_and_store_poster_frame, user_id, final_filename, t)
         if not stored:
@@ -1549,7 +1564,7 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                         continue
 
                     window = open_play_window(section, final_duration)
-                    t = select_poster_frame(window, None)  # backfill never has a user marker
+                    t = select_poster_frame(window, None, section)  # backfill never has a user marker
                     stored = _grab_and_store_poster_frame(user_id, filename, t)
                     if not stored:
                         result["failed"].append({"id": fv_id, "error": "poster generation returned None"})
