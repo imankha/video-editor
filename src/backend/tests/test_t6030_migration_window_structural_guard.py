@@ -254,6 +254,9 @@ def test_intro_cards_hot_paths(below_head):
         list_intro_cards,
         update_intro_card,
     )
+    from app.services.user_db import set_intro_consent
+
+    set_intro_consent(below_head["user_id"], TEST_PROFILE_ID, "2026-08-08T00:00:00Z")
     created = _run(create_intro_card(CreateIntroCardRequest(
         name="Card", treatment="gold", shown_fields=[], subtitle_text="dropped pre-v035",
     )))

@@ -17,6 +17,12 @@ from app.database import USER_DATA_BASE
 from app.services.auth_db import (
     get_user_by_id,
 )
+from app.services.user_db import (
+    get_all_intro_consents,
+    get_all_intro_facts,
+    get_all_intro_full_names,
+    get_all_intro_photo_keys,
+)
 from app.storage import (
     APP_ENV,
     R2_BUCKET,
@@ -26,10 +32,59 @@ from app.storage import (
 )
 from app.user_context import get_current_user_id
 from app.utils.cookies import delete_cookie as _delete_cookie
+from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/privacy", tags=["privacy"])
+
+
+def _safe_kv(reader):
+    """Run a user_settings KV reader, returning {} on any failure.
+
+    A data-export request must never 500 because one KV read raised; a missing
+    map degrades to "no intro data for this profile", not an error.
+    """
+    try:
+        return reader() or {}
+    except Exception as e:
+        logger.warning(f"[Privacy] intro KV read failed: {e}")
+        return {}
+
+
+def _read_intro_cards(conn) -> list[dict]:
+    """Read a profile's intro_cards rows for the CCPA export (T5230).
+
+    An intro card holds a minor's parent-typed free text (title/subtitle), so it
+    is personal data that MUST appear in the export. The R2 image OBJECTS
+    themselves are already enumerated under `r2_objects` (whole-user-prefix walk);
+    this adds the DB rows that give those keys meaning plus the free text.
+
+    Table/column guarded for the deploy→migrate window: a below-head profile.sqlite
+    may lack the `intro_cards` table entirely or the T6570 `subtitle_text` column,
+    so a missing table returns [] and a missing column is simply absent from the
+    row dict — never a 500 on a data-export request.
+    """
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='intro_cards'"
+    ).fetchone()
+    if not exists:
+        return []
+    cards = []
+    for row in conn.execute(
+        "SELECT * FROM intro_cards ORDER BY created_at DESC, id DESC"
+    ).fetchall():
+        card = dict(row)
+        # text_elements is a msgpack BLOB (DEAD as of T6640 but old rows may hold
+        # one). Decode it best-effort so the export is human-readable JSON rather
+        # than raw bytes; drop it on any decode error rather than failing export.
+        if "text_elements" in card:
+            try:
+                card["text_elements"] = decode_data(card["text_elements"]) or {}
+            except Exception:
+                card["text_elements"] = None
+        cards.append(card)
+    return cards
 
 
 @router.post("/export-data")
@@ -64,12 +119,40 @@ async def export_user_data(request: Request):
         export["credit_transactions"] = []
 
     # 3. Profile metadata
+    #
+    # Player-intro personal data (T5230) is TWO-tiered: per-card free text lives
+    # in each profile.sqlite (`intro_cards`), while the parental-consent
+    # timestamp, position/class/team facts, full name and photo key live in the
+    # per-profile user.sqlite settings KV. The KV maps are read ONCE here (keyed
+    # by profile_id) and stitched onto each profile below. All of it is a minor's
+    # personal data and must be exportable (CCPA right-to-know).
+    intro_consents = _safe_kv(lambda: get_all_intro_consents(user_id))
+    intro_facts = _safe_kv(lambda: get_all_intro_facts(user_id))
+    intro_full_names = _safe_kv(lambda: get_all_intro_full_names(user_id))
+    intro_photo_keys = _safe_kv(lambda: get_all_intro_photo_keys(user_id))
+
+    def _intro_kv_for(pid: str) -> dict:
+        return {
+            "intro_consent_at": intro_consents.get(pid),
+            "intro_photo_key": intro_photo_keys.get(pid),
+            "intro_full_name": intro_full_names.get(pid),
+            "intro_facts": intro_facts.get(pid, {}),
+        }
+
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
     export["profiles"] = []
+    seen_profile_ids: set[str] = set()
     if profiles_dir.exists():
         for profile_db in profiles_dir.glob("*/profile.sqlite"):
             profile_id = profile_db.parent.name
-            profile_data = {"profile_id": profile_id, "games": [], "projects": []}
+            seen_profile_ids.add(profile_id)
+            profile_data = {
+                "profile_id": profile_id,
+                "games": [],
+                "projects": [],
+                "intro_cards": [],
+                **_intro_kv_for(profile_id),
+            }
             try:
                 conn = sqlite3.connect(str(profile_db))
                 conn.row_factory = sqlite3.Row
@@ -84,10 +167,27 @@ async def export_user_data(request: Request):
                 ).fetchall()
                 profile_data["projects"] = [dict(p) for p in projects]
 
+                profile_data["intro_cards"] = _read_intro_cards(conn)
+
                 conn.close()
             except Exception as e:
                 logger.warning(f"[Privacy] Failed to read profile {profile_id}: {e}")
             export["profiles"].append(profile_data)
+
+    # Intro consent/facts/photo live in user.sqlite, which is present even when a
+    # profile's profile.sqlite is not locally cached (so the glob above missed
+    # it). Emit those profiles too so a minor's consent/facts are never silently
+    # omitted from the export.
+    for pid in set(intro_consents) | set(intro_facts) | set(intro_full_names) | set(intro_photo_keys):
+        if pid in seen_profile_ids:
+            continue
+        export["profiles"].append({
+            "profile_id": pid,
+            "games": [],
+            "projects": [],
+            "intro_cards": [],
+            **_intro_kv_for(pid),
+        })
 
     # 4. R2 object listing with presigned URLs
     export["r2_objects"] = []

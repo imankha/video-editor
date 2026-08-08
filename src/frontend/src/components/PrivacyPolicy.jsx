@@ -47,6 +47,7 @@ export function PrivacyPolicy() {
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li><strong className="text-white">Account data:</strong> Email address, Google ID, profile picture URL</li>
             <li><strong className="text-white">Game metadata:</strong> Opponent name, game date, tournament name, game type</li>
+            <li><strong className="text-white">Player intro data:</strong> A player photo, the player&apos;s name, and short display facts (position, graduation year/class, team) plus any free text you type onto an intro card, along with a parental-consent attestation recorded when you first create a card. No birthdate, age, address, or school is collected.</li>
             <li><strong className="text-white">Payment data:</strong> Credit card and billing details processed entirely by Stripe — never stored on our servers</li>
           </ul>
 
@@ -67,9 +68,13 @@ export function PrivacyPolicy() {
           <h4 className="text-white font-medium mb-2">Video Content</h4>
           <p className="mb-4">Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. We do not extract biometric data from videos. Our framing feature uses manual crop controls, not facial recognition or detection.</p>
 
+          <h4 className="text-white font-medium mb-2">Player Intro Cards</h4>
+          <p className="mb-4">You can build &ldquo;intro card&rdquo; graphics for a youth player from a photo you upload, the player&apos;s name, and a small fixed set of display facts you type (position, graduation year, team). Because a card depicts a minor, we record a parental-consent attestation before the first card is created and warn you that a card attached to a shared reel or collection is publicly visible to anyone with the link. We do not run facial recognition or biometric templating on player photos; optional background removal is image segmentation only.</p>
+
           <h4 className="text-white font-medium mb-2">Information We Do NOT Collect</h4>
           <ul className="list-disc pl-5 space-y-1">
-            <li>No biometric data (video cropping is manual, no facial recognition)</li>
+            <li>No biometric data (video/photo cropping is manual; background removal is segmentation, not facial recognition)</li>
+            <li>No birthdate, age, address, or school for players featured in intro cards</li>
             <li>No location data (beyond what may exist in video metadata, which we do not extract)</li>
             <li>No advertising identifiers or cross-site tracking</li>
             <li>No contact lists or social graphs</li>
@@ -160,11 +165,11 @@ export function PrivacyPolicy() {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong className="text-white">Children are data subjects in videos, not account holders.</strong> Our users are adults who upload and edit video of youth sporting events.</li>
             <li>We do not knowingly collect personal information from children under 13 (or under 16 for CCPA purposes).</li>
-            <li>No biometric data is extracted. Video framing and cropping are manual operations.</li>
-            <li>No automated identification of individuals in videos is performed.</li>
-            <li>We do not build profiles of individuals who appear in videos.</li>
+            <li>No biometric data is extracted. Video/photo framing and cropping are manual; player-photo background removal is segmentation, not facial recognition.</li>
+            <li>No automated identification of individuals in videos or photos is performed.</li>
+            <li><strong className="text-white">Player intro cards are parent-created and consent-gated.</strong> You provide the photo, name, and display facts (position, graduation year, team); we record your parent/guardian consent before the first card and collect no birthdate, age, address, or school. A shared card is publicly visible to anyone with the link.</li>
           </ul>
-          <p className="mt-3"><strong className="text-white">Parental rights:</strong> Parents/guardians who have uploaded video of their children retain full control. They may delete any content at any time, or request full account deletion.</p>
+          <p className="mt-3"><strong className="text-white">Parental rights:</strong> Parents/guardians who have uploaded video or created intro cards for their children retain full control. All player-intro data (photo, parent-typed facts, and consent record) is included in a data export and erased when you delete the card or your account.</p>
           <p className="mt-3">If you believe a child under 13 has created an account, contact us at <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a>.</p>
         </Section>
 

@@ -39,6 +39,8 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 | **Account data** | Google ID (`sub` claim) | Google OAuth |
 | **Account data** | Profile picture URL | Google OAuth |
 | **Game metadata** | Opponent name, game date, tournament name, game type | User-provided when adding a game |
+| **Player intro data** | A player photo, the player's name, and short display facts (playing position, graduation year/class, and team name), plus any free text you type onto an intro card | User-provided when you build an intro card for a player profile |
+| **Parental-consent attestation** | A timestamp recording that the account holder attested they are the parent or guardian, consent to using the player's likeness, and understand it becomes publicly visible to anyone they share a link with | Recorded when you first create an intro card for a profile |
 | **Payment data** | Credit card and billing details | Processed entirely by Stripe; never stored on our servers |
 
 ### Information Collected Automatically
@@ -63,10 +65,17 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 
 We do not extract biometric data from videos. Our framing (crop/zoom) feature uses manual crop controls, not facial recognition or detection. We do not extract GPS or location data from video metadata. We do not verify the source, ownership, or licensing status of video content uploaded by users.
 
+### Player Intro Cards
+
+**Player photos, names, and display facts.** The Service lets you build "intro card" graphics for a youth player using a photo you upload, the player's name, and a small, fixed set of display facts you type in — the player's playing position, graduation year (class), and team name — along with any free text you choose to add. These facts are optional display fields you enter for the card; they are not derived from the video, and no birthdate, age, height, home address, school, or other sensitive identifier is collected. **Because these cards depict a minor, we require the account holder to record a parental-consent attestation before the first card is created, and we surface a warning that a card attached to a shared reel or collection is publicly visible to anyone with the link.**
+
+We do not run facial recognition, facial templating, or any other biometric identification on player photos. Optional background removal (a "cut-out" of the player) is image segmentation only — it separates foreground from background and does not identify, match, or template a face.
+
 ### Information We Do NOT Collect
 
-- No biometric data (video framing/cropping is performed manually by users)
-- No facial recognition or automated identification of individuals in videos
+- No biometric data (video framing/cropping is performed manually by users; player-photo background removal is segmentation, not facial recognition)
+- No facial recognition or automated identification of individuals in videos or player photos
+- No birthdate, age, home address, or school is collected for players featured in intro cards (only playing position, graduation year, team name, and a photo the account holder provides)
 - No location data (beyond what may exist in video metadata, which we do not extract)
 - No advertising identifiers
 - No cross-site tracking
@@ -126,6 +135,7 @@ We share your information only with service providers who assist in operating th
 | Data Type | Retention Period |
 |-----------|-----------------|
 | Game footage & clips | 30 days after game expiry (per storage credits system) |
+| Player intro data (photo, name, position/class/team, free text, consent record) | Retained until you delete the intro card or your account; erased on either |
 | Account data (email, settings) | Retained until you request deletion |
 | Processing artifacts (GPU intermediates) | Automatically deleted after export completes |
 | Session tokens | 30 days maximum, or until logout |
@@ -173,13 +183,14 @@ We will verify your identity before fulfilling requests. We respond within 45 da
 
 - **Children are data subjects in videos, not account holders.** Our users are adults who upload and edit video of youth sporting events. Children appear in video content uploaded by their parent, guardian, or authorized coach.
 - **We do not knowingly collect personal information from children under 13** (or under 16 for CCPA purposes).
-- **No biometric data is extracted.** Video framing and cropping are manual operations performed by the user. We do not use facial recognition or detection.
-- **No automated identification** of individuals in videos is performed.
-- **No profiles of depicted individuals.** We do not build profiles of individuals who appear in videos.
+- **No biometric data is extracted.** Video framing and cropping are manual operations performed by the user. We do not use facial recognition or detection on video or on player photos. Optional player-photo background removal is image segmentation, not facial recognition.
+- **No automated identification** of individuals in videos or photos is performed.
+- **Player intro cards are parent-created and consent-gated.** When you build an intro card for a youth player, you provide the player's photo, name, and a small set of display facts (playing position, graduation year, team name). We record your attestation that you are the parent or guardian and consent to using the player's likeness before the first card is created, and we do not collect a birthdate, age, address, or school. These fields are display data for a graphic you create — we do not use them to build a behavioral or marketing profile of the child.
+- **Public visibility.** A card attached to a reel or collection you share becomes visible to anyone who has the share link. You control whether, and with whom, to share.
 
 If you believe a child under 13 has somehow created an account, please contact us immediately at [privacy@reelballers.com](mailto:privacy@reelballers.com) and we will delete the account.
 
-**Parental rights:** Parents/guardians who have uploaded video content of their children retain full control. They may delete any content at any time through the app, or request full account deletion.
+**Parental rights.** Parents/guardians who have uploaded video content or created intro cards for their children retain full control. They may delete any content — including a player's photo, name, and display facts — at any time through the app, or request full account deletion. All player-intro data (the photo, the parent-typed facts, and the consent record) is included in a data export you request and is erased when you delete the associated intro card or your account.
 
 ---
 
