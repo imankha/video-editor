@@ -186,6 +186,12 @@ publicly visible when shared**.
 | — | [T5225](T5225-overlay-text-layer.md) — Overlay text layer | Timeline layer + clip-snapping range + burn-in in both render loops. Needs only T5180, so it can run early. |
 | 6 | [T5230](T5230-childrens-data-compliance.md) — Children's-data compliance | Consent record, retention/deletion in `privacy.py`, no-face-recognition guardrail, privacy-policy update. Gates public launch. |
 | — | [T5200](T5200-player-cutout.md) — Player cut-out | Optional enhancement; no longer blocks T5210. |
+| — | [T6530](../T6530-intro-card-discoverability-ux.md) — Discoverability UX pass | Research + decision (DECIDED 2026-08-08), split into the 4 tasks below. |
+| — | [T6660](T6660-rename-athlete-intro-card.md) — Rename to "Athlete Intro Card" | User-facing copy sweep, final naming decision. |
+| — | [T6670](T6670-card-selector-inline-create-flow.md) — Card selector inline create flow | Create a card from the picker, land back on selection with it. |
+| — | [T6680](T6680-default-athlete-intro-card-provisioning.md) — Default card before user creates one | Needs Architecture design gate (consent-gate + resolution-semantics interaction). |
+| — | [T6690](T6690-nonactive-profile-dead-end-fix.md) — Non-active-profile dead end fix | Real "Switch & manage" action replaces dead grey text. |
+| — | [T6700](T6700-owner-inapp-playback-intro.md) — Owner in-app playback intro | Owner's own Play button (reel + collection) doesn't show the intro card, unlike T5220's 4 egress paths. Needs Architecture design gate (CollectionPlayer.jsx has no pause hook). |
 
 ```mermaid
 graph LR
