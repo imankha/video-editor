@@ -292,6 +292,111 @@ async function mountRichTextAndMeasure(page, spec, w, h) {
   return { box, computed };
 }
 
+// T6640 round 3 — card-level collision regression (design §4, extends this
+// spec per rounds-1-2 §2c). Root cause (design §1): the card preview computed
+// a title's wrapped line count TWICE — once in
+// introCardPreviewElements.js::layout (to RESERVE height for the block below
+// it) and once again inside RichText.jsx (to actually DRAW the glyphs) — with
+// different font-family strings and independent settle loops. At the
+// `broadcast` composition's title size (0.068, right at the wrap boundary),
+// the two disagreed: layout() reserved 1 line while RichText drew 2, so the
+// title's second line landed on top of the primary fact below it.
+//
+// The fix (design §2 Option 1, shipped by Stage 4): layout() emits the
+// ALREADY-COMPUTED `lines` into each element's TextSpec; RichText renders
+// those verbatim instead of re-deriving them — ONE wrap decision now feeds
+// BOTH the reserved height and the drawn glyphs, so the two can no longer
+// disagree.
+//
+// This must run in a REAL BROWSER (not jsdom — see design §0 "what the matrix
+// does NOT prove" and T5380/T6610–T6480 false-green precedent: jsdom has no
+// FontFaceSet and canvas metrics never settle, so it cannot exhibit the
+// font-settle race this bug is made of).
+//
+// No existing route mounts the full <IntroCardPreview> card component for
+// Playwright (only /debug/rich-text mounts a bare <RichText>, T5180's seam).
+// Rather than inventing a new debug route (a production-code change, out of
+// scope for the Tester phase), this reuses the EXISTING /debug/rich-text seam
+// twice — once per element — with specs computed by the REAL
+// introCardPreviewElements.layout() mirror (imported in-page via Vite's dev
+// `/src/...` module path, same pattern T4100-dedup-honest-message.spec.js
+// uses for in-page store imports), so the title/fact1 specs under test are
+// byte-identical to what the actual card preview would produce for the exact
+// live-repro parameters (broadcast composition, 9:16, a wrapping two-word
+// name) — not hand-rolled positions that could drift from the real layout.
+test.describe('T6640 round 3 — card title/fact collision (real browser, broadcast composition)', () => {
+  skipOnDeployedTarget(
+    test,
+    "import()s /src/components/introcards/introCardPreviewElements.js (Vite-dev path; 404s on a deployed build)"
+  );
+
+  // Invented name (no PII), matching the design's exact live-repro composition
+  // (broadcast) and aspect (9:16) — the one combination where rounds-1-2 left
+  // the residual overlap (recruiting already agreed on 2 lines both sides).
+  const CARD = { treatment: 'gold', shown_fields: ['position'] };
+  const PROFILE = { full_name: 'Anastasia Wintergreen', position: 'Midfielder' };
+  const COMPOSITION = 'broadcast';
+  const ASPECT = '9:16';
+  const { w: FRAME_W, h: FRAME_H } = RESOLUTIONS[0]; // 1080x1920 (9:16 canonical)
+
+  test('title and primary-fact ink boxes never intersect (the exact reported collision)', async ({ page }) => {
+    await authenticateForSeams(page);
+
+    // Compute the REAL layout()-produced specs for this card, in-page (needs
+    // the browser's canvas for wrapLines/measureFontMetricsPx — see
+    // introCardPreviewElements.js — so this can't run in the Node test body).
+    const { titleSpec, fact1Spec } = await page.evaluate(
+      async ({ card, profile, composition, aspect, frameW, frameH }) => {
+        const { buildPreviewElements } = await import(
+          '/src/components/introcards/introCardPreviewElements.js'
+        );
+        const els = buildPreviewElements(card, profile, composition, aspect, frameW, frameH);
+        return {
+          titleSpec: els.find((e) => e.slot === 'title')?.spec ?? null,
+          fact1Spec: els.find((e) => e.slot === 'fact1')?.spec ?? null,
+        };
+      },
+      { card: CARD, profile: PROFILE, composition: COMPOSITION, aspect: ASPECT, frameW: FRAME_W, frameH: FRAME_H }
+    );
+
+    expect(titleSpec, 'layout() must produce a title element for this card').not.toBeNull();
+    expect(fact1Spec, 'layout() must produce a fact1 element for this card').not.toBeNull();
+
+    const { box: titleBox } = await mountRichTextAndMeasure(page, titleSpec, FRAME_W, FRAME_H);
+    const { box: factBox } = await mountRichTextAndMeasure(page, fact1Spec, FRAME_W, FRAME_H);
+
+    expect(titleBox, 'title did not render a measurable ink box').not.toBeNull();
+    expect(factBox, 'fact1 did not render a measurable ink box').not.toBeNull();
+
+    // Sanity check this IS the wrap-boundary repro (RichText actually drew 2
+    // lines for the title) — otherwise this test would pass vacuously even
+    // with the pre-fix bug, since a single-line title never had anywhere to
+    // collide. Checked against the ACTUAL RENDERED box (not layout()'s
+    // not-yet-existent `lines` field, which is exactly what this test is
+    // proving is missing pre-fix) — a 2-line title's ink box is well over
+    // one line height tall.
+    const titleFontPxApprox = titleSpec.size * FRAME_H;
+    expect(
+      titleBox.height,
+      'expected the long two-word name to actually render as 2 lines at the broadcast composition\'s ' +
+        'title size (the exact wrap-boundary condition from design §1) — a single-line box would be ' +
+        'roughly one line height tall, not this'
+    ).toBeGreaterThan(titleFontPxApprox * 1.3);
+
+    // No vertical overlap between the two ink boxes — this is the reserved
+    // height (layout()'s `lines`) agreeing with the rendered height
+    // (RichText's drawn `lines`), the collision made structurally impossible
+    // by construction once both read the SAME `lines` array (design §2).
+    const titleBottom = titleBox.y + titleBox.height;
+    const factTop = factBox.y;
+    expect(
+      titleBottom,
+      `title ink box (y=${titleBox.y}, h=${titleBox.height}, bottom=${titleBottom}) must not extend past ` +
+        `fact1's ink box top (y=${factTop}) — a positive gap means no collision`
+    ).toBeLessThanOrEqual(factTop);
+  });
+});
+
 test.describe('T5180 text engine parity — backend renderer vs RichText.jsx', () => {
   for (const font of FONT_KEYS) {
     for (const { w, h } of RESOLUTIONS) {
