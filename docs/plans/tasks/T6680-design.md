@@ -2,7 +2,8 @@
 
 **Task:** [T6680](player-intro/T6680-default-athlete-intro-card-provisioning.md).
 **Tier:** L (Architecture design gate). **Epic:** [Player Intro + Rich Text](player-intro/EPIC.md).
-**Status of this doc:** awaiting user approval (v2). No source code is written until approved.
+**Status of this doc:** **APPROVED** (v2, 2026-08-09) — all 5 open questions in §0 resolved. Proceeding
+to implementation.
 
 > **What changed in v2 (2026-08-09):** superseded by user direction — the default / auto-inherited
 > intro card concept is being **removed**, not provisioned-and-gated. v1 designed a lazily-provisioned
@@ -13,38 +14,24 @@
 
 ---
 
-## 0. Open Questions (require a decision before / during implementation)
+## 0. Open Questions — RESOLVED 2026-08-09 (user approval)
 
 The direction resolves the four *original* questions (they presupposed a default, which no longer
-exists). It raises new ones — all are **product/UX or remediation scope**, not code mechanics:
+exists). It raised five new ones — all **product/UX or remediation scope**, not code mechanics — now
+answered:
 
-- [ ] **OQ1 — No-intro-until-attach is acceptable?** After this change a reel/collection with no
-  explicit card attached plays with **no intro at all** (previously a qualifying reel silently grew the
-  profile default). This is the intended end state of the direction, but confirm you are comfortable
-  that the out-of-box state for every reel is *no intro* until the user acts.
-- [ ] **OQ2 — Picker: optional → prompted?** The reel/collection picker
-  (`IntroCardCarousel`) currently offers an "inherit my default" state. That state disappears. Should
-  the picker (a) simply drop the inherit option, leaving *[specific card | no intro]* with **no-intro
-  as the initial selection**, or (b) actively prompt/nudge the user to attach a card (e.g. an empty
-  "Add an intro" affordance on new reels)? This is the one UX decision that gates the frontend slice.
-- [ ] **OQ3 — Existing reels currently showing the inherited default.** Any reel/collection in prod
-  today with `intro_card_id IS NULL` **and** a qualifying duration is *currently* showing the profile
-  default on egress. After this change those reels **silently stop showing an intro**. Two sub-options:
-  (a) **clean break** — accept that they lose the intro until the user explicitly re-attaches (simplest,
-  matches the direction); or (b) **preserve-behavior migration** — a one-time data migration that, for
-  each such reel on a **consented** profile, writes the concrete default id into `intro_card_id`
-  (converting today's implicit inherit into an explicit attach, preserving what the user sees while
-  still closing the hole for **unconsented** profiles). Recommendation below (Decision 2); needs your
-  call because (b) makes a product choice on the user's behalf.
-- [ ] **OQ4 — Remediation of already-frozen unconsented shares.** The hole is **live now** (see §1.4):
-  collection shares created with "use my default" by an **unconsented** profile have **already frozen**
-  a minor's default card id into durable public links. This fix stops **new** such freezes but does not
-  retract existing ones. Is a remediation sweep of existing public shares in scope here, or is it
-  T5230's retention/purge responsibility (recommendation: **out of scope here**, flag to T5230)?
-- [ ] **OQ5 — Retire the `is_default` UI concept too, or leave dormant badges?** Once nothing inherits,
-  a card badged "Default" is a label that no longer *does* anything (see §1.5 for every surface). The
-  coherent end state removes the badge/selector; the minimal end state leaves them as harmless-but-
-  misleading labels. Recommendation below (Decision 4): retire end-to-end in this task.
+- [x] **OQ1 — No-intro-until-attach is acceptable?** **CONFIRMED.** Out-of-box state for every reel is
+  *no intro* until the user explicitly attaches a card. Proceed.
+- [x] **OQ2 — Picker: optional → prompted?** **(a)** — drop the inherit option only. Picker becomes
+  *[specific card | no intro]*, defaulting to no intro. A prompt-to-attach nudge affordance is explicitly
+  **out of scope** for this task (noted as a possible future follow-up, not built here).
+- [x] **OQ3 — Existing reels currently showing the inherited default.** **(a) clean break** — no
+  migration. No Migration agent needed for this task.
+- [x] **OQ4 — Remediation of already-frozen unconsented shares.** **Out of scope for this task.**
+  T5230's retention/purge scope is the right owner for remediating shares frozen during the live-hole
+  window; this task only stops *new* exposure.
+- [x] **OQ5 — Retire the `is_default` UI concept too, or leave dormant badges?** **(a)** — retire
+  end-to-end per Decision 4 as already written.
 
 ---
 
