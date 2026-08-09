@@ -23,7 +23,7 @@ import { IntroCardCarousel } from './IntroCardCarousel';
 export function IntroCardPicker({
   isOpen,
   onClose,
-  title = 'Intro card',
+  title = 'Athlete Intro Card',
   cards,
   profile,
   selectedId,

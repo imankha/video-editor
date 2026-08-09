@@ -447,7 +447,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                   onClick={() => setShowIntroCards(true)}
                   className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors"
                 >
-                  Intro cards
+                  Athlete Intro Cards
                 </button>
               ) : (
                 <button
@@ -455,7 +455,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                   onClick={handleSwitchAndManageCards}
                   className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors"
                 >
-                  Switch to &quot;{editingProfile.name}&quot; &amp; manage cards
+                  Switch to &quot;{editingProfile.name}&quot; &amp; manage Athlete Intro Cards
                 </button>
               )}
             </div>

@@ -55,20 +55,20 @@ describe('ManageProfilesModal — non-active-profile card management (T6690)', (
   it('shows a real button instead of dead grey text for a non-active profile', () => {
     openEditForNonActiveProfile();
     expect(screen.queryByText(/Switch to this profile to manage its intro cards/)).toBeNull();
-    expect(screen.getByRole('button', { name: /Switch to "Other Player" & manage cards/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Switch to "Other Player" & manage Athlete Intro Cards/ })).toBeTruthy();
   });
 
   it('clicking it switches profile and opens the card library in one action', async () => {
     openEditForNonActiveProfile();
-    fireEvent.click(screen.getByRole('button', { name: /Switch to "Other Player" & manage cards/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Switch to "Other Player" & manage Athlete Intro Cards/ }));
 
     expect(h.switchProfile).toHaveBeenCalledWith('p2');
     await waitFor(() => expect(screen.getByTestId('intro-cards-modal')).toBeTruthy());
   });
 
-  it('the active profile still shows the real "Intro cards" button unchanged', () => {
+  it('the active profile still shows the real "Athlete Intro Cards" button unchanged', () => {
     render(<ManageProfilesModal isOpen={true} onClose={vi.fn()} />);
     fireEvent.click(screen.getAllByTitle(/Edit name/)[0]);
-    expect(screen.getByRole('button', { name: 'Intro cards' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Athlete Intro Cards' })).toBeTruthy();
   });
 });

@@ -109,7 +109,7 @@ export function IntroCardCarousel({
       <div
         className="flex gap-2.5 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-thin"
         role="listbox"
-        aria-label="Intro card"
+        aria-label="Athlete Intro Card"
       >
         <NoIntroTile
           selected={isNone || isInheritWithNothingToInherit}
@@ -139,7 +139,7 @@ export function IntroCardCarousel({
       </div>
 
       {sorted.length === 0 && (
-        <p className="text-xs text-gray-400">No intro cards yet.</p>
+        <p className="text-xs text-gray-400">No Athlete Intro Cards yet.</p>
       )}
 
       {isInherit && (

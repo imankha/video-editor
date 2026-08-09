@@ -547,7 +547,7 @@ export function DownloadsPanel({
     }
   };
   const handleRequestIntroConsent = () => {
-    toast.info('Open your profile menu -> Manage Profile -> Player Intro to give consent.');
+    toast.info('Open your profile menu -> Manage Profile -> Athlete Intro Card to give consent.');
   };
 
   // A compact metadata line for the tile scrim: date · duration · game-time.
