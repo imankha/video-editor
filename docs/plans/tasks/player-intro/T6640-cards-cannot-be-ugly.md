@@ -9,15 +9,39 @@ ownership lock below is cleared)
 
 ## Reproduced live 2026-08-09 (Playwright, real account, real card)
 
-Confirmed still present, exact same failure mode as the original report. Card "New card 2"
-(profile `9fa7378c`), **broadcast composition** (photo + Position + Team, Class unchecked), name
-"Mehdi Khabazian" wraps to 2 lines — the SAME wrap-collision class the root cause below describes,
-just observed in `broadcast` rather than `hero`. Measured via bounding boxes, not eyeballed: title
-box `y: 573.9–681.2`, Position fact ("Attacking Mid") box `y: 632.1–659.8` — fully inside the
-title's box, i.e. the second title line and the position fact render on top of each other.
-Toggling on the 3rd fact (Class → `recruiting` composition) removes the overlap for this name,
-confirming the bug is per-composition slot geometry, not universal — consistent with root cause A
-below (fixed fractional-y slots per composition, not measured from actual rendered line count).
+Confirmed still present. Card "New card 2" (profile `9fa7378c`), **broadcast composition** (photo
++ Position + Team, Class unchecked), name "Mehdi Khabazian" wraps to 2 lines. Measured via
+bounding boxes, not eyeballed: title box `y: 573.9–681.2`, Position fact ("Attacking Mid") box
+`y: 632.1–659.8` — fully inside the title's box, i.e. the second title line and the position fact
+render on top of each other. Toggling on the 3rd fact (Class → `recruiting` composition) removes
+the overlap for this exact name, so it is NOT universal across compositions — it reproduces in
+`broadcast`, not (for this name) in `recruiting`.
+
+**IMPORTANT — this task file predates a real partial implementation and is WRONG about current
+code state in at least one place; verify everything below at Stage 1, do not trust either the
+task file's claims OR this note blindly.** `git log`/`git show bb53188b` shows a merge "T6640
+rounds 1-2 + v040 default backfill" (2026-08-06) that rewrote `intro_card_geometry.py` (496 lines)
+to REPLACE the fixed-fractional-y `slots` dict described in root cause A below with a measured
+`_reflow` (anchor + rhythm) system — confirmed still present in the current file (`_reflow`,
+`GEOMETRY` comment "T6640 replaced the old fixed-y `slots` dict with `reflow`"). The FRONTEND
+preview (`introCardPreviewElements.js`: `countLines`, `fitTitle`, `gapBetween`) already measures
+real line counts rather than assuming a fixed position — so both backend and frontend already
+moved off the exact mechanism root cause A describes as missing.
+
+**What this means for scope:**
+- **Root cause A as WRITTEN below (fixed fractional-y, one-line-title assumption) is STALE — the
+  reflow system it describes as needed already exists.** The bug I reproduced live is therefore a
+  RESIDUAL defect within the existing reflow system for specific compositions (confirmed:
+  `broadcast` with a 2-line name), not an absent system. Find why `_reflow`'s anchor/rhythm math
+  under-reserves space for a 2-line title in at least the `broadcast` case — do not re-implement
+  reflow from scratch.
+- **Item B's claim that `IntroCardRail.jsx` "currently passes `hideText/hideSize/hideAlign/
+  collapseEffects` + `colorSwatches` to the shared `TextSpecEditor`" is FALSE as of 2026-08-09** —
+  grepped directly: `TextSpecEditor` appears only in a comment in that file (about T6630's
+  ownership lock, now cleared), never actually rendered. Item B (template owns typography, user
+  controls removed from the card rail) does NOT appear to be built yet — verify at Stage 1.
+- **Items C (composition polish) and D (migrate stored per-slot font/colour) status unknown** —
+  audit before assuming either is done or not done.
 
 User, 2026-08-06, with a 9:16 and a 16:9 card screenshot:
 
