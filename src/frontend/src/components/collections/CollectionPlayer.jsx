@@ -5,8 +5,8 @@ import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
-import { ProgressTrack } from '../shared/ProgressTrack';
 import { PlayheadHandle } from '../shared/PlayheadHandle';
+import { CompositeScrubber } from '../introcards/CompositeScrubber';
 
 const SWIPE_THRESHOLD_PX = 48;
 
@@ -43,10 +43,25 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     plain string — this component stays store-free. Currently
  *                                     wired only from DownloadsPanel (My Reels); the public share
  *                                     viewer, RankingGame, and the diag harness omit it on purpose.
+ * @param {boolean=} renderScrubber - T6710: default true. When false, suppresses the internal
+ *                                     segmented bar entirely — used by IntroStoryPlayer, which
+ *                                     supplies its own single composite bar spanning the intro
+ *                                     AND the reels. Every other caller omits this prop and keeps
+ *                                     today's internal bar, now rendered via the shared weighted
+ *                                     CompositeScrubber (proportional widths, §7.3 Option B) instead
+ *                                     of the old equal-width flex-1 cells.
+ * @param {number|null=} initialSeekFraction - T6710: fraction (0..1) of `initialIndex`'s reel to
+ *                                     seek to once, applied via the SAME `goTo` the internal bar's
+ *                                     click-to-seek uses (no second seek mechanism). Used by
+ *                                     IntroStoryPlayer to land a cross-boundary scrub (from the
+ *                                     intro into the reels) at the right offset instead of always
+ *                                     restarting reel 0 from 0. Omitted/null -> today's behavior
+ *                                     (plain mount at initialIndex, no extra seek).
  */
 export function CollectionPlayer({
   reels,
   initialIndex = 0,
+  initialSeekFraction = null,
   title,
   onClose,
   onReelChange,
@@ -58,6 +73,7 @@ export function CollectionPlayer({
   onReRank,
   reRankLoadingId,
   handleGlyph,
+  renderScrubber = true,
 }) {
   const videoRef = useRef(null);
   const panelRef = useRef(null);
@@ -88,6 +104,20 @@ export function CollectionPlayer({
     onAllEnded: handleAllEnded,
     onReelChange: handleReelChange,
   });
+
+  // T6710: apply a one-shot cross-boundary landing fraction from a composite
+  // scrubber (IntroStoryPlayer) via the SAME goTo the internal bar's
+  // click-to-seek already uses — no second seek mechanism. Re-applies only
+  // when the caller hands a NEW (index, fraction) pair, not on every render.
+  const appliedSeekRef = useRef(null);
+  useEffect(() => {
+    if (initialSeekFraction == null) return;
+    const key = `${initialIndex}:${initialSeekFraction}`;
+    if (appliedSeekRef.current === key) return;
+    appliedSeekRef.current = key;
+    goTo(initialIndex, initialSeekFraction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialIndex, initialSeekFraction]);
 
   // Keyboard: arrows navigate, space toggles, escape closes.
   useEffect(() => {
@@ -174,15 +204,6 @@ export function CollectionPlayer({
     return reel.name || title;
   };
 
-  // Click a segment -> jump to that reel and seek to the fraction of its
-  // duration matching where along the bar the click landed. The View only
-  // computes the fraction from the DOM; the hook owns the seek behavior.
-  const handleSegmentClick = (e, i) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = rect.width ? (e.clientX - rect.left) / rect.width : 0;
-    goTo(i, frac);
-  };
-
   if (!activeReel) return null;
 
   const isPortrait = activeReel.aspect_ratio === RATIO.PORTRAIT;
@@ -212,52 +233,39 @@ export function CollectionPlayer({
       {/* Segmented progress bar — each segment is a scrub target: hover shows the
           reel name, click jumps to that reel and seeks to the clicked fraction.
           The visible bar stays 4px; a taller transparent hit region (py-2) makes
-          it easy to hit (T4760 pattern) without changing the visual. */}
-      <div className="flex gap-1 px-3 pt-2">
-        {reels.map((reel, i) => {
-          const label = reelLabel(reel);
-          return (
-            <button
-              key={i}
-              type="button"
-              aria-label={label}
-              onClick={(e) => handleSegmentClick(e, i)}
-              onMouseEnter={() => setHoverIndex(i)}
-              onMouseLeave={() => setHoverIndex((h) => (h === i ? null : h))}
-              className="group relative flex-1 py-2 cursor-pointer"
-            >
-              <ProgressTrack
-                trackClassName="h-1 rounded-full bg-white/25 overflow-hidden"
-                fillClassName="h-full bg-white rounded-full"
-                progress={
-                  i < activeIndex ? 100
-                    : i === activeIndex ? segmentProgress * 100
-                    : 0
-                }
+          it easy to hit (T4760 pattern) without changing the visual. T6710:
+          generalized to the shared weighted CompositeScrubber (proportional
+          widths, §7.3 Option B) — suppressed via renderScrubber=false when a
+          composite (IntroStoryPlayer) supplies its own single bar instead. */}
+      {renderScrubber && (
+        <CompositeScrubber
+          segments={reels.map((reel, i) => ({
+            kind: 'reel',
+            label: reelLabel(reel),
+            durationSec: reel.duration,
+            fillPercent: i < activeIndex ? 100 : i === activeIndex ? segmentProgress * 100 : 0,
+          }))}
+          onScrub={({ index, fraction }) => goTo(index, fraction)}
+          hoverIndex={hoverIndex}
+          onHoverChange={setHoverIndex}
+          renderExtra={(seg, i) => (
+            // T6320: the sport-ball playhead lives on the ACTIVE segment only,
+            // and only when a glyph was resolved (My Reels today). Rendered as
+            // a SIBLING of ProgressTrack, not nested inside it, because the
+            // track clips overflow (overflow-hidden) and the ball must be
+            // allowed to ride past a segment edge (Gate 3: allow overflow,
+            // don't clamp) rather than being cut off. The button's symmetric
+            // py-2 padding keeps top-1/2 centred on the track either way.
+            i === activeIndex && handleGlyph ? (
+              <PlayheadHandle
+                progress={segmentProgress * 100}
+                glyph={handleGlyph}
+                size={{ box: 16, font: 14 }}
               />
-              {/* T6320: the sport-ball playhead lives on the ACTIVE segment only,
-                  and only when a glyph was resolved (My Reels today). Rendered as
-                  a SIBLING of ProgressTrack, not nested inside it, because the
-                  track clips overflow (overflow-hidden) and the ball must be
-                  allowed to ride past a segment edge (Gate 3: allow overflow,
-                  don't clamp) rather than being cut off. The button's symmetric
-                  py-2 padding keeps top-1/2 centred on the track either way. */}
-              {i === activeIndex && handleGlyph && (
-                <PlayheadHandle
-                  progress={segmentProgress * 100}
-                  glyph={handleGlyph}
-                  size={{ box: 16, font: 14 }}
-                />
-              )}
-              {hoverIndex === i && label && (
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 max-w-[80vw] -translate-x-1/2 truncate rounded bg-black/80 px-2 py-1 text-xs text-white shadow">
-                  {label}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+            ) : null
+          )}
+        />
+      )}
 
       {/* Header: source game + in-match minute for the active reel (T3920),
           falling back to the group title for multi-clip reels with no game. */}

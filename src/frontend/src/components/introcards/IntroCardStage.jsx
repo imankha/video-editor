@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play, Square } from 'lucide-react';
 import { IntroCardPreview, resolveFraming } from './IntroCardPreview';
 import { MotionPreview } from './MotionPreview';
+import { useMotionPreviewAutoplay } from './useMotionPreviewAutoplay';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor } from '../../utils/introCardGeometry';
 import { ASPECT_OPTIONS } from './introCardEditorConstants';
@@ -97,6 +98,15 @@ export function IntroCardStage({
 
   const [playing, setPlaying] = useState(false);
   const dragRef = useRef(null);
+  // T6710: MotionPreview no longer self-completes via setTimeout(onDone) --
+  // it is purely currentTimeMs-driven/seekable now. The Play/Stop button
+  // still wants "play once, then stop", so drive it with the shared
+  // fallback-autoplay clock (also used by IntroPreRoll/IntroCardCarousel).
+  const stageDurationMs = (effectiveCard?.duration || 4.0) * 1000;
+  const previewTimeMs = useMotionPreviewAutoplay(stageDurationMs, {
+    active: playing,
+    onDone: () => setPlaying(false),
+  });
 
   const photoRectPx = {
     left: photoRect.x * box.w,
@@ -184,7 +194,7 @@ export function IntroCardStage({
             aspect={aspect}
             boxWidth={box.w}
             boxHeight={box.h}
-            onDone={() => setPlaying(false)}
+            currentTimeMs={previewTimeMs}
           />
         )}
       </div>

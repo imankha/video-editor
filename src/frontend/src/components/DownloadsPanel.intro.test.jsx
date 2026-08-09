@@ -1,22 +1,26 @@
-// T6700 -- owner in-app playback intro: DownloadsPanel gains an intro-playback
-// fetch + unmount/mount SWAP (design §5.2, §7) that does not exist yet as of
-// this session. `handlePlay` (single reel) and `onPlayCollection` (collection)
-// currently just `setStoryPlayer(...)` and render `<CollectionPlayer>`
-// directly -- no `intro`/`introShowing` state, no fetch to
-// `/api/downloads/{id}/intro-playback` or `/api/collections/intro-playback`,
-// no `<IntroPreRoll>` mount. These tests fail until Stage 4 wires the swap
-// exactly as SharedCollectionView.jsx already does (the copied precedent).
+// T6700 -- owner in-app playback intro: DownloadsPanel fetches the
+// intro-playback payload on the Play gesture (design §5.2, §7) and hands it
+// to the player. `handlePlay` (single reel) and `onPlayCollection`
+// (collection) fetch `/api/downloads/{id}/intro-playback` /
+// `/api/collections/intro-playback` and stash the result on
+// `storyPlayer.intro`.
+//
+// T6710: the render target changed from an unmount/mount
+// IntroPreRoll/CollectionPlayer SWAP ternary to a single composite,
+// `IntroStoryPlayer`, which owns the intro-vs-reels region ITSELF (see
+// IntroStoryPlayer.test.jsx for that composite's own region-routing
+// coverage). DownloadsPanel's job narrowed to "fetch on Play, hand the
+// payload to the composite" -- this file mocks IntroStoryPlayer as a simple
+// test-id marker exposing the props it received, so these tests stay a
+// focused unit test of DownloadsPanel's OWN fetch/state logic without
+// duplicating IntroStoryPlayer's internal region-switching coverage.
 //
 // Heavy child components (CollectionsTab, RankingGame, ConfidenceBanner) are
-// mocked to keep this a focused unit test of the swap/fetch logic living in
+// mocked to keep this a focused unit test of the fetch logic living in
 // DownloadsPanel itself, not a full-panel integration test. The mocked
 // CollectionsTab captures BOTH `renderCard` (the panel's per-reel card
 // factory, which wires handlePlay) and `onPlayCollection` so the test can
 // drive each play path exactly the way the real CollectionsTab does.
-// `CollectionPlayer` and `IntroPreRoll` are mocked as simple test-id markers
-// so we can assert genuine mount/unmount (not just prop values) -- the
-// design's "swap, not toggle" claim (§3) is only proven if CollectionPlayer
-// is truly ABSENT from the tree while the intro shows.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
@@ -92,21 +96,23 @@ vi.mock('./collections/CollectionsTab', () => ({
 vi.mock('./ranking/ConfidenceBanner', () => ({ ConfidenceBanner: () => null }));
 vi.mock('./ranking/RankingGame', () => ({ RankingGame: () => null }));
 
-vi.mock('./collections/CollectionPlayer', () => ({
-  CollectionPlayer: (props) => (
-    <div data-testid="collection-player" onClick={props.onClose}>
-      collection player: {props.title}
+// T6710: DownloadsPanel now mounts ONE composite (IntroStoryPlayer) instead
+// of separately mounting CollectionPlayer/IntroPreRoll itself -- mock the
+// composite as a marker exposing the intro/reels props it received. `onClick`
+// simulates the composite's own onClose forwarding (mirrors the old
+// CollectionPlayer mock's onClose wiring) so the close-then-reopen (R6) flow
+// still exercises DownloadsPanel's real state, not IntroStoryPlayer's
+// internals (covered separately by IntroStoryPlayer.test.jsx).
+vi.mock('./introcards/IntroStoryPlayer', () => ({
+  IntroStoryPlayer: (props) => (
+    <div
+      data-testid="intro-story-player"
+      data-has-intro={String(!!props.intro)}
+      onClick={props.onClose}
+    >
+      story player: {props.title}
     </div>
   ),
-}));
-
-vi.mock('./introcards/IntroPreRoll', () => ({
-  IntroPreRoll: (props) =>
-    props.intro ? (
-      <div data-testid="intro-pre-roll" onClick={props.onDone}>
-        intro pre-roll
-      </div>
-    ) : null,
 }));
 
 import { DownloadsPanel } from './DownloadsPanel';
@@ -159,9 +165,9 @@ async function clickPlayOnFirstReel() {
   fireEvent.click(playButton);
 }
 
-describe('DownloadsPanel intro-playback swap (T6700)', () => {
+describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)', () => {
   describe('single-reel play', () => {
-    it('fetches intro-playback and mounts IntroPreRoll instead of CollectionPlayer when intro is non-null', async () => {
+    it('fetches intro-playback and mounts IntroStoryPlayer with a non-null intro', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
       render(<DownloadsPanel onOpenProject={() => {}} />);
@@ -175,73 +181,53 @@ describe('DownloadsPanel intro-playback swap (T6700)', () => {
         );
       });
 
-      // Swap, not toggle: CollectionPlayer must be genuinely ABSENT while
-      // the intro shows (design §3), not merely hidden/toggled off.
+      // T6710: DownloadsPanel mounts ONE composite regardless of intro
+      // presence -- IntroStoryPlayer itself owns the intro-vs-reels region
+      // (covered by IntroStoryPlayer.test.jsx). This file only proves the
+      // fetched intro reached the composite.
       await waitFor(() => {
-        expect(screen.getByTestId('intro-pre-roll')).toBeTruthy();
+        expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('true');
       });
-      expect(screen.queryByTestId('collection-player')).toBeNull();
     });
 
-    it('never mounts IntroPreRoll and mounts the player immediately when intro-playback returns intro: null', async () => {
+    it('mounts IntroStoryPlayer with intro=null when intro-playback returns intro: null', async () => {
       mockApiFetch(null);
 
       render(<DownloadsPanel onOpenProject={() => {}} />);
       await clickPlayOnFirstReel();
 
       await waitFor(() => {
-        expect(screen.getByTestId('collection-player')).toBeTruthy();
+        expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('false');
       });
-      expect(screen.queryByTestId('intro-pre-roll')).toBeNull();
-    });
-
-    it('onDone flips the swap: IntroPreRoll unmounts and CollectionPlayer mounts', async () => {
-      mockApiFetch(SAMPLE_INTRO);
-
-      render(<DownloadsPanel onOpenProject={() => {}} />);
-      await clickPlayOnFirstReel();
-
-      const preRoll = await waitFor(() => screen.getByTestId('intro-pre-roll'));
-      fireEvent.click(preRoll); // fires onDone in our mock
-
-      await waitFor(() => {
-        expect(screen.getByTestId('collection-player')).toBeTruthy();
-      });
-      expect(screen.queryByTestId('intro-pre-roll')).toBeNull();
     });
   });
 
-  describe('open -> close -> open re-gates introShowing (R6)', () => {
-    it('does not leave a stale introShowing=true on reopen when the second play has no intro', async () => {
+  describe('open -> close -> open refetches on each Play (R6)', () => {
+    it('does not leave a stale intro on reopen when the second play has no intro', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
       render(<DownloadsPanel onOpenProject={() => {}} />);
       await clickPlayOnFirstReel();
-      await waitFor(() => expect(screen.getByTestId('intro-pre-roll')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('true'));
 
-      // Advance into the player, then close it (CollectionPlayer mock's
-      // onClick calls onClose) -- mirrors a real close from mid-playback.
-      fireEvent.click(screen.getByTestId('intro-pre-roll'));
-      await waitFor(() => expect(screen.getByTestId('collection-player')).toBeTruthy());
-      fireEvent.click(screen.getByTestId('collection-player'));
+      // Close (the mock's onClick forwards onClose) -- mirrors a real close
+      // from mid-playback.
+      fireEvent.click(screen.getByTestId('intro-story-player'));
+      await waitFor(() => expect(screen.queryByTestId('intro-story-player')).toBeNull());
 
-      await waitFor(() => {
-        expect(screen.queryByTestId('collection-player')).toBeNull();
-        expect(screen.queryByTestId('intro-pre-roll')).toBeNull();
-      });
-
-      // Reopen with a null-intro response this time -- introShowing must
-      // re-gate from the fresh payload, not carry over `true` from before.
+      // Reopen with a null-intro response this time -- must re-fetch and
+      // re-gate from the fresh payload, not carry over the prior intro.
       mockApiFetch(null);
       await clickPlayOnFirstReel();
 
-      await waitFor(() => expect(screen.getByTestId('collection-player')).toBeTruthy());
-      expect(screen.queryByTestId('intro-pre-roll')).toBeNull();
+      await waitFor(() => {
+        expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('false');
+      });
     });
   });
 
   describe('collection play', () => {
-    it('fetches /api/collections/intro-playback and swaps in IntroPreRoll for a non-null collection intro', async () => {
+    it('fetches /api/collections/intro-playback and passes a non-null intro to IntroStoryPlayer', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
       render(<DownloadsPanel onOpenProject={() => {}} />);
@@ -258,8 +244,9 @@ describe('DownloadsPanel intro-playback swap (T6700)', () => {
           expect.stringContaining('/api/collections/intro-playback'),
         );
       });
-      await waitFor(() => expect(screen.getByTestId('intro-pre-roll')).toBeTruthy());
-      expect(screen.queryByTestId('collection-player')).toBeNull();
+      await waitFor(() => {
+        expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('true');
+      });
     });
   });
 });

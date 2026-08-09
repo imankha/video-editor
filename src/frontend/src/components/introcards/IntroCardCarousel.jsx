@@ -41,6 +41,7 @@ import { Check } from 'lucide-react';
 import { IntroCardPreview } from './IntroCardPreview';
 import { IntroExposureNotice } from './IntroExposureNotice';
 import { MotionPreview } from './MotionPreview';
+import { useMotionPreviewAutoplay } from './useMotionPreviewAutoplay';
 import { CARD_ASPECTS } from '../../utils/introCardGeometry';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 
@@ -70,9 +71,11 @@ export function IntroCardCarousel({
 }) {
   const sorted = useMemo(() => sortNewestFirst(cards || []), [cards]);
   // Which card (if any) is currently PLAYING its motion preview -- a click
-  // starts it, MotionPreview's own onDone (or picking something else) clears
-  // it. Preview-only; the draft selection itself is `selectedId`, owned by
-  // the caller (round 3: IntroCardPicker buffers it until OK).
+  // starts it, the shared fallback-autoplay clock's onDone (or picking
+  // something else) clears it (T6710: MotionPreview itself no longer
+  // self-completes -- see useMotionPreviewAutoplay). Preview-only; the draft
+  // selection itself is `selectedId`, owned by the caller (round 3:
+  // IntroCardPicker buffers it until OK).
   const [previewCardId, setPreviewCardId] = useState(null);
 
   // T6680: NULL ("never explicitly chosen") and 0 ("deliberately off") both
@@ -178,6 +181,14 @@ function NoIntroTile({ selected, onSelect }) {
 }
 
 function CardChoiceTile({ card, profile, explicitlySelected, disabled, playing, onSelect, onPreviewDone }) {
+  // T6710: MotionPreview no longer self-completes -- it is purely
+  // currentTimeMs-driven/seekable now. This tile still wants the old
+  // "tap plays once, then clears" behavior, so it drives MotionPreview with
+  // the shared fallback-autoplay clock (also used by IntroPreRoll/
+  // IntroCardStage) instead of MotionPreview's own removed onDone.
+  const durationMs = (card?.duration || 4.0) * 1000;
+  const previewTimeMs = useMotionPreviewAutoplay(durationMs, { active: playing, onDone: onPreviewDone });
+
   return (
     <button
       type="button"
@@ -199,7 +210,8 @@ function CardChoiceTile({ card, profile, explicitlySelected, disabled, playing, 
 
       {/* Round 3: a click SELECTS *and* PLAYS the card's own motion preview
           -- T5205's MotionPreview reused verbatim, overlaid on top of the
-          static preview and self-clearing via onDone. */}
+          static preview, driven by the shared fallback-autoplay clock
+          (T6710) which self-clears via onPreviewDone. */}
       {playing && (
         <MotionPreview
           card={card}
@@ -207,7 +219,7 @@ function CardChoiceTile({ card, profile, explicitlySelected, disabled, playing, 
           aspect={CARD_ASPECTS.portrait}
           boxWidth={TILE_W}
           boxHeight={TILE_H}
-          onDone={onPreviewDone}
+          currentTimeMs={previewTimeMs}
         />
       )}
 

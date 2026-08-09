@@ -3,21 +3,26 @@
 // SharedCollectionView), mirroring BrandedEndCard's mount-gated pattern in
 // reverse (design §5, §9).
 //
-// IntroPreRoll.jsx does not exist yet -- this import fails until Stage 4
-// creates it. MotionPreview is mocked so this stays a pure unit test of the
-// wrapper's gating/onDone-forwarding logic, not the render engine.
+// T6710: MotionPreview stopped self-completing via setTimeout(onDone) -- it
+// is now purely currentTimeMs-driven/seekable, and end-of-intro ownership
+// moved to the composite (useIntroPlayback's onIntroEnded, owner in-app path
+// only). IntroPreRoll's OTHER two callers (SharedVideoOverlay,
+// SharedCollectionView, out of this task's scope) still call it the old way
+// -- no currentTimeMs, relying on `onDone` firing once. IntroPreRoll now owns
+// a small internal fallback clock for exactly that case (see IntroPreRoll.jsx
+// useFallbackClock) so those two files needed zero changes. MotionPreview is
+// mocked here so this stays a pure unit test of IntroPreRoll's own
+// gating/currentTimeMs-threading/fallback-onDone logic, not the render engine.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 
 vi.mock('./MotionPreview', () => ({
-  MotionPreview: vi.fn(({ onDone }) => {
-    return (
-      <button type="button" data-testid="mock-motion-preview" onClick={onDone}>
-        mock motion preview
-      </button>
-    );
-  }),
+  MotionPreview: vi.fn(({ currentTimeMs }) => (
+    <div data-testid="mock-motion-preview" data-current-time-ms={currentTimeMs}>
+      mock motion preview
+    </div>
+  )),
 }));
 
 import { IntroPreRoll } from './IntroPreRoll';
@@ -53,12 +58,43 @@ describe('IntroPreRoll', () => {
     expect(MotionPreview).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onDone after MotionPreview's onDone fires", () => {
-    const onDone = vi.fn();
-    render(<IntroPreRoll intro={SAMPLE_INTRO} onDone={onDone} />);
-    expect(onDone).not.toHaveBeenCalled();
-    screen.getByTestId('mock-motion-preview').click();
-    expect(onDone).toHaveBeenCalledTimes(1);
+  it('calls onDone once its own fallback clock reaches the card duration (legacy no-currentTimeMs callers)', () => {
+    // SAMPLE_INTRO has no `duration` -> IntroPreRoll's fallback default of
+    // 4.0s applies (mirrors MotionPreview's own `card?.duration || 4.0`).
+    let rafCb = null;
+    let nowMs = 0;
+    const realRaf = global.requestAnimationFrame;
+    const realCancel = global.cancelAnimationFrame;
+    const realNow = global.performance.now;
+    global.requestAnimationFrame = vi.fn((cb) => { rafCb = cb; return 1; });
+    global.cancelAnimationFrame = vi.fn();
+    global.performance.now = () => nowMs;
+    try {
+      const onDone = vi.fn();
+      render(<IntroPreRoll intro={SAMPLE_INTRO} onDone={onDone} />);
+      expect(onDone).not.toHaveBeenCalled();
+
+      const tick = (ms) => {
+        nowMs += ms;
+        const cb = rafCb;
+        rafCb = null;
+        act(() => { cb && cb(nowMs); });
+      };
+
+      tick(2000);
+      expect(onDone).not.toHaveBeenCalled();
+      tick(2001); // crosses the 4000ms fallback duration
+      expect(onDone).toHaveBeenCalledTimes(1);
+    } finally {
+      global.requestAnimationFrame = realRaf;
+      global.cancelAnimationFrame = realCancel;
+      global.performance.now = realNow;
+    }
+  });
+
+  it('threads an externally-driven currentTimeMs straight through and never runs its own fallback clock (owner in-app path)', () => {
+    render(<IntroPreRoll intro={SAMPLE_INTRO} currentTimeMs={1234} />);
+    expect(screen.getByTestId('mock-motion-preview').dataset.currentTimeMs).toBe('1234');
   });
 
   it('reassembles the split payload into the card/profile shape MotionPreview reads facts/photo from', () => {

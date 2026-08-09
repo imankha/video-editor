@@ -5,6 +5,26 @@
 // (design §5) -- preview == playback == export by construction, no second
 // animation path for the same card.
 //
+// T6710: MotionPreview is now currentTime-driven/seekable and no longer runs
+// its own auto-continue timer (that ownership moved to useIntroPlayback, the
+// owner in-app composite's clock -- design §4(i)). IntroStoryPlayer (the
+// owner in-app path) passes a driven `currentTimeMs` straight through and
+// owns `onDone`-equivalent handling itself (via onIntroEnded), so it never
+// passes `onDone` here.
+//
+// SharedVideoOverlay and SharedCollectionView are explicitly OUT of this
+// task's scope (design §1.1/§1.3 -- they keep their own separate swap
+// ternary) but BOTH still call this component the old way: no
+// `currentTimeMs`, an `onDone` they rely on to flip `introShowing` off. To
+// keep them working unmodified, THIS wrapper (not MotionPreview) now owns a
+// small self-contained fallback clock -- active only when the caller passes
+// `onDone` and does not drive `currentTimeMs` itself -- that ticks a local
+// `currentTimeMs` via rAF up to the card's duration and then fires `onDone`
+// once. The owner in-app path never sets `onDone`, so it always takes the
+// externally-driven branch below; the legacy callers keep their exact old
+// behavior (auto-plays once, then advances) without changing a line in
+// either of their files.
+//
 // The backend payload (design §5.4) splits what the editor keeps on ONE
 // object into `{card, previewUrl, field_values, profile}` -- `previewUrl`
 // separate from `card` (the card row has no live R2 URL of its own), and
@@ -19,6 +39,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MotionPreview } from './MotionPreview';
+import { useMotionPreviewAutoplay } from './useMotionPreviewAutoplay';
 import { CARD_ASPECTS } from '../../utils/introCardGeometry';
 
 const MAX_W = 480;
@@ -35,6 +56,10 @@ export function IntroPreRoll({
   intro,
   aspect = CARD_ASPECTS.portrait,
   onDone,
+  // T6710: driven clock from the owner in-app composite (useIntroPlayback,
+  // via IntroStoryPlayer). Omitted -> this wrapper drives itself via
+  // useMotionPreviewAutoplay below (the SharedVideoOverlay/SharedCollectionView path).
+  currentTimeMs,
   // Default anchors inside a relative player container (SharedVideoOverlay).
   // Fullscreen fixed players (SharedCollectionView, z-[90] BrandedEndCard)
   // must pass a fixed, appropriately-layered override -- mirrors
@@ -43,6 +68,9 @@ export function IntroPreRoll({
 }) {
   const wrapRef = useRef(null);
   const [avail, setAvail] = useState({ w: MAX_W, h: MAX_H });
+  const isExternallyDriven = currentTimeMs != null;
+  const durationMs = (intro?.card?.duration || 4.0) * 1000;
+  const fallbackMs = useMotionPreviewAutoplay(durationMs, { active: !isExternallyDriven && !!intro, onDone });
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -75,7 +103,7 @@ export function IntroPreRoll({
           aspect={aspect}
           boxWidth={box.w}
           boxHeight={box.h}
-          onDone={onDone}
+          currentTimeMs={isExternallyDriven ? currentTimeMs : fallbackMs}
         />
       </div>
     </div>
