@@ -17,7 +17,6 @@ Design: docs/plans/tasks/T5215-design.md. Acceptance criteria mapping:
 """
 
 import io
-import logging
 import sqlite3
 from unittest.mock import patch
 
@@ -100,52 +99,16 @@ def _seed_published_final(db_path, intro_card_id=None, duration=30.0):
 #    order every consumer shares.
 # ===========================================================================
 
-class TestResolveIntroCardIdMatrix:
-    def test_zero_always_none_at_any_duration(self):
-        assert resolve_intro_card_id(0, 5.0, 3, 20.0) is None
-        assert resolve_intro_card_id(0, 500.0, 3, 20.0) is None
-        assert resolve_intro_card_id(0, None, 3, 20.0) is None
-
-    def test_explicit_id_always_wins_never_gated_by_duration(self):
-        """The acceptance criterion: an EXPLICIT id applies even to a reel
-        below the threshold -- the gate governs only the NULL/inherit path."""
-        assert resolve_intro_card_id(7, 1.0, 3, 20.0) == 7
-        assert resolve_intro_card_id(7, 999.0, 3, 20.0) == 7
-        assert resolve_intro_card_id(7, None, 3, 20.0) == 7
-
-    def test_null_inherit_long_reel_uses_default(self):
-        assert resolve_intro_card_id(None, 25.0, 3, 20.0) == 3
-
-    def test_null_inherit_short_reel_is_none(self):
-        assert resolve_intro_card_id(None, 5.0, 3, 20.0) is None
-
-    def test_null_inherit_boundary_is_inclusive(self):
-        assert resolve_intro_card_id(None, 20.0, 3, 20.0) == 3
-        assert resolve_intro_card_id(None, 19.999, 3, 20.0) is None
-
-    def test_null_inherit_no_default_is_none(self):
-        assert resolve_intro_card_id(None, 100.0, None, 20.0) is None
-
-    def test_null_unknown_duration_fails_closed_and_warns_loudly(self, caplog):
-        """A NULL duration on our OWN final_videos row is an internal bug, not
-        an expected state -- fail closed to no-intro AND warn with the reel id
-        (user requirement 2026-08-06), never silently substitute a duration."""
-        with caplog.at_level(logging.WARNING):
-            result = resolve_intro_card_id(None, None, 3, 20.0, reel_id=42)
-        assert result is None
-        assert "reel id=42" in caplog.text
-        assert "internal data bug" in caplog.text
-
-
 # ===========================================================================
 # T6680 -- the default/inherit concept is REMOVED (design v2, approved
-# 2026-08-09). These tests INVERT the T5215 inherit expectations above:
-# NULL no longer inherits a profile default at ANY duration -- there is no
-# default to inherit. `resolve_intro_card_id` loses the `default_id` /
-# `reel_duration` / `min_duration` inherit params entirely (Decision 4): the
-# new signature is `resolve_intro_card_id(intro_card_id)` -> `0/NULL -> None`,
-# `<positive> -> that id`. This whole class is RED against the CURRENT
-# (T5215-era) resolver, which still requires those params and still inherits.
+# 2026-08-09). This class REPLACES the pre-T6680 `TestResolveIntroCardIdMatrix`
+# (which asserted `NULL` inherited a profile default above a duration
+# threshold via a 4-arg signature) -- that behavior no longer exists, so the
+# old assertions were deleted rather than left alongside contradictory new
+# ones. `resolve_intro_card_id` loses the `default_id` / `reel_duration` /
+# `min_duration` inherit params entirely (Decision 4): the new signature is
+# `resolve_intro_card_id(intro_card_id)` -> `0/NULL -> None`,
+# `<positive> -> that id`.
 # ===========================================================================
 
 class TestResolveIntroCardIdMatrixT6680NoInherit:
@@ -784,7 +747,13 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
     Profile HAS a default row (v040-backfilled state) to prove it is not read.
 
     RED against current behavior: the current freeze branch calls
-    `get_default_intro_card` and freezes `card_a`, not `0`."""
+    `get_default_intro_card` and freezes `card_a`, not `0`.
+
+    `get_default_intro_card` is asserted gone as an IMPORT in
+    `app.routers.collections` (not merely un-called): T6680 Decision 4 deletes
+    the function entirely rather than leaving it unread, so there is no symbol
+    left to mock -- `hasattr` is the strongest available proof, matching the
+    design's "security auditability: grep shows zero live callers" rationale."""
     import json
 
     from fastapi.testclient import TestClient
@@ -793,12 +762,24 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
     from app.services.sharing_db import get_collection_share_by_token
     from app.session_init import _init_cache
     from tests.test_collection_shares import (
-        GAME_DEF, SHARER_EMAIL, SHARER_ID, PROFILE_ID as SHARER_PROFILE_ID,
-        _create, _seed_sharer_reels,
+        GAME_DEF,
+        SHARER_EMAIL,
+        SHARER_ID,
+        _create,
+        _seed_sharer_reels,
+    )
+    from tests.test_collection_shares import (
+        PROFILE_ID as SHARER_PROFILE_ID,
     )
 
     create_user(SHARER_ID, email=SHARER_EMAIL)
     _init_cache[SHARER_ID] = {"profile_id": SHARER_PROFILE_ID, "is_new_user": False}
+
+    import app.routers.collections as collections_router
+    assert not hasattr(collections_router, "get_default_intro_card"), (
+        "get_default_intro_card must be fully removed from collections.py, "
+        "not just unused -- Decision 4 deletes the function, not just the call"
+    )
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
@@ -806,8 +787,7 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False), \
          patch("app.routers.collections.generate_presigned_url_global",
-               side_effect=lambda key, **kw: f"https://r2.example/{key}"), \
-         patch("app.routers.collections.get_default_intro_card") as mock_get_default:
+               side_effect=lambda key, **kw: f"https://r2.example/{key}"):
         from app.database import get_database_path
         from app.main import app
 
@@ -821,7 +801,6 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
             "INSERT INTO intro_cards (name, shown_fields, treatment, is_default) "
             "VALUES ('A', '[]', 'gold', 1)"
         )
-        card_a = cur.lastrowid
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.close()
@@ -837,7 +816,6 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
         assert definition["intro_card_id"] == 0, (
             "picked None must freeze 0 (no intro), never a default id"
         )
-        mock_get_default.assert_not_called()
 
 
 # ===========================================================================
@@ -867,25 +845,6 @@ class TestListDownloadsNoN1:
             f"query count grew with row count ({delta_one} -> {delta_many}); "
             "intro resolution must batch-load, not query per tile"
         )
-
-    @pytest.mark.asyncio
-    async def test_resolved_name_accounts_for_duration_gate(self, db):
-        from app.routers.downloads import list_downloads
-
-        _seed_card(db, "Default Card", is_default=1)
-        # short reel inheriting the default -> no intro will play
-        _project_short, fv_short = _seed_published_final(db, intro_card_id=None, duration=5.0)
-        # long reel inheriting the default -> the default plays
-        _project_long, fv_long = _seed_published_final(db, intro_card_id=None, duration=30.0)
-
-        resp = await list_downloads()
-        by_id = {d.id: d for d in resp.downloads}
-
-        assert by_id[fv_short].intro_card_id is None  # raw stored value
-        assert by_id[fv_short].intro_card_name is None  # nothing will play
-
-        assert by_id[fv_long].intro_card_id is None  # raw stored value (still NULL)
-        assert by_id[fv_long].intro_card_name == "Default Card"  # resolves to the default
 
     @pytest.mark.asyncio
     async def test_dangling_stored_id_shows_no_intro_name(self, db):
@@ -1050,10 +1009,10 @@ class TestIsDefaultRetirementT6680:
         no-op -- Decision 4 retires the manual set-default gesture."""
         from fastapi import HTTPException
 
-        from app.routers.intro_cards import set_default_intro_card
         card_id = _seed_card(db, "Hero")
 
         with pytest.raises((HTTPException, AttributeError, ImportError)) as exc:
+            from app.routers.intro_cards import set_default_intro_card
             result = await set_default_intro_card(card_id)
             # If the symbol still exists and doesn't raise, fail explicitly --
             # the endpoint must be gone, not just behaviorally inert.

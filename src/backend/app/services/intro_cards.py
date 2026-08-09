@@ -173,16 +173,19 @@ def validate_zoom(value: Any) -> float | None:
 
 
 # ---------------------------------------------------------------------------
-# Attachment resolution (T5215) — ONE resolution order, used by every consumer
-# (reel egress reads, `GET /api/downloads` list, collection share serve). Two
-# implementations of this order is the single failure this task exists to
-# prevent, so the reel path and the collection path both import from here.
+# Attachment resolution (T5215; simplified T6680) — ONE resolution order, used
+# by every consumer (reel egress reads, `GET /api/downloads` list, collection
+# share serve). Two implementations of this order is the single failure this
+# task exists to prevent, so the reel path and the collection path both import
+# from here. T6680 removed the "NULL inherits the profile default" branch —
+# there is no profile default anymore, so NULL and 0 both resolve to no intro.
 # ---------------------------------------------------------------------------
 
-# Per-profile default for the duration gate (epic decision 2026-08-06); the
-# real stored value lives on `user_settings.intro_min_duration_seconds`
-# (profile_db v041) and is only ever missing in the deploy->migrate window or
-# on a legacy row, both of which degrade to this constant.
+# Default for the per-profile settings UI (`user_settings.intro_min_duration_
+# seconds`, profile_db v041, read/written via routers/profiles.py). No longer
+# consulted by attachment resolution (T6680 removed the duration-gated inherit
+# path this threshold used to govern) -- it survives solely as the settings
+# fallback for a missing column/row (deploy->migrate window or a legacy row).
 DEFAULT_INTRO_MIN_DURATION_SECONDS = 20.0
 
 # Bounds for the user-editable threshold. Upper bound is generous for any real
@@ -192,46 +195,20 @@ INTRO_MIN_DURATION_LOWER = 0.0  # exclusive
 INTRO_MIN_DURATION_UPPER = 300.0  # inclusive
 
 
-def resolve_intro_card_id(
-    intro_card_id: int | None,
-    reel_duration: float | None,
-    default_id: int | None,
-    min_duration: float,
-    *,
-    reel_id: int | None = None,
-) -> int | None:
-    """The SINGLE resolution order for an attachment value. Pure (no DB, no I/O
-    besides the warning log below) and read-only: never fabricates a card,
-    never rewrites the caller's row.
+def resolve_intro_card_id(intro_card_id: int | None) -> int | None:
+    """The SINGLE resolution order for an attachment value. Pure and read-only:
+    never fabricates a card, never rewrites the caller's row.
 
-      0                      -> None            (opted THIS reel/collection out, at ANY duration)
-      <positive id>          -> that id         (ALWAYS -- an explicit pick is never duration-gated)
-      NULL (inherit default) -> default_id       IF reel_duration is known and >= min_duration
-                              -> None             otherwise (short reel, or unknown duration)
-
-    `reel_duration` missing (None) while inheriting the default is treated as
-    "unknown -> no intro" (fail closed, matching the "short reels probably
-    don't want one" bias) -- but a NULL `final_videos.duration` on OUR OWN row
-    is an internal data bug, not an expected external state, so it is logged
-    at WARNING (with `reel_id` when the caller has one), exactly like the
-    dangling-card-id case below. It is never silently substituted and the row
-    is never self-repaired.
+      0              -> None      (explicit opt-out)
+      <positive id>  -> that id   (explicit attach -- consent-gated at attach time)
+      NULL           -> None      (no card attached -- there is no profile
+                                    default to inherit; T6680 removed the
+                                    inherit-the-default path entirely)
     """
     if intro_card_id == 0:
         return None
     if intro_card_id is not None:
         return intro_card_id
-    # Inherit-the-default path -- the only branch the duration gate governs.
-    if reel_duration is None:
-        logger.warning(
-            "[intro] reel id=%s has no duration on its own final_videos row "
-            "(internal data bug) -- resolving inherit-the-default to no-intro "
-            "rather than guessing",
-            reel_id,
-        )
-        return None
-    if reel_duration >= min_duration:
-        return default_id
     return None
 
 
@@ -242,18 +219,11 @@ def _intro_cards_table_exists(cursor) -> bool:
     return cursor.fetchone() is not None
 
 
-def get_default_intro_card(cursor):
-    """The profile's default card row, or None if none is marked default or the
-    `intro_cards` table doesn't exist yet (deploy->migrate window, pre-v034)."""
-    if not _intro_cards_table_exists(cursor):
-        return None
-    cursor.execute("SELECT * FROM intro_cards WHERE is_default = 1 LIMIT 1")
-    return cursor.fetchone()
-
-
 def get_intro_min_duration(cursor) -> float:
-    """The profile's minimum-reel-duration threshold for the inherit-the-default
-    resolution path (T5215). Column-guarded (v041 deploy->migrate window) and
+    """The profile's minimum-reel-duration threshold, surfaced via the
+    settings read/write UI (`routers/profiles.py`). No longer consulted by
+    attachment resolution (T6680 removed the inherit-the-default path this
+    threshold used to gate). Column-guarded (v041 deploy->migrate window) and
     guarded again for a missing/legacy row -- both degrade to
     `DEFAULT_INTRO_MIN_DURATION_SECONDS`, never a crash."""
     if not column_exists(cursor, "user_settings", "intro_min_duration_seconds"):
@@ -282,18 +252,18 @@ def validate_intro_min_duration(value: Any) -> float:
 
 
 def load_profile_cards(cursor) -> dict[int, dict]:
-    """Batch-load ``{id: {'name': ..., 'is_default': bool, 'has_photo': bool}}``
-    for every card on this profile, for no-N+1 list resolution
-    (`GET /api/downloads`, T5215; `has_photo` added T5220 for the share-modal
-    exposure notice, Scope F -- same batched query, one extra column).
+    """Batch-load ``{id: {'name': ..., 'has_photo': bool}}`` for every card on
+    this profile, for no-N+1 list resolution (`GET /api/downloads`, T5215;
+    `has_photo` added T5220 for the share-modal exposure notice, Scope F --
+    same batched query). `is_default` is dropped from the projection (T6680) --
+    nothing resolves via it anymore, so it is dead data.
     Empty dict on a below-v034 profile (table absent) -- never per-row queries."""
     if not _intro_cards_table_exists(cursor):
         return {}
-    cursor.execute("SELECT id, name, is_default, image_key FROM intro_cards")
+    cursor.execute("SELECT id, name, image_key FROM intro_cards")
     return {
         row["id"]: {
             "name": row["name"],
-            "is_default": bool(row["is_default"]),
             "has_photo": bool(row["image_key"]),
         }
         for row in cursor.fetchall()
@@ -307,9 +277,14 @@ def resolve_intro_card(
     *,
     reel_id: int | None = None,
 ):
-    """DB-backed single-reel/collection resolution: loads this profile's
-    default card + duration threshold, applies `resolve_intro_card_id`, then
-    fetches the resolved id's row. Read-only -- no UPDATE, no fabrication.
+    """DB-backed single-reel/collection resolution: applies
+    `resolve_intro_card_id`, then fetches the resolved id's row. Read-only --
+    no UPDATE, no fabrication.
+
+    `reel_duration` is accepted for call-site compatibility (callers still
+    have a reel/collection duration to hand) but no longer participates in
+    resolution (T6680 removed the inherit-the-default duration gate -- there
+    is no default left to gate).
 
     A dangling id (the resolved id no longer exists -- e.g. the card was
     deleted after a collection share froze it) logs a warning and resolves to
@@ -317,13 +292,7 @@ def resolve_intro_card(
     `routers/intro_cards.py`.
     """
     cursor = profile_conn.cursor()
-    default_row = get_default_intro_card(cursor)
-    default_id = default_row["id"] if default_row is not None else None
-    min_duration = get_intro_min_duration(cursor)
-
-    resolved_id = resolve_intro_card_id(
-        intro_card_id, reel_duration, default_id, min_duration, reel_id=reel_id,
-    )
+    resolved_id = resolve_intro_card_id(intro_card_id)
     if resolved_id is None:
         return None
 

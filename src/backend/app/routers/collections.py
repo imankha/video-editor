@@ -31,7 +31,6 @@ from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
     collection_intro_settings_key,
     get_collection_intro_card_id,
-    get_default_intro_card,
     resolve_intro_card,
     set_collection_intro_card_id,
 )
@@ -1088,11 +1087,10 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
         cursor = conn.cursor()
         # T5215: freeze the picker choice to a CONCRETE value NOW (id or 0,
         # never NULL) -- this is what makes "changing the default later does
-        # not retroactively change an existing shared link" true.
-        if d.intro_card_id is None:
-            default_row = get_default_intro_card(cursor)
-            concrete_intro_id = default_row["id"] if default_row is not None else 0
-        elif d.intro_card_id == 0:
+        # not retroactively change an existing shared link" true. T6680: there
+        # is no profile default to freeze anymore -- "no explicit pick" (None)
+        # freezes 0 (no intro), the same as an explicit 0.
+        if d.intro_card_id is None or d.intro_card_id == 0:
             concrete_intro_id = 0
         else:
             cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (d.intro_card_id,))
