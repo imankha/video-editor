@@ -839,6 +839,42 @@ async def download_file(download_id: int):
         )
 
 
+@router.get("/{download_id}/intro-playback")
+async def get_download_intro_playback(download_id: int):
+    """The single reel's OWN resolved intro, LIVE, for the owner in-app Play
+    gesture (T6700 design §5.1 row 1). Same-account / same-request-user (the
+    owner's own reel): resolves over the AMBIENT connection, never
+    `open_profile_db_readonly` -- that cross-profile path is for the SHARE
+    endpoints resolving a DIFFERENT user's profile (design §2.2).
+
+    Non-fatal, ALWAYS 200: no card / opted-out (0) / NULL-with-no-default /
+    a forced resolve failure all degrade to `{"intro": null}` --
+    `resolve_intro_for_reel` already never raises (intro_egress.py). Only a
+    genuinely missing download_id 404s, mirroring `download_file` above.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT intro_card_id, duration FROM final_videos WHERE id = ?",
+            (download_id,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Download not found")
+
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+
+        from app.services.intro_egress import resolve_intro_for_reel
+        intro = resolve_intro_for_reel(
+            user_id, profile_id, row['intro_card_id'], row['duration'], download_id,
+            mode="playback", profile_conn=conn,
+        )
+
+    return {"intro": intro}
+
+
 # Shared R2 client for streaming proxies -- reused across requests so the TLS /
 # connection handshake is paid ONCE instead of per request (a fresh client per
 # request was a big chunk of the stream TTFB).
