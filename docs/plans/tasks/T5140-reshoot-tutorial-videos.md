@@ -24,12 +24,17 @@ CHANGED since the last shoot. Prereq: local dev stack on :5173/:8000 against mas
 ## Do this LAST in the milestone
 
 Every UI-visible near/mid-term task must land first (see the "UI Runway -> Tutorial Reshoot"
-milestone in PLAN.md): the Player Intro epic (T5190–T5230) and T4945 (collection download).
-Explicitly NOT gating the reshoot: T5750 (evidence-gated), Multi-File Prep epic
-(deprioritized), Movement Tracking / Dual-Camera milestones (when those land later, the
-affected quest gets a touch-up reshoot, not a full redo), and all refactor/perf/durability
-work (no visible UI). If Player Intro slips badly, the reshoot may jump it — tutorials
-don't have to demo intros (optional add-on flow).
+milestone in PLAN.md, **updated 2026-08-09 — this note itself was stale, PLAN.md is the live
+source**): the [Player Intro + Rich Text epic](tasks/player-intro/EPIC.md) (all remaining
+children, not just the original T5190-T5230 waves — this now includes T6480/T6520/T6600/T6610/
+T6630/T6640/T6650/T6660/T6670/T6680/T6690/T6700) and T4945 (collection download).
+Explicitly NOT gating the reshoot: T6500 (pushed out, polish-only), T5750 (evidence-gated),
+Multi-File Prep epic (deprioritized), Movement Tracking / Dual-Camera milestones (when those
+land later, the affected quest gets a touch-up reshoot, not a full redo), and all
+refactor/perf/durability work (no visible UI). If Player Intro slips badly, the reshoot may
+jump it — tutorials don't have to demo intro CARDS specifically (T6680/T6690/T6700/T6710 are
+lower-risk to slip), but the Overlay quest's text-editor rail IS on-screen in the current
+tutorial and is a real drift risk if it lands after the shoot.
 
 ## Part 1 — Speed: slow the recording, default playback to 1x
 

@@ -15,7 +15,10 @@ cards are built on is **built once and reused** as a text layer on the Overlay t
 2. The user controls the **text, the font, and the font colour**.
    *(AMENDED 2026-08-06 by decision 12 — for CARDS the template owns font and colour; this now applies to Overlay text only.)*
 3. A **different intro can be attached to every reel or collection**.
-4. The user can define a **default** intro.
+4. ~~The user can define a **default** intro.~~ **REVERSED 2026-08-09 (T6680).** The default/
+   inherit concept was removed entirely — every reel/collection is explicit-attach-or-nothing.
+   It closed a live consent-exposure hole (NULL/0 silently rode every egress with no consent
+   check). See Decision 8 below and [T6680](T6680-default-athlete-intro-card-provisioning.md).
 5. The **text overlay system is reused** in Overlay, where the user selects a range of clips and
    adds that same rich text.
 
@@ -77,7 +80,7 @@ has failed.
 | 5 | **Backend text rendering = Pillow raster to a transparent PNG**, never ffmpeg `drawtext`, never a headless browser. | Pillow/numpy/OpenCV are already dependencies. Real wrap/tracking/stroke/shadow with exact TTF metrics shared with the browser. One PNG layer feeds BOTH consumers: ffmpeg animates it for the card, OpenCV alpha-blends it per frame for Overlay text. `drawtext` has no wrap and a proven escaping landmine (T5240); a headless browser means Chromium in the Fly AND Modal images. |
 | 6 | **6 curated fonts**, shipped as TTFs in the repo, served to the browser via `@font-face` from the same files. | The render container has no font server and the preview must load the identical file, so the catalogue is curated, not a system picker. Six keeps every choice deliberate and the repo light. Licences must be verified per face (OFL or equivalent). |
 | 7 | **Cards are PER PROFILE** (`intro_cards` table in `profile.sqlite`), with `is_default` on the card row. | A card names one athlete, and intro media must sit under a per-profile R2 prefix or it 404s cross-profile. Putting the row beside the media removes the split. A future "copy card to another profile" action covers the shared-template case. |
-| 8 | **`NULL` and `0` mean different things** on `final_videos.intro_card_id`: NULL = inherit the default, 0 = the user said no intro on this reel. | Without the distinction, opting one reel out is impossible once a default exists. |
+| 8 | ~~**`NULL` and `0` mean different things** on `final_videos.intro_card_id`: NULL = inherit the default, 0 = the user said no intro on this reel.~~ **REVERSED 2026-08-09 (T6680): NULL and 0 are now equivalent — both mean no intro.** The default/inherit concept is gone; there is nothing left to inherit. Was: "without the distinction, opting one reel out is impossible once a default exists." Is now: a NULL-inherit resolved to an auto-created default on EVERY egress (share, download, collection freeze) with no consent gate — gates only ever fired on an explicit non-null/non-zero pick — a live, already-shipped consent-exposure hole. Fix was removal, not a new gate; `is_default` is a dead column. |
 | 9 | **Card generation is non-fatal**, exactly like the outro. | A failed card logs loudly and the user still gets their video. It never sinks a download, a share or an export. |
 | 10 | **Animation is core, not optional.** The photo hero push-in, staggered text-in and white-flash out ARE v1. | The value is the motion + professionalism, not the data. A static frame is not acceptable. |
 | 11 | **Player cut-out (T5200) no longer blocks the card engine.** | A card works with a plain photo; the cut-out is an enhancement whenever it comes up. |
@@ -193,15 +196,16 @@ publicly visible when shared**.
 | — | [T6580](T6580-card-editor-presentation-and-order-bug.md) — Card editor presentation + order bug | Staging feedback 2026-08-05: bigger card, readable controls, treatments that visibly differ, a click-order-dependent render bug. Merged d91a11c7 (same branch as T6570). |
 | — | [T6600](T6600-modal-z-order-and-stacking-scale.md) — Modal z-order + stacking scale | Split out of T6580 item 1 (2026-08-05): the card modal was losing to draft tiles via nested stacking contexts, not a scrim-strength problem. Merged b6878608. |
 | — | [T6610](T6610-overlay-text-element-manipulation.md) — Overlay text drag + delete | T5225's follow-up: body drag to reposition a text block, bigger delete hit target. Merged 2780032d (same branch as T6480). |
-| — | [T6630](T6630-overlay-text-add-remove-drag-ux.md) — Overlay text add/remove/drag UX | T5225's follow-up, still TODO: T6610 shipped believing add/remove already worked — they don't, in the real app (near-invisible add target, vanishing affordance, harness-only drag verification rejected). **Positioned as the last task in PLAN.md's UI-runway milestone, immediately before the tutorial reshoot (T5140)** — it is a real user-facing gap the reshoot would otherwise capture as broken. |
+| — | [T6630](T6630-overlay-text-add-remove-drag-ux.md) — Overlay text add/remove/drag UX | STAGING, merged `7959db42`+`f4b0f140`. Shipped as a bigger structural pivot than scoped: text regions now contain multiple simultaneous elements, Text tab became an expand/collapse region tree. 9 rounds of live QA. |
 | — | [T6640](T6640-cards-cannot-be-ugly.md) — Cards that cannot be made ugly | Template-owned typography + wrap-safe layout; amends requirement 2 (decision 12). Design-gated. |
 | — | [T6650](T6650-card-delete-destroys-profile-intro-photo.md) — Card delete destroys the profile photo | User-hit data loss 2026-08-07: deleting a card that shares its image key with the profile's own intro photo silently destroyed the profile photo too. |
 | — | [T6530](T6530-intro-card-discoverability-ux.md) — Discoverability UX pass | Research + decision (DECIDED 2026-08-08), split into the 4 tasks below. |
 | — | [T6660](T6660-rename-athlete-intro-card.md) — Rename to "Athlete Intro Card" | User-facing copy sweep, final naming decision. |
 | — | [T6670](T6670-card-selector-inline-create-flow.md) — Card selector inline create flow | Create a card from the picker, land back on selection with it. |
-| — | [T6680](T6680-default-athlete-intro-card-provisioning.md) — Default card before user creates one | Needs Architecture design gate (consent-gate + resolution-semantics interaction). |
-| — | [T6690](T6690-nonactive-profile-dead-end-fix.md) — Non-active-profile dead end fix | Real "Switch & manage" action replaces dead grey text. |
-| — | [T6700](T6700-owner-inapp-playback-intro.md) — Owner in-app playback intro | Owner's own Play button (reel + collection) doesn't show the intro card, unlike T5220's 4 egress paths. Needs Architecture design gate (CollectionPlayer.jsx has no pause hook). |
+| — | [T6680](T6680-default-athlete-intro-card-provisioning.md) — Default/inherit concept removed | WAITING ON USER. Design pivoted (v2, user-directed) from "provision a default" to "remove the default concept entirely" — closes the Decision-8 consent hole above. Implemented, reviewed, QA live-drove the real app, Branch CI green. |
+| — | [T6690](T6690-nonactive-profile-dead-end-fix.md) — Non-active-profile dead end fix | TODO. Real "Switch & manage" action replaces dead grey text. |
+| — | [T6700](T6700-owner-inapp-playback-intro.md) — Owner in-app playback intro | WAITING ON USER. Owner's own Play button (reel + collection) didn't show the intro card, unlike T5220's 4 egress paths. Swap-based (unmount/mount), all 4 acceptance criteria QA'd live. Merged onto T6680's branch 2026-08-09 (shares `downloads.py`/`collections.py`) so both land together. |
+| — | [T6710](T6710-owner-playback-intro-as-timeline-segment.md) — Owner playback intro as a real timeline segment | TODO, needs Architecture design gate. User feedback 2026-08-09: the swap-based pre-roll reads as a bolted-on "commercial," not part of the video — wants one continuous seekable timeline. Scoped to the owner in-app player only for now (share-page's separately-built edge intro is a follow-up). |
 
 ```mermaid
 graph LR

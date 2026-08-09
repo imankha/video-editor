@@ -1,9 +1,22 @@
 # T6630: Text elements — add, remove and drag in the most obvious way
 
-**Status:** TODO
+**Status:** STAGING (merged to master 2026-08-08, `7959db42` + fix-forward `f4b0f140`)
 **Impact:** 8 | **Complexity:** 4
 **Follows:** [T6610](T6610-overlay-text-element-manipulation.md) (built the body drag), [T5225](T5225-overlay-text-layer.md) (built the lane)
 **Related:** [T6590](../T6590-preview-image-marker-linkage-and-occlusion.md) (same lane, occlusion)
+
+## Outcome (2026-08-09 addendum — implementation shipped 9 rounds past the original scope below)
+
+Landed as a structural pivot beyond the original add/remove/drag brief: text REGIONS now
+contain multiple simultaneous ELEMENTS (backend + frontend model reframe), the Text tab became
+an expand/collapse region tree scoped to the playhead, and several poster/thumbnail-marker bugs
+were fixed along the way (default frame moved off the slow-mo midpoint, drag math, auto-scroll).
+Migration `v039` renumbered to `v042` (cross-branch collision with T5215/T6640). First Branch CI
+push came back red on 3 pre-existing-staleness failures (fixed); a real 3-way merge conflict on
+migration-registry files was resolved by combining both sides' version lists; Master CI caught
+one more casualty post-merge (a T5215 test asserting an exact final schema version, fixed
+forward). The original root-cause analysis and requirements below are preserved as the record of
+what was diagnosed and why — read them for the "why," not as an open TODO.
 
 User, 2026-08-06, with a screenshot of the Overlay timeline at 500% zoom:
 
