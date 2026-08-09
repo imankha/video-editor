@@ -3,7 +3,7 @@
 **Status:** TODO — needs an Architecture design gate before implementation
 **Impact:** 7 | **Complexity:** 6
 **Epic:** [Player Intro + Rich Text](EPIC.md)
-**Follows:** [T6530](../T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
+**Follows:** [T6530](T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
 
 ## Problem
 
@@ -75,7 +75,7 @@ break, mirroring the T6030-style regression T5230 itself just hit against an unr
 - `.claude/knowledge/backend-services.md` § "Intro card library" — update once this ships
 
 ### Related Tasks
-- [T6530](../T6530-intro-card-discoverability-ux.md) — the research this decision came from
+- [T6530](T6530-intro-card-discoverability-ux.md) — the research this decision came from
 - [T5230](T5230-childrens-data-compliance.md) — the consent gate this must not silently bypass
 - [T5215](T5215-intro-attachment.md) — owns the NULL/0 resolution semantics this must not break
 - [T6670](T6670-card-selector-inline-create-flow.md) — the "I don't like the default, make a new

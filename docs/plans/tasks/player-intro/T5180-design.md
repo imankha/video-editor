@@ -2,7 +2,7 @@
 
 **Status:** APPROVED 2026-08-04 (design gate) — see § Gate Decisions for the recorded answers.
 **Tier:** L (design-gated foundation; TextSpec is consumed by T5210/T5225 and expensive to change)
-**Epic:** [Player Intro + Rich Text](player-intro/EPIC.md) — decisions 5 & 6 are the whole mandate.
+**Epic:** [Player Intro + Rich Text](EPIC.md) — decisions 5 & 6 are the whole mandate.
 **Persists:** NOTHING. No DB write, no R2 write, no migration. This task ships a model, a font
 catalogue, one backend renderer, one frontend preview, and a parity test.
 

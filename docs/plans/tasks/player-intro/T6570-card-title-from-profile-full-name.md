@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Impact:** 7 | **Complexity:** 3
-**Follows:** [T5190](player-intro/T5190-card-image-upload-consent.md) (profile facts), [T5205](player-intro/T5205-card-editor-ui.md)
+**Follows:** [T5190](T5190-card-image-upload-consent.md) (profile facts), [T5205](T5205-card-editor-ui.md)
 
 ## Problem
 

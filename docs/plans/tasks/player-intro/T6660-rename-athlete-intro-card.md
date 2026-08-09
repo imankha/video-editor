@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 5 | **Complexity:** 3
 **Epic:** [Player Intro + Rich Text](EPIC.md)
-**Follows:** [T6530](../T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
+**Follows:** [T6530](T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
 
 ## Problem
 
@@ -50,7 +50,7 @@ plural grid, per T6530 Q5). This is copy-only:
 - `docs/legal/privacy-policy.md`, `src/frontend/src/components/PrivacyPolicy.jsx`
 
 ### Related Tasks
-- [T6530](../T6530-intro-card-discoverability-ux.md) — the research this decision came out of
+- [T6530](T6530-intro-card-discoverability-ux.md) — the research this decision came out of
 - [T6670](T6670-card-selector-inline-create-flow.md), [T6690](T6690-nonactive-profile-dead-end-fix.md) —
   sibling tasks from the same feedback round; if any land first, this rename must sweep whatever
   new copy they introduced too (check merge order before starting)

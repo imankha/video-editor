@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 7 | **Complexity:** 4
 **Epic:** [Player Intro + Rich Text](EPIC.md)
-**Follows:** [T6530](../T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
+**Follows:** [T6530](T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
 
 ## Problem
 
@@ -48,7 +48,7 @@ plain "No intro" option — check the current layout before deciding placement) 
   handler) — the pre-select-on-return behavior needs to call the same path
 
 ### Related Tasks
-- [T6530](../T6530-intro-card-discoverability-ux.md) — Q1's original (simpler) recommendation;
+- [T6530](T6530-intro-card-discoverability-ux.md) — Q1's original (simpler) recommendation;
   this task supersedes that with the user's refined version
 - [T6660](T6660-rename-athlete-intro-card.md) — any new copy this task introduces ("Create new
   card" or similar) should use "Athlete Intro Card" naming; coordinate merge order

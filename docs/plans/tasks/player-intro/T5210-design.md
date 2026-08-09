@@ -2,8 +2,8 @@
 
 **Status:** APPROVED 2026-08-05 (gate corrections folded in) — implementing the engine
 **Tier:** L · Backend (+ a generated frontend mirror, already landed) · no schema change
-**Task:** [T5210-intro-card-generation.md](player-intro/T5210-intro-card-generation.md) ·
-**Epic:** [Player Intro + Rich Text](player-intro/EPIC.md) (decisions 2, 2b, 3, 3b, 5, 9, 10)
+**Task:** [T5210-intro-card-generation.md](T5210-intro-card-generation.md) ·
+**Epic:** [Player Intro + Rich Text](EPIC.md) (decisions 2, 2b, 3, 3b, 5, 9, 10)
 
 > **Gate scope.** The contract commit (`T5210: shared card geometry + motion timing
 > contract`) already landed on the branch so T5205 (parallel, JS) is unblocked. The

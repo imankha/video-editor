@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Impact:** 6 | **Complexity:** 4
-**Follows:** [T5205](player-intro/T5205-card-editor-ui.md) (card editor, merged 2a3594a6)
+**Follows:** [T5205](T5205-card-editor-ui.md) (card editor, merged 2a3594a6)
 **Sibling:** [T6530](T6530-intro-card-discoverability-ux.md) — that one is about FINDING the feature;
 this one is about using it once you are in.
 

@@ -33,11 +33,11 @@ screenshots) with 6 recommendations and 4 open questions. User reviewed and deci
 
 **Implementation split into 4 child tasks** (gap-numbered T6660-T6690, independent, mergeable in
 any order per the user's explicit staging preference):
-- [T6660](player-intro/T6660-rename-athlete-intro-card.md) — rename to "Athlete Intro Card"
-- [T6670](player-intro/T6670-card-selector-inline-create-flow.md) — inline create-and-return flow
-- [T6680](player-intro/T6680-default-athlete-intro-card-provisioning.md) — auto-default card
+- [T6660](T6660-rename-athlete-intro-card.md) — rename to "Athlete Intro Card"
+- [T6670](T6670-card-selector-inline-create-flow.md) — inline create-and-return flow
+- [T6680](T6680-default-athlete-intro-card-provisioning.md) — auto-default card
   (Architecture design gate required)
-- [T6690](player-intro/T6690-nonactive-profile-dead-end-fix.md) — non-active-profile dead end
+- [T6690](T6690-nonactive-profile-dead-end-fix.md) — non-active-profile dead end
 
 > Deliberately NOT a "move the button" task. The point is to decide, with the whole feature working
 > in front of us, where this belongs in the product — then implement that.

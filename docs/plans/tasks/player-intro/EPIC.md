@@ -186,7 +186,13 @@ publicly visible when shared**.
 | — | [T5225](T5225-overlay-text-layer.md) — Overlay text layer | Timeline layer + clip-snapping range + burn-in in both render loops. Needs only T5180, so it can run early. |
 | 6 | [T5230](T5230-childrens-data-compliance.md) — Children's-data compliance | Consent record, retention/deletion in `privacy.py`, no-face-recognition guardrail, privacy-policy update. Gates public launch. |
 | — | [T5200](T5200-player-cutout.md) — Player cut-out | Optional enhancement; no longer blocks T5210. |
-| — | [T6530](../T6530-intro-card-discoverability-ux.md) — Discoverability UX pass | Research + decision (DECIDED 2026-08-08), split into the 4 tasks below. |
+| — | [T6520](T6520-card-slot-size-align-overrides.md) — Per-slot size/align overrides | Follow-up from T5205's merge (2026-08-04): reintroduces size/alignment as overrides on top of the shared geometry contract, without taking layout ownership back from it. |
+| — | [T6540](T6540-card-editor-information-design.md) — Card editor information design | User feedback 2026-08-05 ("hard to parse"). Three-tier rail hierarchy, composition badge reads as feedback not debug text. Merged bd17b228. |
+| — | [T6570](T6570-card-title-from-profile-full-name.md) — Card title from the profile | User request 2026-08-05. Title resolves from the profile's Full Name (both preview and export), not a per-card text box. Merged d91a11c7. |
+| — | [T6580](T6580-card-editor-presentation-and-order-bug.md) — Card editor presentation + order bug | Staging feedback 2026-08-05: bigger card, readable controls, treatments that visibly differ, a click-order-dependent render bug. Merged d91a11c7 (same branch as T6570). |
+| — | [T6600](T6600-modal-z-order-and-stacking-scale.md) — Modal z-order + stacking scale | Split out of T6580 item 1 (2026-08-05): the card modal was losing to draft tiles via nested stacking contexts, not a scrim-strength problem. Merged b6878608. |
+| — | [T6650](T6650-card-delete-destroys-profile-intro-photo.md) — Card delete destroys the profile photo | User-hit data loss 2026-08-07: deleting a card that shares its image key with the profile's own intro photo silently destroyed the profile photo too. |
+| — | [T6530](T6530-intro-card-discoverability-ux.md) — Discoverability UX pass | Research + decision (DECIDED 2026-08-08), split into the 4 tasks below. |
 | — | [T6660](T6660-rename-athlete-intro-card.md) — Rename to "Athlete Intro Card" | User-facing copy sweep, final naming decision. |
 | — | [T6670](T6670-card-selector-inline-create-flow.md) — Card selector inline create flow | Create a card from the picker, land back on selection with it. |
 | — | [T6680](T6680-default-athlete-intro-card-provisioning.md) — Default card before user creates one | Needs Architecture design gate (consent-gate + resolution-semantics interaction). |

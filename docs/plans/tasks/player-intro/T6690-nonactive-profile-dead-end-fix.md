@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 6 | **Complexity:** 2
 **Epic:** [Player Intro + Rich Text](EPIC.md)
-**Follows:** [T6530](../T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
+**Follows:** [T6530](T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
 
 ## Problem
 
@@ -45,7 +45,7 @@ text.
   live, for reference only (not being changed by this task)
 
 ### Related Tasks
-- [T6530](../T6530-intro-card-discoverability-ux.md) — Q4, the source of this fix
+- [T6530](T6530-intro-card-discoverability-ux.md) — Q4, the source of this fix
 - [T6660](T6660-rename-athlete-intro-card.md) — button copy should use the final name; check
   merge order so this doesn't ship with a name that immediately needs a second edit
 

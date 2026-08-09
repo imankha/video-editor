@@ -2,12 +2,12 @@
 
 **Status:** TODO
 **Impact:** 5 | **Complexity:** 3
-**Follows:** [T5205](player-intro/T5205-card-editor-ui.md) (card editor, merged 2a3594a6),
-[T5210](player-intro/T5210-intro-card-generation.md) (render engine + shared contract, merged 9c603f6f)
+**Follows:** [T5205](T5205-card-editor-ui.md) (card editor, merged 2a3594a6),
+[T5210](T5210-intro-card-generation.md) (render engine + shared contract, merged 9c603f6f)
 
 ## Problem
 
-[T5205](player-intro/T5205-card-editor-ui.md) originally specified a right rail with **text, font,
+[T5205](T5205-card-editor-ui.md) originally specified a right rail with **text, font,
 size (S/M/L/XL), colour and alignment**. Size and alignment shipped **removed**, and the removal was
 correct given the contract as built: `intro_card_geometry` owns layout, `_merge_spec` resolves it
 "layout always wins", and `text_elements` is styling-only. Rail controls for size and align would
