@@ -6,9 +6,9 @@ Resolution order (stated explicitly, see services/intro_cards.py's module
 docstring above collection_intro_settings_key for the full rationale):
   - The collection's OWN resolved intro governs collection playback; per-
     member reel attachments are not consulted in that context.
-  - The duration gate on the inherit-the-default path uses the collection's
-    LIVE TOTAL duration (sum of current members), against the SAME per-
-    profile intro_min_duration_seconds a reel already uses.
+  - T6680: there is no profile default to inherit -- an absent row (no
+    explicit pick) resolves to no intro at any duration, same as an
+    explicit 0. Duration no longer participates in resolution.
   - Storage reuses the pre-existing (v009) collection_settings sparse KV
     table -- NO migration needed for this feature (verified: v038 is T6640's,
     v039 was free, but this task doesn't need either).
@@ -248,20 +248,25 @@ class TestCollectionIntroEndpoints:
         assert resp["intro_card_name"] is None
 
     @pytest.mark.asyncio
-    async def test_get_inherit_gated_by_live_total_duration(self, db):
-        """No explicit collection pick (absent row = inherit); the default
-        resolves ONLY when the collection's LIVE TOTAL duration (summed
-        across its current members) clears the threshold -- reusing
-        resolve_intro_card_id, not a second resolution path."""
+    async def test_get_inherit_no_longer_resolves_at_any_duration(self, db):
+        """T6680 inversion: no explicit collection pick (absent row) used to
+        inherit the profile default once the collection's LIVE TOTAL duration
+        cleared the threshold. There is no profile default to inherit anymore
+        -- an absent row resolves to no intro regardless of duration, even
+        with an `is_default=1` row present (v040-backfilled state) and well
+        above the old 20s threshold."""
         from app.routers.collections import get_collection_intro
         _seed_card(db, "Default Card", is_default=1)
-        # Two short members summing ABOVE the 20s default threshold.
+        # Two short members summing ABOVE the old 20s default threshold.
         _seed_published_final(db, game_ids=[9], duration=12.0, clip_count=1)
         _seed_published_final(db, game_ids=[9], duration=12.0, clip_count=1)
 
         resp = await get_collection_intro(scope_type="game", aspect_ratio="9:16", game_id=9)
         assert resp["intro_card_id"] is None  # raw stored value: absent row
-        assert resp["intro_card_name"] == "Default Card"  # but it resolves (24s >= 20s)
+        assert resp["intro_card_name"] is None, (
+            "an absent collection intro pick must resolve to no intro -- "
+            "there is no default left to inherit"
+        )
 
     @pytest.mark.asyncio
     async def test_get_inherit_below_threshold_resolves_to_none(self, db):

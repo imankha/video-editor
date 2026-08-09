@@ -160,11 +160,13 @@ export function ProfileIntroSection({ profile }) {
         ))}
       </div>
 
-      {/* T5215: the reel-length floor for the inherit-the-default resolution
-          path. Lives on profile.sqlite for the ACTIVE profile only — this
-          view can be opened for a non-active profile (ManageProfilesModal),
-          where the control is not meaningful (there is no per-arbitrary-
-          profile endpoint), so it only renders when editing the current one. */}
+      {/* T5215: a legacy reel-length threshold setting. T6680 removed the
+          default/inherit resolution path this used to gate -- it is now
+          dead/cosmetic (does not affect what plays). Lives on profile.sqlite
+          for the ACTIVE profile only — this view can be opened for a
+          non-active profile (ManageProfilesModal), where the control is not
+          meaningful (there is no per-arbitrary-profile endpoint), so it only
+          renders when editing the current one. */}
       {profile.isCurrent && <IntroMinDurationInput onError={setError} />}
 
       {/* Parental-consent attestation */}
@@ -189,11 +191,13 @@ export function ProfileIntroSection({ profile }) {
 }
 
 /**
- * The reel-length floor below which the "inherit the default" resolution
- * path resolves to no intro (T5215). `0 < value <= 300` seconds. Commits on
- * blur/Enter only (same gesture pattern as the fact inputs above); an
- * out-of-range value is rejected by the server and the input reverts to the
- * last confirmed value rather than silently clamping.
+ * A legacy reel-length threshold (T5215). T6680 removed the default/inherit
+ * resolution path this used to gate, so the value no longer affects what
+ * plays -- kept only as dormant settings plumbing (design doc T6680
+ * Decision 3). `0 < value <= 300` seconds. Commits on blur/Enter only (same
+ * gesture pattern as the fact inputs above); an out-of-range value is
+ * rejected by the server and the input reverts to the last confirmed value
+ * rather than silently clamping.
  */
 function IntroMinDurationInput({ onError }) {
   const minDuration = useIntroCardStore((state) => state.minDuration);
@@ -235,7 +239,7 @@ function IntroMinDurationInput({ onError }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-400 mb-1">
-        Minimum reel length for the default intro
+        Minimum reel length
       </label>
       <div className="flex items-center gap-2">
         <input
@@ -252,8 +256,9 @@ function IntroMinDurationInput({ onError }) {
         <span className="text-xs text-gray-400">seconds</span>
       </div>
       <p className="mt-1 text-xs text-gray-500">
-        Reels shorter than this won&apos;t carry your default intro (an explicitly
-        attached card always plays).
+        This no longer affects which intro plays (T6680: there is no default
+        intro to inherit) — an explicitly attached card always plays,
+        regardless of reel length.
       </p>
     </div>
   );
