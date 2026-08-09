@@ -10,7 +10,7 @@ import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 const TILE_W = 150;
 const TILE_H = Math.round((TILE_W * 16) / 9);
 
-export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onSetDefault, onDelete }) {
+export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDelete }) {
   const [pendingDelete, setPendingDelete] = useState(null);
 
   const confirmDelete = async () => {
@@ -35,7 +35,6 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onSe
               profile={profile}
               onEdit={onEdit}
               onDuplicate={onDuplicate}
-              onSetDefault={onSetDefault}
               onDelete={setPendingDelete}
             />
           ))}
@@ -46,11 +45,7 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onSe
       <ConfirmationDialog
         isOpen={!!pendingDelete}
         title={`Delete "${pendingDelete?.name || ''}"?`}
-        message={
-          pendingDelete?.is_default
-            ? 'This is the default card. Reels that use the default will fall back to whichever card you set as default next (or to no intro until you pick one). This cannot be undone.'
-            : 'Any reel set to use this card will fall back to your default card. This cannot be undone.'
-        }
+        message="Any reel set to use this card will fall back to no intro. This cannot be undone."
         onClose={() => setPendingDelete(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setPendingDelete(null), variant: 'secondary' },

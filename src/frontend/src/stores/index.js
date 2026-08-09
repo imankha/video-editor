@@ -21,7 +21,7 @@ export { useUploadStore } from './uploadStore';
 export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
 export { useSyncStore, checkSyncStatus } from './syncStore';
 export { useProfileStore, useCurrentProfile, useHasMultipleProfiles, useProfilesLoading } from './profileStore';
-export { useIntroCardStore, selectDefaultCard } from './introCardStore';
+export { useIntroCardStore } from './introCardStore';
 export { useAuthStore, useIsAuthenticated, useAuthEmail, useShowAuthModal } from './authStore';
 export { useCreditStore } from './creditStore';
 export { useQuestStore, useQuestProgress } from './questStore';
