@@ -12,28 +12,41 @@ written here — this doc is the only artifact.**
 
 ---
 
-## 0. Open Questions (design-gate — need the user's call)
+## 0. Open Questions (design-gate)
 
-None block implementation. Two low-stakes confirmations, both with a recommended default already
-baked into the plan; the user can veto either at the gate:
+Nothing blocks implementation. Q1 is now **RESOLVED (moot)** by the epic's default-intro-card drop;
+Q2 is a low-stakes confirmation, unaffected by that drop, with its recommended default baked in.
 
-- [ ] **Q1 — Owner sees the intro they'll ship, LIVE.** Owner in-app playback resolves the intro
-      LIVE from the current attachment (exactly like owner download and single-reel share — T5220
-      §11's LIVE-vs-frozen rule). So a reel on `NULL` (inherit) that clears the duration gate WILL
-      show the profile default as a pre-roll when the owner presses Play in-app, and swapping the
-      attached card changes the very next in-app play with no re-export. **Recommendation: keep**
-      (consistent with the single resolution order; the whole point of decision 1 is "swap an
-      intro, costs nothing, see it everywhere"). Flagging only because it means every long reel
-      with a default now shows a pre-roll on the owner's own Play, which the owner has not seen
-      before this task.
+- [x] **Q1 — RESOLVED / moot. The epic dropped the auto/inherited default-intro-card concept
+      (sibling task T6680, USER DIRECTION 2026-08-09).** Q1 originally flagged the *surprise profile
+      default*: a reel on `NULL` (inherit) that clears the duration gate would show the profile
+      default as a pre-roll on the owner's own in-app Play — something the owner had not seen before
+      this task. The epic has since dropped default-inherit entirely: an intro shows **only** when a
+      card is EXPLICITLY attached, and `NULL` resolves to **no intro, full stop**. There is therefore
+      no "surprise default" case left to flag — a reel/collection that was never given a card plays
+      with no pre-roll, in-app exactly as everywhere else.
+      **This requires NO change to this design or its §5 implementation plan.** T6700 never
+      implemented the default fallback itself — §5.1 delegates resolution to the shared
+      `resolve_intro_for_reel(mode="playback")` and the collection resolver, and only ever says
+      "resolve LIVE from the current attachment." When the sibling task removes default-inherit from
+      those shared resolvers, the two thin endpoints here return `{intro: null}` for a never-attached
+      reel/collection automatically — same endpoint code, different (now correct) resolver output. The
+      LIVE-vs-frozen guarantee (swap the attached card → see it on the very next in-app play, no
+      re-export) is unchanged and still the whole point; it just no longer manufactures a pre-roll for
+      a reel the owner never explicitly gave a card. The §5.1/§7 "no stored/inherited card → null" and
+      "reel on `NULL` with no default → null" clauses stay factually correct (they still produce
+      `null`), so they need no edit.
 - [ ] **Q2 — Collection in-app play uses the COLLECTION's own intro, not per-member reel intros.**
-      Per T5220's landmine (intro_cards.py:353-375) and the owner collection-intro seam
-      (`GET /api/collections/intro`, collections.py:734-762), a collection's leading pre-roll is
-      the COLLECTION's own attached card resolved against the LIVE total duration — per-member reel
-      intros stay out of scope (they never played inside a collection on the share path either).
-      **Recommendation: keep** (matches the share-collection behavior exactly). No design change
-      either way; flagging so the "one pre-roll, collection's own card, before the first member"
-      semantics are an explicit yes.
+      Unaffected by the default drop: Q2 was always about the *source* (the collection's own attached
+      card vs. per-member reel intros), never about default inheritance. Per T5220's landmine
+      (intro_cards.py:353-375) and the owner collection-intro seam (`GET /api/collections/intro`,
+      collections.py:734-762), a collection's leading pre-roll is the COLLECTION's own attached card
+      resolved against the LIVE total duration — per-member reel intros stay out of scope (they never
+      played inside a collection on the share path either). With inheritance gone this simply means
+      "no explicitly-attached collection card → no pre-roll," the same non-fatal `{intro: null}` the
+      plan already specifies. **Recommendation: keep** (matches the share-collection behavior exactly).
+      No design change either way; flagging so the "one pre-roll, collection's own card, before the
+      first member" semantics are an explicit yes.
 
 ---
 
