@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { RichText } from './components/RichText.jsx'
+import { IntroCardPreview } from './components/introcards/IntroCardPreview.jsx'
 import { AuthGateModal } from './components/AuthGateModal.jsx'
 import { UpdateGateModal } from './components/UpdateGateModal.jsx'
 import { AuthErrorBanner } from './components/AuthErrorBanner.jsx'
@@ -97,7 +98,35 @@ function renderDebugRichTextRouteIfRequested() {
   return true;
 }
 
-if (!renderDebugRichTextRouteIfRequested()) {
+// T6640 round 3: dev/test-only debug mount for the extended T5180 parity spec's
+// card-collision case. Unlike /debug/rich-text (a single element, hand-built
+// spec), this mounts the REAL <IntroCardPreview> — so the layout mirror's
+// element specs AND their <RichText> renders happen in the SAME component
+// tree, going through the SAME `useCardPreviewElements` settle loop the actual
+// editor uses. A single-element /debug/rich-text mount cannot reproduce that:
+// it never registers the card's @font-face (nothing on that bare page ever
+// mounts a sibling RichText for the same font), so its canvas metrics measure
+// against the browser's fallback font forever — a false mismatch unrelated to
+// the double-wrap bug this route exists to catch. Same DEV-only gating as
+// /debug/rich-text above.
+function renderDebugIntroCardRouteIfRequested() {
+  if (!import.meta.env.DEV) return false;
+  if (window.location.pathname !== '/debug/intro-card') return false;
+
+  const params = new URLSearchParams(window.location.search);
+  const card = JSON.parse(decodeURIComponent(params.get('card') || 'null'));
+  const profile = JSON.parse(decodeURIComponent(params.get('profile') || 'null'));
+  const aspect = params.get('aspect');
+  const boxWidth = Number(params.get('boxWidth'));
+  const boxHeight = Number(params.get('boxHeight'));
+
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <IntroCardPreview card={card} profile={profile} aspect={aspect} boxWidth={boxWidth} boxHeight={boxHeight} />
+  );
+  return true;
+}
+
+if (!renderDebugRichTextRouteIfRequested() && !renderDebugIntroCardRouteIfRequested()) {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <App />

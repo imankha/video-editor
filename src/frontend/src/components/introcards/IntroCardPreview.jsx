@@ -95,7 +95,9 @@ export function IntroCardPreview({
       {bandStyle && <div style={bandStyle} />}
 
       {elements.map(({ slot, spec }) => (
-        <div key={slot} className="absolute inset-0 pointer-events-none">
+        // data-slot: a test hook (T6640 round 3 e2e/T5180-text-parity.spec.js) to
+        // target a specific element's rendered ink box by slot; no runtime use.
+        <div key={slot} data-slot={slot} className="absolute inset-0 pointer-events-none">
           <RichText spec={spec} boxWidth={boxWidth} boxHeight={boxHeight} />
         </div>
       ))}

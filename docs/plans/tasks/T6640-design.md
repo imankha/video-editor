@@ -1,6 +1,12 @@
 # T6640 — Cards that cannot be made ugly — Design
 
-**Status:** WAITING ON USER (design gate — Round 3)
+**Status:** IMPLEMENTED (Round 3, 2026-08-09) — Option 1 shipped: `layout()` emits
+`lines: string[]`, `RichText` renders them verbatim when supplied (falls back to its
+own wrap when absent — Overlay rail unaffected). `routers/intro_cards.py` create/patch
+no longer accept `text_elements` (§5b). Real-browser regression
+(`e2e/T5180-text-parity.spec.js`, new `/debug/intro-card` seam mounting the actual
+`<IntroCardPreview>`) reproduced the live collision pre-fix and is green post-fix across
+repeated runs. Awaiting merge.
 **Tier:** L · Frontend (preview-only this round) · design-gated
 **Amends:** epic requirement 2 via [decision 12](player-intro/EPIC.md); see task
 [T6640-cards-cannot-be-ugly.md](player-intro/T6640-cards-cannot-be-ugly.md).
@@ -216,6 +222,15 @@ NOT changed:
   cleanliness. Minor — recommend leaving; confirm.
 - **(c) Matrix nits.** The §0 matrix reads as designed across all 48 stills; no defect
   identified. Confirm none, or name a frame to adjust.
+
+**Answers (user, 2026-08-09):**
+- (a) Approved as recommended: additive preview-only `lines: string[]` on the produced
+  TextSpec, consumed by `RichText`, NOT added to the `introCardGeometry.js` parity
+  contract.
+- (b) Reject the dead `text_elements` write surface — `routers/intro_cards.py` create/patch
+  no longer accept it. Project convention is to delete unused code outright, no
+  backwards-compat shims.
+- (c) Confirmed — no matrix frame adjustments needed.
 
 ---
 

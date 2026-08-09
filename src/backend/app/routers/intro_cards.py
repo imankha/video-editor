@@ -43,7 +43,6 @@ from app.services.intro_cards import (
     validate_duration,
     validate_focal,
     validate_shown_fields,
-    validate_text_elements,
     validate_treatment,
     validate_zoom,
 )
@@ -51,7 +50,7 @@ from app.services.intro_media import delete_intro_image
 from app.services.user_db import get_intro_consent
 from app.storage import generate_presigned_url_global
 from app.user_context import get_current_user_id
-from app.utils.encoding import decode_data, encode_data
+from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +74,6 @@ class CreateIntroCardRequest(BaseModel):
     focal_x: float | None = None
     focal_y: float | None = None
     zoom: float | None = None
-    # {slot_name: TextSpec}; validated as TextSpec on the way in (400 on bad spec).
-    text_elements: dict[str, Any] | None = None
     duration: float = 4.0
 
 
@@ -95,7 +92,6 @@ class UpdateIntroCardRequest(BaseModel):
     focal_x: float | None = None
     focal_y: float | None = None
     zoom: float | None = None
-    text_elements: dict[str, Any] | None = None
     duration: float | None = None
 
 
@@ -213,7 +209,6 @@ async def create_intro_card(request: CreateIntroCardRequest):
     try:
         shown_fields = validate_shown_fields(request.shown_fields)
         treatment = validate_treatment(request.treatment)
-        text_elements = validate_text_elements(request.text_elements)
         focal_x = validate_focal(request.focal_x, "focal_x")
         focal_y = validate_focal(request.focal_y, "focal_y")
         zoom = validate_zoom(request.zoom)
@@ -227,10 +222,10 @@ async def create_intro_card(request: CreateIntroCardRequest):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         columns = ["name", "shown_fields", "treatment", "title_text", "image_key",
-                   "image_cutout_key", "focal_x", "focal_y", "zoom", "text_elements", "duration"]
+                   "image_cutout_key", "focal_x", "focal_y", "zoom", "duration"]
         values = [request.name.strip(), json.dumps(shown_fields), treatment,
                   request.title_text, request.image_key, request.image_cutout_key,
-                  focal_x, focal_y, zoom, encode_data(text_elements), duration]
+                  focal_x, focal_y, zoom, duration]
         # Column-guarded WRITE (T6570 / v035, T6550 lesson): only write the
         # subtitle when the column exists; below-head DBs create the card without
         # it rather than 500ing.
@@ -273,7 +268,6 @@ _UPDATABLE_FIELDS = {
     "focal_x": ("focal_x", lambda v: validate_focal(v, "focal_x")),
     "focal_y": ("focal_y", lambda v: validate_focal(v, "focal_y")),
     "zoom": ("zoom", validate_zoom),
-    "text_elements": ("text_elements", lambda v: encode_data(validate_text_elements(v))),
     "duration": ("duration", validate_duration),
 }
 

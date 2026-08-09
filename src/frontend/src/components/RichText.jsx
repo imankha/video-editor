@@ -106,9 +106,23 @@ function useFontFaces() {
   return manifest;
 }
 
-function resolveFontFamily(fontKey, manifest) {
+// Exported (T6640 round 3) so `introCardPreviewElements.js`'s measured
+// card-layout mirror can resolve the SAME family string this component uses
+// (the real fallback chain, not a bare font key) for its wrap decision.
+export function resolveFontFamily(fontKey, manifest) {
   const chain = (manifest && manifest[fontKey] && manifest[fontKey].fallback) || [];
   return [`"${fontKey}"`, ...chain].join(', ');
+}
+
+/**
+ * The font manifest, once fetched (module-level cache, see `injectFontFaces`
+ * above) — null before the one-time fetch resolves. Exported (T6640 round 3)
+ * so `introCardPreviewElements.js` can resolve the same manifest weight this
+ * component uses for its wrap decision, without a second fetch or a React
+ * hook (it's called from a plain function, not a component).
+ */
+export function getFontManifest() {
+  return injectFontFaces._manifest || null;
 }
 
 /**
@@ -241,10 +255,22 @@ export function wrapLines(text, fontFamily, fontPx, fontWeight, maxPx) {
 // ascent/descent metrics (both read from the same canvas `ctx.font`), so
 // recomputing wrap alongside metrics (not on a separate timer) keeps the two
 // from settling at different moments.
-function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthPx, maxFrames = 30) {
+//
+// T6640 round 3: `presetLines`, when a NON-EMPTY array, is the pre-broken
+// line list the card layout mirror (`introCardPreviewElements.js::layout`)
+// already computed to RESERVE height for this element. Rendering those
+// verbatim — instead of this hook re-deriving its own wrap from `text` — is
+// what makes the reserved height and the rendered height read the IDENTICAL
+// line count by construction, closing the double-wrap collision (design
+// docs/plans/tasks/T6640-design.md §2 Option 1). An empty array is treated
+// as "not supplied" (not a valid pre-wrap) so a caller can't accidentally
+// blank the text. Ascent/descent are still measured locally either way —
+// only the line COUNT/TEXT is shared, not the metric.
+function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthPx, presetLines, maxFrames = 30) {
+  const hasPresetLines = Array.isArray(presetLines) && presetLines.length > 0;
   const measure = () => ({
     ...measureFontMetricsPx(fontFamily, fontPx, fontWeight),
-    lines: wrapLines(text, fontFamily, fontPx, fontWeight, maxWidthPx),
+    lines: hasPresetLines ? presetLines : wrapLines(text, fontFamily, fontPx, fontWeight, maxWidthPx),
   });
   const [metrics, setMetrics] = useState(measure);
 
@@ -277,7 +303,7 @@ function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthP
       if (rafId) cancelAnimationFrame(rafId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fontFamily, fontPx, fontWeight, text, maxWidthPx, maxFrames]);
+  }, [fontFamily, fontPx, fontWeight, text, maxWidthPx, presetLines, maxFrames]);
 
   return metrics;
 }
@@ -308,7 +334,9 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   const shadowRgba = hexToRgba(spec.shadow.color, effectiveShadowOpacity);
   const textShadow = effectiveShadowOpacity > 0 ? `0 0 ${blurPx}px ${shadowRgba}` : 'none';
 
-  const { ascentPx, descentPx, lines } = useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, spec.text, maxWidthPx);
+  const { ascentPx, descentPx, lines } = useSettledFontMetricsPx(
+    fontFamily, fontPx, fontWeight, spec.text, maxWidthPx, spec.lines
+  );
   const baselineY = topPx + ascentPx;
   // Matches the backend's line advance exactly (design §6 step 2:
   // `line_advance = ascent + descent`, never the browser's own guess at
