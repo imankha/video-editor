@@ -737,8 +737,8 @@ async def get_collection_intro(
 ):
     """Resolve a (scope, ratio) collection's OWN attached intro -- id (raw
     stored value, for the picker's preselection) + name (resolved, what will
-    actually play; accounts for the duration gate on the inherit path)."""
-    tag_list, definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    actually play)."""
+    tag_list, _definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
     key = collection_intro_settings_key(
         scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
     )
@@ -746,14 +746,10 @@ async def get_collection_intro(
     with get_db_connection() as conn:
         cursor = conn.cursor()
         raw_id = get_collection_intro_card_id(cursor, key)
-        # The duration gate on the inherit path uses the collection's LIVE
-        # TOTAL duration (all current members, NULL-excluded) -- the same
-        # quantity collections_summary's ratio_durations already computes,
-        # recomputed here rather than trusting a client-supplied number.
-        members = evaluate_collection_members(conn, definition)
-        durations = [m["duration"] for m in members if m["duration"] is not None]
-        total_duration = sum(durations) if durations else None
-        card = resolve_intro_card(raw_id, total_duration, conn)
+        # T6680: resolution no longer needs a duration (the duration-gated
+        # inherit path is gone) -- no need to evaluate_collection_members
+        # just to compute one.
+        card = resolve_intro_card(raw_id, None, conn)
 
     return {
         "intro_card_id": raw_id,
@@ -818,10 +814,9 @@ async def get_collection_intro_batch(items: str):
     way. `items` is a JSON-encoded array (querystring-safe for a small list;
     a real POST body isn't idiomatic for a request that mutates nothing).
     Each result echoes the item's OWN canonical key so the client can match
-    by key rather than trusting array position. The duration-gating member
-    scan only runs for a bucket that is actually on the inherit path (no
-    stored row) -- an explicit id or an explicit 0 never needs it, so most
-    buckets cost one KV lookup only."""
+    by key rather than trusting array position. T6680: resolution no longer
+    needs a duration (no inherit path left to gate), so every bucket costs
+    one KV lookup only -- no member scan."""
     try:
         raw_items = json.loads(items)
     except (ValueError, TypeError) as e:
@@ -832,7 +827,7 @@ async def get_collection_intro_batch(items: str):
         cursor = conn.cursor()
         results = []
         for item in parsed_items:
-            tag_list, definition = _collection_scope_and_definition(
+            tag_list, _definition = _collection_scope_and_definition(
                 item.scope_type, item.aspect_ratio, item.game_id,
                 ",".join(item.tags) if item.tags else None,
             )
@@ -841,12 +836,7 @@ async def get_collection_intro_batch(items: str):
                 aspect_ratio=item.aspect_ratio,
             )
             raw_id = get_collection_intro_card_id(cursor, key)
-            total_duration = None
-            if raw_id is None:
-                members = evaluate_collection_members(conn, definition)
-                durations = [m["duration"] for m in members if m["duration"] is not None]
-                total_duration = sum(durations) if durations else None
-            card = resolve_intro_card(raw_id, total_duration, conn)
+            card = resolve_intro_card(raw_id, None, conn)
             results.append({
                 "key": key,
                 "intro_card_id": raw_id,

@@ -1282,8 +1282,10 @@ _MOVED_REEL_CARRY_COLUMNS = (
     # potentially collides with an unrelated card) in the target profile. This
     # is the one `final_videos` INSERT writer that must NOT carry the
     # attachment forward; omitting the column lets the target row default to
-    # NULL, i.e. inherit the TARGET profile's own default (decision 4: "no
-    # dangling cross-profile ids"). Do not "helpfully" add it to this tuple.
+    # NULL, i.e. no intro until the user explicitly attaches one in the target
+    # profile (T6680: NULL no longer inherits a profile default -- there is
+    # none -- so this is simply "no dangling cross-profile ids, no intro").
+    # Do not "helpfully" add it to this tuple.
 )
 
 
