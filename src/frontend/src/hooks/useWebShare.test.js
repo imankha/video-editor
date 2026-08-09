@@ -10,7 +10,7 @@ import { useWebShare, ShareCapability } from './useWebShare';
 // of respecting the mobile-only capability the hook computed. It must gate
 // on `capability !== NONE`, not raw feature detection.
 
-function mockShareResponse(downloadId = 1, token = 'tok123') {
+function mockShareResponse(token = 'tok123') {
   globalThis.fetch = undefined;
   globalThis.apiFetchImpl = vi.fn(async () => ({
     ok: true,
