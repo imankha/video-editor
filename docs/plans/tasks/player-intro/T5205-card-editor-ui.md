@@ -85,7 +85,7 @@ element.
 ### D. Structure
 
 Screen -> Container -> View per `src/frontend/CLAUDE.md`. `RichText` stays presentational and
-store-free (it is also used by [T5225](T5225-overlay-text-layer.md) inside the Overlay screen).
+store-free (it is also used by [T5225](../overlay-text/T5225-overlay-text-layer.md) inside the Overlay screen).
 
 ## Relevant files
 - `src/frontend/src/components/ManageProfilesModal.jsx` — entry point precedent
