@@ -26,7 +26,9 @@ const AXIS_LABEL = { game: 'By game', tournament: 'By tournament', month: 'By mo
  *
  * @param {Object}   collections     - the lifted useCollections() value
  * @param {Function} renderCard      - (download) => ReactNode (the panel's reel card)
- * @param {Function} onPlayCollection - (reels[], title) => void (opens the shared player)
+ * @param {Function} onPlayCollection - (reels[], title, definition?) => void (opens the shared player;
+ *                                      definition is the {scope, filter, aspect_ratio} collection
+ *                                      identity, used to fetch the collection's OWN intro, T6700)
  * @param {Function=} onShareCollection - (definition, title) => void (T3620)
  * @param {Function=} onCopyCollectionLink - (definition) => void (T3620)
  * @param {Function=} onIntroCollection - (definition, title) => void, the collection's OWN intro (T5215 round 2)
@@ -47,9 +49,9 @@ export function CollectionsTab({
   // state, not persisted -- switching it never writes anything.
   const [groupBy, setGroupBy] = useState(GROUP_BY.GAME);
 
-  const onPlay = (items, title) => {
+  const onPlay = (items, title, definition) => {
     const reels = toPlayerReels(items);
-    if (reels.length) onPlayCollection(reels, title);
+    if (reels.length) onPlayCollection(reels, title, definition);
   };
 
   const reqGame = (id) => () => fetchMembers({ key: `game:${id}`, query: `game_id=${id}` });
