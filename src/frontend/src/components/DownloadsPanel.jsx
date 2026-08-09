@@ -358,9 +358,10 @@ export function DownloadsPanel({
   // Native share support
   // T6300: isMobile is no longer threaded to ReelTile — the reveal gate moved to
   // useIsCoarsePointer() inside the tile, and Share/Copy Link are now both always
-  // listed in its kebab (see ReelTile.jsx header comment), so the UA-sniff isMobile
-  // flag has no remaining consumer here.
-  const { copyLink, webShare } = useWebShare();
+  // listed in its kebab (see ReelTile.jsx header comment). isMobile IS still read
+  // here (webShareReel below) to decide whether the "Share" click should even
+  // attempt navigator.share() — desktop skips straight to ShareModal instead.
+  const { copyLink, webShare, isMobile } = useWebShare();
 
   if (!isOpen && !storyPlayer) return null;
 
@@ -479,9 +480,16 @@ export function DownloadsPanel({
     return { border: 'border-blue-500', dot: 'bg-blue-500' };
   };
 
-  // Share via the native sheet (mobile). Falls back to the ShareModal on failure.
+  // Share via the native sheet (mobile). Desktop has no native share surface
+  // worth attempting — even where navigator.share() technically exists, it's a
+  // bare OS share sheet with no recipient/visibility controls — so it opens
+  // ShareModal directly instead. Falls back to ShareModal on failure too.
   const webShareReel = async (e, download) => {
     e.stopPropagation();
+    if (!isMobile) {
+      setSharingDownload(download);
+      return;
+    }
     try {
       const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
       const method = await webShare({
