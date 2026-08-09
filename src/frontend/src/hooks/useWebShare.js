@@ -85,7 +85,12 @@ export function useWebShare() {
 
     const shareUrl = await createShareUrl(downloadId);
 
-    if (navigator.share) {
+    // Gate on `capability` (isMobile-aware), not the raw navigator.share
+    // feature check -- some desktop Chromium builds expose navigator.share
+    // for URL-only shares even without touch, which would otherwise pop the
+    // bare OS share sheet on desktop instead of respecting the mobile-only
+    // capability this hook already computed above.
+    if (capability !== ShareCapability.NONE && navigator.share) {
       await navigator.share({ title, text, url: shareUrl });
       return 'link';
     }

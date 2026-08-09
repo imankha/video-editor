@@ -45,6 +45,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose, onEnded, sport }) {
     isMuted,
     hasAudio,
     isLoading,
+    play,
     togglePlay,
     seek,
     seekForward,
@@ -53,6 +54,19 @@ export function MediaPlayer({ src, autoPlay = true, onClose, onEnded, sport }) {
     toggleMute,
     handlers,
   } = useStandaloneVideo({ autoPlay });
+
+  // The `autoPlay` prop only affects the video element's initial mount (the
+  // native `autoplay` attribute is a load-time hint, not a live switch) --
+  // toggling it later, e.g. when an intro pre-roll finishes and the caller
+  // flips autoPlay false->true, does nothing on its own. Explicitly call
+  // play() on that transition so playback actually resumes on the same
+  // timeline instead of leaving the video paused.
+  const autoPlayMountedRef = useRef(autoPlay);
+  useEffect(() => {
+    if (autoPlayMountedRef.current === autoPlay) return;
+    autoPlayMountedRef.current = autoPlay;
+    if (autoPlay) play();
+  }, [autoPlay, play]);
 
   // Fullscreen toggle
   const toggleFullscreen = useCallback(() => {

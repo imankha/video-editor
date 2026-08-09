@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { MediaPlayer } from './MediaPlayer';
 
@@ -26,5 +26,36 @@ describe('MediaPlayer sport -> scrub handle (T5130)', () => {
     const { container } = render(<MediaPlayer src="blob:x" autoPlay={false} />);
     expect(glyph(container)).toBeNull();
     expect(plainDot(container)).not.toBeNull();
+  });
+});
+
+// Bug found live-testing T5220 (2026-08-08): a share's intro pre-roll flips
+// `autoPlay` false->true when it finishes, but toggling the `autoplay`
+// attribute on an already-mounted <video> does nothing per the HTML spec --
+// the video was left paused with no auto-continue. MediaPlayer must call
+// play() explicitly on that transition instead of relying on the attribute.
+describe('MediaPlayer autoPlay prop toggling after mount (T5220 intro pre-roll handoff)', () => {
+  it('does not call play() on initial mount (the autoplay attribute handles that)', () => {
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    render(<MediaPlayer src="blob:x" autoPlay={true} />);
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  });
+
+  it('calls play() when autoPlay flips false -> true after mount', () => {
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    const { rerender } = render(<MediaPlayer src="blob:x" autoPlay={false} />);
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    rerender(<MediaPlayer src="blob:x" autoPlay={true} />);
+    expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call play() when autoPlay flips true -> false (e.g. end card shown)', () => {
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    const { rerender } = render(<MediaPlayer src="blob:x" autoPlay={true} />);
+    rerender(<MediaPlayer src="blob:x" autoPlay={false} />);
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
   });
 });
