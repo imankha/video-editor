@@ -1,14 +1,12 @@
-# T6710 — Owner in-app playback intro as a real timeline segment (Design)
+# T6710 — Owner in-app playback intro as a real composite-scrubber timeline segment (Design)
 
-**Status:** WAITING ON USER (design gate)
-**Tier:** L (frontend composite + one new backend GET endpoint, shared playback infra, no schema change)
+**Status:** WAITING ON USER (design gate — REVISED after T6700-merge re-audit)
+**Tier:** L (frontend composite scrubber + a genuinely-seekable intro renderer over shipped playback infra; no backend change, no schema change)
 **Epic:** [Player Intro + Rich Text](player-intro/EPIC.md)
 **Task file:** [player-intro/T6710-owner-playback-intro-as-timeline-segment.md](player-intro/T6710-owner-playback-intro-as-timeline-segment.md)
-**Subsumes:** [T6700](player-intro/T6700-owner-inapp-playback-intro.md) — never shipped (see §1.1); this task builds the owner in-app intro from scratch.
+**Extends:** [T6700](player-intro/T6700-owner-inapp-playback-intro.md) — the owner in-app playback intro **shipped** (merged via `feature/T6680`). This task EXTENDS that code, reusing the swap's fetch, both endpoints, and the intro renderer unchanged (see §1.1). It does **not** rebuild anything.
 
-This design is decision-complete except for the **two explicit approval-gate questions** in §7,
-each carrying a recommendation the user can confirm or redirect. Approach is settled (§3): Approach B,
-sub-variant (b) — a thin outer composite. Approach A is closed by user direction.
+This design is approach-complete. It carries exactly **ONE new approval-gate question** (§7): whether the reel-vs-reel scrubber segments are ALSO duration-proportional or stay equal-weight among themselves. The user's two earlier open questions are now **DECIDED** (§0, decisions 1 and 2) and are NOT re-litigated here.
 
 ---
 
@@ -16,118 +14,117 @@ sub-variant (b) — a thin outer composite. Approach A is closed by user directi
 
 | # | Decision | Choice |
 |---|---|---|
-| 1 | **Approach A vs B** | **B (virtual composite, intro kept a distinct region).** A (ffmpeg concat into one seamless bar) is CLOSED by user direction — it produces no visible seam, the opposite of "separate scrub region." |
-| 2 | **Composite structure (Code Expert (a) vs (b))** | **(b) Thin OUTER composite** owning two regions: an intro driver + the untouched `CollectionPlayer`/`useStoryPlayback` below. Does NOT rewrite the shared hook (which 3 other callers depend on). |
-| 3 | **Region-boundary rendering** (Q1, §7) | **Recommend:** a separate bar GROUP for the intro, left of a gap/divider, tinted a distinct accent (blue-400) with a small "Intro" label; the reel region(s) keep today's white segmented cells. Sizing: **equal-weight** intro cell (NOT proportional to `card.duration`). |
-| 4 | **Backward-seek into the intro** (Q2, §7) | **Recommend:** **landing/restart only** — clicking the intro region remounts the intro from 0 and replays it atomically. NOT arbitrary-offset seekable (that requires rewriting the atomic `MotionPreview` into a time-driven player — materially bigger, higher risk, out of scope). No "UX lie": the intro region visibly reads as a distinct restart-on-tap block, not a fine scrubber. |
-| 5 | **Intro→reel handoff** | Reuse `SharedCollectionView`'s proven `onDone` → mount `CollectionPlayer` (`<video autoPlay>`) transition. No autoplay-attribute toggling (avoids the T6700-flagged bug). |
-| 6 | **Payload / endpoint** | **NEW** `GET /api/downloads/{download_id}/intro-playback` (single reel) and `GET /api/collections/intro-playback` (collection, keyed by scope+ratio). Both reuse the SHIPPED `resolve_intro_for_reel(mode="playback")` / `build_intro_playback_payload`. No schema change, no migration. |
+| 1 | **Intro region width** (was Q1) | **DECIDED by user — PROPORTIONAL** to the intro card's actual duration relative to the whole reel/collection duration. Still visually distinct (own group, tint, "Intro" label), now proportionally sized. NOT the old "fixed equal-weight block." |
+| 2 | **Backward-seek into the intro** (was Q2) | **DECIDED by user — TRUE ARBITRARY SEEK.** Scrubbing into the intro lands wherever the playhead is dropped inside the intro's own animation. NOT restart-from-0. This forces `MotionPreview` to become `currentTime`-driven — a real, conscious scope increase (§Part C, §5). |
+| 3 | **Integration structure** | **(b2) intro owns its own clock + a thin composite router.** `useStoryPlayback` stays byte-identical. Add `useIntroPlayback` (the intro's own clock), an `IntroStoryPlayer` composite that owns a single `region` state and DERIVES global position, and a generalized weighted composite scrubber. **(b1) — "intro as segment 0 inside `useStoryPlayback`" — is REJECTED** (blast radius across 4 callers + it forces a faked media element the standards ban; §3). |
+| 4 | **Making the intro seekable** | Feasible, LOW-MEDIUM risk. The intro card is a near-ideal WAAPI scrub target (no `<video>`, no slideshow, no infinite loops, no non-WAAPI timers). Create each WAAPI `Animation` `pause()`d; `seek(ms)` sets `a.currentTime` on all; a parent rAF advances a virtual clock forward. `fill:'both'` is already set (`MotionPreview.jsx:56/74/83`), so staggered/out-of-interval poses are free. Kill `setTimeout(onDone)` (`:87`). ONE medium-risk area: the font-settle `setState` (`introCardPreviewElements.js:277`) can remount text nodes and invalidate the WAAPI objects — the animation effect must key on `elements` identity and re-`seek` after rebuild (§Part A). |
+| 5 | **Intro→reel handoff** | Composite owns it: `onIntroEnded` → `setRegion('reels')` + `goTo(0,0)`. Replaces today's `onDone={() => setIntroShowing(false)}` (`DownloadsPanel.jsx:780`). Boundary double-fire guarded by the single `region` state (§Sync surface). |
+| 6 | **Payload / endpoints** | **NO backend change.** Both endpoints already SHIPPED (T6700) and are reused UNCHANGED: `GET /api/downloads/{download_id}/intro-playback` (`downloads.py:842-875`) and `GET /api/collections/intro-playback` (`collections.py:760-803`). No new route, no schema change, no migration. |
 
 ---
 
 ## 1. Current State Analysis
 
-### 1.1 Correction: T6700 never merged — this task builds from scratch
+### 1.1 Correction: T6700 SHIPPED — this task EXTENDS it (the prior doc's premise was stale)
 
-The task file (and T6700's own file) frame T6710 as "extending T6700's swap." **That is stale.**
-Code Expert verified, and I re-confirmed against the code:
+The previous revision of this doc claimed "T6700 never merged, build from scratch." **That was false.**
+T6700 merged via `feature/T6680`; the export-pipeline knowledge doc records it as "the 5th egress —
+owner in-app playback." Verified against the current tree, the owner in-app intro **already ships**:
 
-- **No `IntroPreRoll` mount in `DownloadsPanel.jsx`.** The owner story player renders a bare
-  `<CollectionPlayer>` (`DownloadsPanel.jsx:716-730`) with no intro branch.
-- **No owner `intro-playback` endpoint.** `grep intro-playback` finds only doc text; there is no
-  such route. `downloads.py:693-726` is the burn-in **download** path (`GET /{id}/file`), not a
-  playback payload endpoint.
-- **No T6700 impl commit.**
+| Already ships (REUSED unchanged) | Location |
+|---|---|
+| Unmount/mount **swap** gated by `introShowing` state: `IntroPreRoll` (intro) OR `CollectionPlayer` (reels) | `DownloadsPanel.jsx:776-797`; state at `:89-94` |
+| Play handlers **fetch the intro payload** and stash it on `storyPlayer.intro`, then `setIntroShowing(!!intro)` | `handlePlay` `:426-471`, `onPlayCollection` `:111-129` |
+| **Forward handoff** intro→reel already exists: `onDone={() => setIntroShowing(false)}` → `CollectionPlayer`'s `<video autoPlay>` fires on mount | `:780` |
+| **Single-reel endpoint** (`resolve_intro_for_reel(...,mode="playback",profile_conn=conn)`) | `downloads.py:842-875` |
+| **Collection endpoint** (resolves the card itself via live total duration, then `build_intro_playback_payload`) | `collections.py:760-803` |
+| Serializer `build_intro_playback_payload` / resolver `resolve_intro_for_reel` | `intro_egress.py:110-138` / `:141-233` |
+| Intro renderer `IntroPreRoll` → `MotionPreview` (the SAME component the editor/carousel use) | `introcards/IntroPreRoll.jsx`, `introcards/MotionPreview.jsx` |
 
-So the owner in-app path today shows **NO intro at all**, for either a single reel or a collection.
-T6710 **subsumes T6700**: there is no existing swap to extend — we are building the owner in-app
-intro for the first time, and building it directly as the distinct-region composite the user asked for.
+**The genuine remaining delta** (what this task actually builds) is therefore NOT "add an intro." The
+intro plays today. The delta is turning the **bolted-on pre-roll swap** into a **real single timeline**:
 
-### 1.2 The exact owner in-app render path (today)
+1. Make `MotionPreview` `currentTime`-driven (seekable), replacing its mount-once auto-play (§Part A).
+2. Give the intro its own clock hook `useIntroPlayback` (a real clock for real non-media animations).
+3. Replace the DownloadsPanel swap ternary with an `IntroStoryPlayer` composite that owns a single
+   `region` state and DERIVES a continuous global position across intro + reels.
+4. Generalize `CollectionPlayer`'s segmented bar into ONE weighted composite scrubber (segment 0 = intro,
+   proportionally sized — decision 1), driven additively via a new `renderScrubber={false}` seam.
+
+`SharedCollectionView` has its OWN identical swap (`SharedCollectionView.jsx:121-136`) — **out of scope,
+untouched** (the epic explicitly scopes T6710 to the owner in-app player only).
+
+### 1.2 The exact owner in-app render path (today — WITH the shipped T6700 swap)
 
 ```mermaid
 flowchart LR
-  A["Single reel: DownloadsPanel.handlePlay :386<br/>setStoryPlayer({reels:[toPlayerReel(download)], downloadId})"] --> S
-  B["Collection: onPlayCollection :90<br/>setStoryPlayer({reels, title})"] --> S
-  S["storyPlayer state :84"] --> CP["&lt;CollectionPlayer&gt; :716-730"]
-  CP --> H["useStoryPlayback(videoRef, reels) :78-90"]
-  CP --> V["&lt;video autoPlay&gt; :343-352"]
+  A["Single reel: handlePlay :426<br/>fetch /intro-playback, setStoryPlayer({reels, downloadId, intro})<br/>setIntroShowing(!!intro)"] --> S
+  B["Collection: onPlayCollection :111<br/>fetch /collections/intro-playback, setStoryPlayer({reels, title, intro})<br/>setIntroShowing(!!intro)"] --> S
+  S["storyPlayer + introShowing :89-94"] --> SW{introShowing?}
+  SW -- true --> IPR["&lt;IntroPreRoll&gt; :777<br/>(MotionPreview, mount-once, plays start→end)"]
+  SW -- false --> CP["&lt;CollectionPlayer&gt; :784<br/>useStoryPlayback + &lt;video autoPlay&gt;"]
+  IPR -- "onDone → setIntroShowing(false) :780" --> CP
 ```
 
-Both entry points funnel into one `storyPlayer` state and render one `CollectionPlayer`. No intro
-awareness anywhere in that path.
+This is TWO separately-mounted screens glued by a timer/callback — exactly the "commercial before the
+video" the user flagged. There is no single scrubber spanning both, and no way to seek backward from the
+reel into the intro.
 
 ### 1.3 The shared infra we must NOT destabilize
 
 `CollectionPlayer` + `useStoryPlayback` already implement a **virtual playhead across N reels**:
 
 - Segmented progress bar, **equal-width** cells (`flex gap-1`, each `flex-1`), `CollectionPlayer.jsx:216-260`.
-- Per-segment click-to-seek: `handleSegmentClick` computes a click fraction → `goTo(i, fraction)`
-  (`CollectionPlayer.jsx:180-184`, `useStoryPlayback.js:51-55`).
+- Per-segment click-to-seek: `handleSegmentClick` → click fraction → `goTo(i, fraction)` (`:180-184`,
+  `useStoryPlayback.js:51-55`).
 - Boundary advance on the `<video>` `ended` event (`useStoryPlayback.js:86-93`).
-- Progress derived from `v.currentTime / v.duration` **every rAF tick, NEVER from a frozen
-  `duration`** (`useStoryPlayback.js:94-105`) — deliberate, so a NULL reel duration can't break
-  the scrubber (docstring `:5-11`).
+- Progress derived from `v.currentTime / v.duration` **every rAF tick, NEVER from a frozen `duration`**
+  (`useStoryPlayback.js:94-105`) — deliberate, so a NULL reel duration can't break the scrubber
+  (docstring `:6-10`). `pendingSeekRef` cancels an in-flight seek on transition (`:38,87`).
 
-The hook is **100% HTMLMediaElement-driven**: it needs a real `currentTime`, `duration`, and an
-`ended` event on the `<video>`.
+The hook is **100% HTMLMediaElement-driven**: it reads a real `currentTime`/`duration` and seeks by
+assigning `v.currentTime`. Its contract is literally "a real element's live metadata."
 
-**Callers that must stay green (regression surface):**
+**Callers that must stay green (the regression surface — all keep `useStoryPlayback` byte-identical):**
 
 | Caller | Location | Requirement |
 |---|---|---|
-| Owner story player | `DownloadsPanel.jsx:716-730` | Gains the intro (this task) |
-| Share swap | `SharedCollectionView.jsx:129` | Out of scope — do NOT touch |
+| Owner story player | `DownloadsPanel.jsx:776-797` | Gains the composite (this task) |
+| Share swap | `SharedCollectionView.jsx:121-136` | **Out of scope — do NOT touch** |
 | Ranker replay | `RankingGame.jsx:264` | Must stay intro-free |
-| Dev diag harness | (diag) | Unaffected |
+| Dev diag harness | `collectionplayerdiag/main.jsx:64` | Unaffected |
 | Characterization tests | `CollectionPlayer.characterization.test.jsx`, `useStoryPlayback.test.js` | The guard — stay byte-green |
 
-### 1.4 The intro renderer is ATOMIC — the load-bearing constraint
+### 1.4 The intro renderer TODAY is atomic — and that is exactly what changes
 
-`IntroPreRoll` (`introcards/IntroPreRoll.jsx`) wraps `MotionPreview` (`introcards/MotionPreview.jsx`).
-`MotionPreview`:
+`MotionPreview` (`MotionPreview.jsx`) drives motion with the **Web Animations API** in a **mount-once**
+`useEffect([])` (`:44-94`): every motion piece is a WAAPI `Animation` pushed into an `animations` array —
+a photo push-in (`:51-57`), N staggered text fade-ups each with its own `delay` (`:64-76`), one white
+flash (`:79-85`). It has **no `currentTime`, no `seek`, no progress callback**, and auto-completes via
+`setTimeout(onDone, durationMs + 60)` (`:87`). `durationSec = card?.duration || 4.0` (`:42`).
 
-- Drives motion with the **Web Animations API** in a **mount-once** `useEffect([])`
-  (`MotionPreview.jsx:44-94`).
-- Fires `onDone` via `setTimeout(onDone, durationMs + 60)` (`:87`), where
-  `durationSec = card?.duration || 4.0` (`:42`).
-- Has **no `currentTime`, no `seek`, no progress callback, no `ended` event.** It plays start→end
-  exactly once and cannot be scrubbed to an offset without a rewrite.
+The expert feasibility pass (§Part A) established this is a **near-ideal scrub target** — it has NO
+`<video>`, NO photo slideshow, NO looping/infinite animations, and NO non-WAAPI visual timers. RichText
+renders with `animation:'none'` (`introCardPreviewElements.js:139`); its font-settle rAF only recomputes
+layout, it is NOT a playback clock. So making it seekable is a bounded, honest change, not a rewrite into
+a fake media element. Decision 2 (true seek) makes this a first-class part of the work — see §Part A.
 
-> This is why intra-intro scrubbing (Q2 option b) is out of scope: it would mean rewriting
-> `MotionPreview` into a time-driven player, and the coding standards BAN faking an impossible
-> state (do NOT bolt a fake `currentTime` onto the intro to make it look like a media element).
+### 1.5 Backend: nothing new — both endpoints already ship
 
-### 1.5 Client lacks the intro payload — a new endpoint is genuinely needed
+Both owner playback endpoints shipped with T6700 and return `{ "intro": {card, previewUrl, field_values,
+profile} | null }`:
 
-`GET /api/downloads` (the list) exposes only `intro_card_id`, `intro_card_name`,
-`resolved_intro_has_photo` (`downloads.py:237-239, 638-640`). `MotionPreview` needs the full
-`{card, previewUrl(presigned), field_values, profile}` shape — **absent client-side**.
+- **Single reel** — `GET /api/downloads/{download_id}/intro-playback` (`downloads.py:842-875`): resolves
+  the reel's own `final_videos.intro_card_id` + `duration` via
+  `resolve_intro_for_reel(..., mode="playback", profile_conn=conn)`. This is the one call site that
+  intentionally passes the ambient `get_db_connection()` (same-account/same-request-user — correct here).
+- **Collection** — `GET /api/collections/intro-playback?scope_type&aspect_ratio&game_id?&tags?`
+  (`collections.py:760-803`): resolves the COLLECTION's own attached card against LIVE total duration,
+  then `build_intro_playback_payload`. Mirrors `get_collection_intro`'s resolution block.
 
-**Already shipped and reusable (do NOT rebuild):**
-
-- `resolve_intro_for_reel(user_id, profile_id, intro_card_id, reel_duration, reel_id, *, mode="playback")`
-  → returns exactly `{card, previewUrl, field_values, profile}` or `None`
-  (`intro_egress.py:141-233`). Opens its OWN read-only profile connection keyed on explicit
-  `(user_id, profile_id)` (`:174-194`), decodes `shown_fields`/`text_elements` (`:212-222`).
-- `build_intro_playback_payload(card, field_values)` — the one serializer both live and frozen
-  paths call (`intro_egress.py:110-138`).
-- The collection share path already serializes this exact payload from the FROZEN card
-  (`collections.py:940-947`).
-
-These are the same helpers the share paths use — we add owner-facing GET wrappers around them.
-
-### 1.6 Collections have no `download_id` — the resolve split
-
-- A **single reel** resolves its intro from `final_videos.intro_card_id` + `duration`
-  (`downloads.py:694-726` shows the download path doing exactly this).
-- A **collection** resolves its intro from the collection's OWN attachment, keyed by
-  `(scope, ratio)` (`collections.py:734-762`, `get_collection_intro`) against the collection's
-  live total duration (all members, NULL-excluded, `:754-756`).
-
-The owner story player plays **both** through the same `storyPlayer.reels` array
-(`onPlayCollection` vs `handlePlay`), so the composite must handle both — via two endpoints
-(§4.2), one per resolve rule.
+Both are non-fatal (200-always, `{"intro": null}` on no-attachment/resolve failure). **No change to any
+backend file.** `IntroPreRoll.jsx` already reassembles the split payload back into the single `card`/
+`profile` shape `MotionPreview` reads.
 
 ---
 
@@ -135,309 +132,268 @@ The owner story player plays **both** through the same `storyPlayer.reels` array
 
 ```mermaid
 flowchart TB
-  subgraph OUTER["NEW IntroStoryPlayer (thin outer composite)"]
-    SCR["Composite scrubber:<br/>[ Intro region ] | [ reel cells... ]"]
-    subgraph PHASE["exactly one child mounted at a time"]
-      IR["phase='intro'<br/>IntroPreRoll (MotionPreview)<br/>own timer driver, restart-on-tap"]
-      RS["phase='reels'<br/>CollectionPlayer + useStoryPlayback<br/>UNTOUCHED, its own N-reel scrubber"]
+  subgraph OUTER["NEW IntroStoryPlayer (thin composite — owns region + derives global position)"]
+    SCR["NEW CompositeScrubber (generalized weighted bar):<br/>[ ▓ Intro (flexGrow=introDur) ] [ reel ][ reel ]... "]
+    REGION{"region ∈ {intro, reels}<br/>(SINGLE source of truth)"}
+    subgraph INTRO["region === 'intro'"]
+      UIP["useIntroPlayback(introDurSec)<br/>introTimeMs clock, rAF, seekIntro, onIntroEnded"]
+      IPR["IntroPreRoll → MotionPreview<br/>currentTimeMs-driven, seekable (Part A)"]
     end
+    subgraph REELS["region === 'reels'"]
+      RS["CollectionPlayer renderScrubber={false}<br/>+ useStoryPlayback (BYTE-IDENTICAL)"]
+    end
+    REGION --> INTRO
+    REGION --> REELS
+    UIP --> IPR
   end
-  FETCH["GET /api/downloads/{id}/intro-playback<br/>OR /api/collections/intro-playback"] --> OUTER
-  IR -- onDone --> RS
+  FETCH["(already shipped) GET .../intro-playback → storyPlayer.intro"] --> OUTER
+  UIP -- "onIntroEnded → setRegion('reels'); goTo(0,0)" --> RS
 ```
-
-Two structurally distinct regions on ONE bar row:
-
-- **Intro region** — its own timer-driven driver (mount-once `MotionPreview`), visually distinct
-  (Q1), restart-on-tap only (Q2).
-- **Reel region(s)** — the existing `CollectionPlayer`'s equal-width white cells, unchanged.
 
 **Design principles applied:**
 
-- [x] **DRY:** reuse `IntroPreRoll`/`MotionPreview` verbatim; reuse `resolve_intro_for_reel(mode="playback")`
-      + `build_intro_playback_payload` verbatim; reuse `CollectionPlayer`/`useStoryPlayback` verbatim.
-      Net new code is the thin composite + two GET wrappers + one shared scrubber-strip render.
-- [x] **Single code path:** the intro is delivered ONE way (DOM `MotionPreview`), matching the
-      epic's "one preview component" invariant and every other playback surface.
-- [x] **Minimal branches:** the composite routes on a single `phase` value (`'intro' | 'reels'`),
-      not scattered conditionals.
-- [x] **No faked state:** the intro's timer lives in its OWN driver, never bolted into the
-      media-element-driven `useStoryPlayback` (coding-standards ban on faking impossible state).
-- [x] **No new shared-infra coupling:** `useStoryPlayback` and its 3 other callers are byte-unchanged.
+- [x] **DRY:** reuse `IntroPreRoll`/`MotionPreview` (now made seekable, not duplicated), both endpoints,
+      `resolve_intro_for_reel`/`build_intro_playback_payload`, and `CollectionPlayer`/`useStoryPlayback`
+      verbatim. Net-new code is `useIntroPlayback` + `IntroStoryPlayer` + the generalized scrubber view +
+      the seekable-clock changes inside `MotionPreview`.
+- [x] **Single source of truth for position:** the composite owns ONE `region` state; **global currentTime
+      is DERIVED, never stored** (region==='intro' → global = intro clock; region==='reels' → global =
+      introDur + Σ(prior reel durations) + activeReel.currentTime). No `globalCurrentTime` useState mirror
+      of the sub-clocks (that is the reactive duplication the standards ban).
+- [x] **Minimal branches:** cross-boundary scrub is a SINGLE comparison `if (globalMs < introDurMs)` →
+      `seekIntro` else `goTo(reelIdx,frac)`. Region routing is one value, not scattered conditionals.
+- [x] **No faked media element:** the intro clock lives in `useIntroPlayback` (a real clock for real
+      non-media WAAPI animations). We never hand `useStoryPlayback` a fake `{currentTime, duration, play}`
+      object — that is precisely why (b1) is rejected (§3).
+- [x] **No new shared-infra coupling:** `useStoryPlayback` and its 3 other callers are byte-unchanged;
+      `CollectionPlayer` gets ONE additive default-on prop.
 
 ---
 
-## 3. Chosen Approach — B, sub-variant (b), with justification
+## 3. Chosen Approach — (b2), with the (b1) rejection made explicit
 
-**Approach A (physical ffmpeg concat, one seamless `<video>` bar) is CLOSED.** The user tested
-T6700 and said *"i wanted a separate scrub region for the intro card."* A produces a single seamless
-scrubber with no seam — the opposite of a separate region. It also adds a per-play transcode/cache
-on a path that has always served the LIVE current state (fighting the resolve-at-play-time contract).
-Do not design A.
+The user's decisions (true seek + proportional intro) require the intro to be part of ONE timeline with a
+continuous playhead. Two ways to structure that:
 
-**Within Approach B, choose (b) the thin outer composite over (a) generalizing `useStoryPlayback`:**
-
-| | (a) Generalize the hook into a `kind: video|intro` segment abstraction | (b) Thin outer composite (RECOMMENDED) |
+| | **(b1) intro as "segment 0" inside `useStoryPlayback`** | **(b2) intro owns its own clock + thin composite router (CHOSEN)** |
 |---|---|---|
-| Blast radius | Rewrites the core of a hook shared by 3 other callers (share, ranker, diag) | Zero change to the hook or its callers |
-| Faking risk | Tempts a fake `currentTime` on the intro segment inside the media-driven hook (BANNED) | Intro timer stays in its own clearly-separate driver |
-| UX fit | Would tend toward one uniform bar | Two structurally distinct regions — literally what the user asked for |
-| Atomic-intro honesty | Would have to pretend the atomic intro is seekable | Intro region is its own restart-on-tap block, no pretense |
+| Shared-hook change | Rewrites the core of a hook shared by 4 callers (SharedCollectionView `:129`, RankingGame `:264`, diag `:64`, owner) | **Zero change** — hook stays byte-identical; all 4 callers + characterization tests untouched |
+| Faked-state risk | Forces either intro-specific branching into the shared hook for an owner-only feature, OR handing it a FAKE object with `.currentTime/.duration/.play()` — **exactly the "fake nonexistent media element" the coding standards BAN** | Intro clock is a REAL clock in its own sibling hook; nothing is faked |
+| Global position | Would live inside a media-driven hook that reads `v.currentTime` — no honest place for a non-media segment | **Derived** in the composite from whichever sub-clock is active — no third stored clock |
+| Blast radius / disqualifier | Blast-radius + invariant violation + no-faked-state → **DISQUALIFIED** | Additive; the one seam that touches `CollectionPlayer` is a default-on `renderScrubber` prop |
 
-(b) matches BOTH the "separate region" UX decision AND "don't destabilize shared infra." Adopted
-as the Code Expert recommended; I add the concrete `phase`-routing structure and the two-endpoint
-resolve split below.
+**(b2) is adopted.** It keeps the shared infra frozen, gives the intro an honest clock, and makes the
+composite the single owner of position. The three new/changed pieces:
+
+- **`useIntroPlayback(introDurationSec)`** — a tiny sibling hook: `introTimeMs` state, a rAF that advances
+  it while playing, `seekIntro(ms)`, and `onIntroEnded` fired once `introTimeMs >= durationMs`. Drives
+  `MotionPreview`'s new `currentTimeMs` prop. The honest home for the intro clock.
+- **`IntroStoryPlayer`** — the composite container replacing the DownloadsPanel swap ternary; owns the
+  single `region` state and the derived global position.
+- **Generalized composite scrubber** — `CollectionPlayer`'s segmented bar generalized to an ordered list
+  of weighted segments (segment 0 = intro). Proportional width (decision 1) is nearly free: replace
+  `flex-1` (equal) with `style={{flexGrow: seg.durationSec}}`; intro width =
+  `introDur / (introDur + ΣreelDur)` automatically.
+
+### Part A — making `MotionPreview` truly seekable (first-class part of the approach)
+
+Effort ~0.5–1 day, LOW-MEDIUM risk. The card is a near-ideal WAAPI scrub target (§1.4). Implementation:
+
+- **Pause, don't auto-play.** Build each of the three animation types `pause()`d instead of letting them
+  auto-play from mount. Expose (imperatively or via a `currentTimeMs` prop effect) `seek(ms)` =
+  `animations.forEach(a => a.currentTime = ms)`.
+- **Forward playback is virtual-clock-driven.** `useIntroPlayback`'s rAF advances a virtual `clockMs`; the
+  component `seek(clockMs)` each frame. A scrub calls the SAME `seek(ms)`. One code path for play and scrub.
+- **`fill:'both'` already set** on all three animation kinds (`:56/:74/:83`), so staggered `delay`s and
+  out-of-interval poses (before a text line's delay, after the flash) resolve automatically — **no manual
+  stagger bookkeeping**, no per-element offset math.
+- **Kill `setTimeout(onDone)` (`:87`).** Auto-continue becomes "virtual clock reached `durationMs`", owned
+  by `useIntroPlayback`'s `onIntroEnded` → the composite. `MotionPreview` no longer decides when the intro
+  ends.
+- **THE ONE NON-TRIVIAL AREA (medium risk): the font-settle rebuild.** `useCardPreviewElements`
+  (`introCardPreviewElements.js:238-296`) can fire a late `setState` (`:277`) up to ~45 frames after mount
+  that REMOUNTS text-slot DOM nodes, invalidating the WAAPI `Animation` objects bound to them. So the
+  animation-building effect **must depend on `elements` identity (and box size), NOT `[]`**, and
+  **re-apply `seek(currentClockMs)` after any rebuild**. This actually **FIXES a latent staleness bug** in
+  today's mount-once code (where a post-settle remount silently detaches the running animations) rather
+  than adding risk.
+- **Photo decode race:** reuse the existing skeleton-until-loaded guard (`CollectionPlayer.jsx:70,333`
+  `videoReady` pattern) for the intro photo `<img>` decode, so a scrub-to-mid never shows an un-decoded
+  frame.
 
 ---
 
 ## 4. Implementation Plan
 
-### 4.1 Frontend — the new composite
+### (i) `MotionPreview.jsx` — become `currentTimeMs`-driven + seekable
 
-**New component `src/frontend/src/components/introcards/IntroStoryPlayer.jsx`** (co-located with the
-other intro components). It is the single thing `DownloadsPanel` mounts in place of the bare
-`<CollectionPlayer>` when an intro resolves.
+- Add a `currentTimeMs` prop (the driven clock from `useIntroPlayback`). On change, `seek(currentTimeMs)`.
+- Build each WAAPI `Animation` `pause()`d; keep `fill:'both'` (already present).
+- Change the animation-building `useEffect` deps from `[]` to `[elements, boxWidth, boxHeight]`
+  (identity-keyed rebuild); after each rebuild, re-`seek(currentTimeMs)` so a font-settle remount holds
+  the current pose instead of snapping to 0.
+- Delete `setTimeout(onDone, durationMs + 60)` (`:87`) — end-of-intro is now the composite's call via the
+  clock reaching `durationMs`. (`onDone` may be removed from `MotionPreview` entirely; the composite owns
+  auto-continue.)
+- Guard the photo `<img>` with the existing skeleton-until-decoded pattern.
 
-Props: exactly `CollectionPlayer`'s current prop set (`reels, title, onClose, onReelChange,
-onDownload, downloadLoading, onReEdit, reEditLoadingId, onReRank, reRankLoadingId, handleGlyph`)
-PLUS `intro` (the fetched payload) and `aspect` (the active reel's ratio, for `IntroPreRoll`).
-
-Internal state: `const [phase, setPhase] = useState(intro ? 'intro' : 'reels')`.
+### (ii) NEW `useIntroPlayback.js` (co-located, e.g. `introcards/useIntroPlayback.js`)
 
 ```pseudo
-IntroStoryPlayer({ intro, aspect, reels, ...playerProps }):
-  phase = useState(intro ? 'intro' : 'reels')
-  introKey = useState(0)   // bump to remount MotionPreview on restart-tap (Q2 = restart-only)
+useIntroPlayback(introDurationSec):
+  durationMs = introDurationSec * 1000
+  introTimeMs = useState(0)
+  playing = useState(true)
+  rAF loop (while playing && region-active):        // advance virtual clock
+     introTimeMs = min(introTimeMs + dt, durationMs)
+     if introTimeMs >= durationMs: onIntroEnded()   // fired ONCE (guard below)
+  seekIntro(ms): introTimeMs = clamp(ms, 0, durationMs)   // arbitrary seek (decision 2)
+  return { introTimeMs, playing, setPlaying, seekIntro, onIntroEnded_subscription }
+```
 
-  scrubber =
-    <CompositeScrubber
-       intro={intro}
-       reels={reels}
-       phase={phase}
-       // clicking the intro region: land in intro, restart it from 0
-       onIntroSeek={() => { setPhase('intro'); setIntroKey(k => k+1) }}
-       // clicking a reel cell while in intro: leave intro, jump into that reel
-       onReelSeek={(i, frac) => { setPhase('reels'); pendingReelSeek = {i, frac} }}
-    />
+The clock is frozen (no rAF advance) whenever the composite's `region !== 'intro'`.
 
-  if phase == 'intro':
-    return (
-      scrubber +
-      <IntroPreRoll
-         key={introKey}                     // remount == replay-from-0 (atomic)
-         intro={intro} aspect={aspect}
-         onDone={() => setPhase('reels')}    // forward auto-continue (§4.3)
-         positionClassName="fixed inset-0 z-[85]" />
-    )
+### (iii) NEW `IntroStoryPlayer.jsx` (composite container, co-located in `introcards/`)
 
-  // phase == 'reels'
+The single thing `DownloadsPanel` mounts in place of the swap ternary. Owns the SINGLE `region` state and
+the DERIVED global position (no stored `globalCurrentTime`).
+
+```pseudo
+IntroStoryPlayer({ intro, aspect, reels, ...collectionPlayerProps }):
+  region = useState(intro ? 'intro' : 'reels')     // single source of truth
+  introDurSec = intro ? (intro.card?.duration || 4.0) : 0
+  { introTimeMs, seekIntro, onIntroEnded } = useIntroPlayback(introDurSec)
+
+  // global position is DERIVED, never stored:
+  globalMs = region === 'intro'
+      ? introTimeMs
+      : introDurMs + Σ(priorReelDurations) + activeReel.currentTime*1000
+
+  onIntroEnded:                                     // forward auto-continue
+     if region !== 'intro': return                 // double-fire guard (region left already)
+     setRegion('reels'); goTo(0, 0)                // replaces DownloadsPanel :780
+
+  onScrub(globalMs):                               // single boundary comparison
+     if globalMs < introDurMs:
+        setRegion('intro'); seekIntro(globalMs)     // arbitrary seek INTO intro (needs Part A)
+     else:
+        setRegion('reels'); goTo(reelIdxFor(globalMs), fracWithinReel)
+
   return (
-    scrubber +
-    <CollectionPlayer reels={reels} {...playerProps}
-       initialIndex={pendingReelSeek?.i}     // land on the clicked reel when arriving from intro
-       /* CollectionPlayer owns its OWN scrubber; see §4.1a on the double-scrubber choice */ />
+    <CompositeScrubber weights=[introDurSec, ...reelDurs] globalMs=globalMs onScrub=onScrub />
+    region === 'intro'
+      ? <IntroPreRoll intro={intro} aspect={aspect} currentTimeMs={introTimeMs} />
+      : <CollectionPlayer reels={reels} renderScrubber={false} {...collectionPlayerProps} />
   )
 ```
 
-**§4.1a — one scrubber, not two.** `CollectionPlayer` renders its own segmented bar internally
-(`:216-260`). To present ONE continuous timeline (AC #1), the composite scrubber must be the single
-visible bar. Cleanest low-risk realization: **`CompositeScrubber` renders the intro region + reuses
-`CollectionPlayer`'s existing per-reel cells layout for the reel region**, and we pass a flag to
-`CollectionPlayer` to suppress its internal bar while in the composite (a new optional
-`renderScrubber={false}` prop, defaulting true so every other caller is byte-unchanged). The reel
-cells' fill math (`i < activeIndex ? 100 : i === activeIndex ? segmentProgress*100 : 0`,
-`:232-236`) stays inside `CollectionPlayer`; the composite bar mirrors it via the same
-`onReelChange`/progress the player already surfaces. **This is the one seam that touches
-`CollectionPlayer`** — an additive, default-on prop; its characterization test asserts the default
-still renders the internal bar.
+### (iv) NEW generalized composite scrubber view
 
-> Alternative considered and rejected: two stacked bars (intro bar above the player's bar). Rejected —
-> AC #1 demands ONE continuous timeline/scrubber, and two bars reads as "two screens glued together,"
-> the exact complaint that opened this task.
+Generalize `CollectionPlayer`'s segmented bar (`:216-260`) into an ordered list of weighted segments,
+segment 0 = intro. Extract the segment-cell render into a small `CompositeScrubber` (or a shared
+`SegmentedBar`) that both the composite and (optionally) `CollectionPlayer` can render:
 
-**Region rendering** (Q1, recommended treatment): the intro region is a **separate bar group** to
-the LEFT of a small gap, then the reel cells:
+- **Proportional width (decision 1):** replace each cell's `flex-1` (equal weight) with
+  `style={{ flexGrow: seg.durationSec }}`. Intro width = `introDur/(introDur+ΣreelDur)` automatically.
+- Segment 0 (intro) is the visually-distinct group: a tint (e.g. `bg-blue-400` fill, `bg-blue-400/25`
+  track) + a small "Intro" label + a thin divider before the reel cells. Discoverable at rest,
+  `aria-label`, ≥44px coarse hit target (style-guide "discoverable never hover-only").
+- Fill per segment: intro fill = `introTimeMs/introDurMs`; reel cells keep today's
+  `i<active?100 : i===active?segmentProgress*100 : 0` math.
+- Click/drag → `onScrub(globalMs)` mapping the click fraction across the weighted widths back to a global
+  ms.
 
-```
-[ ▓▓▓▓ Intro ]   [ cell ][ cell ][ cell ]
-   blue-400          white (bg-white/25 track), unchanged
-```
+### (v) `CollectionPlayer.jsx` — additive `renderScrubber` seam + weighted-bar generalization
 
-- Intro cell: one `flex`-none block (fixed basis, e.g. `w-16`) with a distinct fill
-  (`bg-blue-400`, track `bg-blue-400/25`) and a small `text-[11px]` "Intro" label above it — a
-  discoverable, at-rest affordance (style-guide "discoverable never hover-only" rule) with
-  `aria-label="Intro card — tap to replay"` and a ≥44px coarse-pointer hit target.
-- A visible gap/divider (`gap-2` + a thin `w-px bg-white/20` rule) separates the two groups so the
-  seam is unmistakable.
-- Reel cells: today's `flex-1` white segmented cells, byte-unchanged.
-- **Sizing = equal-weight intro cell (fixed basis), NOT proportional to `card.duration`.** Rationale:
-  the reel scrubber deliberately never trusts a frozen duration (`useStoryPlayback.js:5-11`); making
-  the intro width proportional to `card.duration` would reintroduce exactly the null-duration hazard
-  the hook avoids (and `card.duration` can be null → `|| 4.0` fallback in `MotionPreview:42`). A
-  fixed-basis intro block is honest and null-safe. The blue tint + label already communicate
-  "different kind of segment," so width need not encode time.
+- Add optional `renderScrubber = true` prop. When `false`, suppress the internal segmented bar (the
+  composite supplies the single bar). **Default true → every existing caller byte-unchanged.**
+- Generalize the internal bar to the shared weighted `SegmentedBar` (the same component the composite uses)
+  so there is ONE segmented-bar implementation, not two. With `renderScrubber` default-on and equal
+  weights (all reels same `flexGrow`, or falling back to `flex-1` when durations are null), the standalone
+  render is visually identical to today — the characterization test guards this.
+- This is **the only seam that touches `CollectionPlayer`** — additive and default-on.
 
-### 4.2 Backend — two new owner GET endpoints (thin wrappers over shipped helpers)
+### (vi) `DownloadsPanel.jsx` — swap the ternary for the composite
 
-**A. Single reel — `GET /api/downloads/{download_id}/intro-playback`** (in `downloads.py`,
-owner session auth, same as the rest of the router):
+The fetch, `storyPlayer.intro`, and `introShowing` plumbing already ship (§1.1). Change only the render
+block (`:776-797`): replace the `introShowing ? <IntroPreRoll…> : <CollectionPlayer…>` ternary with a
+single `<IntroStoryPlayer intro={storyPlayer.intro} aspect={…} reels={storyPlayer.reels} {…same props}/>`.
+`introShowing` state is no longer needed (the composite owns `region`); it can be removed, or left inert.
+When `intro` is null, `IntroStoryPlayer` starts in `region='reels'` and is behaviorally identical to a
+bare `CollectionPlayer` (AC #5).
 
-```pseudo
-@router.get("/{download_id}/intro-playback")
-def get_download_intro_playback(download_id):
-    user_id, profile_id = get_current_user_id(), get_current_profile_id()
-    with get_db_connection() as conn:
-        row = SELECT intro_card_id, duration FROM final_videos WHERE id = ?   # mirrors :694
-        if not row: 404
-        payload = resolve_intro_for_reel(
-            user_id, profile_id, row['intro_card_id'], row['duration'], download_id,
-            mode="playback", profile_conn=conn)     # conn is live here; helper won't close a passed conn
-    return { "intro": payload }   # payload is {card, previewUrl, field_values, profile} or None
-```
+**Data-always-ready:** the fetch is still the named Play gesture (already shipped) — not reactive
+persistence, not a `useEffect` watching state. It reads a payload; it writes nothing. The composite's
+children assume `intro` is resolved (or null) before mount.
 
-**B. Collection — `GET /api/collections/intro-playback`** (in `collections.py`, mirrors
-`get_collection_intro`'s scope/ratio params `:734-762`):
+### (vii) Backend — REUSED UNCHANGED
 
-```pseudo
-@router.get("/intro-playback")
-def get_collection_intro_playback(scope_type, aspect_ratio, game_id=None, tags=None):
-    tag_list, definition = _collection_scope_and_definition(...)
-    key = collection_intro_settings_key(...)
-    with get_db_connection() as conn:
-        raw_id = get_collection_intro_card_id(cursor, key)          # :749
-        total_duration = sum(member durations, NULL-excluded)       # :754-756
-        card = resolve_intro_card(raw_id, total_duration, conn)     # :757 (same as get_collection_intro)
-        if card is None: return { "intro": None }
-        field_values = _load_field_values(user_id, profile_id)      # collections.py already imports this
-        payload = build_intro_playback_payload(dict(card), field_values)
-    return { "intro": payload }
-```
-
-Both return `{ "intro": {card, previewUrl, field_values, profile} | null }`. Both are non-fatal
-(the shipped helpers degrade to `None` and log on any failure — `intro_egress.py:169-171`).
-
-> Note on `profile_conn`: `resolve_intro_for_reel` only closes a connection it OWNS (opened itself);
-> a passed `profile_conn` is left open (`:174-194`). The download endpoint passes its live `conn`
-> (cheap, correct). The collection endpoint follows `get_collection_intro`'s existing shape exactly
-> and calls `resolve_intro_card` + `build_intro_playback_payload` directly (it already resolves the
-> card itself for the frozen-vs-live-duration reason), so it does not route through
-> `resolve_intro_for_reel` at all — same split the share paths already use (`collections.py:940-947`
-> vs single-reel).
-
-### 4.3 Intro→reel handoff (forward auto-continue)
-
-Reuse `SharedCollectionView`'s proven pattern (`SharedCollectionView.jsx:121-136`): while
-`phase === 'intro'`, mount `IntroPreRoll`; on its `onDone`, `setPhase('reels')`, which mounts
-`CollectionPlayer` whose `<video autoPlay>` (`CollectionPlayer.jsx:347`) starts the first reel.
-**No autoplay-attribute toggling** — the `<video>` is freshly mounted with `autoPlay` already set,
-exactly the transition the share path uses. This structurally avoids the autoplay-toggle bug T6700
-flagged (there is no toggle; mount == play).
-
-### 4.4 Wiring in `DownloadsPanel.jsx`
-
-- On `handlePlay`/`onPlayCollection`, keep setting `storyPlayer`; additionally fetch the intro
-  payload for that target:
-  - single reel → `GET /api/downloads/{download.id}/intro-playback`
-  - collection → `GET /api/collections/intro-playback?scope_type=...&aspect_ratio=...`
-- Store the fetched `intro` on `storyPlayer` state (`{ reels, title, downloadId?, intro }`).
-- The render block (`:716-730`) swaps `<CollectionPlayer .../>` for
-  `<IntroStoryPlayer intro={storyPlayer.intro} aspect={activeAspect} reels=... {...same props} />`.
-  When `intro` is null, `IntroStoryPlayer` starts in `phase='reels'` and is behaviorally identical
-  to today's bare `CollectionPlayer` (AC #5).
-
-**Data-always-ready:** the fetch is a named user gesture (the Play click) — NOT reactive
-persistence, NOT a `useEffect` watching state. It reads a payload; it writes nothing. The composite's
-children assume `intro` is resolved (or null) before mount — the guard lives at the panel level.
+Both endpoints ship (§1.5). No route, serializer, resolver, schema, or migration change. State this
+explicitly at review: the diff is frontend-only.
 
 ---
 
-## 5. Risks
+## 5. Synchronization surface
+
+| Concern | Rule |
+|---|---|
+| **Global currentTime** | **DERIVED, no third clock.** region==='intro' → global = intro clock; region==='reels' → global = introDur + Σ(prior reel durations) + activeReel.currentTime. Never a `globalCurrentTime` useState. |
+| **Playing state** | Composite owns `region`; play/pause forwarded ONLY to the active sub-hook. The inactive clock is frozen (no rAF advance / element paused). |
+| **Forward auto-continue** | `onIntroEnded` → `setRegion('reels')` + `goTo(0,0)`. Replaces today's `setIntroShowing(false)` (`DownloadsPanel.jsx:780`). |
+| **Scrub crossing the boundary** | SINGLE comparison: `if (globalMs < introDurMs)` → `seekIntro(globalMs)` (needs Part A) else `goTo(reelIdx, frac)`. |
+| **Boundary double-fire mitigation** | Ignore `onIntroEnded` once `region !== 'intro'` (mirrors the hook's `pendingSeekRef` cancel-on-transition, `useStoryPlayback.js:38,87`). Tested for BOTH forward auto-continue AND a fast forward-scrub-past-intro. |
+| **Backward scrub reel-0 → intro** | `setRegion('intro'); seekIntro(frac*introDurMs)`. Works ONLY because Part A made the intro seekable. |
+
+---
+
+## 6. Effort / risk delta (honest — the user's two decisions cost real scope)
+
+A restart-only intro (the prior doc's recommendation) would be ~0.5 day, near-zero risk. The user's two
+decisions — **true arbitrary seek** and **proportional width** — add ~2–3 days and ONE medium-risk area
+(the font-settle animation rebuild + the boundary handoff): roughly **4–5×** the restart-only path. This
+tradeoff is a conscious, user-directed choice; it is stated plainly so it stays conscious.
+
+### Risks
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R1 | **Shared-infra blast radius** — `useStoryPlayback` and `CollectionPlayer`'s 3 other callers (share swap, ranker, diag) must stay green. | The hook is byte-unchanged. `CollectionPlayer` gains ONE additive, default-on `renderScrubber` prop (§4.1a); its characterization test asserts the default path is unchanged. Ranker/share/diag pass nothing new → identical behavior. |
-| R2 | **Atomic-intro / seek honesty** — the intro cannot be scrubbed to an offset (`MotionPreview` is mount-once, no `currentTime`). | Q2 = restart-only, and the intro region is rendered as a distinct restart-on-tap block (blue, labeled), NOT a fine scrubber. No "UX lie." A truly-seekable intro is explicitly out of scope (would rewrite `MotionPreview`). |
-| R3 | **Null-duration reels/cards.** | The reel scrubber already derives progress from the live element, never a frozen duration (`useStoryPlayback.js:5-11`, untouched). The intro region is FIXED width, not proportional to `card.duration` (Q1), so a null `card.duration` (→ `MotionPreview`'s `|| 4.0`) never sizes or breaks the bar. |
-| R4 | **Boundary double-fire** at intro→reel. | Single-shot: `MotionPreview` fires `onDone` once via one `setTimeout` (`:87`), cleared on unmount (`:88-91`); `setPhase('reels')` is idempotent (already-'reels' is a no-op). The reel `ended`/advance logic is entirely inside the untouched hook. |
-| R5 | **Collection-vs-single-reel resolve split.** | Two endpoints, one per rule: single reel keys off `final_videos.intro_card_id`+`duration`; collection keys off `(scope, ratio)` + live total duration (mirrors the SHIPPED `get_collection_intro`). Same split the share paths already encode (`collections.py:940-947`). |
-| R6 | **Payload divergence** between owner playback and share playback. | Both call the SAME `build_intro_playback_payload` / `resolve_intro_for_reel(mode="playback")` — one serializer, no second shape. `IntroPreRoll` already reassembles `{card, previewUrl, field_values, profile}` for `MotionPreview` (`IntroPreRoll.jsx:61-64`). |
-| R7 | **Fetch latency before Play.** | Non-blocking: mount the composite in `phase='intro'` only once the payload resolves; while it's in flight the existing skeleton/first-frame handling covers the gap. On fetch failure → treat as `intro=null` → plain reel playback (AC #5), never a broken player. |
+| R1 | **Font-settle rebuild invalidates WAAPI animations mid-scrub** — `useCardPreviewElements` (`introCardPreviewElements.js:277`) can remount text nodes ~45 frames post-mount, detaching the `Animation` objects. | Animation effect keyed on `elements` identity (+ box size), NOT `[]`; re-apply `seek(currentClockMs)` after every rebuild. Characterization test: a settle-triggered remount at `currentTimeMs=X` leaves the visual at X, not 0. Note this FIXES a latent staleness bug in today's mount-once code. |
+| R2 | **Boundary double-fire** at intro→reel (auto-continue firing while a scrub also crosses). | Single `region` state as guard; ignore `onIntroEnded` once region left `'intro'` (mirrors `pendingSeekRef`). Test BOTH forward auto-continue AND a fast forward-scrub-past-intro. |
+| R3 | **Proportional REEL widths need LIVE durations** — a frozen `reel.duration` is nullable (the hook's founding constraint, `useStoryPlayback.js:6-10`). Intro duration IS known (`card.duration || 4.0`), so the intro weights proportionally immediately; reel-vs-reel proportional widths need a live-duration source the segmented bar doesn't have today. | **This is the ONE new open question (§7).** Intro-proportional is safe now. Reel-vs-reel proportional is opt-in and only if the user wants it; the fallback (equal-weight reels) needs no new duration source. |
+| R4 | **Shared-infra byte-identity** — `useStoryPlayback` + 3 other `CollectionPlayer` callers must stay green. | Hook byte-unchanged. `CollectionPlayer` gains ONE additive default-on `renderScrubber` prop; the shared `SegmentedBar` with equal weights renders identically to today. Characterization test asserts the default path is unchanged; ranker/share/diag pass nothing new. |
+| R5 | **Payload parity** owner playback vs share playback. | Untouched — both already call the SAME `build_intro_playback_payload`. No backend change means no divergence introduced. |
+| R6 | **Null-duration handling** (reels and, on the inherit path, cards). | Intro width uses `card.duration || 4.0` (never null). Reel cells keep the live-progress derivation (never a frozen duration). If reels stay equal-weight (§7 default), null reel durations never size the bar. |
 
-**No schema change → no migration.** Both endpoints read existing columns
-(`final_videos.intro_card_id`/`duration`, collection settings). Confirmed: Migration agent NOT
-required.
+**No schema change → no migration. No backend change at all.** Migration agent NOT required.
 
 ---
 
-## 6. Test Plan Sketch (Stage 3 writes these)
+## 7. Open Question for the User (the ONE remaining approval gate)
 
-**Frontend unit (Vitest):**
-- `IntroStoryPlayer`: with a non-null `intro` starts in `phase='intro'`, mounts `IntroPreRoll`; on
-  `onDone` → mounts `CollectionPlayer` (`phase='reels'`). With `intro=null` starts directly in
-  `phase='reels'` and mounts `CollectionPlayer` (pass-through, AC #5).
-- Composite scrubber: renders a distinct intro region (blue/labeled) + the reel cells; clicking the
-  intro region re-enters `phase='intro'` and bumps `introKey` (restart, Q2); clicking a reel cell
-  from the intro enters `phase='reels'` at that index.
-- `CollectionPlayer` `renderScrubber` default: default-on renders the internal bar (characterization
-  guard); `false` suppresses it — asserted so no other caller changes.
+**Decided (do NOT re-ask):** intro region width = **PROPORTIONAL** (decision 1); backward-seek into the
+intro = **TRUE ARBITRARY SEEK** (decision 2). Both are the user's settled calls.
 
-**Frontend E2E (Playwright):**
-- Owner plays a reel WITH an intro → one continuous timeline (intro region + reel cells), intro
-  plays then auto-continues into the reel with no manual resume (AC #1, #2).
-- Seeking within the reel portion works normally (AC #3).
-- Tapping the intro region restarts the intro from 0 (AC #4 behavior — restart, verified honest).
-- Owner plays a reel/collection with NO intro → single plain timeline, byte-identical to today (AC #5).
-- **Regression:** `SharedCollectionView` (share swap) and `RankingGame` replay still mount a bare
-  `CollectionPlayer` with no intro region.
+### Q — Are the REEL segments also duration-proportional, or equal-weight among themselves?
 
-**Backend (pytest):**
-- `GET /api/downloads/{id}/intro-playback`: returns `{intro: {...}}` for a reel with a resolvable
-  intro; `{intro: null}` for one with none / opted-out (`intro_card_id=0`) / duration-gated-out;
-  404 for a missing id; non-fatal (`intro: null`) on an induced resolver failure.
-- `GET /api/collections/intro-playback`: returns the payload for a (scope, ratio) collection with a
-  frozen/attached intro; `{intro: null}` when none; uses live total duration for the inherit-path
-  gate (mirrors `get_collection_intro`).
-- Payload shape parity: owner playback payload == share playback payload for the same card
-  (both through `build_intro_playback_payload`).
+The intro segment IS duration-proportional immediately (its duration is known: `card.duration || 4.0`).
+The reels are the open part, because a frozen `reel.duration` is nullable (`useStoryPlayback.js:6-10`) —
+today's segmented bar deliberately has no live-duration source and derives progress per-tick from the live
+element instead.
 
----
+**Options:**
 
-## 7. Open Questions for the User (the approval gate)
+- **(A) Intro proportional; reels stay equal-weight among themselves (RECOMMENDED).** Segment 0 gets its
+  true proportional slice (`flexGrow: introDur`); the reel cells split the remaining width equally
+  (`flexGrow: 1` each). No new live-duration source, no late reflow, matches today's reel bar exactly for
+  the reel portion. Fully satisfies the user's "intro is proportionally sized, visually distinct" decision.
+- **(B) Everything proportional (intro AND reels).** Reel cells also weight by duration. Needs a
+  live-duration source the bar doesn't have today (durations arrive as each reel's `<video>` metadata
+  loads), so the bar would **reflow** as durations resolve, and null-duration reels need a fallback weight.
+  More complexity and a visible late-reflow for a marginal gain.
 
-Both restated with a recommendation — confirm or redirect.
-
-### Q1 — How is the intro region drawn as distinct?
-
-**Options:** (i) separate bar group + gap/divider; (ii) distinct color/shade for the intro cell;
-(iii) a small "Intro" label. (These combine.) And **sizing:** equal-weight fixed block vs
-proportional to `card.duration`.
-
-**Recommendation:** **all three, combined** — a **separate bar group** (intro block left of a
-`gap-2` + thin divider), a **distinct blue-400 fill** (vs the reel cells' white), and a small
-**"Intro" label** above it, at rest (discoverable, `aria-label`, ≥44px coarse hit). **Fixed
-equal-weight width, NOT proportional to `card.duration`** — proportional sizing would reintroduce
-the null-duration hazard the reel scrubber deliberately avoids, and the tint+label already
-communicate "different segment kind."
-
-**Rationale:** maximally satisfies "visually AND structurally distinct" while staying within the
-style guide's dark-theme + "discoverable never hover-only" rules, and stays null-safe.
-
-### Q2 — Is backward-seek INTO the intro required to be arbitrary-offset seekable, or landing/restart only?
-
-**Options:** (a) **landing/restart only** — clicking the intro region remounts `MotionPreview` from
-0 and replays it (low-risk, achievable now); (b) **arbitrary-offset seekable** — scrub to any point
-inside the intro's own animation (requires rewriting the atomic `MotionPreview` into a time-driven
-player: materially bigger, higher risk).
-
-**Recommendation:** **(a) landing/restart only.** `MotionPreview` is atomic (mount-once WAAPI, no
-`currentTime`/seek — `MotionPreview.jsx:44-94`); making it offset-seekable is a separate, larger
-build, and the coding standards ban faking a `currentTime` to simulate it. Critically, we do NOT
-ship a scrubber that LOOKS finely seekable but silently restarts (a UX lie) — the intro region is
-rendered as a distinct restart-on-tap block (Q1), so its behavior matches its appearance.
-
-**If the user wants true intra-intro seeking**, that becomes an explicit follow-up task to rewrite
-`MotionPreview` as a time-driven player (out of scope here), and this task ships restart-only in the
-meantime.
+**Recommendation: (A).** It delivers the decided intro-proportional behavior with zero new duration
+plumbing and no reflow, and keeps the reel bar byte-faithful to today. Choose (B) only if reel-vs-reel
+time fidelity in the bar is explicitly wanted despite the reflow.
 
 ---
 
@@ -447,18 +403,41 @@ meantime.
 
 | File | Change |
 |---|---|
-| `components/introcards/IntroStoryPlayer.jsx` | **NEW.** Thin outer composite: `phase` routing (`intro`↔`reels`), composite scrubber, intro→reel `onDone` handoff, restart-on-tap intro (`introKey`). |
-| `components/collections/CollectionPlayer.jsx` | Additive `renderScrubber = true` prop; when false, suppress the internal segmented bar (the composite supplies it). Byte-unchanged for every existing caller (default true). |
-| `components/DownloadsPanel.jsx` | On Play (`:386`) / play-collection (`:90`), fetch the intro payload for the target and stash it on `storyPlayer`; swap the render (`:716-730`) from `<CollectionPlayer>` to `<IntroStoryPlayer intro=... aspect=... {...same props}>`. |
-| `components/introcards/IntroPreRoll.jsx` | Reused verbatim (no change). |
-| `components/introcards/MotionPreview.jsx` | Reused verbatim (no change) — atomic intro. |
+| `components/introcards/MotionPreview.jsx` | **CHANGED — seekable.** Add `currentTimeMs` prop; build WAAPI animations `pause()`d; `seek(ms)` sets `a.currentTime` on all; effect deps `[]`→`[elements,boxW,boxH]` with re-`seek` after rebuild; DELETE `setTimeout(onDone)` (`:87`); skeleton-until-decoded photo guard. |
+| `components/introcards/useIntroPlayback.js` | **NEW.** The intro's own clock: `introTimeMs`, rAF forward advance, `seekIntro(ms)`, `onIntroEnded`. |
+| `components/introcards/IntroStoryPlayer.jsx` | **NEW.** Composite container: owns single `region` state, DERIVES global position, forward auto-continue (`onIntroEnded`→`goTo(0,0)`), boundary scrub routing, boundary double-fire guard. Replaces the DownloadsPanel swap ternary. |
+| `components/collections/CollectionPlayer.jsx` | Additive `renderScrubber = true` prop (default on → other callers byte-unchanged); generalize the internal segmented bar to the shared weighted `SegmentedBar`. The one seam touching this file. |
+| `components/introcards/IntroPreRoll.jsx` | Thread the new `currentTimeMs` through to `MotionPreview` (payload reassembly unchanged). |
+| `components/DownloadsPanel.jsx` | Swap the render ternary (`:776-797`) for `<IntroStoryPlayer …>`; `introShowing` state retired (composite owns `region`). Fetch + `storyPlayer.intro` already ship — unchanged. |
+| (new) shared `SegmentedBar` (extracted from `CollectionPlayer.jsx:216-260`) | Ordered weighted segments, `style={{flexGrow: seg.durationSec}}` (proportional; equal weights = today's behavior). Used by both the composite and `CollectionPlayer`. |
 
 ### Backend
 
 | File | Change |
 |---|---|
-| `routers/downloads.py` | **NEW** `GET /{download_id}/intro-playback` — thin wrapper over `resolve_intro_for_reel(mode="playback")` (§4.2 A). |
-| `routers/collections.py` | **NEW** `GET /intro-playback` — mirrors `get_collection_intro`'s resolve, then `build_intro_playback_payload` (§4.2 B). |
-| `services/intro_egress.py` | Reused verbatim (no change) — `resolve_intro_for_reel`, `build_intro_playback_payload` already shipped. |
+| `routers/downloads.py` | **NO CHANGE.** `GET /{download_id}/intro-playback` (`:842-875`) reused as-is. |
+| `routers/collections.py` | **NO CHANGE.** `GET /intro-playback` (`:760-803`) reused as-is. |
+| `services/intro_egress.py` | **NO CHANGE.** `resolve_intro_for_reel` / `build_intro_playback_payload` reused. |
 
-**No schema change, no migration, no Modal change.**
+**No schema change, no migration, no Modal change, no backend change.**
+
+---
+
+## 9. Test Plan Sketch (Stage 3 writes these)
+
+**Frontend unit (Vitest):**
+- `MotionPreview` **seek characterization:** with `currentTimeMs=X`, the animations hold pose X (`seek-to-X-holds`); a font-settle-triggered remount at `currentTimeMs=X` leaves the visual at X, not 0 (R1 guard); no `setTimeout` auto-continue fires (ownership moved to the composite).
+- `useIntroPlayback`: rAF advances `introTimeMs` while playing; `seekIntro(ms)` clamps to `[0,durationMs]`; `onIntroEnded` fires ONCE at `durationMs`; clock frozen while inactive.
+- `IntroStoryPlayer` **region routing + boundary handoff:** non-null `intro` starts `region='intro'`; `onIntroEnded` → `region='reels'` + `goTo(0,0)` (forward auto-continue); a forward scrub PAST the intro also lands in reels without double-firing (R2); a backward scrub into the intro sets `region='intro'` + `seekIntro`; `intro=null` starts directly in `region='reels'` (pass-through, AC #5).
+- **Composite scrubber proportional widths:** intro cell `flexGrow` == `introDur`; reel cells per the §7 choice (equal-weight in option A); intro cell renders the distinct tint/label/divider.
+- `CollectionPlayer` `renderScrubber` default: default-on renders the (now shared) internal bar identically to today (characterization guard); `false` suppresses it.
+
+**Frontend E2E (Playwright):**
+- Owner plays a reel/collection WITH an intro → ONE continuous timeline (proportional intro segment + reel cells); intro plays then auto-continues into the reel with no manual resume (AC #1, #2).
+- Seeking within the reel portion works normally (AC #3).
+- Backward scrub from reel-0 INTO the intro lands at an arbitrary offset inside the intro and resumes correctly (AC #4 — true seek, decision 2).
+- Owner plays a reel/collection with NO intro → single plain timeline, byte-identical to today (AC #5).
+- **Regression:** `SharedCollectionView` (share swap) and `RankingGame` replay still mount a bare `CollectionPlayer` with no intro region.
+
+**Backend (pytest):**
+- The existing T6700 endpoint tests for `GET /api/downloads/{id}/intro-playback` and `GET /api/collections/intro-playback` stay green (reused, no change). No new backend tests required by this task.
