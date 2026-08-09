@@ -275,6 +275,16 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     }
   }, [deleteConfirm, deleteProfile]);
 
+  // T6690: the card library is current-profile-scoped (X-Profile-ID header), so
+  // editing a non-active profile has no card-management entry point today. Chain
+  // the existing switchProfile gesture into opening the library instead of
+  // building per-request profile-scoping plumbing (out of scope, see task file).
+  const handleSwitchAndManageCards = useCallback(async () => {
+    if (!editingProfile) return;
+    await switchProfile(editingProfile.id);
+    setShowIntroCards(true);
+  }, [editingProfile, switchProfile]);
+
   // Switching the active profile (also resets all data stores) lives here now,
   // so the sport-glyph header button can open this as the one profile manager.
   const handleSwitch = useCallback(async (p) => {
@@ -440,9 +450,13 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                   Intro cards
                 </button>
               ) : (
-                <p className="text-xs text-gray-500">
-                  Switch to this profile to manage its intro cards.
-                </p>
+                <button
+                  type="button"
+                  onClick={handleSwitchAndManageCards}
+                  className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors"
+                >
+                  Switch to &quot;{editingProfile.name}&quot; &amp; manage cards
+                </button>
               )}
             </div>
           </div>
