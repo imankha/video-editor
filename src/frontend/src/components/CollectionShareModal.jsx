@@ -113,7 +113,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
   // show the full "publicly visible" copy before recording it) -- this link
   // only points the user there, it never grants consent itself.
   const handleRequestIntroConsent = () => {
-    toast.info('Open your profile menu -> Manage Profile -> Player Intro to give consent.');
+    toast.info('Open your profile menu -> Manage Profile -> Athlete Intro Card to give consent.');
   };
 
   const handleSubmit = async () => {

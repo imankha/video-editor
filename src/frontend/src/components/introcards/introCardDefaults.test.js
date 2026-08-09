@@ -29,33 +29,38 @@ describe('buildCreateFields', () => {
   });
 });
 
-describe('nextCardName (T6640 round 2 — "Intro Card N", gap-filling)', () => {
+describe('nextCardName (T6640 round 2 — "Athlete Intro Card N", gap-filling; T6660 renamed the generated label)', () => {
   it('starts at 1 for an empty library', () => {
-    expect(nextCardName([])).toBe('Intro Card 1');
+    expect(nextCardName([])).toBe('Athlete Intro Card 1');
   });
 
   it('increments past every generated name already in use', () => {
-    const cards = [{ name: 'Intro Card 1' }, { name: 'Intro Card 2' }];
-    expect(nextCardName(cards)).toBe('Intro Card 3');
+    const cards = [{ name: 'Athlete Intro Card 1' }, { name: 'Athlete Intro Card 2' }];
+    expect(nextCardName(cards)).toBe('Athlete Intro Card 3');
   });
 
   it('fills the gap left by a renamed/deleted card, not count + 1', () => {
-    const cards = [{ name: 'Intro Card 1' }, { name: 'Intro Card 3' }];
-    expect(nextCardName(cards)).toBe('Intro Card 2');
+    const cards = [{ name: 'Athlete Intro Card 1' }, { name: 'Athlete Intro Card 3' }];
+    expect(nextCardName(cards)).toBe('Athlete Intro Card 2');
   });
 
   it('ignores cards with any other name — a user rename frees its number without colliding', () => {
-    const cards = [{ name: 'Intro Card 1' }, { name: 'Highlight reel intro' }, { name: 'Stafford card' }];
-    expect(nextCardName(cards)).toBe('Intro Card 2');
+    const cards = [{ name: 'Athlete Intro Card 1' }, { name: 'Highlight reel intro' }, { name: 'Stafford card' }];
+    expect(nextCardName(cards)).toBe('Athlete Intro Card 2');
   });
 
   it('is stable when the library has zero generated-named cards', () => {
     const cards = [{ name: 'Big Game' }, { name: 'Season Opener' }];
-    expect(nextCardName(cards)).toBe('Intro Card 1');
+    expect(nextCardName(cards)).toBe('Athlete Intro Card 1');
   });
 
   it('handles a null/undefined cards list', () => {
-    expect(nextCardName(undefined)).toBe('Intro Card 1');
-    expect(nextCardName(null)).toBe('Intro Card 1');
+    expect(nextCardName(undefined)).toBe('Athlete Intro Card 1');
+    expect(nextCardName(null)).toBe('Athlete Intro Card 1');
+  });
+
+  it('does not recognize a pre-T6660 "Intro Card N" name (copy-only rename, no data migration)', () => {
+    const cards = [{ name: 'Intro Card 1' }];
+    expect(nextCardName(cards)).toBe('Athlete Intro Card 1');
   });
 });

@@ -31,8 +31,8 @@ export function ConsentGate({ onBack, onConsent, error }) {
       <div className="max-w-md mx-auto my-auto bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
         <h3 className="text-base font-semibold text-white mb-2">Consent required</h3>
         <p className="text-sm text-gray-300 mb-4">
-          An intro card shows a player&apos;s photo and can be seen by anyone you share a
-          link with. Confirm you have permission before you build one.
+          An Athlete Intro Card shows a player&apos;s photo and can be seen by anyone you
+          share a link with. Confirm you have permission before you build one.
         </p>
         <label className="flex items-start gap-2.5 text-left cursor-pointer">
           <input

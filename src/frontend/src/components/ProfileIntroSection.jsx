@@ -86,7 +86,7 @@ export function ProfileIntroSection({ profile }) {
 
   return (
     <div className="p-4 border-t border-gray-700 space-y-4">
-      <h3 className="text-sm font-semibold text-white">Player intro card</h3>
+      <h3 className="text-sm font-semibold text-white">Athlete Intro Card</h3>
 
       {/* Image upload + preview */}
       <div>
@@ -95,7 +95,7 @@ export function ProfileIntroSection({ profile }) {
           <div className="flex items-center gap-3">
             <img
               src={photoUrl}
-              alt="Intro card"
+              alt="Athlete Intro Card"
               className="w-20 h-20 rounded-lg object-cover border border-gray-600 bg-gray-900"
             />
             <button

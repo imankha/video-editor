@@ -7,17 +7,23 @@
 
 import { DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEditorConstants';
 
-const GENERATED_NAME_RE = /^Intro Card (\d+)$/;
+// T6660: renamed the generated label from "Intro Card N" to "Athlete Intro
+// Card N" (user-facing final name). The regex only recognizes the NEW form,
+// so a pre-T6660 card still named "Intro Card N" no longer occupies a slot
+// in the gap-filling sequence below -- copy-only rename, no data migration
+// (task file scope), so a stale old-style name is left as-is until the user
+// edits it.
+const GENERATED_NAME_RE = /^Athlete Intro Card (\d+)$/;
 
 /**
- * The generated name for a brand-new card: "Intro Card N", N the LOWEST
- * number not already used by one of this profile's cards with EXACTLY that
- * name (T6640 round 2, user decision). Gap-filling, not `count + 1` — cards
- * "Intro Card 1" and "Intro Card 3" exist -> the next is "Intro Card 2"
- * (renaming a card frees its number). Cards with any OTHER name (including a
- * user's own rename) don't occupy a slot in this sequence — names aren't
- * unique in general, only this generator avoids repeating a number it can
- * still see in use.
+ * The generated name for a brand-new card: "Athlete Intro Card N", N the
+ * LOWEST number not already used by one of this profile's cards with
+ * EXACTLY that name (T6640 round 2, user decision). Gap-filling, not
+ * `count + 1` — cards "Athlete Intro Card 1" and "Athlete Intro Card 3"
+ * exist -> the next is "Athlete Intro Card 2" (renaming a card frees its
+ * number). Cards with any OTHER name (including a user's own rename) don't
+ * occupy a slot in this sequence — names aren't unique in general, only this
+ * generator avoids repeating a number it can still see in use.
  * @param {{name: string}[]} cards
  */
 export function nextCardName(cards) {
@@ -29,7 +35,7 @@ export function nextCardName(cards) {
   );
   let n = 1;
   while (used.has(n)) n += 1;
-  return `Intro Card ${n}`;
+  return `Athlete Intro Card ${n}`;
 }
 
 /**

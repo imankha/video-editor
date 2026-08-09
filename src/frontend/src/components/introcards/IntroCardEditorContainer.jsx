@@ -155,7 +155,7 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile,
         {card.is_default ? (
           <span
             className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-400/10 text-[11px] font-semibold text-yellow-300"
-            title="This is the default intro card"
+            title="This is the default Athlete Intro Card"
           >
             <Star size={11} fill="currentColor" /> Default
           </span>
