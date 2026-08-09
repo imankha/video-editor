@@ -1,6 +1,8 @@
 # T6710 — Owner in-app playback intro as a real composite-scrubber timeline segment (Design)
 
-**Status:** WAITING ON USER (design gate — REVISED after T6700-merge re-audit)
+**Status:** APPROVED — proceeding to Stage 3 (Test First). Design gate closed; §7.3's scope question
+resolved by explicit user decision: option (i), let the proportional-width change flow through globally,
+including to `SharedCollectionView` — no per-caller opt-in prop.
 **Tier:** L (frontend composite scrubber + a genuinely-seekable intro renderer over shipped playback infra; no backend change, no schema change)
 **Epic:** [Player Intro + Rich Text](player-intro/EPIC.md)
 **Task file:** [player-intro/T6710-owner-playback-intro-as-timeline-segment.md](player-intro/T6710-owner-playback-intro-as-timeline-segment.md)
@@ -51,8 +53,14 @@ intro plays today. The delta is turning the **bolted-on pre-roll swap** into a *
 4. Generalize `CollectionPlayer`'s segmented bar into ONE weighted composite scrubber (segment 0 = intro,
    proportionally sized — decision 1), driven additively via a new `renderScrubber={false}` seam.
 
-`SharedCollectionView` has its OWN identical swap (`SharedCollectionView.jsx:121-136`) — **out of scope,
-untouched** (the epic explicitly scopes T6710 to the owner in-app player only).
+`SharedCollectionView` has its OWN identical swap (`SharedCollectionView.jsx:121-136`) — the **intro
+composite work itself stays out of scope there** (the epic scopes the intro-as-timeline-segment feature to
+the owner in-app player only; `SharedCollectionView` keeps its today's separate `IntroPreRoll`/
+`CollectionPlayer` swap ternary, untouched). **Narrower than the prior revision of this line:** because
+`SharedCollectionView` mounts the SAME shared `CollectionPlayer`, and §7's decided scope (Option B,
+"everything proportional," §7.3) makes that component's segmented bar duration-proportional globally with
+no per-caller gate, `SharedCollectionView`'s rendered bar DOES pick up proportional segment widths as a
+deliberate, approved side effect — see §7.3 for the resolution and rationale.
 
 ### 1.2 The exact owner in-app render path (today — WITH the shipped T6700 swap)
 
@@ -90,7 +98,7 @@ assigning `v.currentTime`. Its contract is literally "a real element's live meta
 | Caller | Location | Requirement |
 |---|---|---|
 | Owner story player | `DownloadsPanel.jsx:776-797` | Gains the composite (this task) |
-| Share swap | `SharedCollectionView.jsx:121-136` | **Out of scope — do NOT touch** |
+| Share swap | `SharedCollectionView.jsx:121-136` | **Intro composite out of scope — its own swap ternary untouched.** Its `CollectionPlayer` bar DOES become duration-proportional (shared, non-gated change, §7.3) — approved side effect, not a regression. |
 | Ranker replay | `RankingGame.jsx:264` | Must stay intro-free |
 | Dev diag harness | `collectionplayerdiag/main.jsx:64` | Unaffected |
 | Characterization tests | `CollectionPlayer.characterization.test.jsx`, `useStoryPlayback.test.js` | The guard — stay byte-green |
@@ -417,27 +425,33 @@ equal). The only real finding is the **scope conflict** for #2: this task's own 
 `SharedCollectionView` out of scope, yet the chosen (B) implementation mechanism (global, not per-caller)
 will change its rendered output too. Flagging per the instruction rather than silently shipping it.
 
-### 7.3 Resolution — AWAITING USER APPROVAL
+### 7.3 Resolution — DECIDED by user: option (i)
 
-This is the one thing the caller-impact check surfaced that the user has not yet explicitly decided. Two
-ways to resolve the conflict with §1.1/§1.3's "out of scope — do NOT touch" line:
+The user explicitly decided **(i): let the proportional-width change flow through globally, including to
+`SharedCollectionView`.** No per-caller opt-in prop. `CollectionPlayer`'s segmented bar becomes
+duration-proportional for every caller that renders it, with no structural gate distinguishing the public
+share page from the owner in-app player.
 
-- **(i) Let it flow through globally, including to `SharedCollectionView`.** Read "out of scope" as
-  "do not add T6700 intro-swap code paths there" (the concern that line was written for), not "the shared
-  bar's visual weighting must never change for it." Proportional segment widths on the public share page
-  become an accepted, intentional side effect of making `CollectionPlayer`'s bar duration-proportional
-  globally — no new prop, no per-caller branch. Matches the user's "not gated per-caller" instruction
-  literally.
-- **(ii) Structurally scope it to the owner path.** Add an explicit opt-in weighting prop on
-  `CollectionPlayer` (default off = today's `flex-1`), turned on only by the owner composite
-  (`IntroStoryPlayer`/`DownloadsPanel`). Preserves §1.1/§1.3's boundary exactly, at the cost of
-  reintroducing the per-caller gate the "everything proportional" instruction was pushing away from.
+This resolves the §7.2 conflict by re-reading §1.1/§1.3's "out of scope" line narrowly: it means "do not
+add T6700 intro-swap/composite code paths to `SharedCollectionView`" (the concern the line was originally
+written for — that caller keeps its own separate `IntroPreRoll`/`CollectionPlayer` ternary, untouched by
+this task's composite work), NOT "the shared bar's visual weighting must never change for it." §1.1 and
+§1.3 above have been updated to state this precisely rather than leave the stale blanket "out of scope,
+untouched" phrasing standing.
 
-**Recommendation: (i).** The scope conflict is with a stale internal cross-reference in this doc, not with
-a functional reason `SharedCollectionView` needs equal width (§7.2 found none). Gating it back per-caller
-just to preserve a sentence in §1.1 would be process cargo-culting, not a real product requirement. Pick
-(ii) only if there's a reason the public share page should NOT show proportional segments that hasn't
-surfaced yet.
+**This was a deliberate, approved scope expansion**, not an oversight or a default: the caller-impact
+check (§7.1/§7.2) surfaced that a non-gated global change necessarily reaches `SharedCollectionView`'s
+rendered output, found no functional reason any caller needs equal-width segments, and the user chose to
+accept that reach rather than reintroduce the per-caller gate their "everything proportional" instruction
+(§7 opening) was moving away from. Rejected alternative **(ii)** — a structural opt-in weighting prop
+(default off = today's `flex-1`, turned on only by the owner composite) — would have preserved the old
+boundary exactly, at the cost of reintroducing that gate; not chosen.
+
+**Consequence for the public share page:** a shared collection with 2+ members and at least one known
+`final_videos.duration` will render its scrubber segments duration-proportional instead of equal-width,
+the same visual change the owner in-app player gets. §7.4's null-duration fallback (weight = 1) applies
+identically there — a share page for older reels with no probed duration renders unchanged (equal thirds),
+per §7.2's #2 analysis.
 
 ### 7.4 Null-duration handling (needed regardless of the scope question above)
 
@@ -508,7 +522,7 @@ the class string; this is a fixture-following mechanical change, not evidence of
 - Seeking within the reel portion works normally (AC #3).
 - Backward scrub from reel-0 INTO the intro lands at an arbitrary offset inside the intro and resumes correctly (AC #4 — true seek, decision 2).
 - Owner plays a reel/collection with NO intro → single plain timeline, byte-identical to today (AC #5).
-- **Regression:** `SharedCollectionView` (share swap) and `RankingGame` replay still mount a bare `CollectionPlayer` with no intro region.
+- **Regression:** `SharedCollectionView` (share swap) and `RankingGame` replay still mount a bare `CollectionPlayer` with no intro region (the composite/`IntroStoryPlayer` never mounts there — §7.3 scopes ONLY the intro-composite work away from `SharedCollectionView`). Its segmented bar is expected to render duration-proportional widths now (§7.3 decided consequence, not a regression) when member durations are known; renders equal-width when they are null, same as today (§7.4 fallback).
 
 **Backend (pytest):**
 - The existing T6700 endpoint tests for `GET /api/downloads/{id}/intro-playback` and `GET /api/collections/intro-playback` stay green (reused, no change). No new backend tests required by this task.
