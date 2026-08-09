@@ -229,3 +229,106 @@ describe('CollectionPlayer renderScrubber prop (T6710 — RED until Stage 4)', (
     expect(container.querySelector('video')).not.toBeNull();
   });
 });
+
+// T6710 Stage 4.5 MAJOR #4: landingToken re-apply (not value-equality of
+// initialIndex/initialSeekFraction) so a repeat scrub to the SAME (index,
+// fraction) as a prior one is still honored -- a value-keyed guard silently
+// dropped the second identical gesture.
+describe('CollectionPlayer landingToken re-apply (T6710 Stage 4.5 MAJOR #4)', () => {
+  const barReels = [
+    { id: 1, name: 'One', streamUrl: 'a', aspect_ratio: '9:16', duration: 10 },
+    { id: 2, name: 'Two', streamUrl: 'b', aspect_ratio: '9:16', duration: 6 },
+  ];
+
+  beforeEach(() => mockGoTo.mockClear());
+
+  it('applies goTo on mount when initialSeekFraction is set', () => {
+    render(
+      <CollectionPlayer
+        reels={barReels}
+        title="T"
+        onClose={vi.fn()}
+        initialIndex={0}
+        initialSeekFraction={0.4}
+        landingToken={1}
+      />,
+    );
+    expect(mockGoTo).toHaveBeenCalledWith(0, 0.4);
+  });
+
+  it('re-applies goTo when landingToken changes, even with the SAME (index, fraction) as before', () => {
+    const { rerender } = render(
+      <CollectionPlayer
+        reels={barReels}
+        title="T"
+        onClose={vi.fn()}
+        initialIndex={0}
+        initialSeekFraction={0.4}
+        landingToken={1}
+      />,
+    );
+    expect(mockGoTo).toHaveBeenCalledTimes(1);
+
+    // Same (index, fraction), but a NEW landingToken (a distinct gesture) --
+    // must re-invoke goTo, not be dropped as a value-equality no-op.
+    rerender(
+      <CollectionPlayer
+        reels={barReels}
+        title="T"
+        onClose={vi.fn()}
+        initialIndex={0}
+        initialSeekFraction={0.4}
+        landingToken={2}
+      />,
+    );
+    expect(mockGoTo).toHaveBeenCalledTimes(2);
+    expect(mockGoTo).toHaveBeenLastCalledWith(0, 0.4);
+  });
+
+  it('does not re-apply goTo on a re-render with an unchanged landingToken', () => {
+    const { rerender } = render(
+      <CollectionPlayer
+        reels={barReels}
+        title="T"
+        onClose={vi.fn()}
+        initialIndex={0}
+        initialSeekFraction={0.4}
+        landingToken={1}
+      />,
+    );
+    expect(mockGoTo).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <CollectionPlayer
+        reels={barReels}
+        title="T"
+        onClose={vi.fn()}
+        initialIndex={0}
+        initialSeekFraction={0.4}
+        landingToken={1}
+      />,
+    );
+    expect(mockGoTo).toHaveBeenCalledTimes(1);
+  });
+});
+
+// T6710 Stage 4.5 BLOCKING #2: onProgress reports live {activeIndex,
+// segmentProgress} off the existing useStoryPlayback-driven state -- no
+// second rAF loop, no re-derivation.
+describe('CollectionPlayer onProgress callback (T6710 Stage 4.5 BLOCKING #2)', () => {
+  const barReels = [
+    { id: 1, name: 'One', streamUrl: 'a', aspect_ratio: '9:16', duration: 10 },
+  ];
+
+  it('fires onProgress with the current activeIndex/segmentProgress from useStoryPlayback', () => {
+    const onProgress = vi.fn();
+    render(<CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} onProgress={onProgress} />);
+    expect(onProgress).toHaveBeenCalledWith({ activeIndex: 0, segmentProgress: 0 });
+  });
+
+  it('omitting onProgress is a safe no-op', () => {
+    expect(() =>
+      render(<CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} />),
+    ).not.toThrow();
+  });
+});

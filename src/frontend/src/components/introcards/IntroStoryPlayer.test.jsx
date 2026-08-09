@@ -15,7 +15,7 @@
 // pattern IntroPreRoll.test.jsx already uses for MotionPreview.
 
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 
 const { mockSeekIntro, useIntroPlaybackMock } = vi.hoisted(() => ({
   mockSeekIntro: vi.fn(),
@@ -48,16 +48,23 @@ vi.mock('./IntroPreRoll', () => ({
 // CollectionPlayer's own goTo apply it. Assertions below check those routing
 // props landed on the mock instead of the unreachable mockGoTo.
 vi.mock('../collections/CollectionPlayer', () => ({
-  CollectionPlayer: ({ reels, renderScrubber, initialIndex, initialSeekFraction }) => (
-    <div
-      data-testid="collection-player"
-      data-render-scrubber={String(renderScrubber)}
-      data-initial-index={initialIndex}
-      data-initial-seek-fraction={initialSeekFraction}
-    >
-      reels:{reels?.length ?? 0}
-    </div>
-  ),
+  CollectionPlayer: ({ reels, renderScrubber, initialIndex, initialSeekFraction, landingToken, onProgress }) => {
+    // Expose onProgress on the DOM node itself (jsdom keeps live object refs
+    // on properties, unlike data-* attrs which stringify) so BLOCKING #2 tests
+    // can invoke exactly what IntroStoryPlayer wired to CollectionPlayer.
+    return (
+      <div
+        data-testid="collection-player"
+        data-render-scrubber={String(renderScrubber)}
+        data-initial-index={initialIndex}
+        data-initial-seek-fraction={initialSeekFraction}
+        data-landing-token={landingToken}
+        ref={(node) => { if (node) node.__onProgress = onProgress; }}
+      >
+        reels:{reels?.length ?? 0}
+      </div>
+    );
+  },
 }));
 
 import { IntroStoryPlayer } from './IntroStoryPlayer';
@@ -74,12 +81,16 @@ const REELS = [
   { id: 2, name: 'Two', streamUrl: 'b', aspect_ratio: '9:16', duration: 6 },
 ];
 
+const mockSetPlaying = vi.fn();
+
 beforeEach(() => {
   mockSeekIntro.mockClear();
+  mockSetPlaying.mockClear();
   useIntroPlaybackMock.mockReset();
   useIntroPlaybackMock.mockReturnValue({
     introTimeMs: 0,
     seekIntro: mockSeekIntro,
+    setPlaying: mockSetPlaying,
     onIntroEnded: undefined,
   });
 });
@@ -111,7 +122,7 @@ describe('IntroStoryPlayer region routing + boundary handoff (T6710 — RED)', (
     let capturedOnIntroEnded;
     useIntroPlaybackMock.mockImplementation((durationSec, opts) => {
       capturedOnIntroEnded = opts?.onIntroEnded;
-      return { introTimeMs: 4000, seekIntro: mockSeekIntro, onIntroEnded: opts?.onIntroEnded };
+      return { introTimeMs: 4000, seekIntro: mockSeekIntro, setPlaying: mockSetPlaying, onIntroEnded: opts?.onIntroEnded };
     });
 
     const { rerender } = render(
@@ -134,7 +145,7 @@ describe('IntroStoryPlayer region routing + boundary handoff (T6710 — RED)', (
     let capturedOnIntroEnded;
     useIntroPlaybackMock.mockImplementation((durationSec, opts) => {
       capturedOnIntroEnded = opts?.onIntroEnded;
-      return { introTimeMs: 4000, seekIntro: mockSeekIntro, onIntroEnded: opts?.onIntroEnded };
+      return { introTimeMs: 4000, seekIntro: mockSeekIntro, setPlaying: mockSetPlaying, onIntroEnded: opts?.onIntroEnded };
     });
 
     const { rerender } = render(
@@ -204,7 +215,7 @@ describe('IntroStoryPlayer region routing + boundary handoff (T6710 — RED)', (
     let capturedOnScrub;
     useIntroPlaybackMock.mockImplementation((durationSec, opts) => {
       capturedOnIntroEnded = opts?.onIntroEnded;
-      return { introTimeMs: 4000, seekIntro: mockSeekIntro, onIntroEnded: opts?.onIntroEnded };
+      return { introTimeMs: 4000, seekIntro: mockSeekIntro, setPlaying: mockSetPlaying, onIntroEnded: opts?.onIntroEnded };
     });
     const { rerender } = render(
       <IntroStoryPlayer
@@ -242,5 +253,176 @@ describe('IntroStoryPlayer region routing + boundary handoff (T6710 — RED)', (
     );
     expect(screen.getByTestId('intro-pre-roll')).toBeTruthy();
     expect(mockSeekIntro).toHaveBeenCalledWith(1500);
+  });
+});
+
+describe('IntroStoryPlayer landing token (T6710 Stage 4.5 MAJOR #4)', () => {
+  it('bumps landingToken on every scrub, even a repeat scrub to the SAME (index, fraction) as a prior one', () => {
+    let capturedOnScrub;
+    const { rerender } = render(
+      <IntroStoryPlayer
+        intro={null}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+        __captureOnScrub={(fn) => { capturedOnScrub = fn; }}
+      />,
+    );
+
+    capturedOnScrub(4000); // reel 0 (10s), 4000ms -> fraction 0.4
+    rerender(
+      <IntroStoryPlayer
+        intro={null}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+        __captureOnScrub={(fn) => { capturedOnScrub = fn; }}
+      />,
+    );
+    const tokenAfterFirst = screen.getByTestId('collection-player').dataset.landingToken;
+
+    capturedOnScrub(4000); // identical (index, fraction) as the first scrub
+    rerender(
+      <IntroStoryPlayer
+        intro={null}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+        __captureOnScrub={(fn) => { capturedOnScrub = fn; }}
+      />,
+    );
+    const tokenAfterSecond = screen.getByTestId('collection-player').dataset.landingToken;
+
+    expect(tokenAfterSecond).not.toBe(tokenAfterFirst);
+  });
+});
+
+describe('IntroStoryPlayer composite bar layering (T6710 Stage 4.5 BLOCKING #1)', () => {
+  it('wraps the composite bar in a fixed, positively-z-indexed container above both region renderers', () => {
+    const { container } = render(
+      <IntroStoryPlayer intro={SAMPLE_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />,
+    );
+    // The composite bar's own root has no position/z-index (CompositeScrubber
+    // stays a plain div so CollectionPlayer's own internal usage, laid out
+    // inside ITS fixed panel, is unaffected). IntroStoryPlayer must supply the
+    // fixed + z-indexed wrapper itself so the bar isn't a bare, unpositioned
+    // sibling of the fixed/z-layered region renderers (which paint above it
+    // under CSS stacking rules regardless of DOM order).
+    const wrapper = container.querySelector('.fixed.inset-0');
+    expect(wrapper).not.toBeNull();
+    // Named z-index scale (constants/zLayers.js), not a magic number — must be
+    // at/above the highest region z-layer in play (Z.PLAYER z-[70], the intro
+    // default z-[85]).
+    expect(wrapper.className).toMatch(/z-\[(90|100|9999)\]/);
+  });
+
+  it('the bar wrapper does not block clicks to the region beneath it (pointer-events-none on the full-viewport wrapper)', () => {
+    const { container } = render(
+      <IntroStoryPlayer intro={SAMPLE_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />,
+    );
+    const wrapper = container.querySelector('.fixed.inset-0');
+    expect(wrapper.className).toContain('pointer-events-none');
+  });
+});
+
+describe('IntroStoryPlayer intro clock freeze (T6710 Stage 4.5 MAJOR #3)', () => {
+  it('calls setPlaying(true) while region is "intro"', () => {
+    render(<IntroStoryPlayer intro={SAMPLE_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    expect(mockSetPlaying).toHaveBeenCalledWith(true);
+    expect(mockSetPlaying).not.toHaveBeenCalledWith(false);
+  });
+
+  it('calls setPlaying(false) once region leaves "intro" (forward auto-continue)', () => {
+    let capturedOnIntroEnded;
+    useIntroPlaybackMock.mockImplementation((durationSec, opts) => {
+      capturedOnIntroEnded = opts?.onIntroEnded;
+      return { introTimeMs: 4000, seekIntro: mockSeekIntro, setPlaying: mockSetPlaying, onIntroEnded: opts?.onIntroEnded };
+    });
+    const { rerender } = render(
+      <IntroStoryPlayer intro={SAMPLE_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />,
+    );
+    mockSetPlaying.mockClear();
+    capturedOnIntroEnded();
+    rerender(<IntroStoryPlayer intro={SAMPLE_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    expect(mockSetPlaying).toHaveBeenCalledWith(false);
+  });
+
+  it('re-arms setPlaying(true) on a backward scrub back into the intro', () => {
+    let capturedOnIntroEnded;
+    let capturedOnScrub;
+    useIntroPlaybackMock.mockImplementation((durationSec, opts) => {
+      capturedOnIntroEnded = opts?.onIntroEnded;
+      return { introTimeMs: 4000, seekIntro: mockSeekIntro, setPlaying: mockSetPlaying, onIntroEnded: opts?.onIntroEnded };
+    });
+    const { rerender } = render(
+      <IntroStoryPlayer
+        intro={SAMPLE_INTRO}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+        __captureOnScrub={(fn) => { capturedOnScrub = fn; }}
+      />,
+    );
+    capturedOnIntroEnded(); // -> reels, setPlaying(false)
+    rerender(
+      <IntroStoryPlayer
+        intro={SAMPLE_INTRO}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+        __captureOnScrub={(fn) => { capturedOnScrub = fn; }}
+      />,
+    );
+    mockSetPlaying.mockClear();
+    capturedOnScrub(1500); // backward scrub into the intro -> region='intro' again
+    rerender(
+      <IntroStoryPlayer
+        intro={SAMPLE_INTRO}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+        __captureOnScrub={(fn) => { capturedOnScrub = fn; }}
+      />,
+    );
+    expect(mockSetPlaying).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('IntroStoryPlayer reel live progress wiring (T6710 Stage 4.5 BLOCKING #2)', () => {
+  it('passes an onProgress callback to CollectionPlayer', () => {
+    render(<IntroStoryPlayer intro={null} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    const player = screen.getByTestId('collection-player');
+    expect(typeof player.__onProgress).toBe('function');
+  });
+
+  it('reflects a reported {activeIndex, segmentProgress} into the correct reel segment fillPercent on the rendered composite bar', () => {
+    const { container } = render(
+      <IntroStoryPlayer intro={null} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />,
+    );
+    const player = screen.getByTestId('collection-player');
+
+    act(() => {
+      player.__onProgress({ activeIndex: 1, segmentProgress: 0.5 });
+    });
+
+    // No intro (intro=null) -> segment 0 = reel "One" (fully passed, 100%),
+    // segment 1 = reel "Two" (active, 50%).
+    const cells = container.querySelectorAll('[data-segment-kind="reel"]');
+    expect(cells).toHaveLength(2);
+    // ProgressTrack renders the fill as `h-full rounded-full bg-white` with an
+    // inline `width: ${progress}%` — the track wrapper itself is a SIBLING
+    // element (`h-1 rounded-full overflow-hidden bg-white/25`), so scope to
+    // the fill's own distinguishing class (`bg-white`, no `/25`) to avoid
+    // matching the track.
+    const fill0 = cells[0].querySelector('.bg-white.h-full');
+    const fill1 = cells[1].querySelector('.bg-white.h-full');
+    expect(fill0.style.width).toBe('100%');
+    expect(fill1.style.width).toBe('50%');
   });
 });

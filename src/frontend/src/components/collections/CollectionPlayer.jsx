@@ -51,17 +51,35 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     CompositeScrubber (proportional widths, §7.3 Option B) instead
  *                                     of the old equal-width flex-1 cells.
  * @param {number|null=} initialSeekFraction - T6710: fraction (0..1) of `initialIndex`'s reel to
- *                                     seek to once, applied via the SAME `goTo` the internal bar's
+ *                                     seek to, applied via the SAME `goTo` the internal bar's
  *                                     click-to-seek uses (no second seek mechanism). Used by
  *                                     IntroStoryPlayer to land a cross-boundary scrub (from the
  *                                     intro into the reels) at the right offset instead of always
  *                                     restarting reel 0 from 0. Omitted/null -> today's behavior
  *                                     (plain mount at initialIndex, no extra seek).
+ * @param {number=}  landingToken   - T6710: monotonic counter bumped by IntroStoryPlayer on every
+ *                                     distinct scrub/handoff gesture. Re-applies `initialIndex`/
+ *                                     `initialSeekFraction` whenever this token changes, even if the
+ *                                     new (index, fraction) pair has the SAME numeric value as the
+ *                                     previously-applied one (e.g. scrubbing to reel 0 @0.4 twice in
+ *                                     a row) -- a value-equality guard alone silently drops the second
+ *                                     gesture. Omitted -> defaults to 0, so a caller that never passes
+ *                                     it (every caller but IntroStoryPlayer) gets the one-shot mount
+ *                                     behavior unchanged.
+ * @param {Function=} onProgress    - T6710: `({ activeIndex, segmentProgress })`, fired on the SAME
+ *                                     rAF tick useStoryPlayback already drives internally (no second
+ *                                     rAF loop) whenever live reel progress changes. Lets a composite
+ *                                     bar (IntroStoryPlayer, rendered with renderScrubber=false) fill
+ *                                     the correct reel segment while this component's OWN internal bar
+ *                                     stays suppressed. Omitted -> no-op (every other caller keeps its
+ *                                     own internal bar, which reads activeIndex/segmentProgress directly).
  */
 export function CollectionPlayer({
   reels,
   initialIndex = 0,
   initialSeekFraction = null,
+  landingToken = 0,
+  onProgress,
   title,
   onClose,
   onReelChange,
@@ -105,19 +123,23 @@ export function CollectionPlayer({
     onReelChange: handleReelChange,
   });
 
-  // T6710: apply a one-shot cross-boundary landing fraction from a composite
+  // T6710 / MAJOR #4: apply a cross-boundary landing fraction from a composite
   // scrubber (IntroStoryPlayer) via the SAME goTo the internal bar's
-  // click-to-seek already uses — no second seek mechanism. Re-applies only
-  // when the caller hands a NEW (index, fraction) pair, not on every render.
-  const appliedSeekRef = useRef(null);
+  // click-to-seek already uses — no second seek mechanism. Re-applies whenever
+  // `landingToken` changes, NOT on value-equality of (initialIndex,
+  // initialSeekFraction) alone — a value-keyed guard silently drops a repeat
+  // scrub to the same (index, fraction) as a prior one (e.g. scrub to reel 0
+  // @0.4, let it play forward, then scrub BACK to reel 0 @0.4 again), because
+  // the second gesture's key matches the first. The token is a distinct
+  // per-gesture identity, so every scrub is honored regardless of where it lands.
+  const appliedTokenRef = useRef(null);
   useEffect(() => {
     if (initialSeekFraction == null) return;
-    const key = `${initialIndex}:${initialSeekFraction}`;
-    if (appliedSeekRef.current === key) return;
-    appliedSeekRef.current = key;
+    if (appliedTokenRef.current === landingToken) return;
+    appliedTokenRef.current = landingToken;
     goTo(initialIndex, initialSeekFraction);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialIndex, initialSeekFraction]);
+  }, [landingToken, initialSeekFraction]);
 
   // Keyboard: arrows navigate, space toggles, escape closes.
   useEffect(() => {
@@ -172,6 +194,15 @@ export function CollectionPlayer({
   // Reset the skeleton whenever the source changes so a newly-loaded reel also
   // waits for its first paintable frame instead of flashing the prior video.
   useEffect(() => { setVideoReady(false); }, [activeReel?.streamUrl]);
+
+  // BLOCKING #2: surface live reel progress to a composite bar (IntroStoryPlayer)
+  // whenever it changes. `activeIndex`/`segmentProgress` are ALREADY driven by
+  // useStoryPlayback's own rAF tick above — this reports that same state on
+  // React's normal render cycle, it does not add a second rAF loop or re-derive
+  // playback position; useStoryPlayback remains the one owner of both values.
+  useEffect(() => {
+    onProgress?.({ activeIndex, segmentProgress });
+  }, [activeIndex, segmentProgress, onProgress]);
 
   const onPointerDown = (e) => {
     pointerStart.current = { x: e.clientX, t: Date.now() };

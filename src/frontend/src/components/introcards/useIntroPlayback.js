@@ -83,7 +83,7 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
     };
   }, [playing, durationMs, fireEndedOnce]);
 
-  return { introTimeMs, playing, setPlaying, seekIntro, onIntroEnded: fireEndedOnce };
+  return { introTimeMs, playing, setPlaying, seekIntro };
 }
 
 export default useIntroPlayback;

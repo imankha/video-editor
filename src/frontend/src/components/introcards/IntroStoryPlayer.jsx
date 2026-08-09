@@ -13,12 +13,38 @@
 // intro both land in 'reels' without double-firing (R2) — guarded by the
 // single `region` state itself (ignore onIntroEnded once region has already
 // left 'intro').
+//
+// Stage 4.5 review fixes (post-37206397):
+//  - BLOCKING #1: CompositeScrubber's own root is a plain (non-positioned)
+//    <div>, so as a bare sibling of the fixed/z-layered region renderers
+//    (IntroPreRoll's `fixed inset-0 z-[85]` default, CollectionPlayer's own
+//    internal `fixed inset-0 ${Z.PLAYER}` panel) it painted BEHIND both and
+//    was unclickable. Fix: wrap it in a `fixed inset-0 ${Z.ALERT}` container
+//    here (named ladder rung, covers Z.PLAYER z-[70] and the z-[85] intro
+//    default) with `pointer-events-none` on the full-viewport wrapper and
+//    `pointer-events-auto` restored on the bar row itself, so the rest of the
+//    viewport (the video/intro beneath) still receives clicks/taps.
+//  - BLOCKING #2: reel segments now receive LIVE progress via CollectionPlayer's
+//    new `onProgress({ activeIndex, segmentProgress })` callback (fired from
+//    its existing useStoryPlayback-driven rAF tick -- no second rAF loop here).
+//    IntroStoryPlayer stores only that minimal derived pair for rendering the
+//    bar; useStoryPlayback stays the one owner of real reel playback position.
+//  - MAJOR #3: drives useIntroPlayback's own `setPlaying(region === 'intro')`
+//    so the intro's rAF clock is frozen the instant region leaves 'intro' (was
+//    never wired -- design §5's "frozen whenever region !== 'intro'" was
+//    unimplemented).
+//  - MAJOR #4: `reelsLanding` is now paired with a monotonic `landingToken`
+//    (bumped on every onScrub/handleIntroEnded call) instead of relying on
+//    CollectionPlayer's effect re-keying off VALUE equality of
+//    (initialIndex, initialSeekFraction) alone -- a repeat scrub to the exact
+//    same (index, fraction) is a distinct gesture and must not be dropped.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useIntroPlayback } from './useIntroPlayback';
 import { IntroPreRoll } from './IntroPreRoll';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
 import { CompositeScrubber } from './CompositeScrubber';
+import { Z } from '../../constants/zLayers';
 
 const REGION = { INTRO: 'intro', REELS: 'reels' };
 
@@ -61,14 +87,22 @@ export function IntroStoryPlayer({
 }) {
   const [region, setRegion] = useState(intro ? REGION.INTRO : REGION.REELS);
   // Where a boundary-crossing scrub should land inside the reels region —
-  // consumed once by CollectionPlayer's own useStoryPlayback via goTo, then
-  // cleared. null means "no pending cross-boundary landing" (mount default /
-  // ordinary in-region playback).
+  // applied by CollectionPlayer's own useStoryPlayback via goTo. Paired with
+  // `landingToken` (MAJOR #4) so a repeat scrub to the SAME (index, fraction)
+  // as a prior one is still a distinct gesture CollectionPlayer must re-apply,
+  // not a value-equality no-op.
   const [reelsLanding, setReelsLanding] = useState(null);
+  const [landingToken, setLandingToken] = useState(0);
 
   const introDurSec = intro ? (intro.card?.duration || 4.0) : 0;
   const introDurMs = introDurSec * 1000;
   const durationsSec = useMemo(() => reelDurationsSec(reels), [reels]);
+
+  const landInReels = useCallback((landing) => {
+    setReelsLanding(landing);
+    setLandingToken((t) => t + 1);
+    setRegion(REGION.REELS);
+  }, []);
 
   // Forward auto-continue: onIntroEnded -> region='reels', landing at reel 0.
   // Guarded against double-fire (R2, e.g. a fast forward-scrub past the intro
@@ -79,11 +113,23 @@ export function IntroStoryPlayer({
     setRegion((current) => {
       if (current !== REGION.INTRO) return current;
       setReelsLanding({ index: 0, fraction: 0 });
+      setLandingToken((t) => t + 1);
       return REGION.REELS;
     });
   }, []);
 
-  const { introTimeMs, seekIntro } = useIntroPlayback(introDurSec, { onIntroEnded: handleIntroEnded });
+  const { introTimeMs, seekIntro, setPlaying } = useIntroPlayback(introDurSec, { onIntroEnded: handleIntroEnded });
+
+  // MAJOR #3 / design §5: "the clock is frozen (no rAF advance) whenever the
+  // composite's region !== 'intro'". Drives useIntroPlayback's own play/pause
+  // switch directly off `region` -- the hook's rAF loop tears down via its
+  // existing cleanup the moment region leaves 'intro', and re-arms (playing
+  // becomes true again) the instant a backward scrub sets region back to
+  // 'intro', ordered BEFORE/together-with the seekIntro call below so the
+  // clock is playing again at (or holding) the newly-seeked position.
+  useEffect(() => {
+    setPlaying(region === REGION.INTRO);
+  }, [region, setPlaying]);
 
   // Single boundary comparison (design §5): globalMs < introDurMs -> the
   // intro (true arbitrary seek); else -> the matching reel + in-reel fraction.
@@ -92,32 +138,46 @@ export function IntroStoryPlayer({
       setRegion(REGION.INTRO);
       seekIntro(globalMs);
     } else {
-      const landing = reelIdxAndFractionFor(globalMs - introDurMs, durationsSec);
-      setReelsLanding(landing);
-      setRegion(REGION.REELS);
+      landInReels(reelIdxAndFractionFor(globalMs - introDurMs, durationsSec));
     }
-  }, [introDurMs, seekIntro, durationsSec]);
+  }, [introDurMs, seekIntro, durationsSec, landInReels]);
 
   __captureOnScrub?.(onScrub);
 
+  // BLOCKING #2: live per-reel progress, reported by CollectionPlayer off the
+  // SAME rAF tick useStoryPlayback already drives (no second rAF loop here) --
+  // a lightweight derived mirror `{activeIndex, segmentProgress}` for
+  // rendering the bar only. useStoryPlayback remains the one owner of real
+  // reel playback position; this is receive-and-render, not re-derivation.
+  const [reelProgress, setReelProgress] = useState({ activeIndex: 0, segmentProgress: 0 });
+  const handleReelProgress = useCallback(({ activeIndex, segmentProgress }) => {
+    setReelProgress({ activeIndex, segmentProgress });
+  }, []);
+
   // Composite bar segments: intro (proportional to its own duration) + every
   // reel (also proportional, §7.3 Option B). The intro's fill tracks its own
-  // clock; reel fills stay at 0 here — CollectionPlayer's OWN bar (suppressed
-  // here via renderScrubber=false) is what tracks live per-reel progress
-  // while region==='reels'; this composite bar's job is the cross-boundary
-  // scrub target, not a second live-progress source for reels.
+  // clock; reel fills track `reelProgress` (fed by CollectionPlayer's
+  // onProgress, above) while region==='reels' -- CollectionPlayer's OWN
+  // internal bar stays suppressed (renderScrubber=false) so there is still
+  // only ONE visible bar.
   const segments = useMemo(() => {
     const introSeg = intro
       ? [{ kind: 'intro', label: 'Intro', durationSec: introDurSec, fillPercent: introDurMs ? (introTimeMs / introDurMs) * 100 : 0 }]
       : [];
-    const reelSegs = (reels || []).map((reel) => ({
+    const reelSegs = (reels || []).map((reel, i) => ({
       kind: 'reel',
       label: reel.name,
       durationSec: reel.duration,
-      fillPercent: 0,
+      fillPercent: region !== REGION.REELS
+        ? 0
+        : i < reelProgress.activeIndex
+          ? 100
+          : i === reelProgress.activeIndex
+            ? reelProgress.segmentProgress * 100
+            : 0,
     }));
     return [...introSeg, ...reelSegs];
-  }, [intro, introDurSec, introDurMs, introTimeMs, reels]);
+  }, [intro, introDurSec, introDurMs, introTimeMs, reels, region, reelProgress]);
 
   const handleScrubberScrub = useCallback(({ index, fraction }) => {
     if (intro && index === 0) {
@@ -132,7 +192,22 @@ export function IntroStoryPlayer({
 
   return (
     <>
-      <CompositeScrubber segments={segments} onScrub={handleScrubberScrub} />
+      {/* BLOCKING #1: CompositeScrubber's own root has no position/z-index, so
+          as a bare sibling of the fixed/z-layered region renderers below it
+          painted BEHIND both (invisible + unclickable in the real browser --
+          jsdom unit tests never caught this, they don't do real layout/paint).
+          Wrap it in its own fixed, correctly-layered container: Z.ALERT
+          (z-[90]) sits above both Z.PLAYER (CollectionPlayer's panel, z-[70])
+          and the intro's z-[85] default. The wrapper spans the full viewport
+          so the bar can lay out at its natural top position, but only the bar
+          row itself accepts pointer events -- the rest of the wrapper is
+          pointer-events-none so clicks/taps still reach the video/intro
+          beneath it. */}
+      <div className={`fixed inset-0 ${Z.ALERT} pointer-events-none`}>
+        <div className="pointer-events-auto">
+          <CompositeScrubber segments={segments} onScrub={handleScrubberScrub} />
+        </div>
+      </div>
       {region === REGION.INTRO ? (
         <IntroPreRoll
           intro={intro}
@@ -146,6 +221,8 @@ export function IntroStoryPlayer({
           renderScrubber={false}
           initialIndex={reelsLanding?.index ?? 0}
           initialSeekFraction={reelsLanding?.fraction ?? null}
+          landingToken={landingToken}
+          onProgress={handleReelProgress}
           {...collectionPlayerProps}
         />
       )}
