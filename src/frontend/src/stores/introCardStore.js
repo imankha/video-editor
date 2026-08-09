@@ -18,7 +18,7 @@ import apiFetch from '../utils/apiFetch';
 
 let _fetchPromise = null;
 
-export const useIntroCardStore = create((set, get) => ({
+export const useIntroCardStore = create((set) => ({
   // Raw card rows from the API, verbatim (no transformation before storing).
   cards: [],
   isLoading: false,
@@ -124,51 +124,29 @@ export const useIntroCardStore = create((set, get) => ({
   },
 
   /**
-   * Set a card as the profile default (gesture: "Make default"). The backend
-   * clears the previous default atomically; refetch to reflect both rows.
-   */
-  setDefault: async (cardId) => {
-    const response = await apiFetch(`${API_BASE}/api/intro-cards/${cardId}/default`, {
-      method: 'POST',
-    });
-    if (!response.ok) return false;
-    // The server flips is_default on two rows in one transaction; re-pull the
-    // authoritative list rather than guessing the previous default locally.
-    await get().fetchCards({ force: true });
-    return true;
-  },
-
-  /**
    * Delete a card (gesture: "Delete card"). The backend also nulls referencing
-   * reels and removes the R2 image. T6640 round 2 invariant: if the deleted
-   * card WAS the default and others remain, the backend auto-promotes the
-   * newest remaining one IN THE SAME TRANSACTION and reports it as
-   * `promoted_default_id` — apply that surgically here (the only OTHER row
-   * that could have been the default is the one just deleted, so no other row
-   * needs touching) so the library shows the new Default badge without a
-   * reload, per the same "no window with the wrong default" guarantee the
-   * server enforces.
+   * reels and removes the R2 image. T6680: the default/inherit concept is
+   * retired end-to-end, so the backend no longer promotes a surviving row to
+   * default and no longer reports `promoted_default_id` — this is a plain
+   * removal from the list, nothing else to apply.
    */
   deleteCard: async (cardId) => {
     const response = await apiFetch(`${API_BASE}/api/intro-cards/${cardId}`, {
       method: 'DELETE',
     });
     if (!response.ok) return false;
-    const result = await response.json().catch(() => ({}));
-    const promotedId = result.promoted_default_id;
     set((state) => ({
-      cards: state.cards
-        .filter((c) => c.id !== cardId)
-        .map((c) => (promotedId && c.id === promotedId ? { ...c, is_default: true } : c)),
+      cards: state.cards.filter((c) => c.id !== cardId),
     }));
     return true;
   },
 
-  // T5215: the CURRENT profile's reel-length floor for the inherit-the-default
-  // intro resolution path. Lives on profile.sqlite (per-profile, like the
-  // default card itself), so — unlike the rest of this store — it is scoped
-  // to whichever profile is ACTIVE, not addressable by an arbitrary profile
-  // id (GET/PATCH /api/profiles/current/intro-min-duration).
+  // T5215: the CURRENT profile's legacy reel-length threshold. T6680 removed
+  // the default/inherit intro resolution path this used to gate -- dormant
+  // settings plumbing now, doesn't affect what plays (design doc Decision 3).
+  // Lives on profile.sqlite (per-profile), so — unlike the rest of this
+  // store — it is scoped to whichever profile is ACTIVE, not addressable by
+  // an arbitrary profile id (GET/PATCH /api/profiles/current/intro-min-duration).
   minDuration: null, // null = not yet loaded; the endpoint's own default is 20.0
   isMinDurationLoading: false,
 
@@ -207,10 +185,3 @@ export const useIntroCardStore = create((set, get) => ({
 
   reset: () => set({ cards: [], isLoading: false, isInitialized: false, error: null, minDuration: null }),
 }));
-
-/**
- * The default card, or null. Derived on read (no stored `hasDefault` flag).
- * @param {object} state
- */
-export const selectDefaultCard = (state) =>
-  state.cards.find((c) => c.is_default) || null;

@@ -14,7 +14,7 @@
 // drove are gone too; there is nothing left to select a slot FOR.
 
 import { useState, useCallback } from 'react';
-import { ArrowLeft, Star, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
 import { useIntroCardStore, useProfileStore } from '../../stores';
 import { RATIO } from '../../constants/aspectRatios';
 import { IntroCardStage } from './IntroCardStage';
@@ -22,7 +22,7 @@ import { IntroCardRail } from './IntroCardRail';
 import { ConsentGate } from './ConsentGate';
 import { FACT_SLOTS } from './introCardEditorConstants';
 
-export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile, onSetDefault }) {
+export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile }) {
   const updateCard = useIntroCardStore((s) => s.updateCard);
   const patchCardLocal = useIntroCardStore((s) => s.patchCardLocal);
   const fetchCards = useIntroCardStore((s) => s.fetchCards);
@@ -146,29 +146,6 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile,
         </button>
         <span className="text-gray-600 flex-shrink-0">/</span>
         <CardNameInput value={card.name || ''} onCommit={commitName} />
-
-        {/* Default status — DERIVED from card.is_default, never a stored name
-            (T6640 round 2: a stored "Default" label would drift the moment
-            another card is promoted or this one is renamed). A badge when
-            this IS the default; a promote action when it isn't — never both,
-            so there is always exactly one thing to look at here. */}
-        {card.is_default ? (
-          <span
-            className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-400/10 text-[11px] font-semibold text-yellow-300"
-            title="This is the default Athlete Intro Card"
-          >
-            <Star size={11} fill="currentColor" /> Default
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={onSetDefault}
-            className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium text-gray-300 border border-gray-600 hover:border-yellow-400 hover:text-yellow-300 coarse-pointer:min-h-[32px]"
-            title="Plays before any reel that hasn't been given a specific card"
-          >
-            <Star size={11} /> Set as default
-          </button>
-        )}
       </div>
 
       {error && <p className="text-red-400 text-xs mb-2">{error}</p>}

@@ -1,36 +1,29 @@
 // T5215 — the SHARED attachment picker: a horizontal carousel the user browses
 // through, showing every card as a real visual object (never just a name),
-// newest-first, with a "No intro" choice and the profile default marked "Your
-// default". ONE control, used identically by the reel kebab menu
-// (DownloadsPanel/ReelTile), the collection share dialog (CollectionShareModal),
-// and a collection's own attached-intro picker (CollectionsTab) — per the
-// user's 2026-08-06 direction that this must stay the SAME control everywhere,
-// not forked per host.
+// newest-first, with a "No intro" choice. ONE control, used identically by the
+// reel kebab menu (DownloadsPanel/ReelTile), the collection share dialog
+// (CollectionShareModal), and a collection's own attached-intro picker
+// (CollectionsTab) — per the user's 2026-08-06 direction that this must stay
+// the SAME control everywhere, not forked per host.
 //
 // Presentational only: props in, no store, no fetch (mirrors IntroCardPreview/
 // IntroCardTile). The caller supplies `cards` (already loaded, each with a
 // resolved `previewUrl`) and owns the actual PATCH/share-create gesture in
 // `onSelect`.
 //
-// Selection model: `selectedId` is the RAW stored attachment (0 | null | id).
-// There is no separate "inherit default" TILE (scope D lists only cards + "No
-// intro") — but round 2 (user, 2026-08-06) requires the three underlying
-// states to be UNMISTAKABLE and visually DISTINCT on reopen, not collapsed
-// into one look:
+// Selection model (T6680: the profile-default/inherit concept is retired —
+// there is no longer a card a NULL attachment resolves to, so `NULL` and `0`
+// are both "no intro" here, same as at the backend resolver):
 //   explicit id  -> that card gets the SOLID "Selected" badge (shared
 //                    INTRO_BADGE icon/colour, also used on the reel thumbnail)
 //                    + a solid purple ring. A deliberate choice.
-//   NULL/inherit -> the CURRENT default card (if any) gets an OUTLINED/lighter
-//                    "Following default" badge — same icon+colour family, but
-//                    visually softer than "Selected" (nothing was explicitly
-//                    chosen for THIS reel) — plus a caption line under the
-//                    strip. No card shows "Selected".
-//   0/no intro   -> the "No intro" tile gets its OWN neutral (non-purple)
-//                    "Selected" badge — deliberately NOT the intro colour,
-//                    since no intro is attached.
-// Clicking any card tile — including the current default — sends that card's
-// EXPLICIT id (never re-emits null; the picker only ever calls onSelect with
-// 0 or a card id).
+//   NULL/0       -> the "No intro" tile gets the "Selected" badge. NULL means
+//                    "nothing has been explicitly picked yet" and 0 means
+//                    "deliberately turned off" — the backend treats them
+//                    identically, and the picker shows the same "No intro"
+//                    selection for both (no separate inherit affordance).
+// Clicking any card tile sends that card's EXPLICIT id (the picker only ever
+// calls onSelect with 0 or a card id).
 //
 // ROUND 3 (user, 2026-08-07): "i need a bit more visual feedback... after i
 // select the card it plays its animation and i still need to click 'ok'".
@@ -44,7 +37,7 @@
 // only calls its own onSelect (the real write) on OK.
 
 import { useMemo, useState } from 'react';
-import { Check, Star } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { IntroCardPreview } from './IntroCardPreview';
 import { IntroExposureNotice } from './IntroExposureNotice';
 import { MotionPreview } from './MotionPreview';
@@ -76,32 +69,22 @@ export function IntroCardCarousel({
   frozenNote,
 }) {
   const sorted = useMemo(() => sortNewestFirst(cards || []), [cards]);
-  const defaultCard = useMemo(() => sorted.find((c) => c.is_default) || null, [sorted]);
   // Which card (if any) is currently PLAYING its motion preview -- a click
   // starts it, MotionPreview's own onDone (or picking something else) clears
   // it. Preview-only; the draft selection itself is `selectedId`, owned by
   // the caller (round 3: IntroCardPicker buffers it until OK).
   const [previewCardId, setPreviewCardId] = useState(null);
 
-  // Three DISTINCT states (round 2, user 2026-08-06 — collapsing these into
-  // one look is the presentation bug this rewrite fixes):
+  // T6680: NULL ("never explicitly chosen") and 0 ("deliberately off") both
+  // resolve to "no intro" -- there is no profile default left to inherit, so
+  // both show the "No intro" tile as selected. Only an explicit positive id
+  // is a real pick.
   const isExplicit = selectedId !== null && selectedId !== 0;
-  const isNone = selectedId === 0;
-  const isInherit = selectedId === null;
-  // Round 5 (user, 2026-08-07): "when I first try to attach an intro card to
-  // a card that doesn't have one, ... 'no intro' should [read as] selected."
-  // The RAW value stays null (never rewritten here -- that would corrupt the
-  // inherit-vs-explicit-none distinction resolve_intro_card_id's pinned
-  // matrix relies on); this only changes which tile shows the "Selected"
-  // PRESENTATION when inheriting resolves to nothing anyway -- i.e. there is
-  // no profile default to inherit, so "follow the default" and "no intro"
-  // are behaviourally identical right now. When a default DOES exist, the
-  // inherit state keeps its own distinct "Following" look (unchanged).
-  const isInheritWithNothingToInherit = isInherit && !defaultCard;
+  const isNone = selectedId === null || selectedId === 0;
   const explicitCard = isExplicit ? sorted.find((c) => c.id === selectedId) : null;
-  // What will actually PLAY (for the exposure notice) — explicit card, or the
-  // default when inheriting and one exists.
-  const effectiveCard = isExplicit ? explicitCard : (isInherit ? defaultCard : null);
+  // What will actually PLAY (for the exposure notice) — the explicit card, or
+  // nothing.
+  const effectiveCard = isExplicit ? explicitCard : null;
   const showsExposureNotice = !!effectiveCard?.image_key;
 
   return (
@@ -112,7 +95,7 @@ export function IntroCardCarousel({
         aria-label="Athlete Intro Card"
       >
         <NoIntroTile
-          selected={isNone || isInheritWithNothingToInherit}
+          selected={isNone}
           onSelect={() => {
             setPreviewCardId(null);
             onSelect(0);
@@ -125,8 +108,6 @@ export function IntroCardCarousel({
             card={card}
             profile={profile}
             explicitlySelected={isExplicit && selectedId === card.id}
-            inherited={isInherit && !!card.is_default && card.id === defaultCard?.id}
-            isDefault={!!card.is_default}
             disabled={!hasConsent}
             playing={previewCardId === card.id}
             onSelect={() => {
@@ -140,14 +121,6 @@ export function IntroCardCarousel({
 
       {sorted.length === 0 && (
         <p className="text-xs text-gray-400">No Athlete Intro Cards yet.</p>
-      )}
-
-      {isInherit && (
-        <p className="text-xs text-gray-400 leading-snug">
-          {defaultCard
-            ? <>Following your default (<span className="text-gray-300">{defaultCard.name}</span>) — nothing was explicitly picked for this reel.</>
-            : 'No profile default is set, so no intro plays here yet.'}
-        </p>
       )}
 
       {!hasConsent && (
@@ -204,14 +177,13 @@ function NoIntroTile({ selected, onSelect }) {
   );
 }
 
-function CardChoiceTile({ card, profile, explicitlySelected, inherited, isDefault, disabled, playing, onSelect, onPreviewDone }) {
-  const ariaSuffix = isDefault ? ' (your default)' : '';
+function CardChoiceTile({ card, profile, explicitlySelected, disabled, playing, onSelect, onPreviewDone }) {
   return (
     <button
       type="button"
       role="option"
       aria-selected={explicitlySelected}
-      aria-label={`${card.name}${ariaSuffix}`}
+      aria-label={card.name}
       onClick={onSelect}
       disabled={disabled}
       className={`relative flex-shrink-0 snap-start rounded-lg overflow-hidden border-2 coarse-pointer:min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 ${
@@ -219,9 +191,7 @@ function CardChoiceTile({ card, profile, explicitlySelected, inherited, isDefaul
           ? 'border-gray-800 opacity-40 cursor-not-allowed'
           : explicitlySelected
             ? `${INTRO_BADGE.border} ring-2 ${INTRO_BADGE.ring}`
-            : inherited
-              ? INTRO_BADGE.borderSoft
-              : 'border-gray-700 hover:border-gray-500'
+            : 'border-gray-700 hover:border-gray-500'
       }`}
       style={{ width: `${TILE_W}px`, height: `${TILE_H}px` }}
     >
@@ -241,28 +211,11 @@ function CardChoiceTile({ card, profile, explicitlySelected, inherited, isDefaul
         />
       )}
 
-      {isDefault && (
-        <span
-          className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-yellow-300"
-          title="Your default"
-          aria-hidden="true"
-        >
-          <Star size={9} fill="currentColor" /> Your default
-        </span>
-      )}
-
       {/* Explicit pick: the SAME solid icon+colour as the reel thumbnail badge
           (INTRO_BADGE) -- an unmistakable, deliberate-choice marker. */}
       {explicitlySelected && (
         <span className={`absolute top-1.5 right-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full ${INTRO_BADGE.bgSolid} text-[10px] font-semibold text-white shadow`}>
           <IntroIcon size={11} fill="currentColor" /> Selected
-        </span>
-      )}
-      {/* Inherited (this is the default, reel is on NULL/inherit): same family,
-          visually SOFTER -- an outline pill, never confused with an explicit pick. */}
-      {inherited && !explicitlySelected && (
-        <span className={`absolute top-1.5 right-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border ${INTRO_BADGE.borderSofter} text-[10px] font-semibold ${INTRO_BADGE.text}`}>
-          <IntroIcon size={10} /> Following
         </span>
       )}
 

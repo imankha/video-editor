@@ -16,7 +16,10 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * @param {number}   ratioDuration   - this ratio's full duration (cap + default)
  * @param {boolean}  hasNullDurations
  * @param {Function} requestMembers  - () => Promise<member[]> (cached group fetch)
- * @param {Function} onPlay          - (members[], title) => void
+ * @param {Function} onPlay          - (members[], title, shareDefinition?) => void; the definition is
+ *                                     passed through so the panel can resolve the collection's OWN
+ *                                     intro-playback (T6700), same {scope, filter, aspect_ratio} shape
+ *                                     used for share/intro-badge lookups
  * @param {Object=}  shareDefinition - base {scope, filter, aspect_ratio} for share links (T3620)
  * @param {Function=} onShare        - (definition, title) => void
  * @param {Function=} onCopyLink     - (definition) => void
@@ -73,7 +76,7 @@ export function CollectionCard({
     try {
       const members = await ensureMembers();
       const sel = selectWithinBudget(members, budget);
-      if (sel.length) onPlay(sel, playTitle || title);
+      if (sel.length) onPlay(sel, playTitle || title, shareDefinition);
     } finally {
       setPlayLoading(false);
     }

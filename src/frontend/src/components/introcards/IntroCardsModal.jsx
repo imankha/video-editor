@@ -25,7 +25,6 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
   const error = useIntroCardStore((s) => s.error);
   const fetchCards = useIntroCardStore((s) => s.fetchCards);
   const createCard = useIntroCardStore((s) => s.createCard);
-  const setDefault = useIntroCardStore((s) => s.setDefault);
   const deleteCard = useIntroCardStore((s) => s.deleteCard);
 
   const [editingId, setEditingId] = useState(null);
@@ -131,7 +130,6 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
               profile={profile}
               onBack={() => setEditingId(null)}
               onEditProfile={onEditProfile}
-              onSetDefault={() => setDefault(editingCard.id)}
             />
           ) : editingId && !editingCard ? (
             // The edited card vanished (deleted elsewhere) — fall back to the grid.
@@ -143,7 +141,6 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
               onNew={handleNew}
               onEdit={(card) => setEditingId(card.id)}
               onDuplicate={handleDuplicate}
-              onSetDefault={(card) => setDefault(card.id)}
               onDelete={(card) => deleteCard(card.id)}
             />
           )}

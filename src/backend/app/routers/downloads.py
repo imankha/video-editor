@@ -23,8 +23,6 @@ from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
-    DEFAULT_INTRO_MIN_DURATION_SECONDS,
-    get_intro_min_duration,
     load_profile_cards,
     resolve_intro_card,
     resolve_intro_card_id,
@@ -331,18 +329,11 @@ async def list_downloads(
         cursor.execute(base_query, params)
         rows = cursor.fetchall()
 
-        # T5215: batch-load the card map + default + threshold ONCE for the
-        # whole list (no N+1 per tile) -- resolution happens in memory below,
-        # per row, via the SAME resolve_intro_card_id every other consumer uses.
-        if _has_intro:
-            intro_card_map = load_profile_cards(cursor)
-            intro_default_id = next(
-                (cid for cid, c in intro_card_map.items() if c["is_default"]), None
-            )
-            intro_min_duration = get_intro_min_duration(cursor)
-        else:
-            intro_card_map, intro_default_id = {}, None
-            intro_min_duration = DEFAULT_INTRO_MIN_DURATION_SECONDS
+        # T5215: batch-load the card map ONCE for the whole list (no N+1 per
+        # tile) -- resolution happens in memory below, per row, via the SAME
+        # resolve_intro_card_id every other consumer uses. T6680 dropped the
+        # default/threshold batch-load: there is no profile default to inherit.
+        intro_card_map = load_profile_cards(cursor) if _has_intro else {}
 
         # game_id / mixes filter via the shared router helper (T3630: collections
         # are SINGLE-CLIP reels only -- route_collection sends multi-clip reels to
@@ -570,15 +561,13 @@ async def list_downloads(
 
             # T5215: raw stored attachment (for the picker's preselection) +
             # in-memory resolution via the SAME single resolution order every
-            # consumer uses (no per-tile query -- intro_card_map/default/
-            # threshold were batch-loaded once above).
+            # consumer uses (no per-tile query -- intro_card_map was
+            # batch-loaded once above). T6680: NULL no longer inherits a
+            # profile default, so resolution no longer needs the reel's
+            # duration -- kept unused as `duration` above for the tile payload.
             raw_intro_card_id = row['intro_card_id'] if _has_intro else None
             resolved_intro_id = (
-                resolve_intro_card_id(
-                    raw_intro_card_id, duration, intro_default_id, intro_min_duration,
-                    reel_id=row['id'],
-                )
-                if _has_intro else None
+                resolve_intro_card_id(raw_intro_card_id) if _has_intro else None
             )
             intro_card_info = (
                 intro_card_map.get(resolved_intro_id) if resolved_intro_id is not None else None
@@ -850,6 +839,42 @@ async def download_file(download_id: int):
         )
 
 
+@router.get("/{download_id}/intro-playback")
+async def get_download_intro_playback(download_id: int):
+    """The single reel's OWN resolved intro, LIVE, for the owner in-app Play
+    gesture (T6700 design §5.1 row 1). Same-account / same-request-user (the
+    owner's own reel): resolves over the AMBIENT connection, never
+    `open_profile_db_readonly` -- that cross-profile path is for the SHARE
+    endpoints resolving a DIFFERENT user's profile (design §2.2).
+
+    Non-fatal, ALWAYS 200: no card / opted-out (0) / NULL-with-no-default /
+    a forced resolve failure all degrade to `{"intro": null}` --
+    `resolve_intro_for_reel` already never raises (intro_egress.py). Only a
+    genuinely missing download_id 404s, mirroring `download_file` above.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT intro_card_id, duration FROM final_videos WHERE id = ?",
+            (download_id,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Download not found")
+
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+
+        from app.services.intro_egress import resolve_intro_for_reel
+        intro = resolve_intro_for_reel(
+            user_id, profile_id, row['intro_card_id'], row['duration'], download_id,
+            mode="playback", profile_conn=conn,
+        )
+
+    return {"intro": intro}
+
+
 # Shared R2 client for streaming proxies -- reused across requests so the TLS /
 # connection handshake is paid ONCE instead of per request (a fresh client per
 # request was a big chunk of the stream TTFB).
@@ -1071,7 +1096,8 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
 
       0    -> explicit "no intro" (never gated by consent -- detaching/opting
               out is always allowed)
-      null -> restore inherit-the-profile-default (also never gated)
+      null -> no card attached (T6680: no longer inherits a profile default --
+              there is none; also never gated)
       <id> -> attach that card; requires (a) parental consent recorded for
               this profile and (b) the id to reference a real card in THIS
               profile -- a dangling id is never persisted from a gesture.
@@ -1119,7 +1145,7 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
         # T5215 round 3: return the RESOLVED name too, not just the raw id --
         # the frontend's optimistic update needs it to show the thumbnail
         # badge immediately (no reload), and only the server can resolve it
-        # correctly (accounts for the duration gate on the inherit path).
+        # correctly (e.g. a dangling id degrading to no-intro).
         card = resolve_intro_card(intro_card_id, reel_row["duration"], conn, reel_id=download_id)
 
     return {
@@ -1292,8 +1318,10 @@ _MOVED_REEL_CARRY_COLUMNS = (
     # potentially collides with an unrelated card) in the target profile. This
     # is the one `final_videos` INSERT writer that must NOT carry the
     # attachment forward; omitting the column lets the target row default to
-    # NULL, i.e. inherit the TARGET profile's own default (decision 4: "no
-    # dangling cross-profile ids"). Do not "helpfully" add it to this tuple.
+    # NULL, i.e. no intro until the user explicitly attaches one in the target
+    # profile (T6680: NULL no longer inherits a profile default -- there is
+    # none -- so this is simply "no dangling cross-profile ids, no intro").
+    # Do not "helpfully" add it to this tuple.
 )
 
 

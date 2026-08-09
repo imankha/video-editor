@@ -27,7 +27,5 @@ export const INTRO_BADGE = {
   bg: 'bg-purple-500',
   bgSolid: 'bg-purple-600',
   border: 'border-purple-500',
-  borderSoft: 'border-purple-500/50', // "inherited" tile ring (softer than an explicit pick)
-  borderSofter: 'border-purple-500/70', // "inherited" badge outline
   ring: 'ring-purple-400',
 };
