@@ -762,6 +762,52 @@ async def get_collection_intro(
     }
 
 
+@router.get("/intro-playback")
+async def get_collection_intro_playback(
+    scope_type: str, aspect_ratio: str,
+    game_id: int | None = None, tags: str | None = None,
+):
+    """The COLLECTION's OWN resolved intro, LIVE against LIVE total duration,
+    for the owner in-app Play-all gesture (T6700 design §5.1 row 2). Same
+    (scope_type, aspect_ratio, game_id?, tags?) params as `GET /intro` above;
+    reuses the identical scope/resolution block (never per-member reel
+    intros -- design §0/Q2) and serializes via the SAME
+    `build_intro_playback_payload` the single-reel endpoint and the frozen
+    collection-share path already use, so the three never diverge in shape.
+
+    Non-fatal, ALWAYS 200: no stored/inherited card, the duration gate
+    blocking the inherit path, or a resolve failure all degrade to
+    `{"intro": null}`.
+    """
+    tag_list, definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    key = collection_intro_settings_key(
+        scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
+    )
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            raw_id = get_collection_intro_card_id(cursor, key)
+            # Same LIVE-total-duration gate as GET /intro above.
+            members = evaluate_collection_members(conn, definition)
+            durations = [m["duration"] for m in members if m["duration"] is not None]
+            total_duration = sum(durations) if durations else None
+            card = resolve_intro_card(raw_id, total_duration, conn)
+
+            if card is None:
+                return {"intro": None}
+
+            user_id = get_current_user_id()
+            profile_id = get_current_profile_id()
+            field_values = _load_field_values(user_id, profile_id)
+            intro = build_intro_playback_payload(card, field_values)
+    except Exception as e:
+        logger.error(f"[collections] intro-playback resolve failed for key={key!r}: {e}", exc_info=True)
+        return {"intro": None}
+
+    return {"intro": intro}
+
+
 @router.patch("/intro")
 async def set_collection_intro(
     body: UpdateCollectionIntroRequest,
