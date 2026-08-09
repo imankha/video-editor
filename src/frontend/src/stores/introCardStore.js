@@ -141,11 +141,12 @@ export const useIntroCardStore = create((set) => ({
     return true;
   },
 
-  // T5215: the CURRENT profile's reel-length floor for the inherit-the-default
-  // intro resolution path. Lives on profile.sqlite (per-profile, like the
-  // default card itself), so — unlike the rest of this store — it is scoped
-  // to whichever profile is ACTIVE, not addressable by an arbitrary profile
-  // id (GET/PATCH /api/profiles/current/intro-min-duration).
+  // T5215: the CURRENT profile's legacy reel-length threshold. T6680 removed
+  // the default/inherit intro resolution path this used to gate -- dormant
+  // settings plumbing now, doesn't affect what plays (design doc Decision 3).
+  // Lives on profile.sqlite (per-profile), so — unlike the rest of this
+  // store — it is scoped to whichever profile is ACTIVE, not addressable by
+  // an arbitrary profile id (GET/PATCH /api/profiles/current/intro-min-duration).
   minDuration: null, // null = not yet loaded; the endpoint's own default is 20.0
   isMinDurationLoading: false,
 
