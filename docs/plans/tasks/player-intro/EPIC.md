@@ -174,7 +174,7 @@ publicly visible when shared**.
 
 **2026-08-09: the Overlay text layer split into its own [Overlay Text epic](../overlay-text/EPIC.md).**
 T5180 (the rich-text engine, Layer 1 above) is genuinely shared by both features and stays here;
-T5225 and its follow-ups (T6480/T6490/T6500/T6610/T6630) are specifically about the Overlay
+T5225 and its follow-ups (T6480/T6500/T6610/T6630) are specifically about the Overlay
 *consumer*, not the card feature, and are tracked there now.
 
 ## Child tasks (implement in order)

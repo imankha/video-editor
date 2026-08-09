@@ -32,7 +32,6 @@ flowchart LR
     T5225 --> T6610["T6610<br/>drag + delete"]
     T6610 --> T6630["T6630<br/>add/remove UX"]
     T5225 --> T6500["T6500<br/>font catalogue"]
-    T5225 -.deferred.-> T6490["T6490<br/>pause during text"]
   end
 ```
 
@@ -50,7 +49,6 @@ code path to draw a line of text, something has gone wrong.
 | — | [T6610](T6610-overlay-text-element-manipulation.md) — Drag + delete | STAGING | Body drag to reposition a text block (levers already worked), bigger delete hit target. Merged 2780032d (same branch as T6480). |
 | — | [T6630](T6630-overlay-text-add-remove-drag-ux.md) — Add/remove/drag UX | TODO | T6610 shipped believing add/remove already worked — they don't, in the real app. Root causes: a near-invisible add-click target, an affordance that vanishes after the first block, and drag verified harness-only (rejected). Follows T6610. |
 | — | [T6500](T6500-overlay-font-catalogue.md) — Font catalogue | TODO | The 4 faces were chosen for full-frame card display, not small captions burned over live footage — decide split-catalogue vs. grow-one-list from rendered samples. |
-| — | [T6490](T6490-pause-during-overlay-text.md) — Pause during text | TODO — DEFERRED | Hold a frame while a text block is on screen. Explicitly filed as "do it later" — its own risk profile, not competing with the higher-priority items above. |
 
 ## Completion criteria
 
