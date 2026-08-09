@@ -32,6 +32,21 @@ T6680+T6700 were mid-merge and already waiting on retest:
    stated goal requires actually being able to scrub back into the intro and have it resume
    correctly, which is a materially different (bigger) build than a cosmetic overlay.
 
+## Scrubber shape decided (2026-08-09, user follow-up after testing T6700)
+
+User tested T6700 and confirmed: "i wanted a separate scrub region for the intro card." This
+resolves the approach-A-vs-B tradeoff above toward **Approach B (virtual composite timeline, two
+sources kept separate)** — the user wants the intro to read as its OWN distinct region on the
+scrubber (visually and functionally separate from the reel region), not silently blended into one
+undifferentiated bar the way physical concatenation (Approach A) would render it. Approach A would
+still technically satisfy "one continuous timeline" but produces a single seamless scrubber with no
+visible seam at all, which is the opposite of what "separate scrub region" asks for. **Still open
+for the design doc:** exactly how the region boundary is drawn (a divider line, a distinct color/
+shade for the intro segment, a label) and whether seeking backward INTO the intro region is
+required to work or the region is allowed to be "landing" only (see the original open question
+above) — the user has only confirmed the region must be visually and structurally distinct, not
+resolved the full interaction spec.
+
 ## Solution (needs an Architecture design pass — do not implement directly)
 
 Two known candidate approaches, real tradeoffs between them, needs a design doc before either is

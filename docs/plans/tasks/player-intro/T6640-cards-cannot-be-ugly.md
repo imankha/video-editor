@@ -1,10 +1,23 @@
 # T6640: Cards that cannot be made ugly — template-owned typography + wrap-safe layout
 
-**Status:** TODO
+**Status:** TODO — reproduced live 2026-08-09, still unfixed, ready to start (T6630 merged, file
+ownership lock below is cleared)
 **Impact:** 9 | **Complexity:** 6
 **Epic:** [Player Intro + Rich Text](EPIC.md) — **amends requirement 2 (decision 12)**
-**Blocked-by (file ownership):** [T6630](T6630-overlay-text-add-remove-drag-ux.md) owns
-`TextSpecEditor.jsx` while it is in flight.
+**Blocked-by (file ownership):** ~~[T6630](T6630-overlay-text-add-remove-drag-ux.md) owns
+`TextSpecEditor.jsx` while it is in flight.~~ T6630 merged 2026-08-08 — no longer blocking.
+
+## Reproduced live 2026-08-09 (Playwright, real account, real card)
+
+Confirmed still present, exact same failure mode as the original report. Card "New card 2"
+(profile `9fa7378c`), **broadcast composition** (photo + Position + Team, Class unchecked), name
+"Mehdi Khabazian" wraps to 2 lines — the SAME wrap-collision class the root cause below describes,
+just observed in `broadcast` rather than `hero`. Measured via bounding boxes, not eyeballed: title
+box `y: 573.9–681.2`, Position fact ("Attacking Mid") box `y: 632.1–659.8` — fully inside the
+title's box, i.e. the second title line and the position fact render on top of each other.
+Toggling on the 3rd fact (Class → `recruiting` composition) removes the overlap for this name,
+confirming the bug is per-composition slot geometry, not universal — consistent with root cause A
+below (fixed fractional-y slots per composition, not measured from actual rendered line count).
 
 User, 2026-08-06, with a 9:16 and a 16:9 card screenshot:
 
