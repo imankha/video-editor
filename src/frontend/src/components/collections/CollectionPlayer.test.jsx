@@ -186,3 +186,46 @@ describe('CollectionPlayer Re-rank button gating (T4030)', () => {
     expect(screen.getByTitle(RE_RANK).disabled).toBe(true);
   });
 });
+
+// T6710: additive `renderScrubber` seam (design §4(v)/§8) — the composite
+// (IntroStoryPlayer) mounts CollectionPlayer with renderScrubber={false} and
+// supplies its own single bar; every OTHER existing caller (SharedCollectionView,
+// RankingGame, the diag harness, and this file's other describe blocks) passes
+// nothing and must keep rendering the internal segmented bar exactly as today.
+describe('CollectionPlayer renderScrubber prop (T6710 — RED until Stage 4)', () => {
+  const barReels = [
+    { id: 1, name: 'One', streamUrl: 'a', aspect_ratio: '9:16', duration: null },
+    { id: 2, name: 'Two', streamUrl: 'b', aspect_ratio: '9:16', duration: null },
+  ];
+
+  const segmentedBarRow = (container) => container.querySelector('.flex.gap-1.px-3.pt-2');
+
+  it('default (prop unset) renders the internal segmented bar, unchanged from today', () => {
+    const { container } = render(<CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} />);
+    expect(segmentedBarRow(container)).not.toBeNull();
+  });
+
+  it('renderScrubber={true} explicitly renders the internal segmented bar (same as default)', () => {
+    const { container } = render(
+      <CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} renderScrubber />,
+    );
+    expect(segmentedBarRow(container)).not.toBeNull();
+  });
+
+  it('renderScrubber={false} suppresses the internal segmented bar entirely', () => {
+    const { container } = render(
+      <CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} renderScrubber={false} />,
+    );
+    expect(segmentedBarRow(container)).toBeNull();
+    // No per-reel segment buttons at all when the bar is suppressed.
+    const segButtons = screen.queryAllByRole('button').filter((b) => /^(One|Two)/.test(b.getAttribute('aria-label') || ''));
+    expect(segButtons).toHaveLength(0);
+  });
+
+  it('renderScrubber={false} still renders the video/content — only the bar is suppressed', () => {
+    const { container } = render(
+      <CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} renderScrubber={false} />,
+    );
+    expect(container.querySelector('video')).not.toBeNull();
+  });
+});

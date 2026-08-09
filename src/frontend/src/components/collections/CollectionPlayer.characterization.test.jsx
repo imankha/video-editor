@@ -50,12 +50,23 @@ describe('CollectionPlayer segmented bar rendering (T6320 characterization)', ()
     expect(segmentButtons()).toHaveLength(3);
   });
 
-  it('renders each segment as a flex-1 py-2 hit target (T4760 padding preserved)', () => {
+  it('renders each segment as an equal-width (weighted) py-2 hit target (T4760 padding preserved)', () => {
+    // T6710 §7.5: segments became weighted (style={{ flexGrow: seg.durationSec }},
+    // §7.4 null-duration fallback weight=1) — a static `flex-1` class no longer
+    // exists on the button. All 3 fixture reels have duration: null, so under
+    // the fallback they STILL render as visually-equal thirds (computed
+    // flexGrow all equal to 1) — this test's rendered output is unchanged,
+    // only the assertion mechanism follows the new implementation (computed
+    // width/flexGrow instead of the class string).
     render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
-    for (const seg of segmentButtons()) {
-      expect(seg.className).toContain('flex-1');
+    const segs = segmentButtons();
+    for (const seg of segs) {
       expect(seg.className).toContain('py-2');
     }
+    // Equal computed weight across all 3 segments (fallback weight=1 each,
+    // since every fixture reel has duration: null) -> still equal thirds.
+    const weights = segs.map((seg) => seg.style.flexGrow);
+    expect(weights).toEqual(['1', '1', '1']);
   });
 
   it('renders each track as h-1 rounded-full bg-white/25 with a bg-white fill', () => {
