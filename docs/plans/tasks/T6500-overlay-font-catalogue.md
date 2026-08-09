@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Impact:** 6 | **Complexity:** 4
-**Follows:** [T5180](../player-intro/T5180-rich-text-engine.md), [T5225](T5225-overlay-text-layer.md)
+**Follows:** [T5180](player-intro/T5180-rich-text-engine.md), [T5225](player-intro/T5225-overlay-text-layer.md)
 
 ## Problem
 

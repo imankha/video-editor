@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 7 | **Complexity:** 2
 **Follows:** [T6570](T6570-card-title-from-profile-full-name.md) (title from profile),
-[T5225](overlay-text/T5225-overlay-text-layer.md) (overlay text spec)
+[T5225](player-intro/T5225-overlay-text-layer.md) (overlay text spec)
 
 Three defects from staging use, 2026-08-05. Items 1 and 2 are **root-caused and proven** — do not
 re-investigate, verify the fix instead.

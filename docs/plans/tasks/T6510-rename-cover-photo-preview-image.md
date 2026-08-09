@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Impact:** 6 | **Complexity:** 3
-**Follows:** T5410 (cover photo / poster marker), [T5225](overlay-text/T5225-overlay-text-layer.md)
+**Follows:** T5410 (cover photo / poster marker), [T5225](player-intro/T5225-overlay-text-layer.md)
 
 ## Problem
 

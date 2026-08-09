@@ -10,7 +10,7 @@
 ## Problem
 
 Two features need styled text drawn onto video: the intro card ([T5210](T5210-intro-card-generation.md))
-and the Overlay text layer ([T5225](../overlay-text/T5225-overlay-text-layer.md)). If each builds its own text
+and the Overlay text layer ([T5225](T5225-overlay-text-layer.md)). If each builds its own text
 drawing, the app grows two font stacks, two escaping bugs, and two ways for the preview to disagree
 with the export. **This task builds the text system once, with no user-visible feature attached.**
 

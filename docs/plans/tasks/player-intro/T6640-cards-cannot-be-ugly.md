@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 9 | **Complexity:** 6
 **Epic:** [Player Intro + Rich Text](EPIC.md) — **amends requirement 2 (decision 12)**
-**Blocked-by (file ownership):** [T6630](../overlay-text/T6630-overlay-text-add-remove-drag-ux.md) owns
+**Blocked-by (file ownership):** [T6630](T6630-overlay-text-add-remove-drag-ux.md) owns
 `TextSpecEditor.jsx` while it is in flight.
 
 User, 2026-08-06, with a 9:16 and a 16:9 card screenshot:

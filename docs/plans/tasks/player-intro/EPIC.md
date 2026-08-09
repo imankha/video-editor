@@ -172,11 +172,6 @@ publicly visible when shared**.
 | A default | Not modelled | `is_default` on the card row |
 | Reuse text in Overlay | Not in the epic at all | New Overlay layer sharing the card's renderer |
 
-**2026-08-09: the Overlay text layer split into its own [Overlay Text epic](../overlay-text/EPIC.md).**
-T5180 (the rich-text engine, Layer 1 above) is genuinely shared by both features and stays here;
-T5225 and its follow-ups (T6480/T6500/T6610/T6630) are specifically about the Overlay
-*consumer*, not the card feature, and are tracked there now.
-
 ## Child tasks (implement in order)
 
 | Order | Task | What it does |
@@ -188,15 +183,18 @@ T5225 and its follow-ups (T6480/T6500/T6610/T6630) are specifically about the Ov
 | 3 | [T5210](T5210-intro-card-generation.md) — Card render engine | `player_intro.py`: card row + PNG text layers -> animated MP4, probe-matched, cached, non-fatal. |
 | 4 | [T5215](T5215-intro-attachment.md) — Attachment + resolution | `final_videos.intro_card_id`, collection-definition field, resolution helper, reel + collection pickers. |
 | 5 | [T5220](T5220-add-intro-integration.md) — Apply the intro at every egress | Serve-time prepend, playback pre-roll, T4945 stitch seam, public-exposure notice. |
-| — | ~~T5225 — Overlay text layer~~ **moved 2026-08-09** to its own [Overlay Text epic](../overlay-text/EPIC.md) — it is T5180's SECOND consumer, not a card feature; T5180 itself (the shared engine) stays here. | Timeline layer + clip-snapping range + burn-in in both render loops. Needs only T5180, so it ran early — that off-wave independence is exactly why it now stands alone. |
+| — | [T5225](T5225-overlay-text-layer.md) — Overlay text layer | Timeline layer + clip-snapping range + burn-in in both render loops. Needs only T5180, so it can run early. |
 | 6 | [T5230](T5230-childrens-data-compliance.md) — Children's-data compliance | Consent record, retention/deletion in `privacy.py`, no-face-recognition guardrail, privacy-policy update. Gates public launch. |
 | — | [T5200](T5200-player-cutout.md) — Player cut-out | Optional enhancement; no longer blocks T5210. |
-| — | [T6640](T6640-cards-cannot-be-ugly.md) — Cards that cannot be made ugly | Template-owned typography + wrap-safe layout; amends requirement 2 (decision 12). Design-gated. |
+| — | [T6480](T6480-overlay-text-editor-contrast.md) — Overlay text editor contrast | T5225's follow-up: the Edit Text rail read bright-on-bright on Overlay's own light panel. Fixed host-side, shared component untouched. Merged 2780032d. |
 | — | [T6520](T6520-card-slot-size-align-overrides.md) — Per-slot size/align overrides | Follow-up from T5205's merge (2026-08-04): reintroduces size/alignment as overrides on top of the shared geometry contract, without taking layout ownership back from it. |
 | — | [T6540](T6540-card-editor-information-design.md) — Card editor information design | User feedback 2026-08-05 ("hard to parse"). Three-tier rail hierarchy, composition badge reads as feedback not debug text. Merged bd17b228. |
 | — | [T6570](T6570-card-title-from-profile-full-name.md) — Card title from the profile | User request 2026-08-05. Title resolves from the profile's Full Name (both preview and export), not a per-card text box. Merged d91a11c7. |
 | — | [T6580](T6580-card-editor-presentation-and-order-bug.md) — Card editor presentation + order bug | Staging feedback 2026-08-05: bigger card, readable controls, treatments that visibly differ, a click-order-dependent render bug. Merged d91a11c7 (same branch as T6570). |
 | — | [T6600](T6600-modal-z-order-and-stacking-scale.md) — Modal z-order + stacking scale | Split out of T6580 item 1 (2026-08-05): the card modal was losing to draft tiles via nested stacking contexts, not a scrim-strength problem. Merged b6878608. |
+| — | [T6610](T6610-overlay-text-element-manipulation.md) — Overlay text drag + delete | T5225's follow-up: body drag to reposition a text block, bigger delete hit target. Merged 2780032d (same branch as T6480). |
+| — | [T6630](T6630-overlay-text-add-remove-drag-ux.md) — Overlay text add/remove/drag UX | T5225's follow-up, still TODO: T6610 shipped believing add/remove already worked — they don't, in the real app (near-invisible add target, vanishing affordance, harness-only drag verification rejected). **Positioned as the last task in PLAN.md's UI-runway milestone, immediately before the tutorial reshoot (T5140)** — it is a real user-facing gap the reshoot would otherwise capture as broken. |
+| — | [T6640](T6640-cards-cannot-be-ugly.md) — Cards that cannot be made ugly | Template-owned typography + wrap-safe layout; amends requirement 2 (decision 12). Design-gated. |
 | — | [T6650](T6650-card-delete-destroys-profile-intro-photo.md) — Card delete destroys the profile photo | User-hit data loss 2026-08-07: deleting a card that shares its image key with the profile's own intro photo silently destroyed the profile photo too. |
 | — | [T6530](T6530-intro-card-discoverability-ux.md) — Discoverability UX pass | Research + decision (DECIDED 2026-08-08), split into the 4 tasks below. |
 | — | [T6660](T6660-rename-athlete-intro-card.md) — Rename to "Athlete Intro Card" | User-facing copy sweep, final naming decision. |
