@@ -368,32 +368,103 @@ tradeoff is a conscious, user-directed choice; it is stated plainly so it stays 
 
 ---
 
-## 7. Open Question for the User (the ONE remaining approval gate)
+## 7. Reel-vs-reel proportional width — FINAL DECISION + caller-impact check
 
 **Decided (do NOT re-ask):** intro region width = **PROPORTIONAL** (decision 1); backward-seek into the
 intro = **TRUE ARBITRARY SEEK** (decision 2). Both are the user's settled calls.
 
-### Q — Are the REEL segments also duration-proportional, or equal-weight among themselves?
+**Decided (2026-08-09, supersedes the §7 recommendation below) — Option (B): EVERYTHING proportional.**
+Reel cells are ALSO duration-proportional, not just the intro. This is a **global change to
+`CollectionPlayer`'s shared segmented bar**, not a prop gated per-caller — every caller that renders the
+bar gets proportional weighting where a segment's duration is known. The user explicitly chose the bigger
+option knowing it touches shared infra beyond the owner path; the caller-impact check below was run before
+implementation per that instruction.
 
-The intro segment IS duration-proportional immediately (its duration is known: `card.duration || 4.0`).
-The reels are the open part, because a frozen `reel.duration` is nullable (`useStoryPlayback.js:6-10`) —
-today's segmented bar deliberately has no live-duration source and derives progress per-tick from the live
-element instead.
+### 7.1 Caller list, re-verified against the tree (not the stale doc list)
 
-**Options:**
+`grep -rn "CollectionPlayer" src` was re-run; excluding comment-only hits (`BrandedEndCard.jsx`,
+`ProgressTrack.jsx`, `zLayers.js`), there are exactly **4 render call sites** and **2 guard test files**:
 
-- **(A) Intro proportional; reels stay equal-weight among themselves (RECOMMENDED).** Segment 0 gets its
-  true proportional slice (`flexGrow: introDur`); the reel cells split the remaining width equally
-  (`flexGrow: 1` each). No new live-duration source, no late reflow, matches today's reel bar exactly for
-  the reel portion. Fully satisfies the user's "intro is proportionally sized, visually distinct" decision.
-- **(B) Everything proportional (intro AND reels).** Reel cells also weight by duration. Needs a
-  live-duration source the bar doesn't have today (durations arrive as each reel's `<video>` metadata
-  loads), so the bar would **reflow** as durations resolve, and null-duration reels need a fallback weight.
-  More complexity and a visible late-reflow for a marginal gain.
+| # | Caller | File:line | Reels passed | Segment count | Duration values |
+|---|---|---|---|---|---|
+| 1 | Owner in-app (this task) | `DownloadsPanel.jsx:784` | `toPlayerReel`/`toPlayerReels` (`playerReels.js:12`) | 1 (single reel) or N (collection) | `d.duration` — comment: **"may be null; the player never relies on it"** |
+| 2 | Public share view | `SharedCollectionView.jsx:129` | `data.members.map(...)` inline | N (collection members) | `m.duration` ← `final_videos.duration`, backend-typed **`float \| None`** (`shares.py:82`) |
+| 3 | Ranker replay | `RankingGame.jsx:264` | `reels={[replayReel]}` (`toReplayReel`, `RankingGame.jsx:17`) | **always exactly 1** | not set on `toReplayReel`'s output (undefined) |
+| 4 | Dev diag harness | `collectionplayerdiag/main.jsx:64` | hardcoded `REELS` const | **always exactly 1** | `duration: null` (explicit) |
+| — | `CollectionPlayer.characterization.test.jsx` | segment-bar guard | 3 fixture reels | 3 | `duration: null` (all 3) |
+| — | `CollectionPlayer.test.jsx` | behavior tests | varies | varies | mixed |
 
-**Recommendation: (A).** It delivers the decided intro-proportional behavior with zero new duration
-plumbing and no reflow, and keeps the reel bar byte-faithful to today. Choose (B) only if reel-vs-reel
-time fidelity in the bar is explicitly wanted despite the reflow.
+### 7.2 Safety verdict per caller
+
+- **#3 Ranker replay and #4 diag harness are structurally immune.** Both ALWAYS pass a single-element
+  `reels` array. A segmented bar with one segment renders at 100% width under `flex-1` **and** under
+  `flexGrow: duration` identically — there is no second segment to be unequal against. **No behavior
+  change is observable for either caller, under any weighting scheme.** Neither has "a reason to want
+  equal-width" because equal-vs-proportional is not a distinction that exists for N=1.
+- **#2 Public share view (`SharedCollectionView`) is the one caller materially affected.** It renders real
+  multi-member bars (N≥2 is the common case for a shared collection), and `final_videos.duration` is
+  genuinely nullable in production (not a hypothetical — `shares.py:82` types it `float | None`, and
+  `playerReels.js:12`'s own comment independently confirms the same field "may be null" for the owner
+  path). **This directly conflicts with an existing line in THIS SAME design doc (§1.1 and §1.3):
+  "`SharedCollectionView` has its OWN identical swap — out of scope, untouched."** A non-gated global
+  change to `CollectionPlayer`'s internal bar necessarily reaches this caller too — there is no way to
+  make the shared bar proportional "for everyone" while also leaving this one caller untouched, because
+  that would require exactly the per-caller gate the user's decision rejects.
+- **#1 Owner in-app is the intended target** — no concern, this is the task.
+
+**No caller has a functional reason to WANT equal-width** (nothing depends on segments being visually
+equal). The only real finding is the **scope conflict** for #2: this task's own doc marks
+`SharedCollectionView` out of scope, yet the chosen (B) implementation mechanism (global, not per-caller)
+will change its rendered output too. Flagging per the instruction rather than silently shipping it.
+
+### 7.3 Resolution — AWAITING USER APPROVAL
+
+This is the one thing the caller-impact check surfaced that the user has not yet explicitly decided. Two
+ways to resolve the conflict with §1.1/§1.3's "out of scope — do NOT touch" line:
+
+- **(i) Let it flow through globally, including to `SharedCollectionView`.** Read "out of scope" as
+  "do not add T6700 intro-swap code paths there" (the concern that line was written for), not "the shared
+  bar's visual weighting must never change for it." Proportional segment widths on the public share page
+  become an accepted, intentional side effect of making `CollectionPlayer`'s bar duration-proportional
+  globally — no new prop, no per-caller branch. Matches the user's "not gated per-caller" instruction
+  literally.
+- **(ii) Structurally scope it to the owner path.** Add an explicit opt-in weighting prop on
+  `CollectionPlayer` (default off = today's `flex-1`), turned on only by the owner composite
+  (`IntroStoryPlayer`/`DownloadsPanel`). Preserves §1.1/§1.3's boundary exactly, at the cost of
+  reintroducing the per-caller gate the "everything proportional" instruction was pushing away from.
+
+**Recommendation: (i).** The scope conflict is with a stale internal cross-reference in this doc, not with
+a functional reason `SharedCollectionView` needs equal width (§7.2 found none). Gating it back per-caller
+just to preserve a sentence in §1.1 would be process cargo-culting, not a real product requirement. Pick
+(ii) only if there's a reason the public share page should NOT show proportional segments that hasn't
+surfaced yet.
+
+### 7.4 Null-duration handling (needed regardless of the scope question above)
+
+`reel.duration` is nullable on every caller that supplies it (see table). The weighted bar needs an
+explicit fallback so a null/0 duration cannot collapse a segment to zero width or throw on
+`flexGrow: null`:
+
+- **Fallback weight = 1** for any reel with a null/0/undefined duration (mirrors `flex-1`'s old implicit
+  equal-share for exactly the reels that have no better data). Reels WITH a known duration weight by that
+  duration; reels WITHOUT one weight `1` alongside them — a bar can legitimately mix both in the same row
+  (e.g., an older reel with no probed duration next to a recently-exported one that has it).
+- This is a **presentational weight only** — it does NOT feed `useStoryPlayback`, which keeps deriving
+  live progress from `v.currentTime / v.duration` exactly as today (§1.3, unchanged). The hook's
+  "never trust frozen duration for playback correctness" invariant is preserved; only the bar's initial
+  layout weight uses the frozen value, and only as a hint.
+- All-null fixture sets (`CollectionPlayer.characterization.test.jsx`'s 3 reels, `RankingGame`/diag's
+  single reel) render IDENTICALLY to today under this fallback — confirms 7.2's "no observable change"
+  conclusion for #3/#4, and gives #2/#1 a defined, non-crashing behavior when duration data is thin.
+
+### 7.5 Required test update (mechanical, not a functional regression)
+
+`CollectionPlayer.characterization.test.jsx:53-58` (`renders each segment as a flex-1 py-2 hit target`)
+asserts the literal Tailwind class `flex-1` on every segment button. Implementing weighted segments swaps
+static `flex-1` for an inline `style={{ flexGrow }}`, so this assertion breaks on the class name even
+though the rendered widths are unchanged (all 3 fixture reels have `duration: null` → fallback weight 1
+each → still equal thirds). Stage 3 must update this assertion to check computed width/flexGrow instead of
+the class string; this is a fixture-following mechanical change, not evidence of a regression.
 
 ---
 
