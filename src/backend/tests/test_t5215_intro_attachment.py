@@ -664,10 +664,15 @@ class TestCollectionIntroFreeze:
         assert result["intro_card_id"] == card_id
 
 
-def test_collection_share_create_freezes_default_at_creation_time(pg_conn, tmp_path):
-    """End-to-end (Postgres + TestClient): sharing with NO explicit intro pick
-    ('use my default') freezes the CURRENT default's concrete id, and a later
-    default change does not retroactively move the already-created link."""
+def test_collection_share_create_freezes_zero_regardless_of_later_default_changes(pg_conn, tmp_path):
+    """T6680 inversion of the pre-T6680 test of the same shape (this test used to
+    assert the OLD behavior: sharing with no explicit intro pick froze the
+    CURRENT default's concrete id). Decision 1/2 removed the default concept
+    entirely, so 'no explicit pick' now freezes `0` (no intro) -- there is no
+    default left to read. This test's remaining value is the second half:
+    `is_default` churn on the intro_cards table (legacy column, still written
+    by other flows/migrations) must never retroactively move an already-frozen
+    link, since resolution no longer reads that column at all."""
     import json
 
     from fastapi.testclient import TestClient
@@ -720,9 +725,12 @@ def test_collection_share_create_freezes_default_at_creation_time(pg_conn, tmp_p
         definition = share["collection_definition"]
         if isinstance(definition, str):
             definition = json.loads(definition)
-        assert definition["intro_card_id"] == card_a
+        assert definition["intro_card_id"] == 0, (
+            "picked None must freeze 0 (no intro), never a default id"
+        )
 
-        # Flip the default -- the STORED definition must not change.
+        # Flip `is_default` on the legacy column -- the STORED definition must
+        # still not change, since resolution never reads `is_default`.
         conn = sqlite3.connect(str(get_database_path()))
         conn.execute("UPDATE intro_cards SET is_default = 0 WHERE id = ?", (card_a,))
         conn.execute(
@@ -736,11 +744,11 @@ def test_collection_share_create_freezes_default_at_creation_time(pg_conn, tmp_p
         definition_again = share_again["collection_definition"]
         if isinstance(definition_again, str):
             definition_again = json.loads(definition_again)
-        assert definition_again["intro_card_id"] == card_a
+        assert definition_again["intro_card_id"] == 0
 
 
 def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default(pg_conn, tmp_path):
-    """T6680 direct inversion of test_collection_share_create_freezes_default_at_creation_time
+    """T6680 direct inversion of test_collection_share_create_freezes_zero_regardless_of_later_default_changes
     above: sharing with NO explicit intro pick (`intro_card_id=None`) must now
     freeze `0` (no intro), and `get_default_intro_card` must NEVER be called --
     collections.py:1093's 'picked None -> freeze default' branch is removed.
