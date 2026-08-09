@@ -1,127 +1,141 @@
-# T6680 — Default Athlete Intro Card provisioning — Design (Stage 2)
+# T6680 — Remove the default / auto-inherited Athlete Intro Card — Design (Stage 2, v2)
 
-**Task:** [T6680](player-intro/T6680-default-athlete-intro-card-provisioning.md) — every profile has a usable default Athlete Intro Card before the user builds one.
+**Task:** [T6680](player-intro/T6680-default-athlete-intro-card-provisioning.md).
 **Tier:** L (Architecture design gate). **Epic:** [Player Intro + Rich Text](player-intro/EPIC.md).
-**Status of this doc:** awaiting user approval. No source code is written until approved.
+**Status of this doc:** awaiting user approval (v2). No source code is written until approved.
 
-This doc **decides** all four open questions the task raised; it does not hand them onward. Where a
-question touches compliance, the decision was pre-resolved by the Opus expert and is encoded here as
-a verdict, not re-litigated.
+> **What changed in v2 (2026-08-09):** superseded by user direction — the default / auto-inherited
+> intro card concept is being **removed**, not provisioned-and-gated. v1 designed a lazily-provisioned
+> default plus a new egress consent gate; v2 deletes the inherit path entirely so every intro requires
+> an **explicit attach gesture** (which already runs through the existing consent gate), removing the
+> exposure hole rather than patching around it. Decisions 1/2/4 are rewritten; Decision 3 restates what
+> `NULL` means now. This doc is self-contained — v1 is not needed to read it.
 
 ---
 
-## 1. Current State
+## 0. Open Questions (require a decision before / during implementation)
 
-### 1.1 What exists today
+The direction resolves the four *original* questions (they presupposed a default, which no longer
+exists). It raises new ones — all are **product/UX or remediation scope**, not code mechanics:
 
-A profile has **zero** intro cards until a user explicitly creates one. The empty-library state
-(`IntroCardGrid.jsx:24-28`, `IntroCardCarousel.jsx:141-143`, reworded by T6660 to *"No Athlete Intro
-Cards yet. Create one to open a reel with your player."*) is the starting point for every profile.
-Nothing plays before any reel or collection until that first card exists.
+- [ ] **OQ1 — No-intro-until-attach is acceptable?** After this change a reel/collection with no
+  explicit card attached plays with **no intro at all** (previously a qualifying reel silently grew the
+  profile default). This is the intended end state of the direction, but confirm you are comfortable
+  that the out-of-box state for every reel is *no intro* until the user acts.
+- [ ] **OQ2 — Picker: optional → prompted?** The reel/collection picker
+  (`IntroCardCarousel`) currently offers an "inherit my default" state. That state disappears. Should
+  the picker (a) simply drop the inherit option, leaving *[specific card | no intro]* with **no-intro
+  as the initial selection**, or (b) actively prompt/nudge the user to attach a card (e.g. an empty
+  "Add an intro" affordance on new reels)? This is the one UX decision that gates the frontend slice.
+- [ ] **OQ3 — Existing reels currently showing the inherited default.** Any reel/collection in prod
+  today with `intro_card_id IS NULL` **and** a qualifying duration is *currently* showing the profile
+  default on egress. After this change those reels **silently stop showing an intro**. Two sub-options:
+  (a) **clean break** — accept that they lose the intro until the user explicitly re-attaches (simplest,
+  matches the direction); or (b) **preserve-behavior migration** — a one-time data migration that, for
+  each such reel on a **consented** profile, writes the concrete default id into `intro_card_id`
+  (converting today's implicit inherit into an explicit attach, preserving what the user sees while
+  still closing the hole for **unconsented** profiles). Recommendation below (Decision 2); needs your
+  call because (b) makes a product choice on the user's behalf.
+- [ ] **OQ4 — Remediation of already-frozen unconsented shares.** The hole is **live now** (see §1.4):
+  collection shares created with "use my default" by an **unconsented** profile have **already frozen**
+  a minor's default card id into durable public links. This fix stops **new** such freezes but does not
+  retract existing ones. Is a remediation sweep of existing public shares in scope here, or is it
+  T5230's retention/purge responsibility (recommendation: **out of scope here**, flag to T5230)?
+- [ ] **OQ5 — Retire the `is_default` UI concept too, or leave dormant badges?** Once nothing inherits,
+  a card badged "Default" is a label that no longer *does* anything (see §1.5 for every surface). The
+  coherent end state removes the badge/selector; the minimal end state leaves them as harmless-but-
+  misleading labels. Recommendation below (Decision 4): retire end-to-end in this task.
 
-### 1.2 The resolution + egress machinery (verified 2026-08-09, corrects two stale task-file refs)
+---
 
-The NULL/0 resolver did **not** move to `intro_egress.py`. It lives in `services/intro_cards.py`:
+## 1. Current State (what is being removed)
+
+### 1.1 The default exists and is populated in prod today
+
+`first card inserted → is_default = 1` is enforced at insert (`routers/intro_cards.py:249-252`), delete
+auto-promotes the newest survivor (`:389-397`), and a manual "set as default" gesture flips it
+(`:336-337`). Crucially, **`v040_backfill_intro_card_default.py` has already run**: every pre-T6640
+profile that had cards but no flagged default was backfilled to `is_default = 1`. So **every profile
+with ≥ 1 card has a default row right now** — the inherit path is not hypothetical, it is live for the
+entire existing user base.
+
+### 1.2 The resolution machinery (verified 2026-08-09)
+
+The NULL/0 resolver lives in `services/intro_cards.py` (it did **not** move to `intro_egress.py`):
 
 | Symbol | Location | Role |
 |---|---|---|
-| `resolve_intro_card_id(...)` | `intro_cards.py:195-235` | **Pure** resolution order. `0 → None`; `<id> → id`; `NULL → default_id` **iff** `reel_duration ≥ min_duration` (duration-gated), else `None`. |
+| `resolve_intro_card_id(id, dur, default_id, min_dur)` | `intro_cards.py:195-235` | **Pure** order. `0 → None`; `<id> → id`; `NULL → default_id` **iff** `dur ≥ min_dur` (duration-gated), else `None`. **The inherit branch is `:224-235`.** |
 | `get_default_intro_card(cursor)` | `intro_cards.py:245-251` | `SELECT * FROM intro_cards WHERE is_default = 1 LIMIT 1`. |
-| `resolve_intro_card(...)` | `intro_cards.py:303-339` | DB-backed: loads default + `get_intro_min_duration`, applies the pure resolver, fetches the resolved row. Read-only. |
-| `resolve_intro_for_reel(...)` | `intro_egress.py:141` | T5220 **cross-DB shared egress resolution point** (`mode="burn"|"playback"`). Delegates to `resolve_intro_card`. **Never raises** — every failure degrades to `None` (epic decision 9). This is the shared choke point for the LIVE egress paths. |
+| `get_intro_min_duration(cursor)` | `intro_cards.py:254-265` | Per-profile threshold; **only consumer is the inherit duration gate** (plus the settings read/write UI, `profiles.py:277`). |
+| `load_profile_cards(cursor)` | `intro_cards.py:284-300` | Batch `{id: {name, is_default, has_photo}}` for the download list. |
+| `resolve_intro_card(id, dur, conn)` | `intro_cards.py:303-339` | DB-backed: loads default via `get_default_intro_card` + threshold, applies the pure resolver, fetches the row. Read-only. |
+| `resolve_intro_for_reel(...)` | `intro_egress.py:141` | T5220 cross-DB egress choke point; delegates to `resolve_intro_card`. Never raises → `None` on any failure (epic decision 9). |
 
-The **three LIVE egress paths** that resolve a card at serve time, all through `resolve_intro_for_reel`:
+### 1.3 Every live call site that INHERITS the default (all must be removed — v1 missed two)
 
-1. **Owner download burn** — `downloads.py:719` `_resolve_download_intro()` → `resolve_intro_for_reel`.
-2. **Single-reel share** (playback + download) — same helper, `mode="playback"`/`"burn"`.
-3. **Reel share page (public)** — `shares.py:270` passes the reel's live `intro_card_id`.
+There are **two independent inherit paths**, not one:
 
-The **FROZEN** collection path is different (T5215): at **share creation** (`collections.py:1086-1102`)
-the picker choice is frozen to a **concrete** value (a real id, or `0`). When the user picked "use my
-default" (`intro_card_id is None`), `collections.py:1092-1094` calls `get_default_intro_card` and
-freezes that **concrete default id** into the public share definition. At **playback**,
-`_evaluated_share_members` (`collections.py:866-899`) re-resolves that already-concrete frozen id via
-`resolve_intro_card(frozen_id, reel_duration=None, ...)` — it never re-inherits NULL, so playback
-reads exactly what freeze stored.
+1. **Single-reel / share / download-burn egress** — via `resolve_intro_for_reel` → `resolve_intro_card`:
+   - Owner download burn `downloads.py:723-724`; single-reel share playback/burn (same helper);
+     reel share page `shares.py:270`; per-download resolution `downloads.py:1123`.
+2. **The download LIST** — `downloads.py:337-345` batch-loads `intro_default_id` **directly from
+   `is_default`** and passes it into `resolve_intro_card_id` at `:577` per tile. This path **does not
+   route through `resolve_intro_for_reel`** — a resolver-only gate (v1's plan) would have missed it.
+3. **Collection freeze** — `collections.py:1086-1102`: when the picker choice is `None`, `:1093` calls
+   `get_default_intro_card` and **freezes the concrete default id** into the public share definition.
+   At playback, `_evaluated_share_members` (`collections.py:866-899`) re-resolves that already-concrete
+   frozen id (never re-inherits NULL).
 
-### 1.3 The consent gates today (per-profile KV `intro_consent_at.{profile_id}`)
+### 1.4 The consent hole — LIVE, not latent
 
-`get_intro_consent(user_id, profile_id)` (`user_db.py:558-566`) reads the KV; `None` = never consented.
+`get_intro_consent(user_id, profile_id)` (`user_db.py:558-566`) → `None` = never consented. The
+attach/freeze consent gates fire **only on an explicit non-null, non-zero pick**
+(`intro_cards.py:204-211` create; the attach PATCH handler; `collections.py:1079-1084` freeze). `None`
+("inherit default") and `0` ("no intro") are **deliberately never gated**. Combined with §1.1 (every
+profile already has a default) and §1.3 (NULL inherits it on every egress), the result is:
 
-| Gate | Location | Fires on |
+> **A `NULL`-inherit reel on an unconsented profile publishes that profile's default card — a
+> title-only card carrying a minor's full name — on the share page, on download burns, and (durably)
+> into frozen collection-share links, with no recorded parental authority.** This is shipped and live.
+
+v1 called this "latent." That was wrong: `v040` already populated the defaults, so the hole is **active
+in production now**.
+
+### 1.5 `is_default` surfaces in the frontend (relevant to Decision 4 / OQ5)
+
+`is_default` is not only a resolution key; the UI reads it:
+
+| Surface | File | Meaning that dies with inherit |
 |---|---|---|
-| Create card | `intro_cards.py:204-211` (router only; service has no gate) | any create, unconditionally → 403 |
-| Reel attach (PATCH) | attach handler | an **explicit non-null, non-zero** id pick |
-| Collection freeze | `collections.py:1079-1084` | an **explicit non-null, non-zero** id pick |
-
-**The hole (expert-confirmed, high confidence).** The attach/freeze gates fire ONLY on an explicit
-non-null, non-zero pick. `None` ("use my default") and `0` ("no intro") are **deliberately never
-gated**. So a `NULL`-inherit reel resolves to the profile's `is_default=1` card and rides **every
-egress with no consent check**:
-
-- Reel share page (`shares.py:270`) — public, no consent check.
-- Owner/share download burn (`downloads.py:719`) — no consent check.
-- **Collection freeze** (`collections.py:1092`, the persisting one) — freezes the concrete default id
-  into a public share definition with the `:1079` guard **skipped** because `d.intro_card_id is None`.
-
-Today this hole is **latent**: a zero-card profile's default resolves to *nothing*, so no exposure
-happens. **The moment T6680 auto-provisions a default, the hole becomes live** — a title-only card
-carrying a minor's full name would publish on any share with no recorded parental authority.
-
-### 1.4 Content shape a default would use
-
-`derive_composition(has_photo, shown_fields)` (`intro_cards.py:64-84`): **no photo OR 0 facts →
-`title-only`**. A title-only card renders its title from the profile's `intro_full_name.{profile_id}`
-KV (typed in `ProfileIntroSection`, a separate consent-free flow). `intro_egress._load_field_values`
-(`intro_egress.py:74-84`) omits `full_name` cleanly when unset (no placeholder string). `first-card
-becomes default` is enforced atomically at insert time (`intro_cards.py:249-252`), and delete
-auto-promotes the newest (`intro_cards.py:389-397`).
-
-### 1.5 Architecture diagram — current
-
-```mermaid
-flowchart TB
-  subgraph today["Today: zero-card profile"]
-    Z["profile has 0 cards"] --> R["resolve_intro_for_reel<br/>(NULL inherit)"]
-    R --> D["get_default_intro_card<br/>→ None"]
-    D --> N["no intro plays<br/>(empty state shown in UI)"]
-  end
-  subgraph hole["The latent hole T6680 would make live"]
-    Z2["profile HAS a default<br/>(after provisioning)"] --> R2["egress resolves NULL→default"]
-    R2 --> X["published with NO consent check<br/>(share page / download / collection freeze)"]
-  end
-```
+| Carousel "inherited" state | `IntroCardCarousel.jsx:128` `inherited={isInherit && card.is_default}` | The whole "this reel inherits your default" concept. |
+| Carousel default selector | `IntroCardCarousel.jsx:79,129` | Which card is "the default". |
+| "Default" badge | `IntroCardTile.jsx:13`, `IntroCardEditorContainer.jsx:150-156` | A label that no longer resolves to anything. |
+| Delete-confirm copy | `IntroCardGrid.jsx:50` | "deleting your default…". |
+| Store selector + promotion | `introCardStore.js:135,162,216` | Tracks/animates default promotion. |
 
 ---
 
 ## 2. Target State
 
-A profile with zero cards is **lazily provisioned** — on the first read of its card library — with a
-single private `is_default=1` **title-only** row (`shown_fields=[]`, `image_key=NULL`), whose rendered
-title comes from `intro_full_name`. The write is consent-exempt (it is not an exposure event). The
-consent decision moves from "explicit pick" to **"will this egress EXPOSE a card"**, enforced
-**structurally in the shared resolver** `resolve_intro_for_reel` and at the **collection freeze** —
-the two places a resolved card leaves the profile. An un-consented default therefore **degrades to
-no-intro** on every egress (epic decision 9) instead of publishing a minor's name.
+**Explicit-attach-only.** An intro plays on a reel/collection **iff** a concrete card id was explicitly
+attached through a consent-gated gesture. `NULL` and `0` both resolve to **no intro**, at every call
+site. There is no profile default, no inherit, no auto-provisioning, and (Decision 4) no `is_default`
+concept. The exposure hole is closed **structurally by removal**: the only value that can reach egress
+is a concrete id, and every concrete id was set through the existing attach/freeze consent gate — so no
+new egress gate is needed (nothing ungated remains to gate).
 
 ```mermaid
 flowchart TB
-  subgraph prov["Provisioning (lazy, consent-EXEMPT write)"]
-    G["GET /api/intro-cards (list)"] --> C{"count == 0 ?"}
-    C -- "no" --> L["return cards"]
-    C -- "yes" --> T["ONE txn:<br/>COUNT==0 recheck +<br/>INSERT title-only is_default=1"]
-    T --> L
+  subgraph before["Before (live hole)"]
+    Rn["reel intro_card_id = NULL"] --> Inh["resolve → is_default card"]
+    Inh --> Pub["published, NO consent check"]
   end
-  subgraph egr["Egress (consent gate at the EXPOSURE point)"]
-    E["resolve_intro_for_reel<br/>(shared choke point)"] --> RC["resolve card row"]
-    RC --> K{"card resolved AND<br/>consent is None ?"}
-    K -- "yes" --> NI["return None + log<br/>(serve without intro)"]
-    K -- "no" --> OK["serve intro"]
-  end
-  subgraph frz["Collection freeze (persisting exposure)"]
-    F["POST /share, picked None → default"] --> FK{"consent is None ?"}
-    FK -- "yes" --> R403["403 refuse freeze"]
-    FK -- "no" --> FR["freeze concrete default id"]
+  subgraph after["After (this task)"]
+    A["reel intro_card_id"] --> Q{"value?"}
+    Q -- "NULL or 0" --> NoI["no intro (both cases)"]
+    Q -- "concrete id" --> Gate["was set via consent-gated attach"]
+    Gate --> Serve["serve that card"]
   end
 ```
 
@@ -129,248 +143,148 @@ flowchart TB
 
 ## 3. Decisions
 
-### Decision 1 — Consent on auto-create: **WRITE is exempt; gate the EXPOSURE, in the shared resolver.**
+### Decision 1 — No provisioning, and NO new egress gate. The fix is REMOVAL, not gating.
 
 **Decision.**
-1. **Auto-provisioning the default row is consent-exempt.** A private title-only row
-   (`is_default=1, shown_fields=[], image_key=NULL`) is not an exposure event. The user-gesture
-   create endpoint keeps its 403 consent gate unchanged (`intro_cards.py:204-211`).
-2. **Move the consent check to the exposure point.** Enforce **structurally** in the shared resolver
-   `resolve_intro_for_reel`: after a card resolves, if it would be exposed and the profile has no
-   `intro_consent_at`, resolve to `None` (serve without intro) and log. This covers all three LIVE
-   egress paths at once (owner download, single-reel share playback/download, reel share page),
-   because every one routes through that helper — a new egress call site cannot skip the gate
-   (mirrors CLAUDE.md's T4315 "enforce in the shared path" rule). It degrades gracefully per epic
-   decision 9 (intro failure never sinks a download/share).
-3. **Also gate the collection default-freeze** at `collections.py:1092`: before freezing a resolved
-   default into a public share definition, require consent; refuse with 403 otherwise. This is the
-   one path that **persists** an exposure into a durable public link, so it must fail loud at the
-   gesture, not silently drop the intro.
-4. **Do not weaken** `test_create_card_blocked_without_consent` — it guards the user-gesture create
-   path and is still correct. Add new interaction tests (see §6) asserting each egress refuses to
-   expose the auto-default when consent is `None`.
+1. **Drop auto-provisioning entirely.** Nothing is auto-created. A profile with zero cards stays at
+   zero until the user creates one (the empty-library copy reworded by T6660 remains the start state).
+2. **Add no egress consent gate.** v1 proposed gating the resolver + freeze. That gate exists only to
+   contain the inherit hole; once inherit is removed there is nothing ungated at egress — every card
+   that can reach egress is a concrete id that already passed the **attach-time** consent gate. Adding
+   an egress gate would be defensive code for an impossible state (CLAUDE.md: no defensive fixes for
+   states our own code can no longer create).
+3. **Load-bearing invariant to verify (not a new gate — a check):** *every* write of a concrete
+   `intro_card_id` onto a reel/collection must go through a consent-gated gesture. Known writers: the
+   attach PATCH handler and collection freeze (both gate an explicit non-null/non-zero pick). The
+   implementor (or a Stage-1 re-audit) must confirm **no other endpoint writes a concrete
+   `intro_card_id`** (bulk edit, import, duplication). If one exists, it needs the same attach gate —
+   that is the completeness condition for "removal closes the hole."
 
-**Reasoning.** T5230's compliance posture (EPIC.md § Compliance posture) names the real risk as
-**PUBLIC EXPOSURE, not storage** — "The real risk is PUBLIC EXPOSURE, not storage." A private row is
-storage; publishing a minor's name is exposure. The task file's "consent-exempt because private until
-explicitly attached" reasoning is **wrong** on its own terms: `NULL`-inherit is exactly the path that
-publishes a default with **no** explicit attach gesture, so "until explicitly attached" never fires.
-Putting the gate at the resolver is the only place that catches all of burn, playback, and freeze
-without depending on each future call site remembering to check. The guard test's historical
-"no row" assertion was a valid proxy for "no exposure" **only while a zero-card profile's default
-resolved to nothing** — provisioning breaks that proxy, so the invariant must be restated as
-"no un-consented PUBLIC EXPOSURE" and enforced where exposure happens.
+**Reasoning.** The direction is right on its own terms: the attach gate already captures consent at the
+point a card is chosen; inheriting a card with *no* attach gesture is precisely the path that skips it.
+Removing the inherit path deletes the exposure vector instead of adding a second, parallel gate that
+every future call site must remember (v1's resolver gate still would have missed the download-list path
+at §1.3.2). Fewer code paths, one consent chokepoint (attach), no dead defensive branches.
 
-**Collection playback double-gate check (expert caveat, resolved).** `_evaluated_share_members`
-(`collections.py:890-892`) re-resolves the **frozen concrete id** (never NULL) via
-`resolve_intro_card` — a plain row fetch, not `resolve_intro_for_reel`, so the new resolver gate does
-**not** fire on the frozen playback path. That is correct and intentional: gating the **freeze**
-(Decision 1.3) means a consent-less default is **never frozen into a link in the first place**, so
-playback inherits the gate structurally and there is no frozen-but-consent-less link left to read.
-No double-gating, no leak. (If consent is later **revoked** after a valid freeze, the frozen link
-keeps its already-consented card — revocation-driven purge of existing shares is T5230's retention
-job, explicitly out of scope here.)
+### Decision 2 — This task CLOSES the pre-existing live hole. It is in scope, not a follow-up. No migration required.
 
-**Rejected alternatives.**
-- *Gate the `None` pick at attach time.* Would 403 a user who just wants their default on a reel, and
-  still miss the burn/playback/freeze paths that never route through attach. Expert-flagged as wrong.
-- *Consent-gate the auto-create write.* Would either block provisioning for every un-consented
-  profile (defeating the feature — every profile should get a default) or require a synthetic consent
-  record (fabricating parental authority — a compliance falsehood).
-- *Add the check independently at each of the 3 egress call sites.* Duplicated logic (DRY violation)
-  and a new call site would silently skip it — the exact multiple-code-paths smell the shared-resolver
-  choke point exists to prevent.
+**Decision.** Removing the inherit resolution **is** closing the hole — they are the same code change,
+not separable. You cannot "remove the default concept" while leaving `resolve_intro_card_id`'s NULL
+branch reading `is_default`; the branch *is* the hole. So T6680 owns the full closure across **all**
+inherit sites enumerated in §1.3:
 
-### Decision 2 — Existing zero-card profiles: **lazy provisioning on read, ONE site, ONE transaction.**
+- `resolve_intro_card_id`: the `NULL → default_id` branch (`:224-235`) is removed — `NULL` returns
+  `None` (details in Decision 4).
+- `resolve_intro_card` (`:320-322`): stops loading `get_default_intro_card` / threshold for inherit.
+- **Download list** (`downloads.py:337-345,577`): stops computing/passing `intro_default_id`.
+- **Collection freeze** (`collections.py:1093`): the "picked `None` → freeze default" branch is
+  removed; `None` freezes `0` (no intro), same as an explicit `0`.
 
-**Decision.** Provision lazily, at **exactly one site**: the card-list read
-`list_intro_cards` (`intro_cards.py:167-178`). When the profile's `intro_cards` table exists and
-`COUNT(*) == 0`, create the default row **inside one transaction** that re-checks the count and
-inserts, mirroring the atomic first-card-default logic at `intro_cards.py:249-252`. No migration
-backfill; **no** Migration agent.
+**No migration is required for correctness.** Existing `is_default = 1` rows become **dead data** the
+moment nothing reads `is_default` for resolution. Nothing breaks: those rows are **real user-created
+cards** (the first card each profile made) — still fully usable via explicit attach; only the *flag* is
+now unread. The column stays in the schema (dropping it is a destructive migration for zero benefit).
+`v040`/`v041` remain as historical no-ops. **State explicitly:** dead `is_default` values are harmless
+because the only thing that ever read them for resolution is being deleted in the same change.
 
-**Idempotency / concurrency.** The count-check and insert run in a **single transaction** so two
-concurrent `GET`s cannot both insert a default. The insert sets `is_default = 1` directly (the row is
-provably the only one, since we hold the transaction and just saw `COUNT == 0`), reusing the same
-"first card is default" invariant already proven at `:249-252`. Below-head DBs (table absent,
-pre-v034 deploy→migrate window) are left untouched — `list_intro_cards` already returns `{"cards": []}`
-there (`:173-175`), and provisioning simply does not run until the table exists. This adds **no new
-migration** and **no schema change**.
+**One OPTIONAL migration — a product choice, deferred to OQ3.** The clean-break removal will make
+existing `NULL`-inherit reels on **consented** profiles silently lose their intro. If preserving that
+visible behavior matters, a one-time data migration can convert implicit → explicit: for each reel with
+`intro_card_id IS NULL` on a **consented** profile that has a default and qualifying duration, write the
+concrete default id into `intro_card_id`. This preserves what consented users see **and** still closes
+the hole for unconsented profiles (whose NULL reels correctly go to no-intro). **Recommendation:**
+default to **clean break (no migration)** — it matches the direction and avoids fabricating explicit
+attaches on the user's behalf — but this is OQ3 for the user to decide. If chosen, it adds the Migration
+agent and a `profile_db` migration; if not, **no Migration agent, no schema change** for this task.
 
-**Reconciling with the persistence rule (addressed head-on).** CLAUDE.md bans **reactive frontend
-persistence** — a `useEffect` watching state and writing to the backend as a side effect of state
-changing. Lazy provisioning is **not** that. It is a **server-side, read-triggered creation** at a
-single named API entry point (`GET /api/intro-cards`), analogous to a get-or-create: the "gesture" is
-the user opening their card library, a real user action, not a reactive watcher. It is **not** a
-background job, **not** a frontend effect, and **not** a write-back during a *restore* read (the banned
-T350 pattern). The banned pattern corrupts data by persisting runtime fixups that then re-fix on every
-load; here there is no fixup and no feedback loop — once the row exists, `COUNT == 0` is false forever,
-so the write happens **at most once per profile** and never re-fires. It is a **single write path** for
-this datum (no second provisioning site), satisfying "one canonical write path per data."
+**Rejected — leave the hole for a follow-up task.** Incoherent: the removal the user asked for *is* the
+fix. Splitting them would mean shipping "remove the default concept" while leaving the default-reading
+branch in place, i.e. not actually removing it.
 
-**Reasoning.** Lazy wins on cost and safety: no data-walk over every profile, no data-writing
-migration, and it self-heals for profiles created before OR after the task with identical code. A
-migration backfill would be a **data-writing migration touching every profile** — heavier, and
-`.claude/skills/migration.md` conventions push migrations to be self-sufficient transforms of existing
-data, not fabricators of brand-new rows for profiles that may never open the intro UI. Choosing the
-**list read** as the single site (rather than also provisioning inside an egress resolver) avoids two
-write paths and keeps the write attributable to a real user visiting the intro library, not to an
-anonymous public share-page hit resolving a stranger's profile.
+### Decision 3 — Resolution semantics going forward: `NULL` now means "no intro".
 
-**Why not provision inside `resolve_intro_for_reel`.** That helper runs on **public share-page reads**
-for the *sharer's* profile under a request carrying no owner context, and it is explicitly read-only
-(opens a **read-only** connection, `intro_egress.py:186`). Writing there would (a) create a second
-write path, (b) attempt a write on a read-only connection, and (c) provision a default as a side
-effect of a stranger viewing a share — conceptually wrong. Egress stays read-only; the default is
-provisioned when the **owner** opens their library, and the egress gate (Decision 1) handles the case
-where an owner shares before ever opening it (resolves to no-intro until they do).
+**Decision.** After this change the resolver is:
 
-**Rejected alternative — migration backfill.** More predictable (one row per profile, deterministic),
-but: a data-writing migration over every profile DB; must itself decide consent shape and title
-source per profile; and it provisions cards for dormant profiles that will never use them. Rejected
-for cost and for adding a Migration-agent stage this task otherwise does not need.
+```
+0            -> None      (explicit opt-out — unchanged)
+<positive>   -> that id   (explicit attach — unchanged; consent-gated at attach)
+NULL         -> None      (NEW: "no card attached" — no longer inherits anything)
+```
 
-### Decision 3 — Resolution semantics (epic decision 8): **unchanged.**
+- **`NULL` semantics restated:** `NULL` = *"no card attached / no intro"*. It **no longer means
+  "inherit the profile default"** (there is no default). At resolution `NULL` and `0` are now
+  **equivalent** (both → no intro).
+- **Distinction kept only as an optional UI hint, not a resolution difference:** if the frontend wants
+  to distinguish *"never chosen"* (`NULL`) from *"deliberately off"* (`0`) for picker copy, it may — but
+  the backend treats them identically. **No data migration to collapse `NULL`→`0`** (unnecessary; they
+  resolve the same).
+- **The duration gate (`get_intro_min_duration`) no longer participates in resolution** — it existed
+  solely to gate inherit. `get_intro_min_duration`'s settings read/write UI (`profiles.py:277`) is a
+  separate feature; verify at implementation whether the threshold has any remaining consumer and, if
+  fully orphaned by this change, remove it (otherwise leave the settings plumbing, just drop it from the
+  resolver). Do not silently keep a dead gate inside the resolver.
 
-**Decision.** `resolve_intro_card_id` (`intro_cards.py:195-235`) is **not touched**. `0` (explicit
-opt-out) still → `None` at any duration. The `NULL → default` inheritance stays **duration-gated**:
-NULL resolves to the default only when `reel_duration ≥ get_intro_min_duration` (default 20s), else
-`None`. `test_null_inherit_no_default_is_none` (passing `default_id=None` directly) remains valid — it
-exercises the pure resolver, which is unchanged.
+### Decision 4 — Remove the branch (don't leave it dead), and retire `is_default` end-to-end.
 
-**Reasoning + the nuance that is NOT a regression.** After provisioning, "a profile always has a
-default" is true, but that does **not** mean "NULL always resolves to something." NULL resolves to the
-default **only for reels at or above the duration threshold**; short reels (and reels with an unknown
-duration — logged as an internal data bug) still resolve to no-intro. This is existing, deliberate
-behavior (short reels probably don't want a ~4s card in front of them), and the task must state it so a
-reviewer does not read "every profile has a default now" as "every NULL reel suddenly grows an intro."
-`0` is entirely untouched. **No change to the resolver, no test changes to the NULL/0 suite.**
+**Decision — the resolver NULL branch: REMOVE it, do not leave dead-but-harmless.** Simplify
+`resolve_intro_card_id` to `0/NULL → None`, `<positive> → id`, dropping the `default_id`, `reel_duration`,
+and `min_duration` parameters from the inherit logic (the signature/params drop as their callers stop
+supplying them). Rationale over "leave it returning `None`":
+- **Security auditability:** with `get_default_intro_card` and the `is_default` reads physically gone, a
+  reviewer can `grep get_default_intro_card` / `grep is_default` and see **zero live resolution
+  callers** — proving the hole is *structurally* closed, not just behaviorally disabled behind a branch
+  a future edit could re-enable.
+- **CLAUDE.md** favors deleting dead branches over "handles-impossible-state" code, and greppability
+  here *improves* with removal (no phantom default-resolution path lurking).
 
-### Decision 4 — Default content shape: **title-only, name from `intro_full_name`; empty-name renders acceptably (verify live).**
+**Decision — `is_default` machinery: retire end-to-end (Recommendation for OQ5).** A "default" that is
+never inherited is misleading UI. Retire it in the same task for coherence:
+- **Backend writes:** remove first-card-auto-default (`intro_cards.py:249-252`), delete-promotion
+  (`:389-397`), the manual set-default gesture (`:336-337`), and `get_default_intro_card`
+  (once its two callers in §1.3 are gone). Drop `is_default` from `load_profile_cards`'s projection.
+- **Frontend:** remove the carousel "inherited" state and default selector, the "Default" badges
+  (tile/editor), the delete-confirm "your default" copy, and the store promotion logic (§1.5).
+- **Schema:** leave the `is_default` column in place (harmless dead column; no destructive migration).
+- **The picker change is gated on OQ2** — removing the inherit state forces a picker-copy decision
+  (drop the option vs. prompt-to-attach). That is the one frontend piece that needs the UX answer
+  before implementation of the frontend slice.
 
-**Decision.** The provisioned default is **title-only**: `shown_fields=[]`, `image_key=NULL`,
-`image_cutout_key=NULL`, `focal_x/y`/`zoom` at their neutral stored defaults, `duration` at the
-service default, `treatment` at the default treatment, `text_elements` empty. Its rendered title is
-the profile's `intro_full_name.{profile_id}` KV — read at **render/egress time**, not copied into the
-row (single canonical location per datum; a name change edits one place and every render follows).
-`name` (the library label, never shown on the card) is a fixed non-empty literal so list/serialization
-never sees a blank label.
-
-**When `intro_full_name` is also empty.** `_load_field_values` omits `full_name` with no placeholder
-(`intro_egress.py:82-83`), and `derive_composition([]) → title-only`. So a name-less default renders a
-**title-only card with an empty title line** — motion/treatment still play, just no text. This is
-acceptable per epic decision 9 (non-fatal, never a placeholder like "Athlete"). **This is the one AC
-that needs a live visual check** — confirm the title-only composition with zero facts AND no name
-degrades to a clean card (no broken layout, no literal placeholder), not just that it doesn't crash.
-No synthetic/fabricated name is written — inventing "Player" or the profile slug would be inserting
-data we don't have (violates "correct data, not workarounds").
-
-**Reasoning.** Title-only is the only shape a system-provisioned card can honestly take: no photo
-exists to attach (and attaching one would be an exposure/biometric-adjacent decision the system must
-never make), and there are no facts to show. Reading the title live rather than snapshotting it keeps
-`intro_full_name` the single source of truth. `derive_composition` already collapses "no photo or 0
-facts" to title-only, so no new composition branch is needed.
+**No default content shape decision (v1's Decision 4 is void).** Nothing is provisioned, so there is no
+system-authored title-only card, no `intro_full_name`-at-render question, and no empty-name rendering
+case. Those concerns disappear with provisioning.
 
 ---
 
 ## 4. Implementation Plan
 
-**Provisioning is the write; the egress gate + freeze gate are the compliance half.** Sequence them so
-the gate lands **in the same task as** the write that makes the hole live (never provision without the
-gate).
+**Two slices.** Backend removal (self-contained, closes the hole, no UX dependency) can land first;
+the frontend slice depends on **OQ2**. Keep each reviewable unit < ~200 lines (refactoring rule).
 
-### 4.1 Files & sequence
+### 4.1 Backend slice (load-bearing; closes the hole)
 
 | # | File | Change |
 |---|---|---|
-| 1 | `services/intro_cards.py` | New helper `provision_default_card_if_absent(cursor)` — count-check + title-only insert + `is_default=1`, transaction-safe. Contains **no biometric terms** (guardrail, see §5). |
-| 2 | `routers/intro_cards.py` `list_intro_cards` (`:167-178`) | Call the helper inside the existing `with get_db_connection()` block, guarded by `not _table_missing(cursor)`, then re-select the list so the provisioned card is returned in the same response. |
-| 3 | `services/intro_egress.py` `resolve_intro_for_reel` | After `resolve_intro_card` returns a card, if `card is not None` and `get_intro_consent(user_id, profile_id) is None`, log and return `None` (serve without intro). Single choke point → all 3 LIVE egress paths gated at once. |
-| 4 | `routers/collections.py` `:1092-1094` | In the "picked None → freeze default" branch, if a default resolves AND consent is `None`, raise 403 (refuse freeze) rather than freezing a consent-less default into a public link. |
-| 5 | Frontend (see §4.3) | Keep the empty-state branches as a non-fatal fallback; no removal. |
-| 6 | `.claude/knowledge/backend-services.md` § "Intro card library" | Update: default is auto-provisioned lazily on list; egress/freeze consent gate at the exposure point; NULL/0 unchanged. Same commit. |
+| 1 | `services/intro_cards.py` | `resolve_intro_card_id`: `0/NULL → None`, `<positive> → id`; drop inherit branch + `default_id`/duration params. Remove `get_default_intro_card`. Remove `is_default` from `load_profile_cards` projection. Simplify `resolve_intro_card` (no default/threshold load). Remove first-card-default / delete-promotion / set-default writes. |
+| 2 | `routers/downloads.py` | Drop `intro_default_id` computation (`:337-345`) and its use at `:577`; update `resolve_intro_card_id` calls to the new signature. |
+| 3 | `routers/collections.py` | Freeze branch (`:1093`): `picked None → freeze 0` (no intro); remove `get_default_intro_card` import/use. |
+| 4 | `routers/intro_cards.py` | Remove set-default endpoint + auto-default/promotion writes; drop `is_default` from serialization (`:149`). |
+| 5 | `services/intro_egress.py` | No logic change beyond the simplified `resolve_intro_card` it calls; verify it still degrades to `None` cleanly. |
+| 6 | `.claude/knowledge/backend-services.md` § "Intro card library" | Update: no default/inherit; `NULL/0 → no intro`; `is_default` retired; explicit-attach-only. Same commit. |
 
-**No migration. No schema change. No Migration agent.** (Decision 2.)
+**Verify (Decision 1.3):** grep every writer of `reel.intro_card_id` / collection freeze id to confirm
+each concrete-id write is consent-gated; report any ungated writer as a blocker.
 
-### 4.2 Pseudo-code
+### 4.2 Frontend slice (gated on OQ2)
 
-**Provisioning helper (single write path, idempotent):**
+Remove carousel inherit/default state + selector, "Default" badges, delete-confirm copy, store
+promotion (§1.5). Implement the OQ2 picker decision (drop inherit option → no-intro default selection,
+or prompt-to-attach). Update `introCardStore.test.js` fixtures that assert `is_default` promotion.
 
-```
-# services/intro_cards.py
-def provision_default_card_if_absent(cursor) -> int | None:
-    """Create the profile's default title-only card iff it has none.
-    Transaction-safe: caller holds the connection; count-check + insert commit together,
-    mirroring the first-card-default invariant at intro_cards.py:249-252.
-    Returns the new card id, or None if a card already existed. NO consent gate
-    (the WRITE is not an exposure event — see design Decision 1)."""
-    if not _intro_cards_table_exists(cursor):
-        return None                      # below-v034: nothing to do (list already returns [])
-    cursor.execute("SELECT COUNT(*) FROM intro_cards")
-    if cursor.fetchone()[0] != 0:
-        return None                      # already provisioned or user-created — never a 2nd default
-    cursor.execute(
-        "INSERT INTO intro_cards (name, shown_fields, treatment, title_text, image_key, "
-        "image_cutout_key, focal_x, focal_y, zoom, text_elements, duration, is_default) "
-        "VALUES (?, '[]', ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, 1)",
-        (DEFAULT_CARD_LABEL, DEFAULT_TREATMENT, DEFAULT_FOCAL_X, DEFAULT_FOCAL_Y,
-         DEFAULT_ZOOM, encode_data({}), DEFAULT_DURATION),
-    )
-    return cursor.lastrowid
-    # title renders LIVE from intro_full_name at egress; NOT copied into title_text.
-```
+### 4.3 Optional migration (only if OQ3 = preserve-behavior)
 
-```
-# routers/intro_cards.py  list_intro_cards
-with get_db_connection() as conn:
-    cursor = conn.cursor()
-    if _table_missing(cursor):
-        return {"cards": []}
-    provision_default_card_if_absent(cursor)   # get-or-create, same txn
-    conn.commit()
-    cursor.execute("SELECT * FROM intro_cards ORDER BY created_at DESC, id DESC")
-    rows = cursor.fetchall()
-return {"cards": [_serialize(r) for r in rows]}
-```
-
-**Egress exposure gate (shared choke point):**
-
-```
-# services/intro_egress.py  resolve_intro_for_reel, after `card = resolve_intro_card(...)`
-if card is None:
-    return None
-if get_intro_consent(user_id, profile_id) is None:
-    logger.warning(
-        "[intro_egress] profile_id=%s resolved intro card id=%s but has NO parental "
-        "consent — serving without intro (no un-consented public exposure)",
-        profile_id, card["id"],
-    )
-    return None
-# ... existing decode + burn/playback payload build unchanged
-```
-
-**Collection freeze gate (persisting exposure):**
-
-```
-# routers/collections.py  ~1092, the "picked None -> freeze default" branch
-if d.intro_card_id is None:
-    default_row = get_default_intro_card(cursor)
-    if default_row is not None and get_intro_consent(user_id, profile_id) is None:
-        raise HTTPException(
-            status_code=403,
-            detail="Parental consent is required before sharing a collection with an intro card.",
-        )
-    concrete_intro_id = default_row["id"] if default_row is not None else 0
-```
-
-### 4.3 Frontend — keep empty states as a non-fatal fallback
-
-**Decision: keep, do not remove.** `IntroCardGrid.jsx:24-28` and `IntroCardCarousel.jsx:141-143`
-empty branches stay. Provisioning **usually** makes them unreachable (the list read provisions before
-returning), but provisioning is non-fatal by design (a below-v034 DB, or a failed insert, still
-returns `{"cards": []}`), and epic decision 9 forbids letting an intro failure break the UI. A dead-
-looking-but-cheap fallback is the correct posture over a hard assumption that a card always exists. No
-frontend logic change is required — the grid simply renders the provisioned card like any other.
+`profile_db` migration: for reels with `intro_card_id IS NULL` on a **consented** profile with a default
+and qualifying duration, `UPDATE ... SET intro_card_id = <default_id>`. Self-guarded/idempotent. Adds
+the Migration agent. **Not built unless OQ3 selects it.**
 
 ---
 
@@ -378,64 +292,52 @@ frontend logic change is required — the grid simply renders the provisioned ca
 
 | Risk | Mitigation |
 |---|---|
-| Provisioning makes the consent hole live (a minor's name published without authority). | Ship the egress gate + freeze gate **in the same task** (§4.1 steps 3–4). Never provision without the gate. New interaction tests assert each path refuses (§6). |
-| Concurrent `GET`s create two defaults. | Count-check + insert in **one transaction**, reusing the proven `:249-252` atomic first-card-default pattern. `COUNT != 0 → return` makes it a true get-or-create. |
-| The `test_no_face_recognition` static grep guardrail (`test_t5230_intro_compliance.py:241`) trips on the new helper. | The provisioning helper lives in `intro_cards.py` (in-scope for the grep over `player_intro.py`/`intro_cards.py`/`intro_media.py`/`text_render.py`) and must contain **no biometric terms** — it writes `image_key=NULL`, touches no photo, does no detection. Named-check in the reviewer pass. |
-| Weakening `test_create_card_blocked_without_consent`. | Explicitly out of scope — that test guards the user-gesture create path and stays unmodified (Decision 1.4). |
-| Read regression: NULL reels "suddenly" grow intros. | The resolver is untouched; NULL→default stays **duration-gated** (Decision 3). Documented so it doesn't read as a regression. |
-| Empty-name default renders a broken/placeholder card. | Live visual check (Decision 4) — the one AC needing eyes on the rendered card. `_load_field_values` already omits an unset name with no placeholder. |
-| Provisioning fires on a public share-page read for a stranger's profile. | It doesn't — provisioning is only at `list_intro_cards` (owner library), never in the read-only egress resolver (Decision 2). |
+| **Missed inherit call site** leaves a live default-read path (v1 missed the download list). | §1.3 enumerates **all** sites (both `resolve_intro_*` paths, download list, freeze). Removal of `get_default_intro_card` makes any missed reader a **compile/grep failure**, not a silent survivor. |
+| **Existing consented reels silently lose their intro** (clean break). | OQ3 — surfaced for the user; optional preserve-behavior migration (§4.3) available if they choose it. |
+| **Already-frozen unconsented public shares** created during the live-hole window persist. | OQ4 — flag to T5230 retention/purge; recommend out of scope here (this fix stops **new** exposure). |
+| **Ungated concrete-id write path** would keep the hole open via a different vector. | Decision 1.3 verification: grep all writers; block on any ungated one. |
+| Frontend picker becomes incoherent (inherit option with nothing to inherit). | OQ2 must be answered before the frontend slice; backend slice ships independently. |
+| `get_intro_min_duration` left as a dead gate inside the resolver. | Decision 3 — remove from resolver; verify/keep only its settings-UI consumer. |
+| Dead `is_default` rows in prod. | Decision 2 — harmless (unread after removal); no migration; column retained. |
 
 ---
 
 ## 6. Test Plan (for Stage 3 Tester)
 
-**New tests:**
+**Behavior-change tests (these INVERT prior expectations — update intent, don't just keep them):**
 
-1. **Egress refuses un-consented default — 3 LIVE paths.** For a profile with an auto-provisioned
-   default and `intro_consent_at = None`, assert `resolve_intro_for_reel` returns `None`
-   (`mode="burn"` and `mode="playback"`) for: (a) owner download, (b) single-reel share, (c) reel
-   share page. With consent set, assert the card resolves normally. These replace the retired
-   "no row" proxy with a direct "no exposure" assertion.
-2. **Collection freeze refuses un-consented default.** `POST /share` with `intro_card_id = None` on a
-   profile with a provisioned default and no consent → **403**, and assert **no** share definition was
-   frozen with the default id. With consent → freezes the concrete default id.
-3. **Provisioning idempotency.** Two `list_intro_cards` calls (and a concurrency-simulating double
-   count) create **exactly one** `is_default=1` row; a profile that already has a user-created card is
-   never given a second default.
-4. **Title-only with missing name renders.** Provisioned default + `intro_full_name` unset → the
-   playback/burn payload builds without error and carries no placeholder title (composition =
-   `title-only`, `field_values` has no `full_name`). **Plus a live visual check** that the rendered
-   card is clean (Decision 4 AC).
-5. **No-biometrics guardrail unchanged.** `test_no_face_recognition_in_intro_pipeline` passes against
-   the new helper (no biometric terms in `intro_cards.py`).
+1. **`NULL → no intro` at every site.** For a profile that HAS cards (incl. an `is_default` row from
+   `v040`), assert a reel with `intro_card_id IS NULL` resolves to **no intro** on: single-reel share
+   (playback + burn), owner download burn, reel share page, **and the download list** (`downloads.py`
+   batch path) — at every duration (short AND above threshold). This is the direct hole-closure test and
+   the one that catches the download-list path.
+2. **`0 → no intro`** unchanged; **`<positive id> → that card`** unchanged (still consent-gated at
+   attach — assert the create/attach gate is untouched).
+3. **Collection freeze: `picked None → freeze 0`.** `POST /share` with `intro_card_id = None` freezes
+   `0` (no intro) and **never** calls `get_default_intro_card`; assert no default id is frozen into the
+   share definition.
+4. **No egress can serve an un-attached card.** For an **unconsented** profile with cards, every egress
+   path serves no intro (there is no inherit to expose) — the invariant that replaces v1's egress gate.
+5. **`is_default` retirement.** Backend: creating a first card no longer sets `is_default=1`; no
+   set-default endpoint. Frontend: `introCardStore.test.js` promotion/default-selector cases updated to
+   the retired concept (OQ5).
 
-**Unchanged suites that must still pass unmodified in intent:**
+**Suites to update (deliberately, because behavior changed):** `test_t5215_intro_attachment.py` NULL
+inherit cases now assert `NULL → None` (was `NULL → default`). `test_null_inherit_no_default_is_none`
+still passes (it always expected `None` for `default_id=None`; now `None` regardless).
 
-- `test_t5230_intro_compliance.py::test_create_card_blocked_without_consent` — create-gesture gate.
-- `test_t5215_intro_attachment.py` NULL/0 suite, incl. `test_null_inherit_no_default_is_none`.
+**Unchanged (must still pass):** `test_t5230_intro_compliance.py::test_create_card_blocked_without_consent`
+(create-gesture gate) and `test_no_face_recognition_in_intro_pipeline`.
 
-**Relevant set (curated, ~10):** the 5 new tests + `test_create_card_blocked_without_consent` +
-`test_no_face_recognition_in_intro_pipeline` + the NULL/0 resolver suite + the collection-share
-resolution test guarding `_evaluated_share_members` + the single-reel/download egress test guarding
-`resolve_intro_for_reel`.
+**Relevant set (curated, ~10):** the 5 new/inverted tests + the download-list resolution test + the
+collection freeze test + `test_create_card_blocked_without_consent` + the attach-gate test + the
+`introCardStore` picker test.
 
 ---
 
-## 7. Open Questions for the user
+## 7. Original four questions
 
-None of the four design questions remain open — all are decided above. The only item requiring a human
-is **verification, not a decision**:
-
-- [ ] **Live visual confirmation (Decision 4 AC):** does a title-only default with **no** `intro_full_name`
-  set render as a clean, professional card (empty title line, motion + treatment intact) rather than a
-  broken layout or a literal placeholder? This is a Stage-6 manual-test check, not a design choice.
-
-One genuine product nuance to confirm you are comfortable with (not blocking):
-
-- [ ] With the egress gate, a user who has **not** completed the parental-consent attestation will see
-  their auto-provisioned default in the library **but it will not appear on any shared reel/download**
-  (it silently serves without an intro) until they consent. Is that the intended UX, or do you want the
-  card UI to surface a "consent required before this plays on shares" hint on the provisioned default?
-  (The `IntroCardCarousel` already shows a `!hasConsent` amber notice at `:153` — reusing that copy on
-  the default would make the gate legible without changing the compliance behavior.)
+All four presupposed a default that will no longer exist, so they are void, not merely answered:
+consent-on-auto-create (no auto-create), backfill strategy (nothing to backfill), default content shape
+(no default), resolution-semantics interaction (resolver simplified per Decision 3). The live decisions
+are **OQ1–OQ5 in Section 0**.
