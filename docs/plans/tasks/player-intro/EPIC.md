@@ -202,10 +202,10 @@ publicly visible when shared**.
 | — | [T6530](T6530-intro-card-discoverability-ux.md) — Discoverability UX pass | Research + decision (DECIDED 2026-08-08), split into the 4 tasks below. |
 | — | [T6660](T6660-rename-athlete-intro-card.md) — Rename to "Athlete Intro Card" | User-facing copy sweep, final naming decision. |
 | — | [T6670](T6670-card-selector-inline-create-flow.md) — Card selector inline create flow | Create a card from the picker, land back on selection with it. |
-| — | [T6680](T6680-default-athlete-intro-card-provisioning.md) — Default/inherit concept removed | WAITING ON USER. Design pivoted (v2, user-directed) from "provision a default" to "remove the default concept entirely" — closes the Decision-8 consent hole above. Implemented, reviewed, QA live-drove the real app, Branch CI green. |
-| — | [T6690](T6690-nonactive-profile-dead-end-fix.md) — Non-active-profile dead end fix | TODO. Real "Switch & manage" action replaces dead grey text. |
-| — | [T6700](T6700-owner-inapp-playback-intro.md) — Owner in-app playback intro | WAITING ON USER. Owner's own Play button (reel + collection) didn't show the intro card, unlike T5220's 4 egress paths. Swap-based (unmount/mount), all 4 acceptance criteria QA'd live. Merged onto T6680's branch 2026-08-09 (shares `downloads.py`/`collections.py`) so both land together. |
-| — | [T6710](T6710-owner-playback-intro-as-timeline-segment.md) — Owner playback intro as a real timeline segment | TODO, needs Architecture design gate. User feedback 2026-08-09: the swap-based pre-roll reads as a bolted-on "commercial," not part of the video — wants one continuous seekable timeline. Scoped to the owner in-app player only for now (share-page's separately-built edge intro is a follow-up). |
+| — | [T6680](T6680-default-athlete-intro-card-provisioning.md) — Default/inherit concept removed | STAGING. Design pivoted (v2, user-directed) from "provision a default" to "remove the default concept entirely" — closes the Decision-8 consent hole above. Implemented, reviewed, QA live-drove the real app, Branch CI green. Merged to master `e8105fa9`. |
+| — | [T6690](T6690-nonactive-profile-dead-end-fix.md) — Non-active-profile dead end fix | STAGING. Real "Switch & manage" action replaces dead grey text. Merged to master `1853e4ca`. |
+| — | [T6700](T6700-owner-inapp-playback-intro.md) — Owner in-app playback intro | STAGING. Owner's own Play button (reel + collection) didn't show the intro card, unlike T5220's 4 egress paths. Swap-based (unmount/mount), all 4 acceptance criteria QA'd live. Merged onto T6680's branch, both landed together on master `e8105fa9`. |
+| — | [T6710](T6710-owner-playback-intro-as-timeline-segment.md) — Owner playback intro as a real timeline segment | STAGING. User feedback 2026-08-09: the swap-based pre-roll reads as a bolted-on "commercial," not part of the video — wants one continuous seekable timeline. Scoped to the owner in-app player only for now (share-page's separately-built edge intro is a follow-up). Merged to master `7603627e`. |
 
 ```mermaid
 graph LR
@@ -231,19 +231,25 @@ feel like one system.
 
 ## Epic completion criteria
 
-- [ ] A user can create, edit, name and delete **multiple** intro cards on a profile, each with an
+- [x] A user can create, edit, name and delete **multiple** intro cards on a profile, each with an
       image, a chosen set of facts to show, a visual treatment, and text they styled (font, size,
       colour, alignment).
-- [ ] The **composition is derived** from what the user chose to show — no template picker exists —
+- [x] The **composition is derived** from what the user chose to show — no template picker exists —
       and the visual treatment is an independent 3-way choice.
-- [ ] The photo can be **repositioned and zoomed on the live card**, and one such setting renders
+- [x] The photo can be **repositioned and zoomed on the live card**, and one such setting renders
       correctly at both 9:16 and 16:9.
-- [ ] One card can be marked **default**; exactly one default per profile is enforced.
-- [ ] A **different card can be attached to each reel and each shared collection**, and a reel can be
-      explicitly opted out of intros even when a default exists.
-- [ ] The attached card plays before the reel on **every egress**: owner download, share-page
-      playback, share-page download, collection playback (+ the T4945 stitch seam).
-- [ ] Changing which card is attached to a reel takes effect **without re-exporting**.
+- [x] RETIRED 2026-08-09 (T6680, Decision 8 above): ~~One card can be marked **default**; exactly one
+      default per profile is enforced.~~ Intentionally obsolete — the default/inherit concept was
+      removed entirely (not provisioned+gated) because NULL-inherit resolved to an auto-created
+      default on every egress with no consent gate, a live consent-exposure hole. There is no
+      default to enforce; every reel/collection is explicit-attach-or-nothing by design.
+- [x] A **different card can be attached to each reel and each shared collection**, and a reel can be
+      explicitly opted out of intros (attaching nothing is the opt-out, now that there is no default
+      to opt out of).
+- [x] The attached card plays before the reel on **every egress**: owner download, share-page
+      playback, share-page download, collection playback (+ the T4945 stitch seam), and the owner
+      in-app player (T6700/T6710).
+- [x] Changing which card is attached to a reel takes effect **without re-exporting**.
 - [ ] The **same** rich-text editing produces text on the Overlay timeline over a user-chosen range
       that snaps to clip boundaries, burned into the render.
 - [ ] What the editor previews is what the render produces (parity test, not eyeballing).
