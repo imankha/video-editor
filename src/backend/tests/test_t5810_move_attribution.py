@@ -151,9 +151,11 @@ def _reel(base, pid, fid):
 async def _move(video_ids, source, target):
     from app.profile_context import set_current_profile_id
     from app.routers.downloads import MoveToProfileRequest, move_reels_to_profile
+    from tests.helpers_move import make_move_request
     set_current_profile_id(source)
     return await move_reels_to_profile(
         MoveToProfileRequest(video_ids=video_ids, target_profile_id=target),
+        make_move_request(),
         _durable=None,
     )
 
