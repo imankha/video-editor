@@ -48,6 +48,7 @@ class MockVideoUpscaler:
         progress_callback=None,
         segment_data=None,
         include_audio: bool = True,
+        rotation: float = 0,
         highlight_keyframes=None,
         highlight_effect_type: str = "original",
     ) -> dict:
@@ -55,6 +56,17 @@ class MockVideoUpscaler:
         import ffmpeg as ffmpeg_lib
 
         logger.info(f"[MockUpscaler] Processing {input_path} -> {output_path}")
+        if rotation:
+            # T6451: accepted to match AIVideoUpscaler's interface (crash fix), but
+            # NOT applied — this mock is FFmpeg-only crop+resize (no frame_processor,
+            # which is where the real upscaler applies rotation), and guessing at the
+            # right rotate-vs-crop ordering here risks a silently-wrong transform.
+            # Loud, not silent: dev/CI exports of a rotated clip will look unrotated.
+            logger.warning(
+                f"[MockUpscaler] rotation={rotation} requested but NOT applied "
+                f"(pipeline-verification mock only, no AI upscale) — output will "
+                f"be unrotated. Real rotation only renders via AIVideoUpscaler (Modal/CUDA)."
+            )
 
         # Get source dimensions. T4280: a failed probe means the file is bad -- raise
         # rather than guessing 1920x1080, which would crop/scale against wrong dimensions
