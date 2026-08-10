@@ -8,6 +8,7 @@ import { Button } from './shared/Button';
 import { CollectionsTab } from './collections/CollectionsTab';
 import { ReelTile } from './collections/ReelTile';
 import { CollectionPlayer } from './collections/CollectionPlayer';
+import { IntroPreRoll } from './introcards/IntroPreRoll';
 import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
 import { toPlayerReel } from './collections/playerReels';
@@ -79,19 +80,58 @@ export function DownloadsPanel({
   const collections = useCollections(isOpen);
 
   // Shared story player — one player for both single reels and collections
-  // (T3610). { reels, title, downloadId? }. Rendered at the panel top level so
-  // it fills the viewport (the drawer's transform would otherwise confine it).
+  // (T3610). { reels, title, downloadId?, intro }. Rendered at the panel top
+  // level so it fills the viewport (the drawer's transform would otherwise
+  // confine it). T6700: `intro` carries the resolved playback payload
+  // ({card, previewUrl, field_values, profile} | null) fetched on the Play
+  // gesture; `introShowing` (below) gates the unmount/mount SWAP that shows it
+  // before CollectionPlayer mounts (mirrors SharedCollectionView.jsx).
   const [storyPlayer, setStoryPlayer] = useState(null);
+  // Gates CollectionPlayer's mount behind the intro pre-roll -- CollectionPlayer
+  // (whose own <video autoPlay> has no pause hook) simply does not mount until
+  // the pre-roll's onDone fires. No intro on the fetched payload -> starts
+  // false, CollectionPlayer mounts immediately (today's behavior unchanged).
+  const [introShowing, setIntroShowing] = useState(false);
   const watchTimerRef = useRef(null);
   // Reels already marked watched in the current player session — avoids redundant
   // PATCH/recompute calls when the user navigates back and forth (T3900).
   const watchedThisSessionRef = useRef(new Set());
 
-  const onPlayCollection = (reels, title) => {
-    watchedThisSessionRef.current.clear();
-    setStoryPlayer({ reels, title });
+  // T6700: collection's OWN intro-playback query params, same scope-shape
+  // mapping as collectionIntroKey (introBadgeKey.js) so params match what the
+  // badge already resolves. `definition` is the {scope, filter, aspect_ratio}
+  // shape CollectionCard already threads through onShare/onIntro.
+  const collectionIntroPlaybackParams = ({ scope, filter, aspect_ratio }) => {
+    const params = new URLSearchParams({ scope_type: scope.type, aspect_ratio });
+    if (scope.type === 'game') params.set('game_id', scope.game_id);
+    if (filter?.tags?.length) params.set('tags', filter.tags.join(','));
+    return params.toString();
   };
-  const closeStoryPlayer = useCallback(() => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); }, []);
+
+  const onPlayCollection = async (reels, title, definition) => {
+    watchedThisSessionRef.current.clear();
+    let intro = null;
+    if (definition) {
+      try {
+        const resp = await apiFetch(
+          `${API_BASE}/api/collections/intro-playback?${collectionIntroPlaybackParams(definition)}`,
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          intro = data.intro ?? null;
+        }
+      } catch (err) {
+        console.error('[DownloadsPanel] failed to fetch collection intro-playback:', err);
+      }
+    }
+    setStoryPlayer({ reels, title, intro });
+    setIntroShowing(!!intro);
+  };
+  const closeStoryPlayer = useCallback(() => {
+    clearTimeout(watchTimerRef.current);
+    setStoryPlayer(null);
+    setIntroShowing(false);
+  }, []);
 
   // Single source of watched-marking for BOTH the single-reel and collection
   // playback paths: the player fires onReelChange when a reel becomes active
@@ -383,18 +423,34 @@ export function DownloadsPanel({
     downloadFile(download.id);
   };
 
-  const handlePlay = (e, download) => {
+  const handlePlay = async (e, download) => {
     e.stopPropagation();
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     // Single reel = a one-reel story, played through the SAME player as collections.
     // Watched-marking happens via the player's onReelChange (handleReelWatched),
     // the single source for both the single-reel and collection paths (T3900).
     watchedThisSessionRef.current.clear();
+    // T6700: resolve the reel's OWN intro-playback payload on the Play gesture
+    // (a READ, never a useEffect). Fetch failure is non-fatal -- Play must never
+    // hang or break on the intro fetch (design R3): treat any failure as
+    // intro: null and play immediately.
+    let intro = null;
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/downloads/${download.id}/intro-playback`);
+      if (resp.ok) {
+        const data = await resp.json();
+        intro = data.intro ?? null;
+      }
+    } catch (err) {
+      console.error('[DownloadsPanel] failed to fetch intro-playback:', err);
+    }
     setStoryPlayer({
       reels: [toPlayerReel(download)],
       title: download.project_name,
       downloadId: download.id,
+      intro,
     });
+    setIntroShowing(!!intro);
     // Do NOT close the panel here: the player renders above it (Z.PLAYER vs the
     // panel's Z.MODAL, see constants/zLayers), and collection playback
     // (onPlayCollection) already leaves
@@ -712,8 +768,19 @@ export function DownloadsPanel({
       )}
 
       {/* Shared story player — single reels AND collections play here, at the
-          panel top level so it fills the viewport (T3610). */}
-      {storyPlayer && (
+          panel top level so it fills the viewport (T3610). T6700: gate
+          CollectionPlayer's mount behind the intro pre-roll via an
+          unmount/mount SWAP (mirrors SharedCollectionView.jsx) -- NOT a prop
+          toggle, so CollectionPlayer's <video autoPlay> fires naturally on
+          its first (and only) mount, same mechanism as the share path. */}
+      {storyPlayer && (introShowing ? (
+        <IntroPreRoll
+          intro={storyPlayer.intro}
+          aspect={storyPlayer.reels[0]?.aspect_ratio}
+          onDone={() => setIntroShowing(false)}
+          positionClassName="fixed inset-0 z-[85]"
+        />
+      ) : (
         <CollectionPlayer
           reels={storyPlayer.reels}
           title={storyPlayer.title}
@@ -727,7 +794,7 @@ export function DownloadsPanel({
           reRankLoadingId={reRankingId}
           handleGlyph={storyPlayerHandleGlyph}
         />
-      )}
+      ))}
     </>
   );
 }

@@ -13,12 +13,11 @@ matrix onto named tests:
   focal out of range -> 400 .......... test_create_focal_out_of_range_400
   below-head DB does not 500 ......... test_list_below_head_returns_empty
 
-  T6640 round 2 -- "a profile with any cards always has exactly one default":
-  first card auto-defaults ........... test_create_first_card_auto_defaults
-  delete default -> promote newest ... test_delete_default_auto_promotes_newest_remaining
-  delete non-default -> no change .... test_delete_non_default_card_does_not_touch_default
-  delete the last card -> no default . test_delete_last_card_leaves_no_default
-  invariant over a create/delete run . test_exactly_one_default_invariant_across_create_and_delete_sequence
+  T6680 -- the T6640 "exactly one default" invariant is RETIRED (there is no
+  profile default to maintain; is_default is dead schema data, kept but
+  unread). Superseded the section below this docstring used to point to:
+  first card no longer auto-defaults . test_create_first_card_does_not_default
+  no set-default endpoint remains .... test_no_set_default_symbol
 """
 
 import sqlite3
@@ -102,31 +101,14 @@ async def test_create_read(db):
     assert created["id"] > 0
     assert created["name"] == "My Card"
     assert created["shown_fields"] == ["position", "class"]
-    # T6640 round 2: the FIRST card for a profile auto-defaults.
-    assert created["is_default"] is True
+    # T6680: is_default is retired end-to-end -- not in the serialized response.
+    assert "is_default" not in created
     # No photo -> title-only regardless of 2 facts.
     assert created["composition"] == COMPOSITION_TITLE_ONLY
 
     listed = await list_intro_cards()
     assert len(listed["cards"]) == 1
     assert listed["cards"][0]["id"] == created["id"]
-
-
-@pytest.mark.asyncio
-async def test_create_first_card_auto_defaults(db):
-    # T6640 round 2 (user decision): a profile's FIRST card becomes the
-    # default automatically -- no user action needed. Every card after that
-    # starts non-default; the user promotes one explicitly.
-    a = await _create(name="A")
-    assert a["is_default"] is True
-
-    b = await _create(name="B")
-    assert b["is_default"] is False
-    # The first card's default status is untouched by creating a second.
-    from app.routers.intro_cards import list_intro_cards
-    cards = {c["id"]: c for c in (await list_intro_cards())["cards"]}
-    assert cards[a["id"]]["is_default"] is True
-    assert sum(1 for c in cards.values() if c["is_default"]) == 1
 
 
 @pytest.mark.asyncio
@@ -189,106 +171,58 @@ async def test_update_no_fields_400(db):
 
 
 # ---------------------------------------------------------------------------
-# Default enforcement
+# is_default retirement (T6680) -- supersedes the T6640 "exactly one default"
+# invariant tests that used to live here (set-default, delete-promotes-newest,
+# delete-non-default-untouched, the full create/delete walkthrough). None of
+# that machinery exists anymore: there is no profile default to maintain, so
+# there is nothing left to promote, switch, or count. See also
+# test_t5215_intro_attachment.py::TestIsDefaultRetirementT6680 for the
+# cross-cutting (create/load_profile_cards) assertions; these two are the
+# T5195-local regression coverage for this file's own CRUD surface.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_set_default_twice_leaves_one(db):
-    from app.routers.intro_cards import list_intro_cards, set_default_intro_card
+async def test_create_first_card_does_not_default(db):
+    """T6680 inversion of the retired test_create_first_card_auto_defaults:
+    a profile's first card no longer becomes a default -- there is no default
+    concept left for it to become."""
+    a = await _create(name="A")
+    b = await _create(name="B")
+    assert "is_default" not in a
+    assert "is_default" not in b
+
+    from app.routers.intro_cards import list_intro_cards
+    cards = {c["id"]: c for c in (await list_intro_cards())["cards"]}
+    assert "is_default" not in cards[a["id"]]
+    assert "is_default" not in cards[b["id"]]
+
+
+def test_no_set_default_symbol():
+    """T6680 Decision 4: the set-default gesture is removed, not merely
+    unreachable -- the symbol itself must be gone from the router module."""
+    import app.routers.intro_cards as intro_cards_router
+    assert not hasattr(intro_cards_router, "set_default_intro_card"), (
+        "set_default_intro_card must be fully removed -- there is no "
+        "default to set"
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_does_not_report_promotion(db):
+    """T6680: the delete response no longer carries promoted_default_id --
+    there is nothing to promote."""
+    from app.routers.intro_cards import delete_intro_card
 
     a = await _create(name="A")
     b = await _create(name="B")
 
-    await set_default_intro_card(a["id"])
-    await set_default_intro_card(b["id"])  # switching default
-
-    cards = {c["id"]: c for c in (await list_intro_cards())["cards"]}
-    assert cards[a["id"]]["is_default"] is False
-    assert cards[b["id"]]["is_default"] is True
-    # Exactly one default across the profile.
-    assert sum(1 for c in cards.values() if c["is_default"]) == 1
-
-
-@pytest.mark.asyncio
-async def test_delete_default_auto_promotes_newest_remaining(db):
-    # T6640 round 2 amendment 2 (user decision): a profile with any cards
-    # ALWAYS has exactly one default. Deleting the default while others remain
-    # auto-promotes the NEWEST remaining card, in the SAME transaction as the
-    # delete -- never a window with cards but no default.
-    from app.routers.intro_cards import delete_intro_card, list_intro_cards
-
-    a = await _create(name="A")  # auto-default (first card)
-    b = await _create(name="B")  # newest so far
-    c = await _create(name="C")  # newest overall
-    assert a["is_default"] is True
-
     result = await delete_intro_card(a["id"])
-    assert result["promoted_default_id"] == c["id"]  # newest remaining, not b
+    assert result == {"success": True}
 
-    cards = {row["id"]: row for row in (await list_intro_cards())["cards"]}
-    assert cards[c["id"]]["is_default"] is True
-    assert cards[b["id"]]["is_default"] is False
-    assert sum(1 for row in cards.values() if row["is_default"]) == 1
-    assert set(cards) == {b["id"], c["id"]}
-
-
-@pytest.mark.asyncio
-async def test_delete_non_default_card_does_not_touch_default(db):
-    from app.routers.intro_cards import delete_intro_card, list_intro_cards
-
-    a = await _create(name="A")  # auto-default
-    b = await _create(name="B")
-
-    result = await delete_intro_card(b["id"])
-    assert result["promoted_default_id"] is None  # nothing to promote
-
+    from app.routers.intro_cards import list_intro_cards
     cards = (await list_intro_cards())["cards"]
     assert len(cards) == 1
-    assert cards[0]["id"] == a["id"]
-    assert cards[0]["is_default"] is True
-
-
-@pytest.mark.asyncio
-async def test_delete_last_card_leaves_no_default(db):
-    # The ONLY state where a profile with cards can have zero defaults is
-    # having ZERO cards -- deleting the very last (also the default) card.
-    from app.routers.intro_cards import delete_intro_card, list_intro_cards
-
-    a = await _create(name="A")  # auto-default, the only card
-    result = await delete_intro_card(a["id"])
-    assert result["promoted_default_id"] is None  # nothing left to promote
-
-    cards = (await list_intro_cards())["cards"]
-    assert cards == []
-
-
-@pytest.mark.asyncio
-async def test_exactly_one_default_invariant_across_create_and_delete_sequence(db):
-    # The invariant, exercised directly: whenever a profile has >=1 card,
-    # EXACTLY one is_default=1. Never zero (while cards exist), never two.
-    from app.routers.intro_cards import delete_intro_card, list_intro_cards
-
-    def default_count(cards):
-        return sum(1 for c in cards if c["is_default"])
-
-    a = await _create(name="A")
-    assert default_count((await list_intro_cards())["cards"]) == 1  # first card
-
-    b = await _create(name="B")
-    c = await _create(name="C")
-    assert default_count((await list_intro_cards())["cards"]) == 1  # still one
-
-    await delete_intro_card(b["id"])  # delete a NON-default card
-    assert default_count((await list_intro_cards())["cards"]) == 1
-
-    await delete_intro_card(a["id"])  # delete the DEFAULT, one card (c) remains
-    cards = (await list_intro_cards())["cards"]
-    assert default_count(cards) == 1
-    assert cards[0]["id"] == c["id"] and cards[0]["is_default"] is True
-
-    await delete_intro_card(c["id"])  # delete the LAST card
-    cards = (await list_intro_cards())["cards"]
-    assert cards == []  # zero cards -> zero defaults is the only valid empty state
+    assert cards[0]["id"] == b["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +258,7 @@ async def test_delete_nulls_referencing_reels(db):
         for r in conn.execute("SELECT filename, intro_card_id FROM final_videos").fetchall()
     }
     conn.close()
-    assert rows["r1.mp4"] is None   # detached -> inherit default
+    assert rows["r1.mp4"] is None   # detached -> no intro (T6680: no default to inherit)
     assert rows["r2.mp4"] is None
     assert rows["optout.mp4"] == 0  # opt-out reel left alone (0 != referencing id)
 

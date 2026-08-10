@@ -359,15 +359,16 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   // T5215: attach/detach/clear a reel's intro card. Surgical, gesture-only
-  // PATCH (0 = no intro, null = inherit the profile default, <id> = that
-  // card) — mirrors renameDownload's optimistic-update + PATCH shape.
+  // PATCH (0 = no intro, null = no intro [T6680: no longer inherits a
+  // profile default -- there is none], <id> = that card) — mirrors
+  // renameDownload's optimistic-update + PATCH shape.
   //
   // Round 3: the optimistic update ALSO sets intro_card_id eagerly (so the
   // picker's own preselection state is right immediately), but the THUMBNAIL
   // BADGE keys off the RESOLVED intro_card_name, which only the server can
-  // compute (duration gate on the inherit path) -- setting the id alone left
-  // the badge dark until the next full reload/refetch, exactly the gap the
-  // user reported. The PATCH response now returns the resolved name too;
+  // compute (a dangling id degrading to no-intro) -- setting the id alone
+  // left the badge dark until the next full reload/refetch, exactly the gap
+  // the user reported. The PATCH response now returns the resolved name too;
   // apply it from the response, not a second guess made on the client.
   //
   // Round 6: this only ever updated `downloads` (the flat gallery array) --

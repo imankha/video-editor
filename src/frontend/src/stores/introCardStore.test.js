@@ -86,35 +86,33 @@ describe('introCardStore', () => {
     expect(row.updated_at).toBe('t1');
   });
 
-  it('setDefault refetches the authoritative list (does not guess locally)', async () => {
-    useIntroCardStore.setState({
-      cards: [{ id: 1, is_default: true }, { id: 2, is_default: false }],
-    });
-    mockFetch
-      .mockResolvedValueOnce(jsonResponse({}, true)) // POST /default
-      .mockResolvedValueOnce(
-        jsonResponse({ cards: [{ id: 1, is_default: false }, { id: 2, is_default: true }] }),
-      );
-
-    await useIntroCardStore.getState().setDefault(2);
-
-    // Exactly one default, sourced from the server refetch.
-    const cards = useIntroCardStore.getState().cards;
-    expect(cards.filter((c) => c.is_default)).toHaveLength(1);
-    expect(selectDefaultCard(useIntroCardStore.getState()).id).toBe(2);
-  });
-
-  it('deleteCard removes the row from the list', async () => {
-    useIntroCardStore.setState({ cards: [{ id: 1 }, { id: 2 }] });
-    mockFetch.mockResolvedValueOnce(jsonResponse({ success: true }));
+  it('deleteCard removes the row from the list without any default promotion (T6680)', async () => {
+    // T6680: is_default is retired end-to-end. Deleting a card must not
+    // promote any surviving row -- the backend no longer returns
+    // `promoted_default_id`, and even if a stale server response includes
+    // one, the store must not act on it. RED against current behavior,
+    // which flips is_default on the promoted row.
+    useIntroCardStore.setState({ cards: [{ id: 1, is_default: true }, { id: 2, is_default: false }] });
+    mockFetch.mockResolvedValueOnce(jsonResponse({ success: true, promoted_default_id: 2 }));
 
     await useIntroCardStore.getState().deleteCard(1);
 
-    expect(useIntroCardStore.getState().cards.map((c) => c.id)).toEqual([2]);
+    const cards = useIntroCardStore.getState().cards;
+    expect(cards.map((c) => c.id)).toEqual([2]);
+    expect(cards.find((c) => c.id === 2).is_default).toBe(false);
   });
 
-  it('selectDefaultCard returns null when no card is default', () => {
-    useIntroCardStore.setState({ cards: [{ id: 1, is_default: false }] });
-    expect(selectDefaultCard(useIntroCardStore.getState())).toBeNull();
+  it('T6680: setDefault action is retired (no set-default gesture remains)', () => {
+    // The manual "make default" gesture is removed end-to-end (Decision 4) --
+    // there is no default to set. RED against current behavior, where
+    // setDefault exists and calls POST /api/intro-cards/:id/default.
+    expect(useIntroCardStore.getState().setDefault).toBeUndefined();
+  });
+
+  it('T6680: selectDefaultCard selector is retired (no default concept remains)', () => {
+    // The picker/carousel no longer distinguishes a "default" card (OQ2/OQ5)
+    // -- the selector itself should be gone, not just unused. RED against
+    // current behavior, where selectDefaultCard is exported and functional.
+    expect(selectDefaultCard).toBeUndefined();
   });
 });

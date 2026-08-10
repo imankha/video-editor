@@ -17,7 +17,6 @@ Design: docs/plans/tasks/T5215-design.md. Acceptance criteria mapping:
 """
 
 import io
-import logging
 import sqlite3
 from unittest.mock import patch
 
@@ -100,41 +99,51 @@ def _seed_published_final(db_path, intro_card_id=None, duration=30.0):
 #    order every consumer shares.
 # ===========================================================================
 
-class TestResolveIntroCardIdMatrix:
-    def test_zero_always_none_at_any_duration(self):
-        assert resolve_intro_card_id(0, 5.0, 3, 20.0) is None
-        assert resolve_intro_card_id(0, 500.0, 3, 20.0) is None
-        assert resolve_intro_card_id(0, None, 3, 20.0) is None
+# ===========================================================================
+# T6680 -- the default/inherit concept is REMOVED (design v2, approved
+# 2026-08-09). This class REPLACES the pre-T6680 `TestResolveIntroCardIdMatrix`
+# (which asserted `NULL` inherited a profile default above a duration
+# threshold via a 4-arg signature) -- that behavior no longer exists, so the
+# old assertions were deleted rather than left alongside contradictory new
+# ones. `resolve_intro_card_id` loses the `default_id` / `reel_duration` /
+# `min_duration` inherit params entirely (Decision 4): the new signature is
+# `resolve_intro_card_id(intro_card_id)` -> `0/NULL -> None`,
+# `<positive> -> that id`.
+# ===========================================================================
 
-    def test_explicit_id_always_wins_never_gated_by_duration(self):
-        """The acceptance criterion: an EXPLICIT id applies even to a reel
-        below the threshold -- the gate governs only the NULL/inherit path."""
-        assert resolve_intro_card_id(7, 1.0, 3, 20.0) == 7
-        assert resolve_intro_card_id(7, 999.0, 3, 20.0) == 7
-        assert resolve_intro_card_id(7, None, 3, 20.0) == 7
+class TestResolveIntroCardIdMatrixT6680NoInherit:
+    def test_zero_always_none(self):
+        assert resolve_intro_card_id(0) is None
 
-    def test_null_inherit_long_reel_uses_default(self):
-        assert resolve_intro_card_id(None, 25.0, 3, 20.0) == 3
+    def test_positive_id_always_wins(self):
+        """Explicit attach is unchanged -- still consent-gated at the attach
+        gesture, never at resolution."""
+        assert resolve_intro_card_id(7) == 7
 
-    def test_null_inherit_short_reel_is_none(self):
-        assert resolve_intro_card_id(None, 5.0, 3, 20.0) is None
+    def test_null_is_now_no_intro_not_inherit(self):
+        """The direct hole-closure assertion: NULL no longer reads any
+        default -- it resolves to None unconditionally, even when a default
+        row exists and the reel is long (previously: inherits)."""
+        assert resolve_intro_card_id(None) is None
 
-    def test_null_inherit_boundary_is_inclusive(self):
-        assert resolve_intro_card_id(None, 20.0, 3, 20.0) == 3
-        assert resolve_intro_card_id(None, 19.999, 3, 20.0) is None
-
-    def test_null_inherit_no_default_is_none(self):
-        assert resolve_intro_card_id(None, 100.0, None, 20.0) is None
-
-    def test_null_unknown_duration_fails_closed_and_warns_loudly(self, caplog):
-        """A NULL duration on our OWN final_videos row is an internal bug, not
-        an expected state -- fail closed to no-intro AND warn with the reel id
-        (user requirement 2026-08-06), never silently substitute a duration."""
-        with caplog.at_level(logging.WARNING):
-            result = resolve_intro_card_id(None, None, 3, 20.0, reel_id=42)
-        assert result is None
-        assert "reel id=42" in caplog.text
-        assert "internal data bug" in caplog.text
+    def test_signature_no_longer_accepts_inherit_params(self):
+        """Decision 4: default_id/reel_duration/min_duration are DROPPED from
+        the signature (not just ignored) -- a caller passing them is a signal
+        the old call site was never updated. This call is expected to raise
+        TypeError against the OLD (T5215) signature; it must succeed with
+        exactly one positional arg once T6680 lands."""
+        import inspect
+        sig = inspect.signature(resolve_intro_card_id)
+        params = list(sig.parameters)
+        assert "default_id" not in params, (
+            "resolve_intro_card_id must no longer accept default_id -- the "
+            "inherit branch (and its parameter) must be removed, not just "
+            "dead-branched"
+        )
+        assert "min_duration" not in params, (
+            "resolve_intro_card_id must no longer accept min_duration -- the "
+            "duration gate governed only the removed inherit path"
+        )
 
 
 # ===========================================================================
@@ -655,10 +664,15 @@ class TestCollectionIntroFreeze:
         assert result["intro_card_id"] == card_id
 
 
-def test_collection_share_create_freezes_default_at_creation_time(pg_conn, tmp_path):
-    """End-to-end (Postgres + TestClient): sharing with NO explicit intro pick
-    ('use my default') freezes the CURRENT default's concrete id, and a later
-    default change does not retroactively move the already-created link."""
+def test_collection_share_create_freezes_zero_regardless_of_later_default_changes(pg_conn, tmp_path):
+    """T6680 inversion of the pre-T6680 test of the same shape (this test used to
+    assert the OLD behavior: sharing with no explicit intro pick froze the
+    CURRENT default's concrete id). Decision 1/2 removed the default concept
+    entirely, so 'no explicit pick' now freezes `0` (no intro) -- there is no
+    default left to read. This test's remaining value is the second half:
+    `is_default` churn on the intro_cards table (legacy column, still written
+    by other flows/migrations) must never retroactively move an already-frozen
+    link, since resolution no longer reads that column at all."""
     import json
 
     from fastapi.testclient import TestClient
@@ -711,9 +725,12 @@ def test_collection_share_create_freezes_default_at_creation_time(pg_conn, tmp_p
         definition = share["collection_definition"]
         if isinstance(definition, str):
             definition = json.loads(definition)
-        assert definition["intro_card_id"] == card_a
+        assert definition["intro_card_id"] == 0, (
+            "picked None must freeze 0 (no intro), never a default id"
+        )
 
-        # Flip the default -- the STORED definition must not change.
+        # Flip `is_default` on the legacy column -- the STORED definition must
+        # still not change, since resolution never reads `is_default`.
         conn = sqlite3.connect(str(get_database_path()))
         conn.execute("UPDATE intro_cards SET is_default = 0 WHERE id = ?", (card_a,))
         conn.execute(
@@ -727,7 +744,86 @@ def test_collection_share_create_freezes_default_at_creation_time(pg_conn, tmp_p
         definition_again = share_again["collection_definition"]
         if isinstance(definition_again, str):
             definition_again = json.loads(definition_again)
-        assert definition_again["intro_card_id"] == card_a
+        assert definition_again["intro_card_id"] == 0
+
+
+def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default(pg_conn, tmp_path):
+    """T6680 direct inversion of test_collection_share_create_freezes_zero_regardless_of_later_default_changes
+    above: sharing with NO explicit intro pick (`intro_card_id=None`) must now
+    freeze `0` (no intro), and `get_default_intro_card` must NEVER be called --
+    collections.py:1093's 'picked None -> freeze default' branch is removed.
+    Profile HAS a default row (v040-backfilled state) to prove it is not read.
+
+    RED against current behavior: the current freeze branch calls
+    `get_default_intro_card` and freezes `card_a`, not `0`.
+
+    `get_default_intro_card` is asserted gone as an IMPORT in
+    `app.routers.collections` (not merely un-called): T6680 Decision 4 deletes
+    the function entirely rather than leaving it unread, so there is no symbol
+    left to mock -- `hasattr` is the strongest available proof, matching the
+    design's "security auditability: grep shows zero live callers" rationale."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from app.services.auth_db import create_user
+    from app.services.sharing_db import get_collection_share_by_token
+    from app.session_init import _init_cache
+    from tests.test_collection_shares import (
+        GAME_DEF,
+        SHARER_EMAIL,
+        SHARER_ID,
+        _create,
+        _seed_sharer_reels,
+    )
+    from tests.test_collection_shares import (
+        PROFILE_ID as SHARER_PROFILE_ID,
+    )
+
+    create_user(SHARER_ID, email=SHARER_EMAIL)
+    _init_cache[SHARER_ID] = {"profile_id": SHARER_PROFILE_ID, "is_new_user": False}
+
+    import app.routers.collections as collections_router
+    assert not hasattr(collections_router, "get_default_intro_card"), (
+        "get_default_intro_card must be fully removed from collections.py, "
+        "not just unused -- Decision 4 deletes the function, not just the call"
+    )
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database._initialized_users", set()), \
+         patch("app.database.R2_ENABLED", False), \
+         patch("app.storage.R2_ENABLED", False), \
+         patch("app.routers.collections.generate_presigned_url_global",
+               side_effect=lambda key, **kw: f"https://r2.example/{key}"):
+        from app.database import get_database_path
+        from app.main import app
+
+        client = TestClient(app, raise_server_exceptions=True)
+
+        _seed_sharer_reels([{"game_ids": [12], "ratio": "9:16", "duration": 20.0}])
+
+        conn = sqlite3.connect(str(get_database_path()))
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO intro_cards (name, shown_fields, treatment, is_default) "
+            "VALUES ('A', '[]', 'gold', 1)"
+        )
+        conn.commit()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.close()
+
+        resp = _create(client, GAME_DEF, is_public=True)
+        assert resp.status_code == 200, resp.text
+        token = resp.json()["shares"][0]["share_token"]
+
+        share = get_collection_share_by_token(token)
+        definition = share["collection_definition"]
+        if isinstance(definition, str):
+            definition = json.loads(definition)
+        assert definition["intro_card_id"] == 0, (
+            "picked None must freeze 0 (no intro), never a default id"
+        )
 
 
 # ===========================================================================
@@ -759,25 +855,6 @@ class TestListDownloadsNoN1:
         )
 
     @pytest.mark.asyncio
-    async def test_resolved_name_accounts_for_duration_gate(self, db):
-        from app.routers.downloads import list_downloads
-
-        _seed_card(db, "Default Card", is_default=1)
-        # short reel inheriting the default -> no intro will play
-        _project_short, fv_short = _seed_published_final(db, intro_card_id=None, duration=5.0)
-        # long reel inheriting the default -> the default plays
-        _project_long, fv_long = _seed_published_final(db, intro_card_id=None, duration=30.0)
-
-        resp = await list_downloads()
-        by_id = {d.id: d for d in resp.downloads}
-
-        assert by_id[fv_short].intro_card_id is None  # raw stored value
-        assert by_id[fv_short].intro_card_name is None  # nothing will play
-
-        assert by_id[fv_long].intro_card_id is None  # raw stored value (still NULL)
-        assert by_id[fv_long].intro_card_name == "Default Card"  # resolves to the default
-
-    @pytest.mark.asyncio
     async def test_dangling_stored_id_shows_no_intro_name(self, db):
         from app.routers.downloads import list_downloads
 
@@ -792,3 +869,177 @@ class TestListDownloadsNoN1:
         item = next(d for d in resp.downloads if d.id == fv)
         assert item.intro_card_id == card_id  # raw value still stored
         assert item.intro_card_name is None    # but nothing resolves/plays
+
+    @pytest.mark.asyncio
+    async def test_null_no_longer_inherits_default_in_download_list(self, db):
+        """T6680 direct hole-closure test for the site v1's design missed
+        (downloads.py:337-345,577 batch-loads `is_default` directly, NOT via
+        `resolve_intro_card`). Profile HAS cards including an `is_default=1`
+        row (simulating the v040-backfilled state). A NULL-attachment reel
+        must show no intro name at EVERY duration -- short AND above the old
+        20s inherit threshold -- because there is no inherit left, not
+        because it was gated by length.
+
+        RED against the current resolver: the long reel currently resolves
+        to "Default Card" (see test_resolved_name_accounts_for_duration_gate
+        above, which this test directly inverts)."""
+        from app.routers.downloads import list_downloads
+
+        _seed_card(db, "Default Card", is_default=1)
+        _project_short, fv_short = _seed_published_final(db, intro_card_id=None, duration=5.0)
+        _project_long, fv_long = _seed_published_final(db, intro_card_id=None, duration=30.0)
+
+        resp = await list_downloads()
+        by_id = {d.id: d for d in resp.downloads}
+
+        assert by_id[fv_short].intro_card_id is None
+        assert by_id[fv_short].intro_card_name is None
+
+        assert by_id[fv_long].intro_card_id is None  # raw stored value
+        assert by_id[fv_long].intro_card_name is None, (
+            "a NULL attachment must resolve to no intro at every duration -- "
+            "there is no default left to inherit"
+        )
+
+
+# ===========================================================================
+# T6680 -- NULL no longer inherits at the cross-DB egress choke point
+# (`resolve_intro_card`, `services/intro_cards.py:303-339`), which
+# `intro_egress.resolve_intro_for_reel` delegates to for owner download burn,
+# single-reel share playback/burn, and the reel share page. Exercising
+# `resolve_intro_card` directly covers all of those without R2/network mocks,
+# per the design's "ONE seam" note (T5220).
+# ===========================================================================
+
+class TestResolveIntroCardT6680NoInheritAtEgress:
+    def test_null_no_intro_short_reel(self, db):
+        """Profile HAS cards including an is_default row; short reel; NULL
+        attachment -- already no-intro under the old inherit gate too, kept
+        as a baseline (must still be None after the change)."""
+        from app.services.intro_cards import resolve_intro_card
+        _seed_card(db, "Default Card", is_default=1)
+        conn = _connect(db)
+        result = resolve_intro_card(None, 5.0, conn, reel_id=1)
+        conn.close()
+        assert result is None
+
+    def test_null_no_intro_long_reel_above_old_threshold(self, db):
+        """The direct hole-closure case: a LONG reel (above the old 20s
+        inherit threshold) with NULL attachment on a profile that HAS an
+        is_default row must resolve to no intro. RED against the current
+        resolver, which returns the default row here."""
+        from app.services.intro_cards import resolve_intro_card
+        _seed_card(db, "Default Card", is_default=1)
+        conn = _connect(db)
+        result = resolve_intro_card(None, 30.0, conn, reel_id=1)
+        conn.close()
+        assert result is None, (
+            "NULL must resolve to no intro even for a long reel on a "
+            "profile with a default row -- there is no inherit left"
+        )
+
+    def test_zero_no_intro_unchanged(self, db):
+        from app.services.intro_cards import resolve_intro_card
+        _seed_card(db, "Default Card", is_default=1)
+        conn = _connect(db)
+        result = resolve_intro_card(0, 30.0, conn, reel_id=1)
+        conn.close()
+        assert result is None
+
+    def test_positive_id_resolves_to_that_card_unchanged(self, db):
+        """Explicit attach is untouched -- still consent-gated at the attach
+        gesture (TestSetDownloadIntro above), never at resolution."""
+        from app.services.intro_cards import resolve_intro_card
+        card_id = _seed_card(db, "Hero", is_default=0)
+        conn = _connect(db)
+        result = resolve_intro_card(card_id, 5.0, conn, reel_id=1)
+        conn.close()
+        assert result is not None
+        assert result["id"] == card_id
+
+    def test_unconsented_profile_with_cards_never_serves_an_unattached_card(self, db):
+        """T6680's replacement for a would-be new egress gate (Decision 1):
+        for a profile that has NOT consented (no `set_intro_consent` call)
+        and HAS cards (incl. an is_default row from the v040 backfill), every
+        NULL-attachment reel at every egress path resolves to no intro --
+        there is no inherit left to expose, so no card belonging to this
+        profile is ever served without having passed the attach-time consent
+        gate."""
+        from app.services.intro_cards import resolve_intro_card
+        from app.services.user_db import get_intro_consent
+        assert get_intro_consent(USER_ID, PROFILE_ID) is None  # precondition: unconsented
+
+        _seed_card(db, "Default Card", is_default=1)
+        conn = _connect(db)
+        for duration in (5.0, 30.0, 300.0):
+            result = resolve_intro_card(None, duration, conn, reel_id=1)
+            assert result is None, (
+                f"unconsented profile leaked an intro at duration={duration}"
+            )
+        conn.close()
+
+
+# ===========================================================================
+# T6680 -- `is_default` retirement (Decision 4 / OQ5). No auto-default on
+# create, no set-default endpoint, no default-promotion on delete.
+# ===========================================================================
+
+class TestIsDefaultRetirementT6680:
+    @pytest.mark.asyncio
+    async def test_first_card_created_does_not_set_is_default(self, db):
+        """RED against current behavior: intro_cards.py:249-252 sets
+        is_default=1 for the first card in a profile. After T6680, creating a
+        card never touches is_default -- there is nothing left that reads it
+        for resolution, so writing it is dead code that must be removed, not
+        just unread."""
+        from app.routers.intro_cards import CreateIntroCardRequest, create_intro_card
+        from app.services.user_db import set_intro_consent
+        set_intro_consent(USER_ID, PROFILE_ID, "2026-08-09T00:00:00Z")
+
+        created = await create_intro_card(
+            CreateIntroCardRequest(name="First", shown_fields=[], treatment="gold")
+        )
+
+        conn = _connect(db)
+        row = conn.execute(
+            "SELECT is_default FROM intro_cards WHERE id = ?", (created["id"],)
+        ).fetchone()
+        conn.close()
+        assert not bool(row["is_default"]), (
+            "creating the first card in a profile must not set is_default -- "
+            "the concept is retired end-to-end"
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_default_endpoint_no_longer_reachable(self, db):
+        """RED against current behavior: POST /{card_id}/default exists and
+        succeeds. After T6680 it must be removed (404/410), not merely made a
+        no-op -- Decision 4 retires the manual set-default gesture."""
+        from fastapi import HTTPException
+
+        card_id = _seed_card(db, "Hero")
+
+        with pytest.raises((HTTPException, AttributeError, ImportError)) as exc:
+            from app.routers.intro_cards import set_default_intro_card
+            result = await set_default_intro_card(card_id)
+            # If the symbol still exists and doesn't raise, fail explicitly --
+            # the endpoint must be gone, not just behaviorally inert.
+            pytest.fail(
+                f"set_default_intro_card must no longer exist/succeed, got: {result!r}"
+            )
+        if isinstance(exc.value, HTTPException):
+            assert exc.value.status_code in (404, 410)
+
+    def test_is_default_dropped_from_load_profile_cards_projection(self, db):
+        """Decision 2/4: load_profile_cards' batch projection stops reading
+        is_default (the download-list N+1-avoidance map no longer needs it,
+        since nothing resolves via it anymore)."""
+        from app.services.intro_cards import load_profile_cards
+        card_id = _seed_card(db, "Hero", is_default=1)
+        conn = _connect(db)
+        cards = load_profile_cards(conn.cursor())
+        conn.close()
+        assert "is_default" not in cards[card_id], (
+            "load_profile_cards must drop is_default from its projection -- "
+            "it is dead data now that nothing resolves via it"
+        )

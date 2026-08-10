@@ -57,7 +57,6 @@ const MOCK_CARD = {
   zoom: 1.0,
   // text_elements dropped (T6640): dead column, typography is template-owned.
   duration: 3.0,
-  is_default: true,
   composition: 'hero',
   previewUrl: PHOTO,
   created_at: '2026-08-05T00:00:00Z',
