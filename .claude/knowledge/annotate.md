@@ -438,6 +438,60 @@ The full checklist for an 11th→Nth sport:
     pointer + non-UA-sniffed-mobile context, at-rest opacity/pointer-events read directly, every
     kebab item reachable with zero hover and zero long-press).
 
+- **Tile inline hover preview (T6420) — the shared `TilePreviewVideo` primitive.**
+  Draft + reel tiles play a muted/looping inline video on desktop HOVER (poster-first
+  crossfade), instead of only a static poster. Epic child 1/3 (touch = T6430, setting
+  = T6440); this child is **fine-pointer ONLY** — touch is byte-identical (DraftTile's
+  long-press reveal + ReelTile's coarse kebab untouched).
+  - **Two pieces, both new, both store-free** (T6320 rule — a store import would break
+    the landing build via the `@editor` alias): `src/frontend/src/hooks/useTilePreview.js`
+    (the activation state machine) + `src/frontend/src/components/collections/TilePreviewVideo.jsx`
+    (the `<video>` + crossfade). Two consumers is below the abstract-on-3rd-dup bar, but the
+    sibling tiles MUST NOT diverge (T6300 history) — same justification as T6320's shared
+    progress-track primitive.
+  - **Warm early, reveal late** — the intent delay gates the REVEAL, not the fetch.
+    Timeline (both constants tuned in ONE place, `useTilePreview.js`
+    `PREVIEW_WARM_DELAY_MS=100` / `PREVIEW_REVEAL_DELAY_MS=450`): t0 grace (a straight-line
+    grid crossing fires ZERO requests) → ~100ms WARM (attach `src`, `load()`, buffer, still
+    paused, poster showing) → ~450ms REVEAL (`.play()` + crossfade in on the first rendered
+    frame via `requestVideoFrameCallback`, `playing` event as fallback) → leave/teardown
+    (pause, `removeAttribute('src')`, `load()` — RELEASES the stream).
+  - **`PREVIEW_PHASE` = { IDLE, WARM, REVEAL }.** The tile owns activation (wires
+    `onPointerEnter`/`onPointerLeave` on its root, passes `phase` + `streamUrl` to the
+    component). Component is pure imperative DOM control driven by `phase` — no store, no
+    writes, no watched-marking, no achievements (EPIC: preview is EPHEMERAL; the real
+    player's watched-marking at `DownloadsPanel.jsx:130-140` is the write path preview must
+    NOT touch).
+  - **Single-active registry** is module-level in `useTilePreview.js` (`activePreviewStop`):
+    a tile claims the slot at WARM (force-stopping whoever was active), so at most ONE preview
+    buffers/plays app-wide. Sized so T6430 reuses it as-is. `claimActivePreview` swaps the slot
+    BEFORE invoking the previous `stop()`, so the loser's identity-checked `releaseActivePreview`
+    is a no-op and can't recurse.
+  - **Gate = `useIsCoarsePointer()`** (live matchMedia, never width/UA) AND
+    `prefers-reduced-motion: reduce` (disables entirely, EPIC invariant) AND a non-null
+    `streamUrl`. Coarse/reduced-motion make `onPointerEnter` an inert early-return.
+  - **Stream URL** = `${API_BASE}/api/downloads/${id}/stream` (same endpoint the full players
+    use via `playerReels.js`): DraftTile gates on `project.final_video_id` (no source-clip
+    fallback for an unrendered draft — no preview, no error, nothing) and nulls `streamUrl`
+    while the full preview modal is open; ReelTile builds it from `download.id` and calls
+    `preview.stop()` on the Play button so the full player opening releases the inline stream.
+  - **z-layering / no portal:** `<video absolute inset-0 object-cover pointer-events-none>`
+    layered directly above the poster (implicit z-0), below scrim(z-10)/badges(z-20)/actions
+    (z-30)/kebab(z-40). `pointer-events-none` keeps the T5910/T6300 hover action reveal working
+    over the playing video. NEVER portaled (T5900: the tile's hover-scale transform is the
+    containing block; a `fixed` child would detach — but `absolute` rides it correctly).
+    `preload="none"` until warmed = grid at rest fires ZERO video requests (T6290's lesson).
+  - **`muted` is set imperatively** (`v.muted = true`) before `play()` — React's JSX `muted`
+    attribute is not reliably reflected to the DOM property, and muted-autoplay needs the
+    property.
+  - Covered by `useTilePreview.test.jsx` (gating, grace window, warm/reveal timing, registry,
+    teardown), `TilePreviewVideo.test.jsx` (zero-at-rest, warm attaches src, reveal plays +
+    crossfade, teardown releases, idempotency), `ReelTile.preview.test.jsx` (fine/coarse gating,
+    leave-releases, Play-teardown, no-write ephemerality), and the mandatory real-browser
+    `e2e/T6420-tile-preview-desktop-hover.qa.spec.js` (network-counter evidence: zero-at-rest,
+    warm/reveal/leave, straight-line=0 requests, single-active, coarse-untouched,
+    reduced-motion-disabled — jsdom gives false confidence, T5380).
+
 ## Perf attribution (T4770, 2026-07-09)
 - **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and
   `GET /api/games/{id}/video` (302→presigned R2) both re-time ~90–150ms in isolation (co-timed

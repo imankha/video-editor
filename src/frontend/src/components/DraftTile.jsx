@@ -5,6 +5,8 @@ import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, P
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
+import { TilePreviewVideo } from './collections/TilePreviewVideo';
+import { useTilePreview } from '../hooks/useTilePreview';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useCurrentProfile } from '../stores/profileStore';
 import { useSyncStore } from '../stores/syncStore';
@@ -325,6 +327,17 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const isReadyToPublish = isComplete && !project.is_published;
 
   const posterUrl = `${API_BASE}/api/projects/${project.id}/poster.jpg`;
+
+  // T6420 — inline hover preview (fine pointer only; the hook self-gates on
+  // useIsCoarsePointer + prefers-reduced-motion). Gate on final_video_id: no
+  // source-clip fallback for an unrendered draft (no preview, no error, nothing).
+  // streamUrl -> null while the full preview modal is open so the inline preview
+  // tears down and releases the stream (EPIC: full player opening RELEASES it).
+  const previewStreamUrl = project.final_video_id && !isPreviewing
+    ? `${API_BASE}/api/downloads/${project.final_video_id}/stream`
+    : null;
+  const preview = useTilePreview({ streamUrl: previewStreamUrl });
+
   const gameClock = formatGameClock(project.clip_game_start_time);
   // Q4: one tag chip, only on wider (>=sm) tiles — dropped on narrow mobile tiles.
   const firstTag = project.is_auto_created ? project.clips?.[0]?.tags?.[0] : null;
@@ -403,6 +416,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       onTouchStart={isCoarsePointer && !isReadyToPublish ? handleTouchStart : undefined}
       onTouchMove={isCoarsePointer && !isReadyToPublish ? handleTouchMove : undefined}
       onTouchEnd={isCoarsePointer && !isReadyToPublish ? handleTouchEnd : undefined}
+      onPointerEnter={preview.onPointerEnter}
+      onPointerLeave={preview.onPointerLeave}
       role="button"
       tabIndex={canOpen ? 0 : -1}
       aria-current={isCurrentProject ? 'true' : undefined}
@@ -440,6 +455,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           <Film size={26} className="text-cyan-300/80" />
           <span className="text-[11px] text-gray-200 text-center line-clamp-3 px-1">{getProjectDisplayName(project)}</span>
         </div>
+      )}
+
+      {/* T6420 inline hover preview — layered directly above the poster (implicit
+          z-0), below the scrim (z-10)/badges/actions/kebab. pointer-events-none so
+          the T5910 hover action reveal keeps working over the playing video. Only
+          rendered when a rendered final video exists; allowed on branded-fallback
+          tiles too. */}
+      {previewStreamUrl && (
+        <TilePreviewVideo streamUrl={previewStreamUrl} phase={preview.phase} />
       )}
 
       {/* Multi-clip marker — only shown when the draft has more than 1 clip. On a

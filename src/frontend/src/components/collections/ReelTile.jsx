@@ -6,7 +6,10 @@ import {
 } from 'lucide-react';
 import { RATIO } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
+import { API_BASE } from '../../config';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
+import { useTilePreview } from '../../hooks/useTilePreview';
+import { TilePreviewVideo } from './TilePreviewVideo';
 import { IntroCardPicker } from '../introcards/IntroCardPicker';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 
@@ -97,6 +100,14 @@ export function ReelTile({
   // detected as coarse instead of falling into the (dead-end) desktop hover path.
   const isCoarsePointer = useIsCoarsePointer();
 
+  // T6420 — inline hover preview (fine pointer only; the hook self-gates on
+  // useIsCoarsePointer + prefers-reduced-motion). A published reel always has a
+  // playable stream at /api/downloads/{id}/stream (the same URL the full player
+  // uses via playerReels.js). preview.stop() runs on Play so the full player
+  // opening releases the inline stream (EPIC invariant).
+  const previewStreamUrl = `${API_BASE}/api/downloads/${download.id}/stream`;
+  const preview = useTilePreview({ streamUrl: previewStreamUrl });
+
   const isLandscape = download.aspect_ratio === RATIO.LANDSCAPE;
   // Landscape tiles are wider + shorter; portrait match DraftTile's footprint.
   const sizeClass = isLandscape
@@ -158,6 +169,8 @@ export function ReelTile({
   return (
     <div
       data-testid="reel-card"
+      onPointerEnter={preview.onPointerEnter}
+      onPointerLeave={preview.onPointerLeave}
       className={`group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150
         hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:ring-2 hover:ring-cyan-400/60 ${sizeClass} ${
         isUnwatched ? unwatchedStyle.border : `border-gray-700 hover:border-cyan-400`
@@ -183,6 +196,11 @@ export function ReelTile({
           <span className="text-[11px] text-gray-200 text-center line-clamp-3 px-1">{displayName}</span>
         </div>
       )}
+
+      {/* T6420 inline hover preview — layered directly above the poster (implicit
+          z-0), below the scrim (z-10)/badges/kebab. pointer-events-none so the
+          persistent Play/kebab actions keep working over the playing video. */}
+      <TilePreviewVideo streamUrl={previewStreamUrl} phase={preview.phase} />
 
       {/* Unwatched (NEW) dot — shifted left of the persistent kebab (T6300) so the
           two top-right occupants stack instead of overlapping (design doc §2.2). */}
@@ -259,7 +277,7 @@ export function ReelTile({
       {!isRenaming && (
         <button
           type="button"
-          onClick={(e) => onPlay(e, download)}
+          onClick={(e) => { preview.stop(); onPlay(e, download); }}
           title="Play video"
           aria-label="Play video"
           className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 ${actionBtnClass}`}
