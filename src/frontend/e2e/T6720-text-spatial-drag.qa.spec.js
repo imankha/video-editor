@@ -33,8 +33,10 @@ async function readStatus(page) {
   const text = await page.locator(STATUS).textContent();
   const num = (re) => { const m = text.match(re); return m ? parseFloat(m[1]) : null; };
   return {
-    x: num(/x=([\d.]+)/),
-    y: num(/y=([\d.]+)/),
+    // Allow a leading '-' -- a negative anchor is exactly the BLOCKING bug this
+    // spec guards; a sign-blind class would parse "y=-0.006" as 0.006 and false-pass.
+    x: num(/x=(-?[\d.]+)/),
+    y: num(/y=(-?[\d.]+)/),
     textlen: num(/textlen=(\d+)/),
     commits: num(/commits=(\d+)/),
     selected: /selected=yes/.test(text),
@@ -169,6 +171,11 @@ test.describe('T6720 spatial drag — reposition selected Overlay text (fine / m
     const after = await readStatus(page);
     expect(after.x, 'x actually moved left toward the corner').toBeLessThan(0.5);
     expect(after.y, 'y actually moved up toward the corner').toBeLessThan(0.5);
+    // BLOCKING-fix guard: the persisted anchor must never leave [0,1] (schemas.py
+    // Position ge=0/le=1 -> an out-of-range value 400s on update_text_spec). The
+    // sign-aware regex above would surface a negative here.
+    expect(after.x, 'x never negative (schema 0..1)').toBeGreaterThanOrEqual(0);
+    expect(after.y, 'y never negative (schema 0..1)').toBeGreaterThanOrEqual(0);
     const text = await textBox(page);
     expect(text.x, 'text left edge clamped on-frame').toBeGreaterThanOrEqual(cb.x - 2);
     expect(text.y, 'text top edge clamped on-frame').toBeGreaterThanOrEqual(cb.y - 2);

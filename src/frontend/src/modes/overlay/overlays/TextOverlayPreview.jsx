@@ -82,7 +82,16 @@ function clampRange(v, a, b) {
 export function clampAnchorToFrame(anchorX, anchorY, box) {
   const boxLeft = clampRange(anchorX + box.offLeftF, 0, 1 - box.widthF);
   const boxTop = clampRange(anchorY + box.offTopF, 0, 1 - box.heightF);
-  return { x: round3(boxLeft - box.offLeftF), y: round3(boxTop - box.offTopF) };
+  // position.x/y are 0..1 fractions by schema (schemas.py Position ge=0 le=1), and
+  // update_text_spec re-validates -- an out-of-range anchor is a 400, not a
+  // rendering nicety. Two reachable escapes: a font whose fontBoundingBox exceeds
+  // its content area gives offTopF>0 -> negative y at the top edge; a box wider than
+  // the frame (widthF>1, the unbreakable-word case) gives x<0 (left) / x>1 (right)
+  // since clampRange tolerates a>b. Clamp the RETURNED anchor as the final step.
+  return {
+    x: round3(clampRange(boxLeft - box.offLeftF, 0, 1)),
+    y: round3(clampRange(boxTop - box.offTopF, 0, 1)),
+  };
 }
 
 export default function TextOverlayPreview({
@@ -242,9 +251,9 @@ export default function TextOverlayPreview({
   const beginDrag = useCallback((e) => {
     if (!dragActive || !selectedSpec) return;
     // Measure FRESH at pointerdown so the clamp uses the CURRENT rendered box,
-    // never a stale `grabBox` still settling from a text/size change. Fall back
-    // to the state box only if a live measurement isn't available.
-    const box = measureSpanBox() || grabBox;
+    // never a stale `grabBox` still settling from a text/size change (the whole
+    // reason a lagging state box is not trusted here -- no fallback to it).
+    const box = measureSpanBox();
     if (!box) return;
     e.preventDefault();
     e.stopPropagation();
@@ -264,7 +273,7 @@ export default function TextOverlayPreview({
       moved: false,
       latest: { x: selectedSpec.position.x, y: selectedSpec.position.y },
     };
-  }, [dragActive, selectedElementId, selectedSpec, grabBox, frameW, frameH, measureSpanBox]);
+  }, [dragActive, selectedElementId, selectedSpec, frameW, frameH, measureSpanBox]);
 
   // Unmount safety: never leave the document-level touchmove blocker attached
   // (a lingering one would freeze page scroll).
@@ -288,6 +297,10 @@ export default function TextOverlayPreview({
         onPointerMove={handlePointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        // T6080: swallow the synthetic click trailing a drag's pointerup so it
+        // can't bubble to OverlayModeView's handleVideoAreaTap (mobile fullscreen
+        // onClick), which would togglePlay() on every completed text drag.
+        onClick={(e) => e.stopPropagation()}
         className="absolute rounded-sm cursor-move"
         style={{
           left: `${leftPx}px`,

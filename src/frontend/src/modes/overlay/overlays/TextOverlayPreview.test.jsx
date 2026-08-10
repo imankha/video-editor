@@ -156,4 +156,31 @@ describe('clampAnchorToFrame (T6720)', () => {
     expect(farLeft).toBeCloseTo(0.4, 3);
     expect(farLeft).toBeLessThan(farRight);
   });
+
+  // The returned anchor MUST stay in [0,1] -- schemas.py Position is ge=0/le=1 and
+  // update_text_spec re-validates, so an out-of-range value is a non-retryable 400.
+  // The center-aligned oversized case above happens to stay in range and HID this;
+  // left/right align and a tall font are the escapes.
+  it('LEFT-align oversized box never returns x < 0 (would 400)', () => {
+    const box = { offLeftF: 0, offTopF: 0, widthF: 1.2, heightF: 0.1 }; // left anchor = box left edge
+    const r = clampAnchorToFrame(-1, 0.3, box); // raw x would be -0.2
+    expect(r.x).toBe(0);
+    expect(r.x).toBeGreaterThanOrEqual(0);
+    expect(r.x).toBeLessThanOrEqual(1);
+  });
+
+  it('RIGHT-align oversized box never returns x > 1 (would 400)', () => {
+    const box = { offLeftF: -1.2, offTopF: 0, widthF: 1.2, heightF: 0.1 }; // right anchor = box right edge
+    const r = clampAnchorToFrame(2, 0.3, box); // raw x would be 1.2
+    expect(r.x).toBe(1);
+    expect(r.x).toBeGreaterThanOrEqual(0);
+    expect(r.x).toBeLessThanOrEqual(1);
+  });
+
+  it('a tall font (offTopF > 0) never returns y < 0 at the top edge (would 400)', () => {
+    const box = { offLeftF: -0.1, offTopF: 0.05, widthF: 0.2, heightF: 0.1 };
+    const r = clampAnchorToFrame(0.5, -1, box); // raw y would be -0.05
+    expect(r.y).toBe(0);
+    expect(r.y).toBeGreaterThanOrEqual(0);
+  });
 });
