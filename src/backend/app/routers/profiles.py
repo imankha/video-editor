@@ -33,6 +33,7 @@ from app.services.intro_media import (
     InvalidImageError,
     delete_intro_image,
     store_intro_image,
+    validate_intro_key,
 )
 from app.services.user_db import (
     INTRO_FACT_FIELDS,
@@ -447,11 +448,16 @@ async def remove_intro_image(profile_id: str, request: DeleteIntroImageRequest):
     user_id = get_current_user_id()
     _require_owned_profile(user_id, profile_id)
 
+    # Validate the key belongs to this profile's intro namespace up front (400 on
+    # a foreign/garbage key) — unconditionally, so the reference-check branch
+    # below can never let a bad key silently "succeed".
+    try:
+        validate_intro_key(user_id, profile_id, request.key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     if not _intro_key_referenced_by_a_card(user_id, profile_id, request.key):
-        try:
-            deleted = delete_intro_image(user_id, profile_id, request.key)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        deleted = delete_intro_image(user_id, profile_id, request.key)
         if not deleted:
             raise HTTPException(status_code=500, detail="Failed to delete the intro image")
 

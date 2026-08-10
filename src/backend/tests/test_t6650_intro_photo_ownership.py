@@ -163,6 +163,21 @@ async def test_profile_remove_deletes_exclusive_object(db):
 
 
 @pytest.mark.asyncio
+async def test_profile_remove_foreign_key_still_400(db):
+    """A key not under this profile's intro prefix is still rejected 400 up front
+    — the reference-check branch must not let a bad key silently succeed."""
+    from fastapi import HTTPException
+
+    from app.routers.profiles import DeleteIntroImageRequest, remove_intro_image
+
+    with pytest.raises(HTTPException) as exc:
+        await remove_intro_image(
+            PROFILE_ID, DeleteIntroImageRequest(key="dev/users/someone-else/profiles/x/intro/z.png")
+        )
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_profile_replace_keeps_previous_object_referenced_by_card(db):
     """Replacing the profile photo must not destroy the PREVIOUS object while a
     card still references it (the staleness half's mirror)."""

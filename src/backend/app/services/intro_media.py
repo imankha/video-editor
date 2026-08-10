@@ -126,14 +126,14 @@ def store_intro_image(user_id: str, profile_id: str, raw: bytes) -> dict | None:
     return {"key": key, "previewUrl": preview_url, "ext": ext}
 
 
-def delete_intro_image(user_id: str, profile_id: str, key: str) -> bool:
-    """Delete a profile's intro image R2 object by its stored full key.
+def validate_intro_key(user_id: str, profile_id: str, key: str) -> str:
+    """Assert ``key`` is a real per-profile intro object key; return its
+    profile-relative path.
 
-    Callable service (not only an HTTP handler) so T5230's compliance purge can
-    remove intro media. Validates the key belongs to THIS profile's intro prefix
-    before deleting — refusing (ValueError) a key from another profile/prefix,
-    so a bad row can never delete an unrelated object. Returns
-    ``delete_profile_object``'s result (True on success or R2 disabled).
+    Raises :class:`ValueError` for a key from another profile/prefix or one not
+    under the ``intro/`` prefix — the single source of truth for "does this key
+    belong to this profile's intro namespace", so a bad key can never touch an
+    unrelated object. Callers map the ValueError to HTTP 400.
     """
     base = profile_r2_key(user_id, profile_id, "")
     if not key.startswith(base):
@@ -141,5 +141,17 @@ def delete_intro_image(user_id: str, profile_id: str, key: str) -> bool:
     relative_path = key[len(base):]
     if not relative_path.startswith(f"{INTRO_PREFIX}/"):
         raise ValueError("intro image key is not under the intro/ prefix")
+    return relative_path
 
+
+def delete_intro_image(user_id: str, profile_id: str, key: str) -> bool:
+    """Delete a profile's intro image R2 object by its stored full key.
+
+    Callable service (not only an HTTP handler) so it can be reused off the HTTP
+    path. Validates the key belongs to THIS profile's intro prefix before
+    deleting (via :func:`validate_intro_key`), refusing (ValueError) a key from
+    another profile/prefix. Returns ``delete_profile_object``'s result (True on
+    success or R2 disabled).
+    """
+    relative_path = validate_intro_key(user_id, profile_id, key)
     return delete_profile_object(user_id, profile_id, relative_path)
