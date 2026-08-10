@@ -21,6 +21,11 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
 
   const [introTimeMs, setIntroTimeMs] = useState(0);
   const [playing, setPlaying] = useState(true);
+  // Mirrors introTimeMs synchronously for the rAF tick to read/compute
+  // against — see the BUG FIX note in `tick` below for why the tick cannot
+  // rely on setIntroTimeMs's functional-updater callback running
+  // synchronously at the call site.
+  const introTimeMsRef = useRef(0);
 
   const rafRef = useRef(null);
   const lastFrameTimeRef = useRef(null);
@@ -44,6 +49,7 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
 
   const seekIntro = useCallback((ms) => {
     const clamped = Math.max(0, Math.min(ms, durationMs));
+    introTimeMsRef.current = clamped;
     setIntroTimeMs(clamped);
     if (clamped >= durationMs) fireEndedOnce();
     else endedFiredRef.current = false; // seeking back before the end re-arms the guard
@@ -67,11 +73,33 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
       const dt = now - lastFrameTimeRef.current;
       lastFrameTimeRef.current = now;
 
-      setIntroTimeMs((prev) => {
-        const next = Math.min(prev + dt, durationMs);
-        if (next >= durationMs) fireEndedOnce();
-        return next;
-      });
+      // BUG FIX (QA live-drive, 3rd real defect this task): compute `next`
+      // from introTimeMsRef (a synchronous mirror), NOT from inside
+      // setIntroTimeMs's functional-updater callback, and call
+      // fireEndedOnce() as a plain statement in this normal callback body.
+      // The previous version called fireEndedOnce() (which cascades into
+      // IntroStoryPlayer's own setRegion('reels'), a SIBLING component's
+      // state) from inside the updater passed to setIntroTimeMs. Two
+      // problems with that: (1) the updater's own execution is not
+      // guaranteed synchronous at the call site (confirmed via
+      // useIntroPlayback.test.js — reading a variable closed over by the
+      // updater immediately after calling setIntroTimeMs saw a stale value),
+      // and (2) even when it does run, a setState call for a DIFFERENT
+      // fiber issued while React is mid-render for THIS hook's update is
+      // eagerly computed (the updater runs) but never committed — the
+      // real-browser symptom was the forward auto-continue silently never
+      // firing (the intro froze at 100% forever). jsdom's renderHook harness
+      // in useIntroPlayback.test.js drives a bare `vi.fn()` onIntroEnded (no
+      // sibling component, no second setState), so neither failure mode was
+      // visible there — only the real browser (this QA pass) caught it.
+      // introTimeMsRef is kept in sync by every write path (seekIntro above,
+      // this tick below) so `next` is always computed from a value that is
+      // synchronously current, independent of when React actually commits
+      // the corresponding setIntroTimeMs state update.
+      const next = Math.min(introTimeMsRef.current + dt, durationMs);
+      introTimeMsRef.current = next;
+      setIntroTimeMs(next);
+      if (next >= durationMs) fireEndedOnce();
 
       rafRef.current = requestAnimationFrame(tick);
     };
