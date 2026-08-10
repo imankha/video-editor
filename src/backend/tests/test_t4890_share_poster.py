@@ -405,6 +405,7 @@ def test_moved_reel_carries_poster_and_copies_object(tmp_path):
         from app.database import ensure_database
         from app.routers import downloads
         from app.routers.downloads import MoveToProfileRequest, move_reels_to_profile
+        from tests.helpers_move import make_move_request
 
         user_db_mod.create_profile(U, SRC, "A", "#f00", is_default=True)
         user_db_mod.create_profile(U, DST, "B", "#00f")
@@ -427,7 +428,8 @@ def test_moved_reel_carries_poster_and_copies_object(tmp_path):
              patch.object(downloads, "profile_object_exists", return_value=True), \
              patch.object(downloads, "delete_profile_object", return_value=True):
             asyncio.run(move_reels_to_profile(
-                MoveToProfileRequest(video_ids=[9100], target_profile_id=DST), _durable=None))
+                MoveToProfileRequest(video_ids=[9100], target_profile_id=DST),
+                make_move_request(), _durable=None))
 
         # BOTH the video and its poster object are relocated to the target prefix.
         assert "final_videos/reelm.mp4" in copied
@@ -457,7 +459,8 @@ def test_moved_reel_carries_poster_and_copies_object(tmp_path):
              patch.object(downloads, "profile_object_exists", return_value=False), \
              patch.object(downloads, "delete_profile_object", return_value=True):
             asyncio.run(move_reels_to_profile(
-                MoveToProfileRequest(video_ids=[9200], target_profile_id=DST), _durable=None))
+                MoveToProfileRequest(video_ids=[9200], target_profile_id=DST),
+                make_move_request(), _durable=None))
 
         assert "final_videos/reeln.mp4" in copied2          # video moved
         assert "final_videos/posters/reeln.mp4.jpg" not in copied2  # poster skipped

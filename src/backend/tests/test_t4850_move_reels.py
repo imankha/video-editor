@@ -31,9 +31,9 @@ DST = "dstprof02"
 @pytest.fixture()
 def env(tmp_path):
     """Two schema-current profile DBs for one user under a temp USER_DATA_BASE."""
-    from app.user_context import set_current_user_id, set_current_req_id
     from app.profile_context import set_current_profile_id
     from app.services import user_db as user_db_mod
+    from app.user_context import set_current_req_id, set_current_user_id
 
     set_current_user_id(USER_ID)
     set_current_req_id("req-t4850")
@@ -121,16 +121,11 @@ def _insert_reel(base, pid, *, project_id=None, game_id=None, game_ids=None,
 
 
 async def _move(video_ids, target_profile_id=DST):
-    from types import SimpleNamespace
-
-    from app.routers.downloads import move_reels_to_profile, MoveToProfileRequest
-    # T6350: the handler now takes a Request to register the truthful
-    # move_source_cleanup_failed 503 body on request.state (read by the middleware,
-    # bypassed by this direct call). A namespace with a settable .state is enough.
-    request = SimpleNamespace(state=SimpleNamespace())
+    from app.routers.downloads import MoveToProfileRequest, move_reels_to_profile
+    from tests.helpers_move import make_move_request
     return await move_reels_to_profile(
         MoveToProfileRequest(video_ids=video_ids, target_profile_id=target_profile_id),
-        request,
+        make_move_request(),
         _durable=None,
     )
 
@@ -382,7 +377,9 @@ def test_profile_r2_key_is_per_profile():
 
 def test_copy_and_delete_profile_object_use_exact_prefixes():
     from app.storage import (
-        copy_profile_object, delete_profile_object, profile_object_exists,
+        copy_profile_object,
+        delete_profile_object,
+        profile_object_exists,
     )
     src_key = _media_key(SRC, "clip.mp4")
     dst_key = _media_key(DST, "clip.mp4")
