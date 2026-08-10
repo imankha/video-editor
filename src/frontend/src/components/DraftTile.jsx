@@ -329,13 +329,19 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const posterUrl = `${API_BASE}/api/projects/${project.id}/poster.jpg`;
 
   // T6420 — inline hover preview (fine pointer only; the hook self-gates on
-  // useIsCoarsePointer + prefers-reduced-motion). Gate on final_video_id: no
-  // source-clip fallback for an unrendered draft (no preview, no error, nothing).
-  // streamUrl -> null while the full preview modal is open so the inline preview
-  // tears down and releases the stream (EPIC: full player opening RELEASES it).
-  const previewStreamUrl = project.final_video_id && !isPreviewing
-    ? `${API_BASE}/api/downloads/${project.final_video_id}/stream`
-    : null;
+  // useIsCoarsePointer + prefers-reduced-motion). Prefers the final video; T6441
+  // falls back to the working video for "In Overlay" drafts (has_working_video),
+  // which already have a real rendered artifact. "Not Started"/"Framing" drafts
+  // have neither, so no preview (no error, nothing). streamUrl -> null while the
+  // full preview modal is open so the inline preview tears down and releases the
+  // stream (EPIC: full player opening RELEASES it).
+  const previewStreamUrl = isPreviewing
+    ? null
+    : project.final_video_id
+      ? `${API_BASE}/api/downloads/${project.final_video_id}/stream`
+      : project.has_working_video
+        ? `${API_BASE}/api/projects/${project.id}/working_video/stream`
+        : null;
   const preview = useTilePreview({ streamUrl: previewStreamUrl });
 
   const gameClock = formatGameClock(project.clip_game_start_time);
