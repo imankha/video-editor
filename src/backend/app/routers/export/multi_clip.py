@@ -2111,7 +2111,12 @@ async def _run_multi_clip_background(
                     AND wc.id IN ({latest_working_clips_subquery()})
                     ORDER BY wc.sort_order
                 """, (project_id, project_id))
-                db_clips = cursor.fetchall()
+                # dict(), not raw sqlite3.Row: resolve_clip_source (export_helpers.py)
+                # is typed `clip: dict` and calls .get() on it — a bare Row has no
+                # .get() and crashes every multi-clip export that resolves from DB
+                # (T6450). The single-clip path already converts before calling it
+                # (framing.py); this fallback branch was the one call site that didn't.
+                db_clips = [dict(row) for row in cursor.fetchall()]
 
             if not db_clips:
                 raise RuntimeError("No clips found in project")
