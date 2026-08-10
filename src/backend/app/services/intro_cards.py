@@ -27,7 +27,6 @@ import logging
 from typing import Any
 
 from app.database import column_exists
-from app.schemas import TextSpec
 from app.services.user_db import INTRO_FACT_FIELDS
 
 logger = logging.getLogger(__name__)
@@ -108,30 +107,6 @@ def validate_treatment(value: Any) -> str:
             f"unknown treatment {value!r}; allowed: {sorted(TREATMENTS)}"
         )
     return value
-
-
-def validate_text_elements(value: Any) -> dict[str, dict]:
-    """Validate a ``{slot_name: TextSpec}`` mapping on the way in.
-
-    Every value is parsed as a TextSpec (T5180) — an unknown font key or a
-    malformed spec RAISES ValueError (-> 400), never stored and never silently
-    repaired. Returns a plain-dict form (each spec dumped back to JSON-able
-    primitives) ready for msgpack encoding on disk.
-    """
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise ValueError("text_elements must be an object of slot -> TextSpec")
-    out: dict[str, dict] = {}
-    for slot, spec in value.items():
-        if not isinstance(slot, str):
-            raise ValueError("text_elements slot names must be strings")
-        try:
-            parsed = TextSpec.model_validate(spec)
-        except Exception as e:  # pydantic ValidationError -> 400
-            raise ValueError(f"invalid TextSpec for slot {slot!r}: {e}") from e
-        out[slot] = parsed.model_dump(mode="json")
-    return out
 
 
 def validate_focal(value: Any, name: str) -> float | None:

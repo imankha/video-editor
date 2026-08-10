@@ -168,10 +168,10 @@ async function backendRenderBbox(page, spec, w, h) {
 // overflowing word (e.g. playfair's "MIDFIELDER" at 1080x1920, an
 // 1100+px word inside a 1080px frame) reports a much wider box than the
 // backend ever could. Diagnosed via T5180 parity.
-async function measureTightInkBBox(page, w, h) {
+async function measureTightInkBBox(page, w, h, rootSelector = '') {
   return page.evaluate(
-    ([frameW, frameH]) => {
-    const el = document.querySelector('[data-baseline-y]');
+    ([frameW, frameH, selector]) => {
+    const el = document.querySelector(`${selector} [data-baseline-y]`.trim());
     const style = window.getComputedStyle(el);
     const fontPx = parseFloat(style.fontSize);
     const fontWeight = style.fontWeight;
@@ -236,7 +236,7 @@ async function measureTightInkBBox(page, w, h) {
       height: clampedMaxY - clampedMinY,
     };
     },
-    [w, h]
+    [w, h, rootSelector]
   );
 }
 
@@ -291,6 +291,196 @@ async function mountRichTextAndMeasure(page, spec, w, h) {
   });
   return { box, computed };
 }
+
+// T6640 round 3 — card-level collision regression (design §4, extends this
+// spec per rounds-1-2 §2c). Root cause (design §1): the card preview computed
+// a title's wrapped line count TWICE — once in
+// introCardPreviewElements.js::layout (to RESERVE height for the block below
+// it) and once again inside RichText.jsx (to actually DRAW the glyphs) — with
+// different font-family strings and independent settle loops. At the
+// `broadcast` composition's title size (0.068, right at the wrap boundary),
+// the two disagreed: layout() reserved 1 line while RichText drew 2, so the
+// title's second line landed on top of the primary fact below it.
+//
+// The fix (design §2 Option 1, shipped by Stage 4): layout() emits the
+// ALREADY-COMPUTED `lines` into each element's TextSpec; RichText renders
+// those verbatim instead of re-deriving them — ONE wrap decision now feeds
+// BOTH the reserved height and the drawn glyphs, so the two can no longer
+// disagree.
+//
+// This must run in a REAL BROWSER (not jsdom — see design §0 "what the matrix
+// does NOT prove" and T5380/T6610–T6480 false-green precedent: jsdom has no
+// FontFaceSet and canvas metrics never settle, so it cannot exhibit the
+// font-settle race this bug is made of).
+//
+// Mounts the REAL <IntroCardPreview> via the /debug/intro-card seam (added
+// alongside this fix — see main.jsx), not two separate /debug/rich-text
+// mounts. An earlier draft of this test computed layout() in a bare
+// page.evaluate() and mounted title/fact1 as two INDEPENDENT /debug/rich-text
+// navigations; that produced a false failure with numbers that never moved
+// across 40 rAF-polled frames — because that bare page/evaluate call never
+// mounts any <RichText>, so the card's custom @font-face is never injected
+// there and layout()'s own canvas metrics measure against the BROWSER'S
+// FALLBACK FONT forever, while the separately-navigated /debug/rich-text page
+// measures the REAL font — an apples-to-oranges mismatch with nothing to do
+// with the double-wrap bug. Mounting the actual <IntroCardPreview> (props in,
+// no store/fetch — see its own docstring) puts the layout mirror AND its
+// RichText children in the SAME tree, so the SAME @font-face registration and
+// the SAME `useCardPreviewElements` settle loop the real editor uses govern
+// both sides — the only way to faithfully reproduce (and prove fixed) what
+// ships.
+test.describe('T6640 round 3 — card title/fact collision (real browser, broadcast composition)', () => {
+  skipOnDeployedTarget(test, 'mounts /debug/intro-card, a DEV-only seam (main.jsx)');
+
+  // Invented name (no PII). shown_fields has 2 entries + a truthy image_key so
+  // <IntroCardPreview> naturally DERIVES 'broadcast' (introCardComposition.js:
+  // photo + 2 facts) exactly like a real card would; PROFILE only fills
+  // `position` (the OTHER shown field, `class`, is left blank so
+  // buildPreviewElements omits it — the exact live-repro shape: a `broadcast`
+  // card showing just the one primary fact under the wrapping title).
+  const CARD = { treatment: 'gold', image_key: 'debug-photo-key', shown_fields: ['position', 'class'] };
+  const PROFILE = { full_name: 'Anastasia Wintergreen', position: 'Midfielder' };
+  const ASPECT = '9:16';
+  const { w: FRAME_W, h: FRAME_H } = RESOLUTIONS[0]; // 1080x1920 (9:16 canonical)
+
+  async function mountIntroCardAndSettle(page, { card, profile, aspect, w, h }) {
+    const url =
+      `/debug/intro-card?card=${encodeURIComponent(JSON.stringify(card))}` +
+      `&profile=${encodeURIComponent(JSON.stringify(profile))}&aspect=${aspect}` +
+      `&boxWidth=${w}&boxHeight=${h}`;
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto(url);
+    await expect(page.locator('[data-baseline-y]').first()).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    // Mirror `useCardPreviewElements`'s OWN settle contract
+    // (STABLE_FRAMES_REQUIRED=6, MAX_SETTLE_FRAMES=45 — introCardPreviewElements.js)
+    // layered under each <RichText>'s OWN per-element settle poll: wait for the
+    // JOINED data-baseline-y signature of every rendered element to stop
+    // changing across several consecutive frames, not a fixed guess.
+    await page.evaluate(async () => {
+      const read = () =>
+        Array.from(document.querySelectorAll('[data-baseline-y]'))
+          .map((el) => el.getAttribute('data-baseline-y'))
+          .join('|');
+      let previous = null;
+      let streak = 0;
+      for (let frame = 0; frame < 90; frame++) {
+        await new Promise(requestAnimationFrame);
+        const current = read();
+        streak = current === previous ? streak + 1 : 0;
+        previous = current;
+        if (streak >= 8) return;
+      }
+    });
+  }
+
+  test('title and primary-fact ink boxes never intersect (the exact reported collision)', async ({ page }) => {
+    await authenticateForSeams(page);
+    await mountIntroCardAndSettle(page, { card: CARD, profile: PROFILE, aspect: ASPECT, w: FRAME_W, h: FRAME_H });
+
+    const titleBox = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="title"]');
+    const factBox = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="fact1"]');
+
+    expect(titleBox, 'title did not render a measurable ink box').not.toBeNull();
+    expect(factBox, 'fact1 did not render a measurable ink box').not.toBeNull();
+
+    // Sanity check this IS the wrap-boundary repro (RichText actually drew 2
+    // lines for the title) — otherwise this test would pass vacuously even
+    // with the pre-fix bug, since a single-line title never had anywhere to
+    // collide. Checked against the ACTUAL RENDERED box, not layout()'s `lines`
+    // field — a 2-line title's ink box is well over one line height tall.
+    const titleFontPx = await page
+      .locator('[data-slot="title"] [data-baseline-y]')
+      .evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize));
+    expect(
+      titleBox.height,
+      "expected the long two-word name to actually render as 2 lines at the broadcast composition's " +
+        'title size (the exact wrap-boundary condition from design §1) — a single-line box would be ' +
+        'roughly one line height tall, not this'
+    ).toBeGreaterThan(titleFontPx * 1.3);
+
+    // No vertical overlap between the two ink boxes — this is the reserved
+    // height (layout()'s `lines`) agreeing with the rendered height
+    // (RichText's drawn `lines`), the collision made structurally impossible
+    // by construction once both read the SAME `lines` array (design §2).
+    const titleBottom = titleBox.y + titleBox.height;
+    const factTop = factBox.y;
+    expect(
+      titleBottom,
+      `title ink box (y=${titleBox.y}, h=${titleBox.height}, bottom=${titleBottom}) must not extend past ` +
+        `fact1's ink box top (y=${factTop}) — a positive gap means no collision`
+    ).toBeLessThanOrEqual(factTop);
+  });
+
+  // T6640 round 4 — a SEPARATE, previously-undetected instance of the same
+  // collision class. Round 3's fixture above only renders ONE fact (`class`
+  // left blank) with a single-word value ("Midfielder"), and its long name
+  // happens to have a longest WORD (644.5px) wider than the CSS bug's buggy
+  // shrink-to-fit column (~540px at this frame width) — so the buggy column
+  // never binds and that fixture passes by coincidence, not because the bug
+  // was actually fixed. This fixture is chosen to land in the failing band:
+  // `layout()`/the backend both wrap it to exactly 1 line (fits within the
+  // real 907px column), but the pre-round-4 wrapper's `maxWidth`-driven
+  // shrink-to-fit column collapsed to ~540px for this CENTER-anchored
+  // composition, which IS narrower than the full name — so the DOM silently
+  // re-wrapped a title `layout()` had reserved as 1 line into 2, dropping the
+  // second line onto the fact below it exactly like round 3's bug, just
+  // triggered by a different name shape. Root cause + fix: RichText.jsx's
+  // wrapperStyle now sets a fixed `width` (not `maxWidth`), so the DOM's wrap
+  // column always equals `layout()`'s, never a narrower shrink-to-fit guess.
+  // Also exercises BOTH facts of a real `broadcast` card (position + team) —
+  // round 3's fixture only ever rendered one. No PII: invented name; the
+  // position/team values match the shape of the live-reported card, not its
+  // identity.
+  test('title does not silently re-wrap past its reserved line count (round-4 CSS shrink-to-fit regression)', async ({
+    page,
+  }) => {
+    const ROUND4_CARD = { treatment: 'gold', image_key: 'debug-photo-key', shown_fields: ['position', 'team'] };
+    const ROUND4_PROFILE = { full_name: 'Rowan Castellini', position: 'Attacking Mid', team: 'West Coast ECNL' };
+
+    await authenticateForSeams(page);
+    await mountIntroCardAndSettle(page, {
+      card: ROUND4_CARD,
+      profile: ROUND4_PROFILE,
+      aspect: ASPECT,
+      w: FRAME_W,
+      h: FRAME_H,
+    });
+
+    const titleBox = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="title"]');
+    const fact1Box = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="fact1"]');
+    const fact2Box = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="fact2"]');
+
+    expect(titleBox, 'title did not render a measurable ink box').not.toBeNull();
+    expect(fact1Box, 'fact1 did not render a measurable ink box').not.toBeNull();
+    expect(fact2Box, 'fact2 did not render a measurable ink box').not.toBeNull();
+
+    // The sharp invariant: this name fits the REAL 907px wrap column as ONE
+    // line, so the rendered ink box must stay roughly one line tall. A
+    // regression that re-introduces a narrower DOM wrap column (the round-4
+    // bug) would silently draw a 2nd line here, inflating this past 1.3x —
+    // the same threshold round 3's test uses in the opposite direction.
+    const titleFontPx = await page
+      .locator('[data-slot="title"] [data-baseline-y]')
+      .evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize));
+    expect(
+      titleBox.height,
+      `expected "Rowan Castellini" to render as a SINGLE line at the broadcast composition's title size ` +
+        `(it fits the intended ${FRAME_W}px-frame wrap column) — a height this large means the DOM silently ` +
+        're-wrapped it to 2 lines despite layout() reserving 1 (the round-4 shrink-to-fit regression)'
+    ).toBeLessThanOrEqual(titleFontPx * 1.3);
+
+    // No vertical overlap anywhere in the stack.
+    expect(
+      titleBox.y + titleBox.height,
+      'title ink box must not extend past fact1 (position) ink box top'
+    ).toBeLessThanOrEqual(fact1Box.y);
+    expect(
+      fact1Box.y + fact1Box.height,
+      'fact1 (position) ink box must not extend past fact2 (team) ink box top'
+    ).toBeLessThanOrEqual(fact2Box.y);
+  });
+});
 
 test.describe('T5180 text engine parity — backend renderer vs RichText.jsx', () => {
   for (const font of FONT_KEYS) {

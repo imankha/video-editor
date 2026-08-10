@@ -69,18 +69,23 @@ describe('RichText', () => {
     expect(el.style.fontSize).toBe(`${expectedPx}px`);
   });
 
-  it('maps maxWidth to a pixel maxWidth = spec.maxWidth * boxWidth', () => {
+  it('maps maxWidth to a pixel wrap column = spec.maxWidth * boxWidth', () => {
+    // T6640 round 4: the wrap column is a fixed CSS `width`, not `maxWidth` --
+    // `maxWidth` let a center-anchored wrapper's shrink-to-fit column collapse
+    // to roughly half the intended value (design docs/plans/tasks/T6640-design.md
+    // §1 round 4), silently re-wrapping text `layout()` had already reserved
+    // height for. See RichText.jsx's wrapperStyle comment.
     const spec = baseSpec({ text: 'WRAPPED', maxWidth: 0.5 });
     render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
     const el = screen.getByText('WRAPPED');
-    // maxWidth may be set on the text node itself or an ancestor wrapper -- walk up to find it.
+    // width may be set on the text node itself or an ancestor wrapper -- walk up to find it.
     let node = el;
-    let foundMaxWidth = null;
-    while (node && foundMaxWidth === null) {
-      if (node.style && node.style.maxWidth) foundMaxWidth = node.style.maxWidth;
+    let foundWidth = null;
+    while (node && foundWidth === null) {
+      if (node.style && node.style.width) foundWidth = node.style.width;
       node = node.parentElement;
     }
-    expect(foundMaxWidth).toBe(`${spec.maxWidth * BOX_WIDTH}px`);
+    expect(foundWidth).toBe(`${spec.maxWidth * BOX_WIDTH}px`);
   });
 
   it('maps position.x/y into left/top pixel offsets scaled by boxWidth/boxHeight', () => {
@@ -219,5 +224,69 @@ describe('RichText', () => {
     );
 
     expect(expectedLargeStrokePx).toBeCloseTo(expectedSmallStrokePx * 2, 5);
+  });
+
+  describe('T6640 round 3 — spec.lines passthrough (single-wrap-decision fix)', () => {
+    // Root cause (design docs/plans/tasks/T6640-design.md §1): the card preview
+    // computes a title's wrapped line count TWICE — once in
+    // introCardPreviewElements.js::layout (to reserve height) and once again here
+    // in RichText via its own wrapLines() call — with different inputs and
+    // different settle loops, so the two can disagree on line count at a wrap
+    // boundary and the second line lands on top of the fact below it. The fix
+    // (design §2 Option 1): layout() emits the ALREADY-COMPUTED `lines: string[]`
+    // into the TextSpec; RichText renders those verbatim when supplied, instead
+    // of re-deriving them from spec.text. This is a plumbing/code-path assertion
+    // (does RichText take the shortcut?), not a real-font-metrics claim — jsdom
+    // has no FontFaceSet API so it cannot prove the collision itself is fixed
+    // (that's e2e/T5180-text-parity.spec.js's job, real browser only).
+
+    it('renders spec.lines verbatim when supplied, instead of re-deriving them from spec.text', () => {
+      // Supply a `lines` split that a fresh wrapLines(spec.text, ...) call would
+      // NOT produce on its own (jsdom's wrapLines fallback returns
+      // text.split('\n') -- i.e. it only "wraps" on literal newlines already in
+      // spec.text). By putting NO newline in spec.text but supplying a
+      // pre-broken `lines` array that DOES contain a break, the only way the
+      // rendered output can contain that break is if RichText took the
+      // shortcut and rendered the supplied `lines` rather than recomputing.
+      const spec = baseSpec({ text: 'ANASTASIA WINTERGREEN', lines: ['ANASTASIA', 'WINTERGREEN'] });
+      const { container } = render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
+      const el = container.querySelector('[data-baseline-y]');
+      // whiteSpace: pre-line renders the joined lines with the \n between them
+      // as a visible line break -- textContent still exposes the raw text node.
+      expect(el.textContent).toBe('ANASTASIA\nWINTERGREEN');
+      // Never re-wrapped the ORIGINAL text.split('\n') fallback (which would
+      // have produced a single line, since spec.text has no literal \n).
+      expect(el.textContent).not.toBe('ANASTASIA WINTERGREEN');
+    });
+
+    it('renders a single line unchanged when spec.lines has one entry', () => {
+      const spec = baseSpec({ text: 'GOAL', lines: ['GOAL'] });
+      render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
+      expect(screen.getByText('GOAL')).toBeTruthy();
+    });
+
+    it('falls back to computing its own wrap when spec.lines is absent (Overlay rail regression guard)', () => {
+      // The Overlay text rail (TextSpecEditor-driven free text) never supplies
+      // `lines` -- only the card preview's layout() mirror does. Without a
+      // `lines` array RichText must behave EXACTLY as it does today: derive
+      // the line split itself via wrapLines(spec.text, ...). jsdom's wrapLines
+      // fallback is text.split('\n'), so an explicit '\n' in spec.text must
+      // still render as two lines when `lines` is omitted.
+      const spec = baseSpec({ text: 'FIRST LINE\nSECOND LINE' });
+      delete spec.lines;
+      const { container } = render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
+      const el = container.querySelector('[data-baseline-y]');
+      expect(el.textContent).toBe('FIRST LINE\nSECOND LINE');
+    });
+
+    it('falls back to its own wrap when spec.lines is an empty array (treated as "not supplied")', () => {
+      // Guards against a caller accidentally passing `lines: []` (e.g. a
+      // filtered-to-empty case) silently rendering blank text instead of
+      // falling back -- an empty array is not a valid pre-wrap, so RichText
+      // must still derive lines from spec.text itself.
+      const spec = baseSpec({ text: 'FALLBACK', lines: [] });
+      render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
+      expect(screen.getByText('FALLBACK')).toBeTruthy();
+    });
   });
 });

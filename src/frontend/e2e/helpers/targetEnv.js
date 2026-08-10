@@ -154,12 +154,16 @@ export const LOCAL_ONLY_SPECS = [
   {
     file: 'T5180-text-parity.spec.js',
     category: 'seam',
-    depends: ['/api/test/render-text-bbox', '/debug/rich-text (dev-only route, main.jsx)'],
+    depends: [
+      '/api/test/render-text-bbox',
+      '/debug/rich-text (dev-only route, main.jsx)',
+      '/debug/intro-card (dev-only route, main.jsx — T6640 round 3)',
+    ],
     reason:
       'rich-text engine parity test bridges the backend renderer to RichText.jsx via ' +
-      'the dev/local-only /api/test/render-text-bbox seam and a dev-only /debug/rich-text ' +
-      'mount (gated on import.meta.env.DEV, never present in a deployed BUILD) — neither ' +
-      'exists on staging/prod.',
+      'the dev/local-only /api/test/render-text-bbox seam and dev-only /debug/rich-text ' +
+      '+ /debug/intro-card mounts (gated on import.meta.env.DEV, never present in a ' +
+      'deployed BUILD) — none exist on staging/prod.',
   },
   {
     file: 'T5180-qa-evidence.spec.js',

@@ -8,7 +8,6 @@ matrix onto named tests:
   surgical update (one field) ........ test_surgical_update_touches_one_field
   set default twice (one survives) ... test_set_default_twice_leaves_one
   delete a card a reel points at ..... test_delete_nulls_referencing_reels
-  invalid TextSpec -> 400 ............ test_create_invalid_textspec_400
   invalid treatment -> 400 ........... test_create_invalid_treatment_400
   focal NULL stays NULL .............. test_create_focal_null_stays_null
   focal out of range -> 400 .......... test_create_focal_out_of_range_400
@@ -67,17 +66,6 @@ def _connect(path):
     return conn
 
 
-def _valid_textspec(text="Hero"):
-    return {
-        "text": text,
-        "font": "anton",
-        "size": 0.12,
-        "color": "#ffffff",
-        "position": {"x": 0.5, "y": 0.4},
-        "maxWidth": 0.8,
-    }
-
-
 async def _create(**overrides):
     from app.routers.intro_cards import CreateIntroCardRequest, create_intro_card
 
@@ -109,7 +97,6 @@ async def test_create_read(db):
 
     created = await _create(
         name="My Card", shown_fields=["position", "class"], title_text="Big Game",
-        text_elements={"title": _valid_textspec()},
     )
     assert created["id"] > 0
     assert created["name"] == "My Card"
@@ -118,7 +105,6 @@ async def test_create_read(db):
     assert "is_default" not in created
     # No photo -> title-only regardless of 2 facts.
     assert created["composition"] == COMPOSITION_TITLE_ONLY
-    assert created["text_elements"]["title"]["text"] == "Hero"
 
     listed = await list_intro_cards()
     assert len(listed["cards"]) == 1
@@ -305,15 +291,6 @@ async def test_create_invalid_shown_field_400(db):
 
 
 @pytest.mark.asyncio
-async def test_create_invalid_textspec_400(db):
-    bad = _valid_textspec()
-    bad["font"] = "comic-sans"  # unknown FontKey
-    with pytest.raises(HTTPException) as exc:
-        await _create(text_elements={"title": bad})
-    assert exc.value.status_code == 400
-
-
-@pytest.mark.asyncio
 async def test_create_focal_out_of_range_400(db):
     with pytest.raises(HTTPException) as exc:
         await _create(focal_x=1.5)
@@ -359,18 +336,6 @@ async def test_create_focal_null_stays_null(db):
     ).fetchone()
     conn.close()
     assert row["focal_x"] is None and row["focal_y"] is None and row["zoom"] is None
-
-
-@pytest.mark.asyncio
-async def test_update_invalid_textspec_400(db):
-    from app.routers.intro_cards import UpdateIntroCardRequest, update_intro_card
-
-    c = await _create()
-    bad = _valid_textspec()
-    bad["size"] = 5.0  # out of range (> 0.5)
-    with pytest.raises(HTTPException) as exc:
-        await update_intro_card(c["id"], UpdateIntroCardRequest(text_elements={"t": bad}))
-    assert exc.value.status_code == 400
 
 
 # ---------------------------------------------------------------------------

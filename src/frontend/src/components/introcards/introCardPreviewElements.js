@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { geometryFor, ROLE_FOR_SLOT, MUTED_COLOR, STAGGER_ORDER } from '../../utils/introCardGeometry';
-import { wrapLines, measureFontMetricsPx } from '../RichText';
+import { wrapLines, measureFontMetricsPx, resolveFontFamily, getFontManifest } from '../RichText';
 import { treatmentAccent } from './introCardVisual';
 import { TITLE_SLOT, SUBTITLE_SLOT } from './introCardEditorConstants';
 
@@ -36,14 +36,17 @@ export function resolveTitleText(card, profile) {
 // backend. Same rhythm-gap rule, same shrink-to-fit title, same bottom/centre
 // anchor math — see the Python module's "MEASURED LAYOUT" docstring section for
 // the full algorithm writeup and the collision-safety argument. Font metrics
-// use the BARE font key as the CSS family (the @font-face rules register that
-// exact family name — `RichText.jsx::injectFontFaces`) and a fixed weight 400
-// (RichText's own fallback when a manifest entry isn't available) — this is a
-// LIVE-PREVIEW approximation; the backend render is authoritative, and runtime
-// agreement between this preview and the actual `<RichText>` output is proven
-// by the extended `e2e/T5180-text-parity.spec.js` (T6640 §2c), not by this
-// module needing pixel-exact metrics before the font has visually settled.
-const PREVIEW_FONT_WEIGHT = 400;
+// resolve the REAL fallback-chain family (`RichText.resolveFontFamily`) and
+// the REAL manifest weight (falling back to the bare key / weight 400 only
+// while the one-time manifest fetch hasn't resolved yet — `RichText`'s own
+// fallback for the same case) — round 3 replaced the earlier bare-key/
+// hardcoded-400 approximation, since this module's wrap decision is now the
+// SINGLE authoritative one (see `lines` below), not a second guess RichText
+// re-derives independently.
+function weightFor(fontKey, manifest) {
+  const entry = manifest && manifest[fontKey];
+  return entry ? entry.weight : 400;
+}
 
 function gapBetween(prevRole, role, reflow) {
   if (prevRole == null) return 0;
@@ -52,37 +55,44 @@ function gapBetween(prevRole, role, reflow) {
   return reflow.gapGroup;
 }
 
-function fitTitle(text, typo, frameW, frameH, maxWidthFrac) {
+function fitTitle(text, typo, family, weight, frameW, frameH, maxWidthFrac) {
   let size = typo.size;
   const maxPx = maxWidthFrac * frameW;
   const step = 0.002;
   while (size > typo.minSize) {
     const px = Math.max(Math.round(size * frameH), 1);
-    const lines = wrapLines(text, typo.font, px, PREVIEW_FONT_WEIGHT, maxPx);
-    if (lines.length <= typo.maxLines) return { size, lines: lines.length };
+    const lines = wrapLines(text, family, px, weight, maxPx);
+    if (lines.length <= typo.maxLines) return { size, lines };
     size = Math.round((size - step) * 10000) / 10000;
   }
   const px = Math.max(Math.round(typo.minSize * frameH), 1);
-  return { size: typo.minSize, lines: wrapLines(text, typo.font, px, PREVIEW_FONT_WEIGHT, maxPx).length };
+  return { size: typo.minSize, lines: wrapLines(text, family, px, weight, maxPx) };
 }
 
-function countLines(text, sizeFrac, fontKey, frameW, frameH, maxWidthFrac) {
+function wrapForRole(text, sizeFrac, family, weight, frameW, frameH, maxWidthFrac) {
   const px = Math.max(Math.round(sizeFrac * frameH), 1);
-  return wrapLines(text, fontKey, px, PREVIEW_FONT_WEIGHT, maxWidthFrac * frameW).length;
+  return wrapLines(text, family, px, weight, maxWidthFrac * frameW);
 }
 
-function advanceFrac(sizeFrac, fontKey, frameH) {
+function advanceFrac(sizeFrac, family, weight, frameH) {
   const px = Math.max(Math.round(sizeFrac * frameH), 1);
-  const { ascentPx, descentPx } = measureFontMetricsPx(fontKey, px, PREVIEW_FONT_WEIGHT);
+  const { ascentPx, descentPx } = measureFontMetricsPx(family, px, weight);
   return (ascentPx + descentPx) / frameH;
 }
 
 /**
  * Compute the measured, anchored text stack. `elements` is an ORDERED list of
  * `[slot, text]` pairs already filtered to what will render, in STAGGER_ORDER.
- * Returns `{slot: {x, y, size, align, maxWidth, font, color, shadow}}` — every
- * field a full TextSpec needs, so the caller no longer merges any per-card
- * styling. Mirrors `intro_card_geometry.layout` field-for-field.
+ * Returns `{slot: {x, y, size, align, maxWidth, font, color, shadow, lines}}`
+ * — every field a full TextSpec needs, so the caller no longer merges any
+ * per-card styling. Mirrors `intro_card_geometry.layout` field-for-field.
+ *
+ * `lines` (T6640 round 3) is the ALREADY-WRAPPED text this function used to
+ * reserve height for the element — `RichText` renders it verbatim instead of
+ * re-deriving its own wrap, so the reserved height and the rendered height
+ * can no longer disagree (design docs/plans/tasks/T6640-design.md §2 Option 1;
+ * `lines` is preview-only and additive, NOT part of the `introCardGeometry.js`
+ * parity contract — see design §3).
  * @param {string} composition @param {string} aspect
  * @param {[string, string][]} elements
  * @param {string} accent @param {number} frameW @param {number} frameH
@@ -90,27 +100,30 @@ function advanceFrac(sizeFrac, fontKey, frameH) {
 export function layout(composition, aspect, elements, accent, frameW, frameH) {
   const geo = geometryFor(composition, aspect);
   const { reflow, typography } = geo;
+  const manifest = getFontManifest();
 
   const measured = [];
   let prevRole = null;
   for (const [slot, text] of elements) {
     const role = ROLE_FOR_SLOT[slot];
     const rt = typography[role];
+    const family = resolveFontFamily(rt.font, manifest);
+    const weight = weightFor(rt.font, manifest);
     let size;
     let lines;
     if (role === 'title') {
-      ({ size, lines } = fitTitle(text, rt, frameW, frameH, reflow.maxWidth));
+      ({ size, lines } = fitTitle(text, rt, family, weight, frameW, frameH, reflow.maxWidth));
     } else {
       size = rt.size;
-      lines = countLines(text, size, rt.font, frameW, frameH, reflow.maxWidth);
+      lines = wrapForRole(text, size, family, weight, frameW, frameH, reflow.maxWidth);
     }
-    const advance = advanceFrac(size, rt.font, frameH);
+    const advance = advanceFrac(size, family, weight, frameH);
     const gap = gapBetween(prevRole, role, reflow);
     measured.push({ slot, role, rt, size, lines, advance, gap });
     prevRole = role;
   }
 
-  const total = measured.reduce((s, m) => s + m.lines * m.advance + m.gap, 0);
+  const total = measured.reduce((s, m) => s + m.lines.length * m.advance + m.gap, 0);
   const top = reflow.anchorMode === 'bottom' ? reflow.anchorFrac - total : reflow.anchorFrac - total / 2;
 
   const out = {};
@@ -120,9 +133,9 @@ export function layout(composition, aspect, elements, accent, frameW, frameH) {
     const color = (m.role === 'title' || m.role === 'primary') ? accent : MUTED_COLOR;
     out[m.slot] = {
       x: reflow.anchorX, y, size: m.size, align: reflow.align, maxWidth: reflow.maxWidth,
-      font: m.rt.font, color, shadow: m.rt.shadow,
+      font: m.rt.font, color, shadow: m.rt.shadow, lines: m.lines,
     };
-    y += m.lines * m.advance;
+    y += m.lines.length * m.advance;
   }
   return out;
 }
@@ -139,6 +152,10 @@ function specFromLayout(text, pos) {
     animation: 'none',
     shadow: pos.shadow,
     stroke: { width: 0, color: '#000000' },
+    // T6640 round 3 — the single wrap decision `layout()` already made to
+    // reserve this element's height; `RichText` renders it verbatim. See
+    // `layout()`'s docstring above.
+    lines: pos.lines,
   };
 }
 

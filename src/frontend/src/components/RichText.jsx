@@ -106,9 +106,23 @@ function useFontFaces() {
   return manifest;
 }
 
-function resolveFontFamily(fontKey, manifest) {
+// Exported (T6640 round 3) so `introCardPreviewElements.js`'s measured
+// card-layout mirror can resolve the SAME family string this component uses
+// (the real fallback chain, not a bare font key) for its wrap decision.
+export function resolveFontFamily(fontKey, manifest) {
   const chain = (manifest && manifest[fontKey] && manifest[fontKey].fallback) || [];
   return [`"${fontKey}"`, ...chain].join(', ');
+}
+
+/**
+ * The font manifest, once fetched (module-level cache, see `injectFontFaces`
+ * above) — null before the one-time fetch resolves. Exported (T6640 round 3)
+ * so `introCardPreviewElements.js` can resolve the same manifest weight this
+ * component uses for its wrap decision, without a second fetch or a React
+ * hook (it's called from a plain function, not a component).
+ */
+export function getFontManifest() {
+  return injectFontFaces._manifest || null;
 }
 
 /**
@@ -241,10 +255,22 @@ export function wrapLines(text, fontFamily, fontPx, fontWeight, maxPx) {
 // ascent/descent metrics (both read from the same canvas `ctx.font`), so
 // recomputing wrap alongside metrics (not on a separate timer) keeps the two
 // from settling at different moments.
-function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthPx, maxFrames = 30) {
+//
+// T6640 round 3: `presetLines`, when a NON-EMPTY array, is the pre-broken
+// line list the card layout mirror (`introCardPreviewElements.js::layout`)
+// already computed to RESERVE height for this element. Rendering those
+// verbatim — instead of this hook re-deriving its own wrap from `text` — is
+// what makes the reserved height and the rendered height read the IDENTICAL
+// line count by construction, closing the double-wrap collision (design
+// docs/plans/tasks/T6640-design.md §2 Option 1). An empty array is treated
+// as "not supplied" (not a valid pre-wrap) so a caller can't accidentally
+// blank the text. Ascent/descent are still measured locally either way —
+// only the line COUNT/TEXT is shared, not the metric.
+function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthPx, presetLines, maxFrames = 30) {
+  const hasPresetLines = Array.isArray(presetLines) && presetLines.length > 0;
   const measure = () => ({
     ...measureFontMetricsPx(fontFamily, fontPx, fontWeight),
-    lines: wrapLines(text, fontFamily, fontPx, fontWeight, maxWidthPx),
+    lines: hasPresetLines ? presetLines : wrapLines(text, fontFamily, fontPx, fontWeight, maxWidthPx),
   });
   const [metrics, setMetrics] = useState(measure);
 
@@ -277,7 +303,7 @@ function useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, text, maxWidthP
       if (rafId) cancelAnimationFrame(rafId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fontFamily, fontPx, fontWeight, text, maxWidthPx, maxFrames]);
+  }, [fontFamily, fontPx, fontWeight, text, maxWidthPx, presetLines, maxFrames]);
 
   return metrics;
 }
@@ -308,7 +334,9 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   const shadowRgba = hexToRgba(spec.shadow.color, effectiveShadowOpacity);
   const textShadow = effectiveShadowOpacity > 0 ? `0 0 ${blurPx}px ${shadowRgba}` : 'none';
 
-  const { ascentPx, descentPx, lines } = useSettledFontMetricsPx(fontFamily, fontPx, fontWeight, spec.text, maxWidthPx);
+  const { ascentPx, descentPx, lines } = useSettledFontMetricsPx(
+    fontFamily, fontPx, fontWeight, spec.text, maxWidthPx, spec.lines
+  );
   const baselineY = topPx + ascentPx;
   // Matches the backend's line advance exactly (design §6 step 2:
   // `line_advance = ascent + descent`, never the browser's own guess at
@@ -319,10 +347,25 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   // anchor per align: left -> left edge at leftPx, center -> centered on
   // leftPx, right -> right edge at leftPx. Mirrors the backend's anchor
   // resolution (design §6 step 4).
+  // T6640 round 4: a FIXED `width`, not `maxWidth`. For an absolutely
+  // positioned box, CSS shrink-to-fit resolves an unconstrained dimension as
+  // min(max(min-content, available), max-content), where `available` is the
+  // CONTAINING BLOCK width minus `left` — for a center-anchored element
+  // (leftPx typically ~0.5 * boxWidth) that collapses to roughly HALF of
+  // maxWidthPx, not maxWidthPx itself. `lines` arriving here is ALREADY the
+  // final wrap decision (either `spec.lines` from the card layout mirror, or
+  // this hook's own `wrapLines` call) — the wrapper must never re-derive a
+  // narrower column and re-wrap it, which is exactly what `maxWidth` let
+  // happen (diagnosed live: a center-anchored 1080-wide frame gave a 540px
+  // shrink-to-fit column instead of the intended 907px one, silently
+  // re-wrapping a title `layout()` had already reserved as 1 line into 2,
+  // dropping the second line onto the fact below it). `width` fixes the
+  // column at exactly `maxWidthPx` regardless of `left`, matching the
+  // backend's `wrap_lines(..., spec.maxWidth * frame_w)` column exactly.
   const wrapperStyle = {
     position: 'absolute',
     top: `${topPx}px`,
-    maxWidth: `${maxWidthPx}px`,
+    width: `${maxWidthPx}px`,
     textAlign: spec.align,
     fontFamily,
     ...(spec.align === 'left' && { left: `${leftPx}px` }),
@@ -333,21 +376,21 @@ export function RichText({ spec, boxWidth, boxHeight }) {
     }),
   };
 
-  // display:inline (not inline-block) + whiteSpace:pre-line (not pre-wrap) —
-  // T5180 parity-test diagnosis. The wrapper div's `maxWidth` makes it
-  // shrink-to-fit at whatever's SMALLER of the content's natural width and
-  // maxWidth; once the text needs to wrap, the CSS shrink-to-fit formula
-  // (min(max(min-content, available), max-content)) resolves to the full
-  // available width, NOT the widest actually-rendered line — so an
-  // inline-block span measured via getBoundingClientRect reports the
-  // CONTAINER's width, not the text's. A plain `inline` span instead lets
+  // display:inline (not inline-block) + whiteSpace:pre (not pre-line) —
+  // T5180/T6640 parity-test diagnosis. A plain `inline` span lets
   // getClientRects()/getBoundingClientRect() report the tight union of the
-  // real per-line fragment boxes (still wraps at the parent's maxWidth,
-  // same visual layout). `pre-wrap` also visibly preserves the space that
-  // caused a soft wrap as its own trailing fragment on the line before it,
-  // inflating that union box further; `pre-line` collapses it like `normal`
-  // (while still honouring explicit \n, which is all this component needs
-  // whitespace preservation for).
+  // real per-line fragment boxes, rather than an inline-block span's
+  // CONTAINER width. `pre` (not `pre-line`/`pre-wrap`): `lines` is ALWAYS
+  // pre-broken by this point (preset from the card layout mirror, or this
+  // hook's own `wrapLines` call above) — the DOM must never own a wrap
+  // decision at all, only render the explicit `\n` breaks already chosen.
+  // `pre-line` still lets the browser soft-wrap WITHIN a "line" if the fixed
+  // `width` above and the browser's own metrics disagree by even a
+  // sub-pixel, silently re-introducing the exact double-wrap class of bug
+  // `width` above just closed; `pre` makes any such disagreement overflow
+  // (clipped by the outer overflow:hidden box, matching the backend's
+  // Pillow canvas, which never re-wraps an over-wide line either) instead of
+  // inserting an unreserved extra line.
   const textStyle = {
     fontSize: `${fontPx}px`,
     fontWeight,
@@ -356,7 +399,7 @@ export function RichText({ spec, boxWidth, boxHeight }) {
     color: spec.color,
     textShadow,
     WebkitTextStroke: `${strokePx}px ${spec.stroke.color}`,
-    whiteSpace: 'pre-line',
+    whiteSpace: 'pre',
     margin: 0,
     display: 'inline',
     lineHeight: `${lineHeightPx}px`,

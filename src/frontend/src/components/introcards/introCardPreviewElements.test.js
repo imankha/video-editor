@@ -159,6 +159,51 @@ function allSubsets(items) {
   );
 }
 
+// =============================================================================
+// T6640 round 3 — layout() emits the wrapped `lines` it used to reserve height
+// (design §2 Option 1, §3). This closes the double-wrap: RichText renders these
+// verbatim instead of re-deriving its own line count from spec.text, so the
+// reserved height and the rendered height can no longer disagree. This is a
+// STRUCTURAL check (does the lines array agree with the height math?), not a
+// pixel/collision claim -- real-font wrap agreement is proven in the real
+// browser by e2e/T5180-text-parity.spec.js, jsdom has no real <canvas>.
+// =============================================================================
+describe('layout — emits the wrapped `lines` it used for height reservation (T6640 round 3)', () => {
+  it('every produced spec carries a `lines` array whose length matches the reserved line count', () => {
+    // jsdom's wrapLines fallback is text.split('\n') (RichText.jsx), so an
+    // explicit '\n' in the title text is what forces >1 line here -- same
+    // technique the existing invariance test above already relies on.
+    const positions = layout(
+      'broadcast', '9:16',
+      [['title', 'Anastasia\nWintergreen'], ['fact1', 'Midfielder'], ['fact2', '2027']],
+      '#f7e28b', FRAME_W, FRAME_H,
+    );
+    expect(positions.title.lines).toEqual(['Anastasia', 'Wintergreen']);
+    expect(positions.title.lines).toHaveLength(2);
+    expect(positions.fact1.lines).toEqual(['Midfielder']);
+    expect(positions.fact1.lines).toHaveLength(1);
+  });
+
+  it('buildPreviewElements forwards `lines` onto each element spec (so RichText can consume it)', () => {
+    const card = { treatment: 'gold', shown_fields: ['position'] };
+    const profile = { full_name: 'Anastasia\nWintergreen', position: 'Midfielder' };
+    const els = buildPreviewElements(card, profile, 'broadcast', '9:16', FRAME_W, FRAME_H);
+    const title = els.find((e) => e.slot === 'title');
+    expect(title.spec.lines).toEqual(['Anastasia', 'Wintergreen']);
+    const fact1 = els.find((e) => e.slot === 'fact1');
+    expect(fact1.spec.lines).toEqual(['Midfielder']);
+  });
+
+  it('single-line text produces a `lines` array of length 1, not the bare unwrapped string', () => {
+    const positions = layout(
+      'broadcast', '9:16',
+      [['title', 'Maya'], ['fact1', 'Midfielder']],
+      '#f7e28b', FRAME_W, FRAME_H,
+    );
+    expect(positions.title.lines).toEqual(['Maya']);
+  });
+});
+
 describe('buildPreviewElements — exhaustive fact-subset x aspect matrix never collides', () => {
   const LONG_NAME = 'Anastasia\nWintergreen'; // invented, no PII; \n forces the jsdom-fallback wrap
   const longCard = { treatment: 'gold' };
