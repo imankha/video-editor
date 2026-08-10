@@ -93,6 +93,17 @@ DURABLE_SYNC_FAILED_RESPONSE = {
 }
 
 
+def set_durable_sync_failure_response(request: Request, payload: dict) -> None:
+    """Route-specific 503 body for a durable-sync failure. The generic
+    DURABLE_SYNC_FAILED_RESPONSE lies for routes that already committed part of
+    their work (T6350: move-to-profile has copied+synced the TARGET and locally
+    deleted the SOURCE by the time the source-side durable sync fails — "not
+    moved" is false there). A handler sets this ONLY after the portion of its
+    work that already durably committed, so any earlier abort keeps the truthful
+    generic payload. Same ASGI scope as the middleware -> visible there."""
+    request.state.durable_sync_failed_response = payload
+
+
 async def durable_sync(request: Request) -> None:
     """FastAPI dependency: opt a write route into sync-before-respond (T4050).
 
@@ -898,9 +909,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                             f"returning 503 user={user_id}"
                             f"{(' req_id=' + req_id) if req_id else ''}"
                         )
+                        # T6350: a multi-phase handler that already durably
+                        # committed part of its work can register a truthful
+                        # per-route body via set_durable_sync_failure_response;
+                        # fall back to the generic (correct for single-phase
+                        # gestures). Build a NEW dict — DURABLE_SYNC_FAILED_RESPONSE
+                        # is module-level; mutating it would leak across requests.
+                        payload = getattr(
+                            request.state, "durable_sync_failed_response", None
+                        ) or DURABLE_SYNC_FAILED_RESPONSE
                         return JSONResponse(
                             status_code=503,
-                            content=DURABLE_SYNC_FAILED_RESPONSE,
+                            content={**payload, "sync_state": sync_status},
                         )
                 else:
                     # T3250: Fire sync as background task — response returns

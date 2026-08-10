@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-08-10 (T6350: **the generic `DURABLE_SYNC_FAILED_RESPONSE` LIES for a MULTI-PHASE durable handler.** `move_reels_to_profile` copies+durably-syncs the TARGET profile (phase 1), locally commits the SOURCE-row delete (phase 2, `conn.commit()`), and deletes the SOURCE media (phase 3) BEFORE the middleware runs the SOURCE-side `durable_sync` (which happens AFTER the handler returns 200). When THAT source sync fails/conflicts the middleware discarded the 200 and returned the fixed "Your reel was not moved" body — FALSE: the target copy is already durable in R2, and the source rows/media are already gone locally. FIX: a per-route override, `set_durable_sync_failure_response(request, payload)` (db_sync.py, next to `DURABLE_SYNC_FAILED_RESPONSE`), stashes a truthful body on `request.state`; the middleware's 503 branch now returns `{**(request.state.durable_sync_failed_response or DURABLE_SYNC_FAILED_RESPONSE), "sync_state": sync_status}` (BUILD A NEW DICT — the module-level default must never be mutated). The move handler sets the override (`code=move_source_cleanup_failed`, `target_committed=True`, flat shape) ONLY after the phase-2 commit, so a phase-0/1 abort still serves the honest generic "nothing moved". Because re-running the MOVE gesture can't recover once phase 3 deleted the source media (phase 0 then 502s), the actual "idempotent retry" is a NEW endpoint `POST /api/downloads/move-to-profile/finish` that re-runs ONLY the source cleanup (`_delete_moved_source_rows`, extracted + shared), after proving each reel is present in the TARGET by `filename` (per-user hash; ids differ across profiles) — unproven -> 409, delete nothing. A phase-1 filename-existence guard (skip a target INSERT whose `filename` already exists; skipped rows NOT added to `inserted_target_ids`) makes a re-issued move idempotent. **KNOWN follow-up (NOT fixed here):** `POST /clips/raw/save`, `PUT/DELETE /clips/raw/{id}`, `POST /api/games/finalize-upload`, `POST /api/profiles` are single-phase today so the generic body is CORRECT for them — but any future multi-phase work on those must set an override too. See T6350 section.)
 updated: 2026-08-03 (T6402: **a machine could CAS-conflict with its OWN write.** The version decision (baseline read -> HEAD -> refuse) ran entirely OUTSIDE the upload lock that serialises the PUT, so two concurrent syncs of the SAME db in ONE process interleaved: A reads baseline v2734; B reads v2734, HEADs v2734, takes the lock, PUTs v2735, advances the baseline; A's HEAD then sees v2735 > v2734 and refuses. Both upload the SAME file on disk, so A's "stale" copy already contained B's data -- a false conflict against ITSELF. Concurrency per user is BY DESIGN (`db_sync.py`: "fire-and-forget `_background_sync` tasks are not serialised per user"); T5870 round 2 gave the RE-DRAIN a non-blocking lock probe but the PRIMARY sync path never got the equivalent guard for its decision. Cost: false "edits aren't saving" banner + `schedule_profile_db_reheal` forcing a FULL profile.sqlite re-download on the next request (the "My Reels took forever to load" symptom), plus a narrow silent-loss window -- rows COMMITTED after the winner's PUT but before the loser's HEAD are refused and then DISCARDED by the re-heal (T6160 decision 2). FIX, two halves: (1) the decision + WAL checkpoint + PUT now all run INSIDE the upload lock (also closes the reverse interleave where both syncs HEAD the same version and PUT the same new_version = a version collision other machines' CAS relies on); (2) `_OWN_UPLOAD_VERSIONS` records the version THIS PROCESS last PUT per R2 key, written under the lock BEFORE releasing, and the refusal is skipped when `r2_version == our own recorded version`. EQUALITY, not a range -- a foreign writer always lands strictly ABOVE our own version and still refuses; an unconfirmed (None) baseline is never rescued; the BASELINE IS NEVER MUTATED so `new_version` arithmetic is unchanged for every caller (mutating it broke 11 existing tests -- that approach was rejected). The caller's `set_local_db_version` happens AFTER the primitive returns, i.e. OUTSIDE the lock, which is exactly why re-reading the baseline under the lock does NOT close this race and the own-upload record is required. Accepted trade-off: the lock is now held across the HEAD (~50-100ms) and the checkpoint (<=2s busy timeout), so the middleware's `lock_timeout=0.5s` deferral may fire slightly more often -- a deferral is benign (marks pending, healed by the re-drain), a false conflict was not. See T6402 section.)
 updated: 2026-08-03 (T6390: the `.sync_conflict`/`.sync_failed` markers are now PER-SCOPE files (`.sync_{kind}.{scope}`, scope = `USER_DB_SCOPE="user"` or the profile_id) carrying a JSON DIAG payload, not per-USER files with a bare `str(time.time())`. Fixes a real defect: a success on ONE db (`clear_sync_conflict(user_id)`) silently ERASED a live conflict on ANOTHER — incl. `retry_pending_sync`'s deterministic SELF-STOMP (profile marks conflict, user-branch success cleared it → a non-retryable CAS conflict was blind-retried by `_redrain` to exhaustion and mislabelled `failed`). Now cleared PER SCOPE; `has_sync_conflict` = ANY scope; the T4310 post-gather reassertion is DELETED (scoping makes the race impossible). `retry_pending_sync` returns an aggregate `SyncResult` (not bool) and `_redrain_failed_sync` decides "stop, CAS conflict" from that RETURN VALUE, not a marker file. DIAGNOSTICS: markers carry `reason`(stale_baseline|unconfirmed_baseline|upload_failed|checkpoint_busy|legacy) + db/profile_id/loaded/r2/machine/req_id/method/path/writer/written_at; storage.py stamps `db-writer`(machine/req_id)+`db-written-at` on every upload and reads them from the conflict HEAD (get_db_version_from_r2 return_metadata=True — ZERO extra R2 calls); the `[SYNC_CONFLICT]` CRITICAL now names req_id/method/path/writer/reason (method/path via new `_current_method`/`_current_path` ContextVars set in dispatch); `read_sync_diag` renders the winning marker into the `X-Sync-Diag` header (ADDED to main.py:217 `expose_headers` — invisible cross-origin otherwise); client `checkSyncStatus` logs a console.error on the TRANSITION into conflict/failed (no spam) and `retrySyncToR2` logs all 3 outcomes. Reader/legacy tolerance: `has_/read_` never raise on a legacy bare float marker. CAS guard BYTE-IDENTICAL — diagnostics only. Readers TOLERATE the legacy format. See T6390 section.)
 updated: 2026-08-02 (T6340: the profile_db MIGRATION RUNNER is now a baseline-establishing caller. `_migrate_profile_db` force-downloads the canonical R2 profile.sqlite and `shutil.move`s it over the local file; the R2 sync version lives in object metadata, NOT in the bytes, so the swapped-in file had NO db_version row → get_local_db_version()==None → CAS BLOCKING-2 refused the post-migration upload UNCONDITIONALLY → NO profile_db migration ever reached R2 on staging/prod (v030/v031 stuck). FIX: after the swap, record the DOWNLOADED copy's sync version as the confirmed baseline via set_local_db_version, atomically — `_download_profile_db` now fetches bytes+metadata in ONE get_object so no separate HEAD can observe a moved version (recording a moved version would force-push older bytes at a bumped version = clobber). CAS guard UNCHANGED (fix the caller, not the guard). r2_version now populated in error rows (was always null) via one HEAD on the FAILURE path only. `_migrate_user_db` (user.sqlite) does NOT share the defect — ensure_user_database's restore records the baseline from the same download. See T6340 section.)
@@ -178,6 +179,84 @@ scenarios unchanged and green (its download double now returns the real `(found,
 the bare-bool normalization shim in `_migrate_profile_db` was deleted — no production caller returned
 a bare bool). **Out of the container's reach (post-deploy):** staging reaching v031 in R2, and the
 prod below-head audit.
+
+## T6350 — the generic durable-sync 503 body lies for a multi-phase handler
+
+**The bug (staging repro 2026-08-02, verified against R2 not just the API):** a "Move to
+another profile" that returned `503 {"code":"sync_failed","detail":"...Your reel was not
+moved..."}` had ALREADY put both reels in the target profile durably (target R2 `final_videos=2`),
+while the source still listed them — the reel existed in BOTH profiles and the user was told it
+did not move. `move_reels_to_profile` (`routers/downloads.py`) is 4 phases: phase 0 copies media
+source→target prefix; phase 1 inserts target rows + `sync_db_to_r2_explicit(user, target)` (its
+OWN durable sync, via the `app.routers.downloads` import); phase 2 deletes source rows +
+`conn.commit()`; phase 3 deletes SOURCE-prefix media (best-effort). The SOURCE-side durable sync
+is NOT in the handler — it runs in the middleware (`db_sync.py`) AFTER the 200, via
+`Depends(durable_sync)`. When it fails/conflicts, the middleware discarded the handler response
+and returned the module-level `DURABLE_SYNC_FAILED_RESPONSE` ("not moved") — false, because phases
+1+2 already committed. Worse: phase 3 already deleted the source media, so a naive "retry the move"
+502s at phase 0 ("Nothing was moved") — no existing gesture could recover the half-applied state.
+
+**The fix (Option 3, report honestly + a completion endpoint).** Options 1 (compensate: delete
+target) and 2 (roll-forward queue) were disqualified — the source delete is already `commit()`ed
+before any sync result exists, so undoing the target leaves the reel worse off.
+
+1. **Per-route override (`db_sync.py`).** `set_durable_sync_failure_response(request, payload)`
+   stashes a truthful body on `request.state` (same ASGI scope as the middleware). The durable
+   503 branch now returns `{**(override or DURABLE_SYNC_FAILED_RESPONSE), "sync_state":
+   sync_status}`. **Landmine:** `DURABLE_SYNC_FAILED_RESPONSE` is a module-level dict — build a NEW
+   dict, never mutate it, or the override leaks across requests. `sync_state` (`ok`/`failed`/
+   `conflict`) is now appended to EVERY durable 503, override or not.
+2. **Handler (`downloads.py`).** `move_reels_to_profile` gained a `request: Request` param and sets
+   the override (`code=move_source_cleanup_failed`, `retryable=True`, `target_committed=True`,
+   `moved_ids`, `target_profile_id`; FLAT — the middleware returns it via `content=`, and
+   `useMoveReels.js` reads flat-or-nested-under-`detail`) ONLY after the phase-2 commit. A phase-0/1
+   abort keeps the honest generic "nothing moved". The phase-2 delete body is extracted to
+   `_delete_moved_source_rows(cursor, video_ids) -> int` (NULL project pointer → DELETE row →
+   `_delete_orphan_reference_games`), shared verbatim with /finish.
+3. **Idempotency guard (phase 1).** Before each target INSERT, skip a `video_id` whose `filename`
+   already exists in the target (`SELECT id FROM final_videos WHERE filename = ?` — filename is a
+   per-user hash, a sound natural key). A skipped row is NOT appended to `inserted_target_ids`, so
+   the phase-1 rollback-on-failure never deletes a row a prior attempt committed.
+4. **New endpoint `POST /api/downloads/move-to-profile/finish`** (`Depends(durable_sync)`) is the
+   real "idempotent retry": re-runs ONLY the source cleanup. Validates the sibling profile, then
+   for every requested id confirms a TARGET row matches the SOURCE row's `filename` (match by
+   filename, not id — ids differ across profiles; a source row may be re-healed back from R2). The
+   target read uses `ensure_profile_db_local(..., require_fresh=True)` — the presence proof is a
+   DESTRUCTIVE gate, so a stale local cache must not stand in for R2; if R2 can't confirm the target
+   is current (`ProfileDBRefreshFailed`) it refuses with a retryable 503 and deletes nothing (else a
+   reverted-in-R2 target could pass against a stale local copy and lose the reel from BOTH profiles).
+   Any id not provably in the target → 409 (`move_target_missing`), delete NOTHING. Otherwise
+   `_delete_moved_source_rows` + commit + set the same override. Naturally idempotent: an
+   already-deleted source row makes the DELETE a no-op, but the write is still tracked (writes are
+   tracked on the SQL verb, not rowcount), so `durable_sync` re-attempts the source upload — the
+   retry a prior /finish sync-failure needs.
+
+**Frontend.** `useMoveReels.js` branches on `code === 'move_source_cleanup_failed'` BEFORE the
+generic `sync_failed` branch, shows a sticky (`duration: 0`) `toast.error` with a "Finish removing"
+action calling `finishMove(videoIds, targetProfileId)` → /finish, returns `{partial: true}`, and
+fires a new `onPartial` cb WITHOUT `onMoved`. `DownloadsPanel.jsx`'s `onReelsMovePartial` does NOT
+optimistically remove the reels (they still live here) — it re-fetches summary/count +
+`notifyCollectionsChanged()` and clears the picker.
+
+**Known follow-up (flagged, NOT in scope):** `POST /clips/raw/save`, `PUT/DELETE /clips/raw/{id}`,
+`POST /api/games/finalize-upload`, `POST /api/profiles` still serve the generic body. They are
+SINGLE-PHASE (the whole gesture is one commit), so "not moved / not saved" is currently TRUE for
+them — no lie today. But the override mechanism now exists; any future multi-phase change on those
+routes must set a truthful override, or it reintroduces this class of lie.
+
+**Tests.** `tests/test_t6350_move_half_apply.py` drives the REAL ASGI app (httpx.ASGITransport) so
+the middleware runs — the direct-call `_move()` helper in `test_t4850_move_reels.py` bypasses it and
+can't reach phase 2. Seam: patch ONLY `app.middleware.db_sync.sync_db_to_r2_explicit` (phase-2
+source) to FAILED/CONFLICT; phase 1 uses the `app.routers.downloads` import, left real, so the
+target write is genuinely durable against FakeR2 (`MoveFakeR2` adds `copy_object`). Asserts: honest
+`move_source_cleanup_failed`+`target_committed` with NO "not moved" text and the TARGET's R2 bytes
+holding the reel (FAILED and CONFLICT differ only in `sync_state`); an unrelated durable route
+(`DELETE /downloads/{id}`) still returns the generic body (no leak); phase-1 failure still returns
+the generic + rolls back; idempotent re-move holds exactly one target row per filename; /finish
+happy-path/409/no-op. `FORCE_R2_SYNC_FAILURE` is process-global and faults phase 1 FIRST — it
+CANNOT isolate phase 2 (that's what `test_t4850`'s existing "nothing moved" test covers). No e2e
+spec for the FAILURE path: the fault seam is at the ASGI-middleware layer, not reachable cleanly
+from Playwright.
 
 ## T6402 — a process must not CAS-conflict with its own write
 

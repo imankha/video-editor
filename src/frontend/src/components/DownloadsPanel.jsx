@@ -387,7 +387,18 @@ export function DownloadsPanel({
     setMovingIds(null);
   }, [collections]);
 
-  const { moveReels, moving } = useMoveReels(onReelsMoved);
+  // T6350: a partial move (copied to the target, not yet removed here) must NOT
+  // optimistically drop the reels — they still live in this profile until the
+  // "Finish removing" action succeeds. Re-fetch so the view mirrors the server's
+  // actual state, and clear the picker/spinner. Gesture-driven refresh only.
+  const onReelsMovePartial = useCallback(() => {
+    collections.fetchSummary();
+    useGalleryStore.getState().fetchCount({ force: true });
+    useGalleryStore.getState().notifyCollectionsChanged();
+    setMovingIds(null);
+  }, [collections]);
+
+  const { moveReels, moving } = useMoveReels(onReelsMoved, onReelsMovePartial);
 
   // Native share support
   // T6300: isMobile is no longer threaded to ReelTile — the reveal gate moved to

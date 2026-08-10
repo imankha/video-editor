@@ -75,6 +75,71 @@ describe('useMoveReels', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
+  it('treats a 503 move_source_cleanup_failed as PARTIAL: sticky "Finish removing" toast, onPartial (not onMoved)', async () => {
+    apiFetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        detail: {
+          code: 'move_source_cleanup_failed',
+          target_committed: true,
+          moved_ids: [5],
+          target_profile_id: 'pB',
+        },
+      }),
+    });
+    const onMoved = vi.fn();
+    const onPartial = vi.fn();
+    const { result } = renderHook(() => useMoveReels(onMoved, onPartial));
+
+    let out;
+    await act(async () => { out = await result.current.moveReels([5], 'pB'); });
+
+    // Distinct partial result; the move is NOT reported as fully done.
+    expect(out).toEqual({ partial: true });
+    expect(onMoved).not.toHaveBeenCalled();
+    expect(onPartial).toHaveBeenCalledWith([5], 'pB');
+
+    // Sticky error toast with a "Finish removing" action.
+    expect(toast.error).toHaveBeenCalledWith(
+      'Reels only partly moved',
+      expect.objectContaining({
+        duration: 0,
+        action: expect.objectContaining({ label: 'Finish removing' }),
+      }),
+    );
+  });
+
+  it('"Finish removing" action hits the /finish endpoint and fires onMoved on success', async () => {
+    // First call: the partial 503.
+    apiFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: { code: 'move_source_cleanup_failed', moved_ids: [5], target_profile_id: 'pB' } }),
+    });
+    const onMoved = vi.fn();
+    const { result } = renderHook(() => useMoveReels(onMoved, vi.fn()));
+
+    await act(async () => { await result.current.moveReels([5], 'pB'); });
+
+    // Grab the action registered on the sticky toast.
+    const [, opts] = toast.error.mock.calls[0];
+    const finishAction = opts.action.onClick;
+
+    // The /finish call succeeds.
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, finished_ids: [5], target_profile_id: 'pB' }),
+    });
+    await act(async () => { await finishAction(); });
+
+    const finishCall = apiFetch.mock.calls.at(-1);
+    expect(finishCall[0]).toContain('/api/downloads/move-to-profile/finish');
+    expect(JSON.parse(finishCall[1].body)).toEqual({ video_ids: [5], target_profile_id: 'pB' });
+    expect(onMoved).toHaveBeenCalledWith([5], 'pB');
+  });
+
   it('surfaces the backend detail message on a 400 rejection', async () => {
     apiFetch.mockResolvedValue({
       ok: false,

@@ -121,9 +121,16 @@ def _insert_reel(base, pid, *, project_id=None, game_id=None, game_ids=None,
 
 
 async def _move(video_ids, target_profile_id=DST):
+    from types import SimpleNamespace
+
     from app.routers.downloads import move_reels_to_profile, MoveToProfileRequest
+    # T6350: the handler now takes a Request to register the truthful
+    # move_source_cleanup_failed 503 body on request.state (read by the middleware,
+    # bypassed by this direct call). A namespace with a settable .state is enough.
+    request = SimpleNamespace(state=SimpleNamespace())
     return await move_reels_to_profile(
         MoveToProfileRequest(video_ids=video_ids, target_profile_id=target_profile_id),
+        request,
         _durable=None,
     )
 

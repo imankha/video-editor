@@ -18,7 +18,11 @@ from pydantic import BaseModel
 
 from app.constants import SourceType
 from app.database import column_exists, get_db_connection, get_final_videos_path, sync_db_to_r2_explicit
-from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
+from app.middleware.db_sync import (
+    DURABLE_SYNC_FAILED_RESPONSE,
+    durable_sync,
+    set_durable_sync_failure_response,
+)
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
@@ -1472,9 +1476,55 @@ def _delete_orphan_reference_games(cursor) -> int:
     return len(orphans)
 
 
+def _delete_moved_source_rows(cursor, video_ids: list[int]) -> int:
+    """Remove moved reels from the SOURCE profile DB (T6350 extraction — reused
+    verbatim by the move handler's phase 2 AND the /move-to-profile/finish
+    completion endpoint, so the SQL is never duplicated). NULLs each reel's
+    project pointer first (mirrors delete_download's FK cleanup; before_after_tracks
+    then cascade via ON DELETE CASCADE with foreign_keys=ON), deletes the
+    final_videos rows, then cleans any source-profile game REFERENCE orphaned by
+    the reels leaving (T5810, gesture-driven — never a sweep). Returns the number
+    of final_videos rows actually deleted (0 for an already-cleaned id, which is
+    what makes /finish idempotent). Caller commits."""
+    deleted = 0
+    for vid in video_ids:
+        cursor.execute(
+            "UPDATE projects SET final_video_id = NULL WHERE final_video_id = ?", (vid,)
+        )
+        cursor.execute("DELETE FROM final_videos WHERE id = ?", (vid,))
+        if cursor.rowcount and cursor.rowcount > 0:
+            deleted += cursor.rowcount
+    _delete_orphan_reference_games(cursor)
+    return deleted
+
+
+# T6350: the truthful 503 body when a move (or /finish) copied+synced the target
+# and locally deleted the source, but the SOURCE-side durable sync then failed.
+# The target copy is real and durable; only the source cleanup did not persist.
+# FLAT shape (the middleware returns it via content=, and useMoveReels.js reads
+# flat-or-nested-under-detail); `code`/`retryable` key names match phase-1's
+# existing HTTPException payloads where they overlap.
+def _source_cleanup_failed_payload(video_ids: list[int], target_profile_id: str) -> dict:
+    return {
+        "detail": (
+            "Your reels were copied to the other profile, but we could not finish "
+            "removing them from this one. They may still appear here until you retry."
+        ),
+        "code": "move_source_cleanup_failed",
+        "retryable": True,
+        "target_committed": True,
+        # Copy the list — it is stashed on request.state and serialized later by the
+        # middleware; an immutable-by-construction payload can't be perturbed by any
+        # post-commit mutation of the caller's video_ids.
+        "moved_ids": list(video_ids),
+        "target_profile_id": target_profile_id,
+    }
+
+
 @router.post("/move-to-profile")
 async def move_reels_to_profile(
     body: MoveToProfileRequest,
+    request: Request,
     _durable: None = Depends(durable_sync),
 ):
     """Move one or more PUBLISHED reels from the current profile to a sibling
@@ -1661,12 +1711,36 @@ async def move_reels_to_profile(
             # handled inside ensure_game_reference). The reference insert rides THIS
             # phase-1 target write (committed + synced below) -- no new sync call site
             # (invariant 6b). Built inside the try so a failure rolls the target back.
+            # T6350: on a re-issued move where every reel's INSERT is skipped by the
+            # filename guard below, this remap still runs — it relies on
+            # ensure_game_reference being idempotent (chain-collapse/move-back
+            # resolved internally), so it re-points to the existing reference rather
+            # than duplicating it. Proven by test_move_is_idempotent_after_source_reheal.
             game_remap = _build_reference_map(
                 cursor, target_conn, source_rows,
                 source_profile_id, target_profile_id, user_id, req_id,
             )
             for src_row in source_rows:
                 new_row = _build_moved_reel_row(src_row, game_remap)
+                # T6350 idempotency guard: a retry (e.g. via /move-to-profile/finish,
+                # or a re-issued move after a phase-2-sync failure re-healed the
+                # source rows back) must not double-insert a reel that phase 1
+                # already committed to the target on a prior attempt. `filename` is
+                # a per-user hash — a sound natural key across profiles. A skipped
+                # row is NOT added to inserted_target_ids: the rollback-on-failure
+                # path below deletes only THIS attempt's inserts, never a row a
+                # prior attempt already durably committed.
+                exists = tcur.execute(
+                    "SELECT id FROM final_videos WHERE filename = ?",
+                    (new_row["filename"],),
+                ).fetchone()
+                if exists:
+                    logger.info(
+                        f"[MoveReels] target already has filename={new_row['filename']} "
+                        f"(fv={src_row['id']}); skipping re-insert (idempotent) "
+                        f"req_id={req_id}"
+                    )
+                    continue
                 # T4890: don't carry a poster ref whose object we did NOT relocate
                 # (missing source object) -- keeps the moved row from dangling.
                 if src_row["poster_filename"] and src_row["id"] not in posters_moved:
@@ -1729,23 +1803,18 @@ async def move_reels_to_profile(
             target_conn.close()
 
         # --- Phase 2: target is fully durable -> remove reels from the SOURCE --
-        # before_after_tracks cascade via ON DELETE CASCADE (foreign_keys=ON);
-        # NULL the project pointer first, mirroring delete_download's FK cleanup.
-        for vid in video_ids:
-            cursor.execute(
-                "UPDATE projects SET final_video_id = NULL WHERE final_video_id = ?", (vid,)
-            )
-            cursor.execute("DELETE FROM final_videos WHERE id = ?", (vid,))
-        # T5810: a reel moving AWAY can orphan a source-profile reference (e.g. moving
-        # a reel back to the owning profile leaves its B-side reference unreferenced).
-        # Clean orphaned REFERENCES only, gesture-driven (never a sweep).
-        orphaned = _delete_orphan_reference_games(cursor)
-        if orphaned:
-            logger.info(
-                f"[MoveReels] cleaned {orphaned} orphaned source reference(s) in "
-                f"{source_profile_id} user={user_id} req_id={req_id}"
-            )
+        _delete_moved_source_rows(cursor, video_ids)
         conn.commit()
+
+    # T6350: the source rows are now locally committed and the target is fully
+    # durable, so the move HAS half-applied. Only the source-side durable sync
+    # (run by the middleware AFTER this handler returns) remains. If THAT fails,
+    # the generic "Your reel was not moved" body is a lie — override it with the
+    # truthful cleanup-failed payload. Set it ONLY here (after the phase-2 commit)
+    # so any earlier phase-0/1 abort keeps the honest generic "nothing moved".
+    set_durable_sync_failure_response(
+        request, _source_cleanup_failed_payload(video_ids, target_profile_id)
+    )
 
     # --- Phase 3: delete the SOURCE-prefix media objects LAST ---------------
     # The target reel is now fully durable (object + row + synced DB); the source
@@ -1770,6 +1839,132 @@ async def move_reels_to_profile(
     # durable_sync dependency makes the middleware AWAIT the source-profile R2 sync
     # inside the write lock and convert failure into a 503 (never a lying 200).
     return {"success": True, "moved_ids": video_ids, "target_profile_id": target_profile_id}
+
+
+@router.post("/move-to-profile/finish")
+async def finish_move_reels_to_profile(
+    body: MoveToProfileRequest,
+    request: Request,
+    _durable: None = Depends(durable_sync),
+):
+    """T6350: idempotent completion of a half-applied move.
+
+    When `move_reels_to_profile` copied+synced the TARGET and locally deleted the
+    SOURCE rows, but the source-side durable sync then failed, the frontend gets a
+    truthful `move_source_cleanup_failed` 503 and offers "Finish removing". Re-running
+    the MOVE gesture does NOT work once phase 3 deleted the source media (phase 0 then
+    502s "Nothing was moved"), so this endpoint re-runs ONLY the source cleanup.
+
+    Safety: it deletes source rows only after proving the target still holds each
+    reel (matched by `filename`, a per-user hash — ids differ across profiles, and a
+    source row may have been re-healed back from R2). A reel not provably present in
+    the target -> 409, nothing deleted for ANY id in the call. Naturally idempotent:
+    an already-removed source row makes the DELETE a no-op, but the write is still
+    tracked, so `durable_sync` re-attempts the source upload — the retry a prior
+    /finish sync-failure needs.
+    """
+    user_id = get_current_user_id()
+    source_profile_id = get_current_profile_id()
+    req_id = get_current_req_id()
+    target_profile_id = body.target_profile_id
+
+    # --- Same sibling-profile validation as the main move (reused) ---
+    from app.services.user_db import get_profiles
+    profile_ids = {p["id"] for p in get_profiles(user_id)}
+    if target_profile_id not in profile_ids:
+        raise HTTPException(status_code=404, detail="Target profile not found")
+    if target_profile_id == source_profile_id:
+        raise HTTPException(
+            status_code=400, detail="Target profile must differ from the current profile"
+        )
+
+    video_ids = list(dict.fromkeys(body.video_ids))
+    if not video_ids:
+        raise HTTPException(status_code=400, detail="No reels selected")
+
+    # --- Read the TARGET to prove the copies exist by filename BEFORE deleting the
+    # source. require_fresh=True: this is a DESTRUCTIVE confirmation, so a stale
+    # local cache must not stand in for R2 — if R2 can't confirm the target is
+    # current, refuse (retryable 503) and delete NOTHING, rather than removing the
+    # source based on a possibly-reverted local copy (the both-profiles-empty loss
+    # this task exists to prevent). We only READ the target (no force-push). ---
+    try:
+        ensure_profile_db_local(user_id, target_profile_id, require_fresh=True)
+    except ProfileDBRefreshFailed:
+        logger.warning(
+            f"[MoveReels/finish] could not confirm target profile {target_profile_id} "
+            f"is current (R2 error); refusing to delete source rows user={user_id} "
+            f"req_id={req_id} -> 503"
+        )
+        raise HTTPException(
+            status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE
+        ) from None
+    target_conn = _open_profile_db(user_id, target_profile_id)
+    target_filenames: set[str] = set()
+    if target_conn is not None:
+        try:
+            target_filenames = {
+                r["filename"]
+                for r in target_conn.execute(
+                    "SELECT filename FROM final_videos WHERE filename IS NOT NULL"
+                ).fetchall()
+            }
+        finally:
+            target_conn.close()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Resolve each requested id to its filename via the SOURCE row (re-healed
+        # back from R2 if a prior partial move locally deleted it). A source row
+        # that is genuinely absent has nothing left to destroy here — its deletion
+        # only needs a durable re-sync (the no-op DELETE below still tracks a write).
+        placeholders = ",".join("?" for _ in video_ids)
+        src_filename_by_id = {
+            r["id"]: r["filename"]
+            for r in cursor.execute(
+                f"SELECT id, filename FROM final_videos WHERE id IN ({placeholders})",
+                video_ids,
+            ).fetchall()
+        }
+
+        # Never destroy source data whose target copy can't be proven present.
+        unconfirmed = [
+            vid for vid in video_ids
+            if src_filename_by_id.get(vid) is not None
+            and src_filename_by_id[vid] not in target_filenames
+        ]
+        if unconfirmed:
+            logger.warning(
+                f"[MoveReels/finish] target {target_profile_id} missing reel(s) "
+                f"{unconfirmed}; refusing to delete source rows user={user_id} "
+                f"req_id={req_id} -> 409"
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": (
+                        "These reels are not present in the other profile yet, so "
+                        "we did not remove them here."
+                    ),
+                    "code": "move_target_missing",
+                    "retryable": False,
+                    "unconfirmed_ids": unconfirmed,
+                },
+            )
+
+        deleted = _delete_moved_source_rows(cursor, video_ids)
+        conn.commit()
+
+    logger.info(
+        f"[MoveReels/finish] removed {deleted} source row(s) for ids={video_ids} "
+        f"{source_profile_id}->{target_profile_id} user={user_id} req_id={req_id} "
+        f"(source R2 sync pending via durable_sync)"
+    )
+    # A repeat source-sync failure here must stay honest too, never the generic lie.
+    set_durable_sync_failure_response(
+        request, _source_cleanup_failed_payload(video_ids, target_profile_id)
+    )
+    return {"success": True, "finished_ids": video_ids, "target_profile_id": target_profile_id}
 
 
 def _cleanup_target_objects(user_id: str, target_profile_id: str, rel_paths: list[str]) -> None:
