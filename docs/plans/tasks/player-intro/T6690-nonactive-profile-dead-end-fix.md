@@ -1,6 +1,6 @@
 # T6690: Non-active-profile card management — replace the dead grey text with a real action
 
-**Status:** TODO
+**Status:** STAGING — merged `0d6d806e` (2026-08-09), later relabeled by T6660's rename (`cbd5ca68`). PLAN.md briefly drifted back to TODO from a same-day status-catchup commit that didn't pick up the merge; corrected 2026-08-10, no code change.
 **Impact:** 6 | **Complexity:** 2
 **Epic:** [Player Intro + Rich Text](EPIC.md)
 **Follows:** [T6530](T6530-intro-card-discoverability-ux.md) — UX proposal, approved 2026-08-08
@@ -54,9 +54,10 @@ S/M-tier, frontend-only, single component. No schema/backend change — chains t
 gestures. Low risk, ship independently, no need to wait on any other T6530-feedback sibling.
 
 ## Acceptance Criteria
-- [ ] Non-active-profile edit view shows a real, clickable control instead of plain grey text.
-- [ ] Clicking it switches to that profile AND opens its card library in one action.
+- [x] Non-active-profile edit view shows a real, clickable control instead of plain grey text.
+- [x] Clicking it switches to that profile AND opens its card library in one action.
 - [ ] Verified live at desktop and 375px (T6530's screenshots `06-...` and `21-...` are the
-      "before" reference — take matching "after" shots).
-- [ ] `ProfileIntroSection`'s existing no-gate behavior (photo/name/facts editable on any
+      "before" reference — take matching "after" shots). *(not re-verified as part of this
+      doc-drift correction; code has been live on master since 2026-08-09)*
+- [x] `ProfileIntroSection`'s existing no-gate behavior (photo/name/facts editable on any
       profile) is unchanged — this task only touches the card-library row.
