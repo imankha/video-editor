@@ -21,22 +21,27 @@ repo). Read that project's `CLAUDE.md` first — it is the complete map (pipelin
 capture guide, selector gotchas, no-footprint teardown). This task file adds only what
 CHANGED since the last shoot. Prereq: local dev stack on :5173/:8000 against master.
 
-## Do this LAST in the milestone
+## Do this LAST in the UI runway (not last in the milestone anymore)
 
-Every UI-visible near/mid-term task must land first (see the "UI Runway -> Tutorial Reshoot"
-milestone in PLAN.md, **updated 2026-08-09 — this note itself was stale, PLAN.md is the live
-source**): the [Player Intro + Rich Text epic](tasks/player-intro/EPIC.md) (all remaining
-children, not just the original T5190-T5230 waves — this now includes T6480/T6600/T6610/
-T6630/T6640/T6650/T6660/T6670/T6680/T6690/T6700; T6520 closed/superseded 2026-08-10, no longer a
-gate — every remaining item in this list is merged as of 2026-08-10) and T4945 (collection
-download, still TODO — the only remaining reshoot gate outside T5140 itself).
+**Updated 2026-08-10 — PLAN.md is the live source, this note only summarizes it.** Every
+UI-visible near/mid-term task must land first: the
+[Player Intro + Rich Text epic](tasks/player-intro/EPIC.md) (all remaining children, not just
+the original T5190-T5230 waves — this now includes T6480/T6600/T6610/T6630/T6640/T6650/T6660/
+T6670/T6680/T6690/T6700; T6520 closed/superseded 2026-08-10, no longer a gate). [Collection
+Download](tasks/collection-download/EPIC.md) (formerly T4945) is **no longer a gate** — it's a
+backend feature with no UI-runway visibility, sequenced AFTER this task per user decision
+2026-08-10.
+**Also moved to gate this task (user-ordered 2026-08-10, despite having no visible UI):**
+[T6350](tasks/T6350-move-reels-half-apply-on-sync-failure.md),
+[T6345](tasks/T6345-postgres-migration-runner-skips-version-gaps.md),
+[T6410](tasks/T6410-migration-swap-discards-unsynced-writes.md) — see PLAN.md for the rows.
 Explicitly NOT gating the reshoot: T6500 (pushed out, polish-only), T5750 (evidence-gated),
 Multi-File Prep epic (deprioritized), Movement Tracking / Dual-Camera milestones (when those
-land later, the affected quest gets a touch-up reshoot, not a full redo), and all
-refactor/perf/durability work (no visible UI). If Player Intro slips badly, the reshoot may
-jump it — tutorials don't have to demo intro CARDS specifically (T6680/T6690/T6700/T6710 are
-lower-risk to slip), but the Overlay quest's text-editor rail IS on-screen in the current
-tutorial and is a real drift risk if it lands after the shoot.
+land later, the affected quest gets a touch-up reshoot, not a full redo), and Collection
+Download (see above). If Player Intro slips badly, the reshoot may jump it — tutorials don't
+have to demo intro CARDS specifically (T6680/T6690/T6700/T6710 are lower-risk to slip), but the
+Overlay quest's text-editor rail IS on-screen in the current tutorial and is a real drift risk
+if it lands after the shoot.
 
 ## Part 1 — Speed: slow the recording, default playback to 1x
 

@@ -39,7 +39,7 @@ primitive; the setting gates both.
 
 | ID | Task | Status |
 |----|------|--------|
-| T6420 | [Preview primitive + desktop hover](T6420-preview-primitive-desktop-hover.md) | TODO |
+| T6420 | [Preview primitive + desktop hover](T6420-preview-primitive-desktop-hover.md) | STAGING |
 | T6430 | [Touch: in-viewport autoplay](T6430-touch-in-viewport-autoplay.md) | TODO |
 | T6440 | [Autoplay-previews setting + data-saver](T6440-autoplay-setting-data-saver.md) | TODO |
 
