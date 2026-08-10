@@ -24,11 +24,16 @@ from pydantic import BaseModel
 
 from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import set_current_profile_id
-from app.services.intro_cards import get_intro_min_duration, validate_intro_min_duration
+from app.services.intro_cards import (
+    get_intro_min_duration,
+    intro_image_has_other_reference,
+    validate_intro_min_duration,
+)
 from app.services.intro_media import (
     InvalidImageError,
     delete_intro_image,
     store_intro_image,
+    validate_intro_key,
 )
 from app.services.user_db import (
     INTRO_FACT_FIELDS,
@@ -348,6 +353,33 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
 # Player-intro: image upload + parental-consent attestation (T5190)
 # ---------------------------------------------------------------------------
 
+def _intro_key_referenced_by_a_card(user_id: str, profile_id: str, key: str) -> bool:
+    """True when an intro CARD in this profile still references ``key`` (T6650
+    shared-ownership guard for the profile side).
+
+    Cards seed their `image_key` from the profile's `intro_photo_key`, so
+    removing or replacing the profile photo must not destroy an R2 object a card
+    still points at (the mirror of the card-delete guard).
+
+    The card table lives in the profile's `profile.sqlite`, which
+    `get_db_connection` opens for the CURRENT profile context. When the request
+    targets a non-current profile we cannot cheaply/safely inspect its card
+    table here, so we conservatively report "referenced" — never destroy an
+    object we cannot prove is unreferenced. A leaked object is the lesser evil
+    (T5230's purge is the backstop) and in practice the photo add/remove gesture
+    always targets the active profile.
+    """
+    from app.profile_context import get_current_profile_id
+
+    if get_current_profile_id() != profile_id:
+        return True
+    from app.database import get_db_connection
+    with get_db_connection() as conn:
+        return intro_image_has_other_reference(
+            conn.cursor(), user_id, profile_id, key, include_profile_key=False
+        )
+
+
 @router.post("/{profile_id}/intro/image")
 async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
     """Upload a single still for a profile's intro card (gesture-only).
@@ -375,8 +407,16 @@ async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
     if stored is None:
         raise HTTPException(status_code=500, detail="Failed to store the intro image")
 
+    # Replacing the photo destroys the PREVIOUS object only when no card still
+    # references it (T6650 shared-ownership guard — the mirror of the card-delete
+    # rule). A card seeds its image_key from this profile key, so a blind delete
+    # here would blank that card's photo.
     previous_key = get_intro_photo_key(user_id, profile_id)
-    if previous_key and previous_key != stored["key"]:
+    if (
+        previous_key
+        and previous_key != stored["key"]
+        and not _intro_key_referenced_by_a_card(user_id, profile_id, previous_key)
+    ):
         delete_intro_image(user_id, profile_id, previous_key)
 
     set_intro_photo_key(user_id, profile_id, stored["key"])
@@ -390,22 +430,36 @@ async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
 
 @router.delete("/{profile_id}/intro/image")
 async def remove_intro_image(profile_id: str, request: DeleteIntroImageRequest):
-    """Remove a profile's intro image R2 object (gesture-only).
+    """Remove a profile's intro image (gesture-only).
 
-    Delegates to the callable `delete_intro_image` service (the same function
-    T5230's compliance purge calls), which refuses a key that does not belong to
-    this profile's intro prefix. Also clears the persisted key so a reload does
-    not resurrect a preview pointing at a deleted object.
+    Clears the persisted `intro_photo_key` (so a reload does not resurrect a
+    preview pointing at a deleted object) and destroys the R2 object via the
+    callable `delete_intro_image` service, which refuses a key that does not
+    belong to this profile's intro prefix.
+
+    SHARED-OWNERSHIP RULE (T6650): the R2 object is destroyed ONLY when no intro
+    card still references it — a card seeds its `image_key` from this same
+    profile key, so a blind delete would blank that card's photo. When a card
+    still references it, the profile reference is cleared but the object is kept
+    alive for the card (the mirror of the card-delete guard). T5230's compliance
+    purge deletes intro media unconditionally via a SEPARATE whole-prefix path
+    (`storage.delete_user_r2_data`) and is unaffected by this reference check.
     """
     user_id = get_current_user_id()
     _require_owned_profile(user_id, profile_id)
 
+    # Validate the key belongs to this profile's intro namespace up front (400 on
+    # a foreign/garbage key) — unconditionally, so the reference-check branch
+    # below can never let a bad key silently "succeed".
     try:
-        deleted = delete_intro_image(user_id, profile_id, request.key)
+        validate_intro_key(user_id, profile_id, request.key)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    if not deleted:
-        raise HTTPException(status_code=500, detail="Failed to delete the intro image")
+
+    if not _intro_key_referenced_by_a_card(user_id, profile_id, request.key):
+        deleted = delete_intro_image(user_id, profile_id, request.key)
+        if not deleted:
+            raise HTTPException(status_code=500, detail="Failed to delete the intro image")
 
     if get_intro_photo_key(user_id, profile_id) == request.key:
         clear_intro_photo_key(user_id, profile_id)

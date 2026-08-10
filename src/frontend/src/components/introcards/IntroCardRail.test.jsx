@@ -62,6 +62,32 @@ describe('IntroCardRail', () => {
     expect(props.onCommitSubtitle).toHaveBeenCalledWith('State Cup 2027');
   });
 
+  it('T6650: a broken card photo shows a visible "photo missing" state (not a silent broken img)', () => {
+    renderRail({
+      card: { id: 1, name: 'C', treatment: 'gold', shown_fields: [], image_key: 'k', previewUrl: 'http://dead' },
+      profile: { id: 'p', introPhotoKey: 'k', introPhotoUrl: 'http://profile' },
+    });
+    // The <img> renders first; simulate its load failure.
+    const img = screen.getByAltText('Card');
+    fireEvent.error(img);
+    expect(screen.getByTestId('card-photo-missing')).toBeTruthy();
+    expect(screen.getByText(/photo is no longer available/i)).toBeTruthy();
+  });
+
+  it('T6650: a broken card photo un-gates "Use profile photo" so it refreshes in place (no Remove first)', () => {
+    const props = renderRail({
+      card: { id: 1, name: 'C', treatment: 'gold', shown_fields: [], image_key: 'k', previewUrl: 'http://dead' },
+      profile: { id: 'p', introPhotoKey: 'kp', introPhotoUrl: 'http://profile' },
+    });
+    // Healthy hasPhoto card does NOT offer the recovery button...
+    expect(screen.queryByText('Use profile photo')).toBeNull();
+    // ...but once the photo fails to load it appears in place.
+    fireEvent.error(screen.getByAltText('Card'));
+    const btn = screen.getByText('Use profile photo');
+    fireEvent.click(btn);
+    expect(props.onImageChanged).toHaveBeenCalledWith('kp', 'http://profile');
+  });
+
   it('T6640: exposes no font, colour or effects control (template owns all typography)', () => {
     renderRail();
     expect(screen.queryByText('Font')).toBeNull();

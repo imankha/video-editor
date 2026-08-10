@@ -194,6 +194,50 @@ def _intro_cards_table_exists(cursor) -> bool:
     return cursor.fetchone() is not None
 
 
+def intro_image_has_other_reference(
+    cursor,
+    user_id: str | None,
+    profile_id: str,
+    key: str | None,
+    *,
+    exclude_card_id: int | None = None,
+    include_profile_key: bool = True,
+) -> bool:
+    """True when an R2 intro image ``key`` is still referenced by an owner OTHER
+    than the one being deleted (T6650 shared-ownership guard).
+
+    One R2 intro object can be pointed at by the PROFILE (``user.sqlite``'s
+    ``intro_photo_key``) AND by any number of intro CARDS (``profile.sqlite``'s
+    ``intro_cards.image_key``, seeded from the profile key on card create and
+    copied again on duplicate). A delete triggered by ONE owner must never
+    destroy the object while another owner still points at it — otherwise a
+    card delete silently blanks the profile photo (and vice-versa).
+
+    ``cursor`` is an open ``profile.sqlite`` cursor (the card table lives there).
+    Callers name who is deleting:
+      * card delete   -> ``exclude_card_id=<this card>``, ``include_profile_key=True``
+        (the row may still be present; exclude it, and count the profile as an owner)
+      * profile photo remove/replace -> ``include_profile_key=False``
+        (the profile is the deleter; only cards count as other owners)
+    """
+    if not key:
+        return False
+    if include_profile_key:
+        from app.services.user_db import get_intro_photo_key
+        if get_intro_photo_key(user_id, profile_id) == key:
+            return True
+    if not _intro_cards_table_exists(cursor):
+        return False
+    sql = "SELECT 1 FROM intro_cards WHERE image_key = ?"
+    params: list[Any] = [key]
+    if exclude_card_id is not None:
+        sql += " AND id != ?"
+        params.append(exclude_card_id)
+    sql += " LIMIT 1"
+    cursor.execute(sql, params)
+    return cursor.fetchone() is not None
+
+
 def get_intro_min_duration(cursor) -> float:
     """The profile's minimum-reel-duration threshold, surfaced via the
     settings read/write UI (`routers/profiles.py`). No longer consulted by
