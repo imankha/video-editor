@@ -1,9 +1,27 @@
 # T6520: Per-slot size and alignment control on an intro card
 
-**Status:** TODO
+**Status:** CLOSED — SUPERSEDED (2026-08-10, user decision)
 **Impact:** 5 | **Complexity:** 3
 **Follows:** [T5205](T5205-card-editor-ui.md) (card editor, merged 2a3594a6),
 [T5210](T5210-intro-card-generation.md) (render engine + shared contract, merged 9c603f6f)
+
+## Closed — superseded by epic decision 12
+
+This task was decided 2026-08-04. Two days later, **epic decision 12** (T6640, merged
+2026-08-06 — see [EPIC.md](EPIC.md#decisions-settled-2026-08-03--user-approved)) reversed the
+premise: for CARDS, the template owns typography (font, colour, size, alignment) so the user
+cannot build an ugly card — exactly the size/alignment controls this task set out to give back.
+T6640 also tore out every mechanism this task's approach depended on: `text_elements` is dead
+(v038 migration NULLs it, the router rejects it on create/patch), `_merge_spec` was replaced by
+`layout()`, and `TextSpecEditor` was removed from the card rail entirely (it survives only on the
+Overlay host, which this task was never going to touch).
+
+A worker attempting this task 2026-08-10 correctly stopped at a design gate rather than silently
+overriding decision 12 and rebuilding torn-out architecture. The user's call: **decision 12
+stands, T6520 is closed as superseded, no work needed.** If size/alignment control on cards is
+wanted again in the future, it needs a fresh design (new first-class schema columns, resolution
+inside `layout()`, net-new rail UI, and an explicit answer for how manual sizing coexists with
+T6640's shrink-to-fit collision guarantee) — not a resurrection of this task file's approach.
 
 ## Problem
 

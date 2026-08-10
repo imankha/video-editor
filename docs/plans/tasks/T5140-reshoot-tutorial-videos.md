@@ -26,8 +26,10 @@ CHANGED since the last shoot. Prereq: local dev stack on :5173/:8000 against mas
 Every UI-visible near/mid-term task must land first (see the "UI Runway -> Tutorial Reshoot"
 milestone in PLAN.md, **updated 2026-08-09 — this note itself was stale, PLAN.md is the live
 source**): the [Player Intro + Rich Text epic](tasks/player-intro/EPIC.md) (all remaining
-children, not just the original T5190-T5230 waves — this now includes T6480/T6520/T6600/T6610/
-T6630/T6640/T6650/T6660/T6670/T6680/T6690/T6700) and T4945 (collection download).
+children, not just the original T5190-T5230 waves — this now includes T6480/T6600/T6610/
+T6630/T6640/T6650/T6660/T6670/T6680/T6690/T6700; T6520 closed/superseded 2026-08-10, no longer a
+gate — every remaining item in this list is merged as of 2026-08-10) and T4945 (collection
+download, still TODO — the only remaining reshoot gate outside T5140 itself).
 Explicitly NOT gating the reshoot: T6500 (pushed out, polish-only), T5750 (evidence-gated),
 Multi-File Prep epic (deprioritized), Movement Tracking / Dual-Camera milestones (when those
 land later, the affected quest gets a touch-up reshoot, not a full redo), and all
