@@ -40,6 +40,7 @@ from app.database import column_exists, get_db_connection
 from app.profile_context import get_current_profile_id
 from app.services.intro_cards import (
     derive_composition,
+    intro_image_has_other_reference,
     validate_duration,
     validate_focal,
     validate_shown_fields,
@@ -308,16 +309,27 @@ async def update_intro_card(card_id: int, request: UpdateIntroCardRequest):
 
 @router.delete("/{card_id}")
 async def delete_intro_card(card_id: int):
-    """Delete a card, its R2 image, and clear any reels pointing at it.
+    """Delete a card, clear any reels pointing at it, and remove its R2 image
+    ONLY when no other owner still references that image (T6650).
 
     In ONE transaction: null out `final_videos.intro_card_id` for reels that
     reference this card (so a dangling id is never left behind — resolution
     already degrades a dangling id to no-intro, but the write is cleaned up
     here rather than left dangling) and delete the row. T6680 retired the
     `is_default` promotion that used to run here — there is no profile default
-    concept left to maintain. The R2 image is removed after the DB commit (a
-    leaked object is a lesser evil than a row pointing at a 404, and T5230's
-    purge is a backstop).
+    concept left to maintain.
+
+    SHARED-OWNERSHIP RULE (T6650): a card's `image_key` is SEEDED from the
+    profile's `intro_photo_key` on create (`introCardDefaults`) and copied again
+    on duplicate, so one R2 object can back the profile photo AND N cards. The
+    image is therefore removed after the commit ONLY when nothing else still
+    references it — no other card's `image_key` and not the profile's own
+    `intro_photo_key`. This is NOT the old unconditional "best-effort side
+    effect": deleting the shared object is exactly the bug this task fixes (a
+    card delete silently destroying the profile's photo). A genuinely exclusive
+    object is still removed (no orphan growth). T5230's compliance purge deletes
+    intro media unconditionally via a SEPARATE path (`delete_user_r2_data`,
+    whole-prefix) and is unaffected by this reference check.
 
     The UPDATE naming `intro_card_id` is column_exists-guarded (deploy→migrate
     window discipline), and the guard is LOAD-BEARING: `ensure_database()`
@@ -345,10 +357,17 @@ async def delete_intro_card(card_id: int):
                 (card_id,),
             )
         cursor.execute("DELETE FROM intro_cards WHERE id = ?", (card_id,))
+        # Shared-ownership guard (T6650): with this card's row already gone,
+        # check whether the profile OR any surviving card still references the
+        # image before destroying the R2 object. Runs on the same cursor/txn so
+        # the reference count is consistent with the delete just performed.
+        should_delete_object = bool(image_key) and not intro_image_has_other_reference(
+            cursor, user_id, profile_id, image_key
+        )
         conn.commit()
 
-    # R2 image removal is a best-effort side effect after the row is gone.
-    if image_key:
+    # R2 image removal happens only for an object no other owner references.
+    if should_delete_object:
         try:
             delete_intro_image(user_id, profile_id, image_key)
         except ValueError:

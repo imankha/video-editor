@@ -215,6 +215,19 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
 
   const hasPhoto = !!card.image_key;
   const profileKey = profile?.introPhotoKey;
+
+  // A dead key (the R2 object was deleted, or a re-upload minted a new key this
+  // card never learned) must surface as a visible "photo missing" state, never a
+  // silently-broken <img> (T6650). Tracked per previewUrl so a fresh photo
+  // clears the broken flag. The recovery ("Use profile photo") is offered IN
+  // PLACE — a broken card should refresh without Remove first.
+  const [broken, setBroken] = useState(false);
+  const [lastUrl, setLastUrl] = useState(card.previewUrl);
+  if (card.previewUrl !== lastUrl) {
+    setLastUrl(card.previewUrl);
+    setBroken(false);
+  }
+  const photoMissing = hasPhoto && broken;
   // Live zoom while the slider is dragged; the persisted value otherwise. Commits
   // once on release (the container patches card.zoom), never per input event.
   const zoom = zoomDraft != null ? zoomDraft : resolveFraming(card, profile).zoom;
@@ -241,11 +254,24 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
     <div className="space-y-2">
       {hasPhoto && (
         <div className="flex items-center gap-3">
-          <img
-            src={card.previewUrl}
-            alt="Card"
-            className="w-16 h-16 rounded object-cover border border-gray-600 bg-gray-900 flex-shrink-0"
-          />
+          {photoMissing ? (
+            <div
+              data-testid="card-photo-missing"
+              className="w-16 h-16 rounded border border-amber-500/60 bg-gray-900 flex-shrink-0 flex items-center justify-center text-center px-1 text-[10px] leading-tight text-amber-400"
+            >
+              Photo missing
+            </div>
+          ) : (
+            <img
+              src={card.previewUrl}
+              alt="Card"
+              onError={() => {
+                console.warn('[IntroCard] card photo failed to load (missing R2 object?)', card.image_key);
+                setBroken(true);
+              }}
+              className="w-16 h-16 rounded object-cover border border-gray-600 bg-gray-900 flex-shrink-0"
+            />
+          )}
           <button
             type="button"
             onClick={() => onImageChanged(null)}
@@ -254,6 +280,12 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
             <Trash2 size={14} /> Remove
           </button>
         </div>
+      )}
+
+      {photoMissing && (
+        <p className="text-xs text-amber-400/90 leading-snug">
+          This card&apos;s photo is no longer available. Re-upload it, or refresh it from the profile photo.
+        </p>
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -266,7 +298,10 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
           {uploading ? 'Uploading...' : hasPhoto ? 'Replace' : 'Upload photo'}
         </button>
-        {!hasPhoto && profileKey && (
+        {/* Recovery offered when there is no photo OR the current one is broken
+            (T6650 un-gated it from `!hasPhoto` so a broken card refreshes in
+            place without Remove first). Re-snapshots the CURRENT profile key. */}
+        {(!hasPhoto || photoMissing) && profileKey && (
           <button
             type="button"
             onClick={() => onImageChanged(profileKey, profile?.introPhotoUrl || null)}

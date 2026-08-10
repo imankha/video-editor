@@ -41,6 +41,17 @@ export function ProfileIntroSection({ profile }) {
   const photoKey = profile.introPhotoKey;
   const photoUrl = profile.introPhotoUrl;
 
+  // A dangling key (R2 object gone) must surface as a visible "photo missing"
+  // state, never a silently-broken <img> (T6650). Tracked per photoUrl so a
+  // fresh upload clears it; recovery is re-upload (this IS the profile photo).
+  const [photoBroken, setPhotoBroken] = useState(false);
+  const [lastPhotoUrl, setLastPhotoUrl] = useState(photoUrl);
+  if (photoUrl !== lastPhotoUrl) {
+    setLastPhotoUrl(photoUrl);
+    setPhotoBroken(false);
+  }
+  const photoMissing = !!photoUrl && photoBroken;
+
   const handleFilePick = async (e) => {
     const file = e.target.files?.[0];
     // Reset the input so re-picking the same file fires change again.
@@ -92,12 +103,36 @@ export function ProfileIntroSection({ profile }) {
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">Photo</label>
         {photoUrl ? (
-          <div className="flex items-center gap-3">
-            <img
-              src={photoUrl}
-              alt="Athlete Intro Card"
-              className="w-20 h-20 rounded-lg object-cover border border-gray-600 bg-gray-900"
-            />
+          <div className="flex flex-wrap items-center gap-3">
+            {photoMissing ? (
+              <div
+                data-testid="profile-photo-missing"
+                className="w-20 h-20 rounded-lg border border-amber-500/60 bg-gray-900 flex items-center justify-center text-center px-1.5 text-[11px] leading-tight text-amber-400"
+              >
+                Photo missing
+              </div>
+            ) : (
+              <img
+                src={photoUrl}
+                alt="Athlete Intro Card"
+                onError={() => {
+                  console.warn('[ProfileIntro] intro photo failed to load (missing R2 object?)', photoKey);
+                  setPhotoBroken(true);
+                }}
+                className="w-20 h-20 rounded-lg object-cover border border-gray-600 bg-gray-900"
+              />
+            )}
+            {photoMissing && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors disabled:opacity-60"
+              >
+                {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+                {uploading ? 'Uploading...' : 'Re-upload'}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRemove}
