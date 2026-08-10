@@ -529,6 +529,7 @@ export function OverlayModeView({
               selectedRegionId={selectedRegionId}
               selectedElementId={selectedElementId}
               onMoveTextPosition={onMoveTextPosition}
+              onSelectElement={onSelectElement}
               zoom={zoom}
               panOffset={panOffset}
               isFullscreen={isFullscreen}

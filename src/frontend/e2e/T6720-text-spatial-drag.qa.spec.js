@@ -32,6 +32,7 @@ const FRAME = '[data-testid^="text-drag-frame-"]';
 async function readStatus(page) {
   const text = await page.locator(STATUS).textContent();
   const num = (re) => { const m = text.match(re); return m ? parseFloat(m[1]) : null; };
+  const idMatch = text.match(/selectedId=(\S+)/);
   return {
     // Allow a leading '-' -- a negative anchor is exactly the BLOCKING bug this
     // spec guards; a sign-blind class would parse "y=-0.006" as 0.006 and false-pass.
@@ -40,7 +41,13 @@ async function readStatus(page) {
     textlen: num(/textlen=(\d+)/),
     commits: num(/commits=(\d+)/),
     selected: /selected=yes/.test(text),
+    selectedId: idMatch ? idMatch[1] : null,
   };
+}
+
+/** The harness's second (unselected) element's id, exposed via data-el2-id. */
+async function secondElementId(page) {
+  return page.locator(STATUS).getAttribute('data-el2-id');
 }
 
 async function frameCenter(page) {
@@ -181,5 +188,52 @@ test.describe('T6720 spatial drag — reposition selected Overlay text (fine / m
     expect(text.y, 'text top edge clamped on-frame').toBeGreaterThanOrEqual(cb.y - 2);
     expect(after.commits, 'one persist for the clamped drag').toBe(1);
     await saveEvidence(page, 'T6720-criterion4-clamp-top-left-corner');
+  });
+
+  // T6720 round 2 (post-push UI feedback): clicking a NON-selected text element
+  // directly on the canvas must select it -- previously the only way to select
+  // was via the rail's element list. Both selection paths land on the same
+  // `selectedElementId`, so the SAME grab-frame affordance appears either way.
+  test('clicking a non-selected element on the canvas selects it', async ({ page }) => {
+    await page.goto(HARNESS);
+    await waitForFrame(page);
+    const el2 = await secondElementId(page);
+    expect(el2, 'harness created a second element').toBeTruthy();
+
+    const target = page.locator(`[data-testid="text-select-target-${el2}"]`);
+    await expect(target, 'unselected element exposes a click-to-select hit-target').toBeVisible();
+    await target.click();
+
+    const after = await readStatus(page);
+    expect(after.selectedId, 'selection moved to the clicked element').toBe(el2);
+    // The grab frame (drag affordance) now follows the newly-selected element.
+    await expect(page.locator(`[data-testid="text-drag-frame-${el2}"]`)).toBeVisible();
+    await saveEvidence(page, 'T6720-criterion-click-to-select');
+  });
+
+  // T6720 round 2: the grab frame's border must visibly change while a drag is
+  // actually in progress (mouse down), not just while the element is selected --
+  // otherwise "selected" and "actively being moved" look identical.
+  test('the grab frame border goes SOLID while grabbing and back to DASHED on release', async ({ page }) => {
+    await page.goto(HARNESS);
+    await waitForFrame(page);
+    const frame = page.locator(FRAME);
+
+    const restBorder = await frame.evaluate((el) => getComputedStyle(el).borderStyle);
+    expect(restBorder, 'at rest (selected, not grabbing): dashed').toBe('dashed');
+
+    const c = await frameCenter(page);
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.down();
+    await expect.poll(() => frame.evaluate((el) => getComputedStyle(el).borderStyle))
+      .toBe('solid');
+
+    await page.mouse.move(c.x + 20, c.y + 10, { steps: 4 });
+    const duringBorder = await frame.evaluate((el) => getComputedStyle(el).borderStyle);
+    expect(duringBorder, 'mid-drag: still solid').toBe('solid');
+
+    await page.mouse.up();
+    await expect.poll(() => frame.evaluate((el) => getComputedStyle(el).borderStyle))
+      .toBe('dashed');
   });
 });

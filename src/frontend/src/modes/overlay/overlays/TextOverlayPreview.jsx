@@ -39,6 +39,18 @@ import RichText from '../../../components/RichText';
  * surgical write on pointerup (gesture-based persistence, mirrors T6610's body
  * drag). Only the selected element is draggable; every other element and the
  * bare video stay `pointer-events-none` (video tap-nav passes through).
+ *
+ * T6720 round 2 (post-push UI feedback): the grab frame's border goes SOLID
+ * from pointerdown to pointerup (`isGrabbing`), not just dashed-while-selected,
+ * so "selected" and "actively being moved" read as visibly different states.
+ * Every visible element (not only the selected one) now gets its own
+ * LIVE-measured hit-box (`elementBoxes`, keyed by id, generalized from the
+ * single-element `measureSpanBox`/`grabBox` of round 1) so clicking any text
+ * ON THE CANVAS selects it via `onSelectElement` -- the same callback
+ * `TextManagementPanel`'s rail already uses, so selecting via the rail or via
+ * the canvas both land on the same `selectedElementId` and both render the
+ * SAME selected-state affordance (there is only one selection state, two ways
+ * to set it).
  */
 
 // A pointer down->up moving less than this (screen px) is a TAP, not a drag --
@@ -102,6 +114,7 @@ export default function TextOverlayPreview({
   selectedRegionId = null,
   selectedElementId = null,
   onMoveTextPosition,
+  onSelectElement,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false,
@@ -111,13 +124,25 @@ export default function TextOverlayPreview({
   // The frame-sized overlay div (its on-screen rect IS the displayed video
   // frame); measured for the pointer->fraction transform and the grab box.
   const overlayRef = useRef(null);
-  // The selected element's host div, so its rendered <span> can be measured.
-  const selectedHostRef = useRef(null);
+  // Host div for EVERY visible element, keyed by element id -- so each one's
+  // rendered <span> can be measured, not just the selected element's. Needed
+  // to hit-test click-to-select for elements that aren't currently selected
+  // (the selected element additionally gets the drag grab frame below).
+  const hostRefsRef = useRef({});
 
-  // Rendered text box of the SELECTED element, RELATIVE to its anchor, in frame
-  // fractions. Null until measured. Drives both the grab-frame geometry and the
-  // drag clamp. Kept in state (not a ref) because the grab frame renders from it.
-  const [grabBox, setGrabBox] = useState(null);
+  // Rendered text box of EACH visible element, RELATIVE to its own anchor, in
+  // frame fractions, keyed by element id. Null/absent until measured. Drives
+  // per-element click hit-targets AND (for the selected element specifically)
+  // the grab-frame geometry + drag clamp. Kept in state (not a ref) because
+  // hit-targets/the grab frame render from it. Measured live from the DOM --
+  // never a fixed size assumption -- so short vs long strings differ (the
+  // same lesson the drag clamp bug above was fixed on).
+  const [elementBoxes, setElementBoxes] = useState({});
+
+  // True from pointerdown (beginDrag) to pointerup/cancel (endDrag) -- drives
+  // the grab frame's dashed (idle, selected) vs solid (actively grabbed) border
+  // so a mouse/touch down reads as "you're moving this now", not just "selected".
+  const [isGrabbing, setIsGrabbing] = useState(false);
 
   // The selected element's live position, held in a ref so the measurement
   // effect can subtract it WITHOUT re-running on every position change (offsets
@@ -150,24 +175,26 @@ export default function TextOverlayPreview({
   const selectedSpec = selectedElement ? selectedElement.spec : null;
   selectedPosRef.current = selectedSpec ? selectedSpec.position : null;
 
-  // Re-measure whenever the SIZE/OFFSET-affecting spec fields change (NOT
-  // position -- that moves the box rigidly, offsets are invariant, so excluding
-  // it means a drag never re-runs this effect) or the frame resizes. A
-  // ResizeObserver additionally catches the async font-settle (RichText's metrics
-  // stabilise over a few rAFs, changing the span size after mount).
-  const measureKey = selectedSpec
-    ? `${selectedSpec.text}|${selectedSpec.size}|${selectedSpec.align}|${selectedSpec.maxWidth}|${selectedSpec.font}`
-    : null;
+  // Re-measure whenever the SIZE/OFFSET-affecting spec fields of ANY visible
+  // element change (NOT position -- that moves a box rigidly, offsets are
+  // invariant, so excluding it means a drag never re-runs this effect) or the
+  // frame resizes. A ResizeObserver on the SELECTED element's span additionally
+  // catches the async font-settle (RichText's metrics stabilise over a few
+  // rAFs, changing the span size after mount) for the one box the drag clamp
+  // depends on precisely.
+  const elementIdsKey = visibleElements.map((el) => el.id).join(',');
+  const measureKey = visibleElements
+    .map((el) => `${el.id}:${el.spec.text}|${el.spec.size}|${el.spec.align}|${el.spec.maxWidth}|${el.spec.font}`)
+    .join(';');
   const frameW = rect ? rect.width : 0;
   const frameH = rect ? rect.height : 0;
 
-  // Measure the selected element's rendered <span> box, RELATIVE to its anchor,
-  // in frame fractions. Reads the live DOM, so it reflects the actual wrapped ink
+  // Measure one element's rendered <span> box, RELATIVE to its OWN anchor, in
+  // frame fractions. Reads the live DOM, so it reflects the actual wrapped ink
   // (short vs long strings differ). Returns null until the refs/rect are ready.
-  const measureSpanBox = useCallback(() => {
-    const host = selectedHostRef.current;
+  const measureBoxFor = useCallback((elementId, pos) => {
+    const host = hostRefsRef.current[elementId];
     const frameEl = overlayRef.current;
-    const pos = selectedPosRef.current;
     if (!host || !frameEl || !pos) return null;
     const span = host.querySelector('span');
     if (!span) return null;
@@ -182,41 +209,60 @@ export default function TextOverlayPreview({
     };
   }, []);
 
+  // The selected element's box specifically -- used by the drag clamp, which
+  // needs the FRESHEST measurement taken at pointerdown (not the batched
+  // `elementBoxes` state, which only re-measures on the effect below).
+  const measureSpanBox = useCallback(
+    () => measureBoxFor(selectedElementId, selectedPosRef.current),
+    [selectedElementId, measureBoxFor]
+  );
+
   useLayoutEffect(() => {
-    const host = selectedHostRef.current;
-    if (!host || !frameW || !frameH) {
-      setGrabBox(null);
-      return undefined;
-    }
-    const span = host.querySelector('span');
-    if (!span) {
-      setGrabBox(null);
+    if (!frameW || !frameH) {
+      setElementBoxes({});
       return undefined;
     }
     const measure = () => {
-      const next = measureSpanBox();
-      if (!next) return;
-      setGrabBox((prev) => {
-        if (
-          prev &&
-          Math.abs(prev.offLeftF - next.offLeftF) < 1e-4 &&
-          Math.abs(prev.offTopF - next.offTopF) < 1e-4 &&
-          Math.abs(prev.widthF - next.widthF) < 1e-4 &&
-          Math.abs(prev.heightF - next.heightF) < 1e-4
-        ) {
-          return prev;
-        }
-        return next;
+      setElementBoxes((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        visibleElements.forEach((el) => {
+          const box = measureBoxFor(el.id, el.spec.position);
+          if (!box) return;
+          const p = prev[el.id];
+          if (
+            !p ||
+            Math.abs(p.offLeftF - box.offLeftF) >= 1e-4 ||
+            Math.abs(p.offTopF - box.offTopF) >= 1e-4 ||
+            Math.abs(p.widthF - box.widthF) >= 1e-4 ||
+            Math.abs(p.heightF - box.heightF) >= 1e-4
+          ) {
+            next[el.id] = box;
+            changed = true;
+          }
+        });
+        Object.keys(next).forEach((id) => {
+          if (!visibleElements.some((el) => el.id === id)) {
+            delete next[id];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
       });
     };
     measure();
     let observer;
-    if (typeof ResizeObserver !== 'undefined') {
+    const selectedHost = selectedElementId ? hostRefsRef.current[selectedElementId] : null;
+    const selectedSpan = selectedHost?.querySelector('span');
+    if (typeof ResizeObserver !== 'undefined' && selectedSpan) {
       observer = new ResizeObserver(measure);
-      observer.observe(span);
+      observer.observe(selectedSpan);
     }
     return () => observer?.disconnect();
-  }, [selectedElementId, measureKey, frameW, frameH, measureSpanBox]);
+    // visibleElements is intentionally omitted -- it's a fresh array every
+    // render; elementIdsKey + measureKey are its stable content signature.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elementIdsKey, measureKey, frameW, frameH, selectedElementId, measureBoxFor]);
 
   const handlePointerMove = useCallback((e) => {
     const d = dragRef.current;
@@ -246,13 +292,15 @@ export default function TextOverlayPreview({
     }
     window.removeEventListener('touchmove', preventDefaultTouch);
     dragRef.current = null;
+    setIsGrabbing(false);
   }, [onMoveTextPosition]);
 
   const beginDrag = useCallback((e) => {
     if (!dragActive || !selectedSpec) return;
     // Measure FRESH at pointerdown so the clamp uses the CURRENT rendered box,
-    // never a stale `grabBox` still settling from a text/size change (the whole
-    // reason a lagging state box is not trusted here -- no fallback to it).
+    // never a stale `elementBoxes` entry still settling from a text/size
+    // change (the whole reason a lagging state box is not trusted here -- no
+    // fallback to it).
     const box = measureSpanBox();
     if (!box) return;
     e.preventDefault();
@@ -273,6 +321,7 @@ export default function TextOverlayPreview({
       moved: false,
       latest: { x: selectedSpec.position.x, y: selectedSpec.position.y },
     };
+    setIsGrabbing(true);
   }, [dragActive, selectedElementId, selectedSpec, frameW, frameH, measureSpanBox]);
 
   // Unmount safety: never leave the document-level touchmove blocker attached
@@ -282,14 +331,16 @@ export default function TextOverlayPreview({
   if (!rect || !rect.width || !rect.height) return null;
   if (visibleElements.length === 0) return null;
 
+  const selectedBox = selectedElementId ? elementBoxes[selectedElementId] : null;
+
   // Grab frame for the selected element, positioned from its LIVE anchor + the
   // measured box offsets (so it tracks the text during a drag with no
   // re-measurement). Padded a few px for grabbability.
-  const grabFrame = dragActive && selectedElement && grabBox && selectedSpec ? (() => {
-    const leftPx = (selectedSpec.position.x + grabBox.offLeftF) * rect.width - GRAB_PAD_PX;
-    const topPx = (selectedSpec.position.y + grabBox.offTopF) * rect.height - GRAB_PAD_PX;
-    const widthPx = grabBox.widthF * rect.width + GRAB_PAD_PX * 2;
-    const heightPx = grabBox.heightF * rect.height + GRAB_PAD_PX * 2;
+  const grabFrame = dragActive && selectedElement && selectedBox && selectedSpec ? (() => {
+    const leftPx = (selectedSpec.position.x + selectedBox.offLeftF) * rect.width - GRAB_PAD_PX;
+    const topPx = (selectedSpec.position.y + selectedBox.offTopF) * rect.height - GRAB_PAD_PX;
+    const widthPx = selectedBox.widthF * rect.width + GRAB_PAD_PX * 2;
+    const heightPx = selectedBox.heightF * rect.height + GRAB_PAD_PX * 2;
     return (
       <div
         data-testid={`text-drag-frame-${selectedElement.id}`}
@@ -309,11 +360,51 @@ export default function TextOverlayPreview({
           height: `${heightPx}px`,
           pointerEvents: 'auto',
           touchAction: 'none',
-          border: '1.5px dashed rgba(34, 211, 238, 0.9)',
+          // Solid while actively grabbed (pointer down), dashed at rest -- the
+          // border itself signals "moving now" vs. "selected, drag to move".
+          border: isGrabbing
+            ? '2px solid rgba(34, 211, 238, 0.95)'
+            : '1.5px dashed rgba(34, 211, 238, 0.9)',
         }}
       />
     );
   })() : null;
+
+  // Click-to-select hit-targets for every visible element EXCEPT the selected
+  // one (which is already covered by the grab frame above, on top and
+  // draggable). Sized to the element's own LIVE-measured box, same as the
+  // grab frame -- a fixed/estimated box would mis-hit for a short caption vs.
+  // a long title. Tapping selects only (no move -> no persistence write);
+  // dragging the newly-selected element is a SEPARATE subsequent gesture.
+  const selectTargets = onSelectElement
+    ? visibleElements
+      .filter((element) => element.id !== selectedElementId)
+      .map((element) => {
+        const box = elementBoxes[element.id];
+        if (!box) return null;
+        const leftPx = (element.spec.position.x + box.offLeftF) * rect.width;
+        const topPx = (element.spec.position.y + box.offTopF) * rect.height;
+        const widthPx = box.widthF * rect.width;
+        const heightPx = box.heightF * rect.height;
+        return (
+          <div
+            key={`select-${element.id}`}
+            data-testid={`text-select-target-${element.id}`}
+            // T6080: stop the click here too -- same mobile-fullscreen
+            // togglePlay() bubble risk as the grab frame's onClick above.
+            onClick={(e) => { e.stopPropagation(); onSelectElement(element.id, element.regionId); }}
+            className="absolute cursor-pointer"
+            style={{
+              left: `${leftPx}px`,
+              top: `${topPx}px`,
+              width: `${widthPx}px`,
+              height: `${heightPx}px`,
+              pointerEvents: 'auto',
+            }}
+          />
+        );
+      })
+    : null;
 
   return (
     <div
@@ -324,13 +415,14 @@ export default function TextOverlayPreview({
       {visibleElements.map((element) => (
         <div
           key={element.id}
-          ref={element.id === selectedElementId ? selectedHostRef : undefined}
+          ref={(el) => { hostRefsRef.current[element.id] = el; }}
           data-testid={`text-preview-element-${element.id}`}
           className="absolute inset-0"
         >
           <RichText spec={element.spec} boxWidth={rect.width} boxHeight={rect.height} />
         </div>
       ))}
+      {selectTargets}
       {grabFrame}
     </div>
   );

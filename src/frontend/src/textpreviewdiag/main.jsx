@@ -23,6 +23,13 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
  *
  * jsdom is insufficient for a pointer/layout fix (no real getBoundingClientRect,
  * T5380) -- the Playwright spec drives a real mouse against this harness.
+ *
+ * Round 2: a SECOND element (`elementId2`) lives in the SAME region as the
+ * first, unselected, so the click-to-select hit-target (only rendered for
+ * NON-selected elements) has something to click -- its id is exposed via the
+ * status div's `data-el2-id` attribute (not the text, since it's a
+ * dynamically-generated id the spec can't hardcode). `onSelectElement`
+ * wires straight to the real `selectElement` from `useTextOverlays`.
  */
 
 const DURATION = 10;
@@ -60,11 +67,13 @@ function TextPreviewDiagHarness() {
     selectedElementId,
     initializeWithDuration,
     addRegion,
+    addElement,
     selectElement,
     updateElementSpec,
   } = useTextOverlays();
 
   const [elementId, setElementId] = useState(null);
+  const [elementId2, setElementId2] = useState(null);
   const [commits, setCommits] = useState(0);
 
   // Mirror OverlayScreen.wrappedMoveTextPosition: local update on every tick,
@@ -104,6 +113,34 @@ function TextPreviewDiagHarness() {
     selectElement(elementId, regionId);
   }, [elementId, regionId, textOverlays, updateElementSpec, selectElement]);
 
+  // T6720 round 2 -- a SECOND element in the SAME region, so the click-to-select
+  // hit-target (only rendered for NON-selected elements) has something to click.
+  // addElement auto-picks a preset position distinct from the first element's, so
+  // the two never overlap on-screen.
+  //
+  // MUST wait for step 2's normalize to be OBSERVABLE in `textOverlays` (checked
+  // below via the element's actual landed position), not just `normalizedRef`.
+  // Both this effect and step 2 close over `textOverlays` and call a mutator that
+  // computes its updated region from that SAME closure snapshot before queuing a
+  // functional setState -- if both effects fire in the SAME render's effect
+  // flush, addElement's `{...region, elements: [...region.elements, el2]}` is
+  // built from the PRE-normalize elements array, so its setTextOverlays call
+  // (applied AFTER step 2's) clobbers element 1's just-set BASE_SPEC position
+  // with addRegion's original default (the exact T5644 class of bug this
+  // codebase's mutators are built to avoid for a SINGLE call -- two DIFFERENT
+  // mutators keyed off one same-tick closure need the caller to sequence them,
+  // which is what this extra gate does). Confirmed live: without it, this
+  // harness's element 1 loaded at x=0.92 (addRegion's default) instead of 0.5.
+  const addedSecondRef = useRef(false);
+  useEffect(() => {
+    if (!regionId || addedSecondRef.current) return;
+    const el = textOverlays.flatMap((r) => r.elements).find((e) => e.id === elementId);
+    if (!el || el.spec.position.x !== BASE_SPEC.position.x) return; // step 2 not landed yet
+    addedSecondRef.current = true;
+    const el2 = addElement(regionId, { ...BASE_SPEC, text: 'SECOND' });
+    setElementId2(el2.id);
+  }, [regionId, elementId, textOverlays, addElement]);
+
   const selected = textOverlays
     .flatMap((r) => r.elements)
     .find((el) => el.id === elementId);
@@ -121,10 +158,14 @@ function TextPreviewDiagHarness() {
     <div style={{ margin: 40 }}>
       <div
         data-testid="status"
+        // el2-id exposed as a data attribute (not readable text) so the qa spec
+        // can target the SECOND element's dynamically-generated id without
+        // parsing it out of the monospace status line.
+        data-el2-id={elementId2 || ''}
         style={{ color: '#d1d5db', fontSize: 13, marginBottom: 16, fontFamily: 'monospace' }}
       >
         {pos
-          ? `x=${pos.x.toFixed(3)} y=${pos.y.toFixed(3)} textlen=${textLen} commits=${commits} selected=${selectedElementId === elementId ? 'yes' : 'no'}`
+          ? `x=${pos.x.toFixed(3)} y=${pos.y.toFixed(3)} textlen=${textLen} commits=${commits} selected=${selectedElementId === elementId ? 'yes' : 'no'} selectedId=${selectedElementId || 'none'}`
           : `no-element commits=${commits}`}
       </div>
 
@@ -155,6 +196,7 @@ function TextPreviewDiagHarness() {
           selectedRegionId={selectedRegionId}
           selectedElementId={selectedElementId}
           onMoveTextPosition={handleMoveTextPosition}
+          onSelectElement={selectElement}
           zoom={1}
           panOffset={PAN}
           isFullscreen={false}
