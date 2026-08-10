@@ -26,7 +26,7 @@
 // ConsentGate first (create is 403-gated backend-side too), so this new entry
 // point cannot bypass T5230's consent requirement.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Z } from '../../constants/zLayers';
@@ -78,7 +78,11 @@ export function IntroCardPicker({
   // the consent gate en route to it). Reset to 'select' on every (re)open.
   const [view, setView] = useState('select');
   const [editId, setEditId] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [consentError, setConsentError] = useState(null);
+  // Synchronous guard against a double-create from two fast clicks: the
+  // `creating` state flips asynchronously, so a ref is what actually blocks the
+  // second entry within the same tick.
+  const creatingRef = useRef(false);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     if (isOpen) {
@@ -87,6 +91,7 @@ export function IntroCardPicker({
       setTouched(false);
       setView('select');
       setEditId(null);
+      setConsentError(null);
     }
   } else if (isOpen && !touched && view === 'select' && selectedId !== lastSeenSelectedId) {
     setDraftId(selectedId);
@@ -110,8 +115,8 @@ export function IntroCardPicker({
   // carousel the moment we return. Throws (e.g. the T5230 consent 403) surface
   // as a toast, same as the library's own New-card gesture.
   const doCreate = async () => {
-    if (creating) return;
-    setCreating(true);
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     try {
       const created = await createCard(buildCreateFields({ name: nextCardName(cards || []), profile }));
       setEditId(created.id);
@@ -120,7 +125,7 @@ export function IntroCardPicker({
       toast.error('Could not create card', { message: err.message });
       setView('select');
     } finally {
-      setCreating(false);
+      creatingRef.current = false;
     }
   };
 
@@ -141,7 +146,15 @@ export function IntroCardPicker({
   // setIntroConsent the profile prop flips `hasConsent` true, so the editor that
   // mounts next renders normally instead of re-gating.
   const grantConsentAndCreate = async () => {
-    await setIntroConsent(profile.id);
+    setConsentError(null);
+    try {
+      await setIntroConsent(profile.id);
+    } catch (err) {
+      // Surface a failed consent record inline on the gate (mirrors the library
+      // editor's own ConsentGate handling) instead of swallowing the rejection.
+      setConsentError(err.message || 'Could not record consent. Please try again.');
+      return;
+    }
     await doCreate();
   };
 
@@ -173,6 +186,15 @@ export function IntroCardPicker({
 
   const editingCard = editId != null ? storeCards.find((c) => c.id === editId) || null : null;
   const inCreateView = view === 'create';
+
+  // The editor's rail shows an "Add it" link for a ticked fact the profile is
+  // missing. Hosts that can open the profile editor pass `onEditProfile`; from
+  // the gallery picker there is no such route, so fall back to a hint pointing
+  // the user at where facts are edited -- never a dead click (T6530: an action
+  // or a reason, never a dead end).
+  const editProfileHint =
+    onEditProfile ||
+    (() => toast.info('Open your profile menu -> Manage Profile to add a position, class, or team.'));
 
   return createPortal(
     <div
@@ -208,10 +230,10 @@ export function IntroCardPicker({
                 card={editingCard}
                 profile={profile}
                 onBack={finishCreate}
-                onEditProfile={onEditProfile}
+                onEditProfile={editProfileHint}
               />
             ) : !hasConsent ? (
-              <ConsentGate onBack={finishCreate} onConsent={grantConsentAndCreate} error={null} />
+              <ConsentGate onBack={finishCreate} onConsent={grantConsentAndCreate} error={consentError} />
             ) : (
               // Brief interval while createCard resolves (consent just granted).
               <div className="flex items-center justify-center h-full text-gray-400 text-sm">

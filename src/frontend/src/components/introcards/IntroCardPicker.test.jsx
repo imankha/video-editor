@@ -83,8 +83,8 @@ describe('IntroCardPicker — inline create-and-return (T6670)', () => {
     expect(mocks.createCard.mock.calls[0][0].name).toBe('Athlete Intro Card 1');
   });
 
-  it('after finishing the edit, lands back on selection with the new card PRE-SELECTED and commits ONE existing write', async () => {
-    const { props } = renderPicker();
+  it('after finishing the edit, lands back on selection with the new card VISIBLE + PRE-SELECTED and commits ONE existing write', async () => {
+    const { props, utils } = renderPicker();
     fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
 
@@ -92,6 +92,15 @@ describe('IntroCardPicker — inline create-and-return (T6670)', () => {
 
     // Back on the carousel (OK/Cancel footer is present again).
     await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
+
+    // The host re-renders with the new row now in the store-backed `cards` prop
+    // (createCard prepended it). The new card tile appears in the list AND is
+    // pre-selected (aria-selected) without the user tapping it.
+    const created = mocks.state.cards[0];
+    utils.rerender(<IntroCardPicker {...props} cards={[created]} />);
+    const tile = screen.getByLabelText(created.name);
+    expect(tile).toBeTruthy();
+    expect(tile.getAttribute('aria-selected')).toBe('true');
 
     // The single attach write is the caller's onSelect, fired once on OK, with
     // the newly-created id -- no second/parallel attach path.
@@ -142,5 +151,16 @@ describe('IntroCardPicker — consent gate from the inline entry point (T5230)',
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
     expect(mocks.setIntroConsent).toHaveBeenCalledWith('p');
     expect(mocks.createCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed consent record surfaces on the gate and does NOT create a card', async () => {
+    mocks.setIntroConsent.mockRejectedValueOnce(new Error('Failed to record consent: 500'));
+    renderPicker({ hasConsent: false, profile: { id: 'p', introPhotoKey: null, introConsentAt: null } });
+    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    await waitFor(() => expect(screen.getByText('Failed to record consent: 500')).toBeTruthy());
+    expect(mocks.createCard).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('editor')).toBeNull();
   });
 });
