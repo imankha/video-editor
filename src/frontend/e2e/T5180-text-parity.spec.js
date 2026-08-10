@@ -411,6 +411,75 @@ test.describe('T6640 round 3 — card title/fact collision (real browser, broadc
         `fact1's ink box top (y=${factTop}) — a positive gap means no collision`
     ).toBeLessThanOrEqual(factTop);
   });
+
+  // T6640 round 4 — a SEPARATE, previously-undetected instance of the same
+  // collision class. Round 3's fixture above only renders ONE fact (`class`
+  // left blank) with a single-word value ("Midfielder"), and its long name
+  // happens to have a longest WORD (644.5px) wider than the CSS bug's buggy
+  // shrink-to-fit column (~540px at this frame width) — so the buggy column
+  // never binds and that fixture passes by coincidence, not because the bug
+  // was actually fixed. This fixture is chosen to land in the failing band:
+  // `layout()`/the backend both wrap it to exactly 1 line (fits within the
+  // real 907px column), but the pre-round-4 wrapper's `maxWidth`-driven
+  // shrink-to-fit column collapsed to ~540px for this CENTER-anchored
+  // composition, which IS narrower than the full name — so the DOM silently
+  // re-wrapped a title `layout()` had reserved as 1 line into 2, dropping the
+  // second line onto the fact below it exactly like round 3's bug, just
+  // triggered by a different name shape. Root cause + fix: RichText.jsx's
+  // wrapperStyle now sets a fixed `width` (not `maxWidth`), so the DOM's wrap
+  // column always equals `layout()`'s, never a narrower shrink-to-fit guess.
+  // Also exercises BOTH facts of a real `broadcast` card (position + team) —
+  // round 3's fixture only ever rendered one. No PII: invented name; the
+  // position/team values match the shape of the live-reported card, not its
+  // identity.
+  test('title does not silently re-wrap past its reserved line count (round-4 CSS shrink-to-fit regression)', async ({
+    page,
+  }) => {
+    const ROUND4_CARD = { treatment: 'gold', image_key: 'debug-photo-key', shown_fields: ['position', 'team'] };
+    const ROUND4_PROFILE = { full_name: 'Rowan Castellini', position: 'Attacking Mid', team: 'West Coast ECNL' };
+
+    await authenticateForSeams(page);
+    await mountIntroCardAndSettle(page, {
+      card: ROUND4_CARD,
+      profile: ROUND4_PROFILE,
+      aspect: ASPECT,
+      w: FRAME_W,
+      h: FRAME_H,
+    });
+
+    const titleBox = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="title"]');
+    const fact1Box = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="fact1"]');
+    const fact2Box = await measureTightInkBBox(page, FRAME_W, FRAME_H, '[data-slot="fact2"]');
+
+    expect(titleBox, 'title did not render a measurable ink box').not.toBeNull();
+    expect(fact1Box, 'fact1 did not render a measurable ink box').not.toBeNull();
+    expect(fact2Box, 'fact2 did not render a measurable ink box').not.toBeNull();
+
+    // The sharp invariant: this name fits the REAL 907px wrap column as ONE
+    // line, so the rendered ink box must stay roughly one line tall. A
+    // regression that re-introduces a narrower DOM wrap column (the round-4
+    // bug) would silently draw a 2nd line here, inflating this past 1.3x —
+    // the same threshold round 3's test uses in the opposite direction.
+    const titleFontPx = await page
+      .locator('[data-slot="title"] [data-baseline-y]')
+      .evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize));
+    expect(
+      titleBox.height,
+      `expected "Rowan Castellini" to render as a SINGLE line at the broadcast composition's title size ` +
+        `(it fits the intended ${FRAME_W}px-frame wrap column) — a height this large means the DOM silently ` +
+        're-wrapped it to 2 lines despite layout() reserving 1 (the round-4 shrink-to-fit regression)'
+    ).toBeLessThanOrEqual(titleFontPx * 1.3);
+
+    // No vertical overlap anywhere in the stack.
+    expect(
+      titleBox.y + titleBox.height,
+      'title ink box must not extend past fact1 (position) ink box top'
+    ).toBeLessThanOrEqual(fact1Box.y);
+    expect(
+      fact1Box.y + fact1Box.height,
+      'fact1 (position) ink box must not extend past fact2 (team) ink box top'
+    ).toBeLessThanOrEqual(fact2Box.y);
+  });
 });
 
 test.describe('T5180 text engine parity — backend renderer vs RichText.jsx', () => {

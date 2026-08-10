@@ -69,18 +69,23 @@ describe('RichText', () => {
     expect(el.style.fontSize).toBe(`${expectedPx}px`);
   });
 
-  it('maps maxWidth to a pixel maxWidth = spec.maxWidth * boxWidth', () => {
+  it('maps maxWidth to a pixel wrap column = spec.maxWidth * boxWidth', () => {
+    // T6640 round 4: the wrap column is a fixed CSS `width`, not `maxWidth` --
+    // `maxWidth` let a center-anchored wrapper's shrink-to-fit column collapse
+    // to roughly half the intended value (design docs/plans/tasks/T6640-design.md
+    // §1 round 4), silently re-wrapping text `layout()` had already reserved
+    // height for. See RichText.jsx's wrapperStyle comment.
     const spec = baseSpec({ text: 'WRAPPED', maxWidth: 0.5 });
     render(<RichText spec={spec} boxWidth={BOX_WIDTH} boxHeight={BOX_HEIGHT} />);
     const el = screen.getByText('WRAPPED');
-    // maxWidth may be set on the text node itself or an ancestor wrapper -- walk up to find it.
+    // width may be set on the text node itself or an ancestor wrapper -- walk up to find it.
     let node = el;
-    let foundMaxWidth = null;
-    while (node && foundMaxWidth === null) {
-      if (node.style && node.style.maxWidth) foundMaxWidth = node.style.maxWidth;
+    let foundWidth = null;
+    while (node && foundWidth === null) {
+      if (node.style && node.style.width) foundWidth = node.style.width;
       node = node.parentElement;
     }
-    expect(foundMaxWidth).toBe(`${spec.maxWidth * BOX_WIDTH}px`);
+    expect(foundWidth).toBe(`${spec.maxWidth * BOX_WIDTH}px`);
   });
 
   it('maps position.x/y into left/top pixel offsets scaled by boxWidth/boxHeight', () => {

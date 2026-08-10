@@ -347,10 +347,25 @@ export function RichText({ spec, boxWidth, boxHeight }) {
   // anchor per align: left -> left edge at leftPx, center -> centered on
   // leftPx, right -> right edge at leftPx. Mirrors the backend's anchor
   // resolution (design §6 step 4).
+  // T6640 round 4: a FIXED `width`, not `maxWidth`. For an absolutely
+  // positioned box, CSS shrink-to-fit resolves an unconstrained dimension as
+  // min(max(min-content, available), max-content), where `available` is the
+  // CONTAINING BLOCK width minus `left` — for a center-anchored element
+  // (leftPx typically ~0.5 * boxWidth) that collapses to roughly HALF of
+  // maxWidthPx, not maxWidthPx itself. `lines` arriving here is ALREADY the
+  // final wrap decision (either `spec.lines` from the card layout mirror, or
+  // this hook's own `wrapLines` call) — the wrapper must never re-derive a
+  // narrower column and re-wrap it, which is exactly what `maxWidth` let
+  // happen (diagnosed live: a center-anchored 1080-wide frame gave a 540px
+  // shrink-to-fit column instead of the intended 907px one, silently
+  // re-wrapping a title `layout()` had already reserved as 1 line into 2,
+  // dropping the second line onto the fact below it). `width` fixes the
+  // column at exactly `maxWidthPx` regardless of `left`, matching the
+  // backend's `wrap_lines(..., spec.maxWidth * frame_w)` column exactly.
   const wrapperStyle = {
     position: 'absolute',
     top: `${topPx}px`,
-    maxWidth: `${maxWidthPx}px`,
+    width: `${maxWidthPx}px`,
     textAlign: spec.align,
     fontFamily,
     ...(spec.align === 'left' && { left: `${leftPx}px` }),
@@ -361,21 +376,21 @@ export function RichText({ spec, boxWidth, boxHeight }) {
     }),
   };
 
-  // display:inline (not inline-block) + whiteSpace:pre-line (not pre-wrap) —
-  // T5180 parity-test diagnosis. The wrapper div's `maxWidth` makes it
-  // shrink-to-fit at whatever's SMALLER of the content's natural width and
-  // maxWidth; once the text needs to wrap, the CSS shrink-to-fit formula
-  // (min(max(min-content, available), max-content)) resolves to the full
-  // available width, NOT the widest actually-rendered line — so an
-  // inline-block span measured via getBoundingClientRect reports the
-  // CONTAINER's width, not the text's. A plain `inline` span instead lets
+  // display:inline (not inline-block) + whiteSpace:pre (not pre-line) —
+  // T5180/T6640 parity-test diagnosis. A plain `inline` span lets
   // getClientRects()/getBoundingClientRect() report the tight union of the
-  // real per-line fragment boxes (still wraps at the parent's maxWidth,
-  // same visual layout). `pre-wrap` also visibly preserves the space that
-  // caused a soft wrap as its own trailing fragment on the line before it,
-  // inflating that union box further; `pre-line` collapses it like `normal`
-  // (while still honouring explicit \n, which is all this component needs
-  // whitespace preservation for).
+  // real per-line fragment boxes, rather than an inline-block span's
+  // CONTAINER width. `pre` (not `pre-line`/`pre-wrap`): `lines` is ALWAYS
+  // pre-broken by this point (preset from the card layout mirror, or this
+  // hook's own `wrapLines` call above) — the DOM must never own a wrap
+  // decision at all, only render the explicit `\n` breaks already chosen.
+  // `pre-line` still lets the browser soft-wrap WITHIN a "line" if the fixed
+  // `width` above and the browser's own metrics disagree by even a
+  // sub-pixel, silently re-introducing the exact double-wrap class of bug
+  // `width` above just closed; `pre` makes any such disagreement overflow
+  // (clipped by the outer overflow:hidden box, matching the backend's
+  // Pillow canvas, which never re-wraps an over-wide line either) instead of
+  // inserting an unreserved extra line.
   const textStyle = {
     fontSize: `${fontPx}px`,
     fontWeight,
@@ -384,7 +399,7 @@ export function RichText({ spec, boxWidth, boxHeight }) {
     color: spec.color,
     textShadow,
     WebkitTextStroke: `${strokePx}px ${spec.stroke.color}`,
-    whiteSpace: 'pre-line',
+    whiteSpace: 'pre',
     margin: 0,
     display: 'inline',
     lineHeight: `${lineHeightPx}px`,

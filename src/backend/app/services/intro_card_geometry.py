@@ -540,11 +540,17 @@ def layout(
     Collision guarantee (see the module docstring's T6640 section): the block is
     placed against `reflow.anchorMode`/`anchorFrac`. For `"bottom"`, every
     element's position is `anchorFrac - (height of everything from here to the
-    end of the stack)` — so a taller title only pushes elements ABOVE it (the
-    title itself) upward; elements below the title are unaffected by its line
-    count. This holds regardless of whether the two renderers agree on the exact
-    title line count (a robustness margin on top of the wrap-algorithm parity in
-    `text_render.wrap_lines` <-> `RichText.jsx`'s mirrored `wrapLines`).
+    end of the stack)`, so a taller title only pushes elements ABOVE it (the
+    title itself) upward — an element's OWN allocated slot never shrinks
+    because of what comes before it. That guarantee only holds, though, if the
+    RESERVED line count used to size the title's slot here equals what actually
+    gets DRAWN: an under-reserved title still occupies its real (larger) drawn
+    height, which spills downward past its reserved boundary onto whatever
+    element follows immediately after it (T6640 round 3/4 — the frontend
+    mirror agreeing with `text_render.wrap_lines` isn't enough on its own; the
+    renderer must also draw EXACTLY the line count reserved here, never a
+    fresh re-wrap of its own — see `RichText.jsx`'s `wrapperStyle`/`textStyle`
+    comments for the round-4 CSS bug this bit the frontend with).
     """
     geo = geometry_for(composition, aspect)
     reflow = geo["reflow"]
