@@ -1,0 +1,24 @@
+<!doctype html>
+<!--
+  T6720 DEV-ONLY diagnostic harness for the Overlay text SPATIAL drag (drag a
+  text element on the live video preview to reposition spec.position).
+  NOT a production page: it is not listed in vite build rollupOptions.input
+  (only index.html is), so it never ships. Served by the dev server only, for
+  the Playwright real-browser verification that the grab frame drags the text,
+  the first gesture is not dropped (T5380), the box clamps on-frame for short
+  AND long strings, and exactly ONE surgical write fires per drag.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Text preview spatial-drag diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="textpreviewdiag-root"></div>
+    <script type="module" src="/src/textpreviewdiag/main.jsx"></script>
+  </body>
+</html>

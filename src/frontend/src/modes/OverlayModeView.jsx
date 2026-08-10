@@ -186,6 +186,7 @@ export function OverlayModeView({
   onMoveTextStart,
   onMoveTextEnd,
   onMoveTextBody,
+  onMoveTextPosition,
   onSelectRegion,
   onSelectElement,
   onDeleteText,
@@ -526,6 +527,9 @@ export function OverlayModeView({
               textOverlays={textOverlays}
               currentTime={currentTime}
               selectedRegionId={selectedRegionId}
+              selectedElementId={selectedElementId}
+              onMoveTextPosition={onMoveTextPosition}
+              onSelectElement={onSelectElement}
               zoom={zoom}
               panOffset={panOffset}
               isFullscreen={isFullscreen}

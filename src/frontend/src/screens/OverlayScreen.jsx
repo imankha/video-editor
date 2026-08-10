@@ -1041,15 +1041,44 @@ export function OverlayScreen({
     }
   }, [moveRegionBlock, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
+  // Per-element-id debounce timers for the editor's whole-spec writes (declared
+  // here so BOTH the debounced editor path below AND the drag commit path can
+  // reach it). Keyed PER ELEMENT ID (a Map, not one shared timer): a single
+  // shared timer would let editing element B within the debounce window cancel
+  // element A's still-pending write, silently dropping A's edit (reviewer
+  // finding). Each element's debounce is independent, so switching the selected
+  // element never cancels another element's scheduled POST.
+  const updateTextSpecTimersRef = useRef(new Map());
+
+  // T6720: spatial DRAG of a text element on the live preview. Reuses the SAME
+  // update_text_spec write path the position/align presets use (position lives
+  // INSIDE the spec -- no new backend action, no schema change). Gesture-based
+  // like T6610's body drag: `updateElementSpec` runs locally on every pointermove
+  // (commit=false, no network -- the drag stays smooth) and exactly ONE surgical
+  // persist fires on pointerup (commit=true). Deliberately does NOT route through
+  // the 250ms-debounced wrappedUpdateTextSpec below (that is for per-keystroke
+  // editor edits; a drag would emit many trailing writes). No reactive
+  // persistence: the write is bound to the pointerup gesture, never a useEffect.
+  const wrappedMoveTextPosition = useCallback((id, nextSpec, commit) => {
+    const updated = updateElementSpec(id, nextSpec);
+    setOverlayChangedSinceExport(true);
+    if (!commit || !updated || !canSyncActions) return;
+    // This drag is the most-recent write of `position` (user-confirmed
+    // most-recent-wins). A still-armed debounced spec write for the same element
+    // (e.g. a position preset clicked <250ms before this drag) would carry the
+    // PRE-drag position and could land AFTER us -- drop it (same guard as
+    // wrappedDeleteText below).
+    const timers = updateTextSpecTimersRef.current;
+    if (timers.has(id)) {
+      clearTimeout(timers.get(id));
+      timers.delete(id);
+    }
+    dispatchOverlayAction('updateTextSpec', () => overlayActions.updateTextSpec(projectId, id, nextSpec));
+  }, [updateElementSpec, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
   // Debounced whole-spec persistence (design O4: entity-surgical, ~250ms,
   // never per-keystroke). Local state updates optimistically on EVERY change
   // so the live preview tracks each keystroke; only the network write waits.
-  // Keyed PER ELEMENT ID (a Map, not one shared timer): a single shared timer
-  // would let editing element B within the debounce window cancel element A's
-  // still-pending write, silently dropping A's edit (reviewer finding). Each
-  // element's debounce is independent, so switching the selected element never
-  // cancels another element's scheduled POST.
-  const updateTextSpecTimersRef = useRef(new Map());
   const wrappedUpdateTextSpec = useCallback((id, nextSpec) => {
     const updated = updateElementSpec(id, nextSpec);
     setOverlayChangedSinceExport(true);
@@ -1563,6 +1592,7 @@ export function OverlayScreen({
       onMoveTextStart={wrappedMoveTextStart}
       onMoveTextEnd={wrappedMoveTextEnd}
       onMoveTextBody={wrappedMoveTextBody}
+      onMoveTextPosition={wrappedMoveTextPosition}
       onSelectRegion={selectRegion}
       onSelectElement={selectElement}
       onDeleteText={wrappedDeleteText}
