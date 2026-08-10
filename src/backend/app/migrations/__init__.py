@@ -217,7 +217,8 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
     Verifies in R2 after every run.  Returns MigrateResult; status "ok" means
     the profile verified at head in R2.
     """
-    from ..database import USER_DATA_BASE, set_local_db_version, sync_db_to_r2_explicit
+    from ..database import (USER_DATA_BASE, get_local_db_version, set_local_db_version,
+                            sync_db_to_r2_explicit)
     from ..profile_context import set_current_profile_id
     from ..storage import get_r2_client
     from ..user_context import set_current_user_id
@@ -244,6 +245,14 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
             r2_version = _read_sqlite_user_version(tmp_path)
             local_version = _read_sqlite_user_version(db_path) if db_path.exists() else -1
 
+            # T6410: the SYNC baseline (mirrors R2's x-amz-meta-db-version) is
+            # independent of PRAGMA user_version and is the only signal that says
+            # anything about DATA recency. A local write never advances it (only a
+            # successful upload/restore does), so baseline == R2 version means "R2's
+            # bytes plus whatever this machine hasn't uploaded yet" — NOT "these two
+            # copies are identical".
+            local_baseline = get_local_db_version(user_id, profile_id) if db_path.exists() else None
+
             if local_version > r2_version:
                 # Local SCHEMA is AHEAD of R2 (unsynced local writes): keep the
                 # local file and sync it UP. We do NOT record a baseline here — the
@@ -263,6 +272,46 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
                         r2_version=_r2_version_or_none(user_id, profile_id),
                     )
                 # db_path stays as-is (already newer than R2 was)
+            elif (db_path.exists() and local_baseline is not None
+                    and local_baseline > 0 and local_baseline >= downloaded_sync_version):
+                # T6410: local is not behind R2 on the SYNC version, so R2's copy
+                # cannot hold anything local lacks — but local CAN hold committed
+                # writes that never uploaded (deferred/failed sync). Swapping R2's
+                # bytes over it would discard them, and post-T6340 that discard
+                # becomes canonical (uploads at r2_version+1). Keep local, migrate it
+                # in place, and let the existing post-migration sync (below) carry the
+                # migration AND the pending writes up together. Mirrors
+                # restore-if-newer (database.py / user_db.py) — every other in-place
+                # swap in the codebase is version-gated; this one was not.
+                #
+                # Bounds (both load-bearing, do not relax):
+                #   baseline None -> unconfirmed, cannot prove local isn't behind ->
+                #     swap (this is T6340's original case and must keep working
+                #     unchanged).
+                #   baseline == 0 -> "no version information" (assigned when a fresh
+                #     local DB is created and R2 had no object yet). Excluding it
+                #     prevents an empty local DB from being kept and uploaded over a
+                #     real legacy R2 object.
+                #   >= not ==     -> a baseline ABOVE R2 means R2 went backwards
+                #     (out-of-band edit); local still holds strictly more history, so
+                #     keeping it is the safe side (storage.py's CAS computes
+                #     max(r2, current)+1 regardless).
+                tmp_path.unlink(missing_ok=True)
+                logger.info(
+                    "[Migration] Keeping local profile.sqlite for %s/%s - local sync baseline "
+                    "v%s >= R2 v%s (R2 has nothing local lacks); migrating the local copy so "
+                    "unsynced writes are preserved and uploaded",
+                    user_id, profile_id, local_baseline, downloaded_sync_version,
+                )
+                if local_version < r2_version:
+                    logger.warning(
+                        "[Migration] %s/%s: local schema v%s is BEHIND R2 v%s despite an "
+                        "at-or-ahead sync baseline (v%s >= v%s) - version-tracking anomaly; "
+                        "migrating local and relying on the post-run R2 verify",
+                        user_id, profile_id, local_version, r2_version,
+                        local_baseline, downloaded_sync_version,
+                    )
+                # db_path stays as-is; the post-migration sync below uploads it
             else:
                 # R2 is canonical: overwrite local with the downloaded copy, then
                 # record the DOWNLOADED copy's sync version as the confirmed local
