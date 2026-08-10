@@ -13,12 +13,29 @@
 // that draft in `draftId` and calls the caller's real `onSelect` -- the
 // actual PATCH/write gesture -- exactly once, on OK. Cancel/X/backdrop close
 // with no write. Enter = OK, Escape = cancel (never commits).
+//
+// T6670 — inline "create a new card" without leaving the picker. The carousel
+// surfaces a "New card" tile (`onCreateNew`); clicking it swaps this modal into
+// an inner CREATE view that mounts the SAME editor the library uses
+// (IntroCardEditorContainer) on a freshly created row -- the picker stays
+// mounted throughout (never cycles `isOpen`), so the reel/collection identity
+// and the in-progress selection are never lost. On finishing the edit, we land
+// back on the carousel with the new card PRE-SELECTED as the draft; the user's
+// OK then fires the caller's existing single attach write -- no second write
+// path is introduced. A profile with no consent yet hits the SAME inline
+// ConsentGate first (create is 403-gated backend-side too), so this new entry
+// point cannot bypass T5230's consent requirement.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Z } from '../../constants/zLayers';
+import { useIntroCardStore, useProfileStore } from '../../stores';
 import { IntroCardCarousel } from './IntroCardCarousel';
+import { IntroCardEditorContainer } from './IntroCardEditorContainer';
+import { ConsentGate } from './ConsentGate';
+import { buildCreateFields, nextCardName } from './introCardDefaults';
+import { toast } from '../shared/Toast';
 
 export function IntroCardPicker({
   isOpen,
@@ -30,7 +47,16 @@ export function IntroCardPicker({
   hasConsent,
   onSelect,
   onRequestConsent,
+  onEditProfile,
 }) {
+  const createCard = useIntroCardStore((s) => s.createCard);
+  const setIntroConsent = useProfileStore((s) => s.setIntroConsent);
+  // The editor reads the LIVE card row from the store (it applies optimistic
+  // patches there); look the edited card up from the store, not the `cards`
+  // prop, so a freshly-created row is found on the same tick createCard set it
+  // and every subsequent surgical edit re-renders the editor.
+  const storeCards = useIntroCardStore((s) => s.cards);
+
   // This component stays mounted across open/close (hosts pass `isOpen`
   // rather than conditionally rendering it), so hooks must run every render
   // -- the visibility check happens after them, not before. Reset the draft
@@ -48,14 +74,26 @@ export function IntroCardPicker({
   const [wasOpen, setWasOpen] = useState(isOpen);
   const [lastSeenSelectedId, setLastSeenSelectedId] = useState(selectedId);
   const [touched, setTouched] = useState(false);
+  // T6670: 'select' shows the carousel; 'create' shows the inline editor (or
+  // the consent gate en route to it). Reset to 'select' on every (re)open.
+  const [view, setView] = useState('select');
+  const [editId, setEditId] = useState(null);
+  const [consentError, setConsentError] = useState(null);
+  // Synchronous guard against a double-create from two fast clicks: the
+  // `creating` state flips asynchronously, so a ref is what actually blocks the
+  // second entry within the same tick.
+  const creatingRef = useRef(false);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     if (isOpen) {
       setDraftId(selectedId);
       setLastSeenSelectedId(selectedId);
       setTouched(false);
+      setView('select');
+      setEditId(null);
+      setConsentError(null);
     }
-  } else if (isOpen && !touched && selectedId !== lastSeenSelectedId) {
+  } else if (isOpen && !touched && view === 'select' && selectedId !== lastSeenSelectedId) {
     setDraftId(selectedId);
     setLastSeenSelectedId(selectedId);
   }
@@ -72,7 +110,71 @@ export function IntroCardPicker({
     setDraftId(cardId);
   };
 
+  // T6670: create a fresh card and drop straight into the editor on it. The new
+  // row lands in the store (createCard prepends it), so it also appears in the
+  // carousel the moment we return. Throws (e.g. the T5230 consent 403) surface
+  // as a toast, same as the library's own New-card gesture.
+  const doCreate = async () => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    try {
+      const created = await createCard(buildCreateFields({ name: nextCardName(cards || []), profile }));
+      setEditId(created.id);
+      setView('create');
+    } catch (err) {
+      toast.error('Could not create card', { message: err.message });
+      setView('select');
+    } finally {
+      creatingRef.current = false;
+    }
+  };
+
+  // Gesture: the carousel's "New card" tile. Consent-gated exactly like the
+  // library editor -- if this profile has no attestation yet, show the SAME
+  // inline ConsentGate BEFORE creating (create is 403-gated server-side too),
+  // so this entry point cannot bypass T5230.
+  const startCreate = () => {
+    if (!hasConsent) {
+      setView('create');
+      setEditId(null);
+      return;
+    }
+    doCreate();
+  };
+
+  // From the inline consent gate: record consent, then proceed to create. After
+  // setIntroConsent the profile prop flips `hasConsent` true, so the editor that
+  // mounts next renders normally instead of re-gating.
+  const grantConsentAndCreate = async () => {
+    setConsentError(null);
+    try {
+      await setIntroConsent(profile.id);
+    } catch (err) {
+      // Surface a failed consent record inline on the gate (mirrors the library
+      // editor's own ConsentGate handling) instead of swallowing the rejection.
+      setConsentError(err.message || 'Could not record consent. Please try again.');
+      return;
+    }
+    await doCreate();
+  };
+
+  // Finished editing the new card -> back to the carousel with it PRE-SELECTED
+  // as the draft (the user built it specifically to use here). `touched` guards
+  // it against an incoming selectedId prop clobbering the pick. The actual
+  // attach is still the caller's single onSelect, fired on OK -- no second write.
+  const finishCreate = () => {
+    if (editId != null) {
+      setTouched(true);
+      setDraftId(editId);
+    }
+    setEditId(null);
+    setView('select');
+  };
+
   const handleKeyDown = (e) => {
+    // The editor/consent views own their own inputs and back buttons; the
+    // OK/cancel keyboard shortcuts only apply to the selection view.
+    if (view !== 'select') return;
     if (e.key === 'Enter') {
       e.preventDefault();
       commit();
@@ -82,20 +184,36 @@ export function IntroCardPicker({
     }
   };
 
+  const editingCard = editId != null ? storeCards.find((c) => c.id === editId) || null : null;
+  const inCreateView = view === 'create';
+
+  // The editor's rail shows an "Add it" link for a ticked fact the profile is
+  // missing. Hosts that can open the profile editor pass `onEditProfile`; from
+  // the gallery picker there is no such route, so fall back to a hint pointing
+  // the user at where facts are edited -- never a dead click (T6530: an action
+  // or a reason, never a dead end).
+  const editProfileHint =
+    onEditProfile ||
+    (() => toast.info('Open your profile menu -> Manage Profile to add a position, class, or team.'));
+
   return createPortal(
     <div
       className={`fixed inset-0 ${Z.MODAL} flex items-center justify-center bg-black/60 backdrop-blur-sm px-4`}
-      onClick={cancel}
+      onClick={inCreateView ? undefined : cancel}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
       ref={(node) => node?.focus()}
     >
       <div
-        className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700"
+        className={`bg-gray-800 rounded-lg shadow-xl w-full border border-gray-700 ${
+          inCreateView ? 'max-w-4xl h-[85vh] flex flex-col' : 'max-w-lg'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3.5 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-white">{title}</h3>
+        <div className="px-5 py-3.5 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
+          <h3 className="text-base font-semibold text-white">
+            {inCreateView ? 'New Athlete Intro Card' : title}
+          </h3>
           <button
             onClick={cancel}
             className="text-gray-400 hover:text-white transition-colors p-1 -mr-1 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
@@ -104,30 +222,54 @@ export function IntroCardPicker({
             <X size={18} />
           </button>
         </div>
-        <div className="px-5 py-4">
-          <IntroCardCarousel
-            cards={cards}
-            profile={profile}
-            selectedId={draftId}
-            hasConsent={hasConsent}
-            onSelect={selectDraft}
-            onRequestConsent={onRequestConsent}
-          />
-        </div>
-        <div className="px-5 py-3.5 border-t border-gray-700 flex items-center justify-end gap-2">
-          <button
-            onClick={cancel}
-            className="px-3.5 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors coarse-pointer:min-h-[44px]"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={commit}
-            className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-500 text-sm font-medium text-white transition-colors coarse-pointer:min-h-[44px]"
-          >
-            OK
-          </button>
-        </div>
+
+        {inCreateView ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+            {editingCard ? (
+              <IntroCardEditorContainer
+                card={editingCard}
+                profile={profile}
+                onBack={finishCreate}
+                onEditProfile={editProfileHint}
+              />
+            ) : !hasConsent ? (
+              <ConsentGate onBack={finishCreate} onConsent={grantConsentAndCreate} error={consentError} />
+            ) : (
+              // Brief interval while createCard resolves (consent just granted).
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                Creating card&hellip;
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="px-5 py-4">
+              <IntroCardCarousel
+                cards={cards}
+                profile={profile}
+                selectedId={draftId}
+                hasConsent={hasConsent}
+                onSelect={selectDraft}
+                onRequestConsent={onRequestConsent}
+                onCreateNew={startCreate}
+              />
+            </div>
+            <div className="px-5 py-3.5 border-t border-gray-700 flex items-center justify-end gap-2">
+              <button
+                onClick={cancel}
+                className="px-3.5 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors coarse-pointer:min-h-[44px]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={commit}
+                className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-500 text-sm font-medium text-white transition-colors coarse-pointer:min-h-[44px]"
+              >
+                OK
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>,
     document.body

@@ -37,7 +37,7 @@
 // only calls its own onSelect (the real write) on OK.
 
 import { useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { IntroCardPreview } from './IntroCardPreview';
 import { IntroExposureNotice } from './IntroExposureNotice';
 import { MotionPreview } from './MotionPreview';
@@ -67,6 +67,7 @@ export function IntroCardCarousel({
   hasConsent,
   onSelect,
   onRequestConsent,
+  onCreateNew,
   frozenNote,
 }) {
   const sorted = useMemo(() => sortNewestFirst(cards || []), [cards]);
@@ -120,6 +121,15 @@ export function IntroCardCarousel({
             onPreviewDone={() => setPreviewCardId(null)}
           />
         ))}
+
+        {/* T6670: create a new card WITHOUT leaving the picker. The picker host
+            (IntroCardPicker) owns the create->editor->return-pre-selected
+            handoff; this tile only surfaces the affordance. Rendered only when
+            a host wires `onCreateNew` (the share-dialog carousel, which attaches
+            at share time, does not). Always enabled -- clicking it with no
+            consent yet routes into the same inline consent gate, it does not
+            silently no-op. */}
+        {onCreateNew && <CreateCardTile onClick={onCreateNew} />}
       </div>
 
       {sorted.length === 0 && (
@@ -176,6 +186,25 @@ function NoIntroTile({ selected, onSelect }) {
       )}
       <span className="text-2xl leading-none">—</span>
       <span className="text-xs font-medium">No intro</span>
+    </button>
+  );
+}
+
+// T6670: the "make a new one right here" affordance, styled like the library
+// grid's dashed New-card tile (IntroCardGrid) for consistency, sized to match
+// the picker tiles. Visible text stays "New card" (matches the library); the
+// aria-label carries the full "Athlete Intro Card" name (T6660 terminology).
+function CreateCardTile({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Create new Athlete Intro Card"
+      className="flex-shrink-0 snap-start flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-gray-600 text-gray-400 hover:border-purple-500 hover:text-white transition-colors coarse-pointer:min-h-[44px]"
+      style={{ width: `${TILE_W}px`, height: `${TILE_H}px` }}
+    >
+      <Plus size={26} />
+      <span className="text-xs font-medium">New card</span>
     </button>
   );
 }
