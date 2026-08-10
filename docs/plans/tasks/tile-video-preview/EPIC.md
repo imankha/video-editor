@@ -42,11 +42,15 @@ primitive; the setting gates both.
 | T6420 | [Preview primitive + desktop hover](T6420-preview-primitive-desktop-hover.md) | STAGING |
 | T6430 | [Touch: in-viewport autoplay](T6430-touch-in-viewport-autoplay.md) | TODO |
 | T6440 | [Autoplay-previews setting + data-saver](T6440-autoplay-setting-data-saver.md) | TODO |
+| T6441 | [Extend hover preview to "In Overlay" drafts](T6441-hover-preview-in-overlay-drafts.md) | TODO |
 
 ## Shared invariants (bind every child)
 
-- Source: existing `/api/downloads/{id}/stream` — the endpoint both current players already
-  use. DraftTile gated on `final_video_id`; no source-clip fallback for unrendered drafts.
+- Source: `/api/downloads/{id}/stream` (final video) is the primary source, same endpoint both
+  current players already use. **T6441 adds a fallback** to `/api/projects/{id}/working_video/
+  stream` for drafts that have a working video but no final video yet (same proxy shape/
+  rationale). Still no source-clip fallback for a draft with neither (Not Started/Framing) —
+  explicitly rejected 2026-08-10, not obviously useful.
 - `<video muted playsInline loop>` — audio never.
 - **At most ONE active preview** app-wide (shared registry); activating B force-stops A.
 - Teardown RELEASES the stream (pause, clear `src`, `load()`) — leave, scroll-out
