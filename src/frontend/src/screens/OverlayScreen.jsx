@@ -1041,6 +1041,23 @@ export function OverlayScreen({
     }
   }, [moveRegionBlock, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
+  // T6720: spatial DRAG of a text element on the live preview. Reuses the SAME
+  // update_text_spec write path the position/align presets use (position lives
+  // INSIDE the spec -- no new backend action, no schema change). Gesture-based
+  // like T6610's body drag: `updateElementSpec` runs locally on every pointermove
+  // (commit=false, no network -- the drag stays smooth) and exactly ONE surgical
+  // persist fires on pointerup (commit=true). Deliberately does NOT route through
+  // the 250ms-debounced wrappedUpdateTextSpec below (that is for per-keystroke
+  // editor edits; a drag would emit many trailing writes). No reactive
+  // persistence: the write is bound to the pointerup gesture, never a useEffect.
+  const wrappedMoveTextPosition = useCallback((id, nextSpec, commit) => {
+    const updated = updateElementSpec(id, nextSpec);
+    setOverlayChangedSinceExport(true);
+    if (commit && updated && canSyncActions) {
+      dispatchOverlayAction('updateTextSpec', () => overlayActions.updateTextSpec(projectId, id, nextSpec));
+    }
+  }, [updateElementSpec, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
   // Debounced whole-spec persistence (design O4: entity-surgical, ~250ms,
   // never per-keystroke). Local state updates optimistically on EVERY change
   // so the live preview tracks each keystroke; only the network write waits.
@@ -1563,6 +1580,7 @@ export function OverlayScreen({
       onMoveTextStart={wrappedMoveTextStart}
       onMoveTextEnd={wrappedMoveTextEnd}
       onMoveTextBody={wrappedMoveTextBody}
+      onMoveTextPosition={wrappedMoveTextPosition}
       onSelectRegion={selectRegion}
       onSelectElement={selectElement}
       onDeleteText={wrappedDeleteText}
