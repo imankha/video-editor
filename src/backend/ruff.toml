@@ -43,22 +43,6 @@ exclude = [
 # main.py intentionally orders imports after logging config + conditional/deferred
 # imports for app init (same import-after-code pattern as modal functions).
 "app/main.py" = ["E402"]
-# T6450: 15 pre-existing errors discovered while fixing an unrelated crash in this
-# file (sqlite3.Row .get() in resolve_clip_source) -- all predate the T4790/T5020
-# ruff freeze, none touched by that fix. B904/B030 are manual-review exception-
-# chaining nits (not autofixable) -- scoping a real cleanup is a separate task, not
-# bundled into an urgent bug fix. B023 (4x, lines ~2194-2196) checked by hand: the
-# closures are `await asyncio.to_thread(...)`'d synchronously within the SAME loop
-# iteration before the loop variable next changes -- a ruff false positive for this
-# immediate-await pattern, not a real late-binding bug. This only REMOVES these 15
-# from the whole-app backlog count (still well under the 239 cap); nothing here
-# claims the RUF013/RUF003/RUF006 style nits are fixed.
-"app/routers/export/multi_clip.py" = ["RUF013", "RUF003", "B030", "B904", "RUF006", "B023"]
-# T6451: 11 pre-existing RUF013 (implicit Optional) errors discovered while adding a
-# `rotation` param to MockVideoUpscaler.process_video_with_upscale (T6451 crash fix)
-# -- all predate the T4790/T5020 freeze, unrelated to that change, same style-nit
-# rationale as the multi_clip.py entry above.
-"app/services/local_processors.py" = ["RUF013"]
 
 [lint.isort]
 known-first-party = ["app"]

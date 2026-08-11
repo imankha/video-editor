@@ -181,7 +181,7 @@ async def local_overlay(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-    video_duration: float = None,
+    video_duration: float | None = None,
     progress_callback=None,
 ) -> dict:
     """
@@ -303,13 +303,13 @@ async def local_framing(
     output_width: int = 810,
     output_height: int = 1440,
     fps: int = 30,
-    video_duration: float = None,
-    segment_data: dict = None,
+    video_duration: float | None = None,
+    segment_data: dict | None = None,
     progress_callback=None,
     include_audio: bool = True,
     export_mode: str = "quality",
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
 ) -> dict:
     """
     Local fallback for Modal process_framing_ai.
@@ -521,11 +521,11 @@ def _overlay_sync(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-    video_duration: float = None,
+    video_duration: float | None = None,
     progress_callback=None,
-    overlay_settings: dict = None,
+    overlay_settings: dict | None = None,
     profile_id: str | None = None,
-    text_layers: list = None,
+    text_layers: list | None = None,
 ) -> dict:
     from app.routers.export.overlay import _process_frames_to_ffmpeg
     from app.storage import download_from_r2, upload_to_r2
@@ -610,12 +610,12 @@ def _framing_sync(
     output_width: int = 810,
     output_height: int = 1440,
     fps: int = 30,
-    video_duration: float = None,
-    segment_data: dict = None,
+    video_duration: float | None = None,
+    segment_data: dict | None = None,
     include_audio: bool = True,
     export_mode: str = "quality",
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
     progress_callback=None,
     profile_id: str | None = None,
 ) -> dict:
@@ -781,7 +781,7 @@ async def local_framing_mock(
     output_height: int = 1440,
     progress_callback=None,
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
 ) -> dict:
     """
     Mock framing processor for E2E tests.
