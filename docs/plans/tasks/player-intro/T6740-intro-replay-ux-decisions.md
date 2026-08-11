@@ -1,6 +1,6 @@
 # T6740: Intro replay UX decisions (auto-continue landing position + tail dead-band click)
 
-**Status:** WAITING ON USER (Decision D still open; Decision B implemented)
+**Status:** STAGING (both decisions closed; nothing further to implement)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-08-11
@@ -116,11 +116,11 @@ shared alongside this task for a fuller comparison; the call is the user's.
 ## Implementation
 
 ### Steps
-1. [ ] User picks an option for D (or "leave as-is")
+1. [x] User picks an option for D (or "leave as-is") — **Option 2, leave as-is**, chosen 2026-08-11
 2. [x] User picks an option for B (or "leave as-is") — **Option 1, minimum dwell floor**, chosen 2026-08-11
-3. [x] Implement whichever options were picked — B implemented; D still pending
-4. [x] Tests for the picked behavior(s) — B's dwell mechanism covered
-5. [x] Remove or adjust the now-superseded diagnostic `console.warn`s — the dead-band warn in `useIntroPlayback.js`'s `fireEndedOnce` removed (superseded by the dwell fix itself); D's diagnostic warn in `IntroStoryPlayer.jsx` left in place pending D's decision
+3. [x] Implement whichever options were picked — B implemented; D is "leave as-is", nothing to implement
+4. [x] Tests for the picked behavior(s) — B's dwell mechanism covered; D needs none (no behavior change)
+5. [x] Remove or adjust the now-superseded diagnostic `console.warn`s — the dead-band warn in `useIntroPlayback.js`'s `fireEndedOnce` removed (superseded by the dwell fix itself). D never had its own diagnostic warn in code (checked `IntroStoryPlayer.jsx` directly during closeout — the only `console.warn` there is the unrelated stale-`introTimeMs`-on-leaving-intro check); nothing to remove for D
 
 ### Progress Log
 
@@ -128,8 +128,10 @@ shared alongside this task for a fuller comparison; the call is the user's.
 
 **2026-08-11 (later same day)**: User reviewed the Decision B artifact and approved the recommendation — **Option 1 (minimum dwell floor)**. Implemented in `useIntroPlayback.js`: `seekIntro` now records a wall-clock deadline (`dwellUntilRef`, `performance.now() + 1000ms`) whenever a seek lands short of `durationMs`; the rAF `tick` holds `introTimeMs` frozen at the seeked pose (no advance, no frame-gap evaluation) while `now < dwellUntilRef.current`, resyncing `lastFrameTimeRef` every held frame so the existing frame-gap guard (T6730 finding A) doesn't false-positive the instant the dwell clears. The old dead-band diagnostic (`DEAD_BAND_MS`, `lastBackwardSeekRef`) is removed — the mechanism it warned about is now structurally prevented rather than just logged. 3 new/updated unit tests (dwell holds the pose near the end; the floor is unconditional, applying even to a seek far from the end; a direct seek to `durationMs` itself still fires immediately, no dwell) — 67/67 relevant unit tests green, eslint clean, build clean. Decision D remains open — no recommendation was made for it and the user hasn't weighed in yet.
 
+**2026-08-11 (session 3)**: Design artifact published for Decision D (mechanism diagram, before/after scenario table showing the decision only diverges on the manual-replay path, two-option comparison, no forced recommendation per the task's own framing). User's call: **Option 2, leave as-is** — `handleIntroEnded`'s hardcoded `{ index: 0, fraction: 0 }` landing stays exactly as it is today. No code change, no new tests. Both T6740 decisions are now closed; task moves to STAGING (B's implementation is already on master via PR #253/#254).
+
 ## Acceptance Criteria
 
-- [ ] Decision D has an explicit answer (preserve position / keep restarting at reel 0) and, if changed, is implemented + tested
+- [x] Decision D has an explicit answer (preserve position / keep restarting at reel 0) and, if changed, is implemented + tested — **Option 2, leave as-is**, chosen 2026-08-11; no code change, nothing to test
 - [x] Decision B has an explicit answer (Option 1: minimum dwell floor) and is implemented + tested
 - [ ] No regression to T6710/T6730's existing behavior (seek-back-into-intro itself, forward auto-continue, `landingToken` dedup) — relevant unit suite green; live/e2e re-verification still pending before this can be checked off
