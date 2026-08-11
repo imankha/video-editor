@@ -1,6 +1,6 @@
 ---
 name: spawn-worker
-description: "Supervisor-side subroutine: spin up ONE permission-free container worker for a task and drive it to a pushed branch via the status-file contract (no polling turns). Not a user command — /dotask (or any supervisor flow the user approved) invokes this per task, respecting the WIP limit of 1 (max 2 disjoint)."
+description: "Supervisor-side subroutine: spin up ONE permission-free container worker for a task and drive it to a pushed branch via the status-file contract (no polling turns). Not a user command — /dotask (or any supervisor flow the user approved) invokes this per task, respecting the WIP limit of 4 (all pairs file-disjoint, quota fresh)."
 license: MIT
 author: video-editor
 version: 2.0.0

@@ -1,6 +1,6 @@
 ---
 name: dotask
-description: "Kick off planned tasks in permission-free container workers, driven from THIS supervisor session. WIP limit 1 (max 2 disjoint): finish and bank a branch before starting the next. The supervisor maintains the WAVE.md manifest + per-task status files (stateless supervision — a fresh session bootstraps from files, never from conversation history), spawns workers via spawn-worker, relays gates, and pushes branches for you to test + merge."
+description: "Kick off planned tasks in permission-free container workers, driven from THIS supervisor session. WIP limit 4 (all pairs file-disjoint, quota fresh): bank each branch as it lands rather than letting all 4 pile up unreviewed. The supervisor maintains the WAVE.md manifest + per-task status files (stateless supervision — a fresh session bootstraps from files, never from conversation history), spawns workers via spawn-worker, relays gates, and pushes branches for you to test + merge."
 license: MIT
 author: video-editor
 version: 5.0.0
@@ -30,9 +30,10 @@ burn into merges.
 
 ## When to Apply
 - User says `/dotask <id>` or `/dotask <id> <id> ...` (T#### from `docs/plans/PLAN.md`).
-- Multiple ids = a QUEUE, not a parallel wave: WIP limit is 1 worker (2 only when files are
-  fully disjoint AND the session quota is fresh). Remaining tasks wait in WAVE.md and start
-  as slots free up (a slot frees when a branch is PUSHED and handed to the user).
+- Multiple ids = a QUEUE, not necessarily one flat wave: WIP limit is 4 workers, all pairs
+  file-disjoint AND the session quota fresh. Tasks beyond 4, or that conflict on files, wait
+  in WAVE.md and start as slots free up (a slot frees when a branch is PUSHED and handed to
+  the user).
 - **Container gate (tier check first):** containers pay for themselves on L-tier work and on
   genuinely parallel disjoint tasks. For an S or M single-area task, propose doing it INLINE
   in this session instead (shared tree, commit early, explicit `git add`) — the container's
@@ -50,10 +51,12 @@ burn into merges.
 
 3. **Queue plan (multi-task only).** Before spawning anything, build a file-ownership map:
    the primary files each task touches (from task files + knowledge docs). RULES:
-   - **WIP limit: 1 concurrent worker.** 2 ONLY when the two tasks share no primary files AND
-     the session quota is fresh. Never 3+. Parallel workers on one subscription don't add
-     throughput — they make every task stall at the session limit simultaneously, and the
-     user's test+merge gate is serial anyway.
+   - **WIP limit: 4 concurrent workers.** Every pair in the wave must share no primary files
+     AND the session quota must be fresh. Beyond 4, or on any file conflict, queue in WAVE.md
+     instead of spawning. The user's test+merge gate is serial regardless of worker count — a
+     full 4-wide wave means up to 4 branches queued on the user's review at once, so bank
+     (push + CI verdict + hand to user) each branch as it lands rather than letting all 4 sit
+     unreviewed.
    - Two tasks sharing a primary file never overlap — merge them into ONE worker
      (one container, sequential commits) or queue one behind the other.
    - Tasks inside a strict-serial epic (e.g. export-write-path, keyframe-unification) never
