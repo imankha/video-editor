@@ -17,10 +17,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // and back. See the tick guard below.
 const FRAME_GAP_BUDGET_MS = 250;
 
-// T6730 audit: a backward seek landing within this many ms of durationMs
-// gives the user no perceptible intro playback before auto-continue fires
-// again (the "dead band" — see fireEndedOnce below).
-const DEAD_BAND_MS = 34; // ~2 frames at 60fps
+// T6740 decision B (option 1): any manual seek into the intro (e.g. the
+// user clicking the Intro segment on the composite scrubber) holds the
+// seeked-to pose on screen for at least this long before auto-continue is
+// allowed to end the intro again. Without this, a seek landing near
+// durationMs (T6730's audit finding B, the "dead band") let auto-continue
+// fire again within a couple of frames — the click read as a no-op because
+// there was nothing left to see. The floor is unconditional (not scaled to
+// how close the seek landed to the end): "seeking into the intro always
+// buys you at least a second to actually see it," not just clicks that
+// happen to land in the last ~1% of the segment.
+const MIN_DWELL_AFTER_SEEK_MS = 1000;
 
 /**
  * @param {number} introDurationSec
@@ -52,26 +59,18 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
   const endedFiredRef = useRef(false);
   const onIntroEndedRef = useRef(onIntroEnded);
   onIntroEndedRef.current = onIntroEnded;
-  // The most recent backward seek's landing point (ms, < durationMs) — read
-  // once by fireEndedOnce to detect the dead band, then cleared so it only
-  // ever describes the seek immediately preceding the next ended event.
-  const lastBackwardSeekRef = useRef(null);
+  // T6740 decision B: wall-clock deadline (performance.now()-based, NOT
+  // introTimeMs) until which the tick below holds the clock frozen at its
+  // just-seeked pose instead of advancing — set on every manual seek into
+  // the intro, cleared once the dwell has elapsed. null = no seek is
+  // currently being held (natural playback from mount is never held).
+  const dwellUntilRef = useRef(null);
 
   const fireEndedOnce = useCallback(() => {
     if (endedFiredRef.current) return;
     endedFiredRef.current = true;
-    const seek = lastBackwardSeekRef.current;
-    lastBackwardSeekRef.current = null;
-    // Assumption: a backward seek into the intro yields observable intro
-    // playback. If auto-continue fires again within ~2 frames of that seek,
-    // the click landed in the tail of the segment and the user saw nothing.
-    if (seek != null && durationMs - seek < DEAD_BAND_MS) {
-      console.warn(
-        `[useIntroPlayback] intro ended ${Math.round(durationMs - seek)}ms after a backward seek to ${Math.round(seek)}/${Math.round(durationMs)}ms — the seek landed in the auto-continue dead band and gave no perceptible intro playback`,
-      );
-    }
     onIntroEndedRef.current?.();
-  }, [durationMs]);
+  }, []);
 
   const seekIntro = useCallback((ms) => {
     const clamped = Math.max(0, Math.min(ms, durationMs));
@@ -80,7 +79,7 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
     if (clamped >= durationMs) fireEndedOnce();
     else {
       endedFiredRef.current = false; // seeking back before the end re-arms the guard
-      lastBackwardSeekRef.current = clamped;
+      dwellUntilRef.current = performance.now() + MIN_DWELL_AFTER_SEEK_MS;
     }
   }, [durationMs, fireEndedOnce]);
 
@@ -101,6 +100,18 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
       if (!playingRef.current) return; // stale frame from before a pause — no-op
       const dt = now - lastFrameTimeRef.current;
       lastFrameTimeRef.current = now;
+
+      if (dwellUntilRef.current != null) {
+        if (now < dwellUntilRef.current) {
+          // T6740 decision B: holding the seeked-to pose visible until the
+          // minimum dwell elapses — reschedule without advancing
+          // introTimeMs at all, so the pose the user seeked to stays on
+          // screen instead of racing straight through to durationMs.
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        dwellUntilRef.current = null;
+      }
 
       if (dt > FRAME_GAP_BUDGET_MS) {
         // Assumption: consecutive rAF callbacks stay near a normal frame
