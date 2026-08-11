@@ -109,3 +109,105 @@ migration/sync-durability backend fixes (T6345/T6350/T6410 — checklist itself 
 backend test suite, not UI), and the crash fixes (T6450/T6451 — narrow repro conditions not easily
 reached through normal UI flows). None of these showed any incidental problems during this pass;
 they're simply unverified, not suspect.
+
+## §4 egress follow-up (2026-08-11)
+
+Live-drive QA of Part A of [derisk-plan-2026-08-11.md](derisk-plan-2026-08-11.md) — the egress
+paths ("Not exercised this pass" above) exercised end-to-end against the running dev container
+(`reel-task-testsweep2`, `localhost:5176`) as the real account `imankh@gmail.com` / profile
+`9fa7378c` via `dev-login`. New spec:
+[`src/frontend/e2e/T-egress-livedrive-2026-08-11.qa.spec.js`](../../src/frontend/e2e/T-egress-livedrive-2026-08-11.qa.spec.js)
+— 8 tests, all green (`E2E_BASE_URL=http://localhost:5176 npx playwright test
+e2e/T-egress-livedrive-2026-08-11.qa.spec.js --reporter=line` → **8 passed**). Evidence
+screenshots/frames under `qa/` (gitignored).
+
+### Confirmed PASS
+
+- **Item 1 — owner download composes `[intro][reel][outro]` into ONE file** (reel id 64, intro
+  "T6670 inline-create QA card"). `GET /api/downloads/64/file` → 11,797,465 bytes,
+  `content-type: video/mp4`. ffprobe:
+  ```json
+  {"streams":[{"width":808,"height":1440}],"format":{"duration":"32.033333"}}
+  ```
+  actual duration 32.03s vs expected intro(4s) + reel(23.53s) + outro(4.5s) = 32.03s — exact match.
+  Frame extracted at t=0.5s (`part-a-item-1-owner-download-intro-frame-0.5s.png`) visually confirmed:
+  shows the intro card ("Jordan Vega" on the gold treatment background), not reel footage.
+- **Item 2 — share link playback, logged out, intro then genuine auto-resume.** Fresh
+  cookie-less Playwright context → `/shared/{token}`. Video element mounted immediately (paused,
+  under the intro overlay); polled until `!video.paused && currentTime > 0.3` (bounded by intro
+  duration + 10s). Then sampled `currentTime` twice 2s apart with no interaction:
+  t1=0.32s, t2=2.34s, `paused=false` — genuinely advancing on its own, not a
+  paused-but-ready false positive. Evidence screenshot shows the reel ("Brilliant Dribble and
+  Pass") playing live in the shared-video overlay.
+- **Item 3 — share-page in-app download button serves the composed file**, from a genuinely
+  logged-out context. `GET /api/shared/{token}/download` → 11,797,465 bytes (byte-identical to
+  item 1, as expected — same underlying reel), `content-type: video/mp4`,
+  `content-disposition: attachment`. ffprobe:
+  ```json
+  {"streams":[{"width":808,"height":1440}],"format":{"duration":"32.033333"}}
+  ```
+  Same 32.03s match; frame at t=0.5s confirmed the intro card, matching item 1.
+- **Item 5a — desktop Share button opens the app's ShareModal, never touches `navigator.share`.**
+  `navigator.share` stubbed via `page.addInitScript` before navigation; kebab → "Share" → the
+  `Share "Good Dribble and Interception"` dialog became visible; stub call count = 0. Screenshot
+  confirms the ShareModal (public-link toggle, recipient list), not a native share sheet.
+- **Item 5b — mobile emulation (iPhone 13) still attempts the native share path.** Same stub;
+  coarse-pointer bottom-sheet → "Share" → `navigator.share` called with
+  `{title, text, url: ".../shared/<token>"}` — the native path was reached, and the desktop
+  ShareModal did NOT appear in this run (confirming the two paths are mutually exclusive on
+  `isMobile`). A real native OS sheet can't be visually confirmed headless (noted in the kickoff);
+  reaching `navigator.share` is the achievable/relevant signal.
+- **Item 6 — collection share freeze holds across a later badge change.** Recorded intro consent
+  (idempotent gesture) → attached card 41 ("T6620 QA card") to the `game_id=6` collection's badge
+  → created a public collection share with `intro_card_id=41` explicitly frozen → `GET
+  /api/shared/collection/{token}` confirmed `intro_card_id=41` → changed the collection's badge to
+  card 40 ("T6670 inline-create QA card") → re-fetched the SAME share token → still
+  `intro_card_id=41, intro_card_name="T6620 QA card"`, unchanged. The freeze holds: a share's
+  `collection_definition.intro_card_id` is resolved from the frozen JSONB
+  (`_evaluated_share_members`), never re-read from the live `collection_settings` badge.
+- **Item 7 — re-export carries the intro forward.** Reel 27 (project 48, `intro_card_id=40`,
+  "T6670 inline-create QA card") → `POST /api/downloads/27/restore-project` (Open-as-Draft,
+  re-materializes archived working data) → `POST /api/export/final` (raw stored bytes
+  re-uploaded, not the serve-time-composed download) → new `final_video_id=83` → `POST
+  /api/downloads/publish/48` → `GET /api/downloads` shows id 83 with `intro_card_id=40,
+  intro_card_name="T6670 inline-create QA card"` — unchanged from before the re-export. Confirms
+  the `prior_intro_card_id` capture-and-carry-forward in
+  `export/overlay.py` (~lines 1746-1830) works correctly.
+
+### Confirmed GAP (not a new bug — documented, QA correctly characterizes it)
+
+- **Item 4 — public share page's plain-HTML footer download link is the raw, uncomposed
+  `video_url`.** Static-source assertion against
+  `src/frontend/functions/shared/[token].js`: `videoUrl` is built directly from
+  `escapeHtml(share.video_url)` (no compose call), and the footer's
+  `<a class="dl" href="${videoUrl}" download>Download</a>` uses that same raw URL. No reference to
+  `compose_serve_time`/a composed-download endpoint exists anywhere in the file. This is the
+  documented product gap (release-map §7) — the React SPA's `/shared/{token}` route (items 2/3
+  above) already serves the composed file correctly; only this separate Cloudflare Pages Function
+  edge-rendered page's plain-HTML footer link is uncomposed. Confirmed current behavior only, no
+  fix applied per the kickoff's scope.
+
+### Notes for whoever re-runs this spec locally
+
+- Sessions are single-active-per-account: a later `loginAsRealUser` call for the SAME account (on
+  a different Playwright context, e.g. items 5a/5b's throwaway contexts) invalidates an earlier
+  context's session cookie. Items 6 and 7 re-authenticate the shared owner context immediately
+  before use to guard against this — a real dev-login/session-pinning behavior, not a bug in the
+  egress paths under test.
+- Item 7 re-uploads the RAW stored final-video bytes (`GET
+  /api/export/projects/{project_id}/final-video`, not `/api/downloads/{id}/file`) — the latter is
+  the serve-time-COMPOSED file; re-uploading it would double-composite (extra intro+outro burned
+  in on top of an already-composed file) on every re-run, inflating duration and breaking items
+  1/3's expected-duration math on a later run. Caught during this pass (a pure test-harness
+  self-inflicted issue, not a product bug) and fixed in the spec.
+- Item 7 is destructive (deletes the prior `final_videos` row, republishes a new id for the same
+  project) and item 6 permanently changes the `game_id=6` collection's attached-intro badge and
+  leaves a new collection share link active (no revoke endpoint exists for collection shares in
+  this codebase, only for single-reel shares) — expected churn on this dev/QA account, consistent
+  with how existing specs in this suite already mutate it (e.g. T6730's `attachCardToAllReels`).
+  The spec prefers the known-good reel ids (64/23/27) from the kickoff over "first list match" so
+  duration math stays stable across repeated local re-runs even as item 7 consumes them one by one.
+
+**Verdict: no deploy blockers found in Part A.** All 7 checklist items pass or are the
+already-documented gap; the egress rewrite (serve-time `[intro][reel][outro]` composition,
+share-page playback/download, collection share freeze) is safe to ship.
