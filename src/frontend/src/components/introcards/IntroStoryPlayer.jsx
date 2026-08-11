@@ -39,7 +39,7 @@
 //    (initialIndex, initialSeekFraction) alone -- a repeat scrub to the exact
 //    same (index, fraction) is a distinct gesture and must not be dropped.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIntroPlayback } from './useIntroPlayback';
 import { IntroPreRoll } from './IntroPreRoll';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
@@ -86,6 +86,14 @@ export function IntroStoryPlayer({
   ...collectionPlayerProps
 }) {
   const [region, setRegion] = useState(intro ? REGION.INTRO : REGION.REELS);
+  // Synchronous mirror of `region` for handleIntroEnded's guard below — reading
+  // this ref (not a setRegion functional updater) keeps that guard a plain,
+  // idempotent statement rather than a state-updater with side effects, which
+  // React may invoke more than once for one real event (StrictMode dev
+  // double-invoke, or a Sync-lane render replaying a still-pending Default-lane
+  // update) (T6730 audit finding C).
+  const regionRef = useRef(region);
+  regionRef.current = region;
   // Where a boundary-crossing scrub should land inside the reels region —
   // applied by CollectionPlayer's own useStoryPlayback via goTo. Paired with
   // `landingToken` (MAJOR #4) so a repeat scrub to the SAME (index, fraction)
@@ -110,12 +118,10 @@ export function IntroStoryPlayer({
   // already left 'intro' — mirrors useStoryPlayback's pendingSeekRef
   // cancel-on-transition pattern.
   const handleIntroEnded = useCallback(() => {
-    setRegion((current) => {
-      if (current !== REGION.INTRO) return current;
-      setReelsLanding({ index: 0, fraction: 0 });
-      setLandingToken((t) => t + 1);
-      return REGION.REELS;
-    });
+    if (regionRef.current !== REGION.INTRO) return;
+    setReelsLanding({ index: 0, fraction: 0 });
+    setLandingToken((t) => t + 1);
+    setRegion(REGION.REELS);
   }, []);
 
   const { introTimeMs, seekIntro, setPlaying } = useIntroPlayback(introDurSec, { onIntroEnded: handleIntroEnded });
@@ -130,6 +136,21 @@ export function IntroStoryPlayer({
   useEffect(() => {
     setPlaying(region === REGION.INTRO);
   }, [region, setPlaying]);
+
+  // T6730 audit finding D (diagnostic only, no auto-correction): a forward
+  // scrub across the boundary (onScrub's else branch below) hands off to
+  // reels without ever pinning introTimeMs to introDurMs, so the composite
+  // bar's Intro segment can be left showing a stale partial fill instead of a
+  // completed one once region leaves 'intro' this way. Assumption: leaving
+  // 'intro' always means introTimeMs === introDurMs.
+  useEffect(() => {
+    if (region === REGION.REELS && intro && introTimeMs < introDurMs) {
+      console.warn(
+        `[IntroStoryPlayer] region left 'intro' at introTimeMs=${Math.round(introTimeMs)}/${Math.round(introDurMs)} — the composite bar's Intro segment will show a stale partial fill instead of 100%`,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region]);
 
   // Single boundary comparison (design §5): globalMs < introDurMs -> the
   // intro (true arbitrary seek); else -> the matching reel + in-reel fraction.
@@ -199,14 +220,13 @@ export function IntroStoryPlayer({
           Wrap it in its own fixed, correctly-layered container: Z.ALERT
           (z-[90]) sits above both Z.PLAYER (CollectionPlayer's panel, z-[70])
           and the intro's z-[85] default. The wrapper spans the full viewport
-          so the bar can lay out at its natural top position, but only the bar
-          row itself accepts pointer events -- the rest of the wrapper is
-          pointer-events-none so clicks/taps still reach the video/intro
-          beneath it. */}
+          so the bar can lay out at its natural top position; CompositeScrubber
+          itself now owns the pointer-events split (T6730 audit finding E: its
+          row is pointer-events-none, only its buttons opt back in), so
+          clicks/taps on the bar's padding/gaps/divider fall through to the
+          video/intro beneath instead of being silently swallowed. */}
       <div className={`fixed inset-0 ${Z.ALERT} pointer-events-none`}>
-        <div className="pointer-events-auto">
-          <CompositeScrubber segments={segments} onScrub={handleScrubberScrub} />
-        </div>
+        <CompositeScrubber segments={segments} onScrub={handleScrubberScrub} />
       </div>
       {region === REGION.INTRO ? (
         <IntroPreRoll

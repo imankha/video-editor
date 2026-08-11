@@ -46,12 +46,26 @@ function advanceFrame(ms) {
   act(() => { cb && cb(nowMs); });
 }
 
+// T6730 audit finding A: a single tick's gap above FRAME_GAP_BUDGET_MS (250ms)
+// is now treated as a dropped-frames resume, not an advance (see the hook's
+// own comment) — so simulating "N ms of real playback" must drive several
+// budget-sized ticks, not one big jump, or the guard added for that fix would
+// (correctly) swallow the whole thing.
+function advanceFrames(totalMs, stepMs = 16) {
+  let remaining = totalMs;
+  while (remaining > 0) {
+    const step = Math.min(stepMs, remaining);
+    advanceFrame(step);
+    remaining -= step;
+  }
+}
+
 describe('useIntroPlayback (T6710 — NEW hook)', () => {
   it('rAF advances introTimeMs forward while playing', () => {
     const { result } = renderHook(() => useIntroPlayback(4.0)); // 4s -> 4000ms
     expect(result.current.introTimeMs).toBe(0);
 
-    advanceFrame(500);
+    advanceFrames(500);
     expect(result.current.introTimeMs).toBeGreaterThan(0);
     expect(result.current.introTimeMs).toBeLessThanOrEqual(500 + 1); // tolerate rounding
   });
@@ -73,15 +87,15 @@ describe('useIntroPlayback (T6710 — NEW hook)', () => {
     const onIntroEnded = vi.fn();
     const { result } = renderHook(() => useIntroPlayback(1.0, { onIntroEnded })); // 1000ms
 
-    advanceFrame(600);
+    advanceFrames(600);
     expect(onIntroEnded).not.toHaveBeenCalled();
 
-    advanceFrame(600); // crosses 1000ms boundary
+    advanceFrames(600); // crosses 1000ms boundary
     expect(onIntroEnded).toHaveBeenCalledTimes(1);
     expect(result.current.introTimeMs).toBe(1000); // clamped, not overshooting
 
     // Further frames after reaching the end must NOT re-fire onIntroEnded.
-    advanceFrame(500);
+    advanceFrames(500);
     expect(onIntroEnded).toHaveBeenCalledTimes(1);
   });
 
@@ -101,11 +115,42 @@ describe('useIntroPlayback (T6710 — NEW hook)', () => {
 
     act(() => result.current.setPlaying(false));
     // No rAF advance should move the clock while paused.
-    advanceFrame(1000);
+    advanceFrames(1000);
     expect(result.current.introTimeMs).toBe(0);
 
     act(() => result.current.setPlaying(true));
-    advanceFrame(500);
+    advanceFrames(500);
     expect(result.current.introTimeMs).toBeGreaterThan(0);
+  });
+
+  // T6730 audit finding A.
+  it('an oversized frame gap (backgrounded tab / stall) does not fast-forward the clock', () => {
+    const { result } = renderHook(() => useIntroPlayback(4.0)); // durationMs = 4000
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    advanceFrame(700); // single tick, one big gap -- e.g. tab was hidden
+    expect(result.current.introTimeMs).toBe(0); // NOT advanced by the gap
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('frame gap'));
+
+    // The very next (normal-sized) tick resumes from where it left off.
+    advanceFrame(16);
+    expect(result.current.introTimeMs).toBeGreaterThan(0);
+    expect(result.current.introTimeMs).toBeLessThanOrEqual(16 + 1);
+
+    warnSpy.mockRestore();
+  });
+
+  // T6730 audit finding B.
+  it('warns when a backward seek lands in the auto-continue dead band', () => {
+    const onIntroEnded = vi.fn();
+    const { result } = renderHook(() => useIntroPlayback(4.0, { onIntroEnded })); // durationMs = 4000
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    act(() => result.current.seekIntro(3990)); // 10ms shy of the end
+    advanceFrame(16); // crosses the boundary within ~2 frames of the seek
+    expect(onIntroEnded).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('dead band'));
+
+    warnSpy.mockRestore();
   });
 });

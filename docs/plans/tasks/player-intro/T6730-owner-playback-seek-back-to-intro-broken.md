@@ -1,6 +1,6 @@
 # T6730 — Owner playback: clicking the Intro segment to seek back into the intro
 
-**Tier:** M · **Layer:** Frontend · **Status:** WAITING ON USER (supervisor adjudication — see Outcome)
+**Tier:** M · **Layer:** Frontend · **Status:** WAITING ON USER (live verification pending — see Hardening pass)
 
 ## Report
 On the owner in-app composite player (`IntroStoryPlayer`, built by T6710): after the
@@ -57,6 +57,86 @@ carried into the playback component. This does NOT cause the reported region-swi
 bug (text + card background still render, region still switches), but for a
 photo-only card with a dangling object it could read as a "blank intro" during
 playback. Recommend a small robustness task.
+
+## Hardening pass (supervisor, 2026-08-11, post-worker)
+
+The NO-FIX verdict above holds — no functional defect matching the original
+report was found. Per the project owner's request, ran a deeper audit (Opus
+expert consulted) of the same 5 files specifically for OTHER latent
+weaknesses beyond the one already ruled out. Found 6; fixed/hardened 4,
+flagged 2 as product decisions or too risky to auto-fix. Full theory writeup
++ confidence levels: see the expert consultation transcript referenced in
+`.dotask-status` (2026-08-11T04:00 HARDENING line). Summary:
+
+- **(A) Unclamped rAF `dt` — FIXED.** `useIntroPlayback.js`'s tick had no
+  upper bound on the gap between frames. A backgrounded tab or a main-thread
+  stall (the exact kind (F) below causes) could credit the entire hidden/stall
+  duration to playback in one tick, fast-forwarding `introTimeMs` past
+  `durationMs` and silently skipping the intro. Added a 250ms frame-gap budget
+  (`FRAME_GAP_BUDGET_MS`) — an oversized gap is treated as a resume (no
+  advance) with a `console.warn`, not a fast-forward. Also added a
+  diagnostic-only warn when a backward seek lands within ~2 frames of the end
+  (the "dead band" from (B)) — never auto-corrects, just proves the assumption
+  broke if it's ever hit live.
+- **(B) Dead-band click zone at the segment's tail — DIAGNOSTIC ONLY, not
+  fixed.** A click landing in the last ~0.5-1% of the Intro segment's width
+  (widened by (F)'s churn) seeks to a point so close to the end that
+  auto-continue fires again almost immediately — the user perceives "nothing
+  happened." The expert recommends against snapping the seek away from the
+  literal clicked position (would make the bar lie about the timeline). Left
+  as a `console.warn` for now; a real fix (pause-on-manual-seek, or a
+  minimum-dwell affordance) is a product decision.
+- **(C) Impure `setRegion` updater in `handleIntroEnded` — FIXED
+  (mechanical, no behavior change).** The updater called `setReelsLanding`/
+  `setLandingToken` as side effects inside a `setRegion` functional updater —
+  React can invoke that function more than once for one real event (StrictMode
+  dev double-invoke is live in this app; a Sync-lane click can also replay a
+  still-pending Default-lane update). Currently harmless (the side effects are
+  idempotent), but it's a standards violation sitting on the exact code path
+  that already produced 3 prior real defects (T6710's Stage 4.5 review).
+  Refactored to a `regionRef`-guarded plain callback.
+- **(D) Auto-continue always lands at reel 0 / fraction 0 — FLAGGED, not
+  fixed.** Clicking Intro from anywhere in the reels discards the user's
+  actual reel/position (a product decision — should "rewatch the intro" keep
+  your place?). Related cosmetic gap: a forward *scrub* past the intro (as
+  opposed to auto-continue) never pins `introTimeMs` to `durationMs`, so the
+  composite bar can show a stale partial fill for the Intro segment. Added a
+  diagnostic `console.warn` for the cosmetic gap only — did not attempt the
+  "pin the clock" fix, because it would route through `seekIntro`'s
+  `fireEndedOnce` path and reintroduce a live version of (C)'s double-landing
+  risk for this new call site.
+- **(E) `CompositeScrubber`'s pointer-events wrapper created dead click zones
+  — FIXED.** `IntroStoryPlayer`'s full-viewport overlay wrapped the ENTIRE
+  bar row in `pointer-events-auto`, so the row's own padding, the `gap-1`
+  gutters between segments, and the 1px intro/reel divider all silently
+  swallowed clicks meant to fall through to the player underneath (and were
+  themselves non-interactive, so those clicks did nothing). Moved
+  `pointer-events-auto` off the row and onto each `<button>` individually;
+  the divider and row padding are now `pointer-events-none` and pass clicks
+  through. Not the reported bug (Playwright/mouse clicks target element
+  centers), but a real dead zone for real users aiming at the row's edges.
+- **(F) Font-settle window churns WAAPI animation rebuilds — FIXED.**
+  `useCardPreviewElements`'s settle-window fallback called `compute()` fresh
+  on every render while `state.key !== key` (e.g. `IntroPreRoll`'s
+  `ResizeObserver` correcting `avail` shortly after mount), handing back a new
+  `elements` array identity every time even though the underlying `key`
+  hadn't changed between those renders. `MotionPreview`'s WAAPI build effect
+  is keyed on that identity, so it tore down and rebuilt every animation
+  (photo push-in, per-line fade-ups, flash) on every single render for the
+  whole settle window (~100-750ms, per the settle logic's own
+  `STABLE_FRAMES_REQUIRED`/`MAX_SETTLE_FRAMES` bounds) — main-thread churn
+  exactly during the window where a user is asking "did my click do
+  anything," and the amplifier behind (A)'s stall-triggered clock skip and
+  (B)'s widened dead band. Fixed by memoizing the fallback with `useMemo`
+  keyed on `key` (one-line root cause fix); added a rebuild-count canary
+  `console.warn` in `MotionPreview` in case this regresses.
+
+**Verification:** all 5 audited files eslint clean. Relevant unit suite:
+65/65 (useIntroPlayback + IntroStoryPlayer + CompositeScrubber + MotionPreview
++ IntroPreRoll + CollectionPlayer — 2 new tests for the frame-gap guard and
+dead-band warn, 3 pre-existing tests updated to drive multiple small ticks
+instead of one oversized single-tick jump, since that jump is now correctly
+clamped) + 47/47 (introCardPreviewElements + RichText). Build clean.
 
 ## Progress Log
 - 2026-08-11: Read 5 files; confirmed latent-since-T6710. Built robust live repro
