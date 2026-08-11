@@ -2332,8 +2332,21 @@ async def set_poster_time(project_id: int, body: PosterTimeRequest):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
-    stored = set_project_poster_marker_time(project_id, body.time)
-    return JSONResponse({"success": True, "time": stored})
+    # T6550: the write is column-guarded for the deploy->migrate window (v032 not
+    # yet applied). set_project_poster_marker_time returns False when the column
+    # isn't there yet -- surface that as a 503 (transient, retryable) rather than
+    # a lying 200 success or a raw 500. 503 (not 4xx) is deliberate: this is a
+    # known, time-bounded server-not-ready state, not a client error, and the
+    # overlay action layer treats 5xx as retryable (bounded retry + a persistent
+    # "your edits aren't saving / Retry" toast that also gates export), so the
+    # user's drag re-lands automatically once the admin runs the migration.
+    if not set_project_poster_marker_time(project_id, body.time):
+        raise HTTPException(
+            status_code=503,
+            detail="The poster marker is not available yet for this project "
+                   "(pending migration). Try again in a moment.",
+        )
+    return JSONResponse({"success": True, "time": body.time})
 
 
 # T6510: the custom-cover UPLOAD endpoint (POST /poster/upload) was REMOVED.
