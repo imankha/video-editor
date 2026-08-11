@@ -117,7 +117,7 @@ def get_yolo_model():
     return _yolo_model
 
 
-def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_threshold: float = 0.5, seek_frame: int = None) -> dict:
+def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_threshold: float = 0.5, seek_frame: int | None = None) -> dict:
     """
     Run YOLO detection on a single frame extracted at the given timestamp.
 
@@ -211,7 +211,7 @@ async def run_local_batch_detection(
     timestamps: list[float],
     confidence_threshold: float = 0.5,
     progress_callback=None,
-    local_video_path: str = None,
+    local_video_path: str | None = None,
 ) -> dict:
     """
     Run local YOLO detection on multiple timestamps.
@@ -723,7 +723,7 @@ def calculate_detection_timestamps(source_clips: list[dict[str, Any]], fps: int 
         # 4 evenly spaced detection points: 0, 0.66, 1.33, 2.0 seconds from clip start
         # If clip is shorter than 2s, scale proportionally
         for i in range(4):
-            relative_time = (i / 3) * overlay_duration  # 0, 0.33, 0.66, 1.0 × overlay_duration
+            relative_time = (i / 3) * overlay_duration  # 0, 0.33, 0.66, 1.0 x overlay_duration
             absolute_time = clip_start + relative_time
             # Use ceil for first frame (i=0) to ensure we never detect before clip boundary
             # This guarantees the first tracking frame is at or after the clip demarcation
@@ -1557,21 +1557,24 @@ async def _export_clips(
                     sr_model_name='realesr_general_x4v3',
                 )
                 logger.info(f"[T1110] AIVideoUpscaler init took {time_module.monotonic() - _t0:.2f}s (threaded)")
-            except (torch.cuda.OutOfMemoryError if torch else Exception) as e:
-                logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
-                torch.cuda.empty_cache()
-                raise HTTPException(
-                    status_code=503,
-                    detail={"error": f"GPU out of memory - try closing other GPU applications: {e}"}
-                )
-            except RuntimeError as e:
-                if "CUDA" in str(e) or "cuda" in str(e):
+            except Exception as e:
+                # B030: `except (X if torch else Exception)` isn't a static class/tuple.
+                # torch is guaranteed non-None here (the _cuda_available() guard above
+                # already exited otherwise), but check defensively rather than assert it.
+                if torch is not None and isinstance(e, torch.cuda.OutOfMemoryError):
+                    logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
+                    torch.cuda.empty_cache()
+                    raise HTTPException(
+                        status_code=503,
+                        detail={"error": f"GPU out of memory - try closing other GPU applications: {e}"}
+                    ) from e
+                if isinstance(e, RuntimeError) and ("CUDA" in str(e) or "cuda" in str(e)):
                     logger.error(f"[Multi-Clip Export] CUDA error during model init: {e}")
                     torch.cuda.empty_cache()
                     raise HTTPException(
                         status_code=503,
                         detail={"error": f"CUDA error - GPU may be busy or unavailable: {e}"}
-                    )
+                    ) from e
                 raise
 
             if shared_upscaler.upsampler is None:
@@ -1875,7 +1878,7 @@ async def _export_clips(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=user_error)
+        raise HTTPException(status_code=500, detail=user_error) from e
 
 
 @router.post("/multi-clip")
@@ -1961,7 +1964,7 @@ async def export_multi_clip(
 
         logger.info(f"[Multi-Clip Export] {len(clips_data)} clips, aspect ratio: {global_aspect_ratio}, transition: {transition}")
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid multi-clip data JSON: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Invalid multi-clip data JSON: {e!s}") from e
 
     include_audio_bool = include_audio.lower() == "true"
 
@@ -2021,7 +2024,8 @@ async def export_multi_clip(
     # is released immediately. Holding it for the full export blocked every
     # other write request from this user for minutes. Completion and errors
     # are reported via WebSocket (same pattern as /render-overlay).
-    asyncio.create_task(_run_multi_clip_background(
+    from ...services.poster_warmer import fire_and_forget
+    fire_and_forget(_run_multi_clip_background(
         export_id=export_id,
         clips_data=clips_data,
         video_files=video_files,
@@ -2188,7 +2192,12 @@ async def _run_multi_clip_background(
                         )
 
                         try:
-                            def _extract_clip():
+                            # B023: bind the loop variables as defaults so the closure
+                            # can't observe a later iteration's values (they're read
+                            # synchronously below regardless, but this is robust to
+                            # future refactors that don't await inline).
+                            def _extract_clip(source_url=source_url, start_time=start_time,
+                                               end_time=end_time, clip_path=clip_path):
                                 (
                                     ffmpeg
                                     .input(source_url, ss=start_time, to=end_time)
@@ -2200,7 +2209,7 @@ async def _run_multi_clip_background(
                             await asyncio.to_thread(_extract_clip)
                             logger.info(f"[T1110] ffmpeg extract clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
                         except ffmpeg.Error as e:
-                            raise RuntimeError(f"Failed to extract clip {i} range: {e}")
+                            raise RuntimeError(f"Failed to extract clip {i} range: {e}") from e
 
                         with open(clip_path, 'rb') as f:
                             video_files[i] = BytesFile(f.read())
@@ -2541,4 +2550,4 @@ async def concat_for_overlay(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Concatenation failed: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Concatenation failed: {e!s}") from e
