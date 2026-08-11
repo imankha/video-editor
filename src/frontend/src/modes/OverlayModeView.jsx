@@ -17,6 +17,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
+import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -276,36 +277,25 @@ export function OverlayModeView({
   const [activeTab, setActiveTab] = useState('overlay');
 
   // T6630 round 6/7 item 2/1: "all text settings should be for the text
-  // regions the playhead is currently on" -- STRICT playhead scoping for
-  // the SETTINGS panel, deliberately NOT the selectedRegionId short-circuit
-  // TextOverlayPreview.jsx's own burn-in filter uses (that one intentionally
-  // keeps a region rendering on-screen while you're actively editing it,
-  // even if the playhead nudges outside it -- correct THERE, a separate
-  // call site for the actual video preview). Round 7 user direction: "when
-  // my playhead was not over any text region i expect disabled and empty
-  // text settings" -- no exception for whatever was last selected. The
-  // round-6 rationale for copying the short-circuit here (a just-created
-  // region needs to show immediately) is still handled correctly WITHOUT
-  // it: region creation and region selection both explicitly seek the
-  // playhead into range (wrappedAddRegion / handleSelectRegion below), so a
-  // selected region's range legitimately contains currentTime by the time
-  // this filter runs. Regions CAN overlap, so this is a list (0, 1, or N).
-  // T6630 round 7 item 1 (found during live verification of the strict-scoping
-  // fix below, not in the original report): a region's own creation-time seek
-  // (wrappedAddRegion's `seek(newRegion.startTime)`) can land React's
-  // `currentTime` state a HAIR (sub-millisecond, observed ~0.0000007s) below
-  // `region.startTime` -- the video element's own currentTime after a
-  // programmatic seek is not bit-identical to the requested time. Round 6's
-  // now-removed selectedRegionId short-circuit accidentally absorbed this;
-  // a bare `<=` here would otherwise permanently hide a just-created region's
-  // own settings (currentTime never moves again once the video is paused).
-  // EPSILON matches textPositionPresets.js's existing tolerance convention --
-  // far below one video frame (~0.033s at 30fps), so it cannot widen "the
-  // playhead is over this region" into any perceptible range.
-  const PLAYHEAD_EPSILON = 0.01;
+  // regions the playhead is currently on" -- STRICT playhead scoping for the
+  // SETTINGS panel: no exception for whatever region is last SELECTED. Round 7
+  // user direction: "when my playhead was not over any text region i expect
+  // disabled and empty text settings". Region creation and region selection
+  // both explicitly seek the playhead into range (wrappedAddRegion /
+  // handleSelectRegion below), so a legitimately-just-selected region's range
+  // contains currentTime by the time this filter runs. Regions CAN overlap, so
+  // this is a list (0, 1, or N).
+  // T6880: this uses the SHARED `isRegionUnderPlayhead` predicate that
+  // TextOverlayPreview's burn-in filter now uses too, so the panel and the
+  // canvas can never disagree about "under the playhead" (they previously
+  // diverged -- the canvas kept a SELECTED out-of-range region rendering while
+  // the panel dropped it; that exception is now a paused-only, dimmed editing
+  // ghost layered on top of this same predicate). The EPSILON tolerance (part
+  // of the shared helper) absorbs the sub-millisecond seek quantization that
+  // would otherwise permanently hide a just-created region's own settings once
+  // paused; see textRegionPlayhead.js.
   const activeTextRegionsAtPlayhead = useMemo(
-    () => textOverlays.filter((region) =>
-      region.startTime - PLAYHEAD_EPSILON <= currentTime && currentTime < region.endTime + PLAYHEAD_EPSILON),
+    () => textOverlays.filter((region) => isRegionUnderPlayhead(region, currentTime)),
     [textOverlays, currentTime]
   );
 
@@ -327,7 +317,10 @@ export function OverlayModeView({
     if (id) {
       setActiveTab('text');
       const region = textOverlays.find((r) => r.id === id);
-      if (region && !(region.startTime <= currentTime && currentTime < region.endTime)) {
+      // Seek into range only if the playhead isn't already there -- SAME shared
+      // predicate the panel/canvas use (T6880), so "already under the playhead"
+      // means the same thing everywhere.
+      if (region && !isRegionUnderPlayhead(region, currentTime)) {
         seek && seek(region.startTime);
       }
     }
@@ -533,6 +526,10 @@ export function OverlayModeView({
               zoom={zoom}
               panOffset={panOffset}
               isFullscreen={isFullscreen}
+              // T6880: the editing-ghost exception (selected out-of-range region
+              // shown for editing) is gated on Text tab active AND paused.
+              isPlaying={isPlaying}
+              isTextTabActive={activeTab === 'text'}
             />
           ),
         ].filter(Boolean)}

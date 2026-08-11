@@ -141,6 +141,14 @@ function TextPreviewDiagHarness() {
     setElementId2(el2.id);
   }, [regionId, elementId, textOverlays, addElement]);
 
+  // T6880 -- ghost-state controls. The region window is [2,4] (addRegion(2,...)),
+  // so currentTime=3 is IN range (real output) and currentTime=8 is OUT of range
+  // (candidate for the paused-only editing ghost). Defaults preserve the T6720
+  // spec's setup exactly (in-range, paused, Text tab active).
+  const [currentTime, setCurrentTime] = useState(3);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isTextTabActive, setIsTextTabActive] = useState(true);
+
   const selected = textOverlays
     .flatMap((r) => r.elements)
     .find((el) => el.id === elementId);
@@ -175,6 +183,16 @@ function TextPreviewDiagHarness() {
         <button type="button" data-testid="reset-pos" onClick={resetPos}>reset</button>
       </div>
 
+      {/* T6880 -- ghost-state controls (playhead in/out of the region window,
+          play/pause, Text tab active) so the qa spec can drive the exact
+          reported setup: select a region, move the playhead past its end. */}
+      <div data-testid="t6880-state" data-time={currentTime} data-playing={isPlaying ? 'yes' : 'no'} data-texttab={isTextTabActive ? 'yes' : 'no'} style={{ marginBottom: 12 }}>
+        <button type="button" data-testid="time-in" onClick={() => setCurrentTime(3)}>playhead in-range</button>
+        <button type="button" data-testid="time-out" onClick={() => setCurrentTime(8)}>playhead out-of-range</button>
+        <button type="button" data-testid="toggle-play" onClick={() => setIsPlaying((p) => !p)}>toggle play</button>
+        <button type="button" data-testid="toggle-texttab" onClick={() => setIsTextTabActive((a) => !a)}>toggle text tab</button>
+      </div>
+
       {/* Fixed-size video container so the aspect-fit rect (and thus the grab
           frame's on-screen position) is deterministic across viewports. */}
       <div
@@ -192,7 +210,7 @@ function TextPreviewDiagHarness() {
           videoRef={videoRef}
           videoMetadata={VIDEO_META}
           textOverlays={textOverlays}
-          currentTime={3}
+          currentTime={currentTime}
           selectedRegionId={selectedRegionId}
           selectedElementId={selectedElementId}
           onMoveTextPosition={handleMoveTextPosition}
@@ -200,6 +218,8 @@ function TextPreviewDiagHarness() {
           zoom={1}
           panOffset={PAN}
           isFullscreen={false}
+          isPlaying={isPlaying}
+          isTextTabActive={isTextTabActive}
         />
       </div>
     </div>
