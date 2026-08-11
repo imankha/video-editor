@@ -24,7 +24,9 @@ import { RATIO } from '../constants/aspectRatios';
 import { getDraftStage, DRAFT_STAGE } from '../utils/draftStage';
 
 /**
- * DraftTile - a reel draft as a portrait 9:16 poster tile (T5672).
+ * DraftTile - a reel draft as a poster tile (T5672). Shell aspect follows the
+ * draft's target ratio (portrait 9:16 or landscape 16:9, T5673) except for
+ * Not-Started drafts, which render landscape at SOURCE aspect (T6800).
  *
  * Presentational shell over the SAME handlers the old list card used (open, publish,
  * rename, delete, preview) — this restyle is view-only, no persistence change.

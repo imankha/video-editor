@@ -41,8 +41,7 @@ import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
-import { splitByAspect } from '../constants/aspectRatios';
-import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, splitByStage } from '../utils/draftStage';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor } from '../utils/draftStage';
 
 // Shared layout class strings for the Games tab poster grid (T5681/T6310). The
 // loaded games grid AND its loading skeleton both consume these so the skeleton
@@ -50,20 +49,6 @@ import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, splitByStage } from
 // changes, change it here and both surfaces move together.
 const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
 const GAMES_TILE_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4';
-
-// T6810: stage rows for a draft list — one entry per pipeline stage present,
-// each carrying its aspect sub-rows. Not-Started drafts all render landscape
-// (T6800 sizes them at source aspect regardless of target ratio), so that
-// stage gets ONE row with no aspect chip (ratio null) instead of a split that
-// would separate identically-shaped tiles by an invisible target ratio.
-function stageRowsFor(draftList) {
-  return splitByStage(draftList).map(({ stage, projects }) => ({
-    stage,
-    byAspect: stage === DRAFT_STAGE.NOT_STARTED
-      ? [{ ratio: null, projects }]
-      : splitByAspect(projects),
-  }));
-}
 
 // T6810: the stage-labeled carousel rows for one draft list (a game group or
 // "Other reels"). ONE renderer for both call sites so the two surfaces can
@@ -381,11 +366,15 @@ export function ProjectManager({
       const { has_final_video, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, clip_count } = project;
 
       // === Project-level categorization (for header counts) ===
-      if (has_final_video) {
+      // T6810: ONE stage derivation (getDraftStage) feeds these counts AND the
+      // stage rows below them, so the header badge and its own rows can never
+      // disagree on which bucket a draft is in.
+      const stage = getDraftStage(project);
+      if (stage === DRAFT_STAGE.READY) {
         projectsDone++;
-      } else if (has_working_video) {
+      } else if (stage === DRAFT_STAGE.IN_OVERLAY) {
         projectsInOverlay++;
-      } else if (clips_exported > 0 || clips_in_progress > 0 || has_overlay_edits) {
+      } else if (stage === DRAFT_STAGE.IN_FRAMING) {
         projectsInProgress++;
       } else {
         projectsNotStarted++;

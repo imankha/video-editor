@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DRAFT_STAGE, getDraftStage, splitByStage } from './draftStage';
+import { DRAFT_STAGE, getDraftStage, splitByStage, stageRowsFor } from './draftStage';
+import { RATIO } from '../constants/aspectRatios';
 
 // Minimal draft shapes — only the fields the derivation reads.
 const notStarted = { id: 1, clips_in_progress: 0, clips_exported: 0, has_working_video: false, has_final_video: false, has_overlay_edits: false };
@@ -52,5 +53,50 @@ describe('splitByStage', () => {
 
   it('empty list yields no buckets', () => {
     expect(splitByStage([])).toEqual([]);
+  });
+});
+
+describe('stageRowsFor', () => {
+  it('Not-Started collapses to ONE null-ratio row regardless of target ratios (row-height invariant with DraftTile T6800)', () => {
+    const rows = stageRowsFor([
+      { ...notStarted, id: 10, aspect_ratio: RATIO.PORTRAIT },
+      { ...notStarted, id: 11, aspect_ratio: RATIO.LANDSCAPE },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].stage).toBe(DRAFT_STAGE.NOT_STARTED);
+    expect(rows[0].byAspect).toEqual([
+      { ratio: null, projects: expect.arrayContaining([expect.objectContaining({ id: 10 }), expect.objectContaining({ id: 11 })]) },
+    ]);
+  });
+
+  it('a mixed-aspect stage splits into aspect sub-rows, portrait first', () => {
+    const rows = stageRowsFor([
+      { ...inFraming, id: 20, aspect_ratio: RATIO.LANDSCAPE },
+      { ...inFraming, id: 21, aspect_ratio: RATIO.PORTRAIT },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+  });
+
+  it('a single-aspect non-Not-Started stage yields one ratio-labeled bucket (no chip forced by callers)', () => {
+    const rows = stageRowsFor([{ ...ready, id: 30, aspect_ratio: RATIO.PORTRAIT }]);
+    expect(rows[0].byAspect).toHaveLength(1);
+    expect(rows[0].byAspect[0].ratio).toBe(RATIO.PORTRAIT);
+  });
+
+  it('mixed-stage list yields rows in pipeline order, each with its own aspect buckets', () => {
+    const rows = stageRowsFor([
+      { ...ready, id: 40, aspect_ratio: RATIO.PORTRAIT },
+      { ...notStarted, id: 41, aspect_ratio: RATIO.PORTRAIT },
+      { ...inOverlay, id: 42, aspect_ratio: RATIO.LANDSCAPE },
+    ]);
+    expect(rows.map(r => r.stage)).toEqual([
+      DRAFT_STAGE.NOT_STARTED,
+      DRAFT_STAGE.IN_OVERLAY,
+      DRAFT_STAGE.READY,
+    ]);
+    expect(rows[0].byAspect[0].ratio).toBeNull();
+    expect(rows[1].byAspect[0].ratio).toBe(RATIO.LANDSCAPE);
+    expect(rows[2].byAspect[0].ratio).toBe(RATIO.PORTRAIT);
   });
 });

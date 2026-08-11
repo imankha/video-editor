@@ -1,7 +1,9 @@
 // Canonical pipeline stage of a reel draft, derived from the same persistent
 // fields ProjectManager's status counts and DraftTile's status chip already
-// read (T6800). ONE derivation shared by tile sizing, stage-row grouping, and
-// tests — never re-derive these buckets inline.
+// read (T6800). ONE derivation shared by tile sizing, stage-row grouping,
+// group status counts, and tests — never re-derive these buckets inline.
+
+import { splitByAspect } from '../constants/aspectRatios';
 
 export const DRAFT_STAGE = {
   NOT_STARTED: 'not_started',
@@ -64,4 +66,22 @@ export function splitByStage(list) {
     stage,
     projects: list.filter(project => getDraftStage(project) === stage),
   })).filter(bucket => bucket.projects.length > 0);
+}
+
+/**
+ * Stage rows for a draft list — one entry per pipeline stage present, each
+ * carrying its aspect sub-rows (T6810). Not-Started drafts all render
+ * landscape (DraftTile sizes them at source aspect regardless of target
+ * ratio, T6800), so that stage gets ONE row with no aspect chip (ratio null)
+ * instead of a split that would separate identically-shaped tiles by an
+ * invisible target ratio. This null-ratio branch and DraftTile's landscape
+ * override are two halves of the same row-height invariant — change together.
+ */
+export function stageRowsFor(draftList) {
+  return splitByStage(draftList).map(({ stage, projects }) => ({
+    stage,
+    byAspect: stage === DRAFT_STAGE.NOT_STARTED
+      ? [{ ratio: null, projects }]
+      : splitByAspect(projects),
+  }));
 }

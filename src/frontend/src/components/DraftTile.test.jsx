@@ -257,6 +257,10 @@ describe('DraftTile (T5672)', () => {
   });
 
   it('renders a portrait 9:16 tile shape by default', () => {
+    // baseProject has clips_in_progress: 1 (In Framing) — the portrait shell
+    // only applies once framing has begun; a Not-Started draft is landscape
+    // regardless of target ratio (T6800 test below). If the fixture's counters
+    // ever change, this test changes meaning.
     const { container } = renderTile({ aspect_ratio: '9:16' });
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-\[9\/16\]/);
