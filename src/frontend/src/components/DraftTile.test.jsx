@@ -270,6 +270,22 @@ describe('DraftTile (T5672)', () => {
     expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
   });
 
+  // T6800 — a Not-Started draft renders at SOURCE aspect (landscape), because
+  // nothing has been framed yet and its poster is a source-aspect frame; the
+  // target ratio only shapes the tile once framing has begun.
+  it('renders a Not-Started draft landscape even when the target ratio is 9:16 (T6800)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  it('keeps the portrait shell once framing has begun on a 9:16 draft (T6800)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0, clips_exported: 1 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+  });
+
   // Item 3 — selected/active + currently-loaded accent ring
   it('is keyboard-focusable and exposes a focus-visible ring (item 3)', () => {
     const { container } = renderTile();

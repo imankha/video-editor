@@ -21,6 +21,7 @@ import { formatGameClock } from '../utils/timeFormat';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
+import { getDraftStage, DRAFT_STAGE } from '../utils/draftStage';
 
 /**
  * DraftTile - a reel draft as a portrait 9:16 poster tile (T5672).
@@ -371,7 +372,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // tiles, 16:9 drafts render landscape tiles. A caller that puts both
   // aspects in one row (rare) will get mixed tile heights -- callers should
   // split into one-aspect-per-row instead (see ProjectManager grouping).
-  const isLandscape = project.aspect_ratio === RATIO.LANDSCAPE;
+  // T6800: a Not-Started draft renders at SOURCE aspect (landscape), not the
+  // target ratio -- nothing has been framed yet and its poster is a landscape
+  // source frame (ensure_draft_poster preserves source aspect), so the 9:16
+  // shell was center-cropping a sliver of footage the user never cropped.
+  const isNotStarted = getDraftStage(project) === DRAFT_STAGE.NOT_STARTED;
+  const isLandscape = project.aspect_ratio === RATIO.LANDSCAPE || isNotStarted;
   const sizeClass = isLandscape
     ? 'w-[72vw] max-w-[300px] sm:w-[260px] aspect-video'
     : 'w-[40vw] max-w-[200px] sm:w-[168px] aspect-[9/16]';
