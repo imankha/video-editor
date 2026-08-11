@@ -11,7 +11,7 @@
 //     subtitle <- card.subtitle_text; factN <- profile[shown_fields[N-1]].
 //     A blank value OMITS the line (never a blank render).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { geometryFor, ROLE_FOR_SLOT, MUTED_COLOR, STAGGER_ORDER } from '../../utils/introCardGeometry';
 import { wrapLines, measureFontMetricsPx, resolveFontFamily, getFontManifest } from '../RichText';
 import { treatmentAccent } from './introCardVisual';
@@ -263,6 +263,21 @@ export function useCardPreviewElements(card, profile, composition, aspect, frame
 
   const key = cacheKeyFor(card, profile, composition, aspect, frameW, frameH);
   const [state, setState] = useState(() => ({ key, elements: compute() }));
+  // T6730 audit finding F: while `state.key !== key` (the settle effect below
+  // hasn't landed its corrective setState yet — e.g. IntroPreRoll's
+  // ResizeObserver correcting `avail` shortly after mount), the fallback
+  // below used to call `compute()` fresh on EVERY render, handing back a new
+  // `elements` array identity each time even though `key` itself was not
+  // changing between those renders. A consumer keyed on that identity
+  // (MotionPreview's WAAPI animation-build effect) then tore down and rebuilt
+  // every animation on every render for the whole settle window. Memoizing
+  // per `key` returns the SAME identity across same-key renders, so a
+  // downstream effect only reruns when something real actually changed.
+  // `compute` (not referenced in the dep array) closes over `latest` -- a ref
+  // updated above every render -- by design; adding it here would give the
+  // memo a new "dependency" every render and defeat the whole fix.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fallbackElements = useMemo(() => compute(), [key]);
 
   useEffect(() => {
     // jsdom (unit tests) has no FontFaceSet API — the synchronous compute
@@ -309,5 +324,7 @@ export function useCardPreviewElements(card, profile, composition, aspect, frame
   // A key change (a real prop change, e.g. toggling a fact) invalidates the
   // cached state immediately — recompute synchronously rather than flash the
   // PREVIOUS scenario's layout for one frame while waiting on the effect.
-  return state.key === key ? state.elements : compute();
+  // `fallbackElements` (memoized per `key` above) keeps that recompute's
+  // identity stable across repeated renders of the SAME key.
+  return state.key === key ? state.elements : fallbackElements;
 }

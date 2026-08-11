@@ -10,6 +10,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// T6730 audit: consecutive rAF callbacks are normally ~16ms apart. A gap far
+// above that means the browser stopped scheduling frames for this tab
+// (backgrounded, main-thread stall) — crediting the whole gap to playback
+// would let the intro silently skip itself the instant the user looks away
+// and back. See the tick guard below.
+const FRAME_GAP_BUDGET_MS = 250;
+
+// T6730 audit: a backward seek landing within this many ms of durationMs
+// gives the user no perceptible intro playback before auto-continue fires
+// again (the "dead band" — see fireEndedOnce below).
+const DEAD_BAND_MS = 34; // ~2 frames at 60fps
+
 /**
  * @param {number} introDurationSec
  * @param {Object=} opts
@@ -40,19 +52,36 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
   const endedFiredRef = useRef(false);
   const onIntroEndedRef = useRef(onIntroEnded);
   onIntroEndedRef.current = onIntroEnded;
+  // The most recent backward seek's landing point (ms, < durationMs) — read
+  // once by fireEndedOnce to detect the dead band, then cleared so it only
+  // ever describes the seek immediately preceding the next ended event.
+  const lastBackwardSeekRef = useRef(null);
 
   const fireEndedOnce = useCallback(() => {
     if (endedFiredRef.current) return;
     endedFiredRef.current = true;
+    const seek = lastBackwardSeekRef.current;
+    lastBackwardSeekRef.current = null;
+    // Assumption: a backward seek into the intro yields observable intro
+    // playback. If auto-continue fires again within ~2 frames of that seek,
+    // the click landed in the tail of the segment and the user saw nothing.
+    if (seek != null && durationMs - seek < DEAD_BAND_MS) {
+      console.warn(
+        `[useIntroPlayback] intro ended ${Math.round(durationMs - seek)}ms after a backward seek to ${Math.round(seek)}/${Math.round(durationMs)}ms — the seek landed in the auto-continue dead band and gave no perceptible intro playback`,
+      );
+    }
     onIntroEndedRef.current?.();
-  }, []);
+  }, [durationMs]);
 
   const seekIntro = useCallback((ms) => {
     const clamped = Math.max(0, Math.min(ms, durationMs));
     introTimeMsRef.current = clamped;
     setIntroTimeMs(clamped);
     if (clamped >= durationMs) fireEndedOnce();
-    else endedFiredRef.current = false; // seeking back before the end re-arms the guard
+    else {
+      endedFiredRef.current = false; // seeking back before the end re-arms the guard
+      lastBackwardSeekRef.current = clamped;
+    }
   }, [durationMs, fireEndedOnce]);
 
   // rAF forward-advance loop — active only while playing. Frozen (no
@@ -72,6 +101,19 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
       if (!playingRef.current) return; // stale frame from before a pause — no-op
       const dt = now - lastFrameTimeRef.current;
       lastFrameTimeRef.current = now;
+
+      if (dt > FRAME_GAP_BUDGET_MS) {
+        // Assumption: consecutive rAF callbacks stay near a normal frame
+        // interval. A gap this large means frames were dropped (tab hidden,
+        // thread stalled) — skip this tick's advance entirely rather than
+        // fast-forwarding the clock (and potentially firing onIntroEnded) by
+        // however long the gap was.
+        console.warn(
+          `[useIntroPlayback] frame gap ${Math.round(dt)}ms exceeds the ${FRAME_GAP_BUDGET_MS}ms budget — treating as a resume, not advancing the clock (introTimeMs=${Math.round(introTimeMsRef.current)}/${Math.round(durationMs)})`,
+        );
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
 
       // BUG FIX (QA live-drive, 3rd real defect this task): compute `next`
       // from introTimeMsRef (a synchronous mirror), NOT from inside

@@ -39,7 +39,12 @@ export function CompositeScrubber({ segments, onScrub, onHoverChange, hoverIndex
   };
 
   return (
-    <div className="flex gap-1 px-3 pt-2">
+    // T6730 audit finding E: pointer-events-none on the row so the padding,
+    // inter-segment gaps, and the divider (none of which are click targets)
+    // fall through to whatever's behind this bar in callers that overlay it
+    // on top of other content (IntroStoryPlayer's fixed full-viewport
+    // wrapper) — only the buttons themselves opt back in below.
+    <div className="flex gap-1 px-3 pt-2 pointer-events-none">
       {segments.map((seg, i) => {
         const isIntro = seg.kind === 'intro';
         const weight = weightFor(seg.durationSec);
@@ -54,7 +59,7 @@ export function CompositeScrubber({ segments, onScrub, onHoverChange, hoverIndex
               onMouseEnter={() => onHoverChange?.(i)}
               onMouseLeave={() => onHoverChange?.(null)}
               style={{ flexGrow: weight, flexBasis: 0 }}
-              className={`group relative py-2 cursor-pointer ${isIntro ? 'bg-blue-400/10' : ''}`}
+              className={`group relative py-2 cursor-pointer pointer-events-auto ${isIntro ? 'bg-blue-400/10' : ''}`}
             >
               <ProgressTrack
                 trackClassName={`h-1 rounded-full overflow-hidden ${isIntro ? 'bg-blue-400/25' : 'bg-white/25'}`}
@@ -77,7 +82,7 @@ export function CompositeScrubber({ segments, onScrub, onHoverChange, hoverIndex
               <div
                 data-testid="intro-reel-divider"
                 aria-hidden="true"
-                className="w-px my-2 bg-white/30"
+                className="w-px my-2 bg-white/30 pointer-events-none"
               />
             )}
           </div>

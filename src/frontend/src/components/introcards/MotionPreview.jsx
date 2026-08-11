@@ -32,6 +32,17 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, curr
   // state) because scrubbing them is an imperative side effect, not
   // something that should trigger a re-render.
   const animationsRef = useRef([]);
+  // T6730 audit finding F (diagnostic only): the build effect below is
+  // assumed to rerun only when `elements`/box identity genuinely changes
+  // (see its own comment). If that assumption breaks — e.g. a future change
+  // to `useCardPreviewElements` hands back a fresh array identity every
+  // render during its settle window again — this effect would tear down and
+  // rebuild every WAAPI animation on every render. Count executions per
+  // mount and warn once if it churns well beyond the ~1-2 legitimate builds
+  // (initial mount + one settle correction).
+  const buildCountRef = useRef(0);
+  const buildWarnedRef = useRef(false);
+  const mountTimeRef = useRef(performance.now());
   // Track the latest currentTimeMs without adding it to the build effect's
   // deps — the build effect must NOT re-run on every clock tick (that would
   // tear down/rebuild the animations 60x/sec); it only reruns when the
@@ -122,6 +133,14 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, curr
     // its start/end pose, so staggered text needs no manual offset math.
     animations.forEach((a) => a.pause());
     animationsRef.current = animations;
+
+    buildCountRef.current += 1;
+    if (buildCountRef.current > 3 && !buildWarnedRef.current) {
+      buildWarnedRef.current = true;
+      console.warn(
+        `[MotionPreview] animation set rebuilt ${buildCountRef.current} times in ${Math.round(performance.now() - mountTimeRef.current)}ms since mount — 'elements' identity is churning (useCardPreviewElements settle window regression?)`,
+      );
+    }
 
     // Re-seek to the CURRENT clock right after (re)building — this is what
     // makes a font-settle remount hold its pose instead of resetting to 0.
