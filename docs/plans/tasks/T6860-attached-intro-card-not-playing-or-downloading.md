@@ -98,6 +98,60 @@ resolution returns None) or two independent downstream faults. Do not assume eit
 
 **2026-08-11**: Filed from user report; placed top of Deploy Candidate (user-ordered).
 
+**2026-08-11 (triage v1 — WRONG ENV, superseded):** I first checked PRODUCTION and
+found prod profile `9fa7378c` at `PRAGMA user_version=33` (below the intro epic's v034
+floor). That is real but IRRELEVANT: the entire Athlete Intro Card epic is **not
+deployed to production** (last prod deploy `bce639d0`, 2026-08-03, predates every intro
+commit — see `docs/testing/release-map-2026-08-10.md`). The user does not test prod.
+Disregard the production-migration framing entirely. (Committed as 28f0f146; kept only
+for history.)
+
+**2026-08-11 (triage v2 — STAGING, verified live):** The user tests **staging**
+(`https://app-staging.reelballers.com`, API `reel-ballers-api-staging.fly.dev`). I
+live-drove the real staging server (running commit `95632aa7` = master HEAD) as the
+real user via `dev-login` (email imankh@gmail.com, profile 9fa7378c). Findings:
+
+- **Migration/resolution OK on staging.** Staging profile DB is at v42; reel id=38 has
+  `intro_card_id=1` ("New card 1", real 1070x1440 photo, treatment gold, shown_fields
+  [position, team], subtitle "State Cup"). `GET /api/downloads` shows
+  `intro_card_name: "New card 1"`, `resolved_intro_has_photo: true`.
+- **PLAYBACK egress WORKS on the server.** `GET /api/downloads/38/intro-playback` and
+  the single-reel share `GET /api/shared/{token}` both return a valid intro payload
+  (card + `previewUrl` + field_values {position CAM, class 2031, team West Coast ECNL,
+  full_name Mehdi Khabazian}).
+- **DOWNLOAD egress BROKEN — reproduced live (this is the real bug).**
+  `GET /api/downloads/38/file` returns a **16.833s** MP4 = raw reel **12.333s + outro
+  4.5s**, with **NO intro** (should be 20.833s with the 4.0s intro). Frame at t=1.0s is
+  reel footage; t=14s is the "Made with Reel Ballers" outro. The single-reel **share
+  download** `GET /api/shared/{token}/download` is byte-identical (outro-only). So BOTH
+  burn/download egresses drop the intro; BOTH playback egresses keep it.
+- **Localized to the server-side BURN path** (`resolve_intro_for_reel(mode="burn")` ->
+  `_download_card_image` -> `player_intro.build_intro_card` -> `compose_serve_time`).
+  Playback uses `mode="playback"` (presign only) and works; burn downloads the image
+  bytes + renders the card, and fails. The outro (also ffmpeg, /tmp cache, but text-only,
+  no R2 image download) composes fine.
+- **NOT ffmpeg/data/fonts/cache.** The identical code + identical R2 data + identical DB
+  produce the intro correctly in a non-Fly container (`compose_serve_time` -> 20.833s,
+  3 segments), under BOTH ffmpeg 7.1.5 AND a static ffmpeg 5.1.1 (Fly's Debian-12
+  version). Fonts are bundled in the image; both card caches are under `/tmp` (writable).
+  So the fault is **Fly-runtime-specific**.
+- **Fast-failure signal.** The composed download returns in **~1 second** (outro is a
+  cache hit), i.e. the intro build failed BEFORE its multi-second libx264 encode — a
+  PRE-encode failure (image byte-download or layout resolution), not a mid-encode OOM;
+  the request still 200s (non-fatal degrade), so the machine did not crash.
+- **Cannot obtain the Fly server-side error in-container** (no fly CLI/token, no
+  docker). Leading hypotheses: (i) `download_from_r2_global` via `get_r2_transfer_client()`
+  failing on Fly; (ii) `_get_or_build_card`/`_frame_photo` raising fast on the server
+  for a photo+facts card. Expert consult requested for the verdict + fix. Supervisor can
+  confirm instantly by grepping the staging logs for `[intro_egress] card image download
+  failed for reel_id=38`, `[PlayerIntro] card build failed`, or `[serve_time_video] intro
+  card build`.
+
+**Root cause named (per triage step 6):** ONE downstream fault at the **download/burn
+egress only** — the intro card build fails on the Fly staging runtime (pre-encode),
+degrading non-fatally to no-intro; playback/resolution are healthy. Exact Fly mechanism
+pending the server log line above.
+
 ## Acceptance Criteria
 
 - [ ] Attaching an intro card to a reel, then playing it in-app, shows the intro pre-roll

@@ -2654,10 +2654,20 @@ def download_from_r2_global(key: str, local_path: Path, progress_callback=None) 
 
     Returns:
         True if download succeeded, False otherwise
+
+    T6860: uses the DEFAULT sync client (`get_r2_client`), not the transfer client.
+    The sole live caller is the intro-card burn egress (`intro_egress._download_card_image`,
+    ~1-2 MB PNGs). The transfer client's `download_file` was exercised by NOTHING else on
+    the Fly web servers -- and it failed non-transiently there, so the whole burn/download
+    egress silently degraded to no-intro (attached card missing from every downloaded reel)
+    while in-app playback -- which only presigns the image -- stayed fine. The default sync
+    client's `download_file` is the SAME path `download_from_r2` (per-user) uses on every
+    session-init to pull profile.sqlite, so it is proven-good on Fly; card images are far
+    too small to need the transfer client's GB-scale multipart tuning.
     """
     from .utils.retry import TIER_1, retry_r2_call
 
-    client = get_r2_transfer_client() or get_r2_client()
+    client = get_r2_client()
     if not client:
         return False
 
