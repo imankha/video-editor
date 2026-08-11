@@ -69,8 +69,11 @@ workers/node_modules/
 nul
 /src/backend/test_outputs
 
-# User annotation exports
-formal annotations/
+# User annotation exports (huge real-game footage) -- test.short/ is a small
+# committed fixture used by e2e/annotate upload tests, kept out of the ignore
+formal annotations/*
+!formal annotations/test.short/
+!formal annotations/test.short/**
 
 # Task manager config (session cookies)
 scripts/.task-manager-config.json
