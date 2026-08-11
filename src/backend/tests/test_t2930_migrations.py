@@ -335,15 +335,25 @@ class TestProfileV002:
 # ---------------------------------------------------------------------------
 
 class TestRunAllMigrations:
-    def test_postgres_migration_applied_via_runner(self, pg_with_seed_data, profile_db):
-        """_migrate_postgres applies v002 via the MigrationRunner and records it."""
+    def test_postgres_migration_applied_via_runner(self, pg_with_seed_data, profile_db, preserve_schema_migrations):
+        """_migrate_postgres applies v002 via the MigrationRunner and records it.
+
+        T6750: this test only needs to prove v002 re-applies, so it clears
+        EXACTLY v002 — not `>= 2`. The old `>= 2` wipe forced the runner to
+        also replay v003, whose narrow (pre-widening) shares_share_type_check
+        CHECK raises a CheckViolation on any DB that already holds a
+        collection/game_link share (real dev data), turning this test red for a
+        reason unrelated to what it asserts. `preserve_schema_migrations`
+        additionally snapshots/restores the ledger in teardown so any failure
+        can never leak a below-v003 ledger into later tests.
+        """
         from app.migrations import _migrate_postgres
         from app.services.pg import get_pg
 
-        # Clear v002 so it re-applies
+        # Clear ONLY v002 so it (and nothing below/around it) re-applies.
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM schema_migrations WHERE version >= 2")
+            cur.execute("DELETE FROM schema_migrations WHERE version = 2")
             cur.execute("DROP TABLE IF EXISTS game_ref_counts")
 
         results = {"postgres": {"applied": [], "error": None}}
@@ -646,3 +656,85 @@ class TestHasRemainingRefsIntegration:
     def test_false_when_hash_not_in_table(self, pg_with_seed_data, profile_db):
         from app.services.auth_db import has_remaining_refs
         assert has_remaining_refs("nonexistent_hash") is False
+
+
+# ---------------------------------------------------------------------------
+# T6750: pg_conn replay must never re-apply v003's narrow CHECK against real
+# wider-type share data, and ledger-wiping tests must not poison the DB.
+# ---------------------------------------------------------------------------
+
+class TestT6750LedgerPoisoning:
+    def test_replay_survives_wide_share_outside_test_scope(self, pg_conn, preserve_schema_migrations):
+        """A collection-type share under a user OUTSIDE _TEST_USER_IDS (so the
+        fixture never cleans it) must NOT break the migration replay.
+
+        Reproduces the exact poisoning precondition: a prior test leaves the
+        ledger below v003 while a wider-type share (postdating v003's narrow
+        CHECK) is present. pg_conn's healing sequence must re-assert v001-v004
+        as applied and replay only v005+, so v003's narrow constraint is never
+        re-validated against the collection row (which would raise
+        psycopg2.errors.CheckViolation) — and v003 must remain in the ledger.
+        """
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+
+        from app.migrations.postgres import RUNNER
+        from app.services.pg import _SCHEMA_DDL
+
+        dsn = pg_conn
+        conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+        conn.autocommit = True
+        cur = conn.cursor()
+        try:
+            # Seed a user + collection share outside the fixture's cleanup scope.
+            cur.execute(
+                "INSERT INTO users (user_id, email) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                ("t6750-outside-scope", "t6750-outside@example.com"),
+            )
+            cur.execute(
+                "INSERT INTO shares (share_token, share_type, sharer_user_id, "
+                "sharer_profile_id, recipient_email) VALUES (%s, 'collection', %s, %s, %s)",
+                ("t6750-poison-token", "t6750-outside-scope", "prof", "r@example.com"),
+            )
+
+            # Simulate a prior ledger-wiping test that died below v003.
+            cur.execute("DELETE FROM schema_migrations WHERE version >= 2")
+
+            # Re-run pg_conn's exact healing sequence — must not raise.
+            cur.execute(_SCHEMA_DDL)
+            cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
+            for m in RUNNER.migrations:
+                if m.version < 5:
+                    cur.execute(
+                        "INSERT INTO schema_migrations (version, description) "
+                        "VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                        (m.version, m.description),
+                    )
+            RUNNER.run(conn, "postgres")
+
+            # v003 recorded (re-asserted, never replayed) and ledger back at HEAD.
+            cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+            versions = [r["version"] for r in cur.fetchall()]
+            assert 3 in versions, "v003 must be present, never replayed against wide data"
+            assert versions == list(range(1, RUNNER.latest_version + 1)), (
+                f"ledger not contiguous 1..{RUNNER.latest_version}: {versions}"
+            )
+        finally:
+            # Mirror pg_conn's per-user teardown order: clear every table that
+            # FK-references users (the migration replay backfills user_segments)
+            # before deleting the user itself.
+            uid = ("t6750-outside-scope",)
+            for tbl, col in (
+                ("shares", "sharer_user_id"),
+                ("user_actions", "user_id"),
+                ("user_segments", "user_id"),
+                ("user_usage_daily", "user_id"),
+                ("sessions", "user_id"),
+                ("credit_transactions", "user_id"),
+                ("credit_reservations", "user_id"),
+                ("credits", "user_id"),
+                ("game_storage_refs", "user_id"),
+            ):
+                cur.execute(f"DELETE FROM {tbl} WHERE {col} = %s", uid)
+            cur.execute("DELETE FROM users WHERE user_id = %s", uid)
+            conn.close()
