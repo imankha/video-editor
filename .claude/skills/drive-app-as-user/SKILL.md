@@ -1,3 +1,8 @@
+---
+name: drive-app-as-user
+model: sonnet
+---
+
 # Drive the app AS A REAL USER (Playwright + dev auth)
 
 Authenticate Playwright as a **real account with real data** and drive the app to
