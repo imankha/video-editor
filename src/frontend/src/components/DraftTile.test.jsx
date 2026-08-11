@@ -257,6 +257,10 @@ describe('DraftTile (T5672)', () => {
   });
 
   it('renders a portrait 9:16 tile shape by default', () => {
+    // baseProject has clips_in_progress: 1 (In Framing) — the portrait shell
+    // only applies once framing has begun; a Not-Started draft is landscape
+    // regardless of target ratio (T6800 test below). If the fixture's counters
+    // ever change, this test changes meaning.
     const { container } = renderTile({ aspect_ratio: '9:16' });
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-\[9\/16\]/);
@@ -268,6 +272,22 @@ describe('DraftTile (T5672)', () => {
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-video/);
     expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  // T6800 — a Not-Started draft renders at SOURCE aspect (landscape), because
+  // nothing has been framed yet and its poster is a source-aspect frame; the
+  // target ratio only shapes the tile once framing has begun.
+  it('renders a Not-Started draft landscape even when the target ratio is 9:16 (T6800)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  it('keeps the portrait shell once framing has begun on a 9:16 draft (T6800)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0, clips_exported: 1 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
   });
 
   // Item 3 — selected/active + currently-loaded accent ring

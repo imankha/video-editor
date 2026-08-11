@@ -136,10 +136,10 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     await mobileContext.close();
   });
 
-  test('A game with both 9:16 and 16:9 drafts renders one row per aspect, portrait first', async ({
+  test('Game groups render stage rows (T6810); a mixed-aspect stage sub-splits portrait first; Not-Started collapses to one landscape row (T6800)', async ({
     page,
   }) => {
-    skipOnDeployedTarget(test, 'splices a synthetic 16:9 draft via an in-page import of /src/stores/projectsStore.js; that Vite-dev path 404s on a deployed BUILD');
+    skipOnDeployedTarget(test, 'splices synthetic drafts via an in-page import of /src/stores/projectsStore.js; that Vite-dev path 404s on a deployed BUILD');
     // Set desktop viewport
     await page.setViewportSize({ width: 1315, height: 800 });
     await page.goto('/');
@@ -149,52 +149,89 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     // (helpers/appReady.js), which hung this test to the 60s deployed-target timeout.
     await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-    // The real account's "at Legends Mar 28" group is all-portrait today, so
-    // splice in one synthetic 16:9 draft under the SAME group_key to exercise
-    // the split. Client-side only, no backend/DB writes.
+    // Splice synthetic drafts under an existing group_key to exercise the
+    // T6810 stage rows DETERMINISTICALLY (the real account's stages vary):
+    // force one portrait+one landscape draft into In Framing (mixed-aspect
+    // stage -> aspect sub-split) and one portrait draft into Not Started
+    // (collapses to a single null-ratio row, tile renders landscape per
+    // T6800). Client-side only, no backend/DB writes.
     await page.evaluate(async () => {
       const { useProjectsStore } = await import('/src/stores/projectsStore.js');
       const current = useProjectsStore.getState().projects;
-      const portraitDraft = current.find((p) => p.aspect_ratio === '9:16' && p.group_key);
-      const landscapeDraft = {
-        ...portraitDraft,
-        id: 888888,
-        name: 'Synthetic Landscape Draft',
-        aspect_ratio: '16:9',
+      const seed = current.find((p) => p.aspect_ratio === '9:16' && p.group_key);
+      const inFramingBase = {
+        ...seed,
+        clips_in_progress: 1,
+        clips_exported: 0,
+        has_working_video: false,
+        has_final_video: false,
+        has_overlay_edits: false,
+        is_published: false,
       };
-      useProjectsStore.setState({ projects: [landscapeDraft, ...current] });
+      const framingPortrait = { ...inFramingBase, id: 888887, name: 'Synthetic Framing Portrait' };
+      const framingLandscape = { ...inFramingBase, id: 888888, name: 'Synthetic Landscape Draft', aspect_ratio: '16:9' };
+      const freshDraft = {
+        ...inFramingBase,
+        id: 888889,
+        name: 'Synthetic Fresh Draft',
+        clips_in_progress: 0,
+      };
+      useProjectsStore.setState({ projects: [framingPortrait, framingLandscape, freshDraft, ...current] });
     });
 
     await page.waitForSelector('text=Synthetic Landscape Draft', { timeout: 3000 });
 
-    // Two carousel rows for that game now: one per aspect, portrait first.
-    const portraitRow = page.locator('[role="group"][aria-label*="9:16"]');
-    const landscapeRow = page.locator('[role="group"][aria-label*="16:9"]');
+    // Stage rows exist for both spliced stages, Not Started before In Framing.
+    const notStartedRow = page.locator('[data-testid="stage-row-not_started"]');
+    const inFramingRow = page.locator('[data-testid="stage-row-in_framing"]');
+    await expect(notStartedRow.first()).toBeVisible();
+    await expect(inFramingRow.first()).toBeVisible();
+    const stageOrder = await page.locator('[data-testid^="stage-row-"]').evaluateAll(
+      (els) => els.map((el) => el.getAttribute('data-testid'))
+    );
+    console.log(`Stage row order: ${JSON.stringify(stageOrder)}`);
+    expect(stageOrder.indexOf('stage-row-not_started'))
+      .toBeLessThan(stageOrder.indexOf('stage-row-in_framing'));
+
+    // The mixed-aspect In Framing stage sub-splits: one carousel per aspect,
+    // portrait first, ratios in the aria-labels + visible aspect chips.
+    const portraitRow = page.locator('[role="group"][aria-label*="In Framing"][aria-label*="9:16"]');
+    const landscapeRow = page.locator('[role="group"][aria-label*="In Framing"][aria-label*="16:9"]');
     await expect(portraitRow).toHaveCount(1);
     await expect(landscapeRow).toHaveCount(1);
-
-    // Portrait row precedes the landscape row in DOM order.
-    const rowLabels = await page.locator('[role="group"][aria-label*="drafts"]').evaluateAll(
+    const framingLabels = await page.locator('[role="group"][aria-label*="In Framing"]').evaluateAll(
       (els) => els.map((el) => el.getAttribute('aria-label'))
     );
-    const portraitIdx = rowLabels.findIndex((l) => l?.includes('9:16'));
-    const landscapeIdx = rowLabels.findIndex((l) => l?.includes('16:9'));
-    console.log(`Row order: ${JSON.stringify(rowLabels)}`);
+    const portraitIdx = framingLabels.findIndex((l) => l?.includes('9:16'));
+    const landscapeIdx = framingLabels.findIndex((l) => l?.includes('16:9'));
+    console.log(`In Framing row order: ${JSON.stringify(framingLabels)}`);
     expect(portraitIdx).toBeGreaterThanOrEqual(0);
     expect(landscapeIdx).toBeGreaterThan(portraitIdx);
-
-    // Aspect label chips visible, using the raw filter-chip vocabulary ("9:16"/"16:9").
     expect(await page.getByText('9:16', { exact: true }).count()).toBeGreaterThan(0);
     expect(await page.getByText('16:9', { exact: true }).count()).toBeGreaterThan(0);
+
+    // Not-Started rows never carry an aspect ratio in their aria-label (single
+    // null-ratio bucket -- all tiles landscape, nothing to split on).
+    const notStartedCarouselLabels = await page.locator('[role="group"][aria-label*="Not Started"]').evaluateAll(
+      (els) => els.map((el) => el.getAttribute('aria-label'))
+    );
+    expect(notStartedCarouselLabels.length).toBeGreaterThan(0);
+    for (const label of notStartedCarouselLabels) {
+      expect(label).not.toMatch(/9:16|16:9/);
+    }
 
     // The synthetic landscape tile renders as a landscape (aspect-video) shape,
     // not letterboxed into a portrait tile.
     const landscapeTile = page.locator('[data-testid="project-card"]', { hasText: 'Synthetic Landscape Draft' });
-    const tileClass = await landscapeTile.first().getAttribute('class');
-    expect(tileClass).toMatch(/aspect-video/);
+    expect(await landscapeTile.first().getAttribute('class')).toMatch(/aspect-video/);
 
-    await page.screenshot({ path: '/tmp/t5672-aspect-split-rows.png' });
-    console.log('Screenshot saved: /tmp/t5672-aspect-split-rows.png');
+    // T6800: the Not-Started draft renders landscape even though its TARGET
+    // ratio is 9:16 -- the tile shows the source-aspect poster uncropped.
+    const freshTile = page.locator('[data-testid="project-card"]', { hasText: 'Synthetic Fresh Draft' });
+    expect(await freshTile.first().getAttribute('class')).toMatch(/aspect-video/);
+
+    await page.screenshot({ path: '/tmp/t6810-stage-rows.png' });
+    console.log('Screenshot saved: /tmp/t6810-stage-rows.png');
   });
 
   test('Verify all 13 drafts belong to one game (Legends Mar 28)', async ({
