@@ -145,8 +145,12 @@ def _applied_versions(conn):
 
 
 class TestRealPostgresGapHeals:
-    def test_gap_below_max_reported_pending_and_applied(self, pg_conn):
-        """[1..19, 22] -> v020/v021 pending AND applied by RUNNER.run(); ledger becomes 1..22."""
+    def test_gap_below_max_reported_pending_and_applied(self, pg_conn, preserve_schema_migrations):
+        """[1..19, 22] -> v020/v021 pending AND applied by RUNNER.run(); ledger becomes 1..22.
+
+        T6750: `_seed_versions` wipes the whole ledger; `preserve_schema_migrations`
+        restores it in teardown so a mid-test failure can't poison later tests.
+        """
         from app.migrations.postgres import RUNNER
 
         conn = psycopg2.connect(pg_conn, cursor_factory=RealDictCursor)
@@ -169,8 +173,12 @@ class TestRealPostgresGapHeals:
         finally:
             conn.close()
 
-    def test_contiguous_history_reports_nothing_pending(self, pg_conn):
-        """A fully-migrated [1..22] env still reports nothing pending (AC #4)."""
+    def test_contiguous_history_reports_nothing_pending(self, pg_conn, preserve_schema_migrations):
+        """A fully-migrated [1..22] env still reports nothing pending (AC #4).
+
+        T6750: `_seed_versions` wipes the whole ledger; `preserve_schema_migrations`
+        restores it in teardown so a mid-test failure can't poison later tests.
+        """
         from app.migrations.postgres import RUNNER
 
         conn = psycopg2.connect(pg_conn, cursor_factory=RealDictCursor)

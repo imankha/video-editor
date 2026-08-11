@@ -114,16 +114,37 @@ def pg_conn(monkeypatch):
     cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
 
     from app.migrations.postgres import RUNNER
-    RUNNER.run(setup, "postgres")
+    # T6750: re-assert v001-v004 as already applied BEFORE replaying 5+. v003's
+    # narrow shares_share_type_check CHECK ('video'/'game'/'annotation_playback')
+    # — since widened by v016/v020 to add 'collection'/'game_link' — raises a
+    # CheckViolation if replayed against a DB already holding a wider-type share
+    # row (real dev data, or a test that left one). _SCHEMA_DDL creates every
+    # table at HEAD schema (game_ref_counts present, shares CHECK already wide),
+    # so v001-v004 are structural no-ops on a truly fresh DB anyway. This also
+    # makes the fixture self-healing if a ledger-wiping test drops below v005.
+    for _m in RUNNER.migrations:
+        if _m.version < 5:
+            cur.execute(
+                "INSERT INTO schema_migrations (version, description) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
+                (_m.version, _m.description),
+            )
 
     placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
+    # T6750: clear leftover test-user shares BEFORE the migration replay, not
+    # after. A widened-type ('collection'/'game_link') share left behind by an
+    # errored prior test would otherwise still be present when RUNNER replays,
+    # re-triggering the v003 CheckViolation on the NEXT test's setup.
+    cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
+
+    RUNNER.run(setup, "postgres")
+
     cur.execute(f"DELETE FROM user_actions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM user_segments WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     # T5770: per-user daily usage buckets (keyed by user_id) — clean like segments.
     cur.execute(f"DELETE FROM user_usage_daily WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     cur.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
-    cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     # T5840: credits live in Postgres now -- clean the per-test-user ledger too.
@@ -187,6 +208,43 @@ def pg_conn(monkeypatch):
     tc.execute(f"DELETE FROM credits WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     teardown.close()
+
+
+@pytest.fixture
+def preserve_schema_migrations(pg_conn):
+    """Snapshot schema_migrations before a test and restore it verbatim after.
+
+    T6750: a few tests deliberately wipe the ledger to exercise migration
+    replay (test_t2930's runner test, test_t6345's version-gap tests). Before
+    this fixture existed they left the ledger wiped on failure, permanently
+    poisoning every later pg_conn test in the run — and the shared dev DB —
+    because pg_conn's `DELETE ... WHERE version >= 5` then leaves a below-v003
+    ledger that RUNNER.run replays, hitting v003's narrow CHECK against real
+    wider-type share data. Restoring the exact snapshot in teardown (pass OR
+    fail) makes those tests leave the ledger exactly as they found it.
+
+    Depends on pg_conn so it runs against the same clean, schema-guaranteed DB.
+    """
+    dsn = pg_conn
+    snap = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    snap.autocommit = True
+    sc = snap.cursor()
+    sc.execute("SELECT version, description FROM schema_migrations ORDER BY version")
+    snapshot = [(r["version"], r["description"]) for r in sc.fetchall()]
+    snap.close()
+
+    yield
+
+    restore = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    restore.autocommit = True
+    rc = restore.cursor()
+    rc.execute("DELETE FROM schema_migrations")
+    if snapshot:
+        rc.executemany(
+            "INSERT INTO schema_migrations (version, description) VALUES (%s, %s)",
+            snapshot,
+        )
+    restore.close()
 
 
 @pytest.fixture

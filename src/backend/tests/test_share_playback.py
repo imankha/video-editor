@@ -35,17 +35,13 @@ UNKNOWN_EMAIL = "stranger@example.com"
 @pytest.fixture()
 def isolated_auth_db(pg_conn):
     from app.services.auth_db import create_user
-    from app.services.pg import get_pg
 
-    # Ensure v003 migration constraint is applied (test DB may have old constraint)
-    with get_pg() as conn:
-        cur = conn.cursor()
-        cur.execute("ALTER TABLE shares DROP CONSTRAINT IF EXISTS shares_share_type_check")
-        cur.execute("""
-            ALTER TABLE shares ADD CONSTRAINT shares_share_type_check
-            CHECK (share_type IN ('video', 'game', 'annotation_playback'))
-        """)
-
+    # T6750: this used to re-ADD v003's NARROW shares_share_type_check
+    # (video/game/annotation_playback only). That constraint is stale — v016/v020
+    # widen it to include 'collection'/'game_link' — and re-applying it raised a
+    # CheckViolation on any DB already holding a collection/game_link share (real
+    # dev data). It is also redundant: pg_conn replays migrations through HEAD, so
+    # the shares table already carries v020's full 5-value constraint here. Removed.
     create_user(SHARER_ID, email=SHARER_EMAIL)
     create_user(RECIPIENT_ID, email=RECIPIENT_EMAIL)
     yield
