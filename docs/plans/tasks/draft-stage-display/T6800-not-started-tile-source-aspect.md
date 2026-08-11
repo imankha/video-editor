@@ -1,6 +1,6 @@
 # T6800: Not Started tiles render at source aspect
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-11
