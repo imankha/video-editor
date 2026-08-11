@@ -73,9 +73,17 @@ ref to, while the game keeps showing `ready`. Fixed the code (guard + counter fl
 - [ ] One-time `game_ref_counts` reconciliation to real per-profile counts (clears 14 negatives +
       the `pg=4, real=0` storage leaks). Guard makes it non-urgent.
 - [ ] Consider replacing the bare counter with a derived ref-set table (one row per referencing
-      profile) so `ref_count = COUNT(*)` can never drift — larger change, follow-up task.
+      profile) so `ref_count = COUNT(*)` can never drift — larger change, follow-up task. **Filed
+      2026-08-11 as [T6770](../../docs/plans/tasks/T6770-game-refcount-derived-set.md).**
 - [ ] Add an admin/monitoring check: alert on any `game_ref_counts.ref_count < 0` or any
       grace-queued hash that still has a live ref (would have caught this proactively).
+
+**2026-08-11 observation (derisk-plan account repair, see `docs/testing/derisk-plan-2026-08-11.md`):**
+dev Postgres has NO `game_ref_counts` row at all for the imankh account's games 2, 3, and 5, while
+their per-profile `game_storage` rows are active — a MISSING-row drift shape, distinct from the
+negative-count shape this incident originally found. Same underlying class (the counter table can
+independently diverge from the per-profile source of truth). Folded into T6770 rather than filed as
+a separate incident, since the derived-set fix addresses both shapes structurally.
 
 ## Related
 
