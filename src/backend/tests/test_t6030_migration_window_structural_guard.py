@@ -283,6 +283,28 @@ def test_overlay_data(below_head):
     # getter/setter's own column-guard directly.
 
 
+def test_poster_time_write(below_head):
+    # T6550: the poster-marker WRITE (projects.poster_marker_time, v032) is the
+    # write-side sibling of test_overlay_data's guarded READ. On a below-head DB
+    # the endpoint must NOT raise `sqlite3.OperationalError: no such column`
+    # (which would 500 the drag gesture); it must refuse honestly with a 503
+    # "not available yet" instead of a lying 200 success.
+    import sqlite3
+
+    from fastapi import HTTPException
+
+    from app.routers.export.overlay import PosterTimeRequest, set_poster_time
+
+    try:
+        _run(set_poster_time(below_head["project_id"], PosterTimeRequest(time=1.5)))
+    except sqlite3.OperationalError as e:  # the pre-T6550 failure mode
+        pytest.fail(f"poster-time write hit an unguarded missing column: {e}")
+    except HTTPException as exc:
+        assert exc.status_code == 503  # honest, retryable "pending migration"
+    else:
+        pytest.fail("below-head poster-time write should refuse with 503, not succeed")
+
+
 def test_gallery_downloads(below_head):
     from app.routers.downloads import list_downloads
 

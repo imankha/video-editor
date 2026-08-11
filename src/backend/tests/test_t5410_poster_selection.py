@@ -304,8 +304,10 @@ def test_marker_time_none_by_default(db):
 
 def test_marker_time_set_and_read_back(db):
     pid = _seed_project(db)
-    stored = set_project_poster_marker_time(pid, 3.25)
-    assert stored == 3.25
+    # T6550: the setter now returns True when the write lands (was the stored
+    # value); the persisted time is asserted via the getter read-back.
+    wrote = set_project_poster_marker_time(pid, 3.25)
+    assert wrote is True
     assert get_project_poster_marker_time(pid) == pytest.approx(3.25)
 
 
@@ -339,6 +341,12 @@ def test_marker_time_column_guarded_pre_migration(db):
 
     pid = _seed_project(db)
     # Must not raise "no such column" -- treated as no override (auto).
+    assert get_project_poster_marker_time(pid) is None
+    # T6550: the WRITE must be guarded symmetrically. On a below-v032 profile it
+    # must NOT raise "no such column" and must NOT lie about success -- it reports
+    # False (nothing written) so the caller can surface a distinct 503.
+    assert set_project_poster_marker_time(pid, 4.5) is False
+    # And the column really is still absent (no self-repair / silent create).
     assert get_project_poster_marker_time(pid) is None
 
 

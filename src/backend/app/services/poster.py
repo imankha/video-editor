@@ -591,7 +591,7 @@ def get_project_poster_marker_time(project_id: int | None) -> float | None:
         return float(row["poster_marker_time"]) if row and row["poster_marker_time"] is not None else None
 
 
-def set_project_poster_marker_time(project_id: int, time: float) -> float:
+def set_project_poster_marker_time(project_id: int, time: float) -> bool:
     """Surgical write of the projects.poster_marker_time override (gesture-only
     -- fired from an explicit drag-end / button click, never a useEffect).
 
@@ -599,16 +599,35 @@ def set_project_poster_marker_time(project_id: int, time: float) -> float:
     (the endpoint rejects a null/missing time). The preview image is ALWAYS a
     frame (T6510); the marker only MOVES, it never clears. (A stored NULL still
     means "no override -> window midpoint" for legacy rows and get_/select_
-    fallbacks, but no write path produces one anymore.) Returns the stored
-    value."""
-    from ..database import get_db_connection
+    fallbacks, but no write path produces one anymore.)
+
+    T6550: column-guarded for the deploy->migrate window (v032 not yet applied),
+    mirroring the guarded READ (`get_project_poster_marker_time`) -- migrations
+    do NOT auto-run on deploy, so between deploy and `POST /api/admin/migrate`
+    this write can run against a below-v032 profile whose `projects` table has no
+    `poster_marker_time` column. A bare UPDATE there raises
+    `sqlite3.OperationalError: no such column` -> 500.
+
+    Returns True when the override was written, and False when the column is not
+    present yet (below-head profile in the deploy->migrate window). It returns
+    False rather than raising a bare OperationalError, and rather than silently
+    pretending to succeed: the caller MUST surface the False outcome distinctly
+    (`set_poster_time` maps it to a 503 "not available yet") so a user's drag is
+    never reported saved when nothing was stored (CLAUDE.md: no silent fallback
+    for internal data). This is a real, time-bounded condition, not an impossible
+    state, so it deserves an honest, retryable outcome -- not a swallowed no-op
+    and not a raw 500."""
+    from ..database import column_exists, get_db_connection
     with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if not column_exists(cursor, "projects", "poster_marker_time"):
+            return False
         conn.execute(
             "UPDATE projects SET poster_marker_time = ? WHERE id = ?",
             (time, project_id),
         )
         conn.commit()
-    return time
+    return True
 
 
 def _resolve_final_duration(
