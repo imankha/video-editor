@@ -42,6 +42,7 @@ import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
 import { splitByAspect } from '../constants/aspectRatios';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, splitByStage } from '../utils/draftStage';
 
 // Shared layout class strings for the Games tab poster grid (T5681/T6310). The
 // loaded games grid AND its loading skeleton both consume these so the skeleton
@@ -49,6 +50,76 @@ import { splitByAspect } from '../constants/aspectRatios';
 // changes, change it here and both surfaces move together.
 const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
 const GAMES_TILE_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4';
+
+// T6810: stage rows for a draft list — one entry per pipeline stage present,
+// each carrying its aspect sub-rows. Not-Started drafts all render landscape
+// (T6800 sizes them at source aspect regardless of target ratio), so that
+// stage gets ONE row with no aspect chip (ratio null) instead of a split that
+// would separate identically-shaped tiles by an invisible target ratio.
+function stageRowsFor(draftList) {
+  return splitByStage(draftList).map(({ stage, projects }) => ({
+    stage,
+    byAspect: stage === DRAFT_STAGE.NOT_STARTED
+      ? [{ ratio: null, projects }]
+      : splitByAspect(projects),
+  }));
+}
+
+// T6810: the stage-labeled carousel rows for one draft list (a game group or
+// "Other reels"). ONE renderer for both call sites so the two surfaces can
+// never drift. Each stage row = a label chip (legend-tinted stage name +
+// count) then one carousel per aspect present within that stage; the aspect
+// chip only appears when a stage actually mixes aspects (mirrors the old
+// byAspect behavior, now scoped per stage).
+function DraftStageRows({
+  byStage,
+  ariaPrefix,
+  onSelectProject,
+  onSelectProjectWithMode,
+  onDeleteProject,
+  exportingProject,
+  pendingGameIds,
+}) {
+  return byStage.map(({ stage, byAspect }) => {
+    const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
+    return (
+      <div key={stage} data-testid={`stage-row-${stage}`}>
+        <div className="px-3 pb-1 flex items-center gap-1.5">
+          <span className={`text-[10px] font-semibold ${DRAFT_STAGE_TINTS[stage]} bg-gray-700/40 px-1.5 py-0.5 rounded`}>
+            {DRAFT_STAGE_LABELS[stage]}
+          </span>
+          <span className="text-[10px] text-gray-500">{stageCount}</span>
+        </div>
+        {byAspect.map(({ ratio, projects: aspectProjects }) => (
+          <div key={ratio ?? 'source'}>
+            {byAspect.length > 1 && (
+              <div className="px-3 pb-1">
+                <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+                  {ratio}
+                </span>
+              </div>
+            )}
+            <CardCarousel
+              ariaLabel={`${ariaPrefix} ${DRAFT_STAGE_LABELS[stage]}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
+            >
+              {aspectProjects.map(project => (
+                <DraftTile
+                  key={project.id}
+                  project={project}
+                  onSelect={() => onSelectProject(project.id)}
+                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                  onDelete={() => onDeleteProject(project.id)}
+                  exportingProject={exportingProject}
+                  pendingGameIds={pendingGameIds}
+                />
+              ))}
+            </CardCarousel>
+          </div>
+        ))}
+      </div>
+    );
+  });
+}
 
 // Group games by month (YYYY-MM) in chronological order (newest first)
 function groupGamesByMonth(games) {
@@ -386,10 +457,11 @@ export function ProjectManager({
       groups[key].projects.sort((a, b) =>
         compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
       groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
-      // Portrait/landscape drafts render in separate carousel rows so tile
-      // heights stay consistent within a row (mirrors ReelTile/Collections);
-      // count/statusCounts above stay whole-game (both aspects combined).
-      groups[key].byAspect = splitByAspect(groups[key].projects);
+      // T6810: drafts render one labeled carousel row per pipeline stage
+      // (Not Started -> In Framing -> In Overlay -> Ready), each stage keeping
+      // the aspect sub-split so tile heights stay consistent within a row;
+      // count/statusCounts above stay whole-game (all stages combined).
+      groups[key].byStage = stageRowsFor(groups[key].projects);
       // Find the most recent game date in this group
       let mostRecentDate = null;
       groups[key].projects.forEach(project => {
@@ -426,7 +498,7 @@ export function ProjectManager({
       return a.localeCompare(b);
     });
 
-    return { groups, sortedKeys, ungrouped, ungroupedByAspect: splitByAspect(ungrouped) };
+    return { groups, sortedKeys, ungrouped, ungroupedByStage: stageRowsFor(ungrouped) };
   }, [filteredProjects, getProjectStatusCounts]);
 
   // Compute most recent items for "Continue Where You Left Off" section
@@ -1176,9 +1248,9 @@ export function ProjectManager({
                 </div>
               ) : (
                 <>
-                  {/* Ungrouped drafts (no game) -> one "Other reels" section, one carousel
-                      row per aspect ratio present (portrait first) so tiles keep their
-                      aspect-correct shape and row heights stay consistent (Q5 + aspect split) */}
+                  {/* Ungrouped drafts (no game) -> one "Other reels" section; one
+                      labeled carousel row per pipeline stage present, each stage
+                      aspect-split so row heights stay consistent (T6810) */}
                   {groupedProjects.ungrouped.length > 0 && (
                     <div className="mb-2">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
@@ -1187,30 +1259,15 @@ export function ProjectManager({
                           {groupedProjects.ungrouped.length}
                         </span>
                       </div>
-                      {groupedProjects.ungroupedByAspect.map(({ ratio, projects: aspectProjects }) => (
-                        <div key={ratio}>
-                          {groupedProjects.ungroupedByAspect.length > 1 && (
-                            <div className="px-3 pb-1">
-                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
-                                {ratio}
-                              </span>
-                            </div>
-                          )}
-                          <CardCarousel ariaLabel={groupedProjects.ungroupedByAspect.length > 1 ? `Other reels ${ratio}` : 'Other reels'}>
-                            {aspectProjects.map(project => (
-                              <DraftTile
-                                key={project.id}
-                                project={project}
-                                onSelect={() => onSelectProject(project.id)}
-                                onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                                onDelete={() => onDeleteProject(project.id)}
-                                exportingProject={exportingProject}
-                                pendingGameIds={pendingGameIds}
-                              />
-                            ))}
-                          </CardCarousel>
-                        </div>
-                      ))}
+                      <DraftStageRows
+                        byStage={groupedProjects.ungroupedByStage}
+                        ariaPrefix="Other reels"
+                        onSelectProject={onSelectProject}
+                        onSelectProjectWithMode={onSelectProjectWithMode}
+                        onDeleteProject={onDeleteProject}
+                        exportingProject={exportingProject}
+                        pendingGameIds={pendingGameIds}
+                      />
                     </div>
                   )}
 
@@ -1227,34 +1284,18 @@ export function ProjectManager({
                       statusCounts={group.statusCounts}
                       defaultExpanded={hasIncomplete || hasUnpublished}
                     >
-                      {/* One carousel row per aspect ratio present (portrait first) --
-                          a game with both 9:16 and 16:9 drafts never mixes them in one
-                          row; single-aspect games render exactly as before (one row,
-                          no aspect chip) since byAspect has exactly one entry. */}
-                      {group.byAspect.map(({ ratio, projects: aspectProjects }) => (
-                        <div key={ratio}>
-                          {group.byAspect.length > 1 && (
-                            <div className="px-3 pb-1">
-                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
-                                {ratio}
-                              </span>
-                            </div>
-                          )}
-                          <CardCarousel ariaLabel={group.byAspect.length > 1 ? `${groupKey} drafts ${ratio}` : `${groupKey} drafts`}>
-                            {aspectProjects.map(project => (
-                              <DraftTile
-                                key={project.id}
-                                project={project}
-                                onSelect={() => onSelectProject(project.id)}
-                                onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                                onDelete={() => onDeleteProject(project.id)}
-                                exportingProject={exportingProject}
-                                pendingGameIds={pendingGameIds}
-                              />
-                            ))}
-                          </CardCarousel>
-                        </div>
-                      ))}
+                      {/* One labeled carousel row per pipeline stage present
+                          (Not Started -> In Framing -> In Overlay -> Ready), each
+                          stage aspect-split so a row never mixes tile heights (T6810). */}
+                      <DraftStageRows
+                        byStage={group.byStage}
+                        ariaPrefix={`${groupKey} drafts`}
+                        onSelectProject={onSelectProject}
+                        onSelectProjectWithMode={onSelectProjectWithMode}
+                        onDeleteProject={onDeleteProject}
+                        exportingProject={exportingProject}
+                        pendingGameIds={pendingGameIds}
+                      />
                     </CollapsibleGroup>
                     );
                   })}
