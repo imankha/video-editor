@@ -1,6 +1,6 @@
 # T6730 — Owner playback: clicking the Intro segment to seek back into the intro
 
-**Tier:** M · **Layer:** Frontend · **Status:** WAITING ON USER (live verification pending — see Hardening pass)
+**Tier:** M · **Layer:** Frontend · **Status:** STAGING (merged to master, PR #251 — follow-up decisions spun out to T6740)
 
 ## Report
 On the owner in-app composite player (`IntroStoryPlayer`, built by T6710): after the
@@ -137,6 +137,24 @@ flagged 2 as product decisions or too risky to auto-fix. Full theory writeup
 dead-band warn, 3 pre-existing tests updated to drive multiple small ticks
 instead of one oversized single-tick jump, since that jump is now correctly
 clamped) + 47/47 (introCardPreviewElements + RichText). Build clean.
+
+**Live verification (2026-08-11, post-merge):** drove the hardened branch on
+a real browser against a real multi-reel collection ("Top Plays" — 5 reels +
+intro). Let auto-continue run several reels deep (well past the intro,
+further than the worker's own reel-0-only testing), then clicked the Intro
+segment: a frame-1-through-frame-60 DOM probe confirmed the switch into
+MotionPreview happens by frame 1 and holds stable (no flicker, no bounce).
+Separately observed finding (D) live and unprompted: after that click landed
+mid-intro, the remaining intro time played out and auto-continued again,
+landing back at reel 0/fraction 0 — discarding the reel-3 position. Not a
+regression; confirms the documented gap is real. None of the 4 new
+diagnostics false-fired during two real click sequences. Branch CI green,
+merged to master (PR #251, `a1fd1c55`).
+
+**Follow-up filed:** findings (D) and (B) above were spun out to
+[T6740](T6740-intro-replay-ux-decisions.md), since both need a user design
+call before any implementation — see that task file for the options and the
+accompanying decision artifact.
 
 ## Progress Log
 - 2026-08-11: Read 5 files; confirmed latent-since-T6710. Built robust live repro
