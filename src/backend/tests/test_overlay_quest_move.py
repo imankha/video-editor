@@ -56,6 +56,9 @@ def _ctx():
 def _clean():
     with get_db_connection() as conn:
         conn.execute("DELETE FROM export_jobs")
+        conn.execute(
+            "DELETE FROM achievements WHERE key IN ('previewed_draft_reel_1s', 'moved_to_my_reels')"
+        )
         conn.commit()
 
 
@@ -73,6 +76,12 @@ def _add_overlay_job(status: str):
             "INSERT INTO export_jobs (id, type, status, input_data) VALUES (?, 'overlay', ?, X'00')",
             (uuid.uuid4().hex, status),
         )
+        conn.commit()
+
+
+def _add_achievement(key: str):
+    with get_db_connection() as conn:
+        conn.execute("INSERT OR IGNORE INTO achievements (key) VALUES (?)", (key,))
         conn.commit()
 
 
@@ -96,10 +105,11 @@ def test_quest_3_has_render_steps_appended():
 
 
 def test_quest_4_has_no_render_steps():
-    """quest_4 keeps only tutorial + the two publish steps."""
+    """quest_4 keeps tutorial + the publish steps (preview added by T6840), no render steps."""
     q4 = quest_config.QUEST_BY_ID["quest_4"]
     assert q4["step_ids"] == [
         "watch_publish_tutorial",
+        "preview_draft",
         "move_to_my_reels",
         "view_gallery_video",
     ]
@@ -160,9 +170,9 @@ def test_claimed_quest_3_renders_all_seven_steps():
         assert q3["steps"][s] is True
 
 
-def test_claimed_quest_4_renders_all_three_steps():
-    """quest_4 lost two steps; a previously-claimed quest_4 still renders complete
-    (removing steps can only make a quest more complete, never less)."""
+def test_claimed_quest_4_renders_all_steps():
+    """A previously-claimed quest_4 still renders complete after T6840 added the
+    preview_draft step (self-heal renders every current step True)."""
     from app.services.user_db import mark_quest_completed
     mark_quest_completed(TEST_USER_ID, "quest_4")
 
@@ -170,8 +180,35 @@ def test_claimed_quest_4_renders_all_three_steps():
     q4 = next(q for q in result["quests"] if q["id"] == "quest_4")
     assert q4["completed"] is True
     assert q4["reward_claimed"] is True
-    assert len(q4["steps"]) == 3
+    assert len(q4["steps"]) == 4
     assert all(q4["steps"].values()), q4["steps"]
+
+
+# --- T6840: preview_draft step + its backward-compat OR -----------------------
+
+def test_preview_draft_incomplete_without_either_achievement():
+    """A user who has neither previewed nor published sees preview_draft incomplete."""
+    with get_db_connection() as conn:
+        steps = _check_all_steps(TEST_USER_ID, conn)
+    assert steps["preview_draft"] is False
+
+
+def test_preview_draft_completes_from_preview_achievement():
+    """Playing a draft's preview for ~1s (previewed_draft_reel_1s) completes the step."""
+    _add_achievement("previewed_draft_reel_1s")
+    with get_db_connection() as conn:
+        steps = _check_all_steps(TEST_USER_ID, conn)
+    assert steps["preview_draft"] is True
+
+
+def test_preview_draft_backward_compat_from_move():
+    """A user who already published (moved_to_my_reels) but never recorded the new
+    preview achievement still sees preview_draft complete — the quest can't reopen."""
+    _add_achievement("moved_to_my_reels")
+    with get_db_connection() as conn:
+        steps = _check_all_steps(TEST_USER_ID, conn)
+    assert steps["preview_draft"] is True
+    assert steps["move_to_my_reels"] is True
 
 
 def test_claim_already_claimed_quest_3_no_double_grant(pg_conn):

@@ -48,6 +48,8 @@ export const QUEST_DEFINITIONS = [
     reward: 15,
     step_ids: [
       'watch_publish_tutorial',
+      // T6840: preview the finished draft before publishing (kept in sync with quest_config.py)
+      'preview_draft',
       'move_to_my_reels',
       'view_gallery_video',
     ],
