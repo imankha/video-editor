@@ -1,6 +1,6 @@
 # T6740: Intro replay UX decisions (auto-continue landing position + tail dead-band click)
 
-**Status:** WAITING ON USER (design decision required before implementation)
+**Status:** WAITING ON USER (Decision D still open; Decision B implemented)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-08-11
@@ -117,17 +117,19 @@ shared alongside this task for a fuller comparison; the call is the user's.
 
 ### Steps
 1. [ ] User picks an option for D (or "leave as-is")
-2. [ ] User picks an option for B (or "leave as-is")
-3. [ ] Implement whichever options were picked (skip entirely if both are "leave as-is" — close as WAITING ON USER -> resolved, no code change)
-4. [ ] Tests for the picked behavior(s)
-5. [ ] Remove or adjust the now-superseded diagnostic `console.warn`s in `useIntroPlayback.js`/`IntroStoryPlayer.jsx` if the picked option makes them redundant
+2. [x] User picks an option for B (or "leave as-is") — **Option 1, minimum dwell floor**, chosen 2026-08-11
+3. [x] Implement whichever options were picked — B implemented; D still pending
+4. [x] Tests for the picked behavior(s) — B's dwell mechanism covered
+5. [x] Remove or adjust the now-superseded diagnostic `console.warn`s — the dead-band warn in `useIntroPlayback.js`'s `fireEndedOnce` removed (superseded by the dwell fix itself); D's diagnostic warn in `IntroStoryPlayer.jsx` left in place pending D's decision
 
 ### Progress Log
 
 **2026-08-11**: Task filed, spun out of T6730's hardening-pass audit. Design decisions D and B documented above with options; awaiting user's call via the accompanying design artifact. No implementation started.
 
+**2026-08-11 (later same day)**: User reviewed the Decision B artifact and approved the recommendation — **Option 1 (minimum dwell floor)**. Implemented in `useIntroPlayback.js`: `seekIntro` now records a wall-clock deadline (`dwellUntilRef`, `performance.now() + 1000ms`) whenever a seek lands short of `durationMs`; the rAF `tick` holds `introTimeMs` frozen at the seeked pose (no advance, no frame-gap evaluation) while `now < dwellUntilRef.current`, resyncing `lastFrameTimeRef` every held frame so the existing frame-gap guard (T6730 finding A) doesn't false-positive the instant the dwell clears. The old dead-band diagnostic (`DEAD_BAND_MS`, `lastBackwardSeekRef`) is removed — the mechanism it warned about is now structurally prevented rather than just logged. 3 new/updated unit tests (dwell holds the pose near the end; the floor is unconditional, applying even to a seek far from the end; a direct seek to `durationMs` itself still fires immediately, no dwell) — 67/67 relevant unit tests green, eslint clean, build clean. Decision D remains open — no recommendation was made for it and the user hasn't weighed in yet.
+
 ## Acceptance Criteria
 
 - [ ] Decision D has an explicit answer (preserve position / keep restarting at reel 0) and, if changed, is implemented + tested
-- [ ] Decision B has an explicit answer (one of the 4 options) and, if changed, is implemented + tested
-- [ ] No regression to T6710/T6730's existing behavior (seek-back-into-intro itself, forward auto-continue, `landingToken` dedup)
+- [x] Decision B has an explicit answer (Option 1: minimum dwell floor) and is implemented + tested
+- [ ] No regression to T6710/T6730's existing behavior (seek-back-into-intro itself, forward auto-continue, `landingToken` dedup) — relevant unit suite green; live/e2e re-verification still pending before this can be checked off

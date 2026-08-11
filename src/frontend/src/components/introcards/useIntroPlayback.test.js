@@ -180,11 +180,35 @@ describe('useIntroPlayback (T6710 — NEW hook)', () => {
     expect(result.current.introTimeMs).toBeGreaterThan(1000); // resumed advancing
   });
 
-  it('seeking directly to durationMs (not a landing short of it) fires onIntroEnded immediately, no dwell', () => {
+  it('seeking directly to durationMs fires onIntroEnded synchronously via the seek call, not through a dwell', () => {
     const onIntroEnded = vi.fn();
     const { result } = renderHook(() => useIntroPlayback(2.0, { onIntroEnded })); // durationMs = 2000
 
     act(() => result.current.seekIntro(2000));
-    expect(onIntroEnded).toHaveBeenCalledTimes(1); // no 1000ms wait before this fires
+    // Fires from inside the seekIntro call itself (fireEndedOnce, synchronous),
+    // not via the rAF tick reaching a dwell deadline -- proven by it having
+    // already happened with ZERO frames advanced.
+    expect(onIntroEnded).toHaveBeenCalledTimes(1);
+  });
+
+  // Reviewer finding (T6740 review): the headline user gesture this fix
+  // exists for is "click, perceive nothing, click again" -- prove a second
+  // seek arriving while the first seek's dwell is still pending overrides it
+  // rather than being masked by (or fighting with) the first deadline.
+  it('a second seek during a pending dwell restarts the floor from the second seek', () => {
+    const { result } = renderHook(() => useIntroPlayback(4.0)); // durationMs = 4000
+
+    act(() => result.current.seekIntro(1000)); // dwell until t=1000
+    advanceFrames(500);
+    act(() => result.current.seekIntro(2000)); // dwell until t=1500 -- overrides the first
+    expect(result.current.introTimeMs).toBe(2000);
+
+    // Past the FIRST deadline (t~1000) but well short of the second -- still held.
+    advanceFrames(490);
+    expect(result.current.introTimeMs).toBe(2000);
+
+    // Past the second deadline -- resumes.
+    advanceFrames(520);
+    expect(result.current.introTimeMs).toBeGreaterThan(2000);
   });
 });

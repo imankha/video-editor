@@ -76,10 +76,17 @@ export function useIntroPlayback(introDurationSec, { onIntroEnded } = {}) {
     const clamped = Math.max(0, Math.min(ms, durationMs));
     introTimeMsRef.current = clamped;
     setIntroTimeMs(clamped);
-    if (clamped >= durationMs) fireEndedOnce();
-    else {
+    if (clamped >= durationMs) {
+      // A seek TO the end is not a dead-band seek (there's nothing after it
+      // to hold on) -- clear any dwell a PRIOR seek may have left pending,
+      // rather than leaving it to expire on its own.
+      dwellUntilRef.current = null;
+      fireEndedOnce();
+    } else {
       endedFiredRef.current = false; // seeking back before the end re-arms the guard
-      dwellUntilRef.current = performance.now() + MIN_DWELL_AFTER_SEEK_MS;
+      // Cap the floor at the intro's own duration -- a card shorter than
+      // MIN_DWELL_AFTER_SEEK_MS must never hold longer than it actually runs.
+      dwellUntilRef.current = performance.now() + Math.min(MIN_DWELL_AFTER_SEEK_MS, durationMs);
     }
   }, [durationMs, fireEndedOnce]);
 
