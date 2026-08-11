@@ -1,6 +1,6 @@
 # T6810: Game group: one row per stage
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-11
