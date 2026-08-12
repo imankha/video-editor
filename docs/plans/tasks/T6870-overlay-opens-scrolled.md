@@ -160,6 +160,22 @@ scrolled." Options:
   (`revealOnActive`), reverting T6630 round 7 item 6. Timeline always opens at 0; the marker may
   be off-screen on the Overlay tab until Thumbnail is opened.
 
+### Resolution (2026-08-12): option 2 implemented
+
+User chose option 2. `PosterMarkerLayer.revealMarker` now reuses `computeFollowScrollTarget`
+(the playhead's own follow-scroll math) instead of centering: it scrolls only when the marker
+is within the 15%-of-viewport edge margin (or off-screen), by the minimum distance, and leaves
+the timeline untouched when the marker is already comfortably visible. The trigger schedule
+(mount + 900ms retry + visualTime re-check, latched off after interaction) is unchanged.
+
+Live-verified (real `PosterMarkerLayer`, below-the-fold, `qa/T6870-option2.json` + `T6870-opt2-*.png`):
+
+| case | zoom | marker | page scrollY | timeline scrollLeft | vs centered |
+|---|---|---|---|---|---|
+| already visible | 171% | vt 1.0 | 0 | **0** (no scroll) | centered would be 0 |
+| off-screen | 171% | vt 9.0 | 0 | 401 (revealed) | < 430 (min, not centered) |
+| far marker | 403% | vt 9.5 | 0 | 1755 (revealed) | < 1804 (min, not centered) |
+
 ## Acceptance Criteria
 
 - [ ] Launching Overlay lands with the page/main container at scroll position 0, every time
