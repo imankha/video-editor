@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import RichText from '../../../components/RichText';
+import { isRegionUnderPlayhead } from '../../../utils/textRegionPlayhead';
+
+// The dimmed opacity of the editing GHOST -- a selected, out-of-range region
+// shown only while paused on the Text tab (T6880). Low enough that it reads as
+// "editing preview, not real output", high enough to stay legible/draggable.
+const GHOST_OPACITY = 0.35;
 
 /**
  * TextOverlayPreview -- live "what you see is what renders" preview for
@@ -14,10 +20,24 @@ import RichText from '../../../components/RichText';
  * that each CONTAIN N elements, all rendering SIMULTANEOUSLY during the
  * region's window (user direction: "a text region can have multiple text
  * elements"). A region is ACTIVE when its `[startTime, endTime)` half-open
- * range contains `currentTime` (design O6) -- OR when it is the currently
- * SELECTED region (so editing is visible even while the playhead sits
- * outside the range). Every element of an active region renders, except one
- * individually disabled (T6620's per-element eye).
+ * range contains `currentTime` (design O6) -- the SAME shared
+ * `isRegionUnderPlayhead` predicate the Text settings panel uses, so the
+ * canvas and the panel can never disagree about "under the playhead". Every
+ * element of an active region renders, except one individually disabled
+ * (T6620's per-element eye).
+ *
+ * T6880 (editing ghost): the selected-region exception used to render a
+ * SELECTED region unconditionally -- even with the playhead dragged past its
+ * end, and even during playback -- so the canvas showed "burnt-in" text the
+ * panel (strict range) said wasn't there, and playback rendered out-of-range
+ * text across the whole clip (preview lying about export). It is now HONEST
+ * and NARROW: a selected region whose range does NOT contain the playhead
+ * renders ONLY while the Text tab is active AND playback is PAUSED, as a
+ * dimmed editing GHOST (reduced opacity) that can never be mistaken for real
+ * burn-in, and NEVER during playback. The ghost stays fully draggable
+ * (T6720) while paused; pressing play makes it disappear. Real output
+ * (playhead in range) is unaffected -- the ghost is layered EXPLICITLY on top
+ * of the shared predicate, not baked into it.
  *
  * T6620: a DISABLED element (`enabled === false`) is hidden UNCONDITIONALLY --
  * checked BEFORE the selected-region short-circuit. Previously a selected
@@ -118,6 +138,10 @@ export default function TextOverlayPreview({
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false,
+  // T6880: the editing-ghost exception (render a selected, out-of-range region
+  // for editing) is gated on BOTH -- Text tab active AND playback paused.
+  isPlaying = false,
+  isTextTabActive = false,
 }) {
   const { rect } = useVideoDisplayRect(videoRef, videoMetadata, { zoom, panOffset, isFullscreen });
 
@@ -156,19 +180,33 @@ export default function TextOverlayPreview({
 
   const dragActive = onMoveTextPosition && selectedElementId;
 
-  const activeRegions = textOverlays.filter((region) => {
-    if (region.id === selectedRegionId) return true;
-    return region.startTime <= currentTime && currentTime < region.endTime;
-  });
+  // REAL output: regions whose range actually contains the playhead -- the
+  // shared predicate the settings panel uses too, so the two surfaces agree by
+  // construction (T6880). This IS what export burns in (strict windows).
+  const activeRegions = textOverlays.filter((region) => isRegionUnderPlayhead(region, currentTime));
 
-  // Flatten active regions' elements -- ALL elements of an active region
-  // render at once (the core round-4 fix: two elements in the SAME region
-  // now share one time window and render TOGETHER, not "only the second one
-  // showed up"). Each element keeps its own spec (position/styling).
-  const visibleElements = activeRegions.flatMap((region) =>
+  // Editing GHOST (T6880): the SELECTED region, shown for editing ONLY when it
+  // is NOT already real output (playhead outside its range), the Text tab is
+  // active, and playback is PAUSED. Never during playback, never off the Text
+  // tab -- so it can never masquerade as burnt-in output. Layered explicitly on
+  // top of the shared predicate rather than baked into it.
+  const ghostRegion =
+    !isPlaying && isTextTabActive && selectedRegionId
+      ? textOverlays.find(
+        (region) => region.id === selectedRegionId && !isRegionUnderPlayhead(region, currentTime),
+      ) || null
+      : null;
+
+  // Flatten active (+ ghost) regions' elements -- ALL elements of an active
+  // region render at once (the core round-4 fix: two elements in the SAME
+  // region now share one time window and render TOGETHER, not "only the second
+  // one showed up"). Each element keeps its own spec (position/styling); ghost
+  // elements carry `isGhost` so they render dimmed.
+  const renderRegions = ghostRegion ? [...activeRegions, ghostRegion] : activeRegions;
+  const visibleElements = renderRegions.flatMap((region) =>
     (region.elements || [])
       .filter((element) => element.enabled !== false) // hidden wins (T6620)
-      .map((element) => ({ ...element, regionId: region.id }))
+      .map((element) => ({ ...element, regionId: region.id, isGhost: region.id === ghostRegion?.id }))
   );
 
   const selectedElement = visibleElements.find((el) => el.id === selectedElementId) || null;
@@ -417,7 +455,11 @@ export default function TextOverlayPreview({
           key={element.id}
           ref={(el) => { hostRefsRef.current[element.id] = el; }}
           data-testid={`text-preview-element-${element.id}`}
+          data-ghost={element.isGhost ? 'true' : undefined}
           className="absolute inset-0"
+          // T6880: a selected out-of-range region shown for editing renders
+          // dimmed so it can never be mistaken for real burn-in output.
+          style={element.isGhost ? { opacity: GHOST_OPACITY } : undefined}
         >
           <RichText spec={element.spec} boxWidth={rect.width} boxHeight={rect.height} />
         </div>

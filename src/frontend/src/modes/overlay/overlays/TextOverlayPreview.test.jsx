@@ -37,7 +37,7 @@ function element(id, text, enabled) {
   return el;
 }
 
-function renderPreview(textOverlays, selectedRegionId = null) {
+function renderPreview(textOverlays, selectedRegionId = null, extraProps = {}) {
   return render(
     <TextOverlayPreview
       videoRef={{ current: null }}
@@ -45,6 +45,7 @@ function renderPreview(textOverlays, selectedRegionId = null) {
       textOverlays={textOverlays}
       currentTime={5}
       selectedRegionId={selectedRegionId}
+      {...extraProps}
     />,
   );
 }
@@ -100,17 +101,57 @@ describe('TextOverlayPreview — eye toggle hides one ELEMENT, not the whole reg
     expect(screen.getByText('UNDEFINED SHOWS')).toBeTruthy();
   });
 
-  it('shows a selected region\'s enabled element even when the playhead is outside its range', () => {
-    const r = region('r1', [element('a', 'EDIT OUT OF RANGE', true)], 20, 30);
-    renderPreview([r], 'r1');
-    expect(screen.getByText('EDIT OUT OF RANGE')).toBeTruthy();
-  });
-
   it('one disabled element does not hide its enabled sibling in the SAME region', () => {
     const r = region('r1', [element('a', 'HIDDEN', false), element('b', 'STILL SHOWS', true)]);
     renderPreview([r]);
     expect(screen.queryByText('HIDDEN')).toBeNull();
     expect(screen.getByText('STILL SHOWS')).toBeTruthy();
+  });
+});
+
+// T6880 -- the SELECTED-region exception is now HONEST and NARROW: a selected
+// region whose range does NOT contain the playhead renders ONLY while the Text
+// tab is active AND playback is paused, as a dimmed editing ghost, and NEVER
+// during playback. Real output (playhead in range) is unaffected. This is the
+// bug the report describes: playhead dragged past a region's end, yet the
+// canvas still burnt in its text while the panel said "no region under the
+// playhead" -- the two now agree via the shared `isRegionUnderPlayhead`.
+describe('TextOverlayPreview — selected out-of-range region is a paused-only editing ghost (T6880)', () => {
+  const outOfRange = () => region('r1', [element('a', 'GHOST', true)], 20, 30); // currentTime=5 is outside [20,30)
+
+  it('does NOT render a selected out-of-range region during PLAYBACK (the reported bug: text burnt in past the region end)', () => {
+    renderPreview([outOfRange()], 'r1', { isTextTabActive: true, isPlaying: true });
+    expect(screen.queryByText('GHOST')).toBeNull();
+  });
+
+  it('does NOT render a selected out-of-range region when the Text tab is INACTIVE (even paused)', () => {
+    renderPreview([outOfRange()], 'r1', { isTextTabActive: false, isPlaying: false });
+    expect(screen.queryByText('GHOST')).toBeNull();
+  });
+
+  it('renders the selected out-of-range region as a DIMMED ghost while paused on the Text tab', () => {
+    renderPreview([outOfRange()], 'r1', { isTextTabActive: true, isPlaying: false });
+    expect(screen.getByText('GHOST')).toBeTruthy();
+    // Marked as a ghost + visually dimmed so it can't be mistaken for real output.
+    const host = screen.getByTestId('text-preview-element-a');
+    expect(host.getAttribute('data-ghost')).toBe('true');
+    expect(host.style.opacity).not.toBe('');
+    expect(Number(host.style.opacity)).toBeLessThan(1);
+  });
+
+  it('a region UNDER the playhead renders as REAL output (not a ghost, full opacity) regardless of tab/playback', () => {
+    // In-range region [0,10) at currentTime=5 -- selected AND during playback.
+    const inRange = region('r1', [element('a', 'REAL', true)], 0, 10);
+    renderPreview([inRange], 'r1', { isTextTabActive: false, isPlaying: true });
+    expect(screen.getByText('REAL')).toBeTruthy();
+    const host = screen.getByTestId('text-preview-element-a');
+    expect(host.getAttribute('data-ghost')).toBeNull();
+    expect(host.style.opacity).toBe('');
+  });
+
+  it('does not ghost an UNselected out-of-range region even paused on the Text tab', () => {
+    renderPreview([outOfRange()], null, { isTextTabActive: true, isPlaying: false });
+    expect(screen.queryByText('GHOST')).toBeNull();
   });
 });
 
