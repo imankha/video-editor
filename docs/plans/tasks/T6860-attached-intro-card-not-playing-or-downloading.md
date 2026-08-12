@@ -212,6 +212,35 @@ visual/interaction bugs that need the real UI. Findings from code + live API:
   real UI state I cannot see. Need a screenshot of exactly WHERE the user sees multiple
   (picker highlighting / playback / downloads badge / card library).
 
+**2026-08-12 (round 4 — LIVE-REPRODUCED both, after clarified direction):** Found a way to
+drive the real staging UI in-container: staging CORS allows `http://localhost:5173`, so I ran
+a LOCAL vite build (`VITE_API_BASE`=staging) + Playwright, authenticated as the real user by
+injecting the dev-login `rb_session` cookie (non-partitioned, cross-origin to the fly.dev API).
+
+- **Report 1 "during playback I see one card after another" -> NOT A DEFECT (live-verified).**
+  Single reel solo play (reel 38) = exactly ONE intro card (screenshot: "Mehdi Khabazian /
+  State Cup / CAM / West Coast ECNL"; scrubber = one INTRO + one reel segment; net = one
+  `/downloads/38/intro-playback` + `/stream`). Collection play ("Top Goals & Assists",
+  contains reel 38) = the collection's OWN intro (none) + reels back-to-back, NO per-member
+  intro cards (screenshot: reel footage, 3 reel segments). Per-member intros are structurally
+  never fetched/rendered in collection playback (IntroStoryPlayer takes ONE `intro`;
+  CollectionPlayer plays raw `/stream`s); owner playback shows no branded end card either
+  (public-surface only). So no single session renders multiple cards; "one card after another"
+  = different reels/collections across SEPARATE plays (each correctly one card) or reading the
+  multi-segment collection scrubber as "cards". Hypothesis (b). UX note (not a fix): the
+  multi-reel collection scrubber shows one segment per reel and could be misread.
+- **Report 2 "preview shouldn't include the intro" -> ALREADY SATISFIED everywhere (live).**
+  EVERY preview surface streams the RAW reel (`/downloads/{id}/stream`), no intro: ReelTile
+  hover (`previewStreamUrl`, ReelTile.jsx:108), DraftTile hover + draft "Preview" modal
+  (DraftTile.jsx:341-347). Live: hovering reel 38 fired ONLY `/downloads/38/stream` (no
+  `/intro-playback`, no `/file`); the inline preview showed reel footage, not the card. The
+  intro appears ONLY in full in-app playback (IntroStoryPlayer pre-roll, T6700/T6710, by
+  design) and the composited `/file` download + shares. Nothing to change for "preview"; added
+  a regression GUARD (`ReelTile.intro-preview.test.jsx`, plus the existing DraftTile `/stream`
+  assertion) pinning "preview never points at `/file`, never composites the intro". If the
+  user actually means the FULL in-app playback pre-roll should be removed, that is a PRODUCT
+  decision reversing T6700/T6710 -- flagged, NOT self-implemented.
+
 ## Acceptance Criteria
 
 - [ ] Attaching an intro card to a reel, then playing it in-app, shows the intro pre-roll
