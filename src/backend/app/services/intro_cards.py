@@ -26,7 +26,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.database import column_exists
 from app.services.user_db import INTRO_FACT_FIELDS
 
 logger = logging.getLogger(__name__)
@@ -156,20 +155,6 @@ def validate_zoom(value: Any) -> float | None:
 # there is no profile default anymore, so NULL and 0 both resolve to no intro.
 # ---------------------------------------------------------------------------
 
-# Default for the per-profile settings UI (`user_settings.intro_min_duration_
-# seconds`, profile_db v041, read/written via routers/profiles.py). No longer
-# consulted by attachment resolution (T6680 removed the duration-gated inherit
-# path this threshold used to govern) -- it survives solely as the settings
-# fallback for a missing column/row (deploy->migrate window or a legacy row).
-DEFAULT_INTRO_MIN_DURATION_SECONDS = 20.0
-
-# Bounds for the user-editable threshold. Upper bound is generous for any real
-# reel while still catching a typo that would silently disable intros
-# profile-wide; out-of-range RAISES rather than clamps (never a silent fix).
-INTRO_MIN_DURATION_LOWER = 0.0  # exclusive
-INTRO_MIN_DURATION_UPPER = 300.0  # inclusive
-
-
 def resolve_intro_card_id(intro_card_id: int | None) -> int | None:
     """The SINGLE resolution order for an attachment value. Pure and read-only:
     never fabricates a card, never rewrites the caller's row.
@@ -236,38 +221,6 @@ def intro_image_has_other_reference(
     sql += " LIMIT 1"
     cursor.execute(sql, params)
     return cursor.fetchone() is not None
-
-
-def get_intro_min_duration(cursor) -> float:
-    """The profile's minimum-reel-duration threshold, surfaced via the
-    settings read/write UI (`routers/profiles.py`). No longer consulted by
-    attachment resolution (T6680 removed the inherit-the-default path this
-    threshold used to gate). Column-guarded (v041 deploy->migrate window) and
-    guarded again for a missing/legacy row -- both degrade to
-    `DEFAULT_INTRO_MIN_DURATION_SECONDS`, never a crash."""
-    if not column_exists(cursor, "user_settings", "intro_min_duration_seconds"):
-        return DEFAULT_INTRO_MIN_DURATION_SECONDS
-    cursor.execute("SELECT intro_min_duration_seconds FROM user_settings WHERE id = 1")
-    row = cursor.fetchone()
-    if row is None or row["intro_min_duration_seconds"] is None:
-        return DEFAULT_INTRO_MIN_DURATION_SECONDS
-    return float(row["intro_min_duration_seconds"])
-
-
-def validate_intro_min_duration(value: Any) -> float:
-    """Validate the per-profile minimum-reel-duration threshold (seconds).
-    `0 < value <= 300`. Out-of-range or non-numeric RAISES ValueError (-> 400)
-    -- never clamped silently (a typo here would silently misconfigure intros
-    profile-wide)."""
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        raise ValueError("intro_min_duration_seconds must be a number")
-    v = float(value)
-    if not (INTRO_MIN_DURATION_LOWER < v <= INTRO_MIN_DURATION_UPPER):
-        raise ValueError(
-            f"intro_min_duration_seconds must be within "
-            f"({INTRO_MIN_DURATION_LOWER}, {INTRO_MIN_DURATION_UPPER}] (got {value})"
-        )
-    return v
 
 
 def load_profile_cards(cursor) -> dict[int, dict]:
@@ -339,25 +292,24 @@ def resolve_intro_card(
 # unlike every v024+ addition elsewhere in this task).
 #
 # RESOLUTION ORDER (explicit design call, mirrors the REEL behaviour at the
-# collection's own level -- see T5215 round-2 report for the full rationale):
+# collection's own level -- see T5215 round-2 report for the full rationale;
+# simplified T6680, same as the reel path above):
 #   - The collection's OWN resolved intro governs the collection's playback
 #     experience. Per-MEMBER `final_videos.intro_card_id` attachments are NOT
 #     consulted while inside a collection's playback context -- they remain
 #     the deciding attachment ONLY when that same reel is watched standalone
 #     (its own single-reel view/share). "Most specific level wins outright"
-#     is exactly the reel rule (explicit id beats inherited default); applied
-#     one level up, the collection's own setting is the specific level for a
+#     is exactly the reel rule (explicit id beats no attachment); applied one
+#     level up, the collection's own setting is the specific level for a
 #     collection VIEW, and per-member settings are simply out of scope there.
 #     REVERSIBLE: nothing here prevents a future task from instead compositing
 #     both if that turns out to be the wanted product behaviour -- flagged in
 #     the round-2 report, not read from the epic (ambiguous there).
-#   - The duration gate on a collection's OWN inherit-the-default path uses
-#     the collection's LIVE TOTAL duration (sum of its current members'
-#     durations -- exactly `collections_summary`'s own `ratio_durations`
-#     computation, not any single member's), against the SAME per-profile
-#     `intro_min_duration_seconds` a reel already uses. One threshold, one
-#     meaning: "is this playback long enough to want a default intro" --
-#     applied to whatever is actually about to play back-to-back.
+#   - There is no duration gate: T6680 removed the inherit-the-default path
+#     (and T6850 removed the now-dead `intro_min_duration_seconds` setting
+#     that used to govern it) -- an explicitly attached card always plays
+#     regardless of the collection's total duration, exactly like the reel
+#     path's `resolve_intro_card_id`.
 #   - Rendering this (actually prepending the collection's resolved card) is
 #     T5220's job, same as the reel side of this task -- T5215 only persists
 #     the attachment + resolves it for display.

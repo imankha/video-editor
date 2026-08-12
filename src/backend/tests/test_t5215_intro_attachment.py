@@ -1,13 +1,12 @@
 """
 T5215 -- Intro attachment: resolution helper, reel PATCH, re-export
 carry-forward, cross-profile move (no carry), collection freeze, consent gate,
-no-N+1 list, and the v041 migration (renumbered from v037 on merging master,
-which had advanced to v040 via T6640 while this branch was in flight).
+no-N+1 list. The v041 threshold-storage/migration tests that used to live here
+were removed by T6850 (dead setting deleted; see test_t6850_drop_intro_min_
+duration.py for its v043 drop-column migration coverage instead).
 
 Design: docs/plans/tasks/T5215-design.md. Acceptance criteria mapping:
-  resolve_intro_card_id matrix (NULL/0/id + duration gate) .. TestResolveIntroCardIdMatrix
-  threshold storage + validation ............................ TestThresholdStorage
-  v041 migration (fresh DB + upgrade + idempotent) ........... TestMigrationV041
+  resolve_intro_card_id matrix (NULL/0/id) ................... TestResolveIntroCardIdMatrixT6680NoInherit
   re-export preserves attachment (THE important test) ........ TestReExportCarriesIntroCardId,
                                                                  test_export_final_endpoint_carries_intro_card_id
   cross-profile move never carries the attachment ............ TestMoveToProfileDoesNotCarryIntro
@@ -22,12 +21,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services.intro_cards import (
-    DEFAULT_INTRO_MIN_DURATION_SECONDS,
-    get_intro_min_duration,
-    resolve_intro_card_id,
-    validate_intro_min_duration,
-)
+from app.services.intro_cards import resolve_intro_card_id
 
 USER_ID = "t5215-user"
 PROFILE_ID = "t5215prof"
@@ -147,157 +141,7 @@ class TestResolveIntroCardIdMatrixT6680NoInherit:
 
 
 # ===========================================================================
-# 2. Threshold storage + validation
-# ===========================================================================
-
-class TestThresholdStorage:
-    def test_default_when_column_absent(self, db, monkeypatch):
-        import app.services.intro_cards as ic
-        monkeypatch.setattr(ic, "column_exists", lambda cursor, table, col: False)
-        conn = _connect(db)
-        assert get_intro_min_duration(conn.cursor()) == DEFAULT_INTRO_MIN_DURATION_SECONDS
-        conn.close()
-
-    def test_default_on_fresh_profile_db(self, db):
-        conn = _connect(db)
-        assert get_intro_min_duration(conn.cursor()) == 20.0
-        conn.close()
-
-    def test_reads_stored_value(self, db):
-        conn = _connect(db)
-        conn.execute("UPDATE user_settings SET intro_min_duration_seconds = 45.0 WHERE id = 1")
-        conn.commit()
-        assert get_intro_min_duration(conn.cursor()) == 45.0
-        conn.close()
-
-    def test_validate_bounds_reject_zero_and_over_300(self):
-        with pytest.raises(ValueError):
-            validate_intro_min_duration(0)
-        with pytest.raises(ValueError):
-            validate_intro_min_duration(300.01)
-
-    def test_validate_bounds_accept_edges(self):
-        assert validate_intro_min_duration(300) == 300.0
-        assert validate_intro_min_duration(0.01) == 0.01
-
-    def test_validate_rejects_non_numeric_and_bool(self):
-        with pytest.raises(ValueError):
-            validate_intro_min_duration("20")
-        with pytest.raises(ValueError):
-            validate_intro_min_duration(True)
-
-
-class TestProfileThresholdEndpoint:
-    @pytest.mark.asyncio
-    async def test_get_returns_default(self, db):
-        from app.routers.profiles import get_current_intro_min_duration
-        resp = await get_current_intro_min_duration()
-        assert resp["intro_min_duration_seconds"] == 20.0
-
-    @pytest.mark.asyncio
-    async def test_patch_updates_and_get_reflects_it(self, db):
-        from app.routers.profiles import (
-            UpdateIntroMinDurationRequest,
-            get_current_intro_min_duration,
-            update_current_intro_min_duration,
-        )
-        resp = await update_current_intro_min_duration(
-            UpdateIntroMinDurationRequest(intro_min_duration_seconds=45.0)
-        )
-        assert resp["intro_min_duration_seconds"] == 45.0
-        assert (await get_current_intro_min_duration())["intro_min_duration_seconds"] == 45.0
-
-    @pytest.mark.asyncio
-    async def test_patch_rejects_out_of_range(self, db):
-        from fastapi import HTTPException
-        from app.routers.profiles import (
-            UpdateIntroMinDurationRequest,
-            update_current_intro_min_duration,
-        )
-        with pytest.raises(HTTPException) as exc:
-            await update_current_intro_min_duration(
-                UpdateIntroMinDurationRequest(intro_min_duration_seconds=0)
-            )
-        assert exc.value.status_code == 400
-
-        with pytest.raises(HTTPException) as exc:
-            await update_current_intro_min_duration(
-                UpdateIntroMinDurationRequest(intro_min_duration_seconds=301)
-            )
-        assert exc.value.status_code == 400
-
-
-# ===========================================================================
-# 3. Migration v041
-# ===========================================================================
-
-class TestMigrationV041:
-    def test_fresh_db_has_column_with_default(self, db):
-        conn = _connect(db)
-        row = conn.execute(
-            "SELECT intro_min_duration_seconds FROM user_settings WHERE id = 1"
-        ).fetchone()
-        assert row["intro_min_duration_seconds"] == 20.0
-        conn.close()
-
-    def test_runner_applies_v041_to_a_below_head_db(self, tmp_path):
-        db_path = tmp_path / "legacy.sqlite"
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("""
-            CREATE TABLE user_settings (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                settings_json TEXT NOT NULL DEFAULT '{}',
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.execute("INSERT INTO user_settings (id) VALUES (1)")
-        conn.execute("PRAGMA user_version = 40")
-        conn.commit()
-
-        from app.migrations.profile_db import RUNNER
-        applied = RUNNER.run(conn, "sqlite")
-        assert any(m.version == 41 for m in applied)
-
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(user_settings)").fetchall()}
-        assert "intro_min_duration_seconds" in cols
-        row = conn.execute("SELECT intro_min_duration_seconds FROM user_settings WHERE id = 1").fetchone()
-        assert row[0] == 20.0
-        # A below-v041 DB run through the full registry also picks up v042 (T6630,
-        # text_overlays regions) -- a genuine no-op here since this fixture has no
-        # working_videos table, but the runner still advances user_version past it.
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 42
-        conn.close()
-
-    def test_idempotent_rerun(self, tmp_path):
-        db_path = tmp_path / "legacy2.sqlite"
-        conn = sqlite3.connect(str(db_path))
-        conn.execute(
-            "CREATE TABLE user_settings (id INTEGER PRIMARY KEY CHECK (id=1), "
-            "settings_json TEXT NOT NULL DEFAULT '{}')"
-        )
-        conn.execute("INSERT INTO user_settings (id) VALUES (1)")
-        conn.commit()
-
-        from app.migrations.profile_db.v041_intro_min_duration import V041IntroMinDuration
-        m = V041IntroMinDuration()
-        m.up(conn)
-        m.up(conn)  # must not raise
-        conn.commit()
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(user_settings)").fetchall()}
-        assert "intro_min_duration_seconds" in cols
-        conn.close()
-
-    def test_v041_is_still_the_free_version(self):
-        """Guards against a future duplicate-version regression (the runner
-        silently skips a duplicate). If this fails, someone added another v041."""
-        from app.migrations.profile_db import MIGRATIONS
-        versions = [m.version for m in MIGRATIONS]
-        assert versions.count(41) == 1
-        assert versions == sorted(versions)
-
-
-# ===========================================================================
-# 4. Re-export carries the attachment forward (THE important regression test)
+# 2. Re-export carries the attachment forward (THE important regression test)
 # ===========================================================================
 
 class TestReExportCarriesIntroCardId:
@@ -435,7 +279,7 @@ async def test_export_final_endpoint_carries_intro_card_id(tmp_path):
 
 
 # ===========================================================================
-# 5. Cross-profile move: the ONE writer that must NOT carry the attachment
+# 3. Cross-profile move: the ONE writer that must NOT carry the attachment
 # ===========================================================================
 
 class TestMoveToProfileDoesNotCarryIntro:
@@ -460,7 +304,7 @@ class TestMoveToProfileDoesNotCarryIntro:
 
 
 # ===========================================================================
-# 6. Reel PATCH: consent gate, dangling id, surgical write
+# 4. Reel PATCH: consent gate, dangling id, surgical write
 # ===========================================================================
 
 class TestSetDownloadIntro:
@@ -540,7 +384,7 @@ class TestSetDownloadIntro:
 
 
 # ===========================================================================
-# 7. Collection freeze survives a later default change (serve-time, no PG)
+# 5. Collection freeze survives a later default change (serve-time, no PG)
 # ===========================================================================
 
 class TestCollectionIntroFreeze:
@@ -636,18 +480,12 @@ class TestCollectionIntroFreeze:
         assert "intro_card_id" not in result
 
     def test_collection_freeze_is_never_duration_gated(self, db):
-        """A collection has no single 'duration' -- the frozen concrete value
-        (never NULL) makes the duration-gate branch structurally unreachable
-        here, so even a 1-second-equivalent scenario still resolves."""
+        """A collection has no single 'duration' and (T6680) there is no
+        duration gate left at all -- a frozen, concrete, non-NULL collection
+        attachment always resolves."""
         from app.routers.collections import resolve_collection_share
 
         card_id = _seed_card(db, "Short-lived-ok", is_default=1)
-        # threshold absurdly high -- would block a NULL/inherit reel resolution,
-        # but must NOT block this frozen, concrete, non-NULL collection value.
-        conn = _connect(db)
-        conn.execute("UPDATE user_settings SET intro_min_duration_seconds = 300 WHERE id = 1")
-        conn.commit()
-        conn.close()
 
         share = {
             "sharer_user_id": USER_ID, "sharer_profile_id": PROFILE_ID,
@@ -827,7 +665,7 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
 
 
 # ===========================================================================
-# 8. GET /api/downloads: no per-tile N+1
+# 6. GET /api/downloads: no per-tile N+1
 # ===========================================================================
 
 class TestListDownloadsNoN1:

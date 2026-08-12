@@ -57,7 +57,6 @@ POST_V023_COLUMNS = {
     "working_clips": ["rotation"],                                                       # v029
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
-    "user_settings": ["intro_min_duration_seconds"],                                     # v041
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
     # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
@@ -84,18 +83,20 @@ POST_V023_COLUMNS = {
     #   guard. It only UPDATEs intro_cards.is_default, which v034 created alongside the
     #   table, and it is table-guarded; a below-head DB without intro_cards returns early.
     #   No hot read gains a new column name, so the deploy->migrate window is unchanged.
-    # v041 (T5215 intro_min_duration_seconds, renumbered from v037 on merging master) adds
-    #   user_settings.intro_min_duration_seconds. The read
-    #   (services.intro_cards.get_intro_min_duration) is column_exists-guarded and degrades
-    #   to DEFAULT_INTRO_MIN_DURATION_SECONDS; the write
-    #   (routers.profiles.update_current_intro_min_duration) is column_exists-guarded and
-    #   refuses with 503 rather than naming a nonexistent column. See
-    #   test_profile_intro_min_duration below.
+    # v041 (T5215 intro_min_duration_seconds, renumbered from v037 on merging master) added
+    #   user_settings.intro_min_duration_seconds -- DROPPED by v043 (T6850) below, so it no
+    #   longer appears in POST_V023_COLUMNS at all (nothing to guard: the column doesn't
+    #   exist at head anymore).
     # v042 (T6630 text_overlays flat blocks -> regions, renumbered from v039) adds NO column
     #   -> nothing to guard. It rewrites the JSON/msgpack SHAPE inside the existing
     #   working_videos.text_overlays BLOB column; no hot read gains a new column name to fail on.
+    # v043 (T6850 drop user_settings.intro_min_duration_seconds) REMOVES a column -> nothing
+    #   to guard (this harness only covers ADD-side deploy->migrate windows; a DROP's window
+    #   is covered instead by the v043 migration's own idempotent/absent-column-safe tests in
+    #   test_t6850_drop_intro_min_duration.py). The two consumer endpoints/helpers this column
+    #   used to feed were removed outright in the same T6850 change, not left column-guarded.
 }
-HEAD_VERSION_AUDITED = 42
+HEAD_VERSION_AUDITED = 43
 
 
 def _cleanup(user_id: str) -> None:
@@ -309,29 +310,6 @@ def test_gallery_downloads(below_head):
     from app.routers.downloads import list_downloads
 
     _run(list_downloads())
-
-
-def test_profile_intro_min_duration(below_head):
-    # v037 drops user_settings.intro_min_duration_seconds -> the GET must degrade
-    # to the guarded default (never 500), and the PATCH must refuse with a clear
-    # 503 rather than naming a nonexistent column (T5215).
-    from fastapi import HTTPException
-
-    from app.routers.profiles import (
-        UpdateIntroMinDurationRequest,
-        get_current_intro_min_duration,
-        update_current_intro_min_duration,
-    )
-    from app.services.intro_cards import DEFAULT_INTRO_MIN_DURATION_SECONDS
-
-    resp = _run(get_current_intro_min_duration())
-    assert resp["intro_min_duration_seconds"] == DEFAULT_INTRO_MIN_DURATION_SECONDS
-
-    with pytest.raises(HTTPException) as exc:
-        _run(update_current_intro_min_duration(
-            UpdateIntroMinDurationRequest(intro_min_duration_seconds=45.0)
-        ))
-    assert exc.value.status_code == 503
 
 
 def test_collections_summary(below_head):

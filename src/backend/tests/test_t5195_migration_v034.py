@@ -128,7 +128,7 @@ def test_noop_column_on_missing_final_videos(tmp_path):
     assert "intro_cards" in tables
 
 
-def test_registry_head_is_v042():
+def test_registry_head_is_v043():
     from app.migrations.profile_db import MIGRATIONS
     # T6570 added v035 (intro_cards.subtitle_text); T6620 added v036 (null the
     # dead intro_cards.title_text); T6640 added v038 (null the dead
@@ -136,8 +136,9 @@ def test_registry_head_is_v042():
     # T5215 was renumbered from v037 to v041 (intro_min_duration_seconds) when
     # it merged master and found v037 already past the v040 head; T6630 was
     # renumbered from v039 to v042 (text_overlays regions) for the same reason
-    # once T5215 landed first.
-    assert max(m.version for m in MIGRATIONS) == 42
+    # once T5215 landed first; T6850 added v043 (drops
+    # intro_min_duration_seconds -- T6680 made the v041 threshold dead).
+    assert max(m.version for m in MIGRATIONS) == 43
     # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 35) == 1
@@ -146,11 +147,12 @@ def test_registry_head_is_v042():
     assert sum(1 for m in MIGRATIONS if m.version == 40) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 41) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 42) == 1
+    assert sum(1 for m in MIGRATIONS if m.version == 43) == 1
     # Every registered migration is REACHABLE: the runner applies versions above a
     # DB's user_version, so a class that never made it into MIGRATIONS is dead code
     # (v040 shipped unregistered once -- CI caught it here).
     registered = {m.version for m in MIGRATIONS}
-    assert {34, 35, 36, 38, 40, 41, 42} <= registered
+    assert {34, 35, 36, 38, 40, 41, 42, 43} <= registered
     # v037 / v039 belong to the sibling T5215 / T6630 branches' PRE-RENUMBER
     # claims. They must be renumbered ABOVE this head before they merge, or the
     # runner skips them. Both already did (T5215 -> v041, T6630 -> v042, above).
