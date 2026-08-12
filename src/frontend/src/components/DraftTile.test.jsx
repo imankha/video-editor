@@ -317,6 +317,42 @@ describe('DraftTile (T5672)', () => {
     expect(tile.className).not.toMatch(/aspect-video/);
   });
 
+  // T6900 regression — once a draft is FRAMED (past In-Framing: a working or
+  // final video exists), the source-aspect override no longer applies and the
+  // tile takes its TARGET ratio. These pin In-Overlay and Ready explicitly, and
+  // deliberately OMIT has_crop_keyframes to prove it is irrelevant here: the
+  // has_working_video / has_final_video stage wins regardless of the crop signal.
+  it('renders an In-Overlay 9:16 draft at the portrait target shell (crop signal irrelevant) (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', has_working_video: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+    expect(tile.className).not.toMatch(/aspect-video/);
+  });
+
+  it('renders a Ready 9:16 draft at the portrait target shell (crop signal irrelevant) (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', has_final_video: true, final_video_id: 99, is_published: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+    expect(tile.className).not.toMatch(/aspect-video/);
+  });
+
+  it('renders a 16:9-target In-Overlay draft landscape by TARGET ratio, not the source fallback (T6900)', () => {
+    // aspect_ratio is 16:9 so aspect-video is correct; has_working_video makes
+    // rendersSourceAspect false, so this asserts the target-ratio path, not the
+    // unframed source-aspect fallback (has_crop_keyframes intentionally absent).
+    const { container } = renderTile({ aspect_ratio: '16:9', has_working_video: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  it('renders a 16:9-target Ready draft landscape by TARGET ratio, not the source fallback (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '16:9', has_final_video: true, final_video_id: 99, is_published: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
   // Item 3 — selected/active + currently-loaded accent ring
   it('is keyboard-focusable and exposes a focus-visible ring (item 3)', () => {
     const { container } = renderTile();
