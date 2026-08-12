@@ -1,6 +1,6 @@
 # T6940: Intro card picker exits — backdrop close + create-without-attach dead ends
 
-**Status:** WAITING ON USER (implemented on feature/T6930-intro-card-bugfixes, awaiting user test + merge approval)
+**Status:** STAGING (merged to master 62566e86, 2026-08-12 - auto-deploys staging)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-12

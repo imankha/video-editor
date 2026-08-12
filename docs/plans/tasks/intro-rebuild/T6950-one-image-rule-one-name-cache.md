@@ -1,6 +1,6 @@
 # T6950: One rule for the card image; card-delete must not leave lying badges
 
-**Status:** WAITING ON USER (implemented on feature/T6930-intro-card-bugfixes, awaiting user test + merge approval)
+**Status:** STAGING (merged to master 62566e86, 2026-08-12 - auto-deploys staging)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-12

@@ -1,6 +1,6 @@
 # T6930: Intro card store survives profile switch — wrong card gets attached and plays
 
-**Status:** WAITING ON USER (implemented on feature/T6930-intro-card-bugfixes, awaiting user test + merge approval)
+**Status:** STAGING (merged to master 62566e86, 2026-08-12 - auto-deploys staging)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-08-12
