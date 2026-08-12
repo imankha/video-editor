@@ -181,6 +181,37 @@ the CURRENT name ("Mehdi Khabazian") for the same reel (id=38, card 1).
   Vega", version 1) + newer R2 (708) now resolves "Mehdi Khabazian"; the pre-fix read
   returns the stale "Jordan Vega". Both egress modes resolve the same title.
 
+**2026-08-12 (round 3 — two new reports, BLOCKED on live repro + a product/perf decision):**
+Cannot reproduce EITHER in-container: the staging FRONTEND host (`app-staging.reelballers.com`)
+does not resolve from the worker (only the fly.dev API + prod `app.reelballers.com` do), the
+session cookie is `SameSite=None; Partitioned` scoped to the fly.dev API (blocks cross-origin
+localhost driving), and there is no local Postgres to run the full stack. Both reports are
+visual/interaction bugs that need the real UI. Findings from code + live API:
+
+- **Report 1 "out of sync between the preview and the play in place".** Two surfaces:
+  the editor/picker preview reads facts from the CLIENT `profileStore` (populated by
+  `GET /api/profiles`), and play-in-place reads from `GET /api/downloads/{id}/intro-playback`.
+  Live API RIGHT NOW: both return identical facts (full_name "Mehdi Khabazian", CAM/2031/West
+  Coast ECNL) -> no data desync in the current single-machine state. BUT `/api/profiles`
+  (`routers/profiles.py:158-160`) reads facts via `get_all_intro_facts`/`get_all_intro_full_names`
+  = restore-if-ABSENT (stale-tolerant) -- the SAME class the round-2 fix just closed for the
+  egress, now ASYMMETRIC because `/intro-playback` freshens (be19ef7f) and `/api/profiles`
+  does not. So the *facts* aspect of this desync is plausibly the round-2 bug on the profiles
+  surface. Two blockers to fixing: (a) UNCONFIRMED that facts (not photo/framing or a
+  MotionPreview-vs-IntroCardPreview render-parity difference) is what the user saw -- need a
+  side-by-side screenshot; (b) `/api/profiles` is a HOT bootstrap endpoint (every app load /
+  profile switch), so adding an R2 HEAD (`ensure_user_database_fresh`) there is a real latency
+  tradeoff across the whole app -- a product/perf DECISION, not a clear-cut fix.
+- **Report 2 "multiple intro cards attached, should be single".** No code path produces
+  multiple: `final_videos.intro_card_id` is a single nullable FK; `set_download_intro` is a
+  single UPDATE (replaces); the picker is single-select (`selectedId === card.id`, plus one
+  "No intro" tile); playback renders ONE `intro` (IntroStoryPlayer); the ReelTile intro badge
+  is a mutually-exclusive ternary (one badge). Live: the profile has exactly ONE card (id=1),
+  reel 38 attached to it. The only "multiple cards" mechanism is the LIBRARY growing via the
+  inline "New card" create flow (by design) -- likely misread as "multiple attached", OR a
+  real UI state I cannot see. Need a screenshot of exactly WHERE the user sees multiple
+  (picker highlighting / playback / downloads badge / card library).
+
 ## Acceptance Criteria
 
 - [ ] Attaching an intro card to a reel, then playing it in-app, shows the intro pre-roll
