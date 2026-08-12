@@ -152,6 +152,35 @@ egress only** — the intro card build fails on the Fly staging runtime (pre-enc
 degrading non-fatally to no-intro; playback/resolution are healthy. Exact Fly mechanism
 pending the server log line above.
 
+**2026-08-12 (round 2 — same reel, DIFFERENT card per egress):** after the R2-sync-client
+fix (30f6c08f) made the intro appear in downloads, the user caught a second bug live: the
+downloaded card showed a STALE athlete name ("Jordan Vega") while in-app playback showed
+the CURRENT name ("Mehdi Khabazian") for the same reel (id=38, card 1).
+
+- **NOT a cache-key bug** (the report's guess): I empirically computed the burn render
+  cache key (`player_intro._content_hash`) for the same card with full_name "Mehdi" vs
+  "Jordan" -> DIFFERENT hashes (the rendered title is part of the key). A name change
+  busts the cache; a fresh-facts request rebuilds correctly.
+- **NOT two resolution paths:** both egresses funnel through
+  `intro_egress.resolve_intro_for_reel` -> `_load_field_values`; locally both modes
+  resolve the same title.
+- **Root cause = a FACTS-freshness asymmetry (expert-validated).** The card TITLE = the
+  profile's `full_name`, which lives in **user.sqlite**. The burn egress reads the card
+  ROW restore-if-newer (`open_profile_db_readonly` -> `ensure_profile_db_local`) but reads
+  the FACTS via the OWNER path `get_user_db_connection` -> `ensure_user_database` =
+  restore-if-ABSENT only. So a Fly machine holding a stale local user.sqlite bakes an OLD
+  full_name into the (correctly hash-keyed) cached card, while playback -- resolved on a
+  different, fresh machine -- shows the current name. Strictly cross-machine (a single
+  machine renders identical titles for both modes); surfaced right when 30f6c08f's deploy
+  restarted machines and churned the fly_machine_id pins.
+- **Fix:** `intro_egress._load_field_values` now calls `ensure_user_database_fresh(user_id)`
+  (restore-if-newer, WAL-safe via the sidecar guard, read-only -- no upload) before reading
+  facts, so ALL live egresses that share this one seam resolve facts from the same
+  R2-current truth as the card row. Degrades to the local copy + logs on R2 error (epic
+  dec 9). Verified with REAL staging data: a planted stale local user.sqlite ("Jordan
+  Vega", version 1) + newer R2 (708) now resolves "Mehdi Khabazian"; the pre-fix read
+  returns the stale "Jordan Vega". Both egress modes resolve the same title.
+
 ## Acceptance Criteria
 
 - [ ] Attaching an intro card to a reel, then playing it in-app, shows the intro pre-roll
