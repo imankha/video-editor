@@ -144,7 +144,11 @@ def ensure_user_database(user_id: str) -> None:
 
     if R2_ENABLED:
         local_version = get_local_user_db_version(user_id)
-        if local_version is None:
+        # T6910: local_version is an in-process cache with no tie to the file on
+        # disk -- if the file was deleted out-of-band (not via forget_user_db),
+        # a stale non-None version here would skip the restore below and let a
+        # brand-new BLANK db silently replace the real one.
+        if local_version is None or not db_path.exists():
             # Check cooldown
             last_fail = _r2_user_restore_cooldowns.get(user_id)
             if last_fail and (time.time() - last_fail) < USER_RESTORE_COOLDOWN_SECONDS:
@@ -161,8 +165,13 @@ def ensure_user_database(user_id: str) -> None:
                 # ensure_user_database_fresh already does.
                 from .db_refresh import clear_stale_wal_sidecars, wal_sidecars_present
                 restore_start = time.perf_counter()
+                # T6910: a stale cached version number describes a file that's no
+                # longer there -- treat it as unknown (None) so the R2 version
+                # compare below can't wrongly skip the download on a "local >= r2"
+                # read of a version that has no corresponding local file.
+                version_for_compare = local_version if db_path.exists() else None
                 was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(
-                    user_id, db_path, local_version,
+                    user_id, db_path, version_for_compare,
                     before_download=lambda: not wal_sidecars_present(db_path),
                 )
                 restore_elapsed = time.perf_counter() - restore_start
