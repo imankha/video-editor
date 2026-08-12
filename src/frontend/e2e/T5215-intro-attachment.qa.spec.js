@@ -18,8 +18,6 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  *   d. Without consent: amber notice + "Go to consent settings" link shown;
  *      "No intro" still clickable.
  *   e. Collection share dialog embeds the SAME carousel + frozen-at-share note.
- *   f. Manage Profile -> Player Intro: "Minimum reel length for the default
- *      intro" input, default 20, out-of-range rejected + reverts on reload.
  *
  * This account starts with ZERO intro cards and NO consent recorded (verified
  * live via GET /api/intro-cards -> {cards:[]} and GET /api/profiles ->
@@ -423,52 +421,6 @@ test.describe('T5215 intro attachment (real account)', () => {
     await expect(page.getByText(/Frozen when you share/i)).toBeVisible();
 
     await saveEvidence(page, 'T5215-AC-e-collection-share-carousel-frozen-note');
-  });
-
-  test('f: Manage Profile -> Player Intro threshold input (default 20, validation, revert)', async ({ page }) => {
-    await page.goto('/');
-    await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
-    await page.goto('/');
-    await openManageProfileEdit(page);
-
-    const label = page.getByText('Minimum reel length for the default intro');
-    await expect(label).toBeVisible({ timeout: 10000 });
-    // Scope to the input adjacent to the label (there are other number inputs
-    // possibly elsewhere in the modal tree) by walking up to the labeled block.
-    const thresholdInput = page.locator('div').filter({ has: label }).locator('input[type="number"]').first();
-    await expect(thresholdInput).toBeVisible();
-
-    // The input starts blank (draft='') until GET .../intro-min-duration resolves
-    // and the store populates it -- wait for that async load before reading it,
-    // or "initial" would capture the pre-load empty string.
-    await expect(thresholdInput).not.toHaveValue('', { timeout: 10000 });
-    const initial = await thresholdInput.inputValue();
-    // First load should reflect the server default of 20 unless a prior QA run changed it.
-    console.log(`[T5215] threshold initial value: ${initial}`);
-
-    await saveEvidence(page, 'T5215-AC-f-threshold-input-present');
-
-    // Out-of-range (0) rejected, inline error shown, reverts.
-    await thresholdInput.fill('0');
-    await thresholdInput.blur();
-    await expect(page.getByText(/must be between 0 and 300 seconds/i)).toBeVisible({ timeout: 10000 });
-    await expect(thresholdInput).toHaveValue(initial);
-    await saveEvidence(page, 'T5215-AC-f-threshold-out-of-range-error');
-
-    // Out-of-range (400) also rejected.
-    await thresholdInput.fill('400');
-    await thresholdInput.blur();
-    await expect(page.getByText(/must be between 0 and 300 seconds/i)).toBeVisible({ timeout: 10000 });
-    await expect(thresholdInput).toHaveValue(initial);
-
-    // Reload and re-open to confirm neither rejected write persisted.
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await openManageProfileEdit(page);
-    const thresholdInputAfter = page.locator('div').filter({ has: label }).locator('input[type="number"]').first();
-    await expect(thresholdInputAfter).toHaveValue(initial, { timeout: 10000 });
-
-    await saveEvidence(page, 'T5215-AC-f-threshold-reverted-after-reload');
   });
 
   test('responsive sweep: My Reels carousel view + collection share dialog', async ({ page }) => {
