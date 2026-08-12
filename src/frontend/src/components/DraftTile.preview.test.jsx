@@ -27,7 +27,14 @@ afterEach(() => {
 });
 
 vi.mock('./MediaPlayer', () => ({
-  MediaPlayer: ({ src }) => <video data-testid="preview-video" src={src} />,
+  // The close control stops propagation like the real backdrop/X controls, so
+  // it doesn't bubble through the portal back to the card's preview handler.
+  MediaPlayer: ({ src, onClose }) => (
+    <div>
+      <video data-testid="preview-video" src={src} />
+      <button data-testid="mp-close" onClick={(e) => { e.stopPropagation(); onClose(); }}>close</button>
+    </div>
+  ),
 }));
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 vi.mock('../stores/projectsStore', () => {
@@ -62,6 +69,7 @@ vi.mock('../stores/questStore', () => {
 });
 
 import { DraftTile } from './DraftTile';
+import { useQuestStore } from '../stores/questStore';
 import { PREVIEW_WARM_DELAY_MS } from '../hooks/useTilePreview';
 
 const baseProject = {
@@ -116,5 +124,38 @@ describe('T6441 DraftTile hover preview — In Overlay fallback', () => {
     const { video, hoverAndWarm } = renderTile({ has_working_video: false, final_video_id: null });
     hoverAndWarm();
     expect(video()).toBeNull();
+  });
+});
+
+// T6840: playing a finished draft's preview for ~1s records previewed_draft_reel_1s
+// (quest_4 "Watch Your Preview"). Fires after ~1s, not on open, and cancels if the
+// preview is closed before the second elapses — mirrors watched_gallery_video_1s.
+describe('T6840 preview-watched achievement', () => {
+  const readyProject = { has_final_video: true, is_published: false, final_video_id: 99 };
+
+  beforeEach(() => {
+    useQuestStore.getState().recordAchievement.mockClear();
+  });
+
+  const openPreview = () => {
+    // Ready-state action bar carries the "Preview video" button.
+    fireEvent.click(screen.getByLabelText('Preview video'));
+  };
+
+  it('records previewed_draft_reel_1s after ~1s of playback, not on open', () => {
+    renderTile(readyProject);
+    openPreview();
+    expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
+    act(() => vi.advanceTimersByTime(1000));
+    expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('previewed_draft_reel_1s');
+  });
+
+  it('does NOT record it if the preview is closed before ~1s', () => {
+    renderTile(readyProject);
+    openPreview();
+    act(() => vi.advanceTimersByTime(500));
+    fireEvent.click(screen.getByTestId('mp-close'));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
   });
 });

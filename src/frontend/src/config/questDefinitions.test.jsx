@@ -121,10 +121,11 @@ describe('questDefinitions overlay-quest move (T5170)', () => {
     expect(q3.step_ids.slice(-2)).toEqual(['export_overlay', 'wait_for_overlay']);
   });
 
-  it('leaves quest_4 with only tutorial + publish steps', () => {
+  it('leaves quest_4 with tutorial + publish steps (preview added by T6840)', () => {
     const q4 = QUEST_DEFINITIONS.find((q) => q.id === 'quest_4');
     expect(q4.step_ids).toEqual([
       'watch_publish_tutorial',
+      'preview_draft',
       'move_to_my_reels',
       'view_gallery_video',
     ]);
@@ -142,5 +143,31 @@ describe('questDefinitions overlay-quest move (T5170)', () => {
   it('has no duplicate step ids across all quests after the move', () => {
     const all = QUEST_DEFINITIONS.flatMap((q) => q.step_ids);
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// T6840: a dedicated "Watch Your Preview" step lands between the render-wait step
+// and Move to My Reels, and the preview sentence moves out of move_to_my_reels'
+// copy into the new step's description.
+describe('questDefinitions preview step (T6840)', () => {
+  it('orders preview_draft immediately before move_to_my_reels', () => {
+    const q4 = QUEST_DEFINITIONS.find((q) => q.id === 'quest_4');
+    const previewIdx = q4.step_ids.indexOf('preview_draft');
+    const moveIdx = q4.step_ids.indexOf('move_to_my_reels');
+    expect(previewIdx).toBeGreaterThan(-1);
+    expect(moveIdx).toBe(previewIdx + 1);
+  });
+
+  it('resolves a title + description for preview_draft', () => {
+    expect(STEP_TITLES.preview_draft).toBe('Watch Your Preview');
+    const { container } = render(<>{STEP_DESCRIPTIONS.preview_draft}</>);
+    expect(container.textContent).toMatch(/preview/i);
+  });
+
+  it('moves the preview sentence out of move_to_my_reels copy', () => {
+    const { container } = render(<>{STEP_DESCRIPTIONS.move_to_my_reels}</>);
+    // move step keeps the publish gesture, no longer the "Press play... to preview" nudge
+    expect(container.textContent).toMatch(/Move to/i);
+    expect(container.textContent).not.toMatch(/press play/i);
   });
 });

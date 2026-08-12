@@ -140,6 +140,7 @@ export const STEP_TITLES = {
   // Quest 4 — Publish Your Reel
   export_overlay: 'Add the Spotlight',
   wait_for_overlay: 'Render the Spotlight',
+  preview_draft: 'Watch Your Preview',
   move_to_my_reels: 'Move to My Reels',
   view_gallery_video: 'Watch Your Reel',
 };
@@ -172,6 +173,7 @@ export const STEP_DESCRIPTIONS = {
   // Quest 4 — Publish Your Reel
   export_overlay: <>Click <MiniButton>Add Spotlight</MiniButton> to render your highlight with the spotlight on your player.</>,
   wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
-  move_to_my_reels: <>Press play on the <DoneBadge /> Reel Draft to preview your draft reel. Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
+  preview_draft: <>Press play on the <DoneBadge /> Reel Draft to preview your finished reel. Watch it back for a moment to make sure it looks just how you want.</>,
+  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished reel. Once it's perfect, you can download and share it.</>,
 };

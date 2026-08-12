@@ -43,7 +43,8 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
-    # Publish-quest step event (Move to My Reels button)
+    # Publish-quest step events (Preview player + Move to My Reels button)
+    "previewed_draft_reel_1s",  # T6840
     "moved_to_my_reels",
     # T5185: rate_clip step event — fires on the annotate gesture that leaves the
     # clip both rated AND tagged (not on save; see ClipDetailsEditor).
@@ -73,6 +74,7 @@ ACHIEVEMENT_TO_MILESTONE = {
     "overlay_players_assigned": "overlay_players_assigned",
     "overlay_color_set": "overlay_color_set",
     "overlay_shape_set": "overlay_shape_set",
+    "previewed_draft_reel_1s": "previewed_draft_reel_1s",  # T6840
     "moved_to_my_reels": "moved_to_my_reels",
     # T4780: tutorial-watch milestones (bridge to analytics for funnel tracking)
     "watched_annotate_tutorial": "watched_annotate_tutorial",
@@ -92,6 +94,7 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
+    "previewed_draft_reel_1s",  # T6840
     "moved_to_my_reels",
     "clip_rated",
     "returned_home",
@@ -227,6 +230,11 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # STARTS (job created), the wait step when it COMPLETES.
     steps["export_overlay"] = overlay_total >= 1
     steps["wait_for_overlay"] = overlay_done >= 1
+    # T6840: "Watch Your Preview" completes after ~1s of preview playback. The
+    # `moved_to_my_reels` OR is the backward-compat guarantee: users who already
+    # published (or already finished quest_4 before this step existed) can't have
+    # the quest reopen with a new unchecked step.
+    steps["preview_draft"] = 'previewed_draft_reel_1s' in achieved or 'moved_to_my_reels' in achieved
     steps["move_to_my_reels"] = 'moved_to_my_reels' in achieved
     steps["view_gallery_video"] = 'watched_gallery_video_1s' in achieved
 

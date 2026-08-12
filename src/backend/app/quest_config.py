@@ -65,6 +65,10 @@ QUEST_DEFINITIONS = [
         "reward": 15,
         "step_ids": [
             "watch_publish_tutorial",
+            # T6840: preview the finished draft before publishing (kept in sync
+            # with questDefinitions.js). Completes when the user plays a draft's
+            # preview for ~1s; backfilled by move_to_my_reels for existing users.
+            "preview_draft",
             "move_to_my_reels",
             "view_gallery_video",
         ],

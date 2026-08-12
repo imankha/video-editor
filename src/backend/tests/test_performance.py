@@ -190,6 +190,7 @@ class TestQuestProgressPerformance:
         # Quest 4 — Publish Your Reel
         assert steps["export_overlay"] is True  # overlay export started (total >= 1)
         assert steps["wait_for_overlay"] is True  # completed overlay exists (>= 1)
+        assert steps["preview_draft"] is True  # T6840: compat OR via moved_to_my_reels achievement
         assert steps["move_to_my_reels"] is True  # moved_to_my_reels achievement
         assert steps["view_gallery_video"] is True  # watched_gallery_video_1s achievement
 
