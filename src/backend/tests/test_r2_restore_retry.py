@@ -521,3 +521,66 @@ class TestEnsureUserDatabaseRestore:
 
             ensure_user_database("user-expire")
             assert mock_sync.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# 11. T6910 — a stale non-None cached version must NOT skip the R2 restore
+# when the local file it describes is gone (deleted out-of-band, not via
+# forget_user_db). Regression for imankh@gmail.com's dev account: a process
+# that had already cached a version for a user, whose local user.sqlite was
+# later deleted by hand, silently created a brand-new blank db instead of
+# restoring the real one from R2.
+# ---------------------------------------------------------------------------
+
+class TestEnsureUserDatabaseStaleVersionCache:
+    def setup_method(self):
+        from app.services.user_db import _initialized_user_dbs, _r2_user_restore_cooldowns
+        _initialized_user_dbs.clear()
+        _r2_user_restore_cooldowns.clear()
+
+    @patch("app.storage.R2_ENABLED", True)
+    @patch("app.database.get_local_user_db_version", return_value=5)
+    @patch("app.storage.sync_user_db_from_r2_if_newer")
+    @patch("app.database.set_local_user_db_version")
+    def test_stale_cached_version_with_missing_file_still_restores(
+        self, mock_set_version, mock_sync, mock_get_version
+    ):
+        """local_version is non-None (stale, from an earlier process access) but
+        the file does not exist on disk -- the restore must still run rather than
+        falling through to blank-db creation."""
+        mock_sync.return_value = (True, 7, False)  # downloaded newer version
+
+        with patch("app.services.user_db.sqlite3.connect") as mock_connect:
+            mock_conn = MagicMock()
+            mock_connect.return_value = mock_conn
+
+            from app.services.user_db import _get_user_db_path, ensure_user_database
+            user_id = "user-stale-version-no-file"
+            assert not _get_user_db_path(user_id).exists()
+
+            ensure_user_database(user_id)
+
+        mock_sync.assert_called_once()
+        mock_set_version.assert_called_once_with(user_id, 7)
+
+    @patch("app.storage.R2_ENABLED", True)
+    @patch("app.database.get_local_user_db_version", return_value=5)
+    @patch("app.storage.sync_user_db_from_r2_if_newer")
+    @patch("app.database.set_local_user_db_version")
+    def test_stale_cached_version_passes_none_not_stale_value_to_sync(
+        self, mock_set_version, mock_sync, mock_get_version
+    ):
+        """The stale cached version number must not be handed to
+        sync_user_db_from_r2_if_newer as if it described the (nonexistent) local
+        file -- that would let its own local>=r2 short-circuit wrongly skip the
+        download. Missing file -> compare as None."""
+        mock_sync.return_value = (True, 7, False)
+
+        with patch("app.services.user_db.sqlite3.connect") as mock_connect:
+            mock_connect.return_value = MagicMock()
+
+            from app.services.user_db import ensure_user_database
+            ensure_user_database("user-stale-version-compare")
+
+        called_local_version = mock_sync.call_args.args[2]
+        assert called_local_version is None
