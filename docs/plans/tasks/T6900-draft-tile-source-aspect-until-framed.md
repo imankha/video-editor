@@ -1,6 +1,6 @@
 # T6900: Draft reel card should stay in source aspect until framing is actually applied
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-12
@@ -91,11 +91,19 @@ as it does today.
 stage-display logic (IN_FRAMING bucket doesn't distinguish "entered framing" from "actually
 framed").
 
+**2026-08-12**: Implemented (`has_crop_keyframes` on the projects payload, `rendersSourceAspect`/
+`splitByRenderedAspect` in `draftStage.js`, `DraftTile.jsx` landscape override extended), CI green,
+merged to master. Manual verification was blocked for several hours on an unrelated dev-environment
+bug (imankh@gmail.com's account looked blank after a prod->dev copy) - root-caused and fixed as
+T6910. Once unblocked, verified live in a fresh Docker stack + Playwright against imankh@gmail.com's
+real restored production data: an In-Framing/uncropped draft ("Good Buildup") rendered landscape;
+cropped/In-Overlay/Ready reels rendered target aspect. No migration needed.
+
 ## Acceptance Criteria
 
-- [ ] A draft with clips extracted but no crop/framing applied yet renders its tile at the
+- [x] A draft with clips extracted but no crop/framing applied yet renders its tile at the
       source video's aspect ratio, not the target output ratio
-- [ ] A draft that has been through Framing (crop keyframes exist) renders at target aspect,
+- [x] A draft that has been through Framing (crop keyframes exist) renders at target aspect,
       unchanged from current behavior
-- [ ] NOT_STARTED behavior (T6800) unchanged
-- [ ] Tests pass
+- [x] NOT_STARTED behavior (T6800) unchanged
+- [x] Tests pass

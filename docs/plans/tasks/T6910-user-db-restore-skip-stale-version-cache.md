@@ -1,6 +1,6 @@
 # T6910: user.sqlite R2 restore silently skipped when local file is gone but version cache is stale
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-08-12
@@ -95,10 +95,24 @@ every future deletion path to independently remember cache invalidation.
 **2026-08-12**: Filed and fixed in the same session while unblocking T6900 manual
 verification — see SESSION-HANDOFF-2026-08-12.md for the full incident trace.
 
+**2026-08-12**: Fix landed + 2 regression tests (confirmed they fail without the fix). Also
+found the actual TRIGGER mechanism: two orphaned `uvicorn --reload` worker processes (Windows
+`multiprocessing.spawn_main` children, one predating this session) kept serving :8000 with
+stale in-memory caches through every "restart" attempt this session and the prior one —
+netstat/`Get-NetTCPConnection` attributed the port to a parent PID that `Get-Process` said
+didn't exist, which was the ORPHANED CHILD still holding the inherited listening socket. Killed
+both orphans, then verified live: re-ran `copy_user_between_envs.py` to restore dev's R2 copy
+of `user.sqlite` (the corrupted blank-profile state had already synced up to R2 before the
+fix), deleted the local file, and confirmed a genuinely fresh backend process correctly
+restores profile `9fa7378c` (47 real projects, `selected_profile` correct) instead of
+fabricating a blank one. Note: `b95eb93b` is a pre-existing orphaned/empty profile.sqlite
+object in production itself (not registered in user.sqlite's `profiles` table) — unrelated to
+this bug, not investigated further. Merged to master.
+
 ## Acceptance Criteria
 
-- [ ] A local `user.sqlite` deleted out-of-band (not via `forget_user_db`) is correctly
+- [x] A local `user.sqlite` deleted out-of-band (not via `forget_user_db`) is correctly
       re-restored from R2 on next access, never silently replaced with a blank DB
-- [ ] Regression test passes
-- [ ] imankh@gmail.com's dev account shows real profiles (`9fa7378c`, `b95eb93b`) after
-      a clean restart, no manual intervention
+- [x] Regression test passes
+- [x] imankh@gmail.com's dev account shows real profile (`9fa7378c`) after a clean restart,
+      no manual intervention
