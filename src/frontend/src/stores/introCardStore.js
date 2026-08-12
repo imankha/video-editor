@@ -33,6 +33,13 @@ export const useIntroCardStore = create((set) => ({
   // final_videos.intro_card_id server-side for every reel that referenced the
   // card — surfaces holding reel-list copies (DownloadsPanel's flat list,
   // member caches, badges) watch this to mirror that cascade locally.
+  //
+  // Deliberate deviation from the T6950 task file (reviewer-accepted): the
+  // consumers RECONCILE locally (null any cached intro_card_id not in the
+  // surviving library) instead of refetching the lists. This is not a
+  // client-side "prediction": card ids are AUTOINCREMENT and never reused, so
+  // set-difference against the live library is exact — while a refetch would
+  // be N requests (one per cached member group) for a rare gesture.
   deleteRevision: 0,
 
   /**
@@ -161,6 +168,11 @@ export const useIntroCardStore = create((set) => ({
   // invalidates any in-flight fetch so the old profile's rows can't land after
   // the clear, and drops the dedup handle so the next fetchCards() hits the
   // new profile's API instead of returning the stale promise.
+  //
+  // deleteRevision deliberately SURVIVES reset: it is a monotonic change
+  // signal, and consumers ref-compare it — rewinding it to 0 here would make
+  // every mounted consumer see a "change" on the next delete-after-switch (or
+  // fire a spurious prune on switch). Do not "fix" this to reset it.
   reset: () => {
     _generation += 1;
     _fetchPromise = null;

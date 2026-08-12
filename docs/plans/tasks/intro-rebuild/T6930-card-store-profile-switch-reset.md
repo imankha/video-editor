@@ -1,6 +1,6 @@
 # T6930: Intro card store survives profile switch — wrong card gets attached and plays
 
-**Status:** TODO
+**Status:** WAITING ON USER (implemented on feature/T6930-intro-card-bugfixes, awaiting user test + merge approval)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-08-12
@@ -103,3 +103,7 @@ decision 7). The fix is entirely a frontend-lifecycle fix.
   (including the in-flight-fetch window)
 - [ ] Manual QA script above passes on a real two-profile account
 - [ ] Relevant tests green; eslint clean
+
+## Progress Log
+
+**2026-08-12**: Implemented. Deviation (reviewer-accepted): a module-level GENERATION counter in introCardStore invalidates in-flight fetches and drops the _fetchPromise dedup handle on reset(), instead of the task's cardsProfileId stamp + per-component gating - kills the stale data at the source with zero component edits. Store enrolled in _resetDataStores(). Tests: 2 new store tests (in-flight discard, dedup drop). Reviewer note: the microtask window between currentProfileId set and the reset is not exposable by either chained flow (gallery closes; T6690 awaits the switch before opening the library).

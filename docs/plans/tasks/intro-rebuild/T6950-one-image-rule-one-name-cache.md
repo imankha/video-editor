@@ -1,6 +1,6 @@
 # T6950: One rule for the card image; card-delete must not leave lying badges
 
-**Status:** TODO
+**Status:** WAITING ON USER (implemented on feature/T6930-intro-card-bugfixes, awaiting user test + merge approval)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-12
@@ -95,3 +95,7 @@ Two smaller divergences from the 2026-08-12 audit (mechanisms M6 and M5):
 - [ ] No write path can set `image_cutout_key`
 - [ ] Deleting a card immediately clears every badge/picker preselection that referenced it
 - [ ] Relevant tests green; eslint + ruff clean
+
+## Progress Log
+
+**2026-08-12**: Implemented. ONE image rule: image_cutout_key removed from create/patch models, INSERT, _UPDATABLE_FIELDS, _serialize, _card_payload, and both egress reads (image_key only); duplicate no longer copies it; column stays as dead data. Delete cascade: deleteRevision bump in the store; DownloadsPanel effect reconciles the flat list + member caches (new pruneDanglingIntroCards local-only helpers) and re-fires the collection badge batch GET. DEVIATION (reviewer-accepted, rationale in introCardStore.js): local reconciliation against the surviving library instead of the task's refetch - AUTOINCREMENT ids are never reused so the set-difference is exact, vs N refetches for a rare gesture. Known gap left as-is (reviewer OUT OF SCOPE): card delete does not null collection_settings intro ids - dangling ids resolve to no-intro and ids cannot re-bind; row-level cleanup would be a separate task.

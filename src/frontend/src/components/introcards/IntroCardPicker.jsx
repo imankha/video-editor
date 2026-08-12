@@ -237,7 +237,6 @@ export function IntroCardPicker({
         className={`bg-gray-800 rounded-lg shadow-xl w-full border border-gray-700 ${
           inCreateView ? 'max-w-4xl h-[85vh] flex flex-col' : 'max-w-lg'
         }`}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-3.5 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
           <h3 className="text-base font-semibold text-white">

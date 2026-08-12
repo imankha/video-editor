@@ -46,7 +46,15 @@ function mockApiFetch(introPlaybackResponse) {
 
 // ---------------------------------------------------------------------------
 // Data-layer hook mocks -- one seeded download, no real network/store wiring.
+// The prune fns are hoisted + stable so (a) the T6950 effect's deps don't
+// churn identity every render and (b) the cascade test below can assert on
+// them.
 // ---------------------------------------------------------------------------
+const hookMocks = vi.hoisted(() => ({
+  pruneDownloadsIntroCards: vi.fn(),
+  pruneMembersIntroCards: vi.fn(),
+}));
+
 vi.mock('../hooks/useDownloads', () => ({
   useDownloads: () => ({
     downloads: [],
@@ -55,6 +63,7 @@ vi.mock('../hooks/useDownloads', () => ({
     downloadingId: null,
     renameDownload: vi.fn(),
     setIntroCard: vi.fn(),
+    pruneDanglingIntroCards: hookMocks.pruneDownloadsIntroCards,
     markWatched: vi.fn(),
     formatDate: () => '',
   }),
@@ -71,6 +80,7 @@ vi.mock('../hooks/useCollections', () => ({
     removeMember: vi.fn(),
     patchMember: vi.fn(),
     resortMembers: vi.fn(),
+    pruneDanglingIntroCards: hookMocks.pruneMembersIntroCards,
   }),
 }));
 
@@ -223,6 +233,29 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
       await waitFor(() => {
         expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('false');
       });
+    });
+  });
+
+  describe('card-delete cascade mirror (T6950)', () => {
+    it('a deleteRevision bump prunes dangling intro cards from BOTH reel-list caches', async () => {
+      mockApiFetch(null);
+      useIntroCardStore.setState({ cards: [{ id: 1, name: 'Kept card' }] });
+
+      render(<DownloadsPanel onOpenProject={() => {}} />);
+      const before = useIntroCardStore.getState().deleteRevision;
+
+      // What deleteCard does after a successful DELETE: the surviving library
+      // plus a revision bump. The panel must reconcile its cached reel lists
+      // against the surviving ids.
+      useIntroCardStore.setState({ deleteRevision: before + 1 });
+
+      await waitFor(() => {
+        expect(hookMocks.pruneMembersIntroCards).toHaveBeenCalledTimes(1);
+      });
+      const liveIds = hookMocks.pruneMembersIntroCards.mock.calls[0][0];
+      expect(liveIds instanceof Set).toBe(true);
+      expect([...liveIds]).toEqual([1]);
+      expect(hookMocks.pruneDownloadsIntroCards).toHaveBeenCalledWith(liveIds);
     });
   });
 

@@ -409,6 +409,11 @@ export function useDownloads(isOpen = false) {
   // deleted card. Null the intro fields on any download whose card is no longer
   // in the library. Local-only state patch — the server already did the real
   // write; nothing here calls the network.
+  //
+  // NOTE: inert at today's only call site — DownloadsPanel uses
+  // useDownloads(false) and its `downloads` stays [] (members render from
+  // useCollections). Kept for symmetry with setIntroCard's equally-inert
+  // flat-list half so any future flat-list consumer stays correct.
   const pruneDanglingIntroCards = useCallback((liveCardIds) => {
     setDownloads(prev => prev.map(d =>
       d.intro_card_id && !liveCardIds.has(d.intro_card_id)

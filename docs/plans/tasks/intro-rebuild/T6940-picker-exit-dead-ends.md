@@ -1,6 +1,6 @@
 # T6940: Intro card picker exits — backdrop close + create-without-attach dead ends
 
-**Status:** TODO
+**Status:** WAITING ON USER (implemented on feature/T6930-intro-card-bugfixes, awaiting user test + merge approval)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-12
@@ -91,3 +91,7 @@ but the picker context sets an expectation the exit paths betray.
 - [ ] Inline create → OK attaches the new card (badge + playback agree)
 - [ ] Exiting with a fresh unattached card always asks; no silent abandonment
 - [ ] e2e green in a real browser; relevant unit tests green; eslint clean
+
+## Progress Log
+
+**2026-08-12**: Implemented. Backdrop click is now a no-op in both views; header X / Cancel with a just-created card still pending (create view, or select view with it as the draft) opens a ConfirmationDialog (Attach card / Don't attach); creating then deliberately picking a DIFFERENT card then Cancel = plain close (the later choice stands). finishCreate already pre-selected the created card (verified, test-pinned). 6 new picker tests + a jsdom WAAPI stub (clicking a real tile mounts MotionPreview).
