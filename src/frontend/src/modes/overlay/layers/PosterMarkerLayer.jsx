@@ -259,6 +259,47 @@ export default function PosterMarkerLayer({
     }
   }, [disabled, nudge, commitDrag, timelineDuration]);
 
+  // T6870: reveal the marker by scrolling ONLY the timeline's own horizontal
+  // scroll container -- never the page. The ORIGINAL bug was
+  // `trackRef.current.scrollIntoView({ block: 'nearest', inline: 'center' })`:
+  // `scrollIntoView` walks EVERY scrollable ancestor, so `block: 'nearest'`
+  // scrolled the PAGE down to a below-the-fold timeline on launch. That is
+  // fixed by scrolling this ONE container's scrollLeft instead -- one axis, one
+  // element, no page movement by construction.
+  //
+  // T6870 follow-up (user decision, option 2): DON'T center the marker.
+  // `inline: 'center'` (and the first pass's markerPx-centering) always moved
+  // the timeline to put the marker mid-viewport -- so at auto-zoom > 100% the
+  // timeline opened scrolled even when the marker was ALREADY visible. Instead
+  // reuse the playhead's own follow-scroll math (computeFollowScrollTarget):
+  // it scrolls ONLY when the marker is within a 15%-of-viewport edge margin (or
+  // off-screen), and only the MINIMUM distance to bring it just inside that
+  // margin. When the marker is comfortably visible it returns the current
+  // scrollLeft unchanged, so the timeline stays put (e.g. at 0 on a typical
+  // launch). Same function the drag-follow (`followScroll`) already uses.
+  const revealMarker = useCallback(() => {
+    const scrollContainer = trackRef.current?.closest('.timeline-scroll-container');
+    if (!scrollContainer) return;
+    const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+    if (maxScroll <= 0) return; // content fits: marker already visible, nothing to scroll
+    const percent = timelineDuration > 0
+      ? Math.max(0, Math.min(100, (visualTime / timelineDuration) * 100))
+      : 0;
+    const target = computeFollowScrollTarget({
+      scrollLeft: scrollContainer.scrollLeft,
+      scrollWidth: scrollContainer.scrollWidth,
+      clientWidth: scrollContainer.clientWidth,
+      maxScroll,
+      progress: percent,
+      edgePadding,
+    });
+    // Already comfortably visible -> target === current scrollLeft -> no write,
+    // no scroll event, timeline stays exactly where it is.
+    if (target !== scrollContainer.scrollLeft) {
+      scrollContainer.scrollTo({ left: target, behavior: 'smooth' });
+    }
+  }, [timelineDuration, visualTime, edgePadding]);
+
   // T6630 round 6 item 4 + round 7 item 6: bring the marker into view (a)
   // on first load, BEFORE the user has interacted with the marker itself,
   // and (b) whenever the user actively opens the tab this marker belongs to
@@ -296,19 +337,15 @@ export default function PosterMarkerLayer({
   useEffect(() => {
     if (timelineDuration <= 0) return;
     if (hasInteractedRef.current) {
-      if (revealOnActive) {
-        trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
+      if (revealOnActive) revealMarker();
       return;
     }
-    trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    revealMarker();
     const retryTimer = setTimeout(() => {
-      if (!hasInteractedRef.current) {
-        trackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
+      if (!hasInteractedRef.current) revealMarker();
     }, 900);
     return () => clearTimeout(retryTimer);
-  }, [revealOnActive, timelineDuration, visualTime]);
+  }, [revealOnActive, timelineDuration, visualTime, revealMarker]);
 
   if (timelineDuration <= 0) return null;
 

@@ -11,11 +11,12 @@ import PosterMarkerLayer from './PosterMarkerLayer';
 
 const DURATION = 10;
 
-// jsdom does not implement scrollIntoView. The round 7 item 6 mount-reveal
-// effect calls it unconditionally on every mount, so every test needs a
-// stub present -- individual describe blocks below may replace this with a
-// vi.fn() spy when they need to assert on call counts.
-Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {});
+// jsdom implements neither Element.prototype.scrollTo (the T6870 horizontal-
+// only reveal mechanism) nor scrollIntoView. The mount-reveal effect runs on
+// every mount, so every test needs harmless stubs present -- the reveal
+// describe block below replaces scrollTo with a vi.fn() spy to assert on it.
+Element.prototype.scrollTo = () => {};
+Element.prototype.scrollIntoView = () => {};
 
 let coarse = false;
 function setCoarse(value) {
@@ -189,175 +190,288 @@ describe('PosterMarkerLayer (T5410)', () => {
   });
 });
 
-describe('PosterMarkerLayer — revealOnActive scrolls itself into view (T6630 round 6 item 4 + round 7 item 6)', () => {
-  /* ROOT CAUSE (live-debugged via a real browser, T6630 round 6): the marker
-   * was never a rendering/z-index bug -- it renders correctly (visible,
-   * opacity 1, z-40, valid coordinates) but its DEFAULT position can land
-   * past the right edge of the horizontally-scrollable timeline once the
-   * PRE-EXISTING auto-zoom (OverlayScreen.jsx, driven by detection-marker
-   * spacing, up to 500% -- unrelated to text lanes) widens the scrollable
-   * content far past the viewport, while the scroll container starts at
-   * scrollLeft: 0. document.elementFromPoint at the marker's own bounding-box
-   * center returned null in the real browser -- off-screen, not occluded.
+describe('PosterMarkerLayer — reveal scrolls the timeline HORIZONTALLY, only when off-screen (T6870)', () => {
+  /* ROOT CAUSE of "Overlay always opens scrolled" (T6870): the reveal used
+   * `trackRef.current.scrollIntoView({ block: 'nearest', inline: 'center' })`.
+   * `scrollIntoView` walks EVERY scrollable ancestor -- `block: 'nearest'`
+   * scrolled the page/main container VERTICALLY down to a below-the-fold
+   * timeline on launch. Fixed by scrolling the ONE horizontal scroll
+   * container's scrollLeft (via scrollTo({ left })) -- one axis, one element,
+   * no page movement by construction.
    *
-   * Round 7 item 6 extended this: the SAME off-screen-default problem can
-   * happen on the very FIRST render too (the Overlay tab, not Thumbnail, is
-   * the default active tab -- OverlayModeView.jsx's `activeTab` useState --
-   * so `revealOnActive` starts false and the round-6 fix alone never fires).
-   * Revealing once, unconditionally, on mount is safe specifically because
-   * there is no prior user scroll position to disturb before the user has
-   * looked at anything -- unlike a reveal on every mount of a tab the user
-   * is actively using, which WOULD fight their own scrolling.
+   * T6870 FOLLOW-UP (user decision, option 2): the reveal must NOT center the
+   * marker. `inline: 'center'` (and the first fix pass's markerPx-centering)
+   * always pulled the marker to mid-viewport, so at auto-zoom > 100% the
+   * timeline opened scrolled even when the marker was ALREADY visible. The
+   * reveal now reuses the playhead's own follow-scroll math
+   * (computeFollowScrollTarget): it scrolls ONLY when the marker is within a
+   * 15%-of-viewport edge margin (or off-screen), and only the MINIMUM distance
+   * to bring it just inside that margin. A comfortably-visible marker leaves
+   * the timeline exactly where it is. Trigger SCHEDULE is unchanged (mount +
+   * 900ms retry + visualTime re-check, all latched off once interacted); only
+   * WHEN-to-scroll and HOW-FAR changed.
+   *
+   * The reveal fixture gives the scroll container real scrollWidth (1000) >
+   * clientWidth (300) so there is something to scroll; jsdom defaults both to
+   * 0 (maxScroll <= 0 -> reveal is a no-op, "content fits" -- nothing to do).
+   * With edgePadding 20 the 15% margin is 45px, so at this geometry a marker
+   * is "comfortably visible" (no scroll) for visualTime ~0.5s..2.4s, and
+   * off-screen-to-the-right (scrolls) beyond that.
    */
+  function renderRevealMarker(overrides = {}) {
+    const onDragEnd = vi.fn();
+    const utils = render(
+      <div className="timeline-scroll-container">
+        <PosterMarkerLayer
+          visualTime={4.85}
+          duration={DURATION}
+          visualDuration={DURATION}
+          onDragEnd={onDragEnd}
+          {...overrides}
+        />
+      </div>
+    );
+    const scrollContainer = utils.container.querySelector('.timeline-scroll-container');
+    return { onDragEnd, scrollContainer, ...utils };
+  }
+
+  // MINIMUM-distance follow target for a given visualTime, mirroring
+  // computeFollowScrollTarget (scrollWidth=1000, clientWidth=300, edgePadding=20,
+  // margin=45, maxScroll=700). Returns the current scrollLeft unchanged when the
+  // marker is already comfortably visible -- i.e. NO scroll.
+  const followTargetFor = (visualTime, scrollLeft = 0) => {
+    const percent = Math.max(0, Math.min(100, (visualTime / DURATION) * 100)) / 100;
+    const playheadPx = 20 + (1000 - 40) * percent;
+    const margin = 300 * 0.15;
+    let target = scrollLeft;
+    if (playheadPx < scrollLeft + margin) target = playheadPx - margin;
+    else if (playheadPx > scrollLeft + 300 - margin) target = playheadPx - 300 + margin;
+    return Math.max(0, Math.min(target, 700));
+  };
+  // The OLD (rejected) centering target, kept only to prove the new reveal is
+  // NOT centering.
+  const centeredTargetFor = (visualTime) => {
+    const percent = Math.max(0, Math.min(100, (visualTime / DURATION) * 100)) / 100;
+    const markerPx = 20 + (1000 - 40) * percent;
+    return Math.max(0, Math.min(markerPx - 150, 700));
+  };
+  const OFFSCREEN_VT = 4.85; // playheadPx 485.6 > 255 right-margin -> off-screen
+  const VISIBLE_VT = 1.0;    // playheadPx 116 in [45,255] -> comfortably visible
+
+  const origScrollWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth');
+  const origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+
   beforeEach(() => {
+    Element.prototype.scrollTo = vi.fn();
+    // A spy on the OLD mechanism so we can pin the regression: the reveal must
+    // NEVER call scrollIntoView again (that is what scrolled the page).
     Element.prototype.scrollIntoView = vi.fn();
+    // jsdom does no layout, so scrollWidth/clientWidth default to 0 -- which
+    // would make the reveal (guarded on maxScroll > 0) a no-op. Report a real
+    // 1000px content / 300px viewport for the timeline container BEFORE mount
+    // (keyed by class, so only it is affected), so the mount-reveal effect
+    // sees something to scroll the moment it runs.
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get() { return this.classList?.contains('timeline-scroll-container') ? 1000 : 0; },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() { return this.classList?.contains('timeline-scroll-container') ? 300 : 0; },
+    });
   });
 
-  it('scrolls into view once on mount even when revealOnActive is false (T6630 round 7 item 6 -- visible on the initial screen)', () => {
-    renderMarker({ revealOnActive: false });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ inline: 'center' })
+  afterEach(() => {
+    if (origScrollWidth) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', origScrollWidth);
+    else delete HTMLElement.prototype.scrollWidth;
+    if (origClientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origClientWidth);
+    else delete HTMLElement.prototype.clientWidth;
+  });
+
+  it('T6870 option 2: an ALREADY-VISIBLE marker at mount does NOT scroll the timeline at all', () => {
+    // The crux of the follow-up fix: a marker comfortably within the viewport
+    // must leave the timeline exactly where it is (e.g. at scrollLeft 0), not
+    // get yanked to center. No scrollTo, no scrollIntoView.
+    const { scrollContainer } = renderRevealMarker({ visualTime: VISIBLE_VT, revealOnActive: false });
+    expect(scrollContainer.scrollTo).not.toHaveBeenCalled();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('T6870 option 2: an OFF-SCREEN marker scrolls the MINIMUM distance to reveal it (not centered), horizontal-only, never scrollIntoView', () => {
+    const { scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT, revealOnActive: false });
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
+    const arg = scrollContainer.scrollTo.mock.calls[0][0];
+    // Horizontal only: `left` passed, `top` NOT -> page/vertical offset untouched.
+    expect(arg.top).toBeUndefined();
+    expect(arg.behavior).toBe('smooth');
+    // Minimum follow distance -- brings the marker just inside the edge margin.
+    expect(arg.left).toBeCloseTo(followTargetFor(OFFSCREEN_VT), 1);
+    // ...and it is NOT the old centered target (proves we stopped centering).
+    expect(arg.left).not.toBeCloseTo(centeredTargetFor(OFFSCREEN_VT), 1);
+    // The banned page-scrolling call is gone for good.
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('reveals an off-screen marker on mount even when revealOnActive is false (visible on the initial screen)', () => {
+    const { scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT, revealOnActive: false });
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollContainer.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: expect.closeTo(followTargetFor(OFFSCREEN_VT), 1), behavior: 'smooth' })
     );
   });
 
-  it('scrolls itself into view when revealOnActive is true', () => {
-    renderMarker({ revealOnActive: true });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ inline: 'center' })
+  it('reveals an off-screen marker when revealOnActive is true', () => {
+    const { scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT, revealOnActive: true });
+    expect(scrollContainer.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: expect.closeTo(followTargetFor(OFFSCREEN_VT), 1) })
     );
   });
 
   it('scrolls AGAIN when revealOnActive transitions from false to true post-mount (opening the Thumbnail tab later)', () => {
-    const { rerender } = renderMarker({ revealOnActive: false });
-    // The initial mount already revealed once (round 7 item 6) -- clear that
-    // call so this assertion isolates the LATER, tab-open-triggered reveal.
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    Element.prototype.scrollIntoView.mockClear();
+    const { rerender, scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT, revealOnActive: false });
+    // The initial mount already revealed once -- clear that call so this
+    // assertion isolates the LATER, tab-open-triggered reveal.
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
+    scrollContainer.scrollTo.mockClear();
 
     rerender(
       <div className="timeline-scroll-container">
         <PosterMarkerLayer
-          visualTime={4.85}
+          visualTime={OFFSCREEN_VT}
           duration={DURATION}
           visualDuration={DURATION}
           revealOnActive
         />
       </div>
     );
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
   });
 
-  it('T6630 round 7 item 6 bug fix: still reveals once the real DOM node mounts, even if the FIRST render had no duration yet (metadata still loading)', () => {
-    // Live-debugged: this component returns null while `timelineDuration <=
-    // 0` -- on a genuinely fresh page load, metadata can arrive a render or
-    // two AFTER this component first mounts. The mount-reveal effect used to
-    // run (and permanently latch its one-shot guard) on that FIRST, null-
-    // returning render, when `trackRef.current` was still null -- silently
-    // no-opping forever, even once the marker actually rendered later.
+  it('still reveals once the real DOM node mounts, even if the FIRST render had no duration yet (metadata still loading)', () => {
+    // This component returns null while `timelineDuration <= 0` -- on a fresh
+    // page load, metadata can arrive a render or two AFTER first mount. The
+    // reveal must fire when the marker actually renders, not latch a no-op on
+    // the first null-returning render (trackRef.current still null then).
     const onDragEnd = vi.fn();
     const { rerender, container } = render(
       <div className="timeline-scroll-container">
         <PosterMarkerLayer visualTime={0} duration={0} visualDuration={0} onDragEnd={onDragEnd} />
       </div>
     );
+    const scrollContainer = container.querySelector('.timeline-scroll-container');
     // No marker DOM yet -- the component returned null.
     expect(container.querySelector('[data-testid="poster-marker"]')).toBeNull();
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollContainer.scrollTo).not.toHaveBeenCalled();
 
-    // Metadata arrives -- a REAL duration on a later render.
+    // Metadata arrives -- a REAL duration on a later render, off-screen marker.
     rerender(
       <div className="timeline-scroll-container">
-        <PosterMarkerLayer visualTime={4.85} duration={DURATION} visualDuration={DURATION} onDragEnd={onDragEnd} />
+        <PosterMarkerLayer visualTime={OFFSCREEN_VT} duration={DURATION} visualDuration={DURATION} onDragEnd={onDragEnd} />
       </div>
     );
     expect(screen.getByTestId('poster-marker')).toBeTruthy();
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollContainer.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: expect.closeTo(followTargetFor(OFFSCREEN_VT), 1) })
+    );
   });
 
-  it('T6630 round 7 item 6 bug fix: re-reveals when visualTime settles to a LATER value after mount, before any interaction', () => {
-    // Live-debugged: the item 6 correction changed the no-marker default
-    // from the window's midpoint to 2s into the window -- a value far more
-    // sensitive to WHICH window is used. `posterSlowmoSection` can arrive in
-    // a LATER render than `duration` (async data), so the marker's computed
-    // visualTime can jump (e.g. "2s against a placeholder no-slowmo window"
-    // -> "slowmoStart+2s once real section data lands") AFTER the initial
-    // reveal already fired -- stranding the marker off-screen again with no
-    // second chance, since the old effect only depended on
-    // [revealOnActive, timelineDuration], not visualTime itself.
-    const { rerender } = renderMarker({ visualTime: 2.0 });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  it('T6870 option 2: a marker VISIBLE at mount that later moves OFF-SCREEN (async posterSlowmoSection) still reveals', () => {
+    // Covers the 900ms/async concern under option-2 semantics: mount with a
+    // comfortably-visible marker -> NO scroll; then the async section arrives
+    // and pushes the marker off-screen -> the visualTime dep re-runs the effect
+    // and reveals it (minimum distance). The interaction latch is untouched.
+    const { rerender, scrollContainer } = renderRevealMarker({ visualTime: VISIBLE_VT });
+    expect(scrollContainer.scrollTo).not.toHaveBeenCalled(); // visible -> no scroll
 
     rerender(
       <div className="timeline-scroll-container">
         <PosterMarkerLayer visualTime={9.0} duration={DURATION} visualDuration={DURATION} />
       </div>
     );
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollContainer.scrollTo).toHaveBeenLastCalledWith(
+      expect.objectContaining({ left: expect.closeTo(followTargetFor(9.0), 1) })
+    );
   });
 
-  it('T6630 round 7 item 6: stops auto-following visualTime once the user has interacted with the marker', () => {
-    const { onDragEnd, rerender } = renderMarker({ visualTime: 2.0 });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  it('stops auto-following visualTime once the user has interacted with the marker', () => {
+    const { onDragEnd, rerender, scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT });
+    expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
 
     const marker = screen.getByTestId('poster-marker');
     fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
     fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 600, clientY: 10 });
     fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 600, clientY: 10 });
     expect(onDragEnd).toHaveBeenCalledTimes(1);
-    Element.prototype.scrollIntoView.mockClear();
+    scrollContainer.scrollTo.mockClear();
 
-    // A later visualTime change (e.g. the parent re-rendering with the
-    // user's own just-committed value) must NOT trigger another auto-reveal
-    // on this SAME instance -- the user has already engaged with the marker
-    // directly, so further auto-follow would fight their own choice.
+    // A later visualTime change (e.g. the parent re-rendering with the user's
+    // own just-committed value) must NOT trigger another auto-reveal on this
+    // SAME instance -- the user has already engaged with the marker directly.
     rerender(
       <div className="timeline-scroll-container">
         <PosterMarkerLayer visualTime={9.0} duration={DURATION} visualDuration={DURATION} onDragEnd={onDragEnd} />
       </div>
     );
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollContainer.scrollTo).not.toHaveBeenCalled();
   });
 
-  it('T6630 round 7 item 6: schedules ONE bounded follow-up reveal (~900ms) to catch the timeline\'s own auto-zoom settling after the initial reveal', () => {
-    // Live-verified: this component has no visibility into the timeline's
-    // own auto-zoom (driven by DETECTION marker spacing, a separate async
-    // load), which can widen the scrollable content AFTER this reveal
-    // already centered the marker -- pushing it back out of view with
-    // nothing in this component's own props changing to react to it.
+  it('schedules ONE bounded follow-up reveal (~900ms) to catch the timeline\'s own auto-zoom settling after the initial reveal', () => {
+    // This component has no visibility into the timeline's own auto-zoom
+    // (a separate async load) which can widen the content AFTER this reveal
+    // ran -- so it re-checks once, 900ms later, for a still-off-screen marker.
     vi.useFakeTimers();
     try {
-      renderMarker({ visualTime: 2.0 });
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      const { scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT });
+      expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(899);
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(2);
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
+      expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('T6630 round 7 item 6: the bounded follow-up reveal does NOT fire once the user has interacted before it elapses', () => {
+  it('the bounded follow-up reveal does NOT fire once the user has interacted before it elapses', () => {
     vi.useFakeTimers();
     try {
-      const { onDragEnd } = renderMarker({ visualTime: 2.0 });
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      const { onDragEnd, scrollContainer } = renderRevealMarker({ visualTime: OFFSCREEN_VT });
+      expect(scrollContainer.scrollTo).toHaveBeenCalledTimes(1);
 
       const marker = screen.getByTestId('poster-marker');
       fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
       fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 600, clientY: 10 });
       fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 600, clientY: 10 });
       expect(onDragEnd).toHaveBeenCalledTimes(1);
-      Element.prototype.scrollIntoView.mockClear();
+      scrollContainer.scrollTo.mockClear();
 
       vi.advanceTimersByTime(1000);
-      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+      expect(scrollContainer.scrollTo).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('is a no-op when the timeline content fits the viewport (scrollWidth == clientWidth -> maxScroll <= 0, nothing to scroll)', () => {
+    // Content that fits: scrollWidth == clientWidth, so maxScroll <= 0 -- the
+    // "content fits, marker already visible" branch. The reveal must touch no
+    // scroll position at all (and certainly never the page). Override the
+    // describe-wide geometry so the container reports a fitting viewport.
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get() { return this.classList?.contains('timeline-scroll-container') ? 300 : 0; },
+    });
+    render(
+      <div className="timeline-scroll-container">
+        <PosterMarkerLayer visualTime={4.85} duration={DURATION} visualDuration={DURATION} onDragEnd={vi.fn()} />
+      </div>
+    );
+    expect(Element.prototype.scrollTo).not.toHaveBeenCalled();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 });
 

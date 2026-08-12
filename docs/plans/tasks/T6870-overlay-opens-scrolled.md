@@ -84,6 +84,98 @@ the acceptance criteria are about the symptom, not this hypothesis.
 **2026-08-11**: Filed under Deploy Candidate from user report; hypothesis scoped to
 PosterMarkerLayer's mount-reveal `scrollIntoView`.
 
+**2026-08-11 (fix, 3e3a88b8)**: Replaced `scrollIntoView({block:'nearest',inline:'center'})`
+with horizontal-only `scrollContainer.scrollTo({left})`. This removed the PAGE-vertical
+side effect (the reported "opens scrolled down"). Real-browser QA confirmed page stays at
+scrollY 0.
+
+**2026-08-12 (follow-up: timeline's OWN horizontal scrollbar not at 0 on launch)**:
+User reported the timeline's internal horizontal scroll thumb sits partway across at launch
+(zoom shown 171%). Traced the exact mechanism — see the dedicated section below. VERDICT:
+this is case (A), the intentional poster-marker reveal (pre-existing since T6630), NOT a new
+bug and NOT caused by this task. It needs a PRODUCT DECISION (below). Status: WAITING ON USER.
+
+## Follow-up (2026-08-12): why the timeline's own scrollbar isn't at 0 on launch
+
+### What actually sets the timeline's scrollLeft (traced, not guessed)
+
+Enumerated every writer of the `.timeline-scroll-container` `scrollLeft` reachable at a
+fresh, idle mount:
+
+1. **Auto-zoom** — `src/screens/OverlayScreen.jsx:371-410`. Sets `timelineZoom` (→171% in the
+   screenshot) so detection markers get ≥48px spacing. It calls `setTimelineZoom` ONLY; it
+   **never writes scrollLeft**. Zoom widens the content (scale 1.71×) but leaves scrollLeft 0.
+2. **TimelineBase auto-scroll** — `src/components/timeline/TimelineBase.jsx:264-309`. Gated on
+   `if (!isPlaying) return` (line 277) — does not fire on an idle mount.
+3. **TimelineBase reset-to-start** — `TimelineBase.jsx:319-327`. Only on a progress transition
+   back through the start; not at mount.
+4. **PosterMarkerLayer.revealMarker** — `src/modes/overlay/layers/PosterMarkerLayer.jsx:276-289`
+   (this task). Fires on mount + the 900ms retry, and **centers the poster marker** by setting
+   scrollLeft. **This is the only mount-time scrollLeft writer.**
+
+So the launch scroll is the poster-marker reveal centering `posterVisualTime`. At zoom > 100%
+the content is wider than the viewport, so centering a marker that isn't at the very start
+lands scrollLeft at a non-zero value → the thumb sits partway across.
+
+This is **case (A)** and is **not a regression from this task**: the old
+`scrollIntoView({inline:'center'})` centered the marker horizontally *identically*. This task
+only removed the *vertical* page-scroll. The horizontal timeline scroll on launch predates it
+(T6630 round 6/7 mount-reveal).
+
+### Where the marker sits (drives how far it scrolls)
+
+`OverlayMode.jsx:123-131` → `posterVisualTime`: the user's saved poster time if set, else the
+default from `posterWindow.js selectPosterFrame`: `section.start + 2s` when a slow-mo section
+exists, else `~2s`. On any clip whose thumbnail frame isn't at the very start, the reveal
+scrolls the (zoomed) timeline away from 0.
+
+### Real-component evidence (qa/T6870-reveal-aggressiveness.{mjs,json}, T6870b-*.png)
+
+Drove the REAL `PosterMarkerLayer` at the screenshot's ~171% ratio (scrollWidth 1026 /
+clientWidth 596):
+
+| marker visualTime | marker center (content px) | already visible at scroll 0? | reveal landed scrollLeft |
+|---|---|---|---|
+| 3.5s (~35%) | 367 | **yes** (367 < 596) | **67** (still scrolled) |
+| 9.0s (~90%) | 909 | no | 430 (clamped to max) |
+
+Key finding: the reveal **centers unconditionally** — at vt=3.5 the marker was already fully
+visible at scrollLeft 0, yet the reveal still scrolled the timeline to 67px to center it. That
+is why the timeline never rests at 0 on launch unless the thumbnail frame is at the very start.
+
+### PRODUCT DECISION NEEDED (this is why the task is WAITING ON USER)
+
+The reveal is doing exactly what T6630 designed (guarantee the marker is visible), but it
+centers even when the marker is already on screen, which reads as "the timeline opens
+scrolled." Options:
+
+- **(1) Keep centering** — accept the launch scroll as the cost of always centering the
+  thumbnail frame.
+- **(2) Reveal only when off-screen, minimally (recommended)** — swap `revealMarker`'s centering
+  for the playhead's own `computeFollowScrollTarget` (already shared in TimelineBase): it only
+  scrolls when the marker is within a 15% edge margin and moves the *minimum* needed. Result:
+  timeline stays at 0 whenever the marker is already comfortably visible; only scrolls when
+  genuinely needed. Small, well-tested change confined to `PosterMarkerLayer.jsx`.
+- **(3) No mount reveal at all** — only reveal when the user opens the Thumbnail tab
+  (`revealOnActive`), reverting T6630 round 7 item 6. Timeline always opens at 0; the marker may
+  be off-screen on the Overlay tab until Thumbnail is opened.
+
+### Resolution (2026-08-12): option 2 implemented
+
+User chose option 2. `PosterMarkerLayer.revealMarker` now reuses `computeFollowScrollTarget`
+(the playhead's own follow-scroll math) instead of centering: it scrolls only when the marker
+is within the 15%-of-viewport edge margin (or off-screen), by the minimum distance, and leaves
+the timeline untouched when the marker is already comfortably visible. The trigger schedule
+(mount + 900ms retry + visualTime re-check, latched off after interaction) is unchanged.
+
+Live-verified (real `PosterMarkerLayer`, below-the-fold, `qa/T6870-option2.json` + `T6870-opt2-*.png`):
+
+| case | zoom | marker | page scrollY | timeline scrollLeft | vs centered |
+|---|---|---|---|---|---|
+| already visible | 171% | vt 1.0 | 0 | **0** (no scroll) | centered would be 0 |
+| off-screen | 171% | vt 9.0 | 0 | 401 (revealed) | < 430 (min, not centered) |
+| far marker | 403% | vt 9.5 | 0 | 1755 (revealed) | < 1804 (min, not centered) |
+
 ## Acceptance Criteria
 
 - [ ] Launching Overlay lands with the page/main container at scroll position 0, every time
