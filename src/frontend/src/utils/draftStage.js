@@ -3,7 +3,7 @@
 // read (T6800). ONE derivation shared by tile sizing, stage-row grouping,
 // group status counts, and tests — never re-derive these buckets inline.
 
-import { splitByAspect } from '../constants/aspectRatios';
+import { RATIO, RATIO_ORDER } from '../constants/aspectRatios';
 
 export const DRAFT_STAGE = {
   NOT_STARTED: 'not_started',
@@ -57,6 +57,47 @@ export function getDraftStage(project) {
 }
 
 /**
+ * Whether a draft's tile renders at SOURCE aspect (landscape) rather than its
+ * TARGET output ratio. A tile stays source-aspect until real framing has been
+ * applied:
+ *   NOT_STARTED  nothing touched yet (T6800)
+ *   IN_FRAMING   clips entered the Framing screen but NO crop keyframes exist
+ *                yet (has_crop_keyframes false) — "entered framing" is not the
+ *                same as "framed" (T6900)
+ * Once crop keyframes exist (or the draft has a working/final video), the tile
+ * takes the target ratio. This is the ONE predicate DraftTile's sizeClass and
+ * stageRowsFor's row grouping both read — the two halves of the row-height
+ * invariant, which must always agree on a tile's shape.
+ */
+export function rendersSourceAspect(project) {
+  const stage = getDraftStage(project);
+  if (stage === DRAFT_STAGE.NOT_STARTED) return true;
+  if (stage === DRAFT_STAGE.IN_FRAMING && !project.has_crop_keyframes) return true;
+  return false;
+}
+
+// The aspect a draft's tile ACTUALLY renders at: landscape while source-aspect
+// (T6800/T6900), else the target ratio. Row grouping must bucket by this, not
+// the raw target field, or an unframed portrait draft (rendered landscape)
+// would land in a portrait row and break the uniform row height.
+function renderedRatio(project) {
+  return rendersSourceAspect(project)
+    ? RATIO.LANDSCAPE
+    : (project.aspect_ratio || RATIO.PORTRAIT);
+}
+
+/**
+ * Buckets a draft list by the aspect its tiles RENDER at (portrait first),
+ * dropping empty buckets — the stage-row analogue of splitByAspect, but keyed
+ * on rendered shape so every bucket is one uniform tile height.
+ */
+export function splitByRenderedAspect(list) {
+  return RATIO_ORDER
+    .map(ratio => ({ ratio, projects: list.filter(p => renderedRatio(p) === ratio) }))
+    .filter(bucket => bucket.projects.length > 0);
+}
+
+/**
  * Splits a draft list into one bucket per stage present, pipeline order,
  * dropping empty buckets — the stage analogue of splitByAspect, and shaped the
  * same way so callers can treat "one row" and "N rows" identically (T6810).
@@ -74,14 +115,18 @@ export function splitByStage(list) {
  * landscape (DraftTile sizes them at source aspect regardless of target
  * ratio, T6800), so that stage gets ONE row with no aspect chip (ratio null)
  * instead of a split that would separate identically-shaped tiles by an
- * invisible target ratio. This null-ratio branch and DraftTile's landscape
- * override are two halves of the same row-height invariant — change together.
+ * invisible target ratio. Every other stage buckets by RENDERED aspect
+ * (splitByRenderedAspect), so an In-Framing draft that hasn't been cropped yet
+ * — which DraftTile renders landscape (T6900) — groups with the landscape
+ * tiles instead of its target-ratio row. This null-ratio branch,
+ * splitByRenderedAspect, and DraftTile's landscape override are the halves of
+ * the same row-height invariant — change together via rendersSourceAspect.
  */
 export function stageRowsFor(draftList) {
   return splitByStage(draftList).map(({ stage, projects }) => ({
     stage,
     byAspect: stage === DRAFT_STAGE.NOT_STARTED
       ? [{ ratio: null, projects }]
-      : splitByAspect(projects),
+      : splitByRenderedAspect(projects),
   }));
 }

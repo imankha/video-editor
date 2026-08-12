@@ -256,19 +256,22 @@ describe('DraftTile (T5672)', () => {
     expect(screen.queryByTitle(/Contains \d+ clips/)).toBeNull();
   });
 
-  it('renders a portrait 9:16 tile shape by default', () => {
-    // baseProject has clips_in_progress: 1 (In Framing) — the portrait shell
-    // only applies once framing has begun; a Not-Started draft is landscape
-    // regardless of target ratio (T6800 test below). If the fixture's counters
+  it('renders a portrait 9:16 tile shape once real framing (crop keyframes) exists', () => {
+    // baseProject is In Framing (clips_in_progress: 1); the portrait shell only
+    // applies once a crop has actually been committed (has_crop_keyframes) — an
+    // un-cropped In-Framing draft renders landscape (T6900), a Not-Started draft
+    // is landscape regardless of target ratio (T6800). If the fixture's counters
     // ever change, this test changes meaning.
-    const { container } = renderTile({ aspect_ratio: '9:16' });
+    const { container } = renderTile({ aspect_ratio: '9:16', has_crop_keyframes: true });
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-\[9\/16\]/);
     expect(tile.className).not.toMatch(/aspect-video/);
   });
 
   it('renders a landscape 16:9 tile shape (mirrors ReelTile, not letterboxed into portrait)', () => {
-    const { container } = renderTile({ aspect_ratio: '16:9' });
+    // has_crop_keyframes so it's landscape by TARGET ratio, not by the unframed
+    // source-aspect fallback (T6900) — this pins the 16:9 target shell itself.
+    const { container } = renderTile({ aspect_ratio: '16:9', has_crop_keyframes: true });
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-video/);
     expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
@@ -284,10 +287,70 @@ describe('DraftTile (T5672)', () => {
     expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
   });
 
-  it('keeps the portrait shell once framing has begun on a 9:16 draft (T6800)', () => {
-    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0, clips_exported: 1 });
+  it('keeps the portrait shell once real framing (crop keyframes) exists on a 9:16 draft (T6800/T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0, clips_exported: 1, has_crop_keyframes: true });
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+  });
+
+  // T6900 — a draft that has ENTERED the Framing screen (clips extracted/exported)
+  // but has NOT had any crop keyframes committed yet still renders at SOURCE aspect
+  // (landscape), not the target 9:16. "Entered framing" is not "framed".
+  it('renders an In-Framing-but-uncropped 9:16 draft landscape (clips in progress, no crop) (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 1, has_crop_keyframes: false });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  it('renders an exported-but-uncropped 9:16 draft landscape (clips exported, no crop) (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 0, clips_exported: 1, has_crop_keyframes: false });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  it('switches an In-Framing 9:16 draft to the portrait shell the moment crop keyframes exist (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', clips_in_progress: 1, has_crop_keyframes: true });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+    expect(tile.className).not.toMatch(/aspect-video/);
+  });
+
+  // T6900 regression — once a draft is FRAMED (past In-Framing: a working or
+  // final video exists), the source-aspect override no longer applies and the
+  // tile takes its TARGET ratio. These pin In-Overlay and Ready explicitly, and
+  // deliberately OMIT has_crop_keyframes to prove it is irrelevant here: the
+  // has_working_video / has_final_video stage wins regardless of the crop signal.
+  it('renders an In-Overlay 9:16 draft at the portrait target shell (crop signal irrelevant) (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', has_working_video: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+    expect(tile.className).not.toMatch(/aspect-video/);
+  });
+
+  it('renders a Ready 9:16 draft at the portrait target shell (crop signal irrelevant) (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16', has_final_video: true, final_video_id: 99, is_published: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+    expect(tile.className).not.toMatch(/aspect-video/);
+  });
+
+  it('renders a 16:9-target In-Overlay draft landscape by TARGET ratio, not the source fallback (T6900)', () => {
+    // aspect_ratio is 16:9 so aspect-video is correct; has_working_video makes
+    // rendersSourceAspect false, so this asserts the target-ratio path, not the
+    // unframed source-aspect fallback (has_crop_keyframes intentionally absent).
+    const { container } = renderTile({ aspect_ratio: '16:9', has_working_video: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  it('renders a 16:9-target Ready draft landscape by TARGET ratio, not the source fallback (T6900)', () => {
+    const { container } = renderTile({ aspect_ratio: '16:9', has_final_video: true, final_video_id: 99, is_published: true, clips_in_progress: 0 });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
   });
 
   // Item 3 — selected/active + currently-loaded accent ring
