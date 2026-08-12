@@ -98,6 +98,149 @@ resolution returns None) or two independent downstream faults. Do not assume eit
 
 **2026-08-11**: Filed from user report; placed top of Deploy Candidate (user-ordered).
 
+**2026-08-11 (triage v1 — WRONG ENV, superseded):** I first checked PRODUCTION and
+found prod profile `9fa7378c` at `PRAGMA user_version=33` (below the intro epic's v034
+floor). That is real but IRRELEVANT: the entire Athlete Intro Card epic is **not
+deployed to production** (last prod deploy `bce639d0`, 2026-08-03, predates every intro
+commit — see `docs/testing/release-map-2026-08-10.md`). The user does not test prod.
+Disregard the production-migration framing entirely. (Committed as 28f0f146; kept only
+for history.)
+
+**2026-08-11 (triage v2 — STAGING, verified live):** The user tests **staging**
+(`https://app-staging.reelballers.com`, API `reel-ballers-api-staging.fly.dev`). I
+live-drove the real staging server (running commit `95632aa7` = master HEAD) as the
+real user via `dev-login` (email imankh@gmail.com, profile 9fa7378c). Findings:
+
+- **Migration/resolution OK on staging.** Staging profile DB is at v42; reel id=38 has
+  `intro_card_id=1` ("New card 1", real 1070x1440 photo, treatment gold, shown_fields
+  [position, team], subtitle "State Cup"). `GET /api/downloads` shows
+  `intro_card_name: "New card 1"`, `resolved_intro_has_photo: true`.
+- **PLAYBACK egress WORKS on the server.** `GET /api/downloads/38/intro-playback` and
+  the single-reel share `GET /api/shared/{token}` both return a valid intro payload
+  (card + `previewUrl` + field_values {position CAM, class 2031, team West Coast ECNL,
+  full_name Mehdi Khabazian}).
+- **DOWNLOAD egress BROKEN — reproduced live (this is the real bug).**
+  `GET /api/downloads/38/file` returns a **16.833s** MP4 = raw reel **12.333s + outro
+  4.5s**, with **NO intro** (should be 20.833s with the 4.0s intro). Frame at t=1.0s is
+  reel footage; t=14s is the "Made with Reel Ballers" outro. The single-reel **share
+  download** `GET /api/shared/{token}/download` is byte-identical (outro-only). So BOTH
+  burn/download egresses drop the intro; BOTH playback egresses keep it.
+- **Localized to the server-side BURN path** (`resolve_intro_for_reel(mode="burn")` ->
+  `_download_card_image` -> `player_intro.build_intro_card` -> `compose_serve_time`).
+  Playback uses `mode="playback"` (presign only) and works; burn downloads the image
+  bytes + renders the card, and fails. The outro (also ffmpeg, /tmp cache, but text-only,
+  no R2 image download) composes fine.
+- **NOT ffmpeg/data/fonts/cache.** The identical code + identical R2 data + identical DB
+  produce the intro correctly in a non-Fly container (`compose_serve_time` -> 20.833s,
+  3 segments), under BOTH ffmpeg 7.1.5 AND a static ffmpeg 5.1.1 (Fly's Debian-12
+  version). Fonts are bundled in the image; both card caches are under `/tmp` (writable).
+  So the fault is **Fly-runtime-specific**.
+- **Fast-failure signal.** The composed download returns in **~1 second** (outro is a
+  cache hit), i.e. the intro build failed BEFORE its multi-second libx264 encode — a
+  PRE-encode failure (image byte-download or layout resolution), not a mid-encode OOM;
+  the request still 200s (non-fatal degrade), so the machine did not crash.
+- **Cannot obtain the Fly server-side error in-container** (no fly CLI/token, no
+  docker). Leading hypotheses: (i) `download_from_r2_global` via `get_r2_transfer_client()`
+  failing on Fly; (ii) `_get_or_build_card`/`_frame_photo` raising fast on the server
+  for a photo+facts card. Expert consult requested for the verdict + fix. Supervisor can
+  confirm instantly by grepping the staging logs for `[intro_egress] card image download
+  failed for reel_id=38`, `[PlayerIntro] card build failed`, or `[serve_time_video] intro
+  card build`.
+
+**Root cause named (per triage step 6):** ONE downstream fault at the **download/burn
+egress only** — the intro card build fails on the Fly staging runtime (pre-encode),
+degrading non-fatally to no-intro; playback/resolution are healthy. Exact Fly mechanism
+pending the server log line above.
+
+**2026-08-12 (round 2 — same reel, DIFFERENT card per egress):** after the R2-sync-client
+fix (30f6c08f) made the intro appear in downloads, the user caught a second bug live: the
+downloaded card showed a STALE athlete name ("Jordan Vega") while in-app playback showed
+the CURRENT name ("Mehdi Khabazian") for the same reel (id=38, card 1).
+
+- **NOT a cache-key bug** (the report's guess): I empirically computed the burn render
+  cache key (`player_intro._content_hash`) for the same card with full_name "Mehdi" vs
+  "Jordan" -> DIFFERENT hashes (the rendered title is part of the key). A name change
+  busts the cache; a fresh-facts request rebuilds correctly.
+- **NOT two resolution paths:** both egresses funnel through
+  `intro_egress.resolve_intro_for_reel` -> `_load_field_values`; locally both modes
+  resolve the same title.
+- **Root cause = a FACTS-freshness asymmetry (expert-validated).** The card TITLE = the
+  profile's `full_name`, which lives in **user.sqlite**. The burn egress reads the card
+  ROW restore-if-newer (`open_profile_db_readonly` -> `ensure_profile_db_local`) but reads
+  the FACTS via the OWNER path `get_user_db_connection` -> `ensure_user_database` =
+  restore-if-ABSENT only. So a Fly machine holding a stale local user.sqlite bakes an OLD
+  full_name into the (correctly hash-keyed) cached card, while playback -- resolved on a
+  different, fresh machine -- shows the current name. Strictly cross-machine (a single
+  machine renders identical titles for both modes); surfaced right when 30f6c08f's deploy
+  restarted machines and churned the fly_machine_id pins.
+- **Fix:** `intro_egress._load_field_values` now calls `ensure_user_database_fresh(user_id)`
+  (restore-if-newer, WAL-safe via the sidecar guard, read-only -- no upload) before reading
+  facts, so ALL live egresses that share this one seam resolve facts from the same
+  R2-current truth as the card row. Degrades to the local copy + logs on R2 error (epic
+  dec 9). Verified with REAL staging data: a planted stale local user.sqlite ("Jordan
+  Vega", version 1) + newer R2 (708) now resolves "Mehdi Khabazian"; the pre-fix read
+  returns the stale "Jordan Vega". Both egress modes resolve the same title.
+
+**2026-08-12 (round 3 — two new reports, BLOCKED on live repro + a product/perf decision):**
+Cannot reproduce EITHER in-container: the staging FRONTEND host (`app-staging.reelballers.com`)
+does not resolve from the worker (only the fly.dev API + prod `app.reelballers.com` do), the
+session cookie is `SameSite=None; Partitioned` scoped to the fly.dev API (blocks cross-origin
+localhost driving), and there is no local Postgres to run the full stack. Both reports are
+visual/interaction bugs that need the real UI. Findings from code + live API:
+
+- **Report 1 "out of sync between the preview and the play in place".** Two surfaces:
+  the editor/picker preview reads facts from the CLIENT `profileStore` (populated by
+  `GET /api/profiles`), and play-in-place reads from `GET /api/downloads/{id}/intro-playback`.
+  Live API RIGHT NOW: both return identical facts (full_name "Mehdi Khabazian", CAM/2031/West
+  Coast ECNL) -> no data desync in the current single-machine state. BUT `/api/profiles`
+  (`routers/profiles.py:158-160`) reads facts via `get_all_intro_facts`/`get_all_intro_full_names`
+  = restore-if-ABSENT (stale-tolerant) -- the SAME class the round-2 fix just closed for the
+  egress, now ASYMMETRIC because `/intro-playback` freshens (be19ef7f) and `/api/profiles`
+  does not. So the *facts* aspect of this desync is plausibly the round-2 bug on the profiles
+  surface. Two blockers to fixing: (a) UNCONFIRMED that facts (not photo/framing or a
+  MotionPreview-vs-IntroCardPreview render-parity difference) is what the user saw -- need a
+  side-by-side screenshot; (b) `/api/profiles` is a HOT bootstrap endpoint (every app load /
+  profile switch), so adding an R2 HEAD (`ensure_user_database_fresh`) there is a real latency
+  tradeoff across the whole app -- a product/perf DECISION, not a clear-cut fix.
+- **Report 2 "multiple intro cards attached, should be single".** No code path produces
+  multiple: `final_videos.intro_card_id` is a single nullable FK; `set_download_intro` is a
+  single UPDATE (replaces); the picker is single-select (`selectedId === card.id`, plus one
+  "No intro" tile); playback renders ONE `intro` (IntroStoryPlayer); the ReelTile intro badge
+  is a mutually-exclusive ternary (one badge). Live: the profile has exactly ONE card (id=1),
+  reel 38 attached to it. The only "multiple cards" mechanism is the LIBRARY growing via the
+  inline "New card" create flow (by design) -- likely misread as "multiple attached", OR a
+  real UI state I cannot see. Need a screenshot of exactly WHERE the user sees multiple
+  (picker highlighting / playback / downloads badge / card library).
+
+**2026-08-12 (round 4 — LIVE-REPRODUCED both, after clarified direction):** Found a way to
+drive the real staging UI in-container: staging CORS allows `http://localhost:5173`, so I ran
+a LOCAL vite build (`VITE_API_BASE`=staging) + Playwright, authenticated as the real user by
+injecting the dev-login `rb_session` cookie (non-partitioned, cross-origin to the fly.dev API).
+
+- **Report 1 "during playback I see one card after another" -> NOT A DEFECT (live-verified).**
+  Single reel solo play (reel 38) = exactly ONE intro card (screenshot: "Mehdi Khabazian /
+  State Cup / CAM / West Coast ECNL"; scrubber = one INTRO + one reel segment; net = one
+  `/downloads/38/intro-playback` + `/stream`). Collection play ("Top Goals & Assists",
+  contains reel 38) = the collection's OWN intro (none) + reels back-to-back, NO per-member
+  intro cards (screenshot: reel footage, 3 reel segments). Per-member intros are structurally
+  never fetched/rendered in collection playback (IntroStoryPlayer takes ONE `intro`;
+  CollectionPlayer plays raw `/stream`s); owner playback shows no branded end card either
+  (public-surface only). So no single session renders multiple cards; "one card after another"
+  = different reels/collections across SEPARATE plays (each correctly one card) or reading the
+  multi-segment collection scrubber as "cards". Hypothesis (b). UX note (not a fix): the
+  multi-reel collection scrubber shows one segment per reel and could be misread.
+- **Report 2 "preview shouldn't include the intro" -> ALREADY SATISFIED everywhere (live).**
+  EVERY preview surface streams the RAW reel (`/downloads/{id}/stream`), no intro: ReelTile
+  hover (`previewStreamUrl`, ReelTile.jsx:108), DraftTile hover + draft "Preview" modal
+  (DraftTile.jsx:341-347). Live: hovering reel 38 fired ONLY `/downloads/38/stream` (no
+  `/intro-playback`, no `/file`); the inline preview showed reel footage, not the card. The
+  intro appears ONLY in full in-app playback (IntroStoryPlayer pre-roll, T6700/T6710, by
+  design) and the composited `/file` download + shares. Nothing to change for "preview"; added
+  a regression GUARD (`ReelTile.intro-preview.test.jsx`, plus the existing DraftTile `/stream`
+  assertion) pinning "preview never points at `/file`, never composites the intro". If the
+  user actually means the FULL in-app playback pre-roll should be removed, that is a PRODUCT
+  decision reversing T6700/T6710 -- flagged, NOT self-implemented.
+
 ## Acceptance Criteria
 
 - [ ] Attaching an intro card to a reel, then playing it in-app, shows the intro pre-roll

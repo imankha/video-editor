@@ -34,9 +34,14 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.services.db_refresh import RefreshFailed
 from app.services.intro_cards import resolve_intro_card
 from app.services.materialization import open_profile_db_readonly
-from app.services.user_db import get_all_intro_facts, get_all_intro_full_names
+from app.services.user_db import (
+    ensure_user_database_fresh,
+    get_all_intro_facts,
+    get_all_intro_full_names,
+)
 from app.storage import download_from_r2_global, generate_presigned_url_global
 from app.utils.encoding import decode_data
 
@@ -75,7 +80,28 @@ def _load_field_values(user_id: str, profile_id: str) -> dict:
     """Cross-DB assembly: `full_name` + the fact fields (position/class/team)
     for ONE profile, from user.sqlite. Missing profile key -> {} (title still
     renders from full_name when present; facts simply omit+log downstream,
-    per T6620's existing per-slot omission)."""
+    per T6620's existing per-slot omission).
+
+    T6860 (round 2): the card ROW is read restore-if-newer (the caller opens it
+    via `open_profile_db_readonly` -> `ensure_profile_db_local`), so read the
+    FACTS with the SAME freshness -- otherwise a Fly machine holding a stale
+    local `user.sqlite` (owner reads are restore-if-ABSENT, so a materialized
+    file is never re-pulled) burns an OLD `full_name`/facts into the DOWNLOAD's
+    cached card while in-app PLAYBACK, resolved on a different (fresh) machine,
+    shows the current name -- the exact "same reel, right card, WRONG athlete
+    name at only one egress" divergence this ONE shared seam exists to prevent.
+    Restore-if-newer is READ-ONLY (pulls R2's newer copy into the local cache,
+    never writes user data / never uploads) and WAL-safe (the sidecar guard in
+    `ensure_user_database_fresh` refuses to swap a live-held file). If R2 is
+    unreachable we log and fall back to the local copy -- an intro must never
+    break a download (epic decision 9)."""
+    try:
+        ensure_user_database_fresh(user_id)
+    except RefreshFailed:
+        logger.warning(
+            f"[intro_egress] could not confirm user.sqlite is current for "
+            f"user_id={user_id}; resolving intro facts from the local copy"
+        )
     facts = get_all_intro_facts(user_id).get(profile_id, {})
     full_name = get_all_intro_full_names(user_id).get(profile_id)
     values = dict(facts)
@@ -147,7 +173,7 @@ def resolve_intro_for_reel(
     *,
     mode: str = "burn",
     profile_conn=None,
-) -> "IntroSpec | dict | None":
+) -> IntroSpec | dict | None:
     """Resolve the LIVE intro attachment for one reel, cross-DB assembled.
 
     `profile_conn`: an already-open connection to the reel's profile.sqlite
