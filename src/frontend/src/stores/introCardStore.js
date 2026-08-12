@@ -17,6 +17,10 @@ import apiFetch from '../utils/apiFetch';
  */
 
 let _fetchPromise = null;
+// Bumped by reset() (profile switch). A fetch started before the bump must not
+// write its result into the store: card ids are per-profile AUTOINCREMENT, so a
+// stale library silently attaches the WRONG card in the new profile (T6930).
+let _generation = 0;
 
 export const useIntroCardStore = create((set) => ({
   // Raw card rows from the API, verbatim (no transformation before storing).
@@ -24,6 +28,12 @@ export const useIntroCardStore = create((set) => ({
   isLoading: false,
   isInitialized: false,
   error: null,
+  // T6950: bumped on every successful deleteCard. The delete gesture lives in
+  // the library modal, but DELETE /api/intro-cards/{id} also nulls
+  // final_videos.intro_card_id server-side for every reel that referenced the
+  // card — surfaces holding reel-list copies (DownloadsPanel's flat list,
+  // member caches, badges) watch this to mirror that cascade locally.
+  deleteRevision: 0,
 
   /**
    * Load the profile's cards. Deduped: concurrent callers share one request.
@@ -31,23 +41,28 @@ export const useIntroCardStore = create((set) => ({
   fetchCards: async ({ force = false } = {}) => {
     if (_fetchPromise && !force) return _fetchPromise;
 
+    const gen = _generation;
     set({ isLoading: true, error: null });
-    _fetchPromise = (async () => {
+    let promise;
+    promise = (async () => {
       try {
         const response = await apiFetch(`${API_BASE}/api/intro-cards`);
         if (!response.ok) {
           throw new Error(`Failed to fetch intro cards: ${response.status}`);
         }
         const data = await response.json();
+        if (gen !== _generation) return; // profile switched mid-flight — discard
         set({ cards: data.cards || [], isLoading: false, isInitialized: true });
       } catch (error) {
         console.error('[IntroCardStore] Failed to fetch cards:', error);
+        if (gen !== _generation) return;
         set({ isLoading: false, isInitialized: true, error: error.message });
       } finally {
-        _fetchPromise = null;
+        if (_fetchPromise === promise) _fetchPromise = null;
       }
     })();
-    return _fetchPromise;
+    _fetchPromise = promise;
+    return promise;
   },
 
   /**
@@ -137,9 +152,18 @@ export const useIntroCardStore = create((set) => ({
     if (!response.ok) return false;
     set((state) => ({
       cards: state.cards.filter((c) => c.id !== cardId),
+      deleteRevision: state.deleteRevision + 1,
     }));
     return true;
   },
 
-  reset: () => set({ cards: [], isLoading: false, isInitialized: false, error: null }),
+  // Profile-scope teardown (called from profileStore._resetDataStores). Also
+  // invalidates any in-flight fetch so the old profile's rows can't land after
+  // the clear, and drops the dedup handle so the next fetchCards() hits the
+  // new profile's API instead of returning the stale promise.
+  reset: () => {
+    _generation += 1;
+    _fetchPromise = null;
+    set({ cards: [], isLoading: false, isInitialized: false, error: null });
+  },
 }));

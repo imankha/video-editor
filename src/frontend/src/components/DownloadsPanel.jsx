@@ -70,6 +70,7 @@ export function DownloadsPanel({
     downloadingId,
     renameDownload,
     setIntroCard,
+    pruneDanglingIntroCards,
     markWatched,
     formatDate,
   } = useDownloads(false);
@@ -263,6 +264,11 @@ export function DownloadsPanel({
   // write, so this is an ordinary data-loading effect, not the banned
   // reactive-persistence pattern (nothing here calls a PATCH).
   const [introBadgesByKey, setIntroBadgesByKey] = useState({});
+  // T6950: also re-resolve on card delete — a deleted card that was attached to
+  // a collection leaves a dangling collection_settings id, which the batch
+  // endpoint resolves to no-intro; without this dep the badge kept naming the
+  // deleted card until the summary next changed.
+  const cardDeleteRevision = useIntroCardStore((state) => state.deleteRevision);
   useEffect(() => {
     const summary = collections.summary;
     const items = [];
@@ -310,7 +316,7 @@ export function DownloadsPanel({
       }
     })();
     return () => { cancelled = true; };
-  }, [collections.summary]);
+  }, [collections.summary, cardDeleteRevision]);
 
   const onCopyCollectionLink = async (definition) => {
     try {
@@ -359,6 +365,25 @@ export function DownloadsPanel({
   useEffect(() => {
     if (isOpen) fetchIntroCards();
   }, [isOpen, fetchIntroCards]);
+
+  // T6950: mirror the card-delete cascade into this panel's reel-list copies.
+  // Deleting a card (library modal, a different tree) nulls
+  // final_videos.intro_card_id server-side for every referencing reel; the
+  // member caches here never refetch once 'ready', so they kept showing a
+  // badge naming the deleted card until reload. Read-only LOCAL patch driven
+  // by the store's deleteRevision (subscribed above, next to the badge
+  // effect it also re-fires) — no network write fires here (the banned
+  // pattern is effect→PATCH; this is effect→setState mirroring a completed
+  // server write).
+  const seenCardDeleteRevisionRef = useRef(cardDeleteRevision);
+  const pruneMembersIntroCards = collections.pruneDanglingIntroCards;
+  useEffect(() => {
+    if (cardDeleteRevision === seenCardDeleteRevisionRef.current) return;
+    seenCardDeleteRevisionRef.current = cardDeleteRevision;
+    const liveCardIds = new Set(useIntroCardStore.getState().cards.map((c) => c.id));
+    pruneDanglingIntroCards(liveCardIds);
+    pruneMembersIntroCards(liveCardIds);
+  }, [cardDeleteRevision, pruneDanglingIntroCards, pruneMembersIntroCards]);
 
   // T6320: the story player's active-segment playhead shows the active profile's
   // sport ball (closing the T5130 gap for My Reels). Same read ProfileSportButton

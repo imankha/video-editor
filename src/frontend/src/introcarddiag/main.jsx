@@ -51,7 +51,6 @@ const MOCK_CARD = {
   treatment: diagConfig.treatment || 'gold',
   // T6570: no title_text — the title resolves from the profile's Full Name below.
   image_key: 'intro/mock.png',
-  image_cutout_key: null,
   focal_x: 0.5,
   focal_y: 0.5,
   zoom: 1.0,
