@@ -71,7 +71,6 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
         title_text: card.title_text,
         subtitle_text: card.subtitle_text, // free text travels with the copy (T6570)
         image_key: card.image_key,
-        image_cutout_key: card.image_cutout_key,
         focal_x: card.focal_x,
         focal_y: card.focal_y,
         zoom: card.zoom,

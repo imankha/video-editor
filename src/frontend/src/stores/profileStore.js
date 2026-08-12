@@ -343,6 +343,10 @@ async function _resetDataStores() {
   stores.useSettingsStore.getState().reset();
   stores.useCreditStore.getState().reset();
   stores.useQuestStore.getState().reset();
+  // T6930: card ids are per-profile AUTOINCREMENT — a stale library from the
+  // previous profile validates against the new profile's table and attaches
+  // the wrong card. No Phase-3 refetch: the library is fetched on modal open.
+  stores.useIntroCardStore.getState().reset();
 
   // Phase 3: Re-fetch data for the new profile
   stores.useProjectsStore.getState().fetchProjects();

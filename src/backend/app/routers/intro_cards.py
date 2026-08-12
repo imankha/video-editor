@@ -71,7 +71,10 @@ class CreateIntroCardRequest(BaseModel):
     # tournament name), unlike the title which is the profile's Full Name.
     subtitle_text: str | None = None
     image_key: str | None = None
-    image_cutout_key: str | None = None
+    # image_cutout_key is DEAD (T6950): T5200 (player cut-out) never shipped, no
+    # live writer ever set it, and a set-but-stale value made egress show a
+    # different photo than the editor (two "which image" rules). Not accepted on
+    # create/patch; the column stays as harmless dead data.
     focal_x: float | None = None
     focal_y: float | None = None
     zoom: float | None = None
@@ -89,7 +92,6 @@ class UpdateIntroCardRequest(BaseModel):
     title_text: str | None = None
     subtitle_text: str | None = None
     image_key: str | None = None
-    image_cutout_key: str | None = None
     focal_x: float | None = None
     focal_y: float | None = None
     zoom: float | None = None
@@ -137,7 +139,6 @@ def _serialize(row) -> dict:
         # NB: keep `.keys()` — `in` on a sqlite3.Row tests VALUES, not columns.
         "subtitle_text": (row["subtitle_text"] if "subtitle_text" in row.keys() else None),  # noqa: SIM118
         "image_key": image_key,
-        "image_cutout_key": row["image_cutout_key"],
         "focal_x": row["focal_x"],
         "focal_y": row["focal_y"],
         "zoom": row["zoom"],
@@ -222,9 +223,9 @@ async def create_intro_card(request: CreateIntroCardRequest):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         columns = ["name", "shown_fields", "treatment", "title_text", "image_key",
-                   "image_cutout_key", "focal_x", "focal_y", "zoom", "duration"]
+                   "focal_x", "focal_y", "zoom", "duration"]
         values = [request.name.strip(), json.dumps(shown_fields), treatment,
-                  request.title_text, request.image_key, request.image_cutout_key,
+                  request.title_text, request.image_key,
                   focal_x, focal_y, zoom, duration]
         # Column-guarded WRITE (T6570 / v035, T6550 lesson): only write the
         # subtitle when the column exists; below-head DBs create the card without
@@ -254,7 +255,6 @@ _UPDATABLE_FIELDS = {
     "title_text": ("title_text", lambda v: v),
     "subtitle_text": ("subtitle_text", lambda v: v),
     "image_key": ("image_key", lambda v: v),
-    "image_cutout_key": ("image_cutout_key", lambda v: v),
     "focal_x": ("focal_x", lambda v: validate_focal(v, "focal_x")),
     "focal_y": ("focal_y", lambda v: validate_focal(v, "focal_y")),
     "zoom": ("zoom", validate_zoom),

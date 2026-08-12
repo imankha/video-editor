@@ -111,10 +111,12 @@ def _load_field_values(user_id: str, profile_id: str) -> dict:
 
 
 def _download_card_image(card: dict, user_id: str, profile_id: str, tempdir: str) -> str | None:
-    """Download the card's image (cutout-preferred) from its GLOBAL R2 key to
-    a local path under `tempdir`. Returns None when the card has no photo.
-    Raises on a download failure (the caller degrades non-fatally)."""
-    key = card.get("image_cutout_key") or card.get("image_key")
+    """Download the card's image from its GLOBAL R2 key to a local path under
+    `tempdir`. Returns None when the card has no photo. Raises on a download
+    failure (the caller degrades non-fatally). ONE image rule (T6950):
+    `image_key` everywhere — editor preview, playback, and burn must resolve
+    the same photo (image_cutout_key is dead; T5200 never shipped)."""
+    key = card.get("image_key")
     if not key:
         return None
     ext = Path(key).suffix or ".png"
@@ -125,9 +127,10 @@ def _download_card_image(card: dict, user_id: str, profile_id: str, tempdir: str
 
 
 def _presign_card_image(card: dict) -> str | None:
-    """Presigned URL for the card's image (cutout-preferred), or None when the
-    card has no photo. Never downloads -- for the playback (DOM pre-roll) path."""
-    key = card.get("image_cutout_key") or card.get("image_key")
+    """Presigned URL for the card's image, or None when the card has no photo.
+    Never downloads -- for the playback (DOM pre-roll) path. Same ONE image
+    rule as `_download_card_image` (T6950): `image_key` only."""
+    key = card.get("image_key")
     if not key:
         return None
     return generate_presigned_url_global(key)
@@ -316,7 +319,6 @@ def _card_payload(card) -> dict:
         "id": g("id"),
         "name": g("name"),
         "image_key": g("image_key"),
-        "image_cutout_key": g("image_cutout_key"),
         "treatment": g("treatment"),
         "shown_fields": shown_fields,
         "text_elements": text_elements,

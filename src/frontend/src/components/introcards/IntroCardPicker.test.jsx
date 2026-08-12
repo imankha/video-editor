@@ -41,6 +41,24 @@ vi.mock('../shared/Toast', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
 
 import { IntroCardPicker } from './IntroCardPicker';
 
+// jsdom has no Web Animations API, but clicking a carousel tile mounts the
+// real MotionPreview (T6940's "pick a different card" path). Minimal stub —
+// the tests assert picker behavior, not animation frames.
+if (!Element.prototype.animate) {
+  Element.prototype.animate = () => ({
+    pause: () => {},
+    play: () => {},
+    cancel: () => {},
+    finish: () => {},
+    currentTime: 0,
+    playbackRate: 1,
+    finished: Promise.resolve(),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    onfinish: null,
+  });
+}
+
 afterEach(cleanup);
 beforeEach(() => {
   mocks.state.cards = [];
@@ -128,6 +146,82 @@ describe('IntroCardPicker — inline create-and-return (T6670)', () => {
 
     expect(screen.queryByTestId('editor')).toBeNull();
     expect(screen.getByText('OK')).toBeTruthy();
+  });
+});
+
+describe('IntroCardPicker — exit dead ends (T6940)', () => {
+  it('clicking the backdrop neither closes nor commits (no-backdrop-close rule)', () => {
+    const { props } = renderPicker();
+    fireEvent.click(document.querySelector('.fixed.inset-0'));
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(props.onSelect).not.toHaveBeenCalled();
+    // The picker is still up.
+    expect(screen.getByText('OK')).toBeTruthy();
+  });
+
+  it('plain Cancel with no created card closes immediately, no prompt', () => {
+    const { props } = renderPicker();
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Attach your new card?')).toBeNull();
+  });
+
+  it('Cancel after creating a card asks; "Attach card" commits the NEW card and closes', async () => {
+    const { props } = renderPicker();
+    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
+    fireEvent.click(screen.getByText('editor-done'));
+    await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Attach your new card?')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Attach card'));
+    expect(props.onSelect).toHaveBeenCalledTimes(1);
+    expect(props.onSelect).toHaveBeenCalledWith(99);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Don\'t attach" closes without any write', async () => {
+    const { props } = renderPicker();
+    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
+    fireEvent.click(screen.getByText('editor-done'));
+    await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('Cancel'));
+    fireEvent.click(screen.getByText("Don't attach"));
+    expect(props.onSelect).not.toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('header X while still EDITING the new card also asks (create-view dead end)', async () => {
+    const { props } = renderPicker();
+    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText('Close'));
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Attach your new card?')).toBeTruthy();
+  });
+
+  it('creating a card, then deliberately picking a DIFFERENT one, then Cancel = plain close (the later choice stands)', async () => {
+    const { props, utils } = renderPicker();
+    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
+    fireEvent.click(screen.getByText('editor-done'));
+    await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
+
+    const created = mocks.state.cards[0];
+    const other = { id: 1, name: 'Other card', shown_fields: [], treatment: 'gold', image_key: null };
+    utils.rerender(<IntroCardPicker {...props} cards={[created, other]} />);
+    fireEvent.click(screen.getByLabelText('Other card'));
+
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(screen.queryByText('Attach your new card?')).toBeNull();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(props.onSelect).not.toHaveBeenCalled();
   });
 });
 

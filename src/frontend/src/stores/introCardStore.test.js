@@ -115,4 +115,62 @@ describe('introCardStore', () => {
     // current behavior, where selectDefaultCard is exported and functional.
     expect(selectDefaultCard).toBeUndefined();
   });
+
+  it('T6930: reset() discards an in-flight fetch — the old profile\'s cards must not land after a profile switch', async () => {
+    // Card ids are per-profile AUTOINCREMENT: a stale library silently
+    // attaches the WRONG card in the new profile, so a fetch that started
+    // before the switch must be dead on arrival.
+    let resolveFetch;
+    mockFetch.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+    const inFlight = useIntroCardStore.getState().fetchCards();
+
+    useIntroCardStore.getState().reset(); // the profile switch
+
+    resolveFetch(jsonResponse({ cards: [{ id: 2, name: 'Old profile card 2' }] }));
+    await inFlight;
+
+    expect(useIntroCardStore.getState().cards).toEqual([]);
+    expect(useIntroCardStore.getState().isInitialized).toBe(false);
+  });
+
+  it('T6930: reset() drops the fetch dedup handle — the next fetch hits the network for the NEW profile', async () => {
+    let resolveFetch;
+    mockFetch.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+    const inFlight = useIntroCardStore.getState().fetchCards();
+
+    useIntroCardStore.getState().reset();
+
+    // Without the fix, this call would return the STALE in-flight promise and
+    // never re-fetch. It must issue a second network request.
+    const newRows = [{ id: 2, name: 'New profile card 2' }];
+    mockFetch.mockResolvedValueOnce(jsonResponse({ cards: newRows }));
+    await useIntroCardStore.getState().fetchCards();
+
+    resolveFetch(jsonResponse({ cards: [{ id: 2, name: 'Old profile card 2' }] }));
+    await inFlight;
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(useIntroCardStore.getState().cards).toEqual(newRows);
+  });
+
+  it('T6950: a successful deleteCard bumps deleteRevision (reel-list caches mirror the server cascade)', async () => {
+    useIntroCardStore.setState({ cards: [{ id: 1 }] });
+    const before = useIntroCardStore.getState().deleteRevision;
+    mockFetch.mockResolvedValueOnce(jsonResponse({ success: true }));
+
+    await useIntroCardStore.getState().deleteCard(1);
+
+    expect(useIntroCardStore.getState().deleteRevision).toBe(before + 1);
+  });
+
+  it('T6950: a FAILED deleteCard does not bump deleteRevision', async () => {
+    useIntroCardStore.setState({ cards: [{ id: 1 }] });
+    const before = useIntroCardStore.getState().deleteRevision;
+    mockFetch.mockResolvedValueOnce(jsonResponse({}, false, 500));
+
+    await useIntroCardStore.getState().deleteCard(1);
+
+    expect(useIntroCardStore.getState().deleteRevision).toBe(before);
+    expect(useIntroCardStore.getState().cards).toEqual([{ id: 1 }]);
+  });
 });

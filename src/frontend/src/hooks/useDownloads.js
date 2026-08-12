@@ -402,6 +402,26 @@ export function useDownloads(isOpen = false) {
     }
   }, []);
 
+  // T6950: LOCAL mirror of the card-delete cascade. DELETE /api/intro-cards/{id}
+  // nulls final_videos.intro_card_id server-side for every reel that referenced
+  // the card, but that gesture happens in the library modal (a different tree),
+  // so this flat list never saw a write and kept showing a badge naming a
+  // deleted card. Null the intro fields on any download whose card is no longer
+  // in the library. Local-only state patch — the server already did the real
+  // write; nothing here calls the network.
+  //
+  // NOTE: inert at today's only call site — DownloadsPanel uses
+  // useDownloads(false) and its `downloads` stays [] (members render from
+  // useCollections). Kept for symmetry with setIntroCard's equally-inert
+  // flat-list half so any future flat-list consumer stays correct.
+  const pruneDanglingIntroCards = useCallback((liveCardIds) => {
+    setDownloads(prev => prev.map(d =>
+      d.intro_card_id && !liveCardIds.has(d.intro_card_id)
+        ? { ...d, intro_card_id: null, intro_card_name: null }
+        : d
+    ));
+  }, []);
+
   const markWatched = useCallback(async (downloadId) => {
     setDownloads(prev => prev.map(d =>
       d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
@@ -441,6 +461,7 @@ export function useDownloads(isOpen = false) {
     getStreamingUrl,
     renameDownload,
     setIntroCard,
+    pruneDanglingIntroCards,
     markWatched,
     setFilter,
 

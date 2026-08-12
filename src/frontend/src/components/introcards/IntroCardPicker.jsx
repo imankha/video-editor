@@ -11,8 +11,13 @@
 // OK click, not the card click." The carousel below only ever reports a
 // DRAFT (it plays the motion preview on every click); this component buffers
 // that draft in `draftId` and calls the caller's real `onSelect` -- the
-// actual PATCH/write gesture -- exactly once, on OK. Cancel/X/backdrop close
-// with no write. Enter = OK, Escape = cancel (never commits).
+// actual PATCH/write gesture -- exactly once, on OK. Cancel/X close with no
+// write. Enter = OK, Escape = cancel (never commits). T6940: the backdrop
+// deliberately does NOT close (project rule: modals never close on backdrop
+// click — a mid-flow click outside was silently abandoning selections), and
+// leaving with a just-created card still unattached asks first instead of
+// silently keeping the old attachment (the "I added a card but the old one
+// plays" dead end).
 //
 // T6670 — inline "create a new card" without leaving the picker. The carousel
 // surfaces a "New card" tile (`onCreateNew`); clicking it swaps this modal into
@@ -34,6 +39,7 @@ import { useIntroCardStore, useProfileStore } from '../../stores';
 import { IntroCardCarousel } from './IntroCardCarousel';
 import { IntroCardEditorContainer } from './IntroCardEditorContainer';
 import { ConsentGate } from './ConsentGate';
+import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 import { buildCreateFields, nextCardName } from './introCardDefaults';
 import { toast } from '../shared/Toast';
 
@@ -79,6 +85,11 @@ export function IntroCardPicker({
   const [view, setView] = useState('select');
   const [editId, setEditId] = useState(null);
   const [consentError, setConsentError] = useState(null);
+  // T6940: the card created via the inline flow THIS open-session. If the user
+  // exits while it would be left unattached, we ask instead of silently
+  // dropping it (creating is not attaching — the old card would keep playing).
+  const [createdId, setCreatedId] = useState(null);
+  const [confirmExit, setConfirmExit] = useState(false);
   // Synchronous guard against a double-create from two fast clicks: the
   // `creating` state flips asynchronously, so a ref is what actually blocks the
   // second entry within the same tick.
@@ -92,6 +103,8 @@ export function IntroCardPicker({
       setView('select');
       setEditId(null);
       setConsentError(null);
+      setCreatedId(null);
+      setConfirmExit(false);
     }
   } else if (isOpen && !touched && view === 'select' && selectedId !== lastSeenSelectedId) {
     setDraftId(selectedId);
@@ -104,7 +117,20 @@ export function IntroCardPicker({
     onSelect(draftId);
     onClose();
   };
-  const cancel = () => onClose();
+  // T6940: exiting while the just-created card would be left unattached asks
+  // first. Two shapes qualify: still in the create view (X during editing), or
+  // back on the carousel with the new card as the pending draft. If the user
+  // created a card and then deliberately picked a DIFFERENT one before
+  // cancelling, that later choice stands — plain close, no prompt.
+  const cancel = () => {
+    const abandoningNewCard =
+      createdId != null && (view === 'create' || draftId === createdId);
+    if (abandoningNewCard) {
+      setConfirmExit(true);
+      return;
+    }
+    onClose();
+  };
   const selectDraft = (cardId) => {
     setTouched(true);
     setDraftId(cardId);
@@ -120,6 +146,7 @@ export function IntroCardPicker({
     try {
       const created = await createCard(buildCreateFields({ name: nextCardName(cards || []), profile }));
       setEditId(created.id);
+      setCreatedId(created.id);
       setView('create');
     } catch (err) {
       toast.error('Could not create card', { message: err.message });
@@ -173,7 +200,10 @@ export function IntroCardPicker({
 
   const handleKeyDown = (e) => {
     // The editor/consent views own their own inputs and back buttons; the
-    // OK/cancel keyboard shortcuts only apply to the selection view.
+    // OK/cancel keyboard shortcuts only apply to the selection view. While the
+    // exit-confirm dialog is up it owns the keyboard (its own Escape handler);
+    // Enter must not bubble here and commit behind it.
+    if (confirmExit) return;
     if (view !== 'select') return;
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -199,7 +229,6 @@ export function IntroCardPicker({
   return createPortal(
     <div
       className={`fixed inset-0 ${Z.MODAL} flex items-center justify-center bg-black/60 backdrop-blur-sm px-4`}
-      onClick={inCreateView ? undefined : cancel}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
       ref={(node) => node?.focus()}
@@ -208,7 +237,6 @@ export function IntroCardPicker({
         className={`bg-gray-800 rounded-lg shadow-xl w-full border border-gray-700 ${
           inCreateView ? 'max-w-4xl h-[85vh] flex flex-col' : 'max-w-lg'
         }`}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-3.5 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
           <h3 className="text-base font-semibold text-white">
@@ -271,6 +299,31 @@ export function IntroCardPicker({
           </>
         )}
       </div>
+      <ConfirmationDialog
+        isOpen={confirmExit}
+        title="Attach your new card?"
+        message={'Your new card was saved to your library, but it is not attached here yet — the previous intro choice would keep playing.'}
+        onClose={() => setConfirmExit(false)}
+        buttons={[
+          {
+            label: "Don't attach",
+            variant: 'secondary',
+            onClick: () => {
+              setConfirmExit(false);
+              onClose();
+            },
+          },
+          {
+            label: 'Attach card',
+            variant: 'primary',
+            onClick: () => {
+              setConfirmExit(false);
+              onSelect(createdId);
+              onClose();
+            },
+          },
+        ]}
+      />
     </div>,
     document.body
   );

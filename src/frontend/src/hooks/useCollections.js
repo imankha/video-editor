@@ -125,6 +125,24 @@ export function useCollections(isActive = false) {
     });
   }, []);
 
+  // T6950: LOCAL mirror of the card-delete cascade across every cached member
+  // list (same reasoning as useDownloads.pruneDanglingIntroCards — the server
+  // already nulled final_videos.intro_card_id; these caches never refetch once
+  // 'ready', so patch them here). Local-only, no network.
+  const pruneDanglingIntroCards = useCallback((liveCardIds) => {
+    setMembers((prev) => {
+      const next = {};
+      for (const k of Object.keys(prev)) {
+        next[k] = prev[k].map((m) =>
+          m.intro_card_id && !liveCardIds.has(m.intro_card_id)
+            ? { ...m, intro_card_id: null, intro_card_name: null }
+            : m
+        );
+      }
+      return next;
+    });
+  }, []);
+
   // Re-sort the cached member lists into canonical (rating-first) order, e.g.
   // after a ranking session changed ratings. Read-only on the server side; the
   // rating writes happen in the ranking game (POST /api/rank/result).
@@ -182,6 +200,7 @@ export function useCollections(isActive = false) {
   return {
     summary, summaryState, members, memberStates,
     fetchSummary, fetchMembers, removeMember, patchMember, resortMembers,
+    pruneDanglingIntroCards,
   };
 }
 
