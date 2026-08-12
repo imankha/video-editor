@@ -186,6 +186,14 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
+  // T6830: the Reel Drafts tab is a dead end when there are no drafts AND New Reel
+  // is disabled (no game has extracted clips) — clicking in can only show an empty
+  // list with a disabled action. Disable the tab in exactly that case. Purely
+  // derived, no persisted view state. Gated on both loads settling so it can't
+  // flash disabled->enabled while games/projects stream in (a user WITH clips would
+  // otherwise render disabled for one frame, then enable).
+  const reelDraftsDisabled =
+    !loading && !gamesLoading && projects.length === 0 && !hasClips;
   // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
   // tab. Bare /home falls back to the projects-count default. (T5677)
   const initialTab = tabFromPath(window.location.pathname)
@@ -596,6 +604,17 @@ export function ProjectManager({
     }
   }, [projects, loading]);
 
+  // T6830: never leave the user parked on a dead-end Reel Drafts tab. A /home/reels
+  // deep link (or a stale tab hint) lands on 'projects' before data loads; once the
+  // loads settle and the tab is disabled, fall back to Games. reelDraftsDisabled is
+  // false mid-load, so this can't fight the initial-tab logic above; and it never
+  // fires for a user with drafts or extracted clips (the asymmetric enabled cases).
+  useEffect(() => {
+    if (reelDraftsDisabled && activeTab === 'projects') {
+      setActiveTab('games');
+    }
+  }, [reelDraftsDisabled, activeTab, setActiveTab]);
+
   // Refetch games when opening "new project" modal (needs fresh game list)
   useEffect(() => {
     if (showNewProjectModal && onFetchGames) {
@@ -876,10 +895,14 @@ export function ProjectManager({
         </button>
         <button
           onClick={() => setActiveTab('projects')}
+          disabled={reelDraftsDisabled}
+          title={reelDraftsDisabled ? 'Extract clips from a game first using Annotate mode' : undefined}
           className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
-            activeTab === 'projects'
-              ? `${REEL.bg} text-white shadow-lg`
-              : 'text-gray-400 hover:text-white hover:bg-white/10'
+            reelDraftsDisabled
+              ? 'text-gray-600 opacity-50 cursor-not-allowed'
+              : activeTab === 'projects'
+                ? `${REEL.bg} text-white shadow-lg`
+                : 'text-gray-400 hover:text-white hover:bg-white/10'
           }`}
         >
           <FolderOpen size={16} />
