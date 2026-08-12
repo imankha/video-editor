@@ -592,10 +592,23 @@ def layout(
 # =============================================================================
 # JS MIRROR GENERATION + PARITY
 # =============================================================================
-_JS_PATH = (
-    Path(__file__).resolve().parents[4]
-    / "src" / "frontend" / "src" / "utils" / "introCardGeometry.js"
-)
+def _js_path() -> Path:
+    """Target path for the generated JS mirror. Dev-time tooling only (the
+    generator + its `__main__` entrypoint) — never called from any serve-time
+    path. Computed lazily so importing this module never touches the
+    filesystem layout: in the deployed Fly image (`WORKDIR /app` + `COPY . .`)
+    this module sits only 4 levels below the image root, one short of the
+    5-level repo checkout depth `parents[4]` assumes, so eager computation at
+    import time raised `IndexError: 4` on every Fly deploy (T6920)."""
+    try:
+        repo_root = Path(__file__).resolve().parents[4]
+    except IndexError as e:
+        raise RuntimeError(
+            "_js_path() requires the repo checkout layout "
+            "(<root>/src/backend/app/services/intro_card_geometry.py); "
+            "not available at this file depth"
+        ) from e
+    return repo_root / "src" / "frontend" / "src" / "utils" / "introCardGeometry.js"
 
 
 def contract_as_dict() -> dict:
@@ -712,8 +725,9 @@ export function bandKind(composition) {{
 def write_js_mirror() -> Path:
     """Write the generated JS mirror to disk and return its path."""
     content = render_js_mirror()
-    _JS_PATH.write_text(content, encoding="utf-8", newline="\n")
-    return _JS_PATH
+    js_path = _js_path()
+    js_path.write_text(content, encoding="utf-8", newline="\n")
+    return js_path
 
 
 if __name__ == "__main__":
