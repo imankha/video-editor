@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DRAFT_STAGE, getDraftStage, splitByStage, stageRowsFor } from './draftStage';
+import { DRAFT_STAGE, getDraftStage, rendersSourceAspect, splitByStage, stageRowsFor } from './draftStage';
 import { RATIO } from '../constants/aspectRatios';
 
 // Minimal draft shapes — only the fields the derivation reads.
@@ -29,6 +29,27 @@ describe('getDraftStage', () => {
   it('working video wins over framing counters', () => {
     expect(getDraftStage({ ...inOverlay, clips_in_progress: 2, clips_exported: 1 }))
       .toBe(DRAFT_STAGE.IN_OVERLAY);
+  });
+});
+
+describe('rendersSourceAspect (T6800/T6900)', () => {
+  it('is true for a Not-Started draft (T6800)', () => {
+    expect(rendersSourceAspect(notStarted)).toBe(true);
+  });
+
+  it('is true for an In-Framing draft with NO crop keyframes yet (T6900)', () => {
+    expect(rendersSourceAspect({ ...inFraming, has_crop_keyframes: false })).toBe(true);
+    // exported-but-uncropped is the same case: entered Framing, never cropped.
+    expect(rendersSourceAspect({ ...inFramingExported, has_crop_keyframes: false })).toBe(true);
+  });
+
+  it('is FALSE once crop keyframes exist on an In-Framing draft (target aspect)', () => {
+    expect(rendersSourceAspect({ ...inFraming, has_crop_keyframes: true })).toBe(false);
+  });
+
+  it('is false for In-Overlay and Ready drafts (always target aspect)', () => {
+    expect(rendersSourceAspect(inOverlay)).toBe(false);
+    expect(rendersSourceAspect(ready)).toBe(false);
   });
 });
 
@@ -69,13 +90,44 @@ describe('stageRowsFor', () => {
     ]);
   });
 
-  it('a mixed-aspect stage splits into aspect sub-rows, portrait first', () => {
+  it('a mixed-aspect FRAMED stage splits into aspect sub-rows, portrait first', () => {
+    // has_crop_keyframes: real crop applied -> tiles take their TARGET ratio, so
+    // the stage splits by that ratio (T6900: only FRAMED drafts group by target).
     const rows = stageRowsFor([
-      { ...inFraming, id: 20, aspect_ratio: RATIO.LANDSCAPE },
-      { ...inFraming, id: 21, aspect_ratio: RATIO.PORTRAIT },
+      { ...inFraming, id: 20, aspect_ratio: RATIO.LANDSCAPE, has_crop_keyframes: true },
+      { ...inFraming, id: 21, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: true },
     ]);
     expect(rows).toHaveLength(1);
     expect(rows[0].byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+  });
+
+  // T6900 — an In-Framing draft that entered the Framing screen but has NO crop
+  // keyframes yet renders LANDSCAPE (source aspect), so row grouping must bucket
+  // it by that rendered shape, not its (invisible) target ratio, or a portrait
+  // target would drop it into a portrait row of a different tile height.
+  it('groups an unframed In-Framing draft into the landscape row regardless of target ratio (T6900)', () => {
+    const rows = stageRowsFor([
+      { ...inFraming, id: 22, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: false },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].stage).toBe(DRAFT_STAGE.IN_FRAMING);
+    expect(rows[0].byAspect).toHaveLength(1);
+    expect(rows[0].byAspect[0].ratio).toBe(RATIO.LANDSCAPE);
+  });
+
+  it('splits framed vs unframed In-Framing drafts by rendered aspect, not target ratio (T6900)', () => {
+    // An unframed portrait draft (renders landscape) shares the landscape row
+    // with a framed landscape draft; a framed portrait draft gets its own row.
+    const rows = stageRowsFor([
+      { ...inFraming, id: 23, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: false }, // -> landscape
+      { ...inFraming, id: 24, aspect_ratio: RATIO.LANDSCAPE, has_crop_keyframes: true },  // -> landscape
+      { ...inFraming, id: 25, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: true },   // -> portrait
+    ]);
+    expect(rows[0].byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+    const portrait = rows[0].byAspect.find(b => b.ratio === RATIO.PORTRAIT);
+    const landscape = rows[0].byAspect.find(b => b.ratio === RATIO.LANDSCAPE);
+    expect(portrait.projects.map(p => p.id)).toEqual([25]);
+    expect(landscape.projects.map(p => p.id).sort()).toEqual([23, 24]);
   });
 
   it('a single-aspect non-Not-Started stage yields one ratio-labeled bucket (no chip forced by callers)', () => {

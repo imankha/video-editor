@@ -21,12 +21,13 @@ import { formatGameClock } from '../utils/timeFormat';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
-import { getDraftStage, DRAFT_STAGE } from '../utils/draftStage';
+import { rendersSourceAspect } from '../utils/draftStage';
 
 /**
  * DraftTile - a reel draft as a poster tile (T5672). Shell aspect follows the
  * draft's target ratio (portrait 9:16 or landscape 16:9, T5673) except for
- * Not-Started drafts, which render landscape at SOURCE aspect (T6800).
+ * drafts not yet framed, which render landscape at SOURCE aspect: Not-Started
+ * (T6800) and In-Framing-but-uncropped (T6900) drafts alike.
  *
  * Presentational shell over the SAME handlers the old list card used (open, publish,
  * rename, delete, preview) — this restyle is view-only, no persistence change.
@@ -397,12 +398,14 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // tiles, 16:9 drafts render landscape tiles. A caller that puts both
   // aspects in one row (rare) will get mixed tile heights -- callers should
   // split into one-aspect-per-row instead (see ProjectManager grouping).
-  // T6800: a Not-Started draft renders at SOURCE aspect (landscape), not the
-  // target ratio -- nothing has been framed yet and its poster is a landscape
+  // T6800/T6900: a draft renders at SOURCE aspect (landscape), not the target
+  // ratio, until real framing has been applied -- its poster is a landscape
   // source frame (ensure_draft_poster preserves source aspect), so the 9:16
-  // shell was center-cropping a sliver of footage the user never cropped.
-  const isNotStarted = getDraftStage(project) === DRAFT_STAGE.NOT_STARTED;
-  const isLandscape = project.aspect_ratio === RATIO.LANDSCAPE || isNotStarted;
+  // shell was center-cropping a sliver of footage the user never cropped. This
+  // covers both Not-Started drafts (T6800) and In-Framing drafts that entered
+  // the Framing screen but have no crop keyframes yet (T6900) -- see
+  // rendersSourceAspect, the shared half of the row-height invariant.
+  const isLandscape = project.aspect_ratio === RATIO.LANDSCAPE || rendersSourceAspect(project);
   const sizeClass = isLandscape
     ? 'w-[72vw] max-w-[300px] sm:w-[260px] aspect-video'
     : 'w-[40vw] max-w-[200px] sm:w-[168px] aspect-[9/16]';

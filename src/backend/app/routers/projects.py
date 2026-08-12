@@ -240,6 +240,12 @@ class ProjectListItem(BaseModel):
     clip_count: int
     clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
     clips_in_progress: int  # Clips with edits but not yet exported
+    # T6900: real crop keyframes exist on at least one latest clip. crop_data is
+    # NULL until the user applies a crop (normalize_and_encode collapses empty
+    # crops to NULL at write time), so IS NOT NULL == "framing actually applied".
+    # Distinct from clips_in_progress/exported, which flip the moment clips enter
+    # the Framing screen regardless of whether any crop was committed.
+    has_crop_keyframes: bool
     has_working_video: bool
     working_video_created_at: str | None = None
     has_overlay_edits: bool
@@ -323,6 +329,7 @@ def _read_projects_list():
                 COALESCE(clip_stats.total, 0) as clip_count,
                 COALESCE(clip_stats.exported, 0) as clips_exported,
                 COALESCE(clip_stats.in_progress, 0) as clips_in_progress,
+                COALESCE(clip_stats.cropped, 0) as cropped,
                 -- Working video info (check if referenced working video exists)
                 CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END as has_working_video,
                 wv.created_at as working_video_created_at,
@@ -358,7 +365,12 @@ def _read_projects_list():
                         crop_data IS NOT NULL OR
                         segments_data IS NOT NULL OR
                         timing_data IS NOT NULL
-                    ) THEN 1 ELSE 0 END) as in_progress
+                    ) THEN 1 ELSE 0 END) as in_progress,
+                    -- T6900: any latest clip carrying real crop keyframes. crop_data
+                    -- is NULL until a crop is committed (empty crops normalize to
+                    -- NULL), and exported clips keep their crop_data, so this counts
+                    -- cropped clips whether or not they've been exported.
+                    SUM(CASE WHEN crop_data IS NOT NULL THEN 1 ELSE 0 END) as cropped
                 FROM (
                     SELECT wc.*, ROW_NUMBER() OVER (
                         PARTITION BY wc.project_id, COALESCE(rc.end_time, wc.uploaded_filename)
@@ -496,6 +508,7 @@ def _read_projects_list():
                 clip_count=row['clip_count'],
                 clips_exported=row['clips_exported'],
                 clips_in_progress=row['clips_in_progress'],
+                has_crop_keyframes=bool(row['cropped']),
                 has_working_video=bool(row['has_working_video']),
                 working_video_created_at=row['working_video_created_at'],
                 has_overlay_edits=bool(row['has_overlay_edits']),
