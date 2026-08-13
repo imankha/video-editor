@@ -189,6 +189,11 @@ function TextPreviewDiagHarness() {
       <div data-testid="t6880-state" data-time={currentTime} data-playing={isPlaying ? 'yes' : 'no'} data-texttab={isTextTabActive ? 'yes' : 'no'} style={{ marginBottom: 12 }}>
         <button type="button" data-testid="time-in" onClick={() => setCurrentTime(3)}>playhead in-range</button>
         <button type="button" data-testid="time-out" onClick={() => setCurrentTime(8)}>playhead out-of-range</button>
+        {/* T6990 -- region window is [2,4]; these land the playhead INSIDE the
+            final TEXT_FADE_OUT_SEC (0.25s) so the qa spec can read the real
+            fade-OUT opacity ramp on the live <TextOverlayPreview> element. */}
+        <button type="button" data-testid="time-fade-mid" onClick={() => setCurrentTime(3.9)}>playhead mid-fade</button>
+        <button type="button" data-testid="time-fade-near" onClick={() => setCurrentTime(3.99)}>playhead near-end</button>
         <button type="button" data-testid="toggle-play" onClick={() => setIsPlaying((p) => !p)}>toggle play</button>
         <button type="button" data-testid="toggle-texttab" onClick={() => setIsTextTabActive((a) => !a)}>toggle text tab</button>
       </div>
