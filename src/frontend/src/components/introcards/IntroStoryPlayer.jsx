@@ -41,6 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIntroPlayback } from './useIntroPlayback';
+import { preloadIntroImage } from './preloadIntroImage';
 import { IntroPreRoll } from './IntroPreRoll';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
 import { CompositeScrubber } from './CompositeScrubber';
@@ -126,6 +127,22 @@ export function IntroStoryPlayer({
 
   const { introTimeMs, seekIntro, setPlaying } = useIntroPlayback(introDurSec, { onIntroEnded: handleIntroEnded });
 
+  // T6960: hold the clock until the card's photo is fetched+decoded. Every
+  // Play presigns a FRESH photo URL (cache-busting query params), so without
+  // this the 4s card races a network download and often finishes photoless.
+  // preloadIntroImage always resolves (error/timeout degrade to a photoless
+  // card, warned) — this can delay start by at most its cap, never hang.
+  const introPhotoUrl = intro?.previewUrl || null;
+  const [introAssetsReady, setIntroAssetsReady] = useState(!introPhotoUrl);
+  useEffect(() => {
+    if (!introPhotoUrl) return undefined;
+    let cancelled = false;
+    preloadIntroImage(introPhotoUrl).then(() => {
+      if (!cancelled) setIntroAssetsReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [introPhotoUrl]);
+
   // MAJOR #3 / design §5: "the clock is frozen (no rAF advance) whenever the
   // composite's region !== 'intro'". Drives useIntroPlayback's own play/pause
   // switch directly off `region` -- the hook's rAF loop tears down via its
@@ -133,9 +150,11 @@ export function IntroStoryPlayer({
   // becomes true again) the instant a backward scrub sets region back to
   // 'intro', ordered BEFORE/together-with the seekIntro call below so the
   // clock is playing again at (or holding) the newly-seeked position.
+  // T6960: additionally gated on the photo being ready (above) — the card
+  // holds its t=0 pose (treatment background + skeleton) until then.
   useEffect(() => {
-    setPlaying(region === REGION.INTRO);
-  }, [region, setPlaying]);
+    setPlaying(region === REGION.INTRO && introAssetsReady);
+  }, [region, setPlaying, introAssetsReady]);
 
   // T6730 audit finding D (diagnostic only, no auto-correction): a forward
   // scrub across the boundary (onScrub's else branch below) hands off to

@@ -14,7 +14,7 @@
 // mocked here so this stays a pure unit test of IntroPreRoll's own
 // gating/currentTimeMs-threading/fallback-onDone logic, not the render engine.
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
 
 vi.mock('./MotionPreview', () => ({
@@ -25,8 +25,21 @@ vi.mock('./MotionPreview', () => ({
   )),
 }));
 
+// T6960: the self-driven clock is gated on the photo preload settling. Default
+// mock resolves immediately (tests flush with an async act()); individual
+// tests swap in a deferred promise to pin the gate itself.
+const { preloadIntroImageMock } = vi.hoisted(() => ({ preloadIntroImageMock: vi.fn() }));
+vi.mock('./preloadIntroImage', () => ({
+  preloadIntroImage: (...args) => preloadIntroImageMock(...args),
+}));
+
 import { IntroPreRoll } from './IntroPreRoll';
 import { MotionPreview } from './MotionPreview';
+
+beforeEach(() => {
+  preloadIntroImageMock.mockReset();
+  preloadIntroImageMock.mockResolvedValue('loaded');
+});
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -58,7 +71,7 @@ describe('IntroPreRoll', () => {
     expect(MotionPreview).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onDone once its own fallback clock reaches the card duration (legacy no-currentTimeMs callers)', () => {
+  it('calls onDone once its own fallback clock reaches the card duration (legacy no-currentTimeMs callers)', async () => {
     // SAMPLE_INTRO has no `duration` -> IntroPreRoll's fallback default of
     // 4.0s applies (mirrors MotionPreview's own `card?.duration || 4.0`).
     let rafCb = null;
@@ -72,6 +85,9 @@ describe('IntroPreRoll', () => {
     try {
       const onDone = vi.fn();
       render(<IntroPreRoll intro={SAMPLE_INTRO} onDone={onDone} />);
+      // T6960: flush the (immediately-resolving) photo preload so the gated
+      // clock arms.
+      await act(async () => {});
       expect(onDone).not.toHaveBeenCalled();
 
       const tick = (ms) => {
@@ -89,6 +105,60 @@ describe('IntroPreRoll', () => {
       global.requestAnimationFrame = realRaf;
       global.cancelAnimationFrame = realCancel;
       global.performance.now = realNow;
+    }
+  });
+
+  it('T6960: holds the fallback clock until the photo preload settles, then plays', async () => {
+    let resolvePreload;
+    preloadIntroImageMock.mockImplementation(() => new Promise((resolve) => { resolvePreload = resolve; }));
+
+    let rafCb = null;
+    let nowMs = 0;
+    const realRaf = global.requestAnimationFrame;
+    const realCancel = global.cancelAnimationFrame;
+    const realNow = global.performance.now;
+    global.requestAnimationFrame = vi.fn((cb) => { rafCb = cb; return 1; });
+    global.cancelAnimationFrame = vi.fn();
+    global.performance.now = () => nowMs;
+    try {
+      const onDone = vi.fn();
+      render(<IntroPreRoll intro={SAMPLE_INTRO} onDone={onDone} />);
+      await act(async () => {});
+
+      // Gate closed: the autoplay clock never armed — no rAF scheduled, the
+      // card holds t=0 for however long the (bounded) preload takes.
+      expect(preloadIntroImageMock).toHaveBeenCalledWith(SAMPLE_INTRO.previewUrl);
+      expect(rafCb).toBeNull();
+      expect(onDone).not.toHaveBeenCalled();
+
+      // Preload settles -> clock arms and runs to completion as before.
+      await act(async () => { resolvePreload('loaded'); });
+      expect(rafCb).not.toBeNull();
+      nowMs += 4001;
+      const cb = rafCb;
+      act(() => { cb(nowMs); });
+      expect(onDone).toHaveBeenCalledTimes(1);
+    } finally {
+      global.requestAnimationFrame = realRaf;
+      global.cancelAnimationFrame = realCancel;
+      global.performance.now = realNow;
+    }
+  });
+
+  it('T6960: a photoless intro never waits on a preload', async () => {
+    const noPhoto = { ...SAMPLE_INTRO, previewUrl: null };
+    let rafCb = null;
+    const realRaf = global.requestAnimationFrame;
+    const realCancel = global.cancelAnimationFrame;
+    global.requestAnimationFrame = vi.fn((cb) => { rafCb = cb; return 1; });
+    global.cancelAnimationFrame = vi.fn();
+    try {
+      render(<IntroPreRoll intro={noPhoto} onDone={() => {}} />);
+      expect(preloadIntroImageMock).not.toHaveBeenCalled();
+      expect(rafCb).not.toBeNull(); // clock armed immediately
+    } finally {
+      global.requestAnimationFrame = realRaf;
+      global.cancelAnimationFrame = realCancel;
     }
   });
 

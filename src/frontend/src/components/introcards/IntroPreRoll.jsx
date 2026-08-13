@@ -40,6 +40,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MotionPreview } from './MotionPreview';
 import { useMotionPreviewAutoplay } from './useMotionPreviewAutoplay';
+import { preloadIntroImage } from './preloadIntroImage';
 import { CARD_ASPECTS } from '../../utils/introCardGeometry';
 
 const MAX_W = 480;
@@ -70,7 +71,25 @@ export function IntroPreRoll({
   const [avail, setAvail] = useState({ w: MAX_W, h: MAX_H });
   const isExternallyDriven = currentTimeMs != null;
   const durationMs = (intro?.card?.duration || 4.0) * 1000;
-  const fallbackMs = useMotionPreviewAutoplay(durationMs, { active: !isExternallyDriven && !!intro, onDone });
+  // T6960: on the self-driven (share SPA) path, don't start the card's clock
+  // until the photo is fetched+decoded — the presigned photo URL differs on
+  // every payload, so the browser cache never saves the race. Externally
+  // driven hosts (IntroStoryPlayer) own their own gate and are unaffected.
+  const photoUrl = intro?.previewUrl || null;
+  const [photoSettled, setPhotoSettled] = useState(!photoUrl);
+  useEffect(() => {
+    if (!photoUrl) return undefined;
+    let cancelled = false;
+    setPhotoSettled(false);
+    preloadIntroImage(photoUrl).then(() => {
+      if (!cancelled) setPhotoSettled(true);
+    });
+    return () => { cancelled = true; };
+  }, [photoUrl]);
+  const fallbackMs = useMotionPreviewAutoplay(durationMs, {
+    active: !isExternallyDriven && !!intro && photoSettled,
+    onDone,
+  });
 
   useEffect(() => {
     const el = wrapRef.current;

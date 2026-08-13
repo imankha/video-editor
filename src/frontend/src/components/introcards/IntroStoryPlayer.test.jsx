@@ -26,6 +26,14 @@ vi.mock('./useIntroPlayback', () => ({
   useIntroPlayback: (...args) => useIntroPlaybackMock(...args),
 }));
 
+// T6960: the composite holds the intro clock until the card photo preloads.
+// SAMPLE_INTRO has previewUrl:null, so existing tests never hit the preload;
+// the dedicated T6960 tests below drive it explicitly.
+const { preloadIntroImageMock } = vi.hoisted(() => ({ preloadIntroImageMock: vi.fn() }));
+vi.mock('./preloadIntroImage', () => ({
+  preloadIntroImage: (...args) => preloadIntroImageMock(...args),
+}));
+
 vi.mock('./IntroPreRoll', () => ({
   IntroPreRoll: ({ intro, currentTimeMs }) => (
     <div data-testid="intro-pre-roll" data-current-time-ms={currentTimeMs}>
@@ -86,6 +94,8 @@ const mockSetPlaying = vi.fn();
 beforeEach(() => {
   mockSeekIntro.mockClear();
   mockSetPlaying.mockClear();
+  preloadIntroImageMock.mockReset();
+  preloadIntroImageMock.mockResolvedValue('loaded');
   useIntroPlaybackMock.mockReset();
   useIntroPlaybackMock.mockReturnValue({
     introTimeMs: 0,
@@ -424,5 +434,38 @@ describe('IntroStoryPlayer reel live progress wiring (T6710 Stage 4.5 BLOCKING #
     const fill1 = cells[1].querySelector('.bg-white.h-full');
     expect(fill0.style.width).toBe('100%');
     expect(fill1.style.width).toBe('50%');
+  });
+});
+
+describe('IntroStoryPlayer photo-readiness gate (T6960)', () => {
+  const PHOTO_INTRO = { ...SAMPLE_INTRO, previewUrl: 'https://r2.example/card.jpg' };
+
+  it('holds the intro clock (setPlaying false) until the photo preload settles', async () => {
+    let resolvePreload;
+    preloadIntroImageMock.mockImplementation(() => new Promise((resolve) => { resolvePreload = resolve; }));
+
+    render(<IntroStoryPlayer intro={PHOTO_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    await act(async () => {});
+
+    expect(preloadIntroImageMock).toHaveBeenCalledWith(PHOTO_INTRO.previewUrl);
+    // region==='intro' but assets not ready -> the play switch must be false.
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(false);
+
+    await act(async () => { resolvePreload('loaded'); });
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(true);
+  });
+
+  it('a photoless intro starts the clock immediately (no preload, no hold)', async () => {
+    render(<IntroStoryPlayer intro={SAMPLE_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    await act(async () => {});
+    expect(preloadIntroImageMock).not.toHaveBeenCalled();
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(true);
+  });
+
+  it('a failed/timed-out preload still starts the clock (bounded degrade, never a hang)', async () => {
+    preloadIntroImageMock.mockResolvedValue('timeout');
+    render(<IntroStoryPlayer intro={PHOTO_INTRO} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    await act(async () => {});
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(true);
   });
 });
