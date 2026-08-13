@@ -82,20 +82,48 @@ None directly — this is a fresh UX-consistency finding, not a follow-up to an 
 ## Implementation
 
 ### Steps
-1. [ ] Reposition `DraftTile.jsx`'s rename pencil next to the name (bottom scrim), matching
+1. [x] Reposition `DraftTile.jsx`'s rename pencil next to the name (bottom scrim), matching
        the `IntroCardEditorContainer.jsx` / `ManageProfilesModal.jsx` reference pattern
-2. [ ] Apply the same repositioning to `ReelTile.jsx` and `GameTile.jsx`
-3. [ ] Decide extraction vs. per-surface fix (see Solution §3); document the call briefly in
+2. [x] Apply the same repositioning to `ReelTile.jsx` and `GameTile.jsx`
+3. [x] Decide extraction vs. per-surface fix (see Solution §3); document the call briefly in
        the Progress Log either way
-4. [ ] Responsive check: no crowding/overflow at 375px on all three tile types
-5. [ ] Tests: existing rename-flow tests still pass; add/adjust any test asserting icon
+4. [x] Responsive check: no crowding/overflow at 375px on all three tile types
+5. [x] Tests: existing rename-flow tests still pass; add/adjust any test asserting icon
        position or DOM structure
-6. [ ] Lint + relevant test set green
+6. [x] Lint + relevant test set green
 
 ### Progress Log
 
 **2026-08-12**: Filed from user report (screenshot of DraftTile's action rail) + a repo-wide
 sweep for the same pattern, done at filing time.
+
+**2026-08-13**: Implemented positioning-only fix on all three surfaces. Each tile now renders
+a pencil button as a `flex-shrink-0` sibling of the name `<h3>` (which gets `flex-1 min-w-0`)
+inside the bottom scrim, matching the `ManageProfilesModal` "pencil beside the name" pattern.
+- DraftTile: pencil moved OUT of the top-right hover-action rail into the scrim; `handleStartRename`
+  (already `stopPropagation`) unchanged, so inline rename behaves identically.
+- ReelTile: pencil added beside the name; the "Rename" entry removed from BOTH kebab menus
+  (mobile sheet + desktop popover); `startRename` reused verbatim.
+- GameTile: `Edit game` removed from the kebab `actions` array, replaced by a `data-game-edit`
+  pencil beside the name that calls the same `onEdit`; the tile's `handleClick`/`handleKeyDown`
+  now ignore taps inside `[data-game-edit]` so editing never triggers the primary open.
+
+**Extraction decision (Solution §3): positioning-only, no shared component.** Rejected extracting
+an `InlineRename`/`EditableLabel` because the three surfaces do NOT share one interaction model:
+DraftTile and ReelTile do inline rename over their own local `renameValue`/`isRenaming` state
+(different field names, different persistence calls), while GameTile's pencil opens a separate
+edit *modal* via `onEdit` — no inline input at all. The only genuinely duplicated part is ~6
+lines of `flex` wrapper + pencil-button JSX; a shared component would have to swallow three
+different state/persistence contracts to unify that, adding indirection that hides code paths
+from grep for no real dedup win. Per the "abstract on the 3rd duplication only when it makes the
+fix *simpler*" rule, per-surface positioning is the cleaner call here. If a future task adds a
+4th inline-rename surface with the SAME state contract, revisit extracting an `InlineRename` that
+DraftTile + ReelTile (not GameTile) share.
+
+**Responsive (375px):** name `<h3>` carries `flex-1 min-w-0` with `line-clamp-2` (DraftTile/ReelTile)
+or `truncate` (GameTile); the pencil is `flex-shrink-0`. `min-w-0` lets the name shrink/ellipsize
+instead of pushing the pencil out of the scrim, so no overflow/crowding at narrow widths — verified
+live in the QA phase.
 
 ## Acceptance Criteria
 

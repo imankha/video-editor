@@ -125,15 +125,16 @@ export function GameTile({
   };
 
   const handleClick = (e) => {
-    // A tap inside the kebab or its menu must not trigger the primary open.
-    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]')) return;
+    // A tap inside the kebab, its menu, or the edit pencil must not trigger the
+    // primary open (T6890 added the pencil as a sibling of the name in the scrim).
+    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]') || e.target.closest('[data-game-edit]')) return;
     activatePrimary();
   };
 
   // Keyboard activation (item 3): Enter/Space opens the tile's primary action.
   const handleKeyDown = (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]')) return;
+    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]') || e.target.closest('[data-game-edit]')) return;
     e.preventDefault();
     activatePrimary();
   };
@@ -150,7 +151,7 @@ export function GameTile({
   const actions = [
     hasRecap && { key: 'play', label: 'Watch recap', icon: Play, onClick: onPlayRecap },
     !isExpired && { key: 'share', label: 'Share game', icon: Share2, onClick: onShare },
-    { key: 'edit', label: 'Edit game', icon: Pencil, onClick: onEdit },
+    // T6890: Edit game moved to the pencil beside the name in the scrim (below).
     canExtend && (isExpired || isNearExpiry) &&
       { key: 'extend', label: 'Extend storage', icon: RefreshCw, onClick: onExtend },
   ].filter(Boolean);
@@ -235,9 +236,25 @@ export function GameTile({
           gradient is opaque enough at the base to stay legible over a bright
           poster frame. */}
       <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5">
-        <h3 className="text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
-          {game.name}
-        </h3>
+        {/* T6890: the edit (rename) pencil sits beside the game name it edits,
+            instead of only inside the top-right kebab. Same "icon touches the name"
+            placement as DraftTile/ReelTile (ManageProfilesModal reference pattern:
+            a pencil button next to the name that opens the edit form). */}
+        <div className="flex items-center gap-1">
+          <h3 className="flex-1 min-w-0 text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
+            {game.name}
+          </h3>
+          <button
+            type="button"
+            data-game-edit
+            onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+            title="Edit game"
+            aria-label="Edit game"
+            className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px]"
+          >
+            <Pencil size={14} />
+          </button>
+        </div>
         <div className="mt-0.5 flex items-center justify-between gap-1 text-xs">
           <span className="text-gray-300">
             {new Date(game.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
