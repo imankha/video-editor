@@ -22,15 +22,21 @@ the other fails a test, not just a code review.
 import numpy as np
 import pytest
 
+from app.modal_functions.video_processing import (
+    TEXT_FADE_OUT_SEC as MODAL_TEXT_FADE_OUT_SEC,
+)
+from app.modal_functions.video_processing import (
+    _blend_text_layers as modal_blend_text_layers,
+)
+from app.modal_functions.video_processing import (
+    _decode_text_layers as modal_decode_text_layers,
+)
 from app.routers.export.overlay import (
+    TEXT_FADE_OUT_SEC,
     _blend_text_layers,
     _decode_text_layers,
     _flatten_text_regions,
     _rasterize_text_layers,
-)
-from app.modal_functions.video_processing import (
-    _blend_text_layers as modal_blend_text_layers,
-    _decode_text_layers as modal_decode_text_layers,
 )
 
 
@@ -97,14 +103,18 @@ class TestBlendTextLayers:
         decoded = _decode_text_layers([layer], 4, 4)
         black_frame = np.zeros((4, 4, 3), dtype=np.uint8)
 
+        # AT start it is > TEXT_FADE_OUT_SEC from the end -> fade == 1 -> full alpha.
         at_start = _blend_text_layers(black_frame.copy(), decoded, current_time=1.0)
         assert at_start[0, 0].tolist() == [0, 0, 255]  # fully opaque red-channel-BGR block painted
 
         at_end = _blend_text_layers(black_frame.copy(), decoded, current_time=2.0)
         assert at_end[0, 0].tolist() == [0, 0, 0]  # NOT painted -- endTime is exclusive
 
+        # T6990: still ACTIVE just before endTime (half-open upper bound is crisp),
+        # but the fade-out envelope has ramped it near-transparent by 1.999 (0.001s
+        # left) -- NOT the old hard 255. The full ramp is covered by TestTextFadeOut.
         just_before_end = _blend_text_layers(black_frame.copy(), decoded, current_time=1.999)
-        assert just_before_end[0, 0].tolist() == [0, 0, 255]
+        assert 0 < just_before_end[0, 0, 2] < 255
 
         before_start = _blend_text_layers(black_frame.copy(), decoded, current_time=0.999)
         assert before_start[0, 0].tolist() == [0, 0, 0]
@@ -135,6 +145,58 @@ class TestBlendTextLayers:
         result = _blend_text_layers(frame, decoded, current_time=1.0)
         # top (second in list) is opaque, so it's the final visible color
         assert result[0, 0].tolist() == [0, 255, 0]
+
+
+class TestTextFadeOut:
+    """T6990: text ramps to transparent over the final TEXT_FADE_OUT_SEC of its
+    window instead of hard-cutting on the end frame. We recover the EFFECTIVE
+    alpha over time from the burned pixel: a fully-opaque (alpha=255) layer of
+    color value V burned onto a BLACK frame yields pixel == V * fade, so the
+    pixel IS the fade envelope scaled by V (mirrors T5240's luma-over-time read).
+    """
+
+    # A [0,5) layer, solid blue value 200, opaque -> burned pixel == 200 * fade.
+    def _blended_value(self, current_time, start=0.0, end=5.0, value=200):
+        layer = _make_png_layer(start, end, color_bgr=(0, 0, value), size=(2, 2), alpha=255)
+        decoded = _decode_text_layers([layer], 2, 2)
+        black = np.zeros((2, 2, 3), dtype=np.uint8)
+        out = _blend_text_layers(black, decoded, current_time=current_time)
+        return int(out[0, 0, 2])  # the blue channel we set
+
+    def test_full_alpha_outside_the_fade_window(self):
+        # >TEXT_FADE_OUT_SEC before the end -> fade == 1 -> full value.
+        assert self._blended_value(1.0) == pytest.approx(200, abs=1)
+
+    def test_alpha_ramps_down_monotonically_across_the_fade_window(self):
+        # Sample from mid-region into the final TEXT_FADE_OUT_SEC.
+        ts = [5.0 - TEXT_FADE_OUT_SEC, 5.0 - 0.15, 5.0 - 0.10, 5.0 - 0.05, 5.0 - 0.01]
+        vals = [self._blended_value(t) for t in ts]
+        # Strictly decreasing toward the end (a real fade, not a hard cut).
+        for i in range(len(vals) - 1):
+            assert vals[i + 1] < vals[i]
+        # The frame entering the fade window is (near) full; the last one is faint.
+        assert vals[0] == pytest.approx(200, abs=2)
+        assert vals[-1] < 20
+
+    def test_matches_the_min_1_envelope_formula(self):
+        # Exact envelope: value * min(1, (end - t) / TEXT_FADE_OUT_SEC).
+        t = 5.0 - 0.10  # 0.10s from the end -> fade = 0.4
+        expected = 200 * min(1.0, 0.10 / TEXT_FADE_OUT_SEC)
+        assert self._blended_value(t) == pytest.approx(expected, abs=1)
+
+    def test_end_frame_is_fully_gone_half_open_still_holds(self):
+        # AT endTime the half-open window excludes it -> frame untouched (0),
+        # and the last active instant is nearly transparent -- no residual pop.
+        assert self._blended_value(5.0) == 0
+        assert self._blended_value(4.999) < 4
+
+    def test_region_shorter_than_fade_never_reaches_full_alpha(self):
+        # Documented clamp choice: bare min(1, ...) means a <0.25s region peaks
+        # below full alpha even at its own start (accepted simplification).
+        peak = self._blended_value(0.0, start=0.0, end=0.1, value=200)
+        expected = 200 * (0.1 / TEXT_FADE_OUT_SEC)  # 0.4
+        assert peak == pytest.approx(expected, abs=2)
+        assert peak < 200
 
 
 class TestRasterizeTextLayersDimsProbe:
@@ -310,3 +372,23 @@ class TestModalInlineParity:
         assert np.array_equal(app_at_end, frame)
         assert np.array_equal(modal_at_end, frame)
         assert np.array_equal(app_at_end, modal_at_end)
+
+    def test_fade_out_constant_is_byte_identical(self):
+        # T6990: the two copies of TEXT_FADE_OUT_SEC must stay equal or Modal and
+        # local burn-in fade over different durations.
+        assert TEXT_FADE_OUT_SEC == MODAL_TEXT_FADE_OUT_SEC
+
+    def test_both_copies_agree_mid_fade_window(self):
+        # T6990: same faded frame from both loops at an instant inside the fade
+        # window (not just full-alpha mid-region).
+        layer = _make_png_layer(0.0, 5.0, color_bgr=(0, 0, 220), size=(4, 4), alpha=255)
+        app_decoded = _decode_text_layers([layer], 4, 4)
+        modal_decoded = modal_decode_text_layers([layer], 4, 4)
+        frame = np.full((4, 4, 3), 50, dtype=np.uint8)
+
+        t = 5.0 - 0.10  # inside the final TEXT_FADE_OUT_SEC
+        app_result = _blend_text_layers(frame.copy(), app_decoded, current_time=t)
+        modal_result = modal_blend_text_layers(frame.copy(), modal_decoded, current_time=t)
+        assert np.array_equal(app_result, modal_result)
+        # And it is genuinely faded (blended below the full-alpha value).
+        assert int(app_result[0, 0, 2]) < 220

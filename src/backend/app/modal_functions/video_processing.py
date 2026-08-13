@@ -225,6 +225,14 @@ def _decode_text_layers(text_layers: list, frame_w: int, frame_h: int) -> list:
     return decoded
 
 
+# T6990: fade-OUT envelope constant. INLINE COPY of `TEXT_FADE_OUT_SEC` in
+# `app/routers/export/overlay.py` (the Modal image mounts neither `app` nor the
+# app-side helper, same constraint as `_blend_text_layers` below) -- keep this
+# byte-equal to overlay.py's; `TestModalInlineParity` in test_t5225_text_burn_in
+# asserts the two constants AND the two blend outputs agree.
+TEXT_FADE_OUT_SEC = 0.25
+
+
 def _blend_text_layers(frame, decoded_layers: list, current_time: float):
     """T5225: alpha-blend every ACTIVE text layer onto `frame` (BGR uint8).
 
@@ -232,12 +240,19 @@ def _blend_text_layers(frame, decoded_layers: list, current_time: float):
     the identical helper in `app/routers/export/overlay.py` -- see
     `_decode_text_layers` docstring above for why this can't be a shared
     import. Never re-rasterises -- purely a per-frame numpy blend of bytes
-    rasterised exactly once, upstream, app-side."""
+    rasterised exactly once, upstream, app-side.
+
+    T6990: alpha is scaled by a fade-OUT envelope over the final
+    ``TEXT_FADE_OUT_SEC`` of the window (``min(1, (endTime - t) / fade)``) so text
+    ramps to transparent instead of popping off on its end frame. Fade-IN is out
+    of scope. Sub-``TEXT_FADE_OUT_SEC`` regions never reach full alpha (accepted
+    simplification). Kept byte-identical to overlay.py's copy."""
     import numpy as np
 
     for layer in decoded_layers:
         if layer["startTime"] <= current_time < layer["endTime"]:
-            alpha = layer["alpha"]
+            fade = min(1.0, (layer["endTime"] - current_time) / TEXT_FADE_OUT_SEC)
+            alpha = layer["alpha"] * fade
             frame = (frame.astype(np.float32) * (1 - alpha) + layer["bgr"] * alpha).astype(np.uint8)
     return frame
 

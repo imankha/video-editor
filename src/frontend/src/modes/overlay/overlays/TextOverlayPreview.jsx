@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import RichText from '../../../components/RichText';
 import { isRegionUnderPlayhead } from '../../../utils/textRegionPlayhead';
+import { textFadeOutFactor } from '../../../constants/textSpec';
 
 // The dimmed opacity of the editing GHOST -- a selected, out-of-range region
 // shown only while paused on the Text tab (T6880). Low enough that it reads as
@@ -206,7 +207,12 @@ export default function TextOverlayPreview({
   const visibleElements = renderRegions.flatMap((region) =>
     (region.elements || [])
       .filter((element) => element.enabled !== false) // hidden wins (T6620)
-      .map((element) => ({ ...element, regionId: region.id, isGhost: region.id === ghostRegion?.id }))
+      .map((element) => ({
+        ...element,
+        regionId: region.id,
+        regionEndTime: region.endTime,
+        isGhost: region.id === ghostRegion?.id,
+      }))
   );
 
   const selectedElement = visibleElements.find((el) => el.id === selectedElementId) || null;
@@ -459,7 +465,17 @@ export default function TextOverlayPreview({
           className="absolute inset-0"
           // T6880: a selected out-of-range region shown for editing renders
           // dimmed so it can never be mistaken for real burn-in output.
-          style={element.isGhost ? { opacity: GHOST_OPACITY } : undefined}
+          // T6990: real (non-ghost) elements ramp opacity to 0 over the final
+          // TEXT_FADE_OUT_SEC of their window, matching the export burn-in
+          // envelope so scrubbing across a region's end previews the fade-out.
+          style={
+            element.isGhost
+              ? { opacity: GHOST_OPACITY }
+              : (() => {
+                const fade = textFadeOutFactor(element.regionEndTime, currentTime);
+                return fade < 1 ? { opacity: fade } : undefined;
+              })()
+          }
         >
           <RichText spec={element.spec} boxWidth={rect.width} boxHeight={rect.height} />
         </div>

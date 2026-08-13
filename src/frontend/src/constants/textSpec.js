@@ -60,6 +60,32 @@ export function resolveShadowOpacity(shadow) {
   return shadow.blur > 0 ? DEFAULT_SHADOW_OPACITY : 0;
 }
 
+// T6990: overlay text fades OUT over the final TEXT_FADE_OUT_SEC of its
+// [startTime, endTime) window in the burned video, so the editor preview must
+// apply the SAME opacity ramp when scrubbing across a region's end or preview
+// != export. SOURCE OF TRUTH is the backend blend loop constant
+// `app/routers/export/overlay.py::TEXT_FADE_OUT_SEC` (also mirrored verbatim
+// into the Modal copy in modal_functions/video_processing.py). Keep this value
+// in step with overlay.py's or the ramp the user scrubs won't match the burn.
+export const TEXT_FADE_OUT_SEC = 0.25;
+
+/**
+ * Fade-OUT alpha multiplier for a text region at the current playhead: 1.0 for
+ * most of the window, ramping linearly to 0 over the final TEXT_FADE_OUT_SEC.
+ * Mirrors the backend `min(1, (endTime - t) / TEXT_FADE_OUT_SEC)` envelope
+ * (overlay.py `_blend_text_layers`). Fade-IN is intentionally not implemented.
+ * The extra Math.max(0, ...) floor guards the frontend-only case where
+ * `isRegionUnderPlayhead`'s EPSILON lets `currentTime` sit a hair past `endTime`
+ * (the backend window is strict so its bare `min(1, ...)` stays >= 0); both give
+ * ~0 at the very end, a benign divergence.
+ * @param {number} endTime - region end (seconds)
+ * @param {number} currentTime - playhead (seconds)
+ * @returns {number} 0..1
+ */
+export function textFadeOutFactor(endTime, currentTime) {
+  return Math.max(0, Math.min(1, (endTime - currentTime) / TEXT_FADE_OUT_SEC));
+}
+
 /**
  * @typedef {Object} TextSpecPosition
  * @property {number} x - Frame-relative: fraction of frame WIDTH. Anchor x, interpreted per align.
