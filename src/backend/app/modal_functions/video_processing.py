@@ -3044,6 +3044,172 @@ def process_clips_ai(
         }
 
 
+# ============================================================================
+# Collection stitch (T4945) -- CPU-only ffmpeg muxer, no GPU
+# ============================================================================
+# Muxes a collection's member reels into ONE ordered MP4 so the app server can
+# then compose the intro/outro over it. Runs on a plain CPU container (gpu=None,
+# base `image` = ffmpeg + boto3) so the single shared app server never absorbs
+# the arbitrary-N concat/re-encode (EPIC decision 1). The concat logic is
+# INLINED here (behaviour-equivalent to services/ffmpeg_concat.concat_segments:
+# stream-copy join first, re-encode fallback on any resolution/pix_fmt mismatch,
+# duration-floor validation) because Modal functions do not import app.services.
+
+def _stitch_probe(path: str) -> dict:
+    """Minimal probe for the concat compatibility check + duration floor."""
+    import subprocess
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries",
+         "stream=codec_type,width,height,pix_fmt",
+         "-show_entries", "format=duration", "-of", "json", path],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    import json as _json
+    data = _json.loads(out)
+    streams = data.get("streams", [])
+    v = next((s for s in streams if s.get("codec_type") == "video"), None)
+    a = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    if not v:
+        raise RuntimeError(f"no video stream in {path}")
+    return {
+        "width": int(v["width"]),
+        "height": int(v["height"]),
+        "pix_fmt": v.get("pix_fmt") or "yuv420p",
+        "has_audio": a is not None,
+        "duration": float(data.get("format", {}).get("duration") or 0.0),
+    }
+
+
+def _stitch_concat(segments: list, out_path: str) -> None:
+    """Join `segments` IN ORDER into `out_path`: stream-copy demuxer concat when
+    all segments share width/height/pix_fmt, else a filter_complex re-encode to
+    the FIRST segment's frame size. Raises on total failure / validation miss.
+    Mirrors services/ffmpeg_concat.concat_segments (kept behaviour-equivalent)."""
+    import subprocess
+    import tempfile as _tempfile
+
+    probes = [_stitch_probe(s) for s in segments]
+    expected_min = sum(p["duration"] for p in probes) * 0.6
+    ref = probes[0]
+    has_audio = ref["has_audio"]
+    compatible = all(
+        p["width"] == ref["width"] and p["height"] == ref["height"]
+        and p["pix_fmt"] == ref["pix_fmt"]
+        for p in probes
+    )
+
+    def _validate() -> bool:
+        try:
+            return _stitch_probe(out_path)["duration"] >= expected_min
+        except Exception:
+            return False
+
+    if compatible:
+        with _tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as lf:
+            list_path = lf.name
+            for s in segments:
+                lf.write(f"file '{os.path.abspath(s)}'\n")
+        try:
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-fflags", "+genpts",
+                     "-f", "concat", "-safe", "0", "-i", list_path,
+                     "-c", "copy", "-avoid_negative_ts", "make_zero",
+                     "-movflags", "+faststart", out_path],
+                    capture_output=True, text=True, check=True,
+                )
+                if _validate():
+                    logger.info(f"[stitch_members] joined {len(segments)} members (copy)")
+                    return
+                logger.warning("[stitch_members] copy-join failed validation; re-encoding")
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"[stitch_members] copy concat failed; re-encoding. "
+                               f"{e.stderr[-300:] if e.stderr else e}")
+        finally:
+            try:
+                os.remove(list_path)
+            except OSError:
+                pass
+    else:
+        logger.info("[stitch_members] member params differ; re-encoding directly")
+
+    # Re-encode fallback: scale every input to the reference frame size.
+    n = len(segments)
+    inputs = []
+    for s in segments:
+        inputs += ["-i", s]
+    scale_parts = [
+        f"[{i}:v]scale={ref['width']}:{ref['height']}:force_original_aspect_ratio=disable,"
+        f"setsar=1,format=yuv420p[v{i}]"
+        for i in range(n)
+    ]
+    if has_audio:
+        refs = "".join(f"[v{i}][{i}:a]" for i in range(n))
+        fc = ";".join(scale_parts) + f";{refs}concat=n={n}:v=1:a=1[v][a]"
+        maps = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "128k"]
+    else:
+        refs = "".join(f"[v{i}]" for i in range(n))
+        fc = ";".join(scale_parts) + f";{refs}concat=n={n}:v=1:a=0[v]"
+        maps = ["-map", "[v]", "-an"]
+    subprocess.run(
+        ["ffmpeg", "-y", *inputs, "-filter_complex", fc, *maps,
+         "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+         "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path],
+        capture_output=True, text=True, check=True,
+    )
+    if not _validate():
+        raise RuntimeError("stitch re-encode concat failed validation")
+    logger.info(f"[stitch_members] joined {len(segments)} members (re-encode)")
+
+
+@app.function(
+    image=image,       # base ffmpeg + boto3 image -- no torch, no weights
+    gpu=None,          # CPU only -- pure ffmpeg muxing, no GPU work (T4945)
+    timeout=1800,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def stitch_members(user_id: str, input_keys: list, output_key: str) -> dict:
+    """Download each member reel from R2, concat them IN ORDER (stream-copy with
+    a re-encode fallback on mixed resolution), upload the stitched file to
+    `output_key`. `user_id` is the R2 prefix; keys are `{user_id}/{key}`.
+
+    Read-only over the member sources (they are only ever downloaded); the sole
+    write is `output_key` (the caller's disposable scratch object). Returns
+    `{"output_key", "duration"}`. Raises on total failure -- the app-server
+    caller degrades non-fatally.
+    """
+    import subprocess  # noqa: F401  (kept explicit; helpers import their own)
+
+    bucket = os.environ["R2_BUCKET_NAME"]
+    r2 = get_r2_client()
+
+    if not input_keys:
+        raise RuntimeError("stitch_members called with no members")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        seg_paths = []
+        for i, key in enumerate(input_keys):
+            full_key = f"{user_id}/{key}"
+            local = os.path.join(temp_dir, f"member_{i}.mp4")
+            logger.info(f"[stitch_members] downloading {full_key}")
+            r2.download_file(bucket, full_key, local)
+            seg_paths.append(local)
+
+        stitched = os.path.join(temp_dir, "stitched.mp4")
+        if len(seg_paths) == 1:
+            import shutil as _shutil
+            _shutil.copyfile(seg_paths[0], stitched)
+        else:
+            _stitch_concat(seg_paths, stitched)
+
+        full_out = f"{user_id}/{output_key}"
+        logger.info(f"[stitch_members] uploading stitched -> {full_out}")
+        r2.upload_file(stitched, bucket, full_out)
+        duration = _stitch_probe(stitched)["duration"]
+
+    return {"output_key": output_key, "duration": duration}
+
+
 # Local testing entrypoint
 @app.local_entrypoint()
 def main():

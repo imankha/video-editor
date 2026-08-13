@@ -466,6 +466,50 @@ def _get_detect_players_batch_fn():
 # Cached reference for unified function
 _process_clips_ai_fn = None
 
+# Cached reference for the CPU-only collection stitcher (T4945)
+_stitch_members_fn = None
+
+
+def _get_stitch_members_fn():
+    """Get a reference to the deployed stitch_members function (T4945, CPU-only
+    ffmpeg muxer for collection downloads)."""
+    global _stitch_members_fn
+
+    if _stitch_members_fn is not None:
+        return _stitch_members_fn
+
+    try:
+        import modal
+        _stitch_members_fn = modal.Function.from_name(MODAL_APP_NAME, "stitch_members")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/stitch_members")
+        return _stitch_members_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to stitch_members: {e}")
+        raise RuntimeError(f"Modal stitch_members not available: {e}") from e
+
+
+async def call_modal_stitch_members(
+    user_prefix: str, input_keys: list[str], output_key: str,
+) -> dict:
+    """Route a collection member-stitch to the CPU-only Modal `stitch_members`
+    function (T4945 EPIC decision 1: keep the arbitrary-N concat/re-encode off
+    the single shared app server; no GPU is involved).
+
+    `user_prefix` MUST be the ALREADY-R2-resolved prefix (call
+    `_resolve_modal_user_id` while the request's profile ContextVar is still
+    alive). This wrapper deliberately does NOT re-resolve it -- the owner
+    download invokes this from inside a StreamingResponse generator, after the
+    request context has torn down, where the ContextVar is gone (T5220 gotcha).
+
+    Returns `{"output_key", "duration"}`. Raises (RuntimeError, via
+    `_get_stitch_members_fn`) if the function isn't deployed -- the caller
+    degrades non-fatally.
+    """
+    fn = _get_stitch_members_fn()
+    # stitch_members is a plain (non-generator) function -> .remote returns its
+    # dict result directly; run the blocking call off the event loop.
+    return await asyncio.to_thread(fn.remote, user_prefix, input_keys, output_key)
+
 
 def _get_process_clips_ai_fn():
     """Get a reference to the deployed process_clips_ai function (unified AI processing)."""

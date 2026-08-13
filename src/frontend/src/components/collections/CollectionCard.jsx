@@ -24,6 +24,7 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * @param {Function=} onShare        - (definition, title) => void
  * @param {Function=} onCopyLink     - (definition) => void
  * @param {Function=} onIntro        - (definition, title) => void, the collection's OWN intro (T5215 round 2)
+ * @param {Function=} onDownload     - (definition) => Promise, download the stitched MP4 (T4945)
  * @param {Object=} introBadge      - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6)
  */
 export function CollectionCard({
@@ -39,6 +40,7 @@ export function CollectionCard({
   onShare,
   onCopyLink,
   onIntro,
+  onDownload,
   introBadge,
 }) {
   const cap = budgetCap(ratioDuration);
@@ -46,6 +48,7 @@ export function CollectionCard({
   const [sliderOpen, setSliderOpen] = useState(false);
   const [ratioMembers, setRatioMembers] = useState(null); // this ratio's members (once fetched)
   const [playLoading, setPlayLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
 
   const ensureMembers = async () => {
     if (ratioMembers) return ratioMembers;
@@ -90,6 +93,18 @@ export function CollectionCard({
     return trimmed ? { ...shareDefinition, budget_sec: budget } : { ...shareDefinition };
   };
 
+  // T4945: download the whole collection as ONE stitched MP4. Gesture-scoped
+  // busy flag (no useEffect) around the caller's blob-download promise, folding
+  // the same budget the share/copy-link actions use.
+  const handleDownload = async () => {
+    setDownloadLoading(true);
+    try {
+      await onDownload(buildDefinition());
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
   return (
     <CollectionHeader
       title={title}
@@ -107,6 +122,8 @@ export function CollectionCard({
       onShare={onShare && shareDefinition ? () => onShare(buildDefinition(), playTitle || title) : undefined}
       onCopyLink={onCopyLink && shareDefinition ? () => onCopyLink(buildDefinition()) : undefined}
       onIntro={onIntro && shareDefinition ? () => onIntro(shareDefinition, playTitle || title) : undefined}
+      onDownload={onDownload && shareDefinition ? handleDownload : undefined}
+      downloadLoading={downloadLoading}
       introBadge={introBadge}
     />
   );

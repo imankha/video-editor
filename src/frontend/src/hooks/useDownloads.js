@@ -210,6 +210,46 @@ export function useDownloads(isOpen = false) {
   }, [downloads, getDownloadUrl]);
 
   /**
+   * Download a whole collection as ONE stitched MP4 (T4945). Mirrors
+   * downloadFile's blob -> object URL -> synthetic <a> click, but targets
+   * GET /api/collections/download with the collection's {scope, filter,
+   * aspect_ratio, budget_sec?} definition as query params. No global busy
+   * state here -- the CollectionCard owns its own busy flag around this call
+   * (gesture-scoped, no useEffect). Throws on failure so the caller can react.
+   * @param {Object} definition - {scope:{type,game_id?}, filter:{tags?}, aspect_ratio, budget_sec?}
+   */
+  const downloadCollection = useCallback(async ({ scope, filter, aspect_ratio, budget_sec } = {}) => {
+    const params = new URLSearchParams({ scope_type: scope.type, aspect_ratio });
+    if (scope.type === 'game') params.set('game_id', scope.game_id);
+    if (filter?.tags?.length) params.set('tags', filter.tags.join(','));
+    if (budget_sec != null) params.set('budget_sec', budget_sec);
+
+    const response = await apiFetch(`${API_BASE_URL}/collections/download?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Collection download failed: ${response.status} ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+
+    // Filename from Content-Disposition (server derives it from scope, no PII).
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'collection.mp4';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="(.+)"/);
+      if (match) filename = match[1];
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
+  }, []);
+
+  /**
    * Format file size for display
    */
   const formatFileSize = useCallback((bytes) => {
@@ -457,6 +497,7 @@ export function useDownloads(isOpen = false) {
     fetchCount,
     deleteDownload,
     downloadFile,
+    downloadCollection,
     getDownloadUrl,
     getStreamingUrl,
     renameDownload,

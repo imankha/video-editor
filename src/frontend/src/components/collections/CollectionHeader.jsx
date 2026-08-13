@@ -8,10 +8,10 @@ import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 import { Z } from '../../constants/zLayers';
 
-// Collection-level Download (stitched mp4) is still deferred to T3680.
+// Collection-level Download (stitched mp4) is wired in T4945 (onDownload prop).
 // Share / Copy link are wired in T3620 (onShare / onCopyLink props).
 
-function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
+function MenuItem({ icon: Icon, label, onClick, disabled, title, spinning, comingSoon }) {
   return (
     <button
       type="button"
@@ -22,9 +22,9 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
         disabled ? 'text-gray-500 cursor-not-allowed' : 'text-gray-200 hover:bg-gray-600'
       }`}
     >
-      <Icon size={15} className="shrink-0" />
+      <Icon size={15} className={`shrink-0 ${spinning ? 'animate-spin' : ''}`} />
       <span className="flex-1">{label}</span>
-      {disabled && <span className="text-[10px] text-gray-500">Soon</span>}
+      {comingSoon && <span className="text-[10px] text-gray-500">Soon</span>}
     </button>
   );
 }
@@ -33,8 +33,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * CollectionHeader - One (scope, ratio) collection, rendered with the SAME shared
  * card shell as the reel cards (MediaCard/CardIconButton, T3610 §0B). Play +
  * Copy link + a "..." menu (Play all, Max Duration, Share). Share/Copy-link are
- * wired in T3620 (onShare/onCopyLink); Download stays disabled until T3680. The
- * max-duration slider is hidden until "Max Duration".
+ * wired in T3620 (onShare/onCopyLink); Download (stitched MP4) is wired in T4945
+ * (onDownload). The max-duration slider is hidden until "Max Duration".
  *
  * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
@@ -51,6 +51,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {Function=} onShare        - open the share modal (T3620); omitted => disabled
  * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
  * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
+ * @param {Function=} onDownload     - download the collection as a stitched MP4 (T4945); omitted => disabled
+ * @param {boolean=}  downloadLoading - stitched-download in flight (spins the Download item)
  * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6);
  *                                     shows the shared badge in the media slot's corner when intro_card_name is set
  */
@@ -70,6 +72,8 @@ export function CollectionHeader({
   onShare,
   onCopyLink,
   onIntro,
+  onDownload,
+  downloadLoading,
   introBadge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -115,13 +119,18 @@ export function CollectionHeader({
             <MenuItem icon={Clock} label="Max Duration"
               onClick={() => { setMenuOpen(false); onToggleSlider(); }} />
             <MenuItem icon={IntroIcon} label="Intro"
-              disabled={!onIntro} title={onIntro ? undefined : 'Coming soon'}
+              disabled={!onIntro} comingSoon={!onIntro} title={onIntro ? undefined : 'Coming soon'}
               onClick={onIntro ? () => { setMenuOpen(false); onIntro(); } : undefined} />
             <div className="my-1 border-t border-gray-600" />
             <MenuItem icon={Share2} label="Share"
-              disabled={!onShare} title={onShare ? undefined : 'Coming soon'}
+              disabled={!onShare} comingSoon={!onShare} title={onShare ? undefined : 'Coming soon'}
               onClick={onShare ? () => { setMenuOpen(false); onShare(); } : undefined} />
-            <MenuItem icon={Download} label="Download" disabled title="Coming soon" />
+            <MenuItem icon={downloadLoading ? Loader : Download}
+              label={downloadLoading ? 'Downloading…' : 'Download'}
+              spinning={downloadLoading}
+              disabled={!onDownload || downloadLoading} comingSoon={!onDownload}
+              title={onDownload ? undefined : 'Coming soon'}
+              onClick={onDownload ? () => onDownload() : undefined} />
           </div>
         )}
       </div>

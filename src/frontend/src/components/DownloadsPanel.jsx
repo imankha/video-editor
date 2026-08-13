@@ -67,6 +67,7 @@ export function DownloadsPanel({
     downloads,
     deleteDownload,
     downloadFile,
+    downloadCollection,
     downloadingId,
     renameDownload,
     setIntroCard,
@@ -345,6 +346,19 @@ export function DownloadsPanel({
       });
     } catch {
       toast.error('Could not create link');
+    }
+  };
+
+  // T4945: download the whole collection as ONE stitched MP4 (members in
+  // playback order, the collection's own intro at the front, one branded outro
+  // at the end). Gesture-only -- the CollectionCard owns the busy flag around
+  // this await; failures surface as a toast (the card just un-busies).
+  const onDownloadCollection = async (definition) => {
+    try {
+      await downloadCollection(definition);
+    } catch (err) {
+      console.error('[DownloadsPanel] collection download failed:', err);
+      toast.error('Could not download collection');
     }
   };
 
@@ -723,6 +737,7 @@ export function DownloadsPanel({
             onShareCollection={onShareCollection}
             onCopyCollectionLink={onCopyCollectionLink}
             onIntroCollection={onIntroCollection}
+            onDownloadCollection={onDownloadCollection}
             introBadgesByKey={introBadgesByKey}
           />
         </div>

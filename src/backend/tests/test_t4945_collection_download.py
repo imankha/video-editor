@@ -28,7 +28,8 @@ seeding harness (no Postgres -- owner same-account reads only).
 
 import os
 import sqlite3
-from unittest.mock import AsyncMock, patch
+from contextlib import ExitStack
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -180,11 +181,16 @@ def _install_stub_pipeline(stack, *, modal=False, compose_returns=True, compose_
             return True
         return False
 
+    # modal_enabled / call_modal_stitch_members / resolve_intro_for_reel /
+    # compose_serve_time are lazily imported inside the generator, so patching
+    # them at their source module binds at call time. download_from_r2_global /
+    # r2_delete_object_global / _stitch_members_local are top-level names bound
+    # into the router module -> patch them WHERE USED.
     stack.enter_context(patch("app.services.modal_client.modal_enabled", return_value=modal))
     stack.enter_context(patch("app.routers.collections._stitch_members_local", _local_stitch))
     stack.enter_context(patch("app.services.modal_client.call_modal_stitch_members", _modal_stitch))
-    stack.enter_context(patch("app.storage.download_from_r2_global", _dl_global))
-    stack.enter_context(patch("app.storage.r2_delete_object_global", _del_global))
+    stack.enter_context(patch("app.routers.collections.download_from_r2_global", _dl_global))
+    stack.enter_context(patch("app.routers.collections.r2_delete_object_global", _del_global))
     stack.enter_context(patch("app.services.intro_egress.resolve_intro_for_reel", _resolve_intro))
     stack.enter_context(patch("app.services.serve_time_video.compose_serve_time", _compose))
     return captured
@@ -204,7 +210,6 @@ def test_404_when_collection_has_no_members(client):
 
 
 def test_segments_stitched_in_playback_rank_order(client):
-    from contextlib import ExitStack
     db = _db_path()
     # rating DESC is the primary rank key -> expected order 3,2,1.
     _, f_low = _seed_member(db, game_ids=[9], rating=1)
@@ -225,7 +230,6 @@ def test_segments_stitched_in_playback_rank_order(client):
 
 
 def test_exactly_one_outro_never_per_member(client):
-    from contextlib import ExitStack
     db = _db_path()
     _seed_member(db, game_ids=[9], rating=3)
     _seed_member(db, game_ids=[9], rating=2)
@@ -252,7 +256,6 @@ def test_exactly_one_outro_never_per_member(client):
 # ===========================================================================
 
 def test_one_intro_resolved_from_collections_own_card(client):
-    from contextlib import ExitStack
     db = _db_path()
     card_id = _seed_card(db)
     _attach_collection_card(db, card_id, game_id=9)
@@ -268,7 +271,7 @@ def test_one_intro_resolved_from_collections_own_card(client):
             headers=_auth_headers(),
         )
     assert resp.status_code == 200
-    user_id, profile_id, raw_card_id, total_duration, reel_id = cap["intro_args"]
+    _user_id, _profile_id, raw_card_id, total_duration, reel_id = cap["intro_args"]
     assert raw_card_id == card_id, "intro resolved from the collection's OWN attached card id"
     assert reel_id is None, "collection-level intro, not any member reel's"
     assert total_duration == pytest.approx(30.0), "resolved against LIVE total member duration"
@@ -278,7 +281,6 @@ def test_one_intro_resolved_from_collections_own_card(client):
 
 
 def test_no_intro_when_collection_has_none(client):
-    from contextlib import ExitStack
     db = _db_path()
     _seed_member(db, game_ids=[9], duration=15.0)
 
@@ -298,7 +300,6 @@ def test_no_intro_when_collection_has_none(client):
 # ===========================================================================
 
 def test_modal_branch_routes_stitch_to_modal_not_local(client):
-    from contextlib import ExitStack
     db = _db_path()
     _, f1 = _seed_member(db, game_ids=[9], rating=2)
     _, f2 = _seed_member(db, game_ids=[9], rating=1)
@@ -324,7 +325,6 @@ def test_modal_branch_routes_stitch_to_modal_not_local(client):
 
 
 def test_local_branch_runs_ffmpeg_locally_not_modal(client):
-    from contextlib import ExitStack
     db = _db_path()
     _seed_member(db, game_ids=[9], rating=1)
 
@@ -345,7 +345,6 @@ def test_local_branch_runs_ffmpeg_locally_not_modal(client):
 # ===========================================================================
 
 def test_compose_failure_still_streams_the_stitch_non_fatal(client):
-    from contextlib import ExitStack
     db = _db_path()
     _seed_member(db, game_ids=[9], rating=1)
 
@@ -362,7 +361,6 @@ def test_compose_failure_still_streams_the_stitch_non_fatal(client):
 
 
 def test_budget_sec_trims_members_before_stitch(client):
-    from contextlib import ExitStack
     db = _db_path()
     _seed_member(db, game_ids=[9], duration=20.0, rating=3)
     _seed_member(db, game_ids=[9], duration=20.0, rating=2)
@@ -385,7 +383,6 @@ def test_everything_resolved_before_the_generator_runs(client):
     """The generator body runs AFTER the request's DB connection has closed
     (T5220 gotcha). Prove the heavy stitch only fires once the connection
     context has exited -- i.e. members/card were resolved up front."""
-    from contextlib import ExitStack
     import app.routers.collections as collections_mod
 
     db = _db_path()
@@ -457,8 +454,8 @@ def test_local_stitch_delegates_to_concat_segments_for_mixed_resolution(tmp_path
         return True
 
     out = str(tmp_path / "stitched.mp4")
-    with patch("app.storage.R2_ENABLED", True), \
-         patch("app.storage.download_from_r2", _fake_download), \
+    with patch("app.routers.collections.R2_ENABLED", True), \
+         patch("app.routers.collections.download_from_r2", _fake_download), \
          patch("app.services.ffmpeg_concat.probe_media", _fake_probe), \
          patch("app.services.ffmpeg_concat.concat_segments", _fake_concat):
         _stitch_members_local(
@@ -489,8 +486,8 @@ def test_local_stitch_single_member_needs_no_concat(tmp_path):
         return True
 
     out = str(tmp_path / "stitched.mp4")
-    with patch("app.storage.R2_ENABLED", True), \
-         patch("app.storage.download_from_r2", _fake_download), \
+    with patch("app.routers.collections.R2_ENABLED", True), \
+         patch("app.routers.collections.download_from_r2", _fake_download), \
          patch("app.services.ffmpeg_concat.concat_segments", _fake_concat):
         _stitch_members_local(USER_ID, PROFILE_ID, ["final_videos/solo.mp4"], out, str(tmp_path))
 
