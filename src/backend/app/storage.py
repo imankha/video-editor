@@ -731,6 +731,7 @@ def upload_bytes_to_r2_global(
     fast: bool = False,
     content_type: str | None = None,
     metadata: dict | None = None,
+    cache_control: str | None = None,
 ) -> bool:
     """Upload bytes to a FULL (env-prefixed) R2 key, not a user-scoped path.
 
@@ -756,6 +757,12 @@ def upload_bytes_to_r2_global(
             extra_args["ContentType"] = content_type
         if metadata:
             extra_args["Metadata"] = {k: str(v) for k, v in metadata.items()}
+        if cache_control:
+            # Stored on the object and served on every GET (R2/S3 semantics) —
+            # without it a presigned GET has NO Cache-Control and browsers fall
+            # back to heuristic freshness (10% of the object's age), which for
+            # a just-uploaded object means "stale immediately".
+            extra_args["CacheControl"] = cache_control
 
         def _upload():
             client.upload_fileobj(BytesIO(data), R2_BUCKET, key, ExtraArgs=extra_args)

@@ -73,7 +73,7 @@ function originOf(url) {
 // the render/MotionPreview -- accepted per design §11 R4, the same
 // compromise the shipped outro already makes here). Gated on `share.intro`
 // being present; absent -> today's immediate autoplay, byte-for-byte.
-function renderIntroCard(intro) {
+export function renderIntroCard(intro) {
   if (!intro) return { html: "", css: "", js: "", hasIntro: false };
 
   const card = intro.card || {};
@@ -103,25 +103,75 @@ ${facts}
 <div class="ic-flash"></div>
 </div>`;
 
+  // T6960/T6970: animations only run once the JS adds `.play` (after the
+  // photo has preloaded, or the cap fired), and the card is SIZED to the
+  // video's rendered box by icSize() rather than covering all of <main> —
+  // `inset:0` remains only as the pre-measurement fallback (icSize overrides
+  // it with explicit left/top/width/height).
   const css = `
 #intro-card{position:absolute;inset:0;z-index:30;background:#000;overflow:hidden;transition:opacity .2s}
 #intro-card.hide{opacity:0;pointer-events:none}
-.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center;animation:icPush var(--ic-dur) ease-out forwards}
+.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center}
+#intro-card.play .ic-photo{animation:icPush var(--ic-dur) ease-out forwards}
 .ic-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1) 40%,rgba(0,0,0,.8))}
-.ic-text{position:absolute;left:20px;right:20px;bottom:36px;opacity:0;animation:icFade .6s ease-out .4s forwards}
+.ic-text{position:absolute;left:20px;right:20px;bottom:36px;opacity:0}
+#intro-card.play .ic-text{animation:icFade .6s ease-out .4s forwards}
 .ic-name{font-size:28px;font-weight:700;color:#fff;line-height:1.2}
 .ic-fact{font-size:15px;color:#d1d5db;margin-top:4px}
-.ic-flash{position:absolute;inset:0;background:#fff;opacity:0;animation:icFlash .35s ease-in forwards;animation-delay:calc(var(--ic-dur) - .35s)}
+.ic-flash{position:absolute;inset:0;background:#fff;opacity:0}
+#intro-card.play .ic-flash{animation:icFlash .35s ease-in forwards;animation-delay:calc(var(--ic-dur) - .35s)}
 @keyframes icPush{from{transform:scale(1.08)}to{transform:scale(1)}}
 @keyframes icFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes icFlash{0%{opacity:0}70%{opacity:1}100%{opacity:0}}
 `;
 
+  // The photo URL crosses into an inline <script> string: JSON.stringify
+  // escapes quotes/backslashes, and the extra < replacement prevents a
+  // hostile URL from closing the script tag.
+  //
+  // The 8000ms preload cap below mirrors INTRO_IMAGE_PRELOAD_TIMEOUT_MS in
+  // src/components/introcards/preloadIntroImage.js (this file cannot import
+  // it) — keep the two values in step. The video-box sizing (icSize) covers
+  // poster/metadata/controls-driven layout changes via a ResizeObserver on
+  // the video itself; the loadedmetadata/resize listeners are the no-RO
+  // fallback. All inline JS here stays ES5 + indexed loops: it runs inside
+  // the page's single IIFE BEFORE the unmute/end-card wiring, so any throw
+  // would disable those too.
+  const photoJsLiteral = JSON.stringify(intro.previewUrl || "").replace(/</g, "\\u003c");
   const js = `
 var ic=document.getElementById("intro-card");
 if(ic){
 var icDur=(parseFloat(getComputedStyle(ic).getPropertyValue("--ic-dur"))||4)*1000;
+var icPhoto=${photoJsLiteral};
+function icSize(){
+var r=v.getBoundingClientRect(),m=v.parentElement.getBoundingClientRect();
+if(r.width<2||r.height<2)return;
+ic.style.left=(r.left-m.left)+"px";ic.style.top=(r.top-m.top)+"px";
+ic.style.width=r.width+"px";ic.style.height=r.height+"px";
+ic.style.right="auto";ic.style.bottom="auto";
+var nm=ic.querySelector(".ic-name");
+if(nm)nm.style.fontSize=Math.min(28,Math.round(r.width*.06))+"px";
+var fs=ic.querySelectorAll(".ic-fact");
+for(var i=0;i<fs.length;i++){fs[i].style.fontSize=Math.min(15,Math.round(r.width*.034))+"px"}
+}
+icSize();
+v.addEventListener("loadedmetadata",icSize);
+window.addEventListener("resize",icSize);
+if(typeof ResizeObserver!=="undefined"){new ResizeObserver(icSize).observe(v)}
+var icStarted=false;
+function icStart(){
+if(icStarted)return;icStarted=true;
+icSize();
+ic.classList.add("play");
 setTimeout(function(){ic.classList.add("hide");v.play()},icDur+60);
+}
+if(icPhoto){
+var icT=setTimeout(icStart,8000);
+var icImg=new Image();
+icImg.onload=function(){clearTimeout(icT);icStart()};
+icImg.onerror=function(){clearTimeout(icT);icStart()};
+icImg.src=icPhoto;
+}else{icStart()}
 }
 `;
 

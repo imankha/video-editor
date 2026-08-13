@@ -47,9 +47,8 @@ from app.services.intro_cards import (
     validate_treatment,
     validate_zoom,
 )
-from app.services.intro_media import delete_intro_image
+from app.services.intro_media import delete_intro_image, presign_intro_image
 from app.services.user_db import get_intro_consent
-from app.storage import generate_presigned_url_global
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
 
@@ -149,7 +148,10 @@ def _serialize(row) -> dict:
         # stays in the schema as harmless dead data; see services/intro_cards.py).
         # Derived, computed on every read (epic decision 2). Not a stored column.
         "composition": derive_composition(bool(image_key), shown_fields),
-        "previewUrl": generate_presigned_url_global(image_key) if image_key else None,
+        # T6960: cached presign — a stable URL for ~10min so the browser cache
+        # actually works across plays/reopens (a per-request signature made
+        # every play a cache miss re-downloading the photo).
+        "previewUrl": presign_intro_image(image_key) if image_key else None,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }

@@ -29,6 +29,7 @@ not recognition. Enforced by the static guardrail test
 """
 
 import logging
+import time
 import uuid
 
 from app.storage import (
@@ -39,6 +40,35 @@ from app.storage import (
 )
 
 logger = logging.getLogger(__name__)
+
+# T6960: presign MEMOIZATION for intro images. A fresh presigned URL has fresh
+# signature query params, so every play/reopen was a browser-cache MISS and
+# re-downloaded the photo — the card lost the race and played photoless.
+# Serving the SAME URL for a while makes the second and later loads instant
+# cache hits. TTL is far below the presign's own 4h expiry (storage.py default
+# 14400s), so a cached URL always has hours of validity left when handed out.
+# In-process only (per machine) — a different machine just presigns again,
+# which is exactly today's behavior, never an error.
+_PRESIGN_TTL_SECONDS = 600
+_presign_cache: dict[str, tuple[float, str]] = {}
+
+
+def presign_intro_image(key: str) -> str:
+    """Presigned GET URL for an intro image key, stable for ~10 minutes.
+
+    Every surface that hands an intro image URL to a browser (card API
+    previewUrl, playback payload, share payload) must use THIS, not a raw
+    generate_presigned_url_global, or the browser cache is defeated by
+    per-request signatures."""
+    now = time.monotonic()
+    hit = _presign_cache.get(key)
+    if hit and now - hit[0] < _PRESIGN_TTL_SECONDS:
+        return hit[1]
+    url = generate_presigned_url_global(key)
+    if len(_presign_cache) > 512:  # bound: a profile has ~a handful of keys
+        _presign_cache.clear()
+    _presign_cache[key] = (now, url)
+    return url
 
 # Relative prefix (under the per-profile R2 namespace) that all intro images
 # live under. The delete path validates a key against this before removing it.
@@ -77,6 +107,15 @@ def _reencode(raw: bytes) -> tuple[bytes, str, str]:
         has_alpha = False  # grayscale
     elif decoded.ndim == 3:
         has_alpha = decoded.shape[2] == 4
+        # T6960: a fully-OPAQUE alpha channel is not transparency — it is how
+        # phone screenshots/exports commonly arrive. Keeping those as lossless
+        # PNG produced multi-MB card photos (a real 2.2MB upload) that lose the
+        # download race against the 4s card on every fresh presign. Only real
+        # transparency (a future T5200 cut-out) earns PNG; everything else is
+        # flattened to JPEG.
+        if has_alpha and bool((decoded[:, :, 3] == 255).all()):
+            decoded = decoded[:, :, :3]
+            has_alpha = False
     else:
         raise InvalidImageError("Unsupported image shape")
 
@@ -115,13 +154,21 @@ def store_intro_image(user_id: str, profile_id: str, raw: bytes) -> dict | None:
     relative_path = f"{INTRO_PREFIX}/{uuid.uuid4().hex}.{ext}"
     key = profile_r2_key(user_id, profile_id, relative_path)
 
-    if not upload_bytes_to_r2_global(key, data, content_type=content_type):
+    # Immutable Cache-Control: the key is a fresh uuid per upload (content
+    # never changes under a key), so the browser may cache the photo for as
+    # long as it likes — replays/reopens must be LOCAL cache hits, not
+    # heuristic-freshness revalidations (T6960; heuristic freshness of a
+    # just-uploaded object is ~zero, forcing a re-fetch on every play).
+    if not upload_bytes_to_r2_global(
+        key, data, content_type=content_type,
+        cache_control="public, max-age=31536000, immutable",
+    ):
         logger.error(
             f"[IntroMedia] R2 upload FAILED for user={user_id} profile={profile_id} key={key}"
         )
         return None
 
-    preview_url = generate_presigned_url_global(key)
+    preview_url = presign_intro_image(key)
     logger.info(f"[IntroMedia] stored intro image key={key} ({len(data)} bytes)")
     return {"key": key, "previewUrl": preview_url, "ext": ext}
 

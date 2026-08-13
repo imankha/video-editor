@@ -66,7 +66,7 @@ class _FakeR2:
     def __init__(self):
         self.objects: dict[str, bytes] = {}
 
-    def upload(self, key, data, *, content_type=None, metadata=None):
+    def upload(self, key, data, *, content_type=None, metadata=None, cache_control=None):
         self.objects[key] = data
         return True
 
@@ -155,6 +155,21 @@ class TestStoreAndDelete:
     def test_upload_returns_none_when_r2_fails(self):
         with patch.object(intro_media, "upload_bytes_to_r2_global", return_value=False):
             assert intro_media.store_intro_image(_uid(), "pid1234", _jpeg_bytes()) is None
+
+    def test_upload_sets_immutable_cache_control(self):
+        # T6960: the key is a fresh uuid per upload (content never changes
+        # under a key), so the object must carry immutable Cache-Control —
+        # without it browsers apply heuristic freshness (~0 for a fresh
+        # upload) and re-fetch the photo on every play.
+        captured = {}
+
+        def record(key, data, *, content_type=None, metadata=None, cache_control=None):
+            captured["cache_control"] = cache_control
+            return True
+
+        with patch.object(intro_media, "upload_bytes_to_r2_global", side_effect=record):
+            assert intro_media.store_intro_image(_uid(), "pid1234", _jpeg_bytes()) is not None
+        assert captured["cache_control"] == "public, max-age=31536000, immutable"
 
     def test_delete_removes_the_object(self, fake_r2):
         uid, pid = _uid(), uuid4().hex[:8]
@@ -557,3 +572,69 @@ class TestIntroFacts:
         assert me_boot["position"] == "Midfielder 6-8-10"
         assert me_boot["class"] == "2029"
         assert me_boot["team"] == "Riverside FC"
+
+
+# ---------------------------------------------------------------------------
+# T6960 — image weight + presign stability (the "card plays photoless" pair)
+# ---------------------------------------------------------------------------
+
+class TestOpaqueAlphaFlattening:
+    def test_fully_opaque_alpha_flattens_to_jpeg(self):
+        # A PNG whose alpha channel is all-255 is not transparency — phone
+        # screenshots/exports arrive like this constantly, and keeping them
+        # lossless PNG produced multi-MB card photos that lost the download
+        # race against the 4s card. Must flatten to JPEG.
+        import cv2
+        import numpy as np
+        img = np.zeros((48, 64, 4), np.uint8)
+        img[:, :, :3] = 128
+        img[:, :, 3] = 255
+        ok, buf = cv2.imencode(".png", img)
+        assert ok
+        _data, ext, ct = intro_media._reencode(buf.tobytes())
+        assert ext == "jpg"
+        assert ct == "image/jpeg"
+
+    def test_real_transparency_still_keeps_png(self):
+        # The alpha-RAMP fixture (actual transparency, the future T5200
+        # cut-out shape) must still round-trip as PNG — only fully-opaque
+        # alpha is flattened.
+        _data, ext, ct = intro_media._reencode(_png_with_alpha())
+        assert ext == "png"
+        assert ct == "image/png"
+
+
+class TestPresignIntroImageCache:
+    def test_same_url_within_ttl(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            intro_media, "generate_presigned_url_global",
+            lambda k: (calls.append(k), f"URL-{len(calls)}")[1],
+        )
+        intro_media._presign_cache.clear()
+        u1 = intro_media.presign_intro_image("dev/users/u/profiles/p/intro/a.jpg")
+        u2 = intro_media.presign_intro_image("dev/users/u/profiles/p/intro/a.jpg")
+        assert u1 == u2 == "URL-1"
+        assert len(calls) == 1  # one real presign, second was the cache
+
+    def test_distinct_keys_do_not_collide(self, monkeypatch):
+        monkeypatch.setattr(
+            intro_media, "generate_presigned_url_global", lambda k: f"URL:{k}",
+        )
+        intro_media._presign_cache.clear()
+        assert intro_media.presign_intro_image("k1") != intro_media.presign_intro_image("k2")
+
+    def test_expired_entry_re_presigns(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            intro_media, "generate_presigned_url_global",
+            lambda k: (calls.append(k), f"URL-{len(calls)}")[1],
+        )
+        clock = [1000.0]
+        monkeypatch.setattr(intro_media.time, "monotonic", lambda: clock[0])
+        intro_media._presign_cache.clear()
+        u1 = intro_media.presign_intro_image("k")
+        clock[0] += intro_media._PRESIGN_TTL_SECONDS + 1
+        u2 = intro_media.presign_intro_image("k")
+        assert u1 != u2
+        assert len(calls) == 2

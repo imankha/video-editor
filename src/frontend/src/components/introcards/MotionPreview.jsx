@@ -181,6 +181,11 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, curr
             <img
               src={photoUrl}
               alt=""
+              // Lowercase on purpose: React 18 passes unknown lowercase
+              // attributes through verbatim (camelCase fetchPriority is
+              // dropped with a warning). Keeps the visible request at the
+              // same elevated priority as preloadIntroImage's gate fetch.
+              fetchpriority="high"
               draggable={false}
               className={`select-none pointer-events-none transition-opacity duration-150 ${photoReady ? 'opacity-100' : 'opacity-0'}`}
               style={imgStyle}

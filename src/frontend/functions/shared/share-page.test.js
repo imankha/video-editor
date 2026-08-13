@@ -1,8 +1,8 @@
 // T4840: unit tests for the edge share-page render helpers. Pure functions, no
 // Workers runtime needed. Integration (routing, fallthrough, beacon, caching) is
 // covered by `wrangler pages dev` in the task verification.
-import { describe, it, expect } from 'vitest';
-import { renderSharePage, escapeHtml, apiBase, absolutizePosterUrl } from './[token].js';
+import { describe, it, expect, vi } from 'vitest';
+import { renderSharePage, renderIntroCard, escapeHtml, apiBase, absolutizePosterUrl } from './[token].js';
 
 describe('apiBase', () => {
   it('maps the prod host to the prod API', () => {
@@ -231,10 +231,90 @@ describe('renderSharePage', () => {
       expect(scriptOpens).toBe(1);
     });
 
+    it('T6960: animations are gated behind .play; JS preloads the photo (8s cap) before starting', () => {
+      const html = renderSharePage({ ...share, intro });
+      // Base rules carry NO animation — the JS adds .play once the photo has
+      // preloaded (or the cap fires), so the 3.5s card can't run photoless.
+      expect(html).toContain('.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center}');
+      expect(html).toContain('#intro-card.play .ic-photo{animation:icPush');
+      expect(html).toContain('#intro-card.play .ic-text{animation:icFade');
+      expect(html).toContain('#intro-card.play .ic-flash{animation:icFlash');
+      expect(html).toContain('setTimeout(icStart,8000)');
+      expect(html).toContain('icImg.onload');
+      // The hide-timer moved inside icStart — it must not start at parse.
+      expect(html).toContain('function icStart()');
+    });
+
+    it('T6970: the card is sized to the video box (icSize on load/metadata/resize)', () => {
+      const html = renderSharePage({ ...share, intro });
+      expect(html).toContain('function icSize()');
+      expect(html).toContain('v.getBoundingClientRect()');
+      expect(html).toContain('v.addEventListener("loadedmetadata",icSize)');
+      expect(html).toContain('window.addEventListener("resize",icSize)');
+    });
+
+    it('T6960: photoless intro starts immediately (empty icPhoto takes the else branch)', () => {
+      const html = renderSharePage({ ...share, intro: { ...intro, previewUrl: null } });
+      expect(html).toContain('var icPhoto=""');
+      expect(html).toContain('else{icStart()}');
+    });
+
+    it('T6960: a hostile previewUrl cannot break out of the inline script', () => {
+      const hostile = { ...intro, previewUrl: 'https://x/a.jpg?</script><script>alert(9)</script>' };
+      const html = renderSharePage({ ...share, intro: hostile });
+      expect(html).not.toContain('</script><script>alert(9)');
+      expect(html).toContain('\\u003c/script'); // JSON-escaped inside the JS literal
+      const scriptOpens = (html.match(/<script/g) || []).length;
+      expect(scriptOpens).toBe(1);
+    });
+
     it('stays well under the 15KB budget even with an intro', () => {
       const html = renderSharePage({ ...share, intro });
       const bytes = new TextEncoder().encode(html).length;
       expect(bytes).toBeLessThan(15 * 1024);
+    });
+
+    it('T6970: executing the emitted JS against a fake layout pins the card to the video box, scales type, and runs the play/hide sequence', () => {
+      // Behavioral (reviewer MINOR-4): source-text assertions can't catch
+      // inverted math or mis-wired listeners — run the real inline JS in
+      // jsdom against stubbed geometry. Photoless card -> the .play branch
+      // fires immediately (no Image() involved).
+      vi.useFakeTimers();
+      try {
+        document.body.innerHTML = '<main><video id="v"></video></main>';
+        const { html: cardHtml, js } = renderIntroCard({
+          card: { shown_fields: ['position'], duration: 3.5 },
+          previewUrl: null,
+          field_values: { full_name: 'Jordan Vega', position: 'Point Guard' },
+        });
+        const main = document.querySelector('main');
+        main.insertAdjacentHTML('beforeend', cardHtml);
+        const v = document.getElementById('v');
+        // Portrait 9:16 video pillarboxed in a wide main.
+        v.getBoundingClientRect = () => ({ left: 350, top: 40, width: 300, height: 533 });
+        main.getBoundingClientRect = () => ({ left: 0, top: 40, width: 1000, height: 600 });
+        v.play = vi.fn();
+        new Function('v', js)(v);
+
+        const ic = document.getElementById('intro-card');
+        expect(ic.style.left).toBe('350px');
+        expect(ic.style.top).toBe('0px');
+        expect(ic.style.width).toBe('300px');
+        expect(ic.style.height).toBe('533px');
+        expect(ic.style.right).toBe('auto');
+        expect(ic.querySelector('.ic-name').style.fontSize).toBe('18px'); // min(28, 300*.06)
+        expect(ic.querySelector('.ic-fact').style.fontSize).toBe('10px'); // min(15, 300*.034)
+        // Photoless -> started immediately; after the (fallback 4s) duration
+        // + 60ms grace the card hides and the video plays.
+        expect(ic.classList.contains('play')).toBe(true);
+        expect(v.play).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(4100);
+        expect(ic.classList.contains('hide')).toBe(true);
+        expect(v.play).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+        document.body.innerHTML = '';
+      }
     });
   });
 

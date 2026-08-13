@@ -36,13 +36,14 @@ from pathlib import Path
 
 from app.services.db_refresh import RefreshFailed
 from app.services.intro_cards import resolve_intro_card
+from app.services.intro_media import presign_intro_image
 from app.services.materialization import open_profile_db_readonly
 from app.services.user_db import (
     ensure_user_database_fresh,
     get_all_intro_facts,
     get_all_intro_full_names,
 )
-from app.storage import download_from_r2_global, generate_presigned_url_global
+from app.storage import download_from_r2_global
 from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
@@ -129,11 +130,13 @@ def _download_card_image(card: dict, user_id: str, profile_id: str, tempdir: str
 def _presign_card_image(card: dict) -> str | None:
     """Presigned URL for the card's image, or None when the card has no photo.
     Never downloads -- for the playback (DOM pre-roll) path. Same ONE image
-    rule as `_download_card_image` (T6950): `image_key` only."""
+    rule as `_download_card_image` (T6950): `image_key` only. T6960: uses the
+    CACHED presign so replays/reopens hit the browser cache instead of
+    re-downloading the photo behind a fresh signature."""
     key = card.get("image_key")
     if not key:
         return None
-    return generate_presigned_url_global(key)
+    return presign_intro_image(key)
 
 
 def build_intro_playback_payload(card: dict, field_values: dict) -> dict | None:
