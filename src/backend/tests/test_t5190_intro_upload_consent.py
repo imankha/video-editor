@@ -66,7 +66,7 @@ class _FakeR2:
     def __init__(self):
         self.objects: dict[str, bytes] = {}
 
-    def upload(self, key, data, *, content_type=None, metadata=None):
+    def upload(self, key, data, *, content_type=None, metadata=None, cache_control=None):
         self.objects[key] = data
         return True
 
@@ -155,6 +155,21 @@ class TestStoreAndDelete:
     def test_upload_returns_none_when_r2_fails(self):
         with patch.object(intro_media, "upload_bytes_to_r2_global", return_value=False):
             assert intro_media.store_intro_image(_uid(), "pid1234", _jpeg_bytes()) is None
+
+    def test_upload_sets_immutable_cache_control(self):
+        # T6960: the key is a fresh uuid per upload (content never changes
+        # under a key), so the object must carry immutable Cache-Control —
+        # without it browsers apply heuristic freshness (~0 for a fresh
+        # upload) and re-fetch the photo on every play.
+        captured = {}
+
+        def record(key, data, *, content_type=None, metadata=None, cache_control=None):
+            captured["cache_control"] = cache_control
+            return True
+
+        with patch.object(intro_media, "upload_bytes_to_r2_global", side_effect=record):
+            assert intro_media.store_intro_image(_uid(), "pid1234", _jpeg_bytes()) is not None
+        assert captured["cache_control"] == "public, max-age=31536000, immutable"
 
     def test_delete_removes_the_object(self, fake_r2):
         uid, pid = _uid(), uuid4().hex[:8]

@@ -39,6 +39,11 @@ export function preloadIntroImage(url, { timeoutMs = INTRO_IMAGE_PRELOAD_TIMEOUT
     }, timeoutMs);
 
     const img = new Image();
+    // The photo races the reel videos' own prefetch for bandwidth the moment
+    // Play is clicked; at default priority Chrome happily starves a small
+    // image behind a large video stream. The card cannot start without this
+    // resource — mark it high priority (no-op where unsupported).
+    img.fetchPriority = 'high';
     img.onload = () => {
       // decode() (where available) guarantees the first paint is not a blank
       // decode frame; jsdom has no decode(), so fall through on absence. A

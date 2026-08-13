@@ -154,7 +154,15 @@ def store_intro_image(user_id: str, profile_id: str, raw: bytes) -> dict | None:
     relative_path = f"{INTRO_PREFIX}/{uuid.uuid4().hex}.{ext}"
     key = profile_r2_key(user_id, profile_id, relative_path)
 
-    if not upload_bytes_to_r2_global(key, data, content_type=content_type):
+    # Immutable Cache-Control: the key is a fresh uuid per upload (content
+    # never changes under a key), so the browser may cache the photo for as
+    # long as it likes — replays/reopens must be LOCAL cache hits, not
+    # heuristic-freshness revalidations (T6960; heuristic freshness of a
+    # just-uploaded object is ~zero, forcing a re-fetch on every play).
+    if not upload_bytes_to_r2_global(
+        key, data, content_type=content_type,
+        cache_control="public, max-age=31536000, immutable",
+    ):
         logger.error(
             f"[IntroMedia] R2 upload FAILED for user={user_id} profile={profile_id} key={key}"
         )
