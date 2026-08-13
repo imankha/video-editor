@@ -14,7 +14,14 @@
 // with a console.warn. The cap exists because a network resource may simply
 // never arrive; it must not hold playback hostage.
 
-export const INTRO_IMAGE_PRELOAD_TIMEOUT_MS = 2500;
+// 8s, not 2.5s (T6960 round 2): a real 2.2MB legacy card photo blew a 2.5s cap
+// on an ordinary connection, so the gate gave up and the card played photoless
+// anyway — the user explicitly prefers holding (card background + skeleton is
+// an honest loading state) over playing without the photo. Still bounded: a
+// dead URL can't hold playback hostage. New uploads are far smaller (JPEG
+// re-encode) and the served URL is cache-stable for ~10min (backend presign
+// memoization), so hitting this cap should be rare.
+export const INTRO_IMAGE_PRELOAD_TIMEOUT_MS = 8000;
 
 export function preloadIntroImage(url, { timeoutMs = INTRO_IMAGE_PRELOAD_TIMEOUT_MS } = {}) {
   if (!url) return Promise.resolve('no-image');

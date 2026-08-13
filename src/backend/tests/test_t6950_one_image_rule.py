@@ -23,7 +23,7 @@ STALE_CUTOUT_CARD = {
 
 def test_presign_ignores_stale_cutout(monkeypatch):
     monkeypatch.setattr(
-        intro_egress, "generate_presigned_url_global", lambda key: f"URL:{key}"
+        intro_egress, "presign_intro_image", lambda key: f"URL:{key}"
     )
     assert intro_egress._presign_card_image(STALE_CUTOUT_CARD) == "URL:intro/real-photo.png"
 

@@ -557,3 +557,69 @@ class TestIntroFacts:
         assert me_boot["position"] == "Midfielder 6-8-10"
         assert me_boot["class"] == "2029"
         assert me_boot["team"] == "Riverside FC"
+
+
+# ---------------------------------------------------------------------------
+# T6960 — image weight + presign stability (the "card plays photoless" pair)
+# ---------------------------------------------------------------------------
+
+class TestOpaqueAlphaFlattening:
+    def test_fully_opaque_alpha_flattens_to_jpeg(self):
+        # A PNG whose alpha channel is all-255 is not transparency — phone
+        # screenshots/exports arrive like this constantly, and keeping them
+        # lossless PNG produced multi-MB card photos that lost the download
+        # race against the 4s card. Must flatten to JPEG.
+        import cv2
+        import numpy as np
+        img = np.zeros((48, 64, 4), np.uint8)
+        img[:, :, :3] = 128
+        img[:, :, 3] = 255
+        ok, buf = cv2.imencode(".png", img)
+        assert ok
+        _data, ext, ct = intro_media._reencode(buf.tobytes())
+        assert ext == "jpg"
+        assert ct == "image/jpeg"
+
+    def test_real_transparency_still_keeps_png(self):
+        # The alpha-RAMP fixture (actual transparency, the future T5200
+        # cut-out shape) must still round-trip as PNG — only fully-opaque
+        # alpha is flattened.
+        _data, ext, ct = intro_media._reencode(_png_with_alpha())
+        assert ext == "png"
+        assert ct == "image/png"
+
+
+class TestPresignIntroImageCache:
+    def test_same_url_within_ttl(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            intro_media, "generate_presigned_url_global",
+            lambda k: (calls.append(k), f"URL-{len(calls)}")[1],
+        )
+        intro_media._presign_cache.clear()
+        u1 = intro_media.presign_intro_image("dev/users/u/profiles/p/intro/a.jpg")
+        u2 = intro_media.presign_intro_image("dev/users/u/profiles/p/intro/a.jpg")
+        assert u1 == u2 == "URL-1"
+        assert len(calls) == 1  # one real presign, second was the cache
+
+    def test_distinct_keys_do_not_collide(self, monkeypatch):
+        monkeypatch.setattr(
+            intro_media, "generate_presigned_url_global", lambda k: f"URL:{k}",
+        )
+        intro_media._presign_cache.clear()
+        assert intro_media.presign_intro_image("k1") != intro_media.presign_intro_image("k2")
+
+    def test_expired_entry_re_presigns(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            intro_media, "generate_presigned_url_global",
+            lambda k: (calls.append(k), f"URL-{len(calls)}")[1],
+        )
+        clock = [1000.0]
+        monkeypatch.setattr(intro_media.time, "monotonic", lambda: clock[0])
+        intro_media._presign_cache.clear()
+        u1 = intro_media.presign_intro_image("k")
+        clock[0] += intro_media._PRESIGN_TTL_SECONDS + 1
+        u2 = intro_media.presign_intro_image("k")
+        assert u1 != u2
+        assert len(calls) == 2

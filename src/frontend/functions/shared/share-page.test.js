@@ -231,7 +231,7 @@ describe('renderSharePage', () => {
       expect(scriptOpens).toBe(1);
     });
 
-    it('T6960: animations are gated behind .play; JS preloads the photo (2.5s cap) before starting', () => {
+    it('T6960: animations are gated behind .play; JS preloads the photo (8s cap) before starting', () => {
       const html = renderSharePage({ ...share, intro });
       // Base rules carry NO animation — the JS adds .play once the photo has
       // preloaded (or the cap fires), so the 3.5s card can't run photoless.
@@ -239,7 +239,7 @@ describe('renderSharePage', () => {
       expect(html).toContain('#intro-card.play .ic-photo{animation:icPush');
       expect(html).toContain('#intro-card.play .ic-text{animation:icFade');
       expect(html).toContain('#intro-card.play .ic-flash{animation:icFlash');
-      expect(html).toContain('setTimeout(icStart,2500)');
+      expect(html).toContain('setTimeout(icStart,8000)');
       expect(html).toContain('icImg.onload');
       // The hide-timer moved inside icStart — it must not start at parse.
       expect(html).toContain('function icStart()');

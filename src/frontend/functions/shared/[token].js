@@ -129,7 +129,7 @@ ${facts}
   // escapes quotes/backslashes, and the extra < replacement prevents a
   // hostile URL from closing the script tag.
   //
-  // The 2500ms preload cap below mirrors INTRO_IMAGE_PRELOAD_TIMEOUT_MS in
+  // The 8000ms preload cap below mirrors INTRO_IMAGE_PRELOAD_TIMEOUT_MS in
   // src/components/introcards/preloadIntroImage.js (this file cannot import
   // it) — keep the two values in step. The video-box sizing (icSize) covers
   // poster/metadata/controls-driven layout changes via a ResizeObserver on
@@ -166,7 +166,7 @@ ic.classList.add("play");
 setTimeout(function(){ic.classList.add("hide");v.play()},icDur+60);
 }
 if(icPhoto){
-var icT=setTimeout(icStart,2500);
+var icT=setTimeout(icStart,8000);
 var icImg=new Image();
 icImg.onload=function(){clearTimeout(icT);icStart()};
 icImg.onerror=function(){clearTimeout(icT);icStart()};
