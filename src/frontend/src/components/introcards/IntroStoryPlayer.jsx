@@ -135,8 +135,16 @@ export function IntroStoryPlayer({
   const introPhotoUrl = intro?.previewUrl || null;
   const [introAssetsReady, setIntroAssetsReady] = useState(!introPhotoUrl);
   useEffect(() => {
-    if (!introPhotoUrl) return undefined;
+    // Re-arm on every URL change (reviewer MAJOR-2): if this mounted player
+    // ever receives a different card, the clock must re-hold for the NEW
+    // photo, not start against the previous one's readiness. Mirrors
+    // IntroPreRoll's gate — keep the two in step.
+    if (!introPhotoUrl) {
+      setIntroAssetsReady(true);
+      return undefined;
+    }
     let cancelled = false;
+    setIntroAssetsReady(false);
     preloadIntroImage(introPhotoUrl).then(() => {
       if (!cancelled) setIntroAssetsReady(true);
     });

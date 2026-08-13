@@ -78,14 +78,20 @@ export function IntroPreRoll({
   const photoUrl = intro?.previewUrl || null;
   const [photoSettled, setPhotoSettled] = useState(!photoUrl);
   useEffect(() => {
-    if (!photoUrl) return undefined;
+    // Externally-driven hosts (IntroStoryPlayer) own their own gate — running
+    // a second preload here would double-fetch and double-warn for nothing
+    // (the flag only feeds the self-driven autoplay below).
+    if (!photoUrl || isExternallyDriven) {
+      setPhotoSettled(true);
+      return undefined;
+    }
     let cancelled = false;
     setPhotoSettled(false);
     preloadIntroImage(photoUrl).then(() => {
       if (!cancelled) setPhotoSettled(true);
     });
     return () => { cancelled = true; };
-  }, [photoUrl]);
+  }, [photoUrl, isExternallyDriven]);
   const fallbackMs = useMotionPreviewAutoplay(durationMs, {
     active: !isExternallyDriven && !!intro && photoSettled,
     onDone,

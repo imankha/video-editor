@@ -65,10 +65,11 @@ describe('IntroPreRoll', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('mounts MotionPreview when intro is present', () => {
+  it('mounts MotionPreview when intro is present', async () => {
     render(<IntroPreRoll intro={SAMPLE_INTRO} onDone={() => {}} />);
     expect(screen.getByTestId('mock-motion-preview')).toBeTruthy();
     expect(MotionPreview).toHaveBeenCalledTimes(1);
+    await act(async () => {}); // flush the T6960 preload resolution
   });
 
   it('calls onDone once its own fallback clock reaches the card duration (legacy no-currentTimeMs callers)', async () => {
@@ -145,6 +146,12 @@ describe('IntroPreRoll', () => {
     }
   });
 
+  it('T6960: the externally-driven path never triggers a preload here (IntroStoryPlayer owns its own gate)', async () => {
+    render(<IntroPreRoll intro={SAMPLE_INTRO} currentTimeMs={0} />);
+    await act(async () => {});
+    expect(preloadIntroImageMock).not.toHaveBeenCalled();
+  });
+
   it('T6960: a photoless intro never waits on a preload', async () => {
     const noPhoto = { ...SAMPLE_INTRO, previewUrl: null };
     let rafCb = null;
@@ -167,7 +174,7 @@ describe('IntroPreRoll', () => {
     expect(screen.getByTestId('mock-motion-preview').dataset.currentTimeMs).toBe('1234');
   });
 
-  it('reassembles the split payload into the card/profile shape MotionPreview reads facts/photo from', () => {
+  it('reassembles the split payload into the card/profile shape MotionPreview reads facts/photo from', async () => {
     // MotionPreview reads the photo off `card.previewUrl` (not a sibling prop)
     // and the facts off `profile.full_name`/`profile[shownField]` (not
     // `field_values`) -- see introCardPreviewElements.js. The backend payload
@@ -177,5 +184,6 @@ describe('IntroPreRoll', () => {
     const call = MotionPreview.mock.calls[0][0];
     expect(call.card).toEqual({ ...SAMPLE_INTRO.card, previewUrl: SAMPLE_INTRO.previewUrl });
     expect(call.profile).toEqual({ ...SAMPLE_INTRO.profile, ...SAMPLE_INTRO.field_values });
+    await act(async () => {}); // flush the T6960 preload resolution
   });
 });

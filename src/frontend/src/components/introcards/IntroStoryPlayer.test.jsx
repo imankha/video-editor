@@ -469,3 +469,34 @@ describe('IntroStoryPlayer photo-readiness gate (T6960)', () => {
     expect(mockSetPlaying).toHaveBeenLastCalledWith(true);
   });
 });
+
+describe('IntroStoryPlayer photo-gate re-arm on URL change (T6960 reviewer MAJOR-2)', () => {
+  it('re-holds the clock when a mounted player receives a NEW previewUrl', async () => {
+    const resolvers = [];
+    preloadIntroImageMock.mockImplementation(() => new Promise((resolve) => { resolvers.push(resolve); }));
+    const first = { ...SAMPLE_INTRO, previewUrl: 'https://r2.example/a.jpg' };
+
+    const { rerender } = render(
+      <IntroStoryPlayer intro={first} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />,
+    );
+    await act(async () => { resolvers[0]('loaded'); });
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(true);
+
+    rerender(
+      <IntroStoryPlayer
+        intro={{ ...first, previewUrl: 'https://r2.example/b.jpg' }}
+        aspect="9:16"
+        reels={REELS}
+        title="T"
+        onClose={vi.fn()}
+      />,
+    );
+    await act(async () => {});
+    // New photo, not yet settled -> the clock must be held again.
+    expect(preloadIntroImageMock).toHaveBeenCalledTimes(2);
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(false);
+
+    await act(async () => { resolvers[1]('loaded'); });
+    expect(mockSetPlaying).toHaveBeenLastCalledWith(true);
+  });
+});

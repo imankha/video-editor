@@ -70,4 +70,28 @@ describe('preloadIntroImage', () => {
     vi.advanceTimersByTime(100);
     await expect(p).resolves.toBe('timeout');
   });
+
+  // Real browsers take the decode() branch — the jsdom-fallback tests above
+  // never exercise it (reviewer MAJOR-3).
+  it('resolves "loaded" through decode() when it resolves (the real-browser path)', async () => {
+    class DecodingImage extends FakeImage {
+      decode() { return Promise.resolve(); }
+    }
+    vi.stubGlobal('Image', DecodingImage);
+    const p = preloadIntroImage('https://r2.example/card.jpg');
+    instances[0].onload();
+    await expect(p).resolves.toBe('loaded');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('a decode() REJECTION resolves "error" with a warn — never silently reported as loaded', async () => {
+    class FailingDecodeImage extends FakeImage {
+      decode() { return Promise.reject(new Error('decode failed')); }
+    }
+    vi.stubGlobal('Image', FailingDecodeImage);
+    const p = preloadIntroImage('https://r2.example/corrupt.jpg');
+    instances[0].onload();
+    await expect(p).resolves.toBe('error');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
 });

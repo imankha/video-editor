@@ -1,6 +1,6 @@
 # T6960: Intro card photo must be ready before the intro clock starts
 
-**Status:** WIP
+**Status:** WAITING ON USER (implemented on feature/T6960-intro-image-preload, awaiting staging verify + merge approval)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-13
@@ -82,3 +82,7 @@ mobile data).
 - [ ] Card with no photo: zero added delay
 - [ ] Edge share page behaves the same (throttled + broken-photo checks)
 - [ ] Relevant tests green; eslint clean
+
+## Progress Log
+
+**2026-08-13**: Implemented + reviewer pass (3 MAJOR + 5 MINOR found, all addressed): decode()-rejection now warns + resolves 'error' (was silently 'loaded'); IntroStoryPlayer gate re-arms on previewUrl change (mirrors IntroPreRoll); IntroPreRoll skips the preload on the externally-driven path (no double fetch/warn); edge page re-measures via ResizeObserver on the video (poster-load/controls layout shifts) + icSize() inside icStart(); inline JS kept ES5 (indexed loops) with the 2500ms cap cross-referenced to INTRO_IMAGE_PRELOAD_TIMEOUT_MS; added a BEHAVIORAL jsdom test executing the emitted inline JS against stubbed geometry (left/top/width/height, type scaling, play->hide->v.play() sequence). 72/72 tests green across the 4 relevant files.

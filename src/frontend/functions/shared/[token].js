@@ -73,7 +73,7 @@ function originOf(url) {
 // the render/MotionPreview -- accepted per design §11 R4, the same
 // compromise the shipped outro already makes here). Gated on `share.intro`
 // being present; absent -> today's immediate autoplay, byte-for-byte.
-function renderIntroCard(intro) {
+export function renderIntroCard(intro) {
   if (!intro) return { html: "", css: "", js: "", hasIntro: false };
 
   const card = intro.card || {};
@@ -128,6 +128,15 @@ ${facts}
   // The photo URL crosses into an inline <script> string: JSON.stringify
   // escapes quotes/backslashes, and the extra < replacement prevents a
   // hostile URL from closing the script tag.
+  //
+  // The 2500ms preload cap below mirrors INTRO_IMAGE_PRELOAD_TIMEOUT_MS in
+  // src/components/introcards/preloadIntroImage.js (this file cannot import
+  // it) — keep the two values in step. The video-box sizing (icSize) covers
+  // poster/metadata/controls-driven layout changes via a ResizeObserver on
+  // the video itself; the loadedmetadata/resize listeners are the no-RO
+  // fallback. All inline JS here stays ES5 + indexed loops: it runs inside
+  // the page's single IIFE BEFORE the unmute/end-card wiring, so any throw
+  // would disable those too.
   const photoJsLiteral = JSON.stringify(intro.previewUrl || "").replace(/</g, "\\u003c");
   const js = `
 var ic=document.getElementById("intro-card");
@@ -142,14 +151,17 @@ ic.style.width=r.width+"px";ic.style.height=r.height+"px";
 ic.style.right="auto";ic.style.bottom="auto";
 var nm=ic.querySelector(".ic-name");
 if(nm)nm.style.fontSize=Math.min(28,Math.round(r.width*.06))+"px";
-ic.querySelectorAll(".ic-fact").forEach(function(f){f.style.fontSize=Math.min(15,Math.round(r.width*.034))+"px"});
+var fs=ic.querySelectorAll(".ic-fact");
+for(var i=0;i<fs.length;i++){fs[i].style.fontSize=Math.min(15,Math.round(r.width*.034))+"px"}
 }
 icSize();
 v.addEventListener("loadedmetadata",icSize);
 window.addEventListener("resize",icSize);
+if(typeof ResizeObserver!=="undefined"){new ResizeObserver(icSize).observe(v)}
 var icStarted=false;
 function icStart(){
 if(icStarted)return;icStarted=true;
+icSize();
 ic.classList.add("play");
 setTimeout(function(){ic.classList.add("hide");v.play()},icDur+60);
 }

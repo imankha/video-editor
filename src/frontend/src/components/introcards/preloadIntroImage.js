@@ -34,9 +34,20 @@ export function preloadIntroImage(url, { timeoutMs = INTRO_IMAGE_PRELOAD_TIMEOUT
     const img = new Image();
     img.onload = () => {
       // decode() (where available) guarantees the first paint is not a blank
-      // decode frame; jsdom has no decode(), so fall through on absence.
-      const decoded = typeof img.decode === 'function' ? img.decode().catch(() => {}) : Promise.resolve();
-      decoded.then(() => settle('loaded'));
+      // decode frame; jsdom has no decode(), so fall through on absence. A
+      // decode FAILURE is a degrade path like any other — warn + 'error',
+      // never silently reported as loaded.
+      if (typeof img.decode === 'function') {
+        img.decode().then(
+          () => settle('loaded'),
+          () => {
+            console.warn(`[preloadIntroImage] photo loaded but failed to decode — starting the intro without waiting (url=${url})`);
+            settle('error');
+          },
+        );
+      } else {
+        settle('loaded');
+      }
     };
     img.onerror = () => {
       console.warn(`[preloadIntroImage] photo failed to load — the intro will play without it (url=${url})`);
