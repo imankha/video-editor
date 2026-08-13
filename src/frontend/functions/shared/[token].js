@@ -103,25 +103,63 @@ ${facts}
 <div class="ic-flash"></div>
 </div>`;
 
+  // T6960/T6970: animations only run once the JS adds `.play` (after the
+  // photo has preloaded, or the cap fired), and the card is SIZED to the
+  // video's rendered box by icSize() rather than covering all of <main> —
+  // `inset:0` remains only as the pre-measurement fallback (icSize overrides
+  // it with explicit left/top/width/height).
   const css = `
 #intro-card{position:absolute;inset:0;z-index:30;background:#000;overflow:hidden;transition:opacity .2s}
 #intro-card.hide{opacity:0;pointer-events:none}
-.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center;animation:icPush var(--ic-dur) ease-out forwards}
+.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center}
+#intro-card.play .ic-photo{animation:icPush var(--ic-dur) ease-out forwards}
 .ic-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1) 40%,rgba(0,0,0,.8))}
-.ic-text{position:absolute;left:20px;right:20px;bottom:36px;opacity:0;animation:icFade .6s ease-out .4s forwards}
+.ic-text{position:absolute;left:20px;right:20px;bottom:36px;opacity:0}
+#intro-card.play .ic-text{animation:icFade .6s ease-out .4s forwards}
 .ic-name{font-size:28px;font-weight:700;color:#fff;line-height:1.2}
 .ic-fact{font-size:15px;color:#d1d5db;margin-top:4px}
-.ic-flash{position:absolute;inset:0;background:#fff;opacity:0;animation:icFlash .35s ease-in forwards;animation-delay:calc(var(--ic-dur) - .35s)}
+.ic-flash{position:absolute;inset:0;background:#fff;opacity:0}
+#intro-card.play .ic-flash{animation:icFlash .35s ease-in forwards;animation-delay:calc(var(--ic-dur) - .35s)}
 @keyframes icPush{from{transform:scale(1.08)}to{transform:scale(1)}}
 @keyframes icFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes icFlash{0%{opacity:0}70%{opacity:1}100%{opacity:0}}
 `;
 
+  // The photo URL crosses into an inline <script> string: JSON.stringify
+  // escapes quotes/backslashes, and the extra < replacement prevents a
+  // hostile URL from closing the script tag.
+  const photoJsLiteral = JSON.stringify(intro.previewUrl || "").replace(/</g, "\\u003c");
   const js = `
 var ic=document.getElementById("intro-card");
 if(ic){
 var icDur=(parseFloat(getComputedStyle(ic).getPropertyValue("--ic-dur"))||4)*1000;
+var icPhoto=${photoJsLiteral};
+function icSize(){
+var r=v.getBoundingClientRect(),m=v.parentElement.getBoundingClientRect();
+if(r.width<2||r.height<2)return;
+ic.style.left=(r.left-m.left)+"px";ic.style.top=(r.top-m.top)+"px";
+ic.style.width=r.width+"px";ic.style.height=r.height+"px";
+ic.style.right="auto";ic.style.bottom="auto";
+var nm=ic.querySelector(".ic-name");
+if(nm)nm.style.fontSize=Math.min(28,Math.round(r.width*.06))+"px";
+ic.querySelectorAll(".ic-fact").forEach(function(f){f.style.fontSize=Math.min(15,Math.round(r.width*.034))+"px"});
+}
+icSize();
+v.addEventListener("loadedmetadata",icSize);
+window.addEventListener("resize",icSize);
+var icStarted=false;
+function icStart(){
+if(icStarted)return;icStarted=true;
+ic.classList.add("play");
 setTimeout(function(){ic.classList.add("hide");v.play()},icDur+60);
+}
+if(icPhoto){
+var icT=setTimeout(icStart,2500);
+var icImg=new Image();
+icImg.onload=function(){clearTimeout(icT);icStart()};
+icImg.onerror=function(){clearTimeout(icT);icStart()};
+icImg.src=icPhoto;
+}else{icStart()}
 }
 `;
 

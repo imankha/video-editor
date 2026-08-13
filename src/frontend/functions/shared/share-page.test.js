@@ -231,6 +231,43 @@ describe('renderSharePage', () => {
       expect(scriptOpens).toBe(1);
     });
 
+    it('T6960: animations are gated behind .play; JS preloads the photo (2.5s cap) before starting', () => {
+      const html = renderSharePage({ ...share, intro });
+      // Base rules carry NO animation — the JS adds .play once the photo has
+      // preloaded (or the cap fires), so the 3.5s card can't run photoless.
+      expect(html).toContain('.ic-photo{position:absolute;inset:0;background-size:cover;background-position:center}');
+      expect(html).toContain('#intro-card.play .ic-photo{animation:icPush');
+      expect(html).toContain('#intro-card.play .ic-text{animation:icFade');
+      expect(html).toContain('#intro-card.play .ic-flash{animation:icFlash');
+      expect(html).toContain('setTimeout(icStart,2500)');
+      expect(html).toContain('icImg.onload');
+      // The hide-timer moved inside icStart — it must not start at parse.
+      expect(html).toContain('function icStart()');
+    });
+
+    it('T6970: the card is sized to the video box (icSize on load/metadata/resize)', () => {
+      const html = renderSharePage({ ...share, intro });
+      expect(html).toContain('function icSize()');
+      expect(html).toContain('v.getBoundingClientRect()');
+      expect(html).toContain('v.addEventListener("loadedmetadata",icSize)');
+      expect(html).toContain('window.addEventListener("resize",icSize)');
+    });
+
+    it('T6960: photoless intro starts immediately (empty icPhoto takes the else branch)', () => {
+      const html = renderSharePage({ ...share, intro: { ...intro, previewUrl: null } });
+      expect(html).toContain('var icPhoto=""');
+      expect(html).toContain('else{icStart()}');
+    });
+
+    it('T6960: a hostile previewUrl cannot break out of the inline script', () => {
+      const hostile = { ...intro, previewUrl: 'https://x/a.jpg?</script><script>alert(9)</script>' };
+      const html = renderSharePage({ ...share, intro: hostile });
+      expect(html).not.toContain('</script><script>alert(9)');
+      expect(html).toContain('\\u003c/script'); // JSON-escaped inside the JS literal
+      const scriptOpens = (html.match(/<script/g) || []).length;
+      expect(scriptOpens).toBe(1);
+    });
+
     it('stays well under the 15KB budget even with an intro', () => {
       const html = renderSharePage({ ...share, intro });
       const bytes = new TextEncoder().encode(html).length;
