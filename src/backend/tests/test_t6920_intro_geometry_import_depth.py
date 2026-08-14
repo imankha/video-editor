@@ -23,9 +23,17 @@ never by any import or any serve-time code path. Import of the module now does
 zero filesystem-layout derivation; `_js_path()` raises a clear `RuntimeError`
 (not a bare `IndexError`) if invoked somewhere the repo layout doesn't exist.
 
-These are structural guards, not reproductions of the live crash: pathlib's
-`.parents` is purely lexical (no I/O, no need for the path to actually exist),
-so we fake `__file__` at Fly's image depth without touching the real filesystem.
+These are structural guards, not reproductions of the live crash: we fake
+`__file__` at Fly's image depth without touching the real filesystem. The mock
+must be an ABSOLUTE path on the runtime OS, because `_js_path()` calls
+`Path(__file__).resolve()` first: for a non-absolute string `.resolve()` prepends
+the current working directory, so a Windows-style `C:\\...` path (not absolute on
+Linux) would gain the CI runner's own deep CWD and defeat the depth check
+(`parents[4]` would succeed -> "DID NOT RAISE"). The deployed image is Linux with
+`WORKDIR /app` + `COPY . .`, so the real Fly layout is the POSIX-absolute path
+below; `.parents` from there is then purely lexical (no I/O) on both Linux and
+Windows (where `.resolve()` only supplies the drive letter, keeping the 4-deep
+shape).
 """
 
 from unittest.mock import patch
@@ -34,7 +42,11 @@ import pytest
 
 from app.services import intro_card_geometry as g
 
-_FLY_IMAGE_DEPTH_FILE = r"C:\app\app\services\intro_card_geometry.py"
+# The real deployed Fly image: WORKDIR /app + COPY . . puts this module at
+# /app/app/services/intro_card_geometry.py -- 4 levels below the image root, one
+# short of the 5-level repo checkout depth `parents[4]` assumes. POSIX-absolute so
+# `.resolve()` leaves it untouched on Linux (CI + Fly) instead of prepending CWD.
+_FLY_IMAGE_DEPTH_FILE = "/app/app/services/intro_card_geometry.py"
 
 
 def test_module_has_no_eager_module_level_js_path():
