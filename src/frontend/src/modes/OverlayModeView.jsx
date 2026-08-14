@@ -182,6 +182,10 @@ export function OverlayModeView({
   clipBoundaries = [],
   selectedRegionId = null,
   selectedElementId = null,
+  // T6980: inline text-edit state + setters (view-state only, no write path).
+  inlineEditingElementId = null,
+  beginInlineEdit,
+  endInlineEdit,
   onAddRegion,
   onAddElement,
   onMoveTextStart,
@@ -325,6 +329,21 @@ export function OverlayModeView({
       }
     }
   }, [onSelectRegion, textOverlays, currentTime, seek]);
+
+  // T6980: compose the double-click / double-tap -> inline-edit gesture. Modeled
+  // on handleSelectRegion: select the element, flip to the Text tab, seek the
+  // playhead INTO the owning region if it isn't already there (so the settings
+  // panel + stage show the element being edited), then enter inline edit. All
+  // view-state -- no backend write (the write path is per-keystroke, unchanged).
+  const handleBeginInlineEdit = useCallback((id, regionId) => {
+    onSelectElement && onSelectElement(id, regionId);
+    setActiveTab('text');
+    const region = textOverlays.find((r) => r.id === regionId);
+    if (region && !isRegionUnderPlayhead(region, currentTime)) {
+      seek && seek(region.startTime);
+    }
+    beginInlineEdit && beginInlineEdit(id);
+  }, [onSelectElement, textOverlays, currentTime, seek, beginInlineEdit]);
 
   // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
   // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
@@ -523,6 +542,13 @@ export function OverlayModeView({
               selectedElementId={selectedElementId}
               onMoveTextPosition={onMoveTextPosition}
               onSelectElement={onSelectElement}
+              // T6980: double-click/double-tap -> inline edit. onEditText is the
+              // SAME single write path the panel input uses (onUpdateTextSpec ->
+              // wrappedUpdateTextSpec) -- not a second path.
+              onBeginInlineEdit={handleBeginInlineEdit}
+              inlineEditingElementId={inlineEditingElementId}
+              onEndInlineEdit={endInlineEdit}
+              onEditText={onUpdateTextSpec}
               zoom={zoom}
               panOffset={panOffset}
               isFullscreen={isFullscreen}
@@ -663,6 +689,10 @@ export function OverlayModeView({
       onDeleteTextRegion={onDeleteTextRegion}
       onToggleText={onToggleText}
       onUpdateTextSpec={onUpdateTextSpec}
+      // T6980: when inline-editing, the panel expands+scrolls+focuses the
+      // selected element's row; blur/Escape/Enter on its input ends inline edit.
+      inlineEditingElementId={inlineEditingElementId}
+      onEndInlineEdit={endInlineEdit}
     />
   );
 

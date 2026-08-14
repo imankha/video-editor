@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 // Tailwind utilities: without this the harness renders layout classes inert.
 import '../index.css';
 import TextOverlayPreview from '../modes/overlay/overlays/TextOverlayPreview';
+import TextManagementPanel from '../components/overlay/TextManagementPanel';
 import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
 
 /**
@@ -30,6 +31,24 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
  * status div's `data-el2-id` attribute (not the text, since it's a
  * dynamically-generated id the spec can't hardcode). `onSelectElement`
  * wires straight to the real `selectElement` from `useTextOverlays`.
+ *
+ * T6980 additions -- inline canvas edit + Text-tab-panel sync harness:
+ *  - Reads `inlineEditingElementId`/`beginInlineEdit`/`endInlineEdit` off the
+ *    REAL `useTextOverlays` hook (undefined/no-op until T6980 implements
+ *    them -- the harness tolerates that so this file can be authored ahead
+ *    of the hook change, per test-first).
+ *  - Passes `onBeginInlineEdit`/`inlineEditingElementId`/`onEndInlineEdit`
+ *    into `<TextOverlayPreview>` (unknown/unread props today -- harmless,
+ *    forward-compatible; TextOverlayPreview destructures a fixed prop list
+ *    and ignores anything it doesn't name).
+ *  - Mounts the REAL `<TextManagementPanel>` (not a stand-in) alongside
+ *    `<TextOverlayPreview>`, wired to the SAME `updateElementSpec` write path
+ *    (`onUpdateTextSpec`) the canvas input uses -- so the e2e spec exercises
+ *    the REAL focus/scroll/expand effect the panel runs on inline-edit entry,
+ *    not a simplified stand-in. This is load-bearing: an earlier stub input
+ *    here masked a real focus race between the panel's imperative focus and
+ *    the canvas input's autofocus (reviewer round 1 finding) because it never
+ *    exercised the panel's actual effect.
  */
 
 const DURATION = 10;
@@ -69,7 +88,14 @@ function TextPreviewDiagHarness() {
     addRegion,
     addElement,
     selectElement,
+    selectRegion,
     updateElementSpec,
+    // T6980: undefined until useTextOverlays grows these -- the harness
+    // renders `data-inline-editing` from whatever this evaluates to, so a
+    // spec asserting on it fails honestly (not a harness crash) pre-T6980.
+    inlineEditingElementId,
+    beginInlineEdit,
+    endInlineEdit,
   } = useTextOverlays();
 
   const [elementId, setElementId] = useState(null);
@@ -162,6 +188,30 @@ function TextPreviewDiagHarness() {
     if (selected) updateElementSpec(elementId, { ...selected.spec, position: { x: 0.5, y: 0.5 } });
   };
 
+  // T6980 -- the ONE write path both the canvas inline input and the REAL
+  // TextManagementPanel's onUpdateTextSpec funnel through (design §2.1's
+  // `wrappedUpdateTextSpec` equivalent for this harness): given an element id
+  // + its next spec, call updateElementSpec. Proving single-write-path sync
+  // is a matter of wiring, not a second code path.
+  const onEditText = (id, nextSpec) => updateElementSpec(id, nextSpec);
+
+  // T6980 -- composes the target gesture the real OverlayModeView.
+  // handleBeginInlineEdit will own (design §3.3): select + Text tab (this
+  // harness is Text-tab-only already) + seek into range if needed + begin
+  // inline edit. Seek-into-range is a no-op here (currentTime stays 3, which
+  // is already the harness's in-range default) since the harness's job is
+  // to prove the EDIT flag + write-path wiring, not re-derive T6880's seek
+  // math. Falls back to a no-op if beginInlineEdit doesn't exist yet
+  // (pre-T6980), so the harness never crashes -- the qa spec's assertions
+  // simply fail honestly instead.
+  const handleBeginInlineEdit = (id, elRegionId) => {
+    selectElement(id, elRegionId);
+    if (typeof beginInlineEdit === 'function') beginInlineEdit(id);
+  };
+  const handleEndInlineEdit = () => {
+    if (typeof endInlineEdit === 'function') endInlineEdit();
+  };
+
   return (
     <div style={{ margin: 40 }}>
       <div
@@ -170,6 +220,10 @@ function TextPreviewDiagHarness() {
         // can target the SECOND element's dynamically-generated id without
         // parsing it out of the monospace status line.
         data-el2-id={elementId2 || ''}
+        // T6980: undefined pre-implementation -> the attribute reads "" (React
+        // drops a null/undefined attribute), which the qa spec's "no element is
+        // being inline-edited" assertions treat the same as an explicit 'none'.
+        data-inline-editing={inlineEditingElementId || 'none'}
         style={{ color: '#d1d5db', fontSize: 13, marginBottom: 16, fontFamily: 'monospace' }}
       >
         {pos
@@ -225,6 +279,40 @@ function TextPreviewDiagHarness() {
           isFullscreen={false}
           isPlaying={isPlaying}
           isTextTabActive={isTextTabActive}
+          // T6980 -- unread by TextOverlayPreview until it implements the
+          // dblclick/dbltap -> inline-edit affordance (design §3.4); passing
+          // them now is forward-compatible (extra unread props are a no-op)
+          // and lets this harness be authored ahead of that change.
+          onBeginInlineEdit={handleBeginInlineEdit}
+          inlineEditingElementId={inlineEditingElementId}
+          onEndInlineEdit={handleEndInlineEdit}
+          onEditText={onEditText}
+        />
+      </div>
+
+      {/* T6980 -- the REAL TextManagementPanel, so the qa spec exercises its
+          actual expand/scroll/focus effect (not a simplified stand-in) and
+          the SAME onUpdateTextSpec write path the canvas inline input uses.
+          `regions` is the full `textOverlays` list -- the harness has exactly
+          one region and the default playhead (3) sits inside its [2,4]
+          window, so no range-scoping is needed to match production callers.
+          Rendered BELOW the video container (reviewer round 1 follow-up): the
+          real panel is ~500px tall, and mounting it ABOVE the canvas pushed
+          the 640x360 video below the 720px desktop fold, so the qa spec's
+          `page.mouse.dblclick(center)` (raw viewport coords, no auto-scroll)
+          landed off-screen and missed the element. Keeping the canvas near the
+          top preserves the stable geometry the T6720/T6880 mouse-driven specs
+          share this harness for. */}
+      <div style={{ marginTop: 12, maxWidth: 420 }}>
+        <TextManagementPanel
+          regions={textOverlays}
+          selectedRegionId={selectedRegionId}
+          selectedElementId={selectedElementId}
+          onSelectRegion={selectRegion}
+          onSelectElement={selectElement}
+          onUpdateTextSpec={onEditText}
+          inlineEditingElementId={inlineEditingElementId}
+          onEndInlineEdit={handleEndInlineEdit}
         />
       </div>
     </div>

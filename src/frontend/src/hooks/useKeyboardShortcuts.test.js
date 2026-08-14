@@ -298,6 +298,101 @@ describe('useKeyboardShortcuts', () => {
     });
   });
 
+  describe('isTextEditing suppression (T6980 — inline canvas/panel text edit)', () => {
+    // Design §3.6: a new optional `isTextEditing` param guards the TOP of all
+    // three handlers (Space, Ctrl+C/V, Arrows). Today only Space has a
+    // tagName-based guard -- arrows and copy have NONE, so a real inline
+    // editor (transparent <input> over the canvas OR the panel input) would
+    // leak Space/seek/copy into the overlay while the user is typing. These
+    // tests pin the flag as the real, complete fix.
+
+    it('Space: does NOT toggle play when isTextEditing=true', () => {
+      renderHook(() => useKeyboardShortcuts({ ...defaultProps, isTextEditing: true }));
+
+      simulateKeyDown('Space');
+
+      expect(mockTogglePlay).not.toHaveBeenCalled();
+    });
+
+    it('Space: still toggles play when isTextEditing=false (default) -- regression', () => {
+      renderHook(() => useKeyboardShortcuts(defaultProps));
+
+      simulateKeyDown('Space');
+
+      expect(mockTogglePlay).toHaveBeenCalledTimes(1);
+    });
+
+    it('ArrowRight: does NOT seek when isTextEditing=true (playhead layer)', () => {
+      renderHook(() => useKeyboardShortcuts({
+        ...defaultProps,
+        selectedLayer: 'playhead',
+        isTextEditing: true,
+      }));
+
+      simulateKeyDown('ArrowRight');
+
+      expect(mockSeekForward).not.toHaveBeenCalled();
+      expect(mockSeekBackward).not.toHaveBeenCalled();
+    });
+
+    it('ArrowLeft: does NOT navigate crop keyframes when isTextEditing=true', () => {
+      const keyframes = [
+        { frame: 0, x: 0, y: 0, width: 100, height: 100 },
+        { frame: 30, x: 10, y: 10, width: 100, height: 100 },
+      ];
+      renderHook(() => useKeyboardShortcuts({
+        ...defaultProps,
+        selectedLayer: 'crop',
+        keyframes,
+        selectedCropKeyframeIndex: 1,
+        isTextEditing: true,
+      }));
+
+      simulateKeyDown('ArrowLeft');
+
+      expect(mockSeek).not.toHaveBeenCalled();
+    });
+
+    it('Arrows: still navigate when isTextEditing=false (default) -- regression', () => {
+      renderHook(() => useKeyboardShortcuts({
+        ...defaultProps,
+        selectedLayer: 'playhead',
+      }));
+
+      simulateKeyDown('ArrowRight');
+
+      expect(mockSeekForward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
+    });
+
+    it('Ctrl+C: does NOT copy when isTextEditing=true', () => {
+      renderHook(() => useKeyboardShortcuts({ ...defaultProps, isTextEditing: true }));
+
+      simulateKeyDown('KeyC', { ctrlKey: true });
+
+      expect(mockOnCopyCrop).not.toHaveBeenCalled();
+    });
+
+    it('Ctrl+V: does NOT paste when isTextEditing=true, even with a copiedCrop pending', () => {
+      renderHook(() => useKeyboardShortcuts({
+        ...defaultProps,
+        copiedCrop: { x: 0, y: 0, width: 100, height: 100 },
+        isTextEditing: true,
+      }));
+
+      simulateKeyDown('KeyV', { ctrlKey: true });
+
+      expect(mockOnPasteCrop).not.toHaveBeenCalled();
+    });
+
+    it('Ctrl+C: still copies when isTextEditing=false (default) -- regression', () => {
+      renderHook(() => useKeyboardShortcuts(defaultProps));
+
+      simulateKeyDown('KeyC', { ctrlKey: true });
+
+      expect(mockOnCopyCrop).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('annotate mode navigation', () => {
     const clipRegions = [
       { id: 'region1', startTime: 0 },

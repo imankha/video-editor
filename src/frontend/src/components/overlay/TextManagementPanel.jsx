@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
 import { TextSpecEditor } from '../textspec/TextSpecEditor';
 import PositionPresetGrid from './PositionPresetGrid';
@@ -55,6 +55,10 @@ export default function TextManagementPanel({
   onDeleteTextRegion,
   onToggleText,
   onUpdateTextSpec,
+  // T6980: when set (and matching the selected element), expand+scroll+focus
+  // this element's row so canvas double-click lands the user in the panel field.
+  inlineEditingElementId = null,
+  onEndInlineEdit,
 }) {
   const selectedRegion = selectedRegionId ? regions.find((r) => r.id === selectedRegionId) || null : null;
   const selectedElement = selectedRegion && selectedElementId
@@ -77,6 +81,43 @@ export default function TextManagementPanel({
       return next;
     });
   };
+
+  // T6980: per-element tree-row refs (for scrollIntoView) + the Text field ref
+  // (for imperative focus). Keyed by element id.
+  const rowRefs = useRef({});
+  const textInputRef = useRef(null);
+
+  // T6980: entering inline edit on THIS panel's selected element -> make its row
+  // reachable and, if nothing has already claimed the caret, focused. Ensure the
+  // owning region is expanded (via the SAME expandOverrides mechanism the
+  // chevron uses) and scroll the row into view. View-only side effects (DOM
+  // focus/scroll + UI expand state) -- never a reel-data / backend write.
+  useEffect(() => {
+    if (!inlineEditingElementId || inlineEditingElementId !== selectedElementId) return;
+    if (selectedRegionId) toggleExpanded(selectedRegionId, true);
+    // Defer to let the expand render land before scrolling/focusing.
+    const raf = requestAnimationFrame(() => {
+      rowRefs.current[inlineEditingElementId]?.scrollIntoView({ block: 'nearest' });
+      const input = textInputRef.current;
+      // Reviewer round 1 fix: the canvas inline <input> (TextOverlayPreview)
+      // autofocuses SYNCHRONOUSLY in its ref callback during the SAME commit
+      // that mounts it -- this rAF runs a frame later. Stealing focus here
+      // unconditionally raced it: canvas focuses -> this rAF fires -> panel
+      // steals focus -> canvas input's onBlur fires -> inline edit ends ->
+      // canvas input unmounts, so double-click silently failed to enter edit
+      // in the real app (the dev harness doesn't mount this panel, so the
+      // race was invisible to the e2e suite). Only take focus here if the
+      // caret hasn't already landed on an input -- i.e. the canvas editor
+      // hasn't mounted yet (elementBoxes still settling, design §5 "Async
+      // metrics" landmine) -- so THIS becomes the fallback, not a competitor.
+      if (input && document.activeElement?.tagName !== 'INPUT') {
+        input.focus();
+        const end = input.value.length;
+        input.setSelectionRange(end, end);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [inlineEditingElementId, selectedElementId, selectedRegionId]);
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 lg:h-full">
@@ -144,6 +185,7 @@ export default function TextManagementPanel({
                     return (
                       <li key={element.id}>
                         <div
+                          ref={(node) => { rowRefs.current[element.id] = node; }}
                           data-testid={`text-tab-element-${element.id}`}
                           role="button"
                           tabIndex={0}
@@ -223,6 +265,10 @@ export default function TextManagementPanel({
             <TextSpecEditor
               spec={selectedElement.spec}
               onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedElement.id, nextSpec)}
+              // T6980: focus target for the inline-edit entry; blur/Escape/Enter
+              // end inline edit (commit itself is unchanged -- the debounce fired).
+              inputRef={textInputRef}
+              onCommitEnd={onEndInlineEdit || undefined}
             />
           </div>
         ) : (

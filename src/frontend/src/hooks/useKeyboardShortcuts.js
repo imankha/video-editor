@@ -52,10 +52,19 @@ export function useKeyboardShortcuts({
   clipRegions = [],
   annotateSelectedRegionId,
   selectAnnotateRegion,
+
+  // T6980: true while the user is typing in an inline text editor (canvas
+  // transparent <input> or the Text-tab panel input). Suppresses Space, copy/
+  // paste, and arrow navigation so keystrokes stay in the field. Arrows and
+  // Ctrl+C/V have NO tagName guard today, so this flag is the real fix.
+  isTextEditing = false,
 }) {
   // Space bar: Toggle play/pause
   useEffect(() => {
     const handleKeyDown = (event) => {
+      // T6980: never toggle play while inline text-editing.
+      if (isTextEditing) return;
+
       // Don't handle if typing in an input or textarea
       const tagName = event.target?.tagName?.toLowerCase();
       if (tagName === 'input' || tagName === 'textarea') {
@@ -70,11 +79,13 @@ export function useKeyboardShortcuts({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hasVideo, togglePlay]);
+  }, [hasVideo, togglePlay, isTextEditing]);
 
   // Ctrl+C/V: Copy/paste crop keyframe
   useEffect(() => {
     const handleKeyDown = (event) => {
+      // T6980: never copy/paste crop while inline text-editing.
+      if (isTextEditing) return;
       if (!hasVideo) return;
 
       // Ctrl+C or Cmd+C (Mac)
@@ -97,11 +108,13 @@ export function useKeyboardShortcuts({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hasVideo, copiedCrop, onCopyCrop, onPasteCrop]);
+  }, [hasVideo, copiedCrop, onCopyCrop, onPasteCrop, isTextEditing]);
 
   // Arrow keys: Layer-specific navigation
   useEffect(() => {
     const handleArrowKeys = (event) => {
+      // T6980: never seek/navigate while inline text-editing.
+      if (isTextEditing) return;
       if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return;
 
       // Don't handle if modifier keys are pressed
@@ -225,6 +238,7 @@ export function useKeyboardShortcuts({
     annotateSelectedRegionId,
     selectAnnotateRegion,
     annotateSelectedLayer,
+    isTextEditing,
   ]);
 }
 

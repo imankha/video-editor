@@ -46,7 +46,12 @@ const ALIGN_LABELS = {
   [Align.RIGHT]: 'Right',
 };
 
-export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, collapseEffects = false }) {
+// T6980: `inputRef` (optional) lets a host focus/caret the Text field
+// imperatively (the inline-edit panel focus), and `onCommitEnd` (optional) lets
+// it end inline edit on blur/Escape/Enter. Both are ADDITIVE -- existing callers
+// pass neither and are unaffected (the field commits via the host's debounced
+// onChange exactly as before).
+export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, collapseEffects = false, inputRef = null, onCommitEnd = null }) {
   const emit = (patch) => onChange({ ...spec, ...patch });
 
   const shadowControl = (
@@ -87,9 +92,17 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
         <label className="flex flex-col gap-1">
           <span className="text-xs uppercase tracking-wide text-gray-400">Text</span>
           <input
+            ref={inputRef}
             type="text"
+            data-testid="text-spec-text-input"
             value={spec.text}
             onChange={(e) => emit({ text: e.target.value })}
+            onBlur={onCommitEnd || undefined}
+            onKeyDown={onCommitEnd ? (e) => {
+              // T6980: blur/Escape/Enter end inline edit (commit is unchanged --
+              // the host's 250ms debounce already fired on the last keystroke).
+              if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); onCommitEnd(); }
+            } : undefined}
             className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white"
           />
         </label>
