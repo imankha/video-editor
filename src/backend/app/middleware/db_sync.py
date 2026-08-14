@@ -80,6 +80,7 @@ from ..user_context import (
     set_current_user_id,
 )
 from ..utils.cookies import set_cookie as _set_cookie
+from ..utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -770,7 +771,24 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if profile_id:
                     logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
                 init_start = time.perf_counter()
-                init_result = user_session_init(user_id)
+                # T6240: user_session_init does blocking R2 downloads + sqlite +
+                # Postgres work. Running it directly on the event loop stalled EVERY
+                # concurrent request until it returned — the T6200 fingerprint at
+                # boot: the first request of a session is /api/profiles, which has
+                # no X-Profile-ID to send, so it routes here, and the ~7 requests
+                # issued behind it all drained together (~22s in the 2026-07-31 HAR).
+                # Offload it so the loop stays free. run_in_context (NOT a bare
+                # to_thread): user context is already set (set_current_user_id
+                # above) and user_session_init -> ensure_database() reads
+                # get_current_user_id()/get_current_profile_id() — a bare to_thread
+                # would raise "No user context set" inside the worker thread. It
+                # also copies the write-tracking context installed by
+                # init_request_context() above (a shared mutable dict), so a
+                # new-user boot's writes still mark for R2 sync from the thread.
+                # The profile_id set on the copied context inside the thread does
+                # not propagate back, so we re-apply it on the request context
+                # below from the returned dict.
+                init_result = await run_in_context(user_session_init, user_id)
                 meta["init_ms"] = (time.perf_counter() - init_start) * 1000
                 profile_id = init_result.get("profile_id")
                 if profile_id:

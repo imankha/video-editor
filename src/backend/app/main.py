@@ -148,11 +148,18 @@ async def lifespan(app: FastAPI):
     asyncio.get_running_loop().set_default_executor(io_executor)
     logger.info("[Startup] Default asyncio executor set to bounded I/O pool (max_workers=32)")
 
+    # T6240: hand the main loop to session_init so startup recovery scheduled from
+    # the offloaded (worker-thread) user_session_init still lands on this loop
+    # fire-and-forget, instead of blocking the worker via asyncio.run().
+    from .session_init import set_main_loop
+    set_main_loop(asyncio.get_running_loop())
+
     await _startup_event()
     try:
         yield
     finally:
         await _shutdown_event()
+        set_main_loop(None)
         io_executor.shutdown(wait=False, cancel_futures=True)
 
 
