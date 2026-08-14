@@ -1,6 +1,6 @@
 # T7000: `_js_path()` loud-failure guard no longer raises at Fly deploy depth
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-13
