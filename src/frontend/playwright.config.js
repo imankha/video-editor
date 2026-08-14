@@ -59,6 +59,11 @@ const PER_TEST_TIMEOUT = process.env.E2E_TIMEOUT_MS
 
 export default defineConfig({
   testDir: './e2e',
+  // T6760: e2e/archive/ holds superseded round-N QA/evidence specs and one-off debug
+  // specs (parked, not deleted, so their history stays greppable). They are pinned to
+  // UI states later tasks intentionally changed; the CURRENT regression coverage lives
+  // in the collected live specs (see e2e/archive/README.md). Never collect them.
+  testIgnore: '**/archive/**',
   fullyParallel: false, // Run tests sequentially for workflow tests
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
