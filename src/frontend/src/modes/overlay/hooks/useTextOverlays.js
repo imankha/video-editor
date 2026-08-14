@@ -39,6 +39,11 @@ export default function useTextOverlays() {
   const [duration, setDurationState] = useState(null);
   const [selectedRegionId, setSelectedRegionId] = useState(null);
   const [selectedElementId, setSelectedElementId] = useState(null);
+  // T6980: which element (if any) is in INLINE canvas/panel text-edit mode.
+  // View-state only, next to selection -- the canvas render, the panel focus,
+  // and the keyboard-suppression flag all read this ONE source (design §3.1,
+  // decision #4). NEVER a write path: begin/end mutate local state only.
+  const [inlineEditingElementId, setInlineEditingElementId] = useState(null);
 
   const initializeWithDuration = useCallback((videoDuration) => {
     setDurationState(videoDuration);
@@ -95,6 +100,20 @@ export default function useTextOverlays() {
     setSelectedRegionId(regionId);
     setSelectedElementId(elementId);
   }, [textOverlays]);
+
+  // T6980: enter inline text-edit for one element. Single-purpose (like
+  // selectElement) -- the caller composes select + Text tab + seek around this
+  // (OverlayModeView.handleBeginInlineEdit). A falsy id defensively clears the
+  // flag rather than storing a bad value.
+  const beginInlineEdit = useCallback((elementId) => {
+    setInlineEditingElementId(elementId || null);
+  }, []);
+
+  // T6980: leave inline text-edit (blur / Escape / Enter). No write -- the
+  // per-keystroke debounce already persisted the last edit (design §2.1).
+  const endInlineEdit = useCallback(() => {
+    setInlineEditingElementId(null);
+  }, []);
 
   // Creates a NEW REGION with exactly one starter element. `spec.position`/
   // `spec.align` are overridden with a DEFAULT PRESET (round 4 item 2: a new
@@ -241,6 +260,12 @@ export default function useTextOverlays() {
     const removed = region.elements.find(el => el.id === elementId);
     const remainingElements = region.elements.filter(el => el.id !== elementId);
 
+    // T6980: the inline-edited element is going away -- drop the edit flag so
+    // the canvas never tries to render an input over a deleted element.
+    if (inlineEditingElementId === elementId) {
+      setInlineEditingElementId(null);
+    }
+
     if (remainingElements.length === 0) {
       setTextOverlays(prev => prev.filter(r => r.id !== region.id));
       if (selectedRegionId === region.id) {
@@ -255,7 +280,7 @@ export default function useTextOverlays() {
       }
     }
     return { ...removed, regionId: region.id };
-  }, [textOverlays, selectedRegionId, selectedElementId]);
+  }, [textOverlays, selectedRegionId, selectedElementId, inlineEditingElementId]);
 
   // Deletes a REGION and every element inside it in one gesture (the
   // timeline lane's keyboard Delete/Backspace on the focused region uses
@@ -268,8 +293,12 @@ export default function useTextOverlays() {
       setSelectedRegionId(null);
       setSelectedElementId(null);
     }
+    // T6980: if the inline-edited element lived in this region, clear the flag.
+    if (found.elements.some(el => el.id === inlineEditingElementId)) {
+      setInlineEditingElementId(null);
+    }
     return found;
-  }, [textOverlays, selectedRegionId]);
+  }, [textOverlays, selectedRegionId, inlineEditingElementId]);
 
   /**
    * restoreTextOverlays -- read-only hydration from the backend-shaped
@@ -295,6 +324,7 @@ export default function useTextOverlays() {
     setTextOverlays([]);
     setSelectedRegionId(null);
     setSelectedElementId(null);
+    setInlineEditingElementId(null); // T6980
   }, []);
 
   /**
@@ -318,8 +348,11 @@ export default function useTextOverlays() {
     duration,
     selectedRegionId,
     selectedElementId,
+    inlineEditingElementId,
     selectRegion,
     selectElement,
+    beginInlineEdit,
+    endInlineEdit,
     initializeWithDuration,
     addRegion,
     addElement,

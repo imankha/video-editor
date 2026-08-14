@@ -554,6 +554,106 @@ describe('useTextOverlays - selection (T6630 round 4)', () => {
   });
 });
 
+describe('useTextOverlays - inline-edit state (T6980)', () => {
+  it('beginInlineEdit(id) sets inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec()); });
+    const elementId = region.elements[0].id;
+
+    expect(result.current.inlineEditingElementId).toBeNull();
+    act(() => { result.current.beginInlineEdit(elementId); });
+
+    expect(result.current.inlineEditingElementId).toBe(elementId);
+  });
+
+  it('endInlineEdit() clears inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec()); });
+    const elementId = region.elements[0].id;
+
+    act(() => { result.current.beginInlineEdit(elementId); });
+    expect(result.current.inlineEditingElementId).toBe(elementId);
+
+    act(() => { result.current.endInlineEdit(); });
+    expect(result.current.inlineEditingElementId).toBeNull();
+  });
+
+  it('deleting the element currently being inline-edited clears inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec({ text: 'First' })); });
+    let second;
+    act(() => { second = result.current.addElement(region.id, baseSpec({ text: 'Second' })); });
+
+    act(() => { result.current.beginInlineEdit(second.id); });
+    expect(result.current.inlineEditingElementId).toBe(second.id);
+
+    act(() => { result.current.deleteElement(second.id); });
+    expect(result.current.inlineEditingElementId).toBeNull();
+  });
+
+  it('deleting the REGION containing the inline-edited element clears inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec()); });
+    const elementId = region.elements[0].id;
+
+    act(() => { result.current.beginInlineEdit(elementId); });
+    act(() => { result.current.deleteRegion(region.id); });
+
+    expect(result.current.inlineEditingElementId).toBeNull();
+  });
+
+  it('deleting an UNRELATED element does NOT clear inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let regionA, regionB;
+    act(() => { regionA = result.current.addRegion(0, baseSpec()); });
+    act(() => { regionB = result.current.addRegion(5, baseSpec()); });
+
+    act(() => { result.current.beginInlineEdit(regionA.elements[0].id); });
+    act(() => { result.current.deleteRegion(regionB.id); });
+
+    expect(result.current.inlineEditingElementId).toBe(regionA.elements[0].id);
+  });
+
+  it('reset() clears inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec()); });
+    act(() => { result.current.beginInlineEdit(region.elements[0].id); });
+
+    act(() => { result.current.reset(); });
+    expect(result.current.inlineEditingElementId).toBeNull();
+  });
+
+  it('beginInlineEdit(falsy) defensively clears inlineEditingElementId', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(10));
+
+    let region;
+    act(() => { region = result.current.addRegion(0, baseSpec()); });
+    act(() => { result.current.beginInlineEdit(region.elements[0].id); });
+    expect(result.current.inlineEditingElementId).toBe(region.elements[0].id);
+
+    act(() => { result.current.beginInlineEdit(null); });
+    expect(result.current.inlineEditingElementId).toBeNull();
+  });
+});
+
 describe('useTextOverlays - restore is read-only (T6630 round 4, region shape)', () => {
   it('restoreTextOverlays hydrates state from backend-shaped REGION entries without mutating input', () => {
     const { result } = renderHook(() => useTextOverlays());

@@ -322,8 +322,11 @@ export function OverlayScreen({
     textOverlaysWithLayout,
     selectedRegionId,
     selectedElementId,
+    inlineEditingElementId,
     selectRegion,
     selectElement,
+    beginInlineEdit,
+    endInlineEdit,
     addRegion,
     addElement,
     moveRegionStart,
@@ -1312,8 +1315,15 @@ export function OverlayScreen({
   // KEYBOARD SHORTCUTS
   // =========================================
 
+  const isTextEditing = inlineEditingElementId != null;
   useEffect(() => {
     const handleKeyDown = (event) => {
+      // T6980: suppress overlay shortcuts entirely while inline text-editing so
+      // Space/arrows land in the editor field, not the playhead. The tagName
+      // guard below already covers the focused <input>, but the explicit flag is
+      // the robust fix (same rationale as useKeyboardShortcuts' isTextEditing).
+      if (isTextEditing) return;
+
       // Don't handle if typing in an input or textarea
       const tagName = event.target?.tagName?.toLowerCase();
       if (tagName === 'input' || tagName === 'textarea') {
@@ -1344,7 +1354,7 @@ export function OverlayScreen({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [effectiveOverlayVideoUrl, togglePlay, stepForward, stepBackward]);
+  }, [effectiveOverlayVideoUrl, togglePlay, stepForward, stepBackward, isTextEditing]);
 
   // =========================================
   // FULLSCREEN HANDLER
@@ -1587,6 +1597,11 @@ export function OverlayScreen({
       clipBoundaries={clipBoundaries}
       selectedRegionId={selectedRegionId}
       selectedElementId={selectedElementId}
+      // T6980: inline text-edit (double-click canvas / two-tap touch / panel focus).
+      // OverlayModeView composes select+tab+seek around `beginInlineEdit`.
+      inlineEditingElementId={inlineEditingElementId}
+      beginInlineEdit={beginInlineEdit}
+      endInlineEdit={endInlineEdit}
       onAddRegion={wrappedAddRegion}
       onAddElement={wrappedAddElement}
       onMoveTextStart={wrappedMoveTextStart}

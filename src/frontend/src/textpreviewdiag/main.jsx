@@ -30,6 +30,22 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
  * status div's `data-el2-id` attribute (not the text, since it's a
  * dynamically-generated id the spec can't hardcode). `onSelectElement`
  * wires straight to the real `selectElement` from `useTextOverlays`.
+ *
+ * T6980 additions -- inline canvas edit + Text-tab-panel sync harness:
+ *  - Reads `inlineEditingElementId`/`beginInlineEdit`/`endInlineEdit` off the
+ *    REAL `useTextOverlays` hook (undefined/no-op until T6980 implements
+ *    them -- the harness tolerates that so this file can be authored ahead
+ *    of the hook change, per test-first).
+ *  - Passes `onBeginInlineEdit`/`inlineEditingElementId`/`onEndInlineEdit`
+ *    into `<TextOverlayPreview>` (unknown/unread props today -- harmless,
+ *    forward-compatible; TextOverlayPreview destructures a fixed prop list
+ *    and ignores anything it doesn't name).
+ *  - Renders a `data-testid="panel-text-input"` `<input>` standing in for
+ *    the REAL `TextManagementPanel`'s `TextSpecEditor` text field, wired to
+ *    the SAME `updateElementSpec` -> `handleMoveTextPosition`-equivalent
+ *    single write path (`onEditText`) the canvas input will use -- so the
+ *    e2e spec can assert canvas<->panel LIVE sync through the one shared
+ *    write path without mounting the full settings panel tree.
  */
 
 const DURATION = 10;
@@ -70,6 +86,12 @@ function TextPreviewDiagHarness() {
     addElement,
     selectElement,
     updateElementSpec,
+    // T6980: undefined until useTextOverlays grows these -- the harness
+    // renders `data-inline-editing` from whatever this evaluates to, so a
+    // spec asserting on it fails honestly (not a harness crash) pre-T6980.
+    inlineEditingElementId,
+    beginInlineEdit,
+    endInlineEdit,
   } = useTextOverlays();
 
   const [elementId, setElementId] = useState(null);
@@ -162,6 +184,34 @@ function TextPreviewDiagHarness() {
     if (selected) updateElementSpec(elementId, { ...selected.spec, position: { x: 0.5, y: 0.5 } });
   };
 
+  // T6980 -- the ONE write path both the canvas inline input and the panel
+  // input will funnel through (design §2.1's `wrappedUpdateTextSpec`
+  // equivalent for this harness): given the CURRENTLY SELECTED element's id
+  // + its current spec, replace only `text` and call updateElementSpec.
+  // Both inputs below call this SAME function -- proving single-write-path
+  // sync is a matter of wiring, not a second code path.
+  const selectedForEdit = textOverlays
+    .flatMap((r) => r.elements)
+    .find((el) => el.id === selectedElementId);
+  const onEditText = (id, nextSpec) => updateElementSpec(id, nextSpec);
+
+  // T6980 -- composes the target gesture the real OverlayModeView.
+  // handleBeginInlineEdit will own (design §3.3): select + Text tab (this
+  // harness is Text-tab-only already) + seek into range if needed + begin
+  // inline edit. Seek-into-range is a no-op here (currentTime stays 3, which
+  // is already the harness's in-range default) since the harness's job is
+  // to prove the EDIT flag + write-path wiring, not re-derive T6880's seek
+  // math. Falls back to a no-op if beginInlineEdit doesn't exist yet
+  // (pre-T6980), so the harness never crashes -- the qa spec's assertions
+  // simply fail honestly instead.
+  const handleBeginInlineEdit = (id, elRegionId) => {
+    selectElement(id, elRegionId);
+    if (typeof beginInlineEdit === 'function') beginInlineEdit(id);
+  };
+  const handleEndInlineEdit = () => {
+    if (typeof endInlineEdit === 'function') endInlineEdit();
+  };
+
   return (
     <div style={{ margin: 40 }}>
       <div
@@ -170,6 +220,10 @@ function TextPreviewDiagHarness() {
         // can target the SECOND element's dynamically-generated id without
         // parsing it out of the monospace status line.
         data-el2-id={elementId2 || ''}
+        // T6980: undefined pre-implementation -> the attribute reads "" (React
+        // drops a null/undefined attribute), which the qa spec's "no element is
+        // being inline-edited" assertions treat the same as an explicit 'none'.
+        data-inline-editing={inlineEditingElementId || 'none'}
         style={{ color: '#d1d5db', fontSize: 13, marginBottom: 16, fontFamily: 'monospace' }}
       >
         {pos
@@ -181,6 +235,28 @@ function TextPreviewDiagHarness() {
         <button type="button" data-testid="set-short" onClick={() => setText(SHORT_TEXT)}>short</button>
         <button type="button" data-testid="set-long" onClick={() => setText(LONG_TEXT)}>long</button>
         <button type="button" data-testid="reset-pos" onClick={resetPos}>reset</button>
+      </div>
+
+      {/* T6980 -- stand-in for the REAL TextManagementPanel's TextSpecEditor
+          text <input>. Bound to the SAME selected element + the SAME
+          onEditText write path the canvas inline input will use, so the qa
+          spec can prove live sync both directions without mounting the full
+          settings-panel tree (which is unrelated surface for this harness). */}
+      <div style={{ marginBottom: 12 }}>
+        <input
+          type="text"
+          data-testid="panel-text-input"
+          value={selectedForEdit ? selectedForEdit.spec.text : ''}
+          onChange={(e) => {
+            if (!selectedForEdit) return;
+            onEditText(selectedForEdit.id, { ...selectedForEdit.spec, text: e.target.value });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' || e.key === 'Enter') handleEndInlineEdit();
+          }}
+          onBlur={handleEndInlineEdit}
+          disabled={!selectedForEdit}
+        />
       </div>
 
       {/* T6880 -- ghost-state controls (playhead in/out of the region window,
@@ -220,6 +296,14 @@ function TextPreviewDiagHarness() {
           isFullscreen={false}
           isPlaying={isPlaying}
           isTextTabActive={isTextTabActive}
+          // T6980 -- unread by TextOverlayPreview until it implements the
+          // dblclick/dbltap -> inline-edit affordance (design §3.4); passing
+          // them now is forward-compatible (extra unread props are a no-op)
+          // and lets this harness be authored ahead of that change.
+          onBeginInlineEdit={handleBeginInlineEdit}
+          inlineEditingElementId={inlineEditingElementId}
+          onEndInlineEdit={handleEndInlineEdit}
+          onEditText={onEditText}
         />
       </div>
     </div>

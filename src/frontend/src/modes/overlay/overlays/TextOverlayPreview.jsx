@@ -83,6 +83,12 @@ const TAP_SLOP_SQ = TAP_SLOP * TAP_SLOP;
 // affordance reads as a handle around the text, not exactly on the ink edge.
 const GRAB_PAD_PX = 6;
 
+// T6980: touch two-tap window. A second tap on the SAME element id within this
+// many ms (and NOT a drag) enters inline edit -- the touch equivalent of a
+// desktop double-click (design §3.4, decision #3). ~300ms matches the platform
+// double-tap convention without being so long that two deliberate selects trip it.
+const DOUBLE_TAP_MS = 300;
+
 // Non-passive touchmove blocker used ONLY during an active drag. On touch,
 // preventDefault on pointerdown does not stop the page panning, so we suppress
 // the browser's default touch scroll at the document level while a drag is in
@@ -135,6 +141,16 @@ export default function TextOverlayPreview({
   selectedElementId = null,
   onMoveTextPosition,
   onSelectElement,
+  // T6980: inline text-edit affordance. `onBeginInlineEdit(id, regionId)` is
+  // fired by a double-click / touch double-tap on an editable element;
+  // `inlineEditingElementId` names the element currently in edit mode (render a
+  // transparent <input> over it); `onEndInlineEdit()` fires on blur/Escape/Enter;
+  // `onEditText(id, nextSpec)` is the SAME single write path the panel input uses
+  // (the debounced update_text_spec) -- never a second path.
+  onBeginInlineEdit,
+  inlineEditingElementId = null,
+  onEndInlineEdit,
+  onEditText,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false,
@@ -177,6 +193,14 @@ export default function TextOverlayPreview({
   // pointerdown so the very first pointermove reads current values with zero
   // re-render lag (T5380 -- a useEffect-gated listener races the first move).
   const dragRef = useRef(null);
+
+  // T6980: last TOUCH tap { id, t } for the ref-based double-tap detector. Keyed
+  // on element id + time (not node identity), so the select-target -> grab-frame
+  // node swap on the first tap can't defeat it (design §3.4, decision #3).
+  const lastTapRef = useRef(null);
+  // Caret-to-end guard so the inline <input>'s autoFocus effect only fires once
+  // per edit session (keyed by the edited element id below).
+  const inlineFocusedRef = useRef(null);
 
   const dragActive = onMoveTextPosition && selectedElementId;
 
@@ -366,10 +390,71 @@ export default function TextOverlayPreview({
   // (a lingering one would freeze page scroll).
   useEffect(() => () => window.removeEventListener('touchmove', preventDefaultTouch), []);
 
+  // T6980: clear the one-shot autofocus guard when inline edit ends, so
+  // re-entering edit on the SAME element later re-focuses + re-places the caret.
+  // (Switching directly to a DIFFERENT element is handled by the ref callback,
+  // which focuses whenever the guard doesn't match the current edited id.)
+  useEffect(() => {
+    if (!inlineEditingElementId) inlineFocusedRef.current = null;
+  }, [inlineEditingElementId]);
+
   if (!rect || !rect.width || !rect.height) return null;
   if (visibleElements.length === 0) return null;
 
   const selectedBox = selectedElementId ? elementBoxes[selectedElementId] : null;
+
+  // T6980: enter inline edit for `element`. Kills the mobile-fullscreen
+  // togglePlay bubble (same T6080 concern as the hit-boxes) then hands off to
+  // the composed gesture in OverlayModeView. Only ever called for an element
+  // present in `elementBoxes` (i.e. a visible one -- the T6880 gate), so it can
+  // never enter edit for a hidden/out-of-range element.
+  const handleActivateEdit = (element, e) => {
+    if (!onBeginInlineEdit || !element) return;
+    e?.stopPropagation?.();
+    onBeginInlineEdit(element.id, element.regionId);
+  };
+
+  // T6980: desktop double-click detector. Attached to the STABLE overlayRef
+  // frame (not a per-element node), so the select-target -> grab-frame swap the
+  // first click triggers can't defeat it (design decision #2). Hit-tests the
+  // pointer against each measured `elementBoxes[id]` using the SAME fraction
+  // math the select-targets render from.
+  const handleFrameDoubleClick = (e) => {
+    if (!onBeginInlineEdit) return;
+    const frameEl = overlayRef.current;
+    if (!frameEl) return;
+    const fr = frameEl.getBoundingClientRect();
+    if (!fr.width || !fr.height) return;
+    const fx = (e.clientX - fr.left) / fr.width;
+    const fy = (e.clientY - fr.top) / fr.height;
+    const hit = visibleElements.find((element) => {
+      const box = elementBoxes[element.id];
+      if (!box) return false;
+      const left = element.spec.position.x + box.offLeftF;
+      const top = element.spec.position.y + box.offTopF;
+      return fx >= left && fx <= left + box.widthF && fy >= top && fy <= top + box.heightF;
+    });
+    if (hit) handleActivateEdit(hit, e);
+  };
+
+  // T6980: touch two-tap detector for a hit affordance. Fires only for
+  // pointerType 'touch' and only when the gesture was a TAP (not a drag -- reuse
+  // the `d.moved` result the pointer path already computed for the grab frame;
+  // a bare select-target tap never sets a dragRef, so it's a tap by definition).
+  // A second tap on the SAME element id within DOUBLE_TAP_MS enters inline edit.
+  const handleHitPointerUp = (element) => (e) => {
+    if (e.pointerType !== 'touch') return;
+    const d = dragRef.current;
+    if (d && d.moved) { lastTapRef.current = null; return; } // a drag, not a tap
+    const now = e.timeStamp || Date.now();
+    const prev = lastTapRef.current;
+    if (prev && prev.id === element.id && now - prev.t <= DOUBLE_TAP_MS) {
+      lastTapRef.current = null;
+      handleActivateEdit(element, e);
+      return;
+    }
+    lastTapRef.current = { id: element.id, t: now };
+  };
 
   // Grab frame for the selected element, positioned from its LIVE anchor + the
   // measured box offsets (so it tracks the text during a drag with no
@@ -384,7 +469,10 @@ export default function TextOverlayPreview({
         data-testid={`text-drag-frame-${selectedElement.id}`}
         onPointerDown={beginDrag}
         onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
+        // T6980: run the touch two-tap detector BEFORE endDrag nulls dragRef
+        // (the detector reads d.moved to distinguish a tap from a drag). A drag
+        // never enters edit; a bare tap on the selected frame can double-tap in.
+        onPointerUp={(e) => { handleHitPointerUp(selectedElement)(e); endDrag(e); }}
         onPointerCancel={endDrag}
         // T6080: swallow the synthetic click trailing a drag's pointerup so it
         // can't bubble to OverlayModeView's handleVideoAreaTap (mobile fullscreen
@@ -431,6 +519,9 @@ export default function TextOverlayPreview({
             // T6080: stop the click here too -- same mobile-fullscreen
             // togglePlay() bubble risk as the grab frame's onClick above.
             onClick={(e) => { e.stopPropagation(); onSelectElement(element.id, element.regionId); }}
+            // T6980: touch two-tap -> inline edit (desktop uses the frame's
+            // onDoubleClick hit-test instead).
+            onPointerUp={handleHitPointerUp(element)}
             className="absolute cursor-pointer"
             style={{
               left: `${leftPx}px`,
@@ -444,9 +535,75 @@ export default function TextOverlayPreview({
       })
     : null;
 
+  // T6980: the inline text editor -- a transparent single-line <input> laid over
+  // the edited element's measured box. RichText stays mounted+visible beneath;
+  // the input's fill/background are transparent and only the caret shows, so the
+  // live preview stays honest (design §3.4, decision #1). Positioned from the
+  // SAME leftPx/topPx/widthPx/heightPx as the grab frame. Every keystroke drives
+  // the ONE existing write path (onEditText -> wrappedUpdateTextSpec).
+  const inlineEditElement = inlineEditingElementId
+    ? visibleElements.find((el) => el.id === inlineEditingElementId)
+    : null;
+  const inlineEditBox = inlineEditElement ? elementBoxes[inlineEditElement.id] : null;
+  const inlineEditor = inlineEditElement && inlineEditBox && onEditText ? (() => {
+    const spec = inlineEditElement.spec;
+    const leftPx = (spec.position.x + inlineEditBox.offLeftF) * rect.width - GRAB_PAD_PX;
+    const topPx = (spec.position.y + inlineEditBox.offTopF) * rect.height - GRAB_PAD_PX;
+    const widthPx = inlineEditBox.widthF * rect.width + GRAB_PAD_PX * 2;
+    const heightPx = inlineEditBox.heightF * rect.height + GRAB_PAD_PX * 2;
+    return (
+      <input
+        key={`inline-edit-${inlineEditElement.id}`}
+        type="text"
+        data-testid={`text-inline-edit-${inlineEditElement.id}`}
+        value={spec.text}
+        ref={(node) => {
+          if (!node) return;
+          // Autofocus + caret-to-end ONCE per edit session (not on every
+          // keystroke re-render, which would keep yanking the caret to the end).
+          if (inlineFocusedRef.current !== inlineEditElement.id) {
+            inlineFocusedRef.current = inlineEditElement.id;
+            node.focus();
+            const end = node.value.length;
+            node.setSelectionRange(end, end);
+          }
+        }}
+        onChange={(e) => onEditText(inlineEditElement.id, { ...spec, text: e.target.value })}
+        onBlur={() => onEndInlineEdit && onEndInlineEdit()}
+        onKeyDown={(e) => {
+          // Keep typed Space/arrows in the field even before the isTextEditing
+          // flag propagates to the document keydown listeners (belt-and-braces).
+          e.stopPropagation();
+          if (e.key === 'Escape' || e.key === 'Enter') {
+            e.preventDefault();
+            onEndInlineEdit && onEndInlineEdit();
+          }
+        }}
+        className="absolute"
+        style={{
+          left: `${leftPx}px`,
+          top: `${topPx}px`,
+          width: `${widthPx}px`,
+          height: `${heightPx}px`,
+          pointerEvents: 'auto',
+          touchAction: 'none',
+          color: 'transparent',
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          padding: 0,
+          margin: 0,
+          caretColor: 'rgba(34, 211, 238, 0.95)',
+          textAlign: spec.align || 'left',
+        }}
+      />
+    );
+  })() : null;
+
   return (
     <div
       ref={overlayRef}
+      onDoubleClick={handleFrameDoubleClick}
       className="absolute pointer-events-none"
       style={{ left: rect.offsetX, top: rect.offsetY, width: rect.width, height: rect.height }}
     >
@@ -466,6 +623,7 @@ export default function TextOverlayPreview({
       ))}
       {selectTargets}
       {grabFrame}
+      {inlineEditor}
     </div>
   );
 }
