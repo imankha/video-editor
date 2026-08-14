@@ -150,32 +150,42 @@ export function CollectionHeader({
   );
 
   // T7050: in-flight download feedback. The collection stream has no
-  // Content-Length (the stitched size is unknown until compose finishes), so
-  // there is usually no honest percentage -- render an INDETERMINATE bar with a
-  // live byte readout, reusing GlobalExportIndicator's bar treatment. If a total
-  // ever IS known (Content-Length present), go determinate. Most of the wait is
-  // the server-side stitch (before the first byte), so the copy starts at
-  // "Preparing your download..." until bytes actually arrive.
+  // Content-Length, AND T7040 moved the stitch/compose work OUT of the
+  // StreamingResponse generator (so a failure raises a clean 500 instead of
+  // aborting mid-stream) -- meaning the entire file is fully built server-side
+  // BEFORE the first byte reaches the browser. receivedBytes genuinely stays 0
+  // for the whole compose wait (can be ~1 minute); there is no event to report
+  // during that phase. A bar-shaped element implies fill-tracking that isn't
+  // happening, so the "no total" case is a SPINNER, not a bar (user feedback
+  // 2026-08-15: a static full-width pulsing bar reads as stuck, not busy). If a
+  // total ever IS known (Content-Length present), that case stays a real
+  // determinate bar.
   const received = downloadProgress?.receivedBytes || 0;
   const total = downloadProgress?.totalBytes || null;
   const percent = total ? Math.min(100, Math.round((received / total) * 100)) : null;
 
   const downloadProgressEl = downloadLoading ? (
     <div data-testid="collection-download-progress" aria-live="polite">
-      <div className="flex justify-between text-xs text-gray-400 mb-1">
-        <span>{received > 0 ? 'Downloading…' : 'Preparing your download…'}</span>
-        <span>
-          {received > 0 ? formatBytes(received) : ''}
-          {received > 0 && total ? ` / ${formatBytes(total)}` : ''}
-        </span>
-      </div>
-      <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        {percent != null ? (
-          <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${percent}%` }} />
-        ) : (
-          <div className="h-full bg-cyan-500 animate-pulse w-full opacity-60" />
-        )}
-      </div>
+      {percent != null ? (
+        <>
+          <div className="flex justify-between text-xs text-gray-400 mb-1">
+            <span>Downloading…</span>
+            <span>{formatBytes(received)} / {formatBytes(total)}</span>
+          </div>
+          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${percent}%` }} />
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <Loader size={14} className="animate-spin shrink-0 text-cyan-500" />
+          <span>
+            {received > 0
+              ? `Downloading… ${formatBytes(received)}`
+              : 'Preparing your download… this can take up to a minute'}
+          </span>
+        </div>
+      )}
     </div>
   ) : null;
 

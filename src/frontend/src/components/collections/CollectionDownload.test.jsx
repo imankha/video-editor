@@ -215,20 +215,23 @@ describe('useDownloads.downloadCollection (T7050 progress)', () => {
 });
 
 // T7050: the header renders an in-flight progress indicator while a collection
-// download is in flight. Indeterminate (no Content-Length) with a live byte
-// readout that starts at "Preparing…" until bytes arrive.
+// download is in flight. No Content-Length + T7040 fully builds the file
+// server-side before the first byte -> receivedBytes stays 0 for the whole
+// compose wait, so the "no total" case is a SPINNER (busy, not a fake bar
+// implying fill-tracking that isn't happening) with a "Preparing…" readout
+// that upgrades to a live byte count once bytes actually start arriving.
 describe('CollectionHeader download progress (T7050)', () => {
-  it('shows a "Preparing" indeterminate bar before any bytes arrive', () => {
+  it('shows a "Preparing" spinner before any bytes arrive', () => {
     render(
       <CollectionHeader title="Top Plays" ratio="9:16" reelCount={3}
         onPlayAll={() => {}} onDownload={() => {}} downloadLoading downloadProgress={null} />,
     );
     const region = screen.getByTestId('collection-download-progress');
     expect(region.textContent).toContain('Preparing your download');
-    expect(region.querySelector('.animate-pulse')).toBeTruthy();
+    expect(region.querySelector('.animate-spin')).toBeTruthy();
   });
 
-  it('shows a byte readout once bytes are received (still indeterminate)', () => {
+  it('shows a byte readout once bytes are received (still no bar, no total known)', () => {
     render(
       <CollectionHeader title="Top Plays" ratio="9:16" reelCount={3}
         onPlayAll={() => {}} onDownload={() => {}} downloadLoading
@@ -237,7 +240,7 @@ describe('CollectionHeader download progress (T7050)', () => {
     const region = screen.getByTestId('collection-download-progress');
     expect(region.textContent).toContain('Downloading');
     expect(region.textContent).toContain('2.0 MB');
-    expect(region.querySelector('.animate-pulse')).toBeTruthy();
+    expect(region.querySelector('.animate-spin')).toBeTruthy();
   });
 
   it('goes determinate (width %) when a total is known', () => {
@@ -247,7 +250,7 @@ describe('CollectionHeader download progress (T7050)', () => {
         downloadProgress={{ receivedBytes: 5, totalBytes: 10 }} />,
     );
     const region = screen.getByTestId('collection-download-progress');
-    expect(region.querySelector('.animate-pulse')).toBeFalsy();
+    expect(region.querySelector('.animate-spin')).toBeFalsy();
     const bar = region.querySelector('[style*="width"]');
     expect(bar.style.width).toBe('50%');
   });
