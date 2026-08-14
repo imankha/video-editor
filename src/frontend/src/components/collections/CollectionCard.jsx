@@ -49,6 +49,11 @@ export function CollectionCard({
   const [ratioMembers, setRatioMembers] = useState(null); // this ratio's members (once fetched)
   const [playLoading, setPlayLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
+  // T7050: in-flight download progress ({receivedBytes, totalBytes}) fed by the
+  // caller's onProgress callback. totalBytes is null for the collection stream
+  // (no Content-Length) -> the header renders an INDETERMINATE bar. Gesture-
+  // scoped: set alongside downloadLoading, cleared in the same finally.
+  const [downloadProgress, setDownloadProgress] = useState(null);
 
   const ensureMembers = async () => {
     if (ratioMembers) return ratioMembers;
@@ -98,10 +103,12 @@ export function CollectionCard({
   // the same budget the share/copy-link actions use.
   const handleDownload = async () => {
     setDownloadLoading(true);
+    setDownloadProgress(null);
     try {
-      await onDownload(buildDefinition());
+      await onDownload(buildDefinition(), setDownloadProgress);
     } finally {
       setDownloadLoading(false);
+      setDownloadProgress(null);
     }
   };
 
@@ -124,6 +131,7 @@ export function CollectionCard({
       onIntro={onIntro && shareDefinition ? () => onIntro(shareDefinition, playTitle || title) : undefined}
       onDownload={onDownload && shareDefinition ? handleDownload : undefined}
       downloadLoading={downloadLoading}
+      downloadProgress={downloadProgress}
       introBadge={introBadge}
     />
   );

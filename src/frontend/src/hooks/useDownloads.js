@@ -216,9 +216,22 @@ export function useDownloads(isOpen = false) {
    * aspect_ratio, budget_sec?} definition as query params. No global busy
    * state here -- the CollectionCard owns its own busy flag around this call
    * (gesture-scoped, no useEffect). Throws on failure so the caller can react.
+   *
+   * T7050: in-flight progress feedback. `download_collection` (collections.py)
+   * is a StreamingResponse that sets NO Content-Length (the stitched size isn't
+   * known until the compose finishes), so a determinate percent bar would be
+   * dishonest -- we report an INDETERMINATE state plus the bytes received so
+   * far. The bulk of the wait is server-side (the Modal/local stitch runs
+   * before the 200 + headers commit, i.e. before this fetch even resolves), so
+   * `onProgress` mostly toggles active/inactive; the byte readout only ticks
+   * during the final disk->network stream. If a future backend DOES send
+   * Content-Length, `totalBytes` is populated and the caller can go determinate.
+   * The caller owns the busy flag + progress state (gesture-scoped, no hook
+   * global state, no useEffect).
    * @param {Object} definition - {scope:{type,game_id?}, filter:{tags?}, aspect_ratio, budget_sec?}
+   * @param {Object=} opts - {onProgress?: ({receivedBytes, totalBytes}) => void}
    */
-  const downloadCollection = useCallback(async ({ scope, filter, aspect_ratio, budget_sec } = {}) => {
+  const downloadCollection = useCallback(async ({ scope, filter, aspect_ratio, budget_sec } = {}, { onProgress } = {}) => {
     const params = new URLSearchParams({ scope_type: scope.type, aspect_ratio });
     if (scope.type === 'game') params.set('game_id', scope.game_id);
     if (filter?.tags?.length) params.set('tags', filter.tags.join(','));
@@ -229,7 +242,32 @@ export function useDownloads(isOpen = false) {
       throw new Error(`Collection download failed: ${response.status} ${response.statusText}`);
     }
 
-    const blob = await response.blob();
+    // Content-Length is absent for this endpoint (streamed stitch) -> totalBytes
+    // stays null and the caller shows an indeterminate indicator. Read the body
+    // incrementally so the byte readout ticks during the stream; fall back to
+    // response.blob() when the body isn't a readable stream (older browsers /
+    // test mocks that only stub blob()).
+    const contentLength = response.headers.get('Content-Length');
+    const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
+
+    let blob;
+    if (typeof response.body?.getReader === 'function') {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let receivedBytes = 0;
+      onProgress?.({ receivedBytes, totalBytes });
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        receivedBytes += value.length;
+        onProgress?.({ receivedBytes, totalBytes });
+      }
+      blob = new Blob(chunks, { type: response.headers.get('Content-Type') || 'video/mp4' });
+    } else {
+      onProgress?.({ receivedBytes: 0, totalBytes });
+      blob = await response.blob();
+    }
 
     // Filename from Content-Disposition (server derives it from scope, no PII).
     const contentDisposition = response.headers.get('Content-Disposition');

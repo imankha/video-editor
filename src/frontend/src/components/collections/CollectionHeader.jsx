@@ -11,6 +11,15 @@ import { Z } from '../../constants/zLayers';
 // Collection-level Download (stitched mp4) is wired in T4945 (onDownload prop).
 // Share / Copy link are wired in T3620 (onShare / onCopyLink props).
 
+// T7050: compact byte readout for the in-flight download progress row.
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 function MenuItem({ icon: Icon, label, onClick, disabled, title, spinning, comingSoon }) {
   return (
     <button
@@ -53,6 +62,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title, spinning, comin
  * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
  * @param {Function=} onDownload     - download the collection as a stitched MP4 (T4945); omitted => disabled
  * @param {boolean=}  downloadLoading - stitched-download in flight (spins the Download item)
+ * @param {Object=}   downloadProgress - {receivedBytes, totalBytes} in-flight bytes (T7050);
+ *                                     totalBytes null => indeterminate bar (no server Content-Length)
  * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6);
  *                                     shows the shared badge in the media slot's corner when intro_card_name is set
  */
@@ -74,6 +85,7 @@ export function CollectionHeader({
   onIntro,
   onDownload,
   downloadLoading,
+  downloadProgress,
   introBadge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -137,9 +149,50 @@ export function CollectionHeader({
     </>
   );
 
-  const footer = sliderOpen ? (
-    <div className="mt-2">
-      <DurationBudgetSlider cap={budgetCap} value={budget} onChange={onBudgetChange} />
+  // T7050: in-flight download feedback. The collection stream has no
+  // Content-Length, AND T7040 moved the stitch/compose work OUT of the
+  // StreamingResponse generator (so a failure raises a clean 500 instead of
+  // aborting mid-stream) -- meaning the entire file is fully built server-side
+  // BEFORE the first byte reaches the browser. receivedBytes genuinely stays 0
+  // for the whole compose wait (can be ~1 minute); there is no event to report
+  // during that phase. A bar-shaped element implies fill-tracking that isn't
+  // happening, so the "no total" case is a SPINNER, not a bar (user feedback
+  // 2026-08-15: a static full-width pulsing bar reads as stuck, not busy). If a
+  // total ever IS known (Content-Length present), that case stays a real
+  // determinate bar.
+  const received = downloadProgress?.receivedBytes || 0;
+  const total = downloadProgress?.totalBytes || null;
+  const percent = total ? Math.min(100, Math.round((received / total) * 100)) : null;
+
+  const downloadProgressEl = downloadLoading ? (
+    <div data-testid="collection-download-progress" aria-live="polite">
+      {percent != null ? (
+        <>
+          <div className="flex justify-between text-xs text-gray-400 mb-1">
+            <span>Downloading…</span>
+            <span>{formatBytes(received)} / {formatBytes(total)}</span>
+          </div>
+          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${percent}%` }} />
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <Loader size={14} className="animate-spin shrink-0 text-cyan-500" />
+          <span>
+            {received > 0
+              ? `Downloading… ${formatBytes(received)}`
+              : 'Preparing your download… this can take up to a minute'}
+          </span>
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  const footer = (sliderOpen || downloadLoading) ? (
+    <div className="mt-2 space-y-2">
+      {sliderOpen && <DurationBudgetSlider cap={budgetCap} value={budget} onChange={onBudgetChange} />}
+      {downloadProgressEl}
     </div>
   ) : null;
 
