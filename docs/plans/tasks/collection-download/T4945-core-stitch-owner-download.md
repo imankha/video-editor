@@ -1,6 +1,6 @@
 # T4945: Core Stitch + Owner Download
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6 | **Complexity:** 5
 **Epic:** [Collection Download](EPIC.md)
 **Created:** 2026-07-12 · **Design pass:** 2026-08-10 · **Scope revised:** 2026-08-10

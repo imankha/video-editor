@@ -1,6 +1,6 @@
 # T7010: Clip-save "couldn't save" error + both clips landed under the same game (needs better logging)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-14

@@ -1,6 +1,6 @@
 # T6990: Overlay text fades out in the burned video instead of vanishing on its end frame
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-13
