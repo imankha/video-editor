@@ -1,7 +1,8 @@
 # Collection Download (Stitched MP4)
 
-**Status:** TODO — documented and parked, not yet in active implementation (user decision 2026-08-10: capture the design fully, implement later)
-**Started:** —
+**Status:** IN PROGRESS — T4945 shipped 2026-08-14 (staging); Decision 4 resolved 2026-08-14
+(free), unblocking T4946
+**Started:** 2026-08-14 (unparked by explicit user decision, ahead of the T5140 reshoot sequencing)
 
 ## Goal
 
@@ -61,9 +62,9 @@ download (serves the best playable artifact) rather than raising or touching a s
 | 1 | Where does the stitch run? | **Config-gated**: local ffmpeg when `MODAL_ENABLED=false`, routed to Modal when `MODAL_ENABLED=true` | Reverses the original "always local, no GPU needed" recommendation. Rationale: on the single-server prod stack, concat/re-encode CPU work competes with every other user's request; Modal isolates it even though no GPU is used. **Reuses the existing `modal_enabled()` flag** (`modal_client.py:327`) — the same local/Modal split framing and upscaling already use, not a new flag. **Open implementation question for whoever picks this up**: no CPU-only (non-GPU) Modal function exists today for pure ffmpeg work — this likely needs a new function in `modal_functions/video_processing.py`, not just a call-site branch. Flag this to the Architect when the task is next opened. |
 | 2 | Sync or job-backed? | **Split into a separate epic** — see [collection-download-recovery](../collection-download-recovery/EPIC.md) | User: "Recovery mechanic must be very robust... feel free to make this its own epic." This epic ships the synchronous path first (matches the existing single-reel `download_file` pattern); the recovery epic upgrades it later. |
 | 3 | Cache the output? | **Yes — cache, and do not re-charge credits on a cache hit** | See Decision 4 — the "don't re-charge" half only makes sense once the credit model is settled; both land in the same child task (T4947). Key scheme (unchanged from the original recommendation): `collection_downloads/{sha256(member ids + filenames + card id + card content-hash + outro flag + budget_sec)}.mp4`, disposable, HEAD-before-build. |
-| 4 | Free or charged? | **NOT YET RESOLVED — flagged, do not guess** | The user's own answers point two directions: the Q1 discussion asked "would charging a credit offset the [server] cost, and what affordance would make the deduction obvious," which argues for charging; the Q4 answer says "Addressed" (read as accepting the original "free" recommendation) — but Decision 3's "don't re-charge on a cache hit" only makes sense if downloads DO cost something. **Resolve explicitly before T4946 starts**: free (original rationale — no GPU cost, members already paid for individually), or charged with a visible deduction affordance + cache-hit discount. If charged, the affordance question also needs an answer (existing convention elsewhere: a credit cost shown on the action itself before commit, e.g. "-1 credit", plus a toast on deduction — reuse that pattern, don't invent a new one). |
+| 4 | Free or charged? | **RESOLVED 2026-08-14: Free** | The two prior signals genuinely conflicted (Q1 discussion argued for charging to offset server cost; the "Addressed" answer read as accepting free) — resolved by a margin model built from confirmed codebase pricing (`payments.py` credit packs, 1 credit/sec) plus the actual compute shape of a collection download (CPU-only Modal stitch, zero R2 egress fees). At realistic assumptions, a user downloading every collection they have costs the business well under 1 percentage point of margin versus the export that already earned the credits — GPU compute on the original export dominates the cost, not the free re-download. Decision 3's "don't re-charge on a cache hit" is now moot by construction (nothing is ever charged) rather than something to build and not use. |
 | 5 | Intro-burn plumbing | **Reuse `resolve_intro_for_reel` with the collection's card id** (as recommended) | User: "ID" (approved as proposed). No new collection-specific burn seam. |
-| 6 | Who can download? | **Broader than owner-only**: anyone with permission on the collection, signed in, with sufficient credits | User: "Anyone with permissions to the clip and who is signed in and has the credits can download." This widens the original "owner-cards-only" recommendation from strict ownership to a permission check — **needs investigation**: does the collection/sharing system already have a collaborator-permission concept beyond the owner, or does "permission" collapse to "owner" in practice today? Ties directly to Decision 4 (the credit check is now part of the same access gate). Lands in T4946. |
+| 6 | Who can download? | **Broader than owner-only**: anyone with permission on the collection, signed in | User: "Anyone with permissions to the clip and who is signed in ... can download." This widens the original "owner-cards-only" recommendation from strict ownership to a permission check — **needs investigation**: does the collection/sharing system already have a collaborator-permission concept beyond the owner, or does "permission" collapse to "owner" in practice today? The "has the credits" half of the original quote is now moot per Decision 4 (free) — this is a permission + sign-in gate only, no credit check. Lands in T4946. |
 | 7 | Mixed-resolution members | **Built-in `concat_segments` re-encode fallback, no explicit canonical-resolution picking** (as recommended) | User: "Whatever you think" — deferred to the original recommendation. Reference resolution is the first (top-ranked) member's; correct in all cases, just not always the minimally-rescaled choice. Upgrade path if this proves costly in practice: pass a canonical resolution (T4140's approach) as the concat probe — a one-line change at the call site. |
 
 ## Shared invariants (bind every child)
@@ -83,8 +84,8 @@ mechanism is reachable at all) next; caching last, since it needs the credit mod
 
 | ID | Task | Status |
 |----|------|--------|
-| T4945 | [Core stitch + owner download](T4945-core-stitch-owner-download.md) | TODO |
-| T4946 | [Access control + credits](T4946-access-control-and-credits.md) | TODO — blocked on Decision 4 |
+| T4945 | [Core stitch + owner download](T4945-core-stitch-owner-download.md) | STAGING |
+| T4946 | [Access control (permission + sign-in only, free)](T4946-access-control-and-credits.md) | TODO — unblocked, ready to start |
 | T4947 | [Cache stitched downloads](T4947-cache-stitched-downloads.md) | TODO — depends on T4946 |
 
 ## Completion Criteria
@@ -95,8 +96,7 @@ mechanism is reachable at all) next; caching last, since it needs the credit mod
 - [ ] Mixed-resolution member reels produce a valid (non-corrupt) stitched file
 - [ ] Stitch/outro/cache failure never corrupts or loses a member reel
 - [ ] Compute location honors `MODAL_ENABLED` — local ffmpeg in dev, Modal-routed in prod
-- [ ] Access is gated on collection permission + sign-in + sufficient credits (once Decision 4
-      resolves the credit model)
-- [ ] Repeat downloads of an unchanged collection serve from cache without re-charging
+- [ ] Access is gated on collection permission + sign-in (free — no credit check, Decision 4)
+- [ ] Repeat downloads of an unchanged collection serve from cache (no charge to skip — free)
 - [ ] Tests pass; knowledge doc (`export-pipeline.md`) updated with the new entry point + cache
       key pattern

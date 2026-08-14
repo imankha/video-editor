@@ -1,18 +1,19 @@
 # T4947: Cache Stitched Downloads
 
 **Status:** TODO — depends on T4946
-**Impact:** 5 | **Complexity:** 3
+**Impact:** 5 | **Complexity:** 2 (dropped from 3 — no credit-recharge exemption to build; free
+downloads are never charged in the first place, per Decision 4 resolved 2026-08-14)
 **Epic:** [Collection Download](EPIC.md)
 **Follows:** [T4945](T4945-core-stitch-owner-download.md) (what gets cached),
-[T4946](T4946-access-control-and-credits.md) (whether a cache hit skips a charge — needs that
-task's credit model to exist first)
+[T4946](T4946-access-control-and-credits.md) (the permission gate this wraps)
 
 ## Problem
 
 The original design recommended NO cache for v1 (regenerate on demand, measure before adding
-complexity). The user's review reversed that: **"It should cache and not re-charge when it has
-a cached version."** This task builds the cache the original design deliberately deferred, plus
-the re-charge exemption the user specifically asked for.
+complexity). The user's review reversed that: **"It should cache."** This task builds the cache
+the original design deliberately deferred. (The user's original phrasing also asked to "not
+re-charge when it has a cached version" — moot now that Decision 4 resolved downloads as free;
+there is no charge to skip.)
 
 ## Solution
 
@@ -29,12 +30,9 @@ the re-charge exemption the user specifically asked for.
 2. HEAD-before-build: check the key exists before running `concat_segments`/`compose_serve_time`
    at all; write-after-build on a miss (atomic — don't let two concurrent requests for the same
    key race a partial write into place).
-3. **Skip the credit charge on a cache hit** (only meaningful once T4946 resolves Decision 4 —
-   if downloads are free, this half of the task is a no-op by construction, not something to
-   build and then not use).
-4. Tests: identical inputs → cache hit, no recompute, no charge (if charged); any single input
-   change (member set, rank order, card, outro flag, budget) → cache miss, fresh build; two
-   concurrent requests for the same uncached key don't corrupt each other's output.
+3. Tests: identical inputs → cache hit, no recompute; any single input change (member set, rank
+   order, card, outro flag, budget) → cache miss, fresh build; two concurrent requests for the
+   same uncached key don't corrupt each other's output.
 
 ## Context
 
@@ -51,7 +49,6 @@ the re-charge exemption the user specifically asked for.
 
 - [ ] Repeat download of an unchanged collection serves from cache, no recompute
 - [ ] Any relevant input change produces a cache miss and a fresh build
-- [ ] Cache hit does not re-charge credits (once T4946's credit model exists)
 - [ ] Concurrent requests for the same uncached key don't corrupt each other's output
 - [ ] No DB row, no migration — cache existence is fully derivable from the R2 key
 - [ ] Tests pass
