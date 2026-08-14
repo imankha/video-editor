@@ -353,9 +353,13 @@ export function DownloadsPanel({
   // playback order, the collection's own intro at the front, one branded outro
   // at the end). Gesture-only -- the CollectionCard owns the busy flag around
   // this await; failures surface as a toast (the card just un-busies).
-  const onDownloadCollection = async (definition) => {
+  // T7050: forward the per-card onProgress callback so the CollectionCard that
+  // fired this gesture can render an in-flight progress indicator. The busy
+  // flag + progress state stay owned by that card (gesture-scoped); this panel
+  // just wires the hook's byte updates back to it and surfaces failures.
+  const onDownloadCollection = async (definition, onProgress) => {
     try {
-      await downloadCollection(definition);
+      await downloadCollection(definition, { onProgress });
     } catch (err) {
       console.error('[DownloadsPanel] collection download failed:', err);
       toast.error('Could not download collection');

@@ -11,6 +11,15 @@ import { Z } from '../../constants/zLayers';
 // Collection-level Download (stitched mp4) is wired in T4945 (onDownload prop).
 // Share / Copy link are wired in T3620 (onShare / onCopyLink props).
 
+// T7050: compact byte readout for the in-flight download progress row.
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 function MenuItem({ icon: Icon, label, onClick, disabled, title, spinning, comingSoon }) {
   return (
     <button
@@ -53,6 +62,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title, spinning, comin
  * @param {Function=} onIntro        - open the collection's OWN intro picker (T5215 round 2); omitted => disabled
  * @param {Function=} onDownload     - download the collection as a stitched MP4 (T4945); omitted => disabled
  * @param {boolean=}  downloadLoading - stitched-download in flight (spins the Download item)
+ * @param {Object=}   downloadProgress - {receivedBytes, totalBytes} in-flight bytes (T7050);
+ *                                     totalBytes null => indeterminate bar (no server Content-Length)
  * @param {Object=}   introBadge     - {intro_card_id, intro_card_name}, batch-resolved (T5215 round 6);
  *                                     shows the shared badge in the media slot's corner when intro_card_name is set
  */
@@ -74,6 +85,7 @@ export function CollectionHeader({
   onIntro,
   onDownload,
   downloadLoading,
+  downloadProgress,
   introBadge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -137,9 +149,40 @@ export function CollectionHeader({
     </>
   );
 
-  const footer = sliderOpen ? (
-    <div className="mt-2">
-      <DurationBudgetSlider cap={budgetCap} value={budget} onChange={onBudgetChange} />
+  // T7050: in-flight download feedback. The collection stream has no
+  // Content-Length (the stitched size is unknown until compose finishes), so
+  // there is usually no honest percentage -- render an INDETERMINATE bar with a
+  // live byte readout, reusing GlobalExportIndicator's bar treatment. If a total
+  // ever IS known (Content-Length present), go determinate. Most of the wait is
+  // the server-side stitch (before the first byte), so the copy starts at
+  // "Preparing your download..." until bytes actually arrive.
+  const received = downloadProgress?.receivedBytes || 0;
+  const total = downloadProgress?.totalBytes || null;
+  const percent = total ? Math.min(100, Math.round((received / total) * 100)) : null;
+
+  const downloadProgressEl = downloadLoading ? (
+    <div data-testid="collection-download-progress" aria-live="polite">
+      <div className="flex justify-between text-xs text-gray-400 mb-1">
+        <span>{received > 0 ? 'Downloading…' : 'Preparing your download…'}</span>
+        <span>
+          {received > 0 ? formatBytes(received) : ''}
+          {received > 0 && total ? ` / ${formatBytes(total)}` : ''}
+        </span>
+      </div>
+      <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        {percent != null ? (
+          <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${percent}%` }} />
+        ) : (
+          <div className="h-full bg-cyan-500 animate-pulse w-full opacity-60" />
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  const footer = (sliderOpen || downloadLoading) ? (
+    <div className="mt-2 space-y-2">
+      {sliderOpen && <DurationBudgetSlider cap={budgetCap} value={budget} onChange={onBudgetChange} />}
+      {downloadProgressEl}
     </div>
   ) : null;
 
