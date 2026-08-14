@@ -961,59 +961,99 @@ async def download_collection(
         from app.services.intro_egress import resolve_intro_for_reel
         return resolve_intro_for_reel(user_id, profile_id, raw_card_id, total_duration, None)
 
-    async def _stream_stitched():
-        tmp_dir = tempfile.mkdtemp(prefix="rb_coll_dl_")
-        scratch_full_key = None
+    # ---- Produce the fully-composed MP4 BEFORE returning the stream (T7040) ----
+    # Everything that can fail -- the Modal (or local) member stitch and the R2
+    # fetch of its output -- runs HERE, inside the request handler, so a failure
+    # raises an HTTPException the client reports as a real 5xx. Doing this work
+    # inside the StreamingResponse generator (as the original did) meant an
+    # exception fired AFTER a 200 + headers were already committed, dropping the
+    # connection abnormally -- the browser surfaced that as a bare
+    # "TypeError: Failed to fetch" with no diagnosable server-side status.
+    # Nothing is streamed until the stitch completes anyway, so eager-computing
+    # here costs no extra latency; it only converts mid-stream aborts into clean
+    # error statuses. The intro/outro compose stays best-effort (a failure there
+    # degrades to the bare stitch, never a hard failure -- unchanged).
+    tmp_dir = tempfile.mkdtemp(prefix="rb_coll_dl_")
+    scratch_full_key = None
+    try:
+        stitched_path = os.path.join(tmp_dir, "stitched.mp4")
+        out_path = os.path.join(tmp_dir, "composed.mp4")
+
+        # ---- produce the raw member stitch (compute-location branch) ----
+        from app.services.modal_client import modal_enabled
+        if modal_enabled():
+            from app.services.modal_client import call_modal_stitch_members
+            scratch_rel = f"temp/collection_stitch/{uuid.uuid4().hex}.mp4"
+            scratch_full_key = f"{r2_prefix}/{scratch_rel}"
+            await call_modal_stitch_members(r2_prefix, member_keys, scratch_rel)
+            if not await asyncio.to_thread(
+                download_from_r2_global, scratch_full_key, Path(stitched_path)
+            ):
+                raise RuntimeError("could not fetch Modal-stitched collection output from R2")
+        else:
+            await asyncio.to_thread(
+                _stitch_members_local, user_id, profile_id, member_keys, stitched_path, tmp_dir
+            )
+
+        # ---- compose intro + outro app-side (cards NEVER on Modal) ----
+        serve_path = stitched_path
+        intro = await asyncio.to_thread(_resolve_collection_intro)
         try:
-            stitched_path = os.path.join(tmp_dir, "stitched.mp4")
-            out_path = os.path.join(tmp_dir, "composed.mp4")
-
-            # ---- produce the raw member stitch (compute-location branch) ----
-            from app.services.modal_client import modal_enabled
-            if modal_enabled():
-                from app.services.modal_client import call_modal_stitch_members
-                scratch_rel = f"temp/collection_stitch/{uuid.uuid4().hex}.mp4"
-                scratch_full_key = f"{r2_prefix}/{scratch_rel}"
-                await call_modal_stitch_members(r2_prefix, member_keys, scratch_rel)
-                if not await asyncio.to_thread(
-                    download_from_r2_global, scratch_full_key, Path(stitched_path)
-                ):
-                    raise RuntimeError("could not fetch Modal-stitched collection output from R2")
-            else:
-                await asyncio.to_thread(
-                    _stitch_members_local, user_id, profile_id, member_keys, stitched_path, tmp_dir
-                )
-
-            # ---- compose intro + outro app-side (cards NEVER on Modal) ----
-            serve_path = stitched_path
-            intro = await asyncio.to_thread(_resolve_collection_intro)
+            from app.services.serve_time_video import compose_serve_time
+            if await asyncio.to_thread(
+                compose_serve_time, stitched_path, out_path, intro=intro, outro=True,
+            ):
+                serve_path = out_path
+        except Exception as exc:
+            logger.error(f"[CollectionDownload] compose failed (serving bare stitch): {exc}")
+        finally:
+            if intro is not None:
+                intro.cleanup()
+    except Exception as exc:
+        # Failure BEFORE any byte is streamed -> clean up scratch/tmp and surface
+        # a real HTTP 500. The client sees a reportable status, never a silent
+        # "Failed to fetch". Log with scope context so it is diagnosable.
+        if scratch_full_key:
             try:
-                from app.services.serve_time_video import compose_serve_time
-                if await asyncio.to_thread(
-                    compose_serve_time, stitched_path, out_path, intro=intro, outro=True,
-                ):
-                    serve_path = out_path
-            except Exception as exc:
-                logger.error(f"[CollectionDownload] compose failed (serving bare stitch): {exc}")
-            finally:
-                if intro is not None:
-                    intro.cleanup()
+                await asyncio.to_thread(r2_delete_object_global, scratch_full_key)
+            except Exception:
+                logger.warning(f"[CollectionDownload] scratch cleanup failed: {scratch_full_key}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        logger.exception(
+            f"[CollectionDownload] stitch failed (scope={scope_type} game_id={game_id} "
+            f"members={len(members)}): {exc}"
+        )
+        raise HTTPException(status_code=500, detail="Collection stitch failed") from exc
 
+    # Composed file now lives on local disk -> the R2 scratch object is no longer
+    # needed. Best-effort delete (a leaked scratch key is disposable, never a
+    # member key) before we hand off to the streaming generator.
+    if scratch_full_key:
+        try:
+            await asyncio.to_thread(r2_delete_object_global, scratch_full_key)
+        except Exception:
+            logger.warning(f"[CollectionDownload] scratch cleanup failed: {scratch_full_key}")
+
+    async def _stream_composed():
+        # Only the disk read remains here. A failure now is genuinely post-headers
+        # (the 200 is already committed, so it cannot become a clean status) -- but
+        # it is at least logged loudly with context instead of silently swallowed.
+        try:
             with open(serve_path, "rb") as fin:
                 while True:
                     chunk = fin.read(1024 * 1024)
                     if not chunk:
                         break
                     yield chunk
+        except Exception:
+            logger.exception(
+                f"[CollectionDownload] streaming composed file failed mid-stream: {serve_path}"
+            )
+            raise
         finally:
-            if scratch_full_key:
-                try:
-                    await asyncio.to_thread(r2_delete_object_global, scratch_full_key)
-                except Exception:
-                    logger.warning(f"[CollectionDownload] scratch cleanup failed: {scratch_full_key}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return StreamingResponse(_stream_stitched(), media_type="video/mp4", headers=dl_headers)
+    return StreamingResponse(_stream_composed(), media_type="video/mp4", headers=dl_headers)
 
 
 @router.patch("/intro")

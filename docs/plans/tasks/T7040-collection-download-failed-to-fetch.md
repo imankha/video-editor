@@ -173,10 +173,75 @@ still needs live confirmation, not just the code read above.
   risk from a failed attempt, but a broken first impression on a just-shipped feature is worth
   prioritizing.
 
+## Progress Log
+
+### 2026-08-15 (implementation session)
+
+**Root cause: Hypothesis D confirmed (event-loop starvation).** Mechanism nailed by code
+read + LOCAL REPRO (see evidence path below). `GET /api/exports/active`
+(`async def list_active_exports`) called `get_active_exports()` INLINE on the event loop;
+that runs `cleanup_stale_exports()`, which for every stale `pending`/`processing` job with a
+`modal_call_id` makes a BLOCKING Modal control-plane round-trip
+(`check_modal_job_running` → `call.get(timeout=0)`, a plain `def`) in a SEQUENTIAL loop. On
+staging's single-worker uvicorn this freezes the WHOLE event loop for the sweep's duration
+(the user's console showed a 31s `/api/exports/active`), starving a concurrent
+collection-download request until the browser abandons it — surfacing as the client's generic
+`TypeError: Failed to fetch`, with nothing in `collections.py`'s own path to log (it may never
+be scheduled). This matches every observation: the succeeding HAR (download works when nothing
+contends), the failing console line (a 31s `/active` immediately before the failure), and the
+inconclusive `/api/collections/download` log greps.
+
+**Evidence path used: LOCAL REPRO, not a live staging query.** Per kickoff step 2 — the
+container has no staging per-user-DB credentials/network path, so rather than burn time I
+reproduced D locally: `tests/test_t7040_collection_download_event_loop.py::`
+`test_active_sweep_does_not_block_event_loop` seeds 3 stale `export_jobs` rows (120-min-old,
+`modal_call_id` set), stubs `check_modal_job_running` with a 0.5s blocking sleep (simulating
+the real round-trip), and asserts a concurrent ticker coroutine keeps ticking while
+`list_active_exports()` runs. **Verified it discriminates:** the test FAILS on the pre-fix
+inline code (ticker starved to ~1 tick) and PASSES after the fix (≥20 ticks). This is the
+"real evidence" the acceptance criterion asks for, obtained via local repro — being explicit
+that it is a repro, not a live-staging DB read.
+
+**Fixes shipped (both in scope per kickoff):**
+1. `exports.py` — `list_active_exports` now offloads the whole blocking chain via
+   `await anyio.to_thread.run_sync(get_active_exports)`; the event loop stays responsive during
+   the sweep. anyio copies request contextvars (user/profile) into the worker thread, so
+   `get_db_connection()` still resolves the caller's per-user DB (fresh sqlite conn opened
+   in-thread — no cross-thread affinity). Reviewer empirically confirmed the contextvar copy on
+   pinned `anyio==4.11.0` and that the stale-cleanup R2 sync write-back is not stranded.
+2. `collections.py::download_collection` (Hypothesis A hardening) — moved the fallible Modal/
+   local stitch + R2 fetch + intro/outro compose OUT of the `StreamingResponse` generator and
+   INTO the handler body. A stitch failure now raises a clean `HTTPException(500)` BEFORE any
+   byte streams, instead of an exception thrown mid-stream after a 200 committed (the exact
+   shape that produces a bare "Failed to fetch"). The generator only streams the finished file;
+   a mid-stream read failure is now logged loudly with context. tmp_dir + scratch cleanup
+   preserved on every path (eager-fail `except`, non-fatal compose, success/mid-stream `finally`).
+
+**Verification evidence:**
+- Regression tests: `tests/test_t7040_collection_download_event_loop.py` (3 tests) —
+  event-loop-not-starved (fails-without/passes-with the fix), fix-shape guard, and
+  stitch-failure→clean-500. All pass.
+- Relevant set green: 47 passed — t7040 + t4240 (cleanup_stale_exports) + t4945
+  (collection download) + t5220 + t5215.
+- QA live-drive PASS (`e2e/T7040-collection-download.qa.spec.js`, via `scripts/dev-verify.sh`,
+  `MODAL_ENABLED=false` → local stitch branch): dev-login as the real owner,
+  `GET /api/collections/download?scope_type=all&aspect_ratio=9:16&budget_sec=15` → 200
+  `video/mp4`, a playable 2.98 MB / 14.53s MP4 (ffprobe: real duration + video stream). The
+  full unbounded `scope=all` also returned 200 in one run (134s handler time re-encoding 44
+  reels on CPU — a local-stack artifact; prod offloads the arbitrary-N concat to Modal). No
+  stitch-error path was triggered = the happy path is clean.
+
 ## Acceptance Criteria
-- [ ] Root cause confirmed with real evidence (not just the three hypotheses above)
-- [ ] A collection download succeeds end-to-end on staging for the reported scope
-- [ ] If the fix is generator error-handling: a failure now surfaces as a clean HTTP error status
-      the frontend can report meaningfully, never a bare "Failed to fetch"
-- [ ] Regression test covering whatever the actual root cause turns out to be
-- [ ] Tests pass
+- [x] Root cause confirmed with real evidence (Hypothesis D — event-loop starvation; confirmed
+      via local repro that fails-without/passes-with the fix, evidence path noted above)
+- [x] A collection download succeeds end-to-end (QA live-drive on the container's local stack:
+      200 + playable MP4; staging re-verify to be done by supervisor after push)
+- [x] If the fix is generator error-handling: a failure now surfaces as a clean HTTP error
+      status — `download_collection` raises `HTTPException(500)` before the stream on stitch
+      failure (`test_stitch_failure_returns_clean_500`); a post-headers mid-stream failure is now
+      logged loudly with context (cannot become a clean status once a 200 has started, per the
+      kickoff's concrete bar)
+- [x] Regression test covering the actual root cause (event-loop starvation) + the hardening
+- [x] Tests pass (47 in the relevant set)
+- [ ] Staging re-verify of the reported scope (`game_id=6`, `9:16`) — owned by supervisor/user
+      after the branch is pushed and deployed to staging
