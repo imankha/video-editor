@@ -8,8 +8,21 @@ import { useIsCoarsePointer } from './useIsMobile';
  *
  * "Warm early, reveal late" (EPIC design authority): the intent delay gates the
  * REVEAL, not the fetch. A straight-line grid crossing fires ZERO requests (grace
- * window); a dwell attaches the stream at ~WARM ms and buffers, then plays and
- * crossfades at ~REVEAL ms so the first frame is typically ready by reveal time.
+ * window); a dwell attaches the stream at ~WARM ms and buffers.
+ *
+ * REVEAL timing (2026-08-14 policy, all hover-preview tiers): artificial delay =
+ * PREVIEW_REVEAL_DELAY_MS - real load latency, floored at 0 — i.e. REVEAL fires at
+ * max(PREVIEW_REVEAL_DELAY_MS, load-ready time). A fast-loading tier (final/working
+ * video) still waits the full ~450ms floor (flicker avoidance on a quick mouse
+ * pass — content being ready sooner never reveals it sooner). A slow-loading tier
+ * (T6820's source-clip window: moov + a mid-file byte range, real seek latency)
+ * never pays an ADDITIONAL flat 450ms on top of its own real fetch time — it
+ * reveals as soon as content is actually ready. Implemented by tracking two
+ * independent conditions — the floor timer and a content-ready signal from
+ * TilePreviewVideo's `onContentReady` — and transitioning to REVEAL only once
+ * BOTH are true (whichever finishes second decides the moment). Previously this
+ * was a blind fixed timer with no readiness signal, so a slow tier paid floor +
+ * real-load-time back to back (user report: hover felt "very long").
  *
  * Gate: FINE pointer only (this child, T6420) via useIsCoarsePointer() — never
  * width, never UA. Coarse-pointer activation is T6430 and rides the same registry.
@@ -22,7 +35,8 @@ import { useIsCoarsePointer } from './useIsMobile';
 
 // The two timing constants — tuned HERE, the single source both tiles share.
 export const PREVIEW_WARM_DELAY_MS = 100; // hover dwell before attaching src + buffering
-export const PREVIEW_REVEAL_DELAY_MS = 450; // hover dwell before .play() + crossfade
+export const PREVIEW_REVEAL_DELAY_MS = 450; // floor: REVEAL never fires before this many ms
+// of hover dwell, but WILL fire later if real content-load latency exceeds it (see policy above).
 
 export const PREVIEW_PHASE = {
   IDLE: 'idle', // no src, nothing buffering (grid at rest)
@@ -74,7 +88,9 @@ function usePrefersReducedMotion() {
  *   (e.g. a draft with no rendered final video). Passing null is also the teardown
  *   trigger for "full player opening" on the host that clears it.
  * @returns {{ phase: string, active: boolean, onPointerEnter: Function,
- *   onPointerLeave: Function, stop: Function }}
+ *   onPointerLeave: Function, stop: Function, onContentReady: Function }}
+ *   onContentReady is wired to TilePreviewVideo's `onContentReady` prop — it
+ *   reports the real content-load-ready signal this hook races against the floor.
  */
 export function useTilePreview({ streamUrl } = {}) {
   const isCoarsePointer = useIsCoarsePointer();
@@ -83,7 +99,12 @@ export function useTilePreview({ streamUrl } = {}) {
 
   const [phase, setPhase] = useState(PREVIEW_PHASE.IDLE);
   const warmTimerRef = useRef(null);
-  const revealTimerRef = useRef(null);
+  const revealFloorTimerRef = useRef(null);
+  // The two conditions REVEAL races: the floor timer (always PREVIEW_REVEAL_DELAY_MS
+  // of hover dwell) and the real content-ready signal. REVEAL fires when both are
+  // true, set by whichever finishes second — see the policy note above the exports.
+  const floorReachedRef = useRef(false);
+  const contentReadyRef = useRef(false);
   // stop() is captured by the module registry; a ref keeps the captured identity
   // stable across renders so releaseActivePreview's identity check is reliable.
   const stopRef = useRef(null);
@@ -93,10 +114,12 @@ export function useTilePreview({ streamUrl } = {}) {
       clearTimeout(warmTimerRef.current);
       warmTimerRef.current = null;
     }
-    if (revealTimerRef.current) {
-      clearTimeout(revealTimerRef.current);
-      revealTimerRef.current = null;
+    if (revealFloorTimerRef.current) {
+      clearTimeout(revealFloorTimerRef.current);
+      revealFloorTimerRef.current = null;
     }
+    floorReachedRef.current = false;
+    contentReadyRef.current = false;
   }, []);
 
   // Teardown to idle. Idempotent — safe to call repeatedly (pointer leave, unmount,
@@ -108,6 +131,12 @@ export function useTilePreview({ streamUrl } = {}) {
   }, [clearTimers]);
   stopRef.current = stop;
 
+  const tryReveal = useCallback(() => {
+    if (floorReachedRef.current && contentReadyRef.current) {
+      setPhase(PREVIEW_PHASE.REVEAL);
+    }
+  }, []);
+
   const onPointerEnter = useCallback(() => {
     if (!enabled) return; // coarse pointer / reduced motion / no stream: inert
     clearTimers();
@@ -117,12 +146,20 @@ export function useTilePreview({ streamUrl } = {}) {
       // most one tile ever buffers/plays; this force-stops whoever was active.
       claimActivePreview(stopRef.current);
       setPhase(PREVIEW_PHASE.WARM);
-      revealTimerRef.current = setTimeout(() => {
-        revealTimerRef.current = null;
-        setPhase(PREVIEW_PHASE.REVEAL);
-      }, PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS);
+      revealFloorTimerRef.current = setTimeout(() => {
+        revealFloorTimerRef.current = null;
+        floorReachedRef.current = true;
+        tryReveal();
+      }, Math.max(0, PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS));
     }, PREVIEW_WARM_DELAY_MS);
-  }, [enabled, clearTimers]);
+  }, [enabled, clearTimers, tryReveal]);
+
+  // TilePreviewVideo calls this once the real content is ready to play (its own
+  // 'loadeddata'/'canplay' signal) — the OTHER half of the REVEAL race.
+  const onContentReady = useCallback(() => {
+    contentReadyRef.current = true;
+    tryReveal();
+  }, [tryReveal]);
 
   const onPointerLeave = useCallback(() => {
     stop();
@@ -144,6 +181,7 @@ export function useTilePreview({ streamUrl } = {}) {
     active: phase !== PREVIEW_PHASE.IDLE,
     onPointerEnter,
     onPointerLeave,
+    onContentReady,
     stop,
   };
 }

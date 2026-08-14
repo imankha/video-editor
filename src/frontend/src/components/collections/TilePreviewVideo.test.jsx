@@ -81,3 +81,43 @@ describe('TilePreviewVideo — poster-first crossfade (T6420)', () => {
     expect(video.getAttribute('src')).toBe(STREAM);
   });
 });
+
+// T6820 — the source-clip proxy serves the WHOLE game video, so a windowed preview
+// must seek into [start,end] and loop there. Final/working previews (no window) keep
+// native loop-from-0. jsdom backs a real currentTime property, so we can assert seeks.
+describe('TilePreviewVideo — source-clip window (T6820)', () => {
+  it('no window props: native loop stays on and nothing seeks (final/working path unchanged)', () => {
+    const { container } = render(<TilePreviewVideo streamUrl={STREAM} phase={PREVIEW_PHASE.WARM} />);
+    const video = container.querySelector('video');
+    expect(video.hasAttribute('loop')).toBe(true);
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(0);
+  });
+
+  it('with startTime: seeks into the clip window on loadedmetadata, native loop disabled', () => {
+    const { container } = render(
+      <TilePreviewVideo streamUrl={STREAM} phase={PREVIEW_PHASE.WARM} startTime={12.5} endTime={20} />
+    );
+    const video = container.querySelector('video');
+    expect(video.hasAttribute('loop')).toBe(false); // manual loop instead
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(12.5);
+  });
+
+  it('loops back to startTime once playback passes endTime, but not while inside the window', () => {
+    const { container } = render(
+      <TilePreviewVideo streamUrl={STREAM} phase={PREVIEW_PHASE.REVEAL} startTime={12} endTime={20} />
+    );
+    const video = container.querySelector('video');
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(12);
+    // Inside the window -> left alone.
+    video.currentTime = 15;
+    fireEvent.timeUpdate(video);
+    expect(video.currentTime).toBe(15);
+    // At/past the end -> wrap to start.
+    video.currentTime = 20;
+    fireEvent.timeUpdate(video);
+    expect(video.currentTime).toBe(12);
+  });
+});
