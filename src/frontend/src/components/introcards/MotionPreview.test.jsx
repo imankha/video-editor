@@ -21,7 +21,7 @@
 // which jsdom does not drive realistically.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 
 // Mock the element-layout hook so the test controls `elements` identity
 // directly — this IS the font-settle remount scenario (R1), not a detail to
@@ -162,6 +162,104 @@ describe('MotionPreview seek characterization (T6710 — RED until Part A)', () 
     for (const anim of rebuiltAnimations) {
       expect(anim.currentTime).toBe(1800);
     }
+  });
+
+  // T7030 — the intro photo blanks (first play AND scrub-back) because the
+  // visible <img> always loads from the cache preloadIntroImage warmed, so it is
+  // `complete` at attach time and the `load` event never re-fires to the reveal
+  // gate. These pin that a cache-complete image reveals WITHOUT a load event,
+  // that a scrub-forward-then-backward remount against the same warmed cache
+  // still reveals, and that a genuinely broken image stays skeleton.
+  const PHOTO_CARD = {
+    ...SAMPLE_CARD,
+    image_key: 'user/1/intro/photo.png',
+    previewUrl: 'https://r2.example/intro/photo.png?sig=abc',
+  };
+
+  // Simulate the browser's HTMLImageElement completeness for a src jsdom never
+  // actually fetches. Overrides the prototype getters so the ref callback /
+  // effect read our controlled cache state; restored in afterEach.
+  let imgPropOverrides = [];
+  function stubImageState({ complete, naturalWidth }) {
+    for (const [prop, value] of [['complete', complete], ['naturalWidth', naturalWidth]]) {
+      const original = Object.getOwnPropertyDescriptor(window.HTMLImageElement.prototype, prop);
+      imgPropOverrides.push([prop, original]);
+      Object.defineProperty(window.HTMLImageElement.prototype, prop, {
+        configurable: true,
+        get() { return value; },
+      });
+    }
+  }
+  afterEach(() => {
+    for (const [prop, original] of imgPropOverrides) {
+      if (original) Object.defineProperty(window.HTMLImageElement.prototype, prop, original);
+      else delete window.HTMLImageElement.prototype[prop];
+    }
+    imgPropOverrides = [];
+  });
+
+  const skeletonOf = (c) => c.querySelector('[data-testid="motion-preview-photo-skeleton"]');
+  const renderPhotoCard = () => render(
+    <MotionPreview
+      card={PHOTO_CARD}
+      profile={SAMPLE_PROFILE}
+      aspect="9:16"
+      boxWidth={270}
+      boxHeight={480}
+      currentTimeMs={0}
+    />,
+  );
+
+  it('T7030: a cache-complete photo reveals WITHOUT a load event (first play)', () => {
+    // Cache hit: complete + paintable at attach time, and no `load` ever fires.
+    stubImageState({ complete: true, naturalWidth: 800 });
+    const { container } = renderPhotoCard();
+
+    const img = container.querySelector('img');
+    expect(img).not.toBeNull();
+    // Revealed off the ref/effect completeness check alone — no fireEvent.load.
+    expect(img.className).toContain('opacity-100');
+    expect(img.className).not.toContain('opacity-0');
+    expect(skeletonOf(container)).toBeNull();
+  });
+
+  it('T7030: scrub forward past the intro then back into it re-reveals the cached photo on remount', () => {
+    stubImageState({ complete: true, naturalWidth: 800 });
+
+    // Scrub-back remounts IntroPreRoll -> MotionPreview fresh (region ternary).
+    // First mount (intro playing), then unmount (region -> reels)...
+    const first = renderPhotoCard();
+    expect(first.container.querySelector('img').className).toContain('opacity-100');
+    cleanup();
+
+    // ...then a fresh mount against the SAME warmed cache (scrub back into intro),
+    // again with no new load event. Must not be left blank.
+    const { container } = renderPhotoCard();
+    const img = container.querySelector('img');
+    expect(img.className).toContain('opacity-100');
+    expect(skeletonOf(container)).toBeNull();
+  });
+
+  it('T7030: a not-yet-loaded photo stays skeleton until its load event, then reveals', () => {
+    stubImageState({ complete: false, naturalWidth: 0 });
+    const { container } = renderPhotoCard();
+
+    const img = container.querySelector('img');
+    expect(img.className).toContain('opacity-0');
+    expect(skeletonOf(container)).not.toBeNull();
+
+    fireEvent.load(img);
+    expect(img.className).toContain('opacity-100');
+    expect(skeletonOf(container)).toBeNull();
+  });
+
+  it('T7030: a broken photo (complete but 0-width) stays skeleton, never falsely revealed', () => {
+    stubImageState({ complete: true, naturalWidth: 0 });
+    const { container } = renderPhotoCard();
+
+    const img = container.querySelector('img');
+    expect(img.className).toContain('opacity-0');
+    expect(skeletonOf(container)).not.toBeNull();
   });
 
   it('does not auto-complete via setTimeout any more — no onDone fires from a bare mount', () => {

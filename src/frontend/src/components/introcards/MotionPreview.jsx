@@ -13,7 +13,7 @@
 // The motion vocabulary (T5210 / T5240 shared): photo push-in, per-line
 // staggered fade-up, white-flash exit into the footage.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RichText } from '../RichText';
 import { selectCardComposition } from '../../utils/introCardComposition';
 import { geometryFor, INTRO_CARD_MOTION, STAGGER_ORDER } from '../../utils/introCardGeometry';
@@ -53,6 +53,16 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, curr
   // Photo decode guard: don't reveal an undecoded frame mid-scrub (mirrors
   // CollectionPlayer.jsx's videoReady skeleton-until-loaded pattern).
   const [photoReady, setPhotoReady] = useState(false);
+  // The visible <img> below nearly ALWAYS loads from cache: IntroStoryPlayer's
+  // preloadIntroImage gate has already fetched+decoded this exact URL before the
+  // card is shown (T6960), and a scrub-back into the intro remounts this
+  // component against the same warmed cache with no new request at all. A
+  // cache-complete <img> can be `complete` the instant it is attached, a state
+  // the `load` event may never re-dispatch to React's just-attached listener —
+  // so an onLoad-only gate leaves photoReady stuck false and the photo stuck
+  // invisible (blank card) on both first play and scrub-back (T7030). Read
+  // completeness directly instead of relying solely on the event.
+  const imgNodeRef = useRef(null);
 
   const composition = selectCardComposition(card);
   const geo = geometryFor(composition, aspect);
@@ -70,9 +80,26 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, curr
 
   const durationSec = card?.duration || 4.0;
 
-  // Reset the photo skeleton whenever the source changes so a newly-seeked-to
-  // card also waits for its first paintable frame instead of flashing stale.
-  useEffect(() => { setPhotoReady(false); }, [photoUrl]);
+  // Ref callback: reveal the moment a cache-complete image is attached, without
+  // waiting for a `load` event that may never fire for it (T7030). `complete`
+  // alone is true for a BROKEN image too, so `naturalWidth > 0` is required —
+  // an unpaintable image stays skeleton, matching the photoless-degrade
+  // philosophy elsewhere.
+  const attachImg = useCallback((node) => {
+    imgNodeRef.current = node;
+    if (node && node.complete && node.naturalWidth > 0) setPhotoReady(true);
+  }, []);
+
+  // Re-evaluate on every source change: the <img> node is REUSED across a src
+  // swap (same component instance receiving a new card), so the ref callback
+  // above won't re-fire. A new URL that isn't cached resets the gate to false
+  // (wait for its load / decode); a cached one reveals immediately. This
+  // replaces the old unconditional `setPhotoReady(false)` reset, which could
+  // never observe a cache hit and so left preloaded photos stuck invisible.
+  useEffect(() => {
+    const node = imgNodeRef.current;
+    setPhotoReady(!!(node && node.complete && node.naturalWidth > 0));
+  }, [photoUrl]);
 
   // Build (or rebuild) every WAAPI Animation, PAUSED, keyed on `elements`
   // identity + box size — NOT a mount-once `[]`. This is the R1 fix: the
@@ -179,6 +206,7 @@ export function MotionPreview({ card, profile, aspect, boxWidth, boxHeight, curr
           )}
           <div ref={photoRef} className="w-full h-full">
             <img
+              ref={attachImg}
               src={photoUrl}
               alt=""
               // Lowercase on purpose: React 18 passes unknown lowercase
