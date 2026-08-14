@@ -1,6 +1,6 @@
 # T4946: Access Control for Collection Download
 
-**Status:** TODO — unblocked, ready to start
+**Status:** WIP
 **Impact:** 6 | **Complexity:** 2 (dropped from 3 — no credit machinery, permission check only)
 **Epic:** [Collection Download](EPIC.md)
 **Follows:** [T4945](T4945-core-stitch-owner-download.md) — this task gates that endpoint's real
