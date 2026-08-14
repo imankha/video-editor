@@ -1,6 +1,6 @@
 # T7020: Remux uploaded game videos with faststart (moov at front)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-14
