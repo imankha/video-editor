@@ -864,6 +864,29 @@ def ensure_database():
                         f"[Restore] Downloaded database from R2 for user={user_id} profile={profile_id}: "
                         f"version={new_version}, size={new_size} bytes, took {restore_elapsed:.2f}s"
                     )
+                    # T7010: a first-access download that fires DURING a write request,
+                    # following a CAS conflict (schedule_profile_db_reheal nulled the
+                    # version — has_sync_conflict is still set here), is a mid-request
+                    # DB heal that DISCARDS the local writes this process made since the
+                    # conflict and re-runs the request against R2's fresh copy. That is a
+                    # CRITICAL diagnostic event — name the in-flight endpoint so the
+                    # discarded/re-run work is visible without correlating handler logs
+                    # across the [Restore] boundary. A plain cold first-access restore
+                    # (no prior conflict) is normal load-time work and is NOT flagged.
+                    from .user_context import (
+                        get_current_method,
+                        get_current_path,
+                        get_current_req_id,
+                    )
+                    _heal_method = (get_current_method() or "").upper()
+                    if _heal_method in ("POST", "PUT", "PATCH", "DELETE") and has_sync_conflict(user_id):
+                        logger.critical(
+                            f"[Restore] MID-WRITE HEAL: re-downloaded profile.sqlite version={new_version} "
+                            f"for user={user_id} profile={profile_id} DURING in-flight write "
+                            f"{_heal_method} {get_current_path()} (req_id={get_current_req_id()}) after a "
+                            f"CAS conflict — local writes from this request are discarded and re-run "
+                            f"against the healed DB"
+                        )
                     set_local_db_version(user_id, profile_id, new_version)
                     # Force re-initialization since we got a new DB
                     already_initialized = False

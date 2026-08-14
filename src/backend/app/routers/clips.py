@@ -17,7 +17,7 @@ import os
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -1011,6 +1011,7 @@ async def save_raw_clip(
     clip_data: RawClipCreate,
     background_tasks: BackgroundTasks,
     _durable: None = Depends(durable_sync),  # T4320: sync the new clip row to R2 before 200
+    client_game_id: int | None = Header(default=None, alias="X-Client-Game-Id"),
 ):
     """
     Save a raw clip during annotation (real-time save).
@@ -1021,6 +1022,20 @@ async def save_raw_clip(
     Idempotent: If a clip with the same game_id + end_time + video_sequence already exists,
     updates that clip instead of creating a duplicate.
     """
+    # T7010: the backend stores whatever game_id the client sends (RawClipCreate.game_id
+    # is authoritative). Log the frontend's ACTIVE game alongside it so a "clip landed
+    # under the wrong game" report is one grep, not req_id archaeology. They come from
+    # the same frontend source (annotateGameId), so a divergence here means the client
+    # itself sent a stale active game vs. the game_id it saved under — WARN loudly.
+    logger.info(
+        f"[ClipSave] POST /clips/raw/save game_id(body)={clip_data.game_id} "
+        f"client_active_game={client_game_id}"
+    )
+    if client_game_id is not None and client_game_id != clip_data.game_id:
+        logger.warning(
+            f"[ClipSave] GAME MISMATCH on save: saving under game {clip_data.game_id} "
+            f"but frontend active game is {client_game_id} — clip may be misattributed"
+        )
     if clip_data.create_project:
         logger.info(f"[CreateReel] save_raw_clip called with create_project=True, game_id={clip_data.game_id}")
 
@@ -1157,6 +1172,7 @@ async def update_raw_clip(
     update: RawClipUpdate,
     background_tasks: BackgroundTasks,
     _durable: None = Depends(durable_sync),  # T4320: sync the edited clip to R2 before 200
+    client_game_id: int | None = Header(default=None, alias="X-Client-Game-Id"),
 ):
     """
     Update a raw clip's metadata.
@@ -1186,6 +1202,26 @@ async def update_raw_clip(
 
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
+
+        # T7010: this endpoint addresses a clip by id and reads its game_id from the
+        # stored row (it never re-assigns attribution). Log the stored game_id next to
+        # the frontend's ACTIVE game so "a clip was mutated while the UI showed a
+        # different game" is visible in one line. A mismatch is the exact fingerprint
+        # of a stale active-game context — WARN so it stands out without DB archaeology.
+        logger.info(
+            f"[ClipSave] PUT /clips/raw/{clip_id} stored game_id={clip['game_id']} "
+            f"client_active_game={client_game_id}"
+        )
+        if (
+            client_game_id is not None
+            and clip['game_id'] is not None
+            and client_game_id != clip['game_id']
+        ):
+            logger.warning(
+                f"[ClipSave] GAME MISMATCH on update: clip {clip_id} is stored under game "
+                f"{clip['game_id']} but frontend active game is {client_game_id} — a clip is "
+                f"being edited while the UI shows a different game"
+            )
 
         if update.create_project:
             logger.info(f"[CreateReel] update_raw_clip: clip found, auto_project_id={clip['auto_project_id']}, game_id={clip['game_id']}")

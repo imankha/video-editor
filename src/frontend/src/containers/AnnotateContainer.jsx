@@ -95,6 +95,13 @@ export function AnnotateContainer({
     setLayerFilter,
   } = useAnnotateState();
 
+  // Keep a ref to annotateGameId so async callbacks always read the latest value.
+  // useCallback closures capture state at creation time, but the ref is always current.
+  // Declared here (before useRawClipSave) so the clip-save hook can stamp the
+  // frontend's active game onto every clip request as a diagnostic header (T7010).
+  const annotateGameIdRef = useRef(annotateGameId);
+  annotateGameIdRef.current = annotateGameId;
+
   useWakeLock();
 
   // T82: Multi-video state (null = single video, array = multi-video)
@@ -232,7 +239,7 @@ export function AnnotateContainer({
     updateClip: updateClipRemote,
     deleteClip: deleteClipRemote,
     isSaving: isClipSaving,
-  } = useRawClipSave();
+  } = useRawClipSave(annotateGameIdRef);
 
   // Export state from Zustand store (used for dismiss-on-change only)
   const { dismissExportCompleteToast } = useExportStore();
@@ -299,11 +306,6 @@ export function AnnotateContainer({
       });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- one-time restore on mount
-
-  // Keep a ref to annotateGameId so async callbacks always read the latest value.
-  // useCallback closures capture state at creation time, but the ref is always current.
-  const annotateGameIdRef = useRef(annotateGameId);
-  annotateGameIdRef.current = annotateGameId;
 
   // T251: High-water mark tracking — track max video position reached per video sequence
   // Map<sequenceKey, maxTime> where sequenceKey is 'single' for single-video or sequence number
