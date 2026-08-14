@@ -1,6 +1,6 @@
 # T7020: Remux uploaded game videos with faststart (moov at front)
 
-**Status:** WAITING ON USER
+**Status:** TODO — deliberately deferred, sequenced first after T5140 (see Progress Log)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-14
@@ -84,6 +84,34 @@ multiple sites) — reuse the pattern, don't invent a new one.
 - `blake3_hash` (used for dedup/change-detection elsewhere, e.g. `games.blake3_hash`) will
   change after a remux even though the content is perceptually identical (byte layout changes)
   — check whether anything relies on hash stability across this operation before shipping.
+
+## Progress Log
+
+**2026-08-15**: Implemented as a synchronous, inline remux — works, CI green, and a real
+reliability bug found live-testing it (a transient R2 502 during the re-upload step was
+silently not retried; `is_transient_error` didn't recognize boto3's `S3UploadFailedError`
+wrapper) is fixed and regression-tested. Branch: `feature/T7020-game-video-faststart-remux`,
+commit `7f2aeb4e`, **kept on origin, not merged**.
+
+Measured end-to-end on a 278MB test upload: the synchronous remux adds 65-78s to
+`finalize_upload`'s response — roughly as much as the 58.5s original upload itself — because it
+round-trips the file through R2 twice more (download + re-upload; `ffmpeg` itself is
+negligible, ~1440MB/s). User does not want ANY upload-time increase, ever.
+
+Presented a design note comparing the current synchronous approach against dispatching the
+remux to Modal (mirrors T4945's `stitch_members` — a durable job independent of the Fly
+machine's lifecycle, sidesteps the T1537 fire-and-forget constraint) — full comparison +
+sequence diagrams: [design artifact](https://claude.ai/code/artifact/27a9f3e5-38fb-44bd-8dcb-50655873f81c).
+User decision: **prefers the Modal-dispatch redesign.** Response would stay near-instant
+(~1-2s, matching pre-this-task finalize time) regardless of upload size — satisfies the
+zero-upload-time-cost bar the synchronous version can't.
+
+**Not merging the synchronous branch.** Held for more thorough testing and the Modal-dispatch
+rework; resequenced to be the FIRST task picked up after T5140 (the tutorial reshoot) rather
+than left in the general backlog. When resumed: keep the retry-classifier fix and the
+correctness logic (moov-position probe, fail-open semantics) from the current branch, replace
+the synchronous `remux_game_faststart()` call in `finalize_upload` with a fire-and-forget
+Modal dispatch per the design note's Option A.
 
 ## Acceptance Criteria
 - [ ] New game video uploads get a lossless faststart remux before being marked ready
