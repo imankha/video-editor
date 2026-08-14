@@ -912,10 +912,23 @@ async def download_collection(
     Every ffmpeg stage is non-fatal -- a stitch/outro failure degrades the
     download, it never corrupts or drops a source reel.
 
-    Scope: T4946 owns the real permission/credit gate. This endpoint runs on
-    the caller's own session/profile context and stitches only the caller's own
-    reels (`evaluate_collection_members` reads the caller's profile DB), so it
-    is implicitly owner-scoped -- not wide open.
+    Access control (T4946, RESOLVED): "permission to the clip" collapses to
+    OWNERSHIP for a collection download -- there is no collaborator-permission
+    concept for collections. Both properties are enforced STRUCTURALLY, not by
+    an added gate (a defensive owner check against a row that cannot exist is a
+    banned defensive fix, CLAUDE.md):
+      - Sign-in: this path is NOT in the middleware AUTH_ALLOWLIST_PREFIXES, so
+        a request with no session cookie / X-User-ID is 401'd by
+        RequestContextMiddleware BEFORE this handler runs.
+      - Ownership: `get_db_connection()` / `evaluate_collection_members` read
+        ONLY the caller's own profile DB (resolved purely from the request's
+        user/profile ContextVars -- there is no user argument to pass), and
+        `final_videos` never holds a foreign-owned reel. A signed-in user can
+        only ever stitch their own published reels; another user's collection
+        is structurally invisible (yields the 404 below), never reachable.
+      - Free (Decision 4): NO credit reservation / debit -- downloads are free.
+    This mirrors the sibling single-reel download (`downloads.py::download_file`),
+    which gates identically. Regression: test_t4946_collection_download_access.py.
     """
     tag_list, definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
     key = collection_intro_settings_key(
