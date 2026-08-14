@@ -16,6 +16,7 @@ game_ids/tags BLOBs are on-disk storage only, decoded in Python here).
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -56,6 +57,7 @@ from app.storage import (
     generate_presigned_url_global,
     r2_delete_object_global,
     r2_head_object_global,
+    upload_file_to_r2_global,
 )
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
@@ -844,6 +846,88 @@ def _collection_download_filename(scope_type: str, tags: list[str] | None) -> st
     return f"{base}.mp4"
 
 
+# ---- disposable stitched-download cache (T4947) ----------------------------
+# A repeat download of an UNCHANGED collection serves a pre-built MP4 straight
+# from R2 instead of re-stitching. No DB row, no migration: the cache is fully
+# derivable from its R2 key, which fingerprints EVERYTHING that changes the
+# composed bytes, so any input change is a natural miss. Lives under the
+# caller's own R2 prefix (same namespace as the Modal stitch scratch), disposable
+# and torn down with the account.
+
+_CACHE_KEY_PREFIX = "collection_downloads"
+
+# The intro-card columns whose value determines the BURNED intro; an edit to any
+# of them (same card id) must invalidate the cache. `updated_at` bumps on every
+# card edit; the explicit content columns cover a same-second image/text swap.
+_CARD_CONTENT_COLUMNS = (
+    "id", "name", "shown_fields", "treatment", "subtitle_text",
+    "image_key", "image_cutout_key", "focal_x", "focal_y", "zoom",
+    "duration", "updated_at",
+)
+
+
+def _card_content_hash(card_row) -> str:
+    """Stable 16-hex digest of the resolved intro card's burn-affecting content
+    (or a fixed sentinel when there is no intro), so EDITING the card without
+    changing its id still invalidates the download cache. `card_row` is a
+    `SELECT *` sqlite row from `resolve_intro_card`."""
+    if card_row is None:
+        return "no-card"
+    parts = []
+    for col in _CARD_CONTENT_COLUMNS:
+        try:
+            parts.append(f"{col}={card_row[col]}")
+        except (KeyError, IndexError):
+            parts.append(f"{col}=?")  # column absent below-head; still stable
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _collection_download_cache_key(
+    r2_prefix: str, members: list[dict], resolved_card_id: int | None,
+    card_content_hash: str, field_values_fp: str, outro_on: bool,
+    budget_sec: float | None,
+) -> str:
+    """Full R2 key for the stitched-download cache: sha256 over the ordered
+    member ids + each member's filename + the resolved intro card id + its
+    content hash + the burned intro FACTS (profile full_name / shown fields) +
+    the branded-outro flag + the budget. Any single input change (member set,
+    rank order, card, card content, a burned profile fact, outro flag, budget)
+    yields a different key = a natural cache miss."""
+    fingerprint = "\n".join([
+        "ids=" + ",".join(str(m["id"]) for m in members),
+        "files=" + ",".join(m["filename"] for m in members),
+        f"card={resolved_card_id}",
+        f"cardhash={card_content_hash}",
+        f"facts={field_values_fp}",
+        f"outro={int(outro_on)}",
+        f"budget={budget_sec}",
+    ])
+    digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+    return f"{r2_prefix}/{_CACHE_KEY_PREFIX}/{digest}.mp4"
+
+
+def _stream_file_and_cleanup(path: str, cleanup_dir: str):
+    """Stream an on-disk MP4 in 1 MiB chunks, then `rmtree` `cleanup_dir` in a
+    `finally`. Shared by the cache-hit and freshly-built collection-download
+    paths so they never drift on chunk size / cleanup. A failure here is
+    genuinely post-headers (the 200 is already committed) -- logged loudly with
+    context rather than silently swallowed."""
+    def _gen():
+        try:
+            with open(path, "rb") as fin:
+                while True:
+                    chunk = fin.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        except Exception:
+            logger.exception(f"[CollectionDownload] streaming file failed mid-stream: {path}")
+            raise
+        finally:
+            shutil.rmtree(cleanup_dir, ignore_errors=True)
+    return _gen()
+
+
 def _stitch_members_local(
     user_id: str, profile_id: str, member_keys: list[str], out_path: str, tmp_dir: str,
 ) -> None:
@@ -944,6 +1028,11 @@ async def download_collection(
         cursor = conn.cursor()
         raw_card_id = get_collection_intro_card_id(cursor, key)
         members = evaluate_collection_members(conn, definition)
+        # Resolve the collection's intro card row here (connection alive) -- its
+        # RESOLVED id + content hash feed the cache key so a card swap/edit
+        # invalidates it. Same row `resolve_intro_for_reel` will burn (T6680:
+        # the reel_duration arg no longer participates in resolution).
+        card_row = resolve_intro_card(raw_card_id, None, conn)
     if budget_sec is not None:
         members = select_within_budget(members, budget_sec)
     if not members:
@@ -966,6 +1055,44 @@ async def download_collection(
         "Content-Disposition": f'attachment; filename="{download_filename}"',
         "Cache-Control": "no-cache",
     }
+
+    # ---- HEAD-before-build: serve a repeat download from the disposable R2
+    # cache without re-stitching (T4947). The key fingerprints every input that
+    # changes the composed bytes; `outro_enabled()` (the BRANDED_OUTRO_ENABLED
+    # flag) is what compose_serve_time ACTUALLY honors even though we always pass
+    # outro=True, so it -- not the literal True -- belongs in the key. ----
+    from app.services.branded_outro import outro_enabled
+    # The BURNED intro facts (profile full_name + the card's shown fields) live in
+    # user.sqlite, NOT the intro-card row, so editing a fact never bumps the
+    # card's `updated_at` -- they must be in the key on their own, or a profile
+    # rename would keep serving the stale burned name from cache. Only relevant
+    # when a card is actually attached (the only case they get burned). Offloaded:
+    # _load_field_values does an R2 user-db freshness check that must not run on
+    # the event loop (T7040).
+    field_values_fp = ""
+    if card_row is not None:
+        field_values = await asyncio.to_thread(_load_field_values, user_id, profile_id)
+        field_values_fp = json.dumps(field_values, sort_keys=True, default=str)
+    cache_key = _collection_download_cache_key(
+        r2_prefix, members,
+        card_row["id"] if card_row is not None else None,
+        _card_content_hash(card_row), field_values_fp, outro_enabled(), budget_sec,
+    )
+    if await asyncio.to_thread(r2_head_object_global, cache_key) is not None:
+        cache_tmp = tempfile.mkdtemp(prefix="rb_coll_dl_cache_")
+        cached_path = os.path.join(cache_tmp, "cached.mp4")
+        if await asyncio.to_thread(download_from_r2_global, cache_key, Path(cached_path)):
+            logger.info(f"[CollectionDownload] cache HIT {cache_key}")
+            return StreamingResponse(
+                _stream_file_and_cleanup(cached_path, cache_tmp),
+                media_type="video/mp4", headers=dl_headers,
+            )
+        # HEAD said present but the GET failed (transient blip / just-evicted) --
+        # tear down and fall through to a fresh build rather than 5xx.
+        shutil.rmtree(cache_tmp, ignore_errors=True)
+        logger.warning(
+            f"[CollectionDownload] cache HEAD hit but download failed; rebuilding {cache_key}"
+        )
 
     def _resolve_collection_intro():
         # Own read-only connection (resolve_intro_for_reel opens one keyed on
@@ -1010,11 +1137,13 @@ async def download_collection(
 
         # ---- compose intro + outro app-side (cards NEVER on Modal) ----
         serve_path = stitched_path
+        compose_report: dict = {}
         intro = await asyncio.to_thread(_resolve_collection_intro)
         try:
             from app.services.serve_time_video import compose_serve_time
             if await asyncio.to_thread(
-                compose_serve_time, stitched_path, out_path, intro=intro, outro=True,
+                compose_serve_time, stitched_path, out_path,
+                intro=intro, outro=True, report=compose_report,
             ):
                 serve_path = out_path
         except Exception as exc:
@@ -1047,26 +1176,37 @@ async def download_collection(
         except Exception:
             logger.warning(f"[CollectionDownload] scratch cleanup failed: {scratch_full_key}")
 
-    async def _stream_composed():
-        # Only the disk read remains here. A failure now is genuinely post-headers
-        # (the 200 is already committed, so it cannot become a clean status) -- but
-        # it is at least logged loudly with context instead of silently swallowed.
+    # ---- write-after-build: populate the disposable cache (best-effort) ----
+    # An R2 object PUT is atomic -- the key only becomes visible once the whole
+    # object lands -- so two concurrent requests for the same uncached key can
+    # only ever race to write byte-complete objects (last writer wins on
+    # identical content), never expose a partial one. And because each request
+    # STREAMS ITS OWN freshly-built `serve_path` (never the key it just wrote),
+    # the race can't corrupt the bytes any caller actually receives. A cache-write
+    # failure is non-fatal: the download already succeeded from local disk.
+    #
+    # ONLY cache a FULL-FIDELITY compose. compose_serve_time is non-fatal: a
+    # transient intro/outro/concat hiccup degrades to a bare stitch but still
+    # returns True. Caching that would freeze the degraded bytes and serve them
+    # on every future hit for this key (no self-heal), so a degraded serve
+    # streams to THIS caller but must not poison the cache -- the next request
+    # re-misses and rebuilds once the transient condition clears.
+    if compose_report.get("full_fidelity"):
         try:
-            with open(serve_path, "rb") as fin:
-                while True:
-                    chunk = fin.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    yield chunk
-        except Exception:
-            logger.exception(
-                f"[CollectionDownload] streaming composed file failed mid-stream: {serve_path}"
+            await asyncio.to_thread(
+                upload_file_to_r2_global, cache_key, Path(serve_path), content_type="video/mp4",
             )
-            raise
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            logger.warning(f"[CollectionDownload] cache write failed (non-fatal): {cache_key}")
+    else:
+        logger.info(
+            f"[CollectionDownload] compose degraded (not full fidelity); skipping cache write {cache_key}"
+        )
 
-    return StreamingResponse(_stream_composed(), media_type="video/mp4", headers=dl_headers)
+    return StreamingResponse(
+        _stream_file_and_cleanup(serve_path, tmp_dir),
+        media_type="video/mp4", headers=dl_headers,
+    )
 
 
 @router.patch("/intro")

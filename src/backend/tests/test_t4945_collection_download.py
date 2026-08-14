@@ -169,13 +169,15 @@ def _install_stub_pipeline(stack, *, modal=False, compose_returns=True, compose_
         captured["intro_args"] = (user_id, profile_id, raw_card_id, total_duration, reel_id)
         return intro
 
-    def _compose(reel_path, out_path, *, intro=None, outro=True, metadata_hook=None):
+    def _compose(reel_path, out_path, *, intro=None, outro=True, metadata_hook=None, report=None):
         captured.setdefault("compose_calls", []).append(
             {"reel_path": reel_path, "intro": intro, "outro": outro}
         )
         if compose_raises:
             raise RuntimeError("forced compose failure")
         if compose_returns:
+            if report is not None:
+                report["full_fidelity"] = True
             with open(out_path, "wb") as f:
                 f.write(b"COMPOSED")
             return True

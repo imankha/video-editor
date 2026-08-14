@@ -156,7 +156,7 @@ async def test_stitch_failure_returns_clean_500(monkeypatch):
     monkeypatch.setattr(collections, "get_collection_intro_card_id", lambda *a, **k: None)
     monkeypatch.setattr(
         collections, "evaluate_collection_members",
-        lambda *a, **k: [{"filename": "a.mp4", "duration": 3.0}],
+        lambda *a, **k: [{"id": 1, "filename": "a.mp4", "duration": 3.0}],
     )
     monkeypatch.setattr(collections, "record_milestone", lambda *a, **k: None)
 
