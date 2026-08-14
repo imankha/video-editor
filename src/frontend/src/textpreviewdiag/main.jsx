@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 // Tailwind utilities: without this the harness renders layout classes inert.
 import '../index.css';
 import TextOverlayPreview from '../modes/overlay/overlays/TextOverlayPreview';
+import TextManagementPanel from '../components/overlay/TextManagementPanel';
 import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
 
 /**
@@ -40,12 +41,14 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
  *    into `<TextOverlayPreview>` (unknown/unread props today -- harmless,
  *    forward-compatible; TextOverlayPreview destructures a fixed prop list
  *    and ignores anything it doesn't name).
- *  - Renders a `data-testid="panel-text-input"` `<input>` standing in for
- *    the REAL `TextManagementPanel`'s `TextSpecEditor` text field, wired to
- *    the SAME `updateElementSpec` -> `handleMoveTextPosition`-equivalent
- *    single write path (`onEditText`) the canvas input will use -- so the
- *    e2e spec can assert canvas<->panel LIVE sync through the one shared
- *    write path without mounting the full settings panel tree.
+ *  - Mounts the REAL `<TextManagementPanel>` (not a stand-in) alongside
+ *    `<TextOverlayPreview>`, wired to the SAME `updateElementSpec` write path
+ *    (`onUpdateTextSpec`) the canvas input uses -- so the e2e spec exercises
+ *    the REAL focus/scroll/expand effect the panel runs on inline-edit entry,
+ *    not a simplified stand-in. This is load-bearing: an earlier stub input
+ *    here masked a real focus race between the panel's imperative focus and
+ *    the canvas input's autofocus (reviewer round 1 finding) because it never
+ *    exercised the panel's actual effect.
  */
 
 const DURATION = 10;
@@ -85,6 +88,7 @@ function TextPreviewDiagHarness() {
     addRegion,
     addElement,
     selectElement,
+    selectRegion,
     updateElementSpec,
     // T6980: undefined until useTextOverlays grows these -- the harness
     // renders `data-inline-editing` from whatever this evaluates to, so a
@@ -184,15 +188,11 @@ function TextPreviewDiagHarness() {
     if (selected) updateElementSpec(elementId, { ...selected.spec, position: { x: 0.5, y: 0.5 } });
   };
 
-  // T6980 -- the ONE write path both the canvas inline input and the panel
-  // input will funnel through (design §2.1's `wrappedUpdateTextSpec`
-  // equivalent for this harness): given the CURRENTLY SELECTED element's id
-  // + its current spec, replace only `text` and call updateElementSpec.
-  // Both inputs below call this SAME function -- proving single-write-path
-  // sync is a matter of wiring, not a second code path.
-  const selectedForEdit = textOverlays
-    .flatMap((r) => r.elements)
-    .find((el) => el.id === selectedElementId);
+  // T6980 -- the ONE write path both the canvas inline input and the REAL
+  // TextManagementPanel's onUpdateTextSpec funnel through (design §2.1's
+  // `wrappedUpdateTextSpec` equivalent for this harness): given an element id
+  // + its next spec, call updateElementSpec. Proving single-write-path sync
+  // is a matter of wiring, not a second code path.
   const onEditText = (id, nextSpec) => updateElementSpec(id, nextSpec);
 
   // T6980 -- composes the target gesture the real OverlayModeView.
@@ -235,28 +235,6 @@ function TextPreviewDiagHarness() {
         <button type="button" data-testid="set-short" onClick={() => setText(SHORT_TEXT)}>short</button>
         <button type="button" data-testid="set-long" onClick={() => setText(LONG_TEXT)}>long</button>
         <button type="button" data-testid="reset-pos" onClick={resetPos}>reset</button>
-      </div>
-
-      {/* T6980 -- stand-in for the REAL TextManagementPanel's TextSpecEditor
-          text <input>. Bound to the SAME selected element + the SAME
-          onEditText write path the canvas inline input will use, so the qa
-          spec can prove live sync both directions without mounting the full
-          settings-panel tree (which is unrelated surface for this harness). */}
-      <div style={{ marginBottom: 12 }}>
-        <input
-          type="text"
-          data-testid="panel-text-input"
-          value={selectedForEdit ? selectedForEdit.spec.text : ''}
-          onChange={(e) => {
-            if (!selectedForEdit) return;
-            onEditText(selectedForEdit.id, { ...selectedForEdit.spec, text: e.target.value });
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || e.key === 'Enter') handleEndInlineEdit();
-          }}
-          onBlur={handleEndInlineEdit}
-          disabled={!selectedForEdit}
-        />
       </div>
 
       {/* T6880 -- ghost-state controls (playhead in/out of the region window,
@@ -304,6 +282,32 @@ function TextPreviewDiagHarness() {
           inlineEditingElementId={inlineEditingElementId}
           onEndInlineEdit={handleEndInlineEdit}
           onEditText={onEditText}
+        />
+      </div>
+
+      {/* T6980 -- the REAL TextManagementPanel, so the qa spec exercises its
+          actual expand/scroll/focus effect (not a simplified stand-in) and
+          the SAME onUpdateTextSpec write path the canvas inline input uses.
+          `regions` is the full `textOverlays` list -- the harness has exactly
+          one region and the default playhead (3) sits inside its [2,4]
+          window, so no range-scoping is needed to match production callers.
+          Rendered BELOW the video container (reviewer round 1 follow-up): the
+          real panel is ~500px tall, and mounting it ABOVE the canvas pushed
+          the 640x360 video below the 720px desktop fold, so the qa spec's
+          `page.mouse.dblclick(center)` (raw viewport coords, no auto-scroll)
+          landed off-screen and missed the element. Keeping the canvas near the
+          top preserves the stable geometry the T6720/T6880 mouse-driven specs
+          share this harness for. */}
+      <div style={{ marginTop: 12, maxWidth: 420 }}>
+        <TextManagementPanel
+          regions={textOverlays}
+          selectedRegionId={selectedRegionId}
+          selectedElementId={selectedElementId}
+          onSelectRegion={selectRegion}
+          onSelectElement={selectElement}
+          onUpdateTextSpec={onEditText}
+          inlineEditingElementId={inlineEditingElementId}
+          onEndInlineEdit={handleEndInlineEdit}
         />
       </div>
     </div>

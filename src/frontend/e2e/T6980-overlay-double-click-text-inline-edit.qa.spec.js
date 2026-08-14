@@ -9,20 +9,19 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * through the ONE existing debounced `update_text_spec` write path -- per
  * the approved design (docs/plans/tasks/T6980-design.md).
  *
- * Verified against the REAL <TextOverlayPreview> + REAL useTextOverlays hook
- * via the dev-only /textpreviewdiag.html harness (same harness T6720/T6880
- * use), extended for T6980 with:
+ * Verified against the REAL <TextOverlayPreview> + REAL <TextManagementPanel>
+ * + REAL useTextOverlays hook via the dev-only /textpreviewdiag.html harness
+ * (same harness T6720/T6880 use), extended for T6980 with:
  *  - `inlineEditingElementId`/`beginInlineEdit`/`endInlineEdit` read off the
  *    real hook and exposed via `data-inline-editing` on the status div,
- *  - a `data-testid="panel-text-input"` standing in for the real
- *    TextManagementPanel's TextSpecEditor input, wired to the SAME
- *    `onEditText` write path the canvas inline input uses.
+ *  - the REAL `<TextManagementPanel>` mounted alongside the canvas (not a
+ *    stand-in input) -- this is load-bearing: a stub input here would not
+ *    exercise the panel's real focus/scroll/expand effect, which is exactly
+ *    where a canvas-vs-panel focus race lived (reviewer round 1 finding;
+ *    fixed by making the panel yield focus to an already-focused input).
  *
  * jsdom gives false confidence for pointer/focus/dblclick timing (T5380
- * precedent); this is the required real-browser proof. Some steps below are
- * `test.fixme` pending the T6980 implementation of the `onDoubleClick`
- * hit-test + transparent canvas `<input>` in TextOverlayPreview.jsx (design
- * §3.4) -- the implementor should un-skip them once that lands.
+ * precedent); this is the required real-browser proof.
  *
  * Run: cd src/frontend && npx playwright test e2e/T6980-overlay-double-click-text-inline-edit.qa.spec.js
  */
@@ -31,7 +30,7 @@ const HARNESS = '/textpreviewdiag.html';
 const STATUS = '[data-testid="status"]';
 const ELEMENT = '[data-testid^="text-preview-element-"]';
 const FRAME = '[data-testid^="text-drag-frame-"]';
-const PANEL_INPUT = '[data-testid="panel-text-input"]';
+const PANEL_INPUT = '[data-testid="text-spec-text-input"]';
 // T6980 design §3.4: the transparent canvas <input> the implementor adds,
 // rendered when inlineEditingElementId === element.id. Not yet in
 // TextOverlayPreview.jsx -- selector is the CONTRACT the implementor's

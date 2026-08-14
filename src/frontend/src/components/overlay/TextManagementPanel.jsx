@@ -88,9 +88,9 @@ export default function TextManagementPanel({
   const textInputRef = useRef(null);
 
   // T6980: entering inline edit on THIS panel's selected element -> make its row
-  // reachable and focused. Ensure the owning region is expanded (via the SAME
-  // expandOverrides mechanism the chevron uses), scroll the row into view, and
-  // focus the Text field with the caret at end. View-only side effects (DOM
+  // reachable and, if nothing has already claimed the caret, focused. Ensure the
+  // owning region is expanded (via the SAME expandOverrides mechanism the
+  // chevron uses) and scroll the row into view. View-only side effects (DOM
   // focus/scroll + UI expand state) -- never a reel-data / backend write.
   useEffect(() => {
     if (!inlineEditingElementId || inlineEditingElementId !== selectedElementId) return;
@@ -99,7 +99,18 @@ export default function TextManagementPanel({
     const raf = requestAnimationFrame(() => {
       rowRefs.current[inlineEditingElementId]?.scrollIntoView({ block: 'nearest' });
       const input = textInputRef.current;
-      if (input) {
+      // Reviewer round 1 fix: the canvas inline <input> (TextOverlayPreview)
+      // autofocuses SYNCHRONOUSLY in its ref callback during the SAME commit
+      // that mounts it -- this rAF runs a frame later. Stealing focus here
+      // unconditionally raced it: canvas focuses -> this rAF fires -> panel
+      // steals focus -> canvas input's onBlur fires -> inline edit ends ->
+      // canvas input unmounts, so double-click silently failed to enter edit
+      // in the real app (the dev harness doesn't mount this panel, so the
+      // race was invisible to the e2e suite). Only take focus here if the
+      // caret hasn't already landed on an input -- i.e. the canvas editor
+      // hasn't mounted yet (elementBoxes still settling, design §5 "Async
+      // metrics" landmine) -- so THIS becomes the fallback, not a competitor.
+      if (input && document.activeElement?.tagName !== 'INPUT') {
         input.focus();
         const end = input.value.length;
         input.setSelectionRange(end, end);

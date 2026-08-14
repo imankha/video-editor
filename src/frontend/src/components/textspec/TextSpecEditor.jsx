@@ -94,6 +94,7 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
           <input
             ref={inputRef}
             type="text"
+            data-testid="text-spec-text-input"
             value={spec.text}
             onChange={(e) => emit({ text: e.target.value })}
             onBlur={onCommitEnd || undefined}
