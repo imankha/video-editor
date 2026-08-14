@@ -1,4 +1,4 @@
-# T5450: Detection Signals + Fusion + Smoothing → Decision Gate
+# T7080: Detection Signals + Fusion + Smoothing → Decision Gate
 
 **Status:** TODO
 **Impact:** 9
@@ -7,7 +7,7 @@
 
 ## Problem
 
-Classical signals (T5440) measure *pixel* motion; they can't distinguish "22 players sprinting" from "wind in the nets + spectators", and they can't see that the pitch is empty at halftime. Semantic features from player detection/tracking — plus a small learned fusion over ALL features and a temporal decode — is the recipe expected to clear the epic's gates. This task builds it, tunes it on the dev split, and renders the epic's go/no-go verdict on the held-out split. See [EPIC.md](EPIC.md): signals S4–S6, gates G1–G6, asymmetric-tuning decision.
+Classical signals (T7070) measure *pixel* motion; they can't distinguish "22 players sprinting" from "wind in the nets + spectators", and they can't see that the pitch is empty at halftime. Semantic features from player detection/tracking — plus a small learned fusion over ALL features and a temporal decode — is the recipe expected to clear the epic's gates. This task builds it, tunes it on the dev split, and renders the epic's go/no-go verdict on the held-out split. See [EPIC.md](EPIC.md): signals S4–S6, gates G1–G6, asymmetric-tuning decision.
 
 ## Solution
 
@@ -20,13 +20,13 @@ In `src/backend/experiments/motion_testbed/`:
 - `signals/detection.py` — S4: ultralytics YOLO (start with `yolov8x.pt` — the exact model already baked into our Modal `yolo_image`; also measure `yolov8m` for cost) + built-in ByteTrack; per-second features: on-pitch player count, aggregate track displacement, convex-hull area, centroid speed, cluster-tightness
 - `signals/pitch_mask.py` — S4b (conditional): HSV dominant-green mask to exclude off-pitch motion; only if error analysis shows spectator noise
 - `signals/audio.py` — S5 (optional): whistle-band (2–4 kHz) energy + RMS via librosa; skip if audio quality across the dataset is junk
-- `recipes/fusion.py` — S6: feature assembly (reads T5440's npz cache + this task's detection features), classifier (sklearn LogisticRegression baseline, LightGBM comparison), temporal decode (hysteresis with min-duration; hmmlearn/Viterbi comparison)
+- `recipes/fusion.py` — S6: feature assembly (reads T7070's npz cache + this task's detection features), classifier (sklearn LogisticRegression baseline, LightGBM comparison), temporal decode (hysteresis with min-duration; hmmlearn/Viterbi comparison)
 - `recipes/fusion_v1.json` — frozen weights + thresholds + feature list of the shipped recipe
 - `modal_runner.py` — thin Modal T4 runner for detection over the 8-game set (pattern: sr_testbed's runner; testbed-only app, NOT the production `reel-ballers-video-v2`)
 - `README.md` — final report
 
 ### Related Tasks
-- Depends on: T5430 (labels/metrics), T5440 (feature cache — reuse, don't re-extract classical features)
+- Depends on: T7060 (labels/metrics), T7070 (feature cache — reuse, don't re-extract classical features)
 - Blocks: T5460 (implements fusion-v1 as the production Modal job)
 
 ### Technical Notes
@@ -42,7 +42,7 @@ In `src/backend/experiments/motion_testbed/`:
 ## Implementation
 
 ### Steps
-1. [ ] `modal_runner.py` + detection feature extraction over all 8 games (cache npz alongside T5440's)
+1. [ ] `modal_runner.py` + detection feature extraction over all 8 games (cache npz alongside T7070's)
 2. [ ] Solo-eval detection features (G5 per feature) — sanity: player count must nail EMPTY
 3. [ ] Audio features if dataset audio permits; else document skip
 4. [ ] Fusion classifier, leave-one-game-out on dev split

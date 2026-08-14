@@ -14,7 +14,7 @@ Why: annotating a full game is the single largest time cost in the product. Only
 
 ## The Prime Directive: Testbed First
 
-**No detector ships to the app without a testbed run against labeled held-out games proving it clears the decision gates below.** Every signal, fusion recipe, threshold, or smoothing change is expressed as a testbed pipeline, run against the standard labeled game set, and evaluated on the standard report. "It looked right on the game I scrubbed" is not evidence. T5430 (testbed + labeling environment) is ordered first and blocks everything.
+**No detector ships to the app without a testbed run against labeled held-out games proving it clears the decision gates below.** Every signal, fusion recipe, threshold, or smoothing change is expressed as a testbed pipeline, run against the standard labeled game set, and evaluated on the standard report. "It looked right on the game I scrubbed" is not evidence. T7060 (testbed + labeling environment) is ordered first and blocks everything.
 
 ## Camera Reality (signals must survive all three)
 
@@ -26,7 +26,7 @@ Our game footage comes from three source classes with very different motion char
 | Trace-style auto-follow | continuous pan/zoom tracking play | **global camera motion dominates pixel change** — must be compensated or every frame looks "active" |
 | Handheld phone | shake + pan + zoom, worst case | compensation mandatory; expect the noisiest scores |
 
-Additional confounders: spectators and warm-up players near the sideline (motion that isn't play), wind-blown nets/trees, rain, exposure flicker, far-side players at 30–80 px, and the scoreboard/watermark overlays some cameras burn in. The labeled dataset (T5430) must include all three source classes or we will tune a detector that only works on one.
+Additional confounders: spectators and warm-up players near the sideline (motion that isn't play), wind-blown nets/trees, rain, exposure flicker, far-side players at 30–80 px, and the scoreboard/watermark overlays some cameras burn in. The labeled dataset (T7060) must include all three source classes or we will tune a detector that only works on one.
 
 ## Signal Candidates (the bake-off)
 
@@ -40,7 +40,7 @@ Ordered roughly by cost. The end recipe is likely a **fusion** of a cheap dense 
 | S4 | **Player detection + tracking** | YOLO on sampled frames (1–2 fps), track with ByteTrack/BoT-SORT; features: player count on pitch, aggregate displacement, team spread (convex-hull area), centroid speed, "clustered around a point" (free-kick/injury signature). **`yolov8x.pt` is already baked into our Modal `yolo_image`** — reuse it. | ultralytics (det + built-in ByteTrack/BoT-SORT), [supervision](https://github.com/roboflow/supervision), [norfair](https://github.com/tryolabs/norfair), [roboflow/sports](https://github.com/roboflow/sports) (pitch keypoints, examples) | ~$0.10–0.30 GPU at 1–2 fps sampling | Cost; far-side misses; detects spectators too (need pitch masking — S4b) |
 | S4b | **Pitch masking** | One-time-per-game field segmentation (dominant-green mask or pitch keypoint homography from roboflow/sports) so S1–S4 only count motion ON the field. | OpenCV HSV masking; roboflow/sports pitch model | ~free | Non-grass sports/dirt fields; worth it only if spectator noise shows up in error analysis |
 | S5 | **Audio energy (optional, complementary)** | Whistle-band energy (2–4 kHz bandpass), crowd RMS. Whistles mark stop/start transitions; silence marks halftime. | librosa/torchaudio; optionally YAMNet/PANNs "whistle" class | ~free | Wind noise, music, sideline chatter; many uploads have poor audio |
-| S6 | **Learned fusion + temporal smoothing** | Per-second feature vector from S1–S5 → small classifier (logistic regression / LightGBM, or tiny 1D-conv/GRU) trained on our labels → per-second P(active) → HMM/hysteresis decode with min-duration constraints. | scikit-learn / LightGBM, hmmlearn (or hand-rolled Viterbi/hysteresis) | ~free | Needs the labeled set (that's what T5430 builds); overfit risk with ~8 games — keep the model tiny |
+| S6 | **Learned fusion + temporal smoothing** | Per-second feature vector from S1–S5 → small classifier (logistic regression / LightGBM, or tiny 1D-conv/GRU) trained on our labels → per-second P(active) → HMM/hysteresis decode with min-duration constraints. | scikit-learn / LightGBM, hmmlearn (or hand-rolled Viterbi/hysteresis) | ~free | Needs the labeled set (that's what T7060 builds); overfit risk with ~8 games — keep the model tiny |
 | S7 | **End-to-end video classifier (reference only)** | X3D / MoViNet / VideoMAE-2 fine-tuned on 2–4 s windows for active-vs-dead. | pytorchvideo, timm, HF transformers | GPU, highest | Almost certainly unnecessary; only if S1–S6 fusion fails the gate. Data-hungry. |
 
 **Prior art to mine (ideas, not shipped weights):** broadcast play–break segmentation literature (Ekin et al. 2003 dominant-color/camera-view methods — built for broadcast cutting, mostly N/A to our single fixed panorama, but the play/break taxonomy is useful); [SoccerNet](https://www.soccer-net.org/) action-spotting and game-state-reconstruction challenges + baselines (**check licenses — much of it is research-only; use for benchmarking ideas, do not ship weights without license review**); [PySceneDetect](https://github.com/Breakthrough/PySceneDetect) for coarse content-change detection (halftime static scenes); Roboflow's sports pipelines for detection/tracking recipes.
@@ -64,11 +64,11 @@ Per-second (0.5 s resolution internally) state, exactly three classes:
 
 ## Labeling Environment
 
-**Decision: build a custom keyboard-driven labeler inside the testbed** (~300 LOC static HTML). We build video annotation UIs for a living; Label Studio/CVAT are heavyweight for a 3-state timeline. If it disappoints, fall back to [Label Studio](https://labelstud.io/)'s video timeline-segmentation template or [CVAT](https://www.cvat.ai/) — both are documented in T5430 as plan B, along with zero-install [VIA](https://www.robots.ox.ac.uk/~vgg/software/via/).
+**Decision: build a custom keyboard-driven labeler inside the testbed** (~300 LOC static HTML). We build video annotation UIs for a living; Label Studio/CVAT are heavyweight for a 3-state timeline. If it disappoints, fall back to [Label Studio](https://labelstud.io/)'s video timeline-segmentation template or [CVAT](https://www.cvat.ai/) — both are documented in T7060 as plan B, along with zero-install [VIA](https://www.robots.ox.ac.uk/~vgg/software/via/).
 
 The labeler: single HTML page, `<video>` element pointed at a local game file, speed control 1–8x, keys **A/D/E** stamp the state from the current time forward (state persists until the next keypress — you label by *toggling while watching at 4x*, not by dragging segments), a colored timeline strip shows the state track, undo, export/import of the ground-truth JSON. A second **review mode** jumps between transitions ±5 s at 1x to fix boundaries.
 
-**Labeling protocol (T5430):**
+**Labeling protocol (T7060):**
 - **Dataset: 8 games** (~12 h footage) from our own accounts: 2+ Veo-static, 2+ follow-cam, 2+ phone; soccer-weighted (target audience) with at least 1 non-soccer if available. Split **5 dev / 3 held-out test** — held-out games are never used for tuning, thresholds, or model fitting; they are touched only by the final report of each task.
 - Expected effort: one watch-through pass at ~4x + a transition-review pass ≈ 25–35 min per game hour → **~5–7 h total**. Budget it; it's the irreplaceable asset of this epic.
 - **Double-label one game** (two annotators) and report agreement (Cohen's kappa + boundary deltas). That number is the human ceiling — no gate below may demand more than humans agree with each other.
@@ -78,7 +78,7 @@ The labeler: single HTML page, `<video>` element pointed at a local game file, s
 
 **The core asymmetry:** classifying real play as skippable is catastrophic (a parent misses their kid's goal); classifying dead time as active merely wastes time. All tuning fixes the play-preservation gate first, then maximizes dead-time capture at that operating point.
 
-### Signal-quality gates (measured on the 3 held-out games; must pass ALL to productize — T5450 is the go/no-go)
+### Signal-quality gates (measured on the 3 held-out games; must pass ALL to productize — T7080 is the go/no-go)
 
 | # | KPI | Gate | Rationale |
 |---|---|---|---|
@@ -89,7 +89,7 @@ The labeler: single HTML page, `<video>` element pointed at a local game file, s
 | G5 | **Score quality**: ROC-AUC of continuous score, ACTIVE vs rest | **≥ 0.92** | threshold-independent health metric; tracks signal quality across iterations |
 | G6 | **Stability**: state flips per game-minute after smoothing | **≤ 0.5** | a strobing timeline layer reads as broken |
 
-### Cost gates (T5450 estimates, T5460 verifies on Modal)
+### Cost gates (T7080 estimates, T5460 verifies on Modal)
 
 | KPI | Gate |
 |---|---|
@@ -140,9 +140,9 @@ One per game, written by the Modal job to R2 (exact key scheme defined in T5460,
 
 | ID | Task | Status |
 |----|------|--------|
-| T5430 | [Motion Testbed + Labeling Environment + Ground-Truth Dataset](T5430-motion-testbed-labeling.md) | TODO |
-| T5440 | [Classical Signal Bake-off (motion vectors / diff / flow + camera compensation)](T5440-classical-signal-bakeoff.md) | TODO |
-| T5450 | [Detection Signals + Fusion + Smoothing → Decision Gate](T5450-detection-fusion-tuning.md) | TODO |
+| T7060 | [Motion Testbed + Labeling Environment + Ground-Truth Dataset](T7060-motion-testbed-labeling.md) | TODO |
+| T7070 | [Classical Signal Bake-off (motion vectors / diff / flow + camera compensation)](T7070-classical-signal-bakeoff.md) | TODO |
+| T7080 | [Detection Signals + Fusion + Smoothing → Decision Gate](T7080-detection-fusion-tuning.md) | TODO |
 | T5460 | [Modal Movement Job + Profile Persistence](T5460-modal-movement-job.md) | TODO |
 | T5470 | [Annotate Activity Layer](T5470-annotate-activity-layer.md) | TODO |
 | T5480 | [Smart Playback](T5480-smart-playback.md) | TODO |
@@ -150,11 +150,11 @@ One per game, written by the Modal job to R2 (exact key scheme defined in T5460,
 
 Overlap map (what's shared vs new per science task):
 
-| Concern | T5440 (classical) | T5450 (detection + fusion) |
+| Concern | T7070 (classical) | T7080 (detection + fusion) |
 |---|---|---|
 | Runs inside testbed | yes (new `Signal` subclasses) | yes (new `Signal` subclasses + `Recipe` fuser) |
-| Ground truth / metrics / report | reuses T5430 unchanged | reuses T5430 unchanged |
-| Feature cache | WRITES per-second feature vectors (npz) | READS T5440's cache, adds detection features |
+| Ground truth / metrics / report | reuses T7060 unchanged | reuses T7060 unchanged |
+| Feature cache | WRITES per-second feature vectors (npz) | READS T7070's cache, adds detection features |
 | GPU | none (CPU only) | Modal T4 via a thin runner (pattern from sr_testbed's `modal_runner.py`) |
 | Output | per-signal gate table + cost curve | final recipe + go/no-go vs ALL gates + Modal cost estimate |
 

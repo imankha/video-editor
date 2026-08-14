@@ -9,7 +9,7 @@
 ## Problem
 
 With two aligned cameras, the user still has to guess which one filmed a given moment
-better. The Movement Tracking epic (T5430-T5490) produces exactly the needed raw material:
+better. The Movement Tracking epic (T7060-T7080, T5460-T5490) produces exactly the needed raw material:
 a per-second activity profile per source. Comparing the two cameras' profiles on the shared
 clock yields a "which camera sees the action" signal for every timestamp.
 
@@ -30,7 +30,7 @@ clock yields a "which camera sees the action" signal for every timestamp.
    dual-camera games in the motion testbed (label 10-20 moments per game "which camera is
    better" and report agreement) BEFORE enabling by default. If the proxy is weak, the
    fallback signal is YOLO mean-player-bbox-height per camera (bigger players = closer
-   action), which T5450's feature cache already computes.
+   action), which T7080's feature cache already computes.
 3. **UI (two layers, both read-only/derived — zero persistence):**
    - **Badge:** while paused or scrubbing in Annotate, if the OTHER camera's score
      meaningfully beats the current one at the playhead, the T5540 toggle button shows a
@@ -54,7 +54,7 @@ clock yields a "which camera sees the action" signal for every timestamp.
 
 ### Related Tasks
 - **BLOCKED by: T5460** (profile artifact + persistence — and the per-source keying must be agreed with that task NOW), **T5540** (toggle machinery), T5530 (alignment)
-- Reuses: T5450 feature cache (bbox-height fallback signal), T5470 gating pattern, T5480 suspend semantics
+- Reuses: T7080 feature cache (bbox-height fallback signal), T5470 gating pattern, T5480 suspend semantics
 - Part of [dual-camera epic](EPIC.md)
 
 ### Technical Notes

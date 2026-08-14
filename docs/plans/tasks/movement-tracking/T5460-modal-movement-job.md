@@ -7,9 +7,9 @@
 
 ## Problem
 
-The tuned recipe (T5450's frozen `fusion_v1`) lives in a testbed. Productizing it means: a Modal function that runs the recipe over an uploaded game, a movement-profile artifact in R2, profile-DB tracking of profile status, a backend endpoint the frontend can read, and job recovery — all following the existing Modal conventions. See [EPIC.md](EPIC.md) for the artifact schema and design decision 5 (reuse existing Modal infra).
+The tuned recipe (T7080's frozen `fusion_v1`) lives in a testbed. Productizing it means: a Modal function that runs the recipe over an uploaded game, a movement-profile artifact in R2, profile-DB tracking of profile status, a backend endpoint the frontend can read, and job recovery — all following the existing Modal conventions. See [EPIC.md](EPIC.md) for the artifact schema and design decision 5 (reuse existing Modal infra).
 
-**BLOCKED until T5450 records "go".**
+**BLOCKED until T7080 records "go".**
 
 ## Solution
 
@@ -27,7 +27,7 @@ New `analyze_movement` Modal function in the production app + `call_modal_moveme
 - Job status plumbing: follow the export_jobs `modal_call_id` recovery pattern (`exports.py`) — decide during design whether movement jobs reuse `export_jobs` or the new table carries its own call id
 
 ### Related Tasks
-- Depends on: T5450 (go verdict + frozen recipe). Reuse: T5450's `fusion_v1.json`, T5440's signal implementations (ported, not imported from experiments/)
+- Depends on: T7080 (go verdict + frozen recipe). Reuse: T7080's `fusion_v1.json`, T7070's signal implementations (ported, not imported from experiments/)
 - Blocks: T5470 (layer reads the GET endpoint), T5490 (opt-in triggers this job)
 
 ### Technical Notes

@@ -1,4 +1,4 @@
-# T5430: Motion Testbed + Labeling Environment + Ground-Truth Dataset
+# T7060: Motion Testbed + Labeling Environment + Ground-Truth Dataset
 
 **Status:** TODO
 **Impact:** 8
@@ -29,7 +29,7 @@ All new, under `src/backend/experiments/motion_testbed/`:
 - `labels/` — committed ground-truth JSONs
 
 ### Related Tasks
-- Blocks: T5440, T5450 (and transitively the whole epic)
+- Blocks: T7070, T7080 (and transitively the whole epic)
 - Pattern precedent: `src/backend/experiments/sr_testbed/` (T4700) — copy its manifest/gitignore/report conventions where they fit
 
 ### Technical Notes
