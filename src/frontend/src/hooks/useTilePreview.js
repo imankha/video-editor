@@ -73,10 +73,22 @@ function usePrefersReducedMotion() {
  * @param {?string} opts.streamUrl  the reel's /stream URL; null disables the preview
  *   (e.g. a draft with no rendered final video). Passing null is also the teardown
  *   trigger for "full player opening" on the host that clears it.
+ * @param {number}  [opts.warmDelayMs]   override for PREVIEW_WARM_DELAY_MS. T6820's
+ *   source-clip-window tier passes 0 — it already pays real network seek latency
+ *   (moov + a mid-file byte range) before anything is visible, so stacking the
+ *   standard artificial dwell on top made hover feel sluggish (user report
+ *   2026-08-14). Final/working-video tiers keep the default (near-instant fetch,
+ *   so the dwell is the only thing preventing flicker on a fast mouse pass).
+ * @param {number}  [opts.revealDelayMs] override for PREVIEW_REVEAL_DELAY_MS, same
+ *   rationale as warmDelayMs.
  * @returns {{ phase: string, active: boolean, onPointerEnter: Function,
  *   onPointerLeave: Function, stop: Function }}
  */
-export function useTilePreview({ streamUrl } = {}) {
+export function useTilePreview({
+  streamUrl,
+  warmDelayMs = PREVIEW_WARM_DELAY_MS,
+  revealDelayMs = PREVIEW_REVEAL_DELAY_MS,
+} = {}) {
   const isCoarsePointer = useIsCoarsePointer();
   const prefersReducedMotion = usePrefersReducedMotion();
   const enabled = Boolean(streamUrl) && !isCoarsePointer && !prefersReducedMotion;
@@ -120,9 +132,9 @@ export function useTilePreview({ streamUrl } = {}) {
       revealTimerRef.current = setTimeout(() => {
         revealTimerRef.current = null;
         setPhase(PREVIEW_PHASE.REVEAL);
-      }, PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS);
-    }, PREVIEW_WARM_DELAY_MS);
-  }, [enabled, clearTimers]);
+      }, Math.max(0, revealDelayMs - warmDelayMs));
+    }, warmDelayMs);
+  }, [enabled, clearTimers, warmDelayMs, revealDelayMs]);
 
   const onPointerLeave = useCallback(() => {
     stop();

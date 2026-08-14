@@ -189,6 +189,32 @@ describe('T6820 DraftTile hover preview — Not Started source-clip fallback', (
     hoverAndWarm();
     expect(video()).toBeNull();
   });
+
+  // Regression (user report 2026-08-14): the source-clip tier already pays real
+  // network seek latency (moov + byte-range fetch) before anything is visible, so
+  // stacking the standard ~450ms artificial reveal dwell on top made hover feel
+  // very slow. Zero the warm/reveal dwell for this tier specifically -- play()
+  // should fire on the SAME tick as pointer-enter, not after a further wait.
+  it('reveals immediately (no artificial warm/reveal dwell) on the source-clip tier', () => {
+    renderTile({
+      has_working_video: false,
+      final_video_id: null,
+      clips: [sourceClip],
+    });
+    fireEvent.pointerEnter(screen.getByTestId('project-card'));
+    // Flush the zero-delay warm+reveal timer chain (runAllTimers, not a fixed
+    // advance, since the reveal timer is scheduled FROM INSIDE the warm timer's
+    // own callback and both are 0ms).
+    act(() => vi.runAllTimers());
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  });
+
+  it('final/working-video tiers still wait for the standard reveal dwell (no regression to their timing)', () => {
+    renderTile({ has_working_video: true, final_video_id: null });
+    fireEvent.pointerEnter(screen.getByTestId('project-card'));
+    act(() => vi.advanceTimersByTime(0));
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  });
 });
 
 // T6840: playing a finished draft's preview for ~1s records previewed_draft_reel_1s
