@@ -78,7 +78,8 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(screen.getByText('Download')).toBeTruthy();
     expect(screen.getByText('Share')).toBeTruthy();
     expect(screen.getByText('Copy Link')).toBeTruthy();
-    expect(screen.getByText('Rename')).toBeTruthy();
+    // T6890: Rename is no longer a kebab item — it moved to the pencil by the name.
+    expect(screen.queryByText('Rename')).toBeNull();
     expect(screen.getByText('Before / After')).toBeTruthy();
     expect(screen.getByText('Open as Draft')).toBeTruthy();
     expect(screen.getByText('Move to profile…')).toBeTruthy();
@@ -134,11 +135,20 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(container.querySelector('[title="New"]')).toBeNull();
   });
 
+  it('T6890: the rename pencil sits beside the name and starts an inline rename', () => {
+    renderTile();
+    // Discoverable at rest (no kebab open needed) — the pencil is next to the name.
+    const renameBtn = screen.getByRole('button', { name: 'Rename reel' });
+    expect(renameBtn).toBeTruthy();
+    fireEvent.click(renameBtn);
+    // Inline rename input appears, seeded with the current name.
+    expect(screen.getByDisplayValue('Brilliant Dribble')).toBeTruthy();
+  });
+
   it('Play hides while renaming (matches DraftTile precedent)', () => {
-    coarsePointer = true;
     renderTile({ canOpenSource: () => false });
-    fireEvent.click(kebabBtn());
-    fireEvent.click(screen.getByText('Rename'));
+    // T6890: rename now starts from the pencil beside the name, not the kebab.
+    fireEvent.click(screen.getByRole('button', { name: 'Rename reel' }));
     expect(screen.queryByRole('button', { name: 'Play video' })).toBeNull();
   });
 

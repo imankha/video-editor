@@ -263,9 +263,24 @@ export function ReelTile({
             className={`w-full text-white text-xs font-medium bg-black/40 border-b ${REEL.border} outline-none`}
           />
         ) : (
-          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
-            {displayName}
-          </h3>
+          // T6890: rename pencil beside the name it edits (was reachable only from
+          // the top-right kebab, away from the name). Same "icon touches the name"
+          // placement now used on DraftTile/GameTile, following the CardNameInput /
+          // ManageProfilesModal reference pattern.
+          <div className="flex items-start gap-1">
+            <h3 className="flex-1 min-w-0 text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
+              {displayName}
+            </h3>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); startRename(); }}
+              title="Rename reel"
+              aria-label="Rename reel"
+              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
         )}
         {metaLine && (
           <div className="mt-0.5 text-[11px] text-gray-300 truncate">{metaLine}</div>
@@ -332,10 +347,7 @@ export function ReelTile({
                   <Link2 size={20} className="text-gray-300 flex-shrink-0" />
                   <span className="text-gray-200">Copy Link</span>
                 </button>
-                <button onClick={startRename} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
-                  <Pencil size={20} className="text-gray-300 flex-shrink-0" />
-                  <span className="text-gray-200">Rename</span>
-                </button>
+                {/* T6890: Rename moved to the pencil beside the name in the scrim. */}
                 <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
                   <Sparkles size={20} className="text-gray-300 flex-shrink-0" />
                   <span className="text-gray-200">Intro</span>
@@ -398,10 +410,7 @@ export function ReelTile({
                 <span className="text-gray-200">Copy Link</span>
               </button>
               <div className="my-1 border-t border-gray-600" />
-              <button onClick={startRename} className={menuItemClass}>
-                <Pencil size={18} className="text-gray-300 flex-shrink-0" />
-                <span className="text-gray-200">Rename</span>
-              </button>
+              {/* T6890: Rename moved to the pencil beside the name in the scrim. */}
               <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className={menuItemClass}>
                 <Sparkles size={18} className="text-gray-300 flex-shrink-0" />
                 <span className="text-gray-200">Intro</span>

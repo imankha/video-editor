@@ -80,18 +80,28 @@ describe('GameTile — kebab menu (item 4)', () => {
     const hs = handlers();
     render(<GameTile game={baseGame} {...hs} />);
 
-    // No action labels until the kebab is opened.
-    expect(screen.queryByText('Edit game')).toBeNull();
+    // No kebab action labels until the kebab is opened.
+    expect(screen.queryByText('Watch recap')).toBeNull();
 
     fireEvent.click(screen.getByLabelText('More actions'));
 
     expect(screen.getByText('Watch recap')).toBeTruthy(); // hasRecap
     expect(screen.getByText('Share game')).toBeTruthy();   // active
-    expect(screen.getByText('Edit game')).toBeTruthy();
     expect(screen.getByText('Delete game')).toBeTruthy();
+    // T6890: Edit moved OUT of the kebab to the pencil beside the name.
+    expect(screen.queryByText('Edit game')).toBeNull();
+  });
 
-    fireEvent.click(screen.getByText('Edit game'));
+  it('T6890: the edit pencil sits beside the name and opens the edit form', () => {
+    const hs = handlers();
+    render(<GameTile game={baseGame} {...hs} />);
+    // Discoverable at rest (no kebab open needed) — the affordance is next to the name.
+    const editBtn = screen.getByRole('button', { name: 'Edit game' });
+    expect(editBtn).toBeTruthy();
+    fireEvent.click(editBtn);
     expect(hs.onEdit).toHaveBeenCalledTimes(1);
+    // Editing must NOT also trigger the tile's primary open (annotate).
+    expect(hs.onLoad).not.toHaveBeenCalled();
   });
 
   it('delete requires a second confirm tap', () => {
@@ -114,7 +124,7 @@ describe('GameTile — kebab menu (item 4)', () => {
     fireEvent.click(screen.getByLabelText('More actions'));
     const sheet = document.querySelector('[data-game-menu]');
     expect(sheet).toBeTruthy();
-    expect(within(sheet).getByText('Edit game')).toBeTruthy();
+    expect(within(sheet).getByText('Share game')).toBeTruthy();
   });
 
   it('tapping the tile body triggers the primary open (annotate), not the menu', () => {
@@ -181,8 +191,9 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
   it('keeps date + clip count as the secondary line under the name', () => {
     render(<GameTile game={baseGame} {...handlers()} />);
     const heading = screen.getByRole('heading', { level: 3 });
-    // Secondary line (date/clip count) renders in a sibling below the name.
-    const secondary = heading.nextElementSibling;
+    // T6890: the name shares a row with the edit pencil, so the secondary line
+    // (date/clip count) sits below that name-row wrapper, not the bare heading.
+    const secondary = heading.closest('div').nextElementSibling;
     expect(secondary.textContent).toContain('3 clips');
   });
 });

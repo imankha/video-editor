@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // jsdom lacks matchMedia. DraftTile's reveal mechanism runs through the REAL
@@ -218,6 +218,27 @@ describe('DraftTile (T5672)', () => {
     // Second click deletes.
     fireEvent.click(confirm);
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  // T6890 — the rename pencil sits beside the name in the bottom scrim (was stacked
+  // in the top-right hover rail with unrelated actions). It is discoverable at rest
+  // (no hover / no kebab open needed) and starts the existing inline rename.
+  it('T6890: renders the rename pencil beside the name and starts inline rename', () => {
+    const { container } = renderTile();
+    const renameBtn = screen.getByRole('button', { name: 'Rename reel' });
+    // It lives in the bottom scrim next to the name, NOT inside the hover action rail.
+    const rail = container.querySelector('[data-testid="tile-actions"]');
+    expect(rail.contains(renameBtn)).toBe(false);
+    fireEvent.click(renameBtn);
+    // The inline rename input appears, seeded with the current name.
+    expect(screen.getByDisplayValue('Brilliant Dribble')).toBeTruthy();
+  });
+
+  it('T6890: the hover action rail no longer carries a rename button', () => {
+    const { container } = renderTile();
+    const rail = container.querySelector('[data-testid="tile-actions"]');
+    const railRenameBtn = within(rail).queryByRole('button', { name: 'Rename reel' });
+    expect(railRenameBtn).toBeNull();
   });
 
   it('previews on body tap in the ready state (the tile is no longer inert) (T6180)', () => {

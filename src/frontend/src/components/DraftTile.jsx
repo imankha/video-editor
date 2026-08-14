@@ -567,9 +567,25 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             autoFocus
           />
         ) : (
-          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
-            {getProjectDisplayName(project)}
-          </h3>
+          // T6890: the rename pencil sits directly beside the name it edits (it
+          // used to be stacked in the top-right hover rail with Preview/Crop/Layers/
+          // Hide/Delete, so nothing tied it to the name). Discoverable at rest per
+          // the CardNameInput / ManageProfilesModal reference pattern; brightens on
+          // hover, 44px tap target on coarse pointers.
+          <div className="flex items-start gap-1">
+            <h3 className="flex-1 min-w-0 text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
+              {getProjectDisplayName(project)}
+            </h3>
+            <button
+              type="button"
+              onClick={handleStartRename}
+              title="Rename reel"
+              aria-label="Rename reel"
+              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
         )}
         <div className="mt-0.5 flex items-center gap-1.5 flex-nowrap overflow-hidden">
           {gameClock && (
@@ -608,7 +624,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {isComplete && project.final_video_id && (
             <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); startPreview(); }} title="Preview video" className={actionBtnClass} />
           )}
-          <Button variant="secondary" size="sm" icon={Pencil} iconOnly onClick={handleStartRename} title="Rename reel" className={actionBtnClass} />
+          {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
+              in the bottom scrim (above). It is no longer stacked here. */}
           {isComplete && (
             <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in Framing" className={actionBtnClass} />
           )}
