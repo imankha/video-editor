@@ -155,6 +155,34 @@ describe('TextOverlayPreview — selected out-of-range region is a paused-only e
   });
 });
 
+// T6990 -- the preview must ramp opacity to 0 over the final TEXT_FADE_OUT_SEC
+// (0.25s) of a region's window, matching the export burn-in envelope
+// (overlay.py `_blend_text_layers`) so scrubbing across a region's end previews
+// the same fade the burned video shows.
+describe('TextOverlayPreview — fade-out envelope matches the export (T6990)', () => {
+  it('renders full opacity (no inline opacity) more than 0.25s before the region end', () => {
+    // region [0,10), currentTime=5 -> 5s from end -> fade == 1.
+    const r = region('r1', [element('a', 'FULL', true)], 0, 10);
+    renderPreview([r]);
+    expect(screen.getByTestId('text-preview-element-a').style.opacity).toBe('');
+  });
+
+  it('ramps opacity down inside the final 0.25s (fade-out, not a hard cut)', () => {
+    // region [0,10), currentTime=9.9 -> 0.1s from end -> fade = 0.1/0.25 = 0.4.
+    const r = region('r1', [element('a', 'FADING', true)], 0, 10);
+    renderPreview([r], null, { currentTime: 9.9 });
+    const host = screen.getByTestId('text-preview-element-a');
+    expect(Number(host.style.opacity)).toBeCloseTo(0.4, 5);
+  });
+
+  it('is nearly transparent at the very last active instant', () => {
+    // currentTime=9.99 -> 0.01s from end -> fade = 0.04.
+    const r = region('r1', [element('a', 'GONE', true)], 0, 10);
+    renderPreview([r], null, { currentTime: 9.99 });
+    expect(Number(screen.getByTestId('text-preview-element-a').style.opacity)).toBeLessThan(0.1);
+  });
+});
+
 // T6720 -- pure clamp math for the SPATIAL drag. jsdom has no real layout
 // (getBoundingClientRect is 0), so the drag MECHANICS live in the real-browser
 // qa spec (e2e/T6720-text-spatial-drag.qa.spec.js); this pins the clamp

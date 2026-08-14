@@ -1145,6 +1145,16 @@ def _decode_text_layers(text_layers: list, frame_w: int, frame_h: int) -> list:
     return decoded
 
 
+# T6990: text fades OUT over the final TEXT_FADE_OUT_SEC of each layer's window
+# instead of hard-cutting on its end frame. SHARED CONSTANT (source of truth):
+# mirrored VERBATIM into `modal_functions/video_processing.py` (the Modal image
+# cannot import `app`, so its inline `_blend_text_layers` copy defines its own;
+# `TestModalInlineParity` pins the two equal) and into the frontend preview
+# `src/frontend/src/constants/textSpec.js` (so scrubbing == export). Change all
+# three together or preview/local/Modal drift.
+TEXT_FADE_OUT_SEC = 0.25
+
+
 def _blend_text_layers(frame, decoded_layers: list, current_time: float):
     """Alpha-blend every ACTIVE text layer onto `frame` (BGR uint8), in order.
 
@@ -1153,12 +1163,22 @@ def _blend_text_layers(frame, decoded_layers: list, current_time: float):
     export-pipeline knowledge doc). Purely a per-frame numpy blend -- the layer
     itself was rasterised exactly ONCE, upstream (`_rasterize_text_layers`),
     never here.
+
+    T6990: the layer's alpha is scaled by a fade-OUT envelope over the final
+    ``TEXT_FADE_OUT_SEC`` of its window (``min(1, (endTime - t) / fade)``) so the
+    text ramps to transparent rather than popping off on its end frame. Fade-IN
+    is intentionally NOT implemented (out of scope for T6990). CLAMP: the plain
+    ``min(1, ...)`` rule with no per-region floor means a region SHORTER than
+    ``TEXT_FADE_OUT_SEC`` never reaches full alpha -- an accepted simplification
+    (sub-0.25s regions are pathological drags), keeps the envelope identical
+    across all three surfaces without threading each region's own start.
     """
     import numpy as np
 
     for layer in decoded_layers:
         if layer['startTime'] <= current_time < layer['endTime']:
-            alpha = layer['alpha']
+            fade = min(1.0, (layer['endTime'] - current_time) / TEXT_FADE_OUT_SEC)
+            alpha = layer['alpha'] * fade
             frame = (frame.astype(np.float32) * (1 - alpha) + layer['bgr'] * alpha).astype(np.uint8)
     return frame
 
