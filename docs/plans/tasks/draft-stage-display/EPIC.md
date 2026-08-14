@@ -32,7 +32,7 @@ and lands after the freeze.
 |----|------|--------|
 | T6800 | [Not Started tiles render at source aspect](T6800-not-started-tile-source-aspect.md) | STAGING |
 | T6810 | [Game group: one row per stage](T6810-game-group-stage-rows.md) | STAGING |
-| T6820 | [Hover preview for Not Started drafts (source clip window)](T6820-hover-preview-not-started-source-clip.md) | TODO |
+| T6820 | [Hover preview for Not Started drafts (source clip window)](T6820-hover-preview-not-started-source-clip.md) | STAGING |
 
 ## Stage definitions (shared by all three tasks)
 
