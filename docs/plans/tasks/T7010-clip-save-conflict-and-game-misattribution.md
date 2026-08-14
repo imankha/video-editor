@@ -101,11 +101,56 @@ saved under game 6 while the UI showed game X." Add:
   this is a data-correctness + diagnosability investigation, not an active outage.
 
 ## Acceptance Criteria
-- [ ] Confirm whether raw clips 131/134 (or their equivalents on a fresh repro) genuinely share
+- [x] Confirm whether raw clips 131/134 (or their equivalents on a fresh repro) genuinely share
       one `game_id` at creation time, or whether the frontend's active-game context went stale
-      after the save-error/retry/heal cycle
-- [ ] If Hypothesis B (real bug): fix the stale-context path so a clip always saves against the
-      game the user was actually looking at
-- [ ] Logging: frontend-believed game id logged alongside backend-read game id at clip-save time
-- [ ] Logging: mid-request DB heal logs CRITICAL with the specific in-flight work it discarded
-- [ ] Tests pass
+      after the save-error/retry/heal cycle — **HYPOTHESIS A confirmed (no bug); see Progress Log**
+- [x] If Hypothesis B (real bug): fix the stale-context path — **N/A, Hypothesis A; no fix forced**
+- [x] Logging: frontend-believed game id logged alongside backend-read game id at clip-save time
+      — `X-Client-Game-Id` header + `[ClipSave]` POST/PUT log lines + mismatch WARN
+- [x] Logging: mid-request DB heal logs CRITICAL with the specific in-flight work it discarded
+      — `[Restore] MID-WRITE HEAL` CRITICAL in `ensure_database`
+- [x] Tests pass — 7 backend (`test_t7010_clip_game_logging.py`) + 11 frontend
+      (`useRawClipSave` suites) + 53-test regression set green
+
+## Progress Log
+
+**2026-08-14 — Investigation verdict: HYPOTHESIS A (no attribution bug). Logging added.**
+
+Root-cause chain (code, not recollection):
+- **`raw_clips.game_id` is write-once, at `POST /clips/raw/save` only.** `save_raw_clip` inserts
+  the frontend-supplied `RawClipCreate.game_id` verbatim (`clips.py:1124-1128`); the backend never
+  derives it. All five `UPDATE raw_clips SET ...` statements were audited — **none touches
+  `game_id`** (`update_raw_clip`'s dynamic `updates` list at `clips.py:1232-1260` cannot include it,
+  and `RawClipUpdate` has no `game_id` field). So the game a clip belongs to is frozen at capture.
+- **The natural key is game-scoped.** The idempotency lookup is `WHERE game_id = ? AND end_time = ?
+  AND video_sequence ...` (`clips.py:1039-1045`) — a save under game B can never update a game-A row
+  even if `end_time`/`video_sequence` collide.
+- **The 503 -> retry -> DB-heal cycle is causally incapable of changing attribution.** That cycle
+  ran on the `PUT /clips/raw/131` (reel creation), *after* `game_id` was committed by the POST; the
+  re-heal just re-runs `update_raw_clip`, which reads the stored `game_id`. On the frontend,
+  `annotateGameId` is set only by the game-open gesture (`applyGameData`, `AnnotateContainer.jsx:534`)
+  — no error/retry/heal path repoints it, and the sync-failed **Retry closure re-sends the exact
+  `gameId` it captured** (`useRawClipSave.js:149`), never re-reading the active-game slot.
+- **Corroborating field detail:** clip ids 131 & 134 are 3 apart within a ~12s window, both
+  `game_id=6` — a single game-6 annotation burst, not two game navigations (each of which would
+  force a full `/load` + `applyGameData` that resets `annotateGameId`).
+
+Conclusion: both clips were captured from game 6; the "two different games" recollection does not
+match the DB. The observed error was the already-documented multi-container `stale_baseline` CAS
+collision (`[[project_container_ports_r2_cors]]`), which self-heals (T6160) and lost no data — not a
+new defect. **No fix made (correctly not forced).**
+
+Diagnosability improvements (the explicit user ask, done regardless of A/B):
+1. Frontend stamps its ACTIVE game onto every clip save/update/delete as `X-Client-Game-Id`
+   (`useRawClipSave.js`, ref threaded from `AnnotateContainer`). Backend logs it alongside the
+   game the row is stored under at save (`[ClipSave] POST`) and update (`[ClipSave] PUT`) time, with
+   a loud `GAME MISMATCH` WARNING when they diverge — the exact fingerprint of a stale active-game
+   context, now visible in one line instead of req_id DB archaeology.
+2. A mid-request DB heal (`ensure_database` re-pulls a fresh `profile.sqlite` after a CAS conflict)
+   that fires DURING a write request now logs `[Restore] MID-WRITE HEAL` at CRITICAL, naming the
+   in-flight `METHOD path` (+ `req_id`) whose local work is discarded/re-run. A plain cold
+   first-access restore (no prior conflict) is deliberately NOT flagged.
+
+Tests: `test_t7010_clip_game_logging.py` (save/update logging + mismatch WARN via `caplog`; the
+mid-write-heal CRITICAL driven off a real FakeR2 conflict; cold-restore-not-flagged negative),
+`useRawClipSave.clientGameHeader.test.js` (header stamped/omitted, read at call time).

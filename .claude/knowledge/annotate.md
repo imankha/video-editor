@@ -51,7 +51,15 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   L209-213). Natural key everywhere: `(game_id, end_time, video_sequence)`.
 - **Gesture persistence** (ClipDetailsEditor → `updateClipRegionWithSync`, AnnotateContainer:832-948):
   - create → `POST /api/clips/raw/save` (`save_raw_clip`, clips.py:911) — idempotent on the natural
-    key; new rows have empty `filename` until extraction. **T4175**: for a game clip that reaches
+    key; new rows have empty `filename` until extraction. **T7010: `raw_clips.game_id` is
+    WRITE-ONCE here** — inserted from the frontend-supplied `RawClipCreate.game_id` (`clips.py:1124`),
+    and the natural-key lookup is game-scoped (`WHERE game_id = ?`, `clips.py:1039-1045`) so a save
+    can never update another game's row. `update_raw_clip` reads `game_id` but NONE of its
+    `UPDATE raw_clips` statements writes it — a clip's game attribution is frozen at capture and no
+    503/retry/DB-heal path can change it (the sync-failed Retry closure re-sends the *captured*
+    `gameId`, `useRawClipSave.js:149`). Diagnostics (T7010): the frontend stamps its active game as
+    `X-Client-Game-Id` on every clip save/update/delete; backend logs `[ClipSave] POST/PUT` with
+    `client_active_game` next to the stored game and WARNs `GAME MISMATCH` on divergence. **T4175**: for a game clip that reaches
     the expiry sweep unframed, `_export_brilliant_clip` now fills `raw_clips.filename` with the
     preserved per-clip extract (`raw_clips/auto_{game}_{clip}_{hex}.mp4`) — the clip's surviving
     independent source once `games/{hash}.mp4` is reclaimed. So a non-empty `filename` on a game

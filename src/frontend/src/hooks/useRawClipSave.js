@@ -72,6 +72,19 @@ function refreshQuestProgress() {
 }
 
 /**
+ * T7010: Build request headers with the frontend's ACTIVE game stamped on as
+ * `X-Client-Game-Id`. The backend logs this alongside the game the clip row is
+ * actually stored under, so a "clip saved under the wrong game" report is visible
+ * in one log line instead of requiring req_id DB archaeology. Diagnostic only —
+ * the backend never derives attribution from it (game_id in the save body remains
+ * authoritative); it is omitted entirely when no active game is known.
+ */
+function withClientGameHeader(headers, activeGameIdRef) {
+  const gid = activeGameIdRef?.current;
+  return gid != null ? { ...headers, 'X-Client-Game-Id': String(gid) } : headers;
+}
+
+/**
  * useRawClipSave - Manages real-time clip saving during annotation
  *
  * Provides:
@@ -80,8 +93,12 @@ function refreshQuestProgress() {
  * - deleteClip: Delete a clip from the library
  * - isSaving: Loading state for saves
  * - error: Error message if any
+ *
+ * @param {{current: number|null}} [activeGameIdRef] - optional ref to the screen's
+ *   current active game; when supplied, stamped onto every clip request as the
+ *   `X-Client-Game-Id` diagnostic header (T7010).
  */
-export function useRawClipSave() {
+export function useRawClipSave(activeGameIdRef = null) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -133,7 +150,7 @@ export function useRawClipSave() {
       }
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withClientGameHeader({ 'Content-Type': 'application/json' }, activeGameIdRef),
         body: JSON.stringify(payload)
       });
 
@@ -169,7 +186,7 @@ export function useRawClipSave() {
       pendingSaves.current.delete(saveKey);
       setIsSaving(false);
     }
-  }, []);
+  }, [activeGameIdRef]);
 
   /**
    * Update a raw clip's metadata.
@@ -192,7 +209,7 @@ export function useRawClipSave() {
       }
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withClientGameHeader({ 'Content-Type': 'application/json' }, activeGameIdRef),
         body: JSON.stringify(updates)
       });
 
@@ -229,7 +246,7 @@ export function useRawClipSave() {
     } finally {
       setIsSaving(false);
     }
-  }, []);
+  }, [activeGameIdRef]);
 
   /**
    * Delete a raw clip from the library.
@@ -247,7 +264,8 @@ export function useRawClipSave() {
 
     try {
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: withClientGameHeader({}, activeGameIdRef)
       });
 
       if (!response.ok) {
@@ -271,7 +289,7 @@ export function useRawClipSave() {
     } finally {
       setIsSaving(false);
     }
-  }, []);
+  }, [activeGameIdRef]);
 
   /**
    * Clear any error state
