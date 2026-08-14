@@ -120,8 +120,72 @@ describe('T6441 DraftTile hover preview — In Overlay fallback', () => {
     expect(video().getAttribute('src')).toBe('/api/downloads/99/stream');
   });
 
-  it('"Not Started"/"Framing" draft (neither working nor final video) shows no preview at all', () => {
+  it('"Not Started"/"Framing" draft with no streamable source clip shows no preview at all', () => {
+    // No clips array -> no first-clip stream id -> nothing to preview (T6820 gate).
     const { video, hoverAndWarm } = renderTile({ has_working_video: false, final_video_id: null });
+    hoverAndWarm();
+    expect(video()).toBeNull();
+  });
+});
+
+// T6820: a Not-Started draft has neither a final nor a working video, but its source
+// clip is streamable via the bounded proxy. clips[0].stream_clip_id (a working_clips.id
+// from the projects payload) yields the URL; source_start/end_time seek the preview
+// into the clip window. Absent stream_clip_id (expired/no working clip) -> no preview.
+describe('T6820 DraftTile hover preview — Not Started source-clip fallback', () => {
+  const sourceClip = { id: 5, stream_clip_id: 42, source_start_time: 12.5, source_end_time: 20.0 };
+
+  it('warms from the bounded clip-stream proxy using clips[0].stream_clip_id', () => {
+    const { video, hoverAndWarm } = renderTile({
+      has_working_video: false,
+      final_video_id: null,
+      clips: [sourceClip],
+    });
+    hoverAndWarm();
+    expect(video().getAttribute('src')).toBe('/api/clips/projects/7/clips/42/stream');
+  });
+
+  it('passes the source-window offsets so the preview seeks into the clip and disables native loop', () => {
+    const { container, hoverAndWarm } = renderTile({
+      has_working_video: false,
+      final_video_id: null,
+      clips: [sourceClip],
+    });
+    hoverAndWarm();
+    const video = container.querySelector('video[preload="none"]');
+    expect(video.hasAttribute('loop')).toBe(false);
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(12.5);
+  });
+
+  it('a final video still wins over the source clip (no window offsets applied)', () => {
+    const { video, container, hoverAndWarm } = renderTile({
+      has_final_video: true,
+      final_video_id: 99,
+      clips: [sourceClip],
+    });
+    hoverAndWarm();
+    expect(video().getAttribute('src')).toBe('/api/downloads/99/stream');
+    // Final path keeps native loop-from-0 (the file IS the clip).
+    expect(container.querySelector('video[preload="none"]').hasAttribute('loop')).toBe(true);
+  });
+
+  it('a working video still wins over the source clip', () => {
+    const { video, hoverAndWarm } = renderTile({
+      has_working_video: true,
+      final_video_id: null,
+      clips: [sourceClip],
+    });
+    hoverAndWarm();
+    expect(video().getAttribute('src')).toBe('/api/projects/7/working_video/stream');
+  });
+
+  it('a clip row without a stream_clip_id (expired / no working clip) shows no preview', () => {
+    const { video, hoverAndWarm } = renderTile({
+      has_working_video: false,
+      final_video_id: null,
+      clips: [{ id: 5, tags: ['Goal'] }], // display-only clip, not streamable
+    });
     hoverAndWarm();
     expect(video()).toBeNull();
   });

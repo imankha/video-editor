@@ -358,18 +358,32 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // T6420 — inline hover preview (fine pointer only; the hook self-gates on
   // useIsCoarsePointer + prefers-reduced-motion). Prefers the final video; T6441
   // falls back to the working video for "In Overlay" drafts (has_working_video),
-  // which already have a real rendered artifact. "Not Started"/"Framing" drafts
-  // have neither, so no preview (no error, nothing). streamUrl -> null while the
-  // full preview modal is open so the inline preview tears down and releases the
-  // stream (EPIC: full player opening RELEASES it).
+  // which already have a real rendered artifact. T6820 adds a third rung: a
+  // "Not Started" draft has neither, but its SOURCE clip is streamable via the
+  // bounded proxy — clips[0].stream_clip_id (a working_clips.id, populated by the
+  // projects payload) yields that URL, and the source-window offsets seek the
+  // preview into the clip. Drafts with no streamable source (no stream_clip_id)
+  // still show nothing (no error). streamUrl -> null while the full preview modal
+  // is open so the inline preview tears down and releases the stream (EPIC: full
+  // player opening RELEASES it).
+  const firstClip = project.clips?.[0];
   const previewStreamUrl = isPreviewing
     ? null
     : project.final_video_id
       ? `${API_BASE}/api/downloads/${project.final_video_id}/stream`
       : project.has_working_video
         ? `${API_BASE}/api/projects/${project.id}/working_video/stream`
-        : null;
+        : firstClip?.stream_clip_id != null
+          ? `${API_BASE}/api/clips/projects/${project.id}/clips/${firstClip.stream_clip_id}/stream`
+          : null;
   const preview = useTilePreview({ streamUrl: previewStreamUrl });
+  // T6820: seek/loop the source-clip window only on the source-proxy rung. Final/
+  // working previews carry no offsets (the file IS the clip) -> undefined, so
+  // TilePreviewVideo keeps its native-loop-from-0 behavior for them.
+  const isSourceClipPreview = previewStreamUrl != null
+    && !project.final_video_id && !project.has_working_video;
+  const previewStartTime = isSourceClipPreview ? firstClip?.source_start_time : undefined;
+  const previewEndTime = isSourceClipPreview ? firstClip?.source_end_time : undefined;
 
   const gameClock = formatGameClock(project.clip_game_start_time);
   // Q4: one tag chip, only on wider (>=sm) tiles — dropped on narrow mobile tiles.
@@ -503,7 +517,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           rendered when a rendered final video exists; allowed on branded-fallback
           tiles too. */}
       {previewStreamUrl && (
-        <TilePreviewVideo streamUrl={previewStreamUrl} phase={preview.phase} />
+        <TilePreviewVideo
+          streamUrl={previewStreamUrl}
+          phase={preview.phase}
+          startTime={previewStartTime}
+          endTime={previewEndTime}
+        />
       )}
 
       {/* Multi-clip marker — only shown when the draft has more than 1 clip. On a

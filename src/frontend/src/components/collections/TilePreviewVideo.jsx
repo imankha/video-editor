@@ -26,7 +26,7 @@ import { PREVIEW_PHASE } from '../../hooks/useTilePreview';
  * makes it the containing block, so a `fixed` child would detach — `absolute inset-0`
  * rides the transform correctly.
  */
-export function TilePreviewVideo({ streamUrl, phase, onFirstFrame, className = '' }) {
+export function TilePreviewVideo({ streamUrl, phase, onFirstFrame, startTime, endTime, className = '' }) {
   const videoRef = useRef(null);
   const rvfcRef = useRef(null);
   const [shown, setShown] = useState(false);
@@ -87,12 +87,37 @@ export function TilePreviewVideo({ streamUrl, phase, onFirstFrame, className = '
     return cancelFrameCb;
   }, [phase, streamUrl]);
 
+  // T6820 — bounded source-clip window. The clip-stream proxy serves the WHOLE
+  // source game video's byte layout, so a naive play would start at t=0 (game
+  // start, outside the clip) and native-loop the entire file. When startTime is
+  // provided (Not-Started draft previews), seek into the window on metadata load
+  // and loop back to startTime once playback passes endTime. Absent props
+  // (final/working-video previews) leave the code path — and native loop — exactly
+  // as before, so the two existing consumers stay byte-identical.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || startTime == null) return undefined;
+    const seekToStart = () => { v.currentTime = startTime; };
+    const loopWindow = () => {
+      if (endTime != null && v.currentTime >= endTime) v.currentTime = startTime;
+    };
+    v.addEventListener('loadedmetadata', seekToStart);
+    v.addEventListener('timeupdate', loopWindow);
+    return () => {
+      v.removeEventListener('loadedmetadata', seekToStart);
+      v.removeEventListener('timeupdate', loopWindow);
+    };
+  }, [startTime, endTime]);
+
   return (
     <video
       ref={videoRef}
       muted
       playsInline
-      loop
+      // Native loop restarts at t=0 — correct for final/working previews (the file
+      // IS the clip), wrong for the windowed source proxy (would jump to game
+      // start). With a window, looping is handled manually above; disable native.
+      loop={startTime == null}
       preload="none"
       aria-hidden="true"
       tabIndex={-1}

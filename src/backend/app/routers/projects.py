@@ -231,6 +231,16 @@ class ClipSummary(BaseModel):
     name: str | None = None
     tags: list[str] = []
     rating: int | None = None
+    # T6820: source-window offsets + a streamable working-clip id, populated ONLY on
+    # the FIRST clip (payload discipline). Powers the Not-Started draft hover preview,
+    # which streams the bounded source-clip proxy and so must seek into the clip
+    # window. stream_clip_id is a working_clips.id -- the bounded endpoint keys on
+    # wc.id, NOT this row's `id` (a raw_clips.id); source_start_time/source_end_time
+    # are per-sequence seconds (T1440), used directly as the <video> seek target.
+    # All three absent -> the draft has no streamable source clip, so no preview.
+    stream_clip_id: int | None = None
+    source_start_time: float | None = None
+    source_end_time: float | None = None
 
 
 class ProjectListItem(BaseModel):
@@ -475,6 +485,34 @@ def _read_projects_list():
             project_clip_starts[project_id].setdefault(
                 clip_row['clip_id'], clip_row['start_time'])
 
+        # T6820: the first working clip's source-window offsets + its streamable
+        # working_clips.id, for the Not-Started draft hover preview. Resolved the
+        # SAME way stream_working_clip_bounded resolves the window -- rc.start_time/
+        # rc.end_time are already per-sequence seconds (T1440), so the frontend uses
+        # them directly as the <video> currentTime seek target. Keyed to the FIRST
+        # working clip (lowest sort_order, then id) and filtered to the LATEST
+        # version, so stream_clip_id is one the bounded endpoint (an un-versioned
+        # wc.id lookup) will actually resolve. One query for the whole list (no
+        # N+1); a project with no working clip yields no row -> no source preview.
+        cursor.execute(f"""
+            SELECT project_id, stream_clip_id, source_start_time, source_end_time
+            FROM (
+                SELECT
+                    wc.project_id AS project_id,
+                    wc.id AS stream_clip_id,
+                    rc.start_time AS source_start_time,
+                    rc.end_time AS source_end_time,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY wc.project_id
+                        ORDER BY wc.sort_order ASC, wc.id ASC
+                    ) AS rn
+                FROM working_clips wc
+                JOIN raw_clips rc ON rc.id = wc.raw_clip_id
+                WHERE wc.id IN ({latest_working_clips_subquery(project_filter=False)})
+            ) WHERE rn = 1
+        """)
+        project_first_clip = {r['project_id']: r for r in cursor.fetchall()}
+
         result = []
         for row in rows:
             project_id = row['id']
@@ -501,6 +539,17 @@ def _read_projects_list():
                 clip_game_start_time = compute_unified_clip_start(
                     cursor, source_clip_id, clip_start_time)
 
+            # T6820: attach the first working clip's stream id + source-window
+            # offsets to clips[0] (the frontend's project.clips[0] access), leaving
+            # every other clip untouched. Absent row (no working clip) -> the trio
+            # stays None -> DraftTile shows no source preview, no error.
+            clips = project_clips.get(project_id, [])
+            first_clip = project_first_clip.get(project_id)
+            if clips and first_clip is not None:
+                clips[0].stream_clip_id = first_clip['stream_clip_id']
+                clips[0].source_start_time = first_clip['source_start_time']
+                clips[0].source_end_time = first_clip['source_end_time']
+
             result.append(ProjectListItem(
                 id=row['id'],
                 name=row['name'],
@@ -519,7 +568,7 @@ def _read_projects_list():
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',
-                clips=project_clips.get(project_id, []),
+                clips=clips,
                 last_opened_at=row['last_opened_at'],
                 game_ids=game_info['game_ids'],
                 game_names=game_info['game_names'],
