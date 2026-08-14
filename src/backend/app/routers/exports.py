@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+import anyio.to_thread
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
@@ -615,7 +616,17 @@ async def list_active_exports():
     - Reconnect WebSocket connections for progress tracking
     - Recover export tracking state after page refresh
     """
-    exports = get_active_exports()
+    # T7040: get_active_exports() runs cleanup_stale_exports(), which for every
+    # stale job with a modal_call_id makes a BLOCKING Modal control-plane
+    # round-trip (check_modal_job_running -> call.get) in a sequential loop.
+    # Run inline on the event loop, that froze uvicorn's single worker for the
+    # whole sweep (observed 31s), starving every OTHER concurrent request on the
+    # machine -- a collection download racing this call died client-side with a
+    # bare "TypeError: Failed to fetch". Offload the whole blocking chain to a
+    # worker thread so the event loop stays responsive. anyio copies the request
+    # contextvars (user/profile) into the thread, so get_db_connection() still
+    # resolves the caller's per-user DB.
+    exports = await anyio.to_thread.run_sync(get_active_exports)
 
     return ExportJobListResponse(
         exports=[
