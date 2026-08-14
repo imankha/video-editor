@@ -1,6 +1,6 @@
 # T7030: Intro card image doesn't load; scrubbing back to it leaves the video blank
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-08-14
