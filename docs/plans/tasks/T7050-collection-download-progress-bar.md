@@ -1,6 +1,6 @@
 # T7050: Collection download has no in-app progress feedback
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-15
