@@ -200,7 +200,7 @@ export function ReelTile({
       {/* T6420 inline hover preview — layered directly above the poster (implicit
           z-0), below the scrim (z-10)/badges/kebab. pointer-events-none so the
           persistent Play/kebab actions keep working over the playing video. */}
-      <TilePreviewVideo streamUrl={previewStreamUrl} phase={preview.phase} />
+      <TilePreviewVideo streamUrl={previewStreamUrl} phase={preview.phase} onContentReady={preview.onContentReady} />
 
       {/* Unwatched (NEW) dot — shifted left of the persistent kebab (T6300) so the
           two top-right occupants stack instead of overlapping (design doc §2.2). */}

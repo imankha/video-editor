@@ -69,12 +69,15 @@ describe('T6420 ReelTile inline hover preview', () => {
     expect(video().getAttribute('src')).toBeNull();
   });
 
-  it('FINE pointer hover: warms (attaches the /stream src) then plays', () => {
+  it('FINE pointer hover: warms (attaches the /stream src) then plays once the floor AND content-ready both pass', () => {
     const { video } = renderTile();
     fireEvent.pointerEnter(screen.getByTestId('reel-card'));
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     expect(video().getAttribute('src')).toBe(EXPECTED_STREAM);
     expect(playSpy).not.toHaveBeenCalled(); // still warming, poster showing
+    // Content-ready (2026-08-14 policy) is required in addition to the floor.
+    fireEvent.loadedData(video());
+    expect(playSpy).not.toHaveBeenCalled(); // floor not reached yet
     act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS));
     expect(playSpy).toHaveBeenCalled();
   });

@@ -19,21 +19,28 @@ import { PREVIEW_PHASE } from '../../hooks/useTilePreview';
  * Activation timing + the single-active registry live in useTilePreview; this
  * component is pure imperative playback control driven by the `phase` prop:
  *   IDLE   -> no src, paused, faded out (grid at rest: preload="none" => 0 requests)
- *   WARM   -> src attached, buffering, still paused (poster showing)
+ *   WARM   -> src attached, buffering, still paused (poster showing); reports
+ *             readiness via onContentReady as soon as the browser actually has
+ *             enough data (T6820, 2026-08-14 — see useTilePreview's REVEAL policy
+ *             note: this is one half of the max(floor, real-load-time) race)
  *   REVEAL -> play(); crossfade in on the first rendered frame
  *
  * Mounted INSIDE the tile, never portaled (T5900): the tile's hover-scale transform
  * makes it the containing block, so a `fixed` child would detach — `absolute inset-0`
  * rides the transform correctly.
  */
-export function TilePreviewVideo({ streamUrl, phase, onFirstFrame, startTime, endTime, className = '' }) {
+export function TilePreviewVideo({
+  streamUrl, phase, onFirstFrame, onContentReady, startTime, endTime, className = '',
+}) {
   const videoRef = useRef(null);
   const rvfcRef = useRef(null);
   const [shown, setShown] = useState(false);
-  // Keep the latest onFirstFrame without re-running the playback effect when a host
-  // passes an inline callback.
+  // Keep the latest callbacks without re-running the playback effect when a host
+  // passes an inline function.
   const onFirstFrameRef = useRef(onFirstFrame);
   onFirstFrameRef.current = onFirstFrame;
+  const onContentReadyRef = useRef(onContentReady);
+  onContentReadyRef.current = onContentReady;
 
   useEffect(() => {
     const v = videoRef.current;
@@ -67,7 +74,14 @@ export function TilePreviewVideo({ streamUrl, phase, onFirstFrame, startTime, en
     // WARM or REVEAL: attach the stream (idempotent via getAttribute compare — note
     // getAttribute returns the raw relative URL, unlike v.src which resolves it) and
     // begin buffering. preload="none" at rest means nothing loads until this runs.
+    // 'loadeddata' (first frame's data available) is the real content-ready signal
+    // useTilePreview races against its reveal floor — fires independent of play(),
+    // so it measures TRUE load latency regardless of when REVEAL happens to land.
+    let cancelReadyListener = () => {};
     if (v.getAttribute('src') !== streamUrl) {
+      const onLoadedData = () => onContentReadyRef.current?.();
+      v.addEventListener('loadeddata', onLoadedData, { once: true });
+      cancelReadyListener = () => v.removeEventListener('loadeddata', onLoadedData);
       v.setAttribute('src', streamUrl);
       v.load();
     }
@@ -84,7 +98,10 @@ export function TilePreviewVideo({ streamUrl, phase, onFirstFrame, startTime, en
       // crossfade fires whenever the first frame actually lands. Never a black box.
       if (p && typeof p.catch === 'function') p.catch(() => {});
     }
-    return cancelFrameCb;
+    return () => {
+      cancelFrameCb();
+      cancelReadyListener();
+    };
   }, [phase, streamUrl]);
 
   // T6820 — bounded source-clip window. The clip-stream proxy serves the WHOLE

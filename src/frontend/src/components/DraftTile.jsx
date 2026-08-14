@@ -381,14 +381,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // TilePreviewVideo keeps its native-loop-from-0 behavior for them.
   const isSourceClipPreview = previewStreamUrl != null
     && !project.final_video_id && !project.has_working_video;
-  // Source-clip tier already pays real network seek latency (moov + byte-range
-  // fetch) before anything is visible; stacking the standard artificial dwell on
-  // top made hover feel very slow (user report 2026-08-14) -> zero the dwell here,
-  // final/working tiers keep the default timing.
-  const preview = useTilePreview({
-    streamUrl: previewStreamUrl,
-    ...(isSourceClipPreview ? { warmDelayMs: 0, revealDelayMs: 0 } : {}),
-  });
+  const preview = useTilePreview({ streamUrl: previewStreamUrl });
   const previewStartTime = isSourceClipPreview ? firstClip?.source_start_time : undefined;
   const previewEndTime = isSourceClipPreview ? firstClip?.source_end_time : undefined;
 
@@ -527,6 +520,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         <TilePreviewVideo
           streamUrl={previewStreamUrl}
           phase={preview.phase}
+          onContentReady={preview.onContentReady}
           startTime={previewStartTime}
           endTime={previewEndTime}
         />
