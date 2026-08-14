@@ -32,6 +32,7 @@ const AXIS_LABEL = { game: 'By game', tournament: 'By tournament', month: 'By mo
  * @param {Function=} onShareCollection - (definition, title) => void (T3620)
  * @param {Function=} onCopyCollectionLink - (definition) => void (T3620)
  * @param {Function=} onIntroCollection - (definition, title) => void, the collection's OWN intro (T5215 round 2)
+ * @param {Function=} onDownloadCollection - (definition) => Promise, download the stitched MP4 (T4945)
  * @param {Object=} introBadgesByKey - {key: {intro_card_id, intro_card_name}}, batch-resolved (T5215 round 6)
  */
 export function CollectionsTab({
@@ -41,6 +42,7 @@ export function CollectionsTab({
   onShareCollection,
   onCopyCollectionLink,
   onIntroCollection,
+  onDownloadCollection,
   introBadgesByKey = {},
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
@@ -105,6 +107,7 @@ export function CollectionsTab({
         onShare={onShareCollection}
         onCopyLink={onCopyCollectionLink}
         onIntro={onIntroCollection}
+        onDownload={onDownloadCollection}
         introBadgesByKey={introBadgesByKey}
       />
     );
@@ -158,6 +161,7 @@ export function CollectionsTab({
                   onShare={onShareCollection}
                   onCopyLink={onCopyCollectionLink}
                   onIntro={onIntroCollection}
+                  onDownload={onDownloadCollection}
                   introBadge={introBadgesByKey[collectionIntroKey(definition)]}
                 />
               );
@@ -253,6 +257,7 @@ export function CollectionsTab({
           onShare={onShareCollection}
           onCopyLink={onCopyCollectionLink}
           onIntro={onIntroCollection}
+          onDownload={onDownloadCollection}
           introBadgesByKey={introBadgesByKey}
         />
       )}

@@ -51,6 +51,7 @@ export function GameCollectionGroup({
   onShare,
   onCopyLink,
   onIntro,
+  onDownload,
   introBadgesByKey = {},
 }) {
   const ratioCounts = collection.ratio_counts || {};
@@ -123,6 +124,7 @@ export function GameCollectionGroup({
             onShare={onShare}
             onCopyLink={onCopyLink}
             onIntro={onIntro}
+            onDownload={onDownload}
             introBadge={shareScope ? introBadgesByKey[collectionIntroKey({ scope: shareScope, filter: {}, aspect_ratio: ratio })] : undefined}
           />
           {members

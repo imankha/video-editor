@@ -15,12 +15,19 @@ JSON over the wire like every other endpoint (no msgpack transport; the
 game_ids/tags BLOBs are on-disk storage only, decoded in Python here).
 """
 
+import asyncio
 import json
 import logging
+import os
+import shutil
+import tempfile
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
@@ -41,7 +48,15 @@ from app.services.sharing_db import (
     find_collection_share,
 )
 from app.services.user_db import get_intro_consent
-from app.storage import APP_ENV, generate_presigned_url_global, r2_head_object_global
+from app.storage import (
+    APP_ENV,
+    R2_ENABLED,
+    download_from_r2,
+    download_from_r2_global,
+    generate_presigned_url_global,
+    r2_delete_object_global,
+    r2_head_object_global,
+)
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
 
@@ -801,6 +816,204 @@ async def get_collection_intro_playback(
         return {"intro": None}
 
     return {"intro": intro}
+
+
+# ---- collection download: ONE stitched MP4 (T4945) -------------------------
+# `[intro?][member_1..member_N][outro?]` -- members in rank/playback order,
+# the collection's OWN resolved intro at the front, exactly one branded outro
+# at the end. The hard part is already built: `ffmpeg_concat.concat_segments`
+# (ordered N-join with a mixed-resolution re-encode fallback, EPIC decision 7)
+# pre-joins the members, `serve_time_video.compose_serve_time` wraps the single
+# stitch with the intro/outro cards in ONE pass. This endpoint is the wiring.
+
+_MEMBER_KEY_PREFIX = "final_videos"
+
+
+def _collection_download_filename(scope_type: str, tags: list[str] | None) -> str:
+    """A human-ish attachment filename for the Content-Disposition header.
+    No PII -- derived only from the collection's scope, never a reel name."""
+    if scope_type == "game":
+        base = "Game_Highlights"
+    elif scope_type == "mixes":
+        base = "Mixes"
+    elif tags:
+        joined = "_".join(tags)
+        base = "".join(c if (c.isalnum() or c in "-_") else "_" for c in joined)[:60] or "Highlights"
+    else:
+        base = "Highlights"
+    return f"{base}.mp4"
+
+
+def _stitch_members_local(
+    user_id: str, profile_id: str, member_keys: list[str], out_path: str, tmp_dir: str,
+) -> None:
+    """Pre-join the collection's member reels into `out_path`, IN ORDER, on the
+    app server (the MODAL_ENABLED=false / dev + container path). Read-only over
+    the member sources: each is fetched (R2 download, or a copy of the local
+    final_videos file when R2 is off) into `tmp_dir`, never opened for write.
+
+    Mixed-resolution safety is delegated ENTIRELY to `concat_segments`' built-in
+    re-encode fallback (EPIC decision 7) -- there is no bespoke resolution
+    normalization here; the reference probe is the top-ranked member's, exactly
+    as `concat_segments` expects. Raises on a member fetch / concat failure (the
+    caller degrades non-fatally); NOTHING is ever written back to a source.
+    """
+    from app.database import get_final_videos_path
+    from app.services.ffmpeg_concat import concat_segments, probe_media
+
+    seg_paths: list[str] = []
+    for i, key in enumerate(member_keys):
+        local = os.path.join(tmp_dir, f"member_{i}.mp4")
+        if R2_ENABLED:
+            # Explicit profile_id (T5340): this runs inside the deferred
+            # streaming generator, where the request's profile ContextVar may
+            # already be gone -- never rely on it to build the R2 key.
+            if not download_from_r2(user_id, key, Path(local), profile_id=profile_id):
+                raise RuntimeError(f"could not download collection member {key!r}")
+        else:
+            filename = key.split("/", 1)[1] if "/" in key else key
+            src = get_final_videos_path() / filename
+            if not src.exists():
+                raise RuntimeError(f"collection member file missing: {src}")
+            shutil.copyfile(src, local)
+        seg_paths.append(local)
+
+    if len(seg_paths) == 1:
+        # One member: the "stitch" is just that member -- compose still prepends
+        # the intro / appends the outro over it. No concat needed.
+        shutil.copyfile(seg_paths[0], out_path)
+        return
+
+    reference = probe_media(seg_paths[0])  # top-ranked member = concat reference
+    if not concat_segments(seg_paths, out_path, reference):
+        raise RuntimeError("collection member concat failed")
+
+
+@router.get("/download")
+async def download_collection(
+    scope_type: str, aspect_ratio: str,
+    game_id: int | None = None, tags: str | None = None,
+    budget_sec: float | None = None,
+):
+    """Stream a (scope, ratio) collection as ONE stitched MP4 (T4945): members
+    in rank/playback order, the collection's OWN resolved intro card at the
+    front, exactly one branded outro at the end (flag off -> no outro).
+
+    Compute location honors MODAL_ENABLED (EPIC decision 1): the arbitrary-N
+    concat/re-encode runs on the CPU-only Modal `stitch_members` function in
+    prod (the single shared app server must not absorb it), or locally in dev.
+    The intro/outro compose ALWAYS runs app-side (the card render engines are
+    app-side; T3950 invariant) -- Modal only ever muxes the raw member concat.
+
+    Read-only over member sources throughout: sources are fetched into a
+    per-request temp dir (rmtree'd in `finally`), the Modal branch writes only
+    to a disposable `temp/collection_stitch/` scratch key (best-effort deleted,
+    never a member key), and NOTHING is inserted into final_videos/export_jobs.
+    Every ffmpeg stage is non-fatal -- a stitch/outro failure degrades the
+    download, it never corrupts or drops a source reel.
+
+    Scope: T4946 owns the real permission/credit gate. This endpoint runs on
+    the caller's own session/profile context and stitches only the caller's own
+    reels (`evaluate_collection_members` reads the caller's profile DB), so it
+    is implicitly owner-scoped -- not wide open.
+    """
+    tag_list, definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
+    key = collection_intro_settings_key(
+        scope_type, game_id=game_id, tags=tag_list, aspect_ratio=aspect_ratio,
+    )
+
+    # ---- Resolve EVERYTHING that needs the request connection / ContextVar
+    # BEFORE building the async generator (T5220 gotcha: the generator body runs
+    # after this request's DB connection has closed). ----
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        raw_card_id = get_collection_intro_card_id(cursor, key)
+        members = evaluate_collection_members(conn, definition)
+    if budget_sec is not None:
+        members = select_within_budget(members, budget_sec)
+    if not members:
+        raise HTTPException(status_code=404, detail="Collection has no members to download")
+
+    durations = [m["duration"] for m in members if m["duration"] is not None]
+    total_duration = sum(durations) if durations else None
+    member_keys = [f"{_MEMBER_KEY_PREFIX}/{m['filename']}" for m in members]
+    # R2 prefix resolved here (ContextVar alive) for the Modal branch -- Modal
+    # builds member/scratch keys as `{prefix}/{relative_key}`.
+    from app.services.modal_client import _resolve_modal_user_id
+    r2_prefix = _resolve_modal_user_id(user_id)
+    download_filename = _collection_download_filename(scope_type, tag_list)
+
+    record_milestone(user_id, "collection_downloaded", {
+        "scope_type": scope_type, "aspect_ratio": aspect_ratio, "members": len(members),
+    })
+
+    dl_headers = {
+        "Content-Disposition": f'attachment; filename="{download_filename}"',
+        "Cache-Control": "no-cache",
+    }
+
+    def _resolve_collection_intro():
+        # Own read-only connection (resolve_intro_for_reel opens one keyed on
+        # the EXPLICIT user/profile ids), matching the single-reel download --
+        # reel_id=None because this is the collection-level card, not a member's.
+        from app.services.intro_egress import resolve_intro_for_reel
+        return resolve_intro_for_reel(user_id, profile_id, raw_card_id, total_duration, None)
+
+    async def _stream_stitched():
+        tmp_dir = tempfile.mkdtemp(prefix="rb_coll_dl_")
+        scratch_full_key = None
+        try:
+            stitched_path = os.path.join(tmp_dir, "stitched.mp4")
+            out_path = os.path.join(tmp_dir, "composed.mp4")
+
+            # ---- produce the raw member stitch (compute-location branch) ----
+            from app.services.modal_client import modal_enabled
+            if modal_enabled():
+                from app.services.modal_client import call_modal_stitch_members
+                scratch_rel = f"temp/collection_stitch/{uuid.uuid4().hex}.mp4"
+                scratch_full_key = f"{r2_prefix}/{scratch_rel}"
+                await call_modal_stitch_members(r2_prefix, member_keys, scratch_rel)
+                if not await asyncio.to_thread(
+                    download_from_r2_global, scratch_full_key, Path(stitched_path)
+                ):
+                    raise RuntimeError("could not fetch Modal-stitched collection output from R2")
+            else:
+                await asyncio.to_thread(
+                    _stitch_members_local, user_id, profile_id, member_keys, stitched_path, tmp_dir
+                )
+
+            # ---- compose intro + outro app-side (cards NEVER on Modal) ----
+            serve_path = stitched_path
+            intro = await asyncio.to_thread(_resolve_collection_intro)
+            try:
+                from app.services.serve_time_video import compose_serve_time
+                if await asyncio.to_thread(
+                    compose_serve_time, stitched_path, out_path, intro=intro, outro=True,
+                ):
+                    serve_path = out_path
+            except Exception as exc:
+                logger.error(f"[CollectionDownload] compose failed (serving bare stitch): {exc}")
+            finally:
+                if intro is not None:
+                    intro.cleanup()
+
+            with open(serve_path, "rb") as fin:
+                while True:
+                    chunk = fin.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            if scratch_full_key:
+                try:
+                    await asyncio.to_thread(r2_delete_object_global, scratch_full_key)
+                except Exception:
+                    logger.warning(f"[CollectionDownload] scratch cleanup failed: {scratch_full_key}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return StreamingResponse(_stream_stitched(), media_type="video/mp4", headers=dl_headers)
 
 
 @router.patch("/intro")
