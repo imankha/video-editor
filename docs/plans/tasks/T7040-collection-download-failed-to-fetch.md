@@ -4,7 +4,7 @@
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-08-14
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 ## Problem
 
@@ -40,6 +40,64 @@ CPU-only `gpu=None`) genuinely exists and hydrates successfully against the live
 `modal.Function.from_name('reel-ballers-video-v2', 'stitch_members').hydrate()`. This is NOT a
 "function was never deployed" problem.
 
+## New evidence 2026-08-15 (user-provided, second session)
+
+**Updated HAR** (`Downloads/downcollection.har`, same filename, re-captured): 4 entries this
+time, and the collection-download GET itself actually **succeeded**:
+```
+GET /api/collections/download?scope_type=all&aspect_ratio=9:16  -> 200, 3892ms
+  content-disposition: attachment; filename="Highlights.mp4"
+  content-type: video/mp4
+```
+(`x-request-id: b666f3e0`). No `/api/exports/active` request appears anywhere in this capture.
+This is a **different collection** (`scope_type=all` vs. the original repro's `scope_type=game,
+game_id=6`) and a different `x-request-id` than the console log below — **this HAR entry is not
+necessarily the same attempt that failed**; treat it as "download CAN succeed, 3.9s end-to-end
+for `scope=all`, when nothing else is contending" rather than a resolution of the bug.
+
+**Console log, same testing session** (pasted directly by the user, not from the HAR):
+```
+[SLOW FETCH] GET /api/exports/active 31181ms req_id=b8f0c9f1 status=200
+[DownloadsPanel] collection download failed: TypeError: Failed to fetch
+```
+`req_id=b8f0c9f1` does not match the HAR's `b666f3e0` — this failure is from a **separate**
+attempt in the same session, not captured in the HAR. The 31-second `/api/exports/active` call
+completing with `status=200` immediately before the "Failed to fetch" is the most concrete new
+lead so far.
+
+**Traced why `/api/exports/active` can take 31s** (code read, not yet reproduced live):
+- `GET /api/exports/active` is `async def list_active_exports()`
+  (`src/backend/app/routers/exports.py:608`), which calls `get_active_exports()` →
+  `cleanup_stale_exports(max_age_minutes=60)` (`exports.py:288`) directly — no `await`, no
+  threadpool offload.
+- `cleanup_stale_exports` loops over every `pending`/`processing` export job older than 60
+  minutes and, for each one that has a `modal_call_id`, calls `check_modal_job_running()`
+  (`exports.py:252`) **synchronously** — plain `def`, not `async def`.
+- `check_modal_job_running` calls `modal.FunctionCall.from_id(...)` then `call.get(timeout=0)`
+  (`exports.py:269,276`) — the Modal Python SDK's blocking network call. "`timeout=0`" only means
+  it doesn't block waiting for the job to FINISH; it still makes a real network round-trip to
+  Modal's control plane to ask "is it done yet", once per stale candidate, in a loop.
+- **This is an unawaited blocking call inside an `async def` FastAPI route.** In uvicorn's
+  default single-worker/single-event-loop model (staging's `Dockerfile:23` CMD has no
+  `--workers` flag, and `fly.staging.toml` has `min_machines_running = 0`, so staging normally
+  runs exactly one machine under light test traffic), a blocking call like this **freezes the
+  entire event loop** for its duration — stalling every OTHER concurrent request on that same
+  machine, not just the one that triggered it.
+
+**New leading hypothesis (D):** if several stale/orphaned export jobs had accumulated on the
+account (each costing one blocking Modal round-trip), a `/api/exports/active` call fired around
+the same time as a collection-download request could freeze the event loop long enough that the
+collection-download's connection gets abandoned client-side or killed by an intermediate proxy
+before the (otherwise-working, per the HAR above) download generator ever gets scheduled to run
+— surfacing as the client's generic `TypeError: Failed to fetch`, with nothing useful in the
+collections.py code path itself to log because it may never have started. This would also
+explain why direct log greps for `/api/collections/download` came up inconclusive in the first
+investigation — the request may never have reached that handler's own log lines at all.
+
+This does NOT contradict hypotheses A/B/C below; it's a plausible trigger sitting one layer
+above them (something has to be the "other thing" starving the request in the first place), and
+still needs live confirmation, not just the code read above.
+
 ## Hypotheses (unconfirmed — need live investigation with proper server-side error capture)
 
 - **A — mid-stream failure after headers are already sent.** T4945's endpoint builds a
@@ -64,13 +122,26 @@ CPU-only `gpu=None`) genuinely exists and hydrates successfully against the live
 
 ## Next steps for whoever picks this up
 
-1. **Get real server-side visibility on this exact failure** — either reproduce live while
+1. **Check Hypothesis D first — it's cheap to confirm or rule out.** On staging: `SELECT id,
+   status, created_at, modal_call_id FROM export_jobs WHERE status IN ('pending','processing')`
+   (per-user SQLite, `get_db_connection()`) to see whether stale jobs have actually been piling
+   up (60+ min old, still pending/processing). If yes, that's your `/api/exports/active` slowness
+   explained directly — every one of them costs a blocking Modal round-trip on EVERY app-startup
+   load, for EVERY user, not just this reporter. If real, the fix is straightforward and worth
+   doing regardless of whether it's the T7040 root cause: make `cleanup_stale_exports` run its
+   Modal checks off the event loop (`anyio.to_thread.run_sync`, or gather them concurrently
+   instead of a sequential loop) so a slow/stuck sweep can never block other requests.
+2. **Reproduce collections/download WHILE a slow `/api/exports/active` is artificially forced**
+   (e.g. temporarily seed a few fake stale `export_jobs` rows with bogus `modal_call_id`s on a
+   dev/staging test account) to see if that alone reproduces `Failed to fetch` — this would
+   confirm D without needing to catch the real 31s window live.
+3. **Get real server-side visibility on this exact failure** — either reproduce live while
    tailing `fly logs -a reel-ballers-api-staging` in real time (don't rely on short retrospective
    captures like this investigation did), or temporarily add explicit try/except logging around
    the generator body in `collections.py::download_collection` if none exists.
-2. Reproduce with the SAME collection (`game_id=6`, `aspect_ratio=9:16`) to control for
+4. Reproduce with the SAME collection (`game_id=6`, `aspect_ratio=9:16`) to control for
    Hypothesis B.
-3. Time the reproduction end-to-end to test Hypothesis C (a Modal cold start + cold concat can
+5. Time the reproduction end-to-end to test Hypothesis C (a Modal cold start + cold concat can
    reasonably take 10-30s+; if the failure happens right around a known proxy timeout window,
    that's a strong signal).
 
@@ -85,7 +156,11 @@ CPU-only `gpu=None`) genuinely exists and hydrates successfully against the live
   surfaces the generic error
 - `src/frontend/src/components/collections/DownloadsPanel.jsx` — where the console error line
   the user saw is logged
-- HAR evidence: `Downloads/downcollection.har` (user-provided, not committed)
+- `src/backend/app/routers/exports.py:608` `list_active_exports`, `:355` `get_active_exports`,
+  `:288` `cleanup_stale_exports`, `:252` `check_modal_job_running` — Hypothesis D's blocking
+  event-loop chain, added 2026-08-15
+- HAR evidence: `Downloads/downcollection.har` (user-provided, not committed, re-captured
+  2026-08-15 — see "New evidence" above, this is now TWO captures under the same filename)
 
 ### Related Tasks
 - Follows: T4945 (core stitch + owner download, merged 2026-08-14) — this is that endpoint's
