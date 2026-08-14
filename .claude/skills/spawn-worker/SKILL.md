@@ -37,6 +37,17 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    ```
    echo "$(date -u +%FT%H:%M) SPAWNED <tier> <branch>" >> /c/work/tasks/<SLUG>/.dotask-status
    ```
+   **Also set the task's PLAN.md status to WIP at this exact moment** — flip the status column
+   in `docs/plans/PLAN.md` and the `**Status:**` line in the task's own file from TODO to WIP,
+   in the SUPERVISOR's checkout (not the worker's clone). This is the AI-owned factual status
+   transition from CLAUDE.md's Task Status Rule ("WIP — work begins or resumes... a task must
+   never sit at WIP while AI is idle") — a spawned worker actively driving the task IS that
+   transition, so it must never be skipped or deferred to task-complete time. Don't wait for a
+   batch of tasks to fill WAVE.md's queue before doing this — set it per-task, at spawn, one at
+   a time (batching status edits across multiple tasks in one commit is exactly how T6990 drifted
+   out of sync in 2026-08-15 — see `project_planmd_status_drift_batched_commits` memory).
+   A task that stays QUEUED in WAVE.md (not yet spawned, waiting on a file-conflict or dependency
+   to clear) stays TODO in PLAN.md — WIP is set only once the container is actually driving it.
 
 2.5. **Status-file contract (the completion protocol — replaces polling).** The worker
    appends ONE line to `/workspace/.dotask-status` after every stage; the checkout is
