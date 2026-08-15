@@ -1,6 +1,6 @@
 # T4947: Cache Stitched Downloads
 
-**Status:** WIP
+**Status:** STAGING — merged 2026-08-15
 **Impact:** 5 | **Complexity:** 2 (dropped from 3 — no credit-recharge exemption to build; free
 downloads are never charged in the first place, per Decision 4 resolved 2026-08-14)
 **Epic:** [Collection Download](EPIC.md)

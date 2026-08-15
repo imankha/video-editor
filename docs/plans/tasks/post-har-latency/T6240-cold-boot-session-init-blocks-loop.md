@@ -1,6 +1,6 @@
 # T6240: App boot serializes for ~22s — `user_session_init` blocks the event loop
 
-**Status:** WIP
+**Status:** STAGING — merged 2026-08-15
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-07-31
