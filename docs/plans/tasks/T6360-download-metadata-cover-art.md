@@ -1,6 +1,6 @@
 # T6360: Pack poster + rich metadata into every downloaded video
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-02
