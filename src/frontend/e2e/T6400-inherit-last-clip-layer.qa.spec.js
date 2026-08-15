@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { assertGameStorageActive } from './helpers/fixtureGuard.js';
 import { saveEvidence } from './helpers/qa.js';
 
 /**
@@ -85,6 +86,14 @@ async function deleteClip(context, rawClipId) {
     throw new Error(`[T6400 cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
   }
 }
+
+// T6760: fail fast + loud if game GAME_ID's source storage has drifted/expired,
+// instead of hanging the full 300s per-test timeout on an Annotate screen that never
+// mounts a <video>. This spec's own header already warns it needs an ACTIVE game.
+// See helpers/fixtureGuard.js + docs/testing/derisk-plan-2026-08-11.md.
+test.beforeAll(async ({ request }) => {
+  await assertGameStorageActive(request, GAME_ID, { email: REAL_EMAIL, apiBase });
+});
 
 test.describe('T6400 — new clip inherits the last assigned layer (no mode toggle)', () => {
   let createdIds = [];

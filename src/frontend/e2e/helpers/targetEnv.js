@@ -247,12 +247,6 @@ export const LOCAL_ONLY_SPECS = [
     reason: 'bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD.',
   },
   {
-    file: 'sidebar-scrub-debug.spec.js',
-    category: 'vite-module',
-    depends: ['/src/stores/authStore.js'],
-    reason: 'bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD.',
-  },
-  {
     file: 'cache-warming-console.spec.js',
     category: 'vite-module',
     depends: ['/src/utils/cacheWarming.js'],

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { assertGameStorageActive } from './helpers/fixtureGuard.js';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,13 @@ async function deleteClip(context, rawClipId) {
 }
 
 const teammatesLabel = (scope) => scope.getByText('Teammates', { exact: true });
+
+// T6760: fail fast + loud if game GAME_ID's source storage has drifted/expired,
+// instead of hanging the full 300s per-test timeout on an Annotate screen that never
+// mounts a <video>. See helpers/fixtureGuard.js + docs/testing/derisk-plan-2026-08-11.md.
+test.beforeAll(async ({ request }) => {
+  await assertGameStorageActive(request, GAME_ID, { email: REAL_EMAIL, apiBase });
+});
 
 test.describe('T5725 — desktop: Teammates control gating + clear-on-switch', () => {
   let clipId;
