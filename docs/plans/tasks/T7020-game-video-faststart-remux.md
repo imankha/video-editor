@@ -135,14 +135,15 @@ for the fire-and-forget dispatch shape to build instead.
 Three pieces below survive the redesign untouched — only the caller changes (sync call ->
 Modal dispatch). Diffs are against master as of commit `7f2aeb4e`.
 
-### 1. Retry-classifier fix (`src/backend/app/utils/retry.py`)
+### 1. Retry-classifier fix (`src/backend/app/utils/retry.py`) — ALREADY ON MASTER
 
-General-purpose fix, not specific to this task — `is_transient_error` didn't recognize
-boto3's `S3UploadFailedError`/`S3TransferFailedError` wrapper (used by `client.upload_file`'s
-multipart transfer manager) around a transient status code, so a 502/503 mid-multipart-upload
-was silently classified as non-retryable anywhere in the codebase using that call path, not
-just this remux. **Worth cherry-picking onto master independently of this task** — it's a
-correctness fix with no dependency on the remux feature.
+**Landed independently 2026-08-15, do not reimplement.** General-purpose fix, not specific to
+this task — `is_transient_error` didn't recognize boto3's `S3UploadFailedError`/
+`S3TransferFailedError` wrapper (used by `client.upload_file`'s multipart transfer manager)
+around a transient status code, so a 502/503 mid-multipart-upload was silently classified as
+non-retryable anywhere in the codebase using that call path, not just this remux. Cherry-picked
+onto master ahead of the rest of T7020 since it's a correctness fix with no dependency on the
+remux feature.
 
 ```python
 # after the existing ClientError status_code in (403, 404) check:

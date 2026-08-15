@@ -16,6 +16,7 @@ Usage:
 import asyncio
 import logging
 import random
+import re
 import socket
 import ssl
 import time
@@ -84,6 +85,21 @@ def is_transient_error(exc: Exception) -> bool:
         if status_code in (403, 404):
             return False
 
+    # boto3's S3Transfer manager (client.upload_file / download_file for
+    # large/multipart transfers) wraps the underlying ClientError in its OWN
+    # exception type (S3UploadFailedError / S3TransferFailedError) instead of
+    # raising the ClientError directly, so the ClientError branch above never
+    # matches it — a transient 502/503 from a multipart part upload was
+    # silently classified as non-retryable. Recover the wrapped status code
+    # from boto3's standard message format instead of relying on a typed
+    # attribute, since S3UploadFailedError doesn't carry a `.response` dict.
+    if error_type in ("S3UploadFailedError", "S3TransferFailedError"):
+        match = re.search(r"an error occurred \((\d+)\)", error_msg)
+        if match and int(match.group(1)) in (429, 500, 502, 503):
+            return True
+        if match and int(match.group(1)) in (403, 404):
+            return False
+
     # Check for NoSuchKey / AccessDenied (never retry)
     if error_type in ("NoSuchKey", "AccessDenied"):
         return False
@@ -106,11 +122,7 @@ def is_transient_error(exc: Exception) -> bool:
         "ssl validation failed",
         "unexpected eof",
     ]
-    for keyword in network_keywords:
-        if keyword in error_msg:
-            return True
-
-    return False
+    return any(keyword in error_msg for keyword in network_keywords)
 
 
 def retry_r2_call(func, *args, max_attempts=4, initial_delay=1.0, backoff=2.0,

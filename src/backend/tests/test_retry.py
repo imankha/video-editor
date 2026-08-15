@@ -1,18 +1,17 @@
 """Tests for the R2 retry utility."""
-import asyncio
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.utils.retry import (
-    is_transient_error,
-    retry_r2_call,
-    retry_async_call,
     TIER_1,
     TIER_2,
     TIER_3,
+    is_transient_error,
+    retry_async_call,
+    retry_r2_call,
 )
-
 
 # ---------------------------------------------------------------------------
 # is_transient_error
@@ -96,6 +95,30 @@ class TestIsTransientError:
         for name in ("TimeoutException", "ConnectTimeout", "ReadTimeout", "ConnectError"):
             exc = type(name, (Exception,), {})("timed out")
             assert is_transient_error(exc), f"{name} should be transient"
+
+    def test_s3_upload_failed_error_502_is_transient(self):
+        # T7020 regression: client.upload_file()'s multipart transfer manager
+        # wraps a transient 502 in ITS OWN exception type instead of raising
+        # the underlying ClientError, so the ClientError branch above never
+        # sees it. Before this fix, this returned False and a transient R2
+        # hiccup got zero retries despite TIER_1's 4-attempt budget.
+        exc = type("S3UploadFailedError", (Exception,), {})(
+            "Failed to upload /tmp/x.mp4 to bucket/games/abc.mp4: An error "
+            "occurred (502) when calling the UploadPart operation (reached "
+            "max retries: 0): Bad Gateway"
+        )
+        assert is_transient_error(exc)
+
+    def test_s3_upload_failed_error_403_is_not_transient(self):
+        exc = type("S3UploadFailedError", (Exception,), {})(
+            "Failed to upload /tmp/x.mp4 to bucket/games/abc.mp4: An error "
+            "occurred (403) when calling the UploadPart operation: Forbidden"
+        )
+        assert not is_transient_error(exc)
+
+    def test_s3_upload_failed_error_unparseable_message_is_not_transient(self):
+        exc = type("S3UploadFailedError", (Exception,), {})("no status code here")
+        assert not is_transient_error(exc)
 
     def test_ssl_eof_error_is_transient(self):
         """An R2 TLS connection drop mid-upload must be retried (real export failure)."""
