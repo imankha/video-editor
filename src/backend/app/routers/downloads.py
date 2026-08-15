@@ -661,6 +661,31 @@ def generate_download_filename(project_name: str) -> str:
     return f"{safe_name}_final.mp4"
 
 
+def _stamp_download(
+    serve_path: str, tmp_dir: str, meta: dict,
+    user_id: str, profile_id: str,
+) -> str:
+    """T6360: download the reel's cover-art poster (when it has one) into
+    `tmp_dir`, then run the metadata/cover-art stamping pass over `serve_path`
+    (the composed `[intro?][reel][outro?]` file). Returns the path to stream:
+    the stamped file on success, `serve_path` unchanged on any skip/failure.
+    Blocking (ffmpeg + R2); callers wrap it in `asyncio.to_thread`. Never raises."""
+    from app.services.download_metadata import apply_download_metadata, fetch_owner_cover
+
+    poster_basename = meta.get("poster_basename") if meta else None
+    if poster_basename:
+        cover_local = os.path.join(tmp_dir, "cover.jpg")
+        if fetch_owner_cover(user_id, profile_id, poster_basename, cover_local):
+            meta["cover_path"] = cover_local
+        else:
+            # Pre-T5280 reels (and any transient miss) simply have no cover: the
+            # tags still ship (no-silent-fallback -- never a fabricated image).
+            logger.info(
+                f"[Download] no cover art for poster={poster_basename}; stamping tags only"
+            )
+    return apply_download_metadata(serve_path, tmp_dir, meta)
+
+
 @router.get("/{download_id}/file")
 async def download_file(download_id: int):
     """
@@ -717,6 +742,13 @@ async def download_file(download_id: int):
             return resolve_intro_for_reel(
                 user_id, profile_id, intro_card_id, reel_duration, download_id,
             )
+
+        # T6360: assemble the metadata field map + poster ref NOW, over the still-
+        # open `conn` (it closes before the streaming generator runs). The cover
+        # is downloaded + stamped INSIDE the generator (after the outro/intro
+        # compose), so a stamping failure ships the composed-but-unstamped file.
+        from app.services.download_metadata import build_download_metadata
+        dl_meta = build_download_metadata(conn, download_id, user_id, profile_id)
 
         # ---- R2 path: download to temp, append outro, stream result ----
         if R2_ENABLED:
@@ -783,6 +815,11 @@ async def download_file(download_id: int):
                         if intro is not None:
                             intro.cleanup()
 
+                    serve_path = await asyncio.to_thread(
+                        _stamp_download, serve_path, tmp_dir, dl_meta,
+                        user_id, profile_id,
+                    )
+
                     with open(serve_path, "rb") as fin:
                         while True:
                             chunk = fin.read(1024 * 1024)
@@ -826,6 +863,11 @@ async def download_file(download_id: int):
                 finally:
                     if intro is not None:
                         intro.cleanup()
+
+                serve_path = await asyncio.to_thread(
+                    _stamp_download, serve_path, tmp_dir, dl_meta,
+                    user_id, profile_id,
+                )
 
                 with open(serve_path, "rb") as fin:
                     while True:

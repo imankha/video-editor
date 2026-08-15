@@ -60,17 +60,19 @@ def _try_build_outro_card(info: dict) -> str | None:
 
 
 def _apply_metadata_hook(served_path: str, out_path: str, metadata_hook) -> None:
-    """T6360 SEAM: `metadata_hook`, when supplied, is a `callable(list[str]) ->
-    list[str]` that appends extra `-c copy` ffmpeg args (cover-art/tags) AFTER
-    the intro/outro concat above. Today it is ALWAYS None (T6360 is TODO, not
-    in flight) -- this is a documented no-op identity copy-through: if
-    `served_path != out_path`, copy it into place so callers always find the
-    served bytes at `out_path`. T5220 owns this endpoint + helper; T6360 adds
-    its pass on top of this seam, it does not re-create the endpoint."""
+    """Identity copy-through so callers always find the composed bytes at
+    `out_path` (copies `served_path` into place when the concat was a no-op and
+    `served_path` is still the raw reel).
+
+    T6360 SHIPPED its metadata/cover-art stamping as a SEPARATE post-compose
+    ffmpeg `-c copy` pass at the ROUTER (`download_metadata.apply_download_metadata`,
+    run over this function's `out_path`), NOT through this `metadata_hook` seam:
+    a router-level pass keeps stamping out of the T4947 collection-download cache
+    (so a profile rename reflects on the next download without stale-artist cache
+    poisoning) and stays independently testable/failing. `metadata_hook` is
+    therefore always None and retained only for signature back-compat."""
     if metadata_hook is not None:
-        # Seam reserved for T6360 -- not built here (design §10). When it
-        # lands, this is where its ffmpeg args get threaded through.
-        logger.info("[serve_time_video] metadata_hook supplied but not yet implemented (T6360 seam)")
+        logger.info("[serve_time_video] metadata_hook is deprecated; T6360 stamps at the router")
     if served_path != out_path:
         shutil.copyfile(served_path, out_path)
 
