@@ -48,12 +48,20 @@ multiple sites) — reuse the pattern, don't invent a new one.
   separate migration-shaped effort with its own risk profile; this task should NOT attempt it.
   Existing videos keep today's latency until they're naturally superseded or a backfill task is
   filed separately.
-- **Where does the remux run?** Options: (a) inline in `finalize_upload` before the upload is
-  marked complete (simplest, but adds wall-clock time to every upload — `-c copy` remux of a
-  multi-GB file is I/O-bound, not CPU-bound, so likely fast, but MEASURE on a real large file
-  before assuming), or (b) a background/async step that doesn't block finalize (more complex,
-  needs a "remux pending" state so early hover/scrub attempts don't break). Recommend starting
-  with (a) and measuring; only move to (b) if the measured cost is unacceptable.
+- **Where does the remux run? DECIDED: Modal-dispatch, not inline.** A synchronous inline
+  version was prototyped and measured — see Progress Log — and rejected because it added
+  65-78s to `finalize_upload` (matching the original upload time) by round-tripping the file
+  through R2 twice more. `finalize_upload` must instead fire-and-forget dispatch to a Modal
+  function, mirroring T4945's `stitch_members` pattern (a durable job independent of the Fly
+  machine's lifecycle, sidesteps the T1537 fire-and-forget constraint) — full comparison +
+  sequence diagrams in the [design artifact](https://claude.ai/code/artifact/27a9f3e5-38fb-44bd-8dcb-50655873f81c),
+  Option A. The moov-probe + fail-open remux logic itself (`game_remux.py`, embedded in
+  "Preserved Implementation" below) is dispatch-agnostic and moves into `modal_functions/`
+  largely unchanged — only its caller changes. **No "remux pending" state is needed**: because
+  the remux is fail-open and always replaces the SAME `r2_key` in place, a hover/scrub that
+  lands before the async remux completes just reads the still-moov-at-end original (today's
+  behavior, not a regression) and a later request after completion transparently gets the fast
+  path — no state machine, no client-visible pending status.
 - **Multi-video games** (T1440's video_sequence): each video file in the sequence needs its own
   remux pass independently.
 - **Failure handling**: if the remux fails for any reason, the ORIGINAL upload must still
@@ -113,7 +121,179 @@ correctness logic (moov-position probe, fail-open semantics) from the current br
 the synchronous `remux_game_faststart()` call in `finalize_upload` with a fire-and-forget
 Modal dispatch per the design note's Option A.
 
+**2026-08-14 (later): branch deleted, logic folded in below.** Rather than keeping
+`feature/T7020-game-video-faststart-remux` (commit `7f2aeb4e`) parked on origin indefinitely,
+the reusable pieces are embedded verbatim in "Preserved Implementation" below so this task file
+is self-sufficient when picked back up — no branch checkout needed. The only piece that does
+NOT carry forward as-is is the `finalize_upload` integration point itself (the synchronous
+`remux_game_faststart(r2_key)` call) — that's exactly what the Modal-dispatch redesign replaces;
+see Option A in the [design artifact](https://claude.ai/code/artifact/27a9f3e5-38fb-44bd-8dcb-50655873f81c)
+for the fire-and-forget dispatch shape to build instead.
+
+## Preserved Implementation (from the parked branch, pre-Modal-redesign)
+
+Three pieces below survive the redesign untouched — only the caller changes (sync call ->
+Modal dispatch). Diffs are against master as of commit `7f2aeb4e`.
+
+### 1. Retry-classifier fix (`src/backend/app/utils/retry.py`)
+
+General-purpose fix, not specific to this task — `is_transient_error` didn't recognize
+boto3's `S3UploadFailedError`/`S3TransferFailedError` wrapper (used by `client.upload_file`'s
+multipart transfer manager) around a transient status code, so a 502/503 mid-multipart-upload
+was silently classified as non-retryable anywhere in the codebase using that call path, not
+just this remux. **Worth cherry-picking onto master independently of this task** — it's a
+correctness fix with no dependency on the remux feature.
+
+```python
+# after the existing ClientError status_code in (403, 404) check:
+if error_type in ("S3UploadFailedError", "S3TransferFailedError"):
+    match = re.search(r"an error occurred \((\d+)\)", error_msg)
+    if match and int(match.group(1)) in (429, 500, 502, 503):
+        return True
+    if match and int(match.group(1)) in (403, 404):
+        return False
+```
+(needs `import re` added to the file's imports)
+
+Regression tests to restore in `test_retry.py`: `test_s3_upload_failed_error_502_is_transient`,
+`test_s3_upload_failed_error_403_is_not_transient`,
+`test_s3_upload_failed_error_unparseable_message_is_not_transient` — construct a dynamic
+`S3UploadFailedError` exception type with a boto3-formatted message
+(`"...An error occurred (502) when calling the UploadPart operation..."`) and assert the
+classification.
+
+### 2. Storage helpers (`src/backend/app/storage.py`)
+
+- Refactor `_probe_local_mp4_moov` to extract a shared `_probe_mp4_moov_bytes(buf: bytes)`
+  helper (walks top-level MP4 boxes to find `moov`/`mdat`/`moof`, returns `(verdict, boxes)`
+  where verdict is `FASTSTART`/`MOOV-AT-END`/`UNKNOWN`) — both the pre-upload check and the
+  remux skip-decision need this logic and it shouldn't be duplicated (it previously was,
+  inline, in `upload_bytes_to_r2`).
+- Add `upload_file_to_r2_global(key, local_path, *, content_type="video/mp4") -> bool`: streams
+  a local file to a full (env-prefixed) R2 key via boto3's managed multipart transfer (so
+  multi-GB files never load into memory), using the existing `TIER_1` retry tier. Never raises;
+  logs and returns `False` on failure. This is the re-upload half of the remux (download via
+  existing `download_from_r2_global`, remux locally, re-upload via this new helper).
+
+### 3. `src/backend/app/services/game_remux.py` (new module, in full)
+
+The moov-probe + fail-open remux logic — this is the actual optimization and doesn't change
+under the Modal redesign, only who calls it:
+
+```python
+"""
+Game video faststart remux (T7020).
+
+Consumer devices (phones, action cams) frequently write the MP4 `moov` atom —
+the index a player needs before it can seek — at the END of the file, because
+that's cheaper to write while recording. A player/seek then pays several extra
+R2 round trips locating `moov` near EOF before any content streams (documented
+5-request sequence in the T7020 task file). This module runs a lossless,
+copy-only remux (`ffmpeg -c copy -movflags +faststart`) that moves `moov` to the
+front — no re-encode, no quality/dimension/bitrate change, just a byte-layout
+change — so every seek into a newly-uploaded game starts fast.
+
+It NEVER raises: a remux failure must fail open — the original upload stays in
+R2 and remains fully usable (CLAUDE.md no-silent-fallback: the failure is
+logged loudly, never swallowed silently).
+
+FINDING (T7020): the R2 key is `games/{blake3_hash}.mp4` where `blake3_hash` is
+the client-computed hash of the ORIGINAL uploaded bytes. The remux changes the
+stored bytes, so they no longer hash to the key. This is SAFE: the hash is the
+identity of the source video (used for dedup) and the server NEVER re-hashes
+the stored object to verify it. Nothing depends on hash-stability of the
+stored bytes across this operation.
+"""
+
+import logging
+import tempfile
+from pathlib import Path
+
+from app.services.ffmpeg_errors import run_ffmpeg
+from app.storage import (
+    _probe_local_mp4_moov,
+    download_from_r2_global,
+    upload_file_to_r2_global,
+)
+
+logger = logging.getLogger(__name__)
+
+_REMUX_TIMEOUT_S = 30 * 60
+
+
+def remux_game_faststart(r2_key: str) -> bool:
+    """Download the game video at `r2_key`, remux it with `+faststart`, and
+    overwrite the object in place. Skips files whose `moov` is already at the
+    front. Returns True if the stored object is now faststart because of this
+    call, False if it was skipped or the remux failed (fail-open). Never raises.
+    """
+    try:
+        with tempfile.TemporaryDirectory(prefix="game_remux_") as tmp:
+            src = Path(tmp) / "src.mp4"
+            dst = Path(tmp) / "faststart.mp4"
+
+            if not download_from_r2_global(r2_key, src):
+                logger.error(f"[GameRemux] download failed for {r2_key} — skipping")
+                return False
+
+            verdict, boxes = _probe_local_mp4_moov(src)
+            head = " ".join(boxes[:4]) if boxes else "-"
+            if verdict == "FASTSTART":
+                logger.info(f"[GameRemux] {r2_key} already faststart — skipping")
+                return False
+
+            logger.info(f"[GameRemux] remuxing {r2_key} verdict={verdict} head=[{head}]")
+
+            run_ffmpeg(
+                ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+                 "-c", "copy", "-movflags", "+faststart", str(dst)],
+                timeout=_REMUX_TIMEOUT_S,
+            )
+
+            if not dst.exists() or dst.stat().st_size == 0:
+                logger.error(f"[GameRemux] ffmpeg produced no output for {r2_key} — skipping")
+                return False
+
+            out_verdict, out_boxes = _probe_local_mp4_moov(dst)
+            if out_verdict != "FASTSTART":
+                logger.error(
+                    f"[GameRemux] remuxed output for {r2_key} is not faststart "
+                    f"(verdict={out_verdict}) — NOT overwriting"
+                )
+                return False
+
+            if not upload_file_to_r2_global(r2_key, dst):
+                logger.error(f"[GameRemux] re-upload failed for {r2_key} — skipping")
+                return False
+
+            logger.info(
+                f"[GameRemux] {r2_key} remuxed to faststart "
+                f"({src.stat().st_size} -> {dst.stat().st_size} bytes)"
+            )
+            return True
+    except Exception as e:
+        logger.error(
+            f"[GameRemux] unexpected failure remuxing {r2_key}: "
+            f"{type(e).__name__}: {e}", exc_info=True,
+        )
+        return False
+```
+
+**What changes under the Modal redesign:** only the caller in `finalize_upload`
+(`games_upload.py`) — replace the direct `remux_game_faststart(r2_key)` call with a
+fire-and-forget dispatch to a Modal function (mirror T4945's `stitch_members` pattern: durable,
+independent of the Fly machine's lifecycle, sidesteps the T1537 fire-and-forget constraint).
+The function body above can likely move into `modal_functions/` largely unchanged — `ffmpeg`,
+the moov probe, and the fail-open semantics are the same regardless of where it executes.
+
 ## Acceptance Criteria
+- [ ] `finalize_upload`'s response time stays near-instant (~1-2s, matching pre-T7020 finalize
+      time) regardless of upload file size — measured on a multi-GB upload. This is the entire
+      reason the Modal-dispatch design was chosen over the synchronous prototype (which measured
+      65-78s added on a 278MB file); a fix that reintroduces upload-time cost does not satisfy
+      this task, however cleanly it reuses the remux logic below.
+- [ ] Remux is dispatched to Modal (fire-and-forget, mirrors T4945's `stitch_members`), not run
+      inline in the request path
 - [ ] New game video uploads get a lossless faststart remux before being marked ready
 - [ ] Multi-video games: every video in the sequence is remuxed independently
 - [ ] Remux failure never blocks or corrupts the underlying upload (fails open to the original)
