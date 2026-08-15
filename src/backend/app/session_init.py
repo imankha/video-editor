@@ -13,6 +13,8 @@ Idempotent per user — user.sqlite is source of truth. Results are cached
 in _init_cache. Subsequent calls just set the profile context and return.
 """
 
+import asyncio
+import contextvars
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +23,23 @@ from uuid import uuid4
 from .profile_context import set_current_profile_id
 
 logger = logging.getLogger(__name__)
+
+# T6240: the app's main event loop, captured at startup (main.py lifespan).
+# user_session_init is now offloaded to a worker thread by the request middleware
+# (run_in_context) so it no longer blocks the loop. But a worker thread has no
+# running loop of its own, so _schedule_startup_recovery cannot detect the loop
+# with get_running_loop() there — without this reference it would fall back to
+# asyncio.run() and BLOCK the worker thread draining the modal queue (and cancel
+# recovery sub-tasks when the ephemeral loop closes). With it, the worker-thread
+# path fires the recovery coroutine onto the real main loop, fire-and-forget.
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    """Record (or clear, on shutdown) the app's main event loop. Called from
+    main.py lifespan(). See _schedule_startup_recovery."""
+    global _main_loop
+    _main_loop = loop
 
 # Per-user init cache: user_id -> {"profile_id": str, "is_new_user": bool}
 # Populated on first call, returned on subsequent calls.
@@ -331,9 +350,34 @@ async def _run_startup_recovery(user_id: str) -> None:
 
 
 def _schedule_startup_recovery(user_id: str) -> None:
-    import asyncio
+    """Fire orphaned-job recovery + modal-queue drain WITHOUT blocking the caller.
+
+    Three contexts reach this:
+    - On the event loop directly (dev-login / auth-init handlers): schedule a
+      background task on the running loop.
+    - On a worker thread (T6240: user_session_init offloaded via run_in_context):
+      there is no running loop here, so schedule onto the captured main loop
+      (_main_loop) with call_soon_threadsafe. copy_context() carries THIS thread's
+      user/profile ContextVars into the task (call_soon_threadsafe's callback runs
+      on the main-loop thread, whose ContextVars are not ours), which
+      _run_startup_recovery requires. Fire-and-forget: we do not wait on it.
+    - No loop anywhere (pure synchronous test context): run inline via asyncio.run.
+    """
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_run_startup_recovery(user_id))
     except RuntimeError:
-        asyncio.run(_run_startup_recovery(user_id))
+        loop = None
+
+    if loop is not None:
+        loop.create_task(_run_startup_recovery(user_id))
+        return
+
+    main_loop = _main_loop
+    if main_loop is not None and main_loop.is_running():
+        ctx = contextvars.copy_context()
+        main_loop.call_soon_threadsafe(
+            lambda: main_loop.create_task(_run_startup_recovery(user_id), context=ctx)
+        )
+        return
+
+    asyncio.run(_run_startup_recovery(user_id))
