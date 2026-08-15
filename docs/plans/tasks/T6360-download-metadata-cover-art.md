@@ -1,6 +1,12 @@
 # T6360: Pack poster + rich metadata into every downloaded video
 
-**Status:** WIP
+**Status:** STAGING — merged 2026-08-15. Platform sweep (iOS share-sheet -> Instagram/social)
+NOT yet verified — task file's own stated top risk (attached_pic cover art breaking a mobile
+upload pipeline). ffprobe-level correctness proven (attached_pic disposition, one real
+selectable video stream, byte-identical stream via md5), but that's necessary not sufficient.
+**Hard gate before this reaches production via `/deploy`** — verify on staging with a real
+device first; fallback per the task file is to gate cover art off for web-share and keep tags
+if a target chokes. Also unverified: latency on a real (non-synthetic) reel.
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-02
