@@ -1047,6 +1047,17 @@ async def download_collection(
     r2_prefix = _resolve_modal_user_id(user_id)
     download_filename = _collection_download_filename(scope_type, tag_list)
 
+    # T6360: scope-derived metadata (title/album) + the profile name (artist) +
+    # the constant attribution block. Applied per-request AFTER compose and
+    # DELIBERATELY NOT baked into the T4947 cache -- `artist` is the current
+    # profile name, so a rename must reflect on the next download without
+    # poisoning the cached bytes (which stay keyed on stitch + cards only).
+    from app.services.download_metadata import (
+        apply_download_metadata,
+        build_collection_metadata,
+    )
+    coll_meta = build_collection_metadata(scope_type, tag_list, user_id, profile_id)
+
     record_milestone(user_id, "collection_downloaded", {
         "scope_type": scope_type, "aspect_ratio": aspect_ratio, "members": len(members),
     })
@@ -1083,8 +1094,12 @@ async def download_collection(
         cached_path = os.path.join(cache_tmp, "cached.mp4")
         if await asyncio.to_thread(download_from_r2_global, cache_key, Path(cached_path)):
             logger.info(f"[CollectionDownload] cache HIT {cache_key}")
+            # Stamp metadata on the cached (unstamped) bytes at serve time.
+            stamped_path = await asyncio.to_thread(
+                apply_download_metadata, cached_path, cache_tmp, coll_meta,
+            )
             return StreamingResponse(
-                _stream_file_and_cleanup(cached_path, cache_tmp),
+                _stream_file_and_cleanup(stamped_path, cache_tmp),
                 media_type="video/mp4", headers=dl_headers,
             )
         # HEAD said present but the GET failed (transient blip / just-evicted) --
@@ -1202,6 +1217,13 @@ async def download_collection(
         logger.info(
             f"[CollectionDownload] compose degraded (not full fidelity); skipping cache write {cache_key}"
         )
+
+    # T6360: stamp AFTER the cache write above, so the cache stores the unstamped
+    # compose output (matching the cache-HIT path, which stamps on read) while
+    # this caller streams the stamped file.
+    serve_path = await asyncio.to_thread(
+        apply_download_metadata, serve_path, tmp_dir, coll_meta,
+    )
 
     return StreamingResponse(
         _stream_file_and_cleanup(serve_path, tmp_dir),

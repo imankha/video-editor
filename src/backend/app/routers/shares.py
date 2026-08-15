@@ -45,6 +45,7 @@ from ..services.sharing_db import (
 )
 from ..storage import (
     APP_ENV,
+    download_from_r2_global,
     generate_presigned_url_global,
     r2_head_object_global,
 )
@@ -283,6 +284,56 @@ def _resolve_share_video_intro(share: dict, *, mode: str):
         return None
     finally:
         conn.close()
+
+
+def _resolve_share_metadata(share: dict) -> dict | None:
+    """T6360: assemble the download metadata field map + poster ref for a shared
+    reel, from the SHARER's profile DB (read-only), reusing the SAME
+    `build_download_metadata` the owner-download path uses so tags never diverge
+    across egress points. Never raises; None when the sharer DB can't be opened."""
+    from app.services.download_metadata import build_download_metadata
+    from app.services.materialization import open_profile_db_readonly
+
+    conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    if conn is None:
+        logger.info(
+            f"[shares] could not open sharer profile DB for metadata "
+            f"(share_token={share.get('share_token')}) -- serving without metadata"
+        )
+        return None
+    try:
+        return build_download_metadata(
+            conn, share["video_id"],
+            share["sharer_user_id"], share["sharer_profile_id"],
+        )
+    except Exception as e:
+        logger.error(
+            f"[shares] metadata assembly failed for share_token={share.get('share_token')}: {e}",
+            exc_info=True,
+        )
+        return None
+    finally:
+        conn.close()
+
+
+def _stamp_shared_download(serve_path: str, tmp_dir: str, share: dict) -> str:
+    """Download the sharer's poster (when present) into `tmp_dir` and run the
+    T6360 metadata/cover-art stamping pass over the composed share download.
+    Returns the path to stream (stamped on success, `serve_path` otherwise).
+    Blocking (R2 + ffmpeg) -- callers wrap in `asyncio.to_thread`. Never raises."""
+    from pathlib import Path
+
+    from app.services.download_metadata import apply_download_metadata
+
+    meta = _resolve_share_metadata(share)
+    if not meta:
+        return serve_path
+    poster_key = _build_poster_r2_key(share)
+    if r2_head_object_global(poster_key) is not None:
+        cover_local = os.path.join(tmp_dir, "cover.jpg")
+        if download_from_r2_global(poster_key, Path(cover_local)):
+            meta["cover_path"] = cover_local
+    return apply_download_metadata(serve_path, tmp_dir, meta)
 
 
 def _recap_poster_r2_key(share: dict) -> str:
@@ -923,6 +974,10 @@ async def download_shared_video(share_token: str, request: Request):
             finally:
                 if intro is not None:
                     intro.cleanup()
+
+            serve_path = await asyncio.to_thread(
+                _stamp_shared_download, serve_path, tmp_dir, share,
+            )
 
             with open(serve_path, "rb") as fin:
                 while True:
