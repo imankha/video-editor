@@ -2699,3 +2699,34 @@ def download_from_r2_global(key: str, local_path: Path, progress_callback=None) 
     except Exception as e:
         logger.error(f"Failed to download global object from R2: {key} - {e}")
         return False
+
+
+def upload_file_to_r2_global(
+    key: str, local_path: Path, *, content_type: str | None = None,
+) -> bool:
+    """Upload a LOCAL FILE to a FULL (env-prefixed) R2 key, streaming from disk.
+
+    The local-file counterpart of `upload_bytes_to_r2_global` (same global key
+    space as `r2_head_object_global` / `download_from_r2_global`), for artifacts
+    too large to hold in memory as bytes (e.g. the T4947 stitched-collection
+    download cache). `client.upload_file` transfers from disk (multipart under
+    the hood) and the object only becomes visible on completion -- an S3/R2
+    object PUT is atomic, so a concurrent HEAD/GET never observes a partial
+    write. Returns True on success, False otherwise (never raises)."""
+    from .utils.retry import TIER_1, retry_r2_call
+
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        extra_args = {"ContentType": content_type} if content_type else None
+        retry_r2_call(
+            client.upload_file, str(local_path), R2_BUCKET, key,
+            ExtraArgs=extra_args, operation=f"upload_file_global {key}", **TIER_1,
+        )
+        logger.debug(f"Uploaded file to R2 (global): {local_path} -> {key}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to upload file to R2 (global): {key} - {e}")
+        return False

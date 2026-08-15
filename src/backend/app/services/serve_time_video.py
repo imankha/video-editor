@@ -82,6 +82,7 @@ def compose_serve_time(
     intro=None,
     outro: bool = True,
     metadata_hook=None,
+    report: dict | None = None,
 ) -> bool:
     """Compose `[intro?, reel, outro?]` into `out_path` in ONE
     `ffmpeg_concat.concat_segments` pass.
@@ -91,6 +92,13 @@ def compose_serve_time(
     `outro`: whether to attempt the branded outro (still internally respects
       `branded_outro.outro_enabled()`, i.e. the `BRANDED_OUTRO_ENABLED` flag).
     `metadata_hook`: T6360 SEAM (design §10) -- a documented no-op today.
+    `report`: OPTIONAL out-dict. When supplied, `report["full_fidelity"]` is set
+      True only if EVERY expected segment landed -- the intro (when an `intro`
+      was passed), the outro (when `outro` and the flag are on), and the concat
+      itself. A non-fatal degradation still returns True (the reel is served) but
+      sets `full_fidelity=False`, so a caller that CACHES the bytes (T4947) can
+      refuse to freeze a transiently-degraded artifact. Existing callers that
+      pass nothing are unaffected.
 
     Returns True if `out_path` was written with AT LEAST the reel (i.e. any
     non-fatal degradation still counts as success as long as the reel is
@@ -104,38 +112,53 @@ def compose_serve_time(
     `outro=True` gives the single trailing outro exactly as today. Do NOT
     per-member prepend -- T4945 is TODO, nothing built here beyond this note.
     """
+    if report is not None:
+        report["full_fidelity"] = False  # flipped True below only on a clean pass
+
     try:
         probe = ffmpeg_concat.probe_media(reel_path)
     except Exception as e:
         logger.error(f"[serve_time_video] reel unreadable, cannot compose: {e}", exc_info=True)
         return False
 
+    from app.services.branded_outro import outro_enabled
+
     tmp_dir = os.path.dirname(out_path) or "."
     segments: list[str] = []
 
+    expected_intro = intro is not None
     intro_path = None
-    if intro is not None:
+    if expected_intro:
         intro_path = _try_build_intro_card(intro, probe, os.path.join(tmp_dir, "_compose_intro.mp4"))
         if intro_path:
             segments.append(intro_path)
 
     segments.append(reel_path)
 
+    expected_outro = bool(outro) and outro_enabled()
     outro_path = None
     if outro:
         outro_path = _try_build_outro_card(probe)
         if outro_path:
             segments.append(outro_path)
 
+    concat_ok = True
     if len(segments) == 1:
         # Nothing to join -- serve the reel itself, straight through.
         served = reel_path
     else:
-        if ffmpeg_concat.concat_segments(segments, out_path, probe):
+        concat_ok = ffmpeg_concat.concat_segments(segments, out_path, probe)
+        if concat_ok:
             served = out_path
         else:
             logger.error("[serve_time_video] concat failed; degrading to reel-only")
             served = reel_path
 
     _apply_metadata_hook(served, out_path, metadata_hook)
+    if report is not None:
+        report["full_fidelity"] = (
+            concat_ok
+            and (intro_path is not None or not expected_intro)
+            and (outro_path is not None or not expected_outro)
+        )
     return True
