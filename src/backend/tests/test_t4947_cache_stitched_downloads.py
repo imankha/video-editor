@@ -177,7 +177,13 @@ def _install_cached_pipeline(stack, store, counters, *, modal=False, barrier=Non
     def _resolve_intro(user_id, profile_id, raw_card_id, total_duration, reel_id, **kw):
         return None
 
-    def _compose(reel_path, out_path, *, intro=None, outro=True, metadata_hook=None, report=None):
+    # T7090 Phase 3: the collection router composes via `compose_serve_time_dispatched`
+    # (Modal-or-local dispatch seam). Patch THAT with the counting stub -- it is the
+    # single compose seam the router calls regardless of the modal flag, so the cache
+    # control-flow assertions hold identically on both branches (the dispatch's own
+    # Modal-vs-local choice is covered by test_t7090_modal_compose_dispatch.py).
+    def _compose(reel_path, out_path, *, user_id=None, user_prefix=None,
+                 intro=None, outro=True, report=None):
         counters["compose"] += 1
         if report is not None:
             report["full_fidelity"] = compose_full_fidelity
@@ -193,7 +199,9 @@ def _install_cached_pipeline(stack, store, counters, *, modal=False, barrier=Non
     stack.enter_context(patch("app.routers.collections.upload_file_to_r2_global", _upload_file_global))
     stack.enter_context(patch("app.routers.collections.r2_delete_object_global", _del_global))
     stack.enter_context(patch("app.services.intro_egress.resolve_intro_for_reel", _resolve_intro))
-    stack.enter_context(patch("app.services.serve_time_video.compose_serve_time", _compose))
+    stack.enter_context(
+        patch("app.services.serve_time_video.compose_serve_time_dispatched", _compose)
+    )
 
 
 def _get(client, **params):

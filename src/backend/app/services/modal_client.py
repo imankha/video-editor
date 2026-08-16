@@ -511,6 +511,70 @@ async def call_modal_stitch_members(
     return await asyncio.to_thread(fn.remote, user_prefix, input_keys, output_key)
 
 
+# Cached reference for the CPU-only serve-time composer (T7090 Phase 3)
+_compose_fn = None
+
+
+def _get_compose_fn():
+    """Get a reference to the deployed compose_serve_time_modal function (T7090
+    Phase 3, CPU-only ffmpeg card-burn + concat for download-time compose).
+
+    NOTE: `compose_serve_time_modal` must be MANUALLY DEPLOYED
+    (`modal deploy app/modal_functions/video_processing.py`) -- like every other
+    function in that module it does NOT auto-deploy. Until it is deployed this
+    `from_name` raises RuntimeError, and the dispatch caller degrades non-fatally
+    to the local `compose_serve_time` (the Modal-off path)."""
+    global _compose_fn
+
+    if _compose_fn is not None:
+        return _compose_fn
+
+    try:
+        import modal
+        _compose_fn = modal.Function.from_name(MODAL_APP_NAME, "compose_serve_time_modal")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/compose_serve_time_modal")
+        return _compose_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to compose_serve_time_modal: {e}")
+        raise RuntimeError(f"Modal compose_serve_time_modal not available: {e}") from e
+
+
+async def call_modal_compose(
+    user_prefix: str,
+    reel_key: str,
+    card_plan: dict | None,
+    intro_layer_keys: list[str],
+    outro_enabled: bool,
+    out_key: str,
+) -> dict:
+    """Route a download-time compose ([intro?][reel][outro?]) to the CPU-only
+    Modal `compose_serve_time_modal` function (T7090 Phase 3): the OOM-prone
+    ffmpeg card-burn + concat runs on Modal's headroom instead of the 1GB Fly box.
+
+    The app renders the intro-card PNG layers (cheap PIL) and uploads them to an
+    R2 scratch prefix; `card_plan` is the JSON plan (from
+    `player_intro._plan_card_render`) describing the burn over those PNGs.
+    `card_plan=None` and an empty `intro_layer_keys` means no intro segment.
+
+    `user_prefix` MUST be the ALREADY-R2-resolved prefix. This wrapper does NOT
+    resolve it, for two reasons: (1) the SHARE download composes objects under the
+    SHARER's prefix, which is NOT derivable from the viewer's request context at
+    all -- it must be passed explicitly; (2) defensiveness -- the caller owns
+    resolving `_resolve_modal_user_id(user_id)` under the correct profile context
+    (the owner/collection paths resolve it inside the request's own to_thread
+    worker, where the profile ContextVar is still propagated).
+
+    Returns `{"out_key", "duration", "full_fidelity", "degraded_reason"}`. Raises
+    (RuntimeError, via `_get_compose_fn`) if the function isn't deployed -- the
+    caller degrades non-fatally to the local compose.
+    """
+    fn = _get_compose_fn()
+    return await asyncio.to_thread(
+        fn.remote, user_prefix, reel_key, card_plan, intro_layer_keys,
+        outro_enabled, out_key,
+    )
+
+
 def _get_process_clips_ai_fn():
     """Get a reference to the deployed process_clips_ai function (unified AI processing)."""
     global _process_clips_ai_fn

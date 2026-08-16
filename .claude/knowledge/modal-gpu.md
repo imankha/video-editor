@@ -27,6 +27,8 @@ Deployed Modal app: `modal.App("reel-ballers-video-v2")` (`video_processing.py:2
 | `process_framing_ai_chunk` (:1840) | T4 | 900 | parallel chunk worker |
 | `process_framing_ai_parallel` (:2043) | none (CPU orchestrator) | 3600 | fans out chunks |
 | `process_clips_ai` (:2387) | T4 | 3600 | multi-clip framing+concat, generator |
+| `stitch_members` (:3186) | none (CPU) | 1800 | T4945 collection member concat/re-encode (bare ffmpeg+boto3 `image`) |
+| `compose_serve_time_modal` (:~3250) | none (CPU) | 1800 | T7090 download-time compose: intro-card BURN + `[intro?][reel][outro?]` concat + branded outro off the 1GB Fly box. `compose_image` = bare `image` + pillow/numpy/pydantic + the WHOLE `app/` tree at `/root/app` (for `card_compose_plan`/`ffmpeg_concat`/`branded_outro`/fonts; deliberately NOT player_intro/user_db — the PIL card render runs app-side, PNG layers arrive via R2). **NEEDS MANUAL DEPLOY.** |
 
 ## Data flow
 ```mermaid
@@ -93,6 +95,7 @@ graph LR
 - **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); delete `_optimized.py`. Requires Modal redeploy (ask user).
 - **T4430** (TODO, depends on T4370): named encode profiles + single ffprobe.
 - **Upscale Quality epic** (`docs/plans/tasks/upscale-quality/EPIC.md`, strict order): T4700 SR testbed (`src/backend/experiments/sr_testbed/`, prime directive: no quality change ships without a testbed run) → T4710 encode/denoise quick wins (crf, bt709, `dni_weight`) → T4720 GAN A/B → T4730 temporal VSR prototype (FlashVSR/SeedVR2, L40S) → T4740 prod integration with crop-size routing → T4750 fine-tune.
+- **T7090** (impl 2026-08-16, download-compose to Modal): `compose_serve_time_modal` (CPU, bare-image+app-tree) dispatched by `modal_client.call_modal_compose` / `_get_compose_fn` (mirrors `call_modal_stitch_members`), routed through the `serve_time_video.compose_serve_time_dispatched` seam (Modal-on -> R2-scratch round-trip; ANY Modal error incl. undeployed -> local `compose_serve_time` fallback; Modal-off local is the only in-container path per T4180). The intro-card ffmpeg graph is built by the PURE `app/services/card_compose_plan.build_intro_card_cmd`, shared by the local `_build_card` and the Modal burn (no drift). **Requires `modal deploy app/modal_functions/video_processing.py` before the Modal path works** (else `from_name` raises -> non-fatal local fallback). Live cost/latency/OOM-avoidance + the `/root/app` sys.path/font resolution are a staging-verification gap (unexercisable in-container).
 - **T2650** (TODO): move sweep auto-export compute from Fly to Modal.
 - Historical: T2480 shipped Catmull-Rom spline crop interpolation on the Modal side (matching frontend curves) — the origin of today's duplicated spline copies; T50/T51 were the original Modal cost/parallelization analyses (parallel overlay rejected as 3-4x costlier, E7).
 - Related DONE infra: T1200 (Modal job-id logging + retry), T1520 (disconnect/retry UX reconciling with Modal job state), T2450-T2470 (auto-export reliability: presigned URLs to FFmpeg, pending-status recovery, sweep keepalive).

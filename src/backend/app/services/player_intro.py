@@ -48,13 +48,12 @@ import numpy as np
 from PIL import Image
 
 from app.schemas import TextSpec
-from app.services.ffmpeg_concat import escape_filter_path as _escape_filter_path
 from app.services.ffmpeg_concat import probe_media as _probe_media
 from app.services.ffmpeg_concat import run as _run
 from app.services.intro_card_geometry import MOTION, STAGGER_ORDER, aspect_key, band_kind, geometry_for, treatment_for
 from app.services.intro_card_geometry import layout as compute_layout
 from app.services.intro_cards import derive_composition
-from app.services.text_render import render_text_layer
+from app.services.text_render import render_text_layer_cropped
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,18 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_intro_cards"
 # hash, which changes when the user edits the card.
 # T6640: template-owned typography + measured layout replaced per-slot styling
 # (text_elements is no longer read) -- every existing cache entry is stale.
-_CARD_VERSION = "v3-template-typography"
+_CARD_VERSION = "v4-collapsed-static-cropped-text"
+
+# T7090 (fix #3): the `degraded_reason` a caller's report out-dict receives when
+# the intro-card render subprocess was KILLED BY A SIGNAL (e.g. the kernel OOM
+# killer's SIGKILL/-9 on a memory-starved box) rather than failing ordinarily.
+# An infrastructure kill is NOT an ordinary "this card could not be built" miss:
+# it is logged at CRITICAL and surfaced distinctly so a shipped-but-degraded
+# download is never confused with a reel that simply has no intro configured.
+# Canonical definition lives in the PURE `card_compose_plan` module so the Modal
+# burn (Phase 3) can reference it WITHOUT importing this heavy render module
+# (player_intro -> intro_cards -> user_db); re-exported here for existing callers.
+from app.services.card_compose_plan import INTRO_DEGRADED_KILLED  # noqa: E402
 
 
 # =============================================================================
@@ -380,11 +390,49 @@ def _content_hash(
 # =============================================================================
 # Card build (the one filter_complex, encoded once)
 # =============================================================================
-def _build_card(card: dict, field_values: dict, image_path: str | None, info: dict, card_path: str) -> None:
-    """Render the animated card to `card_path`, matching the reel's stream params
-    exactly. All motion lives in ONE filter_complex so the card is encoded once
-    (animation is free at serve time). Raises on failure — the caller catches and
-    returns non-fatally."""
+def _composite_static_layers(
+    layers: list[tuple[Image.Image, int, int]], w: int, h: int
+) -> Image.Image | None:
+    """T7090 fix #2: alpha-composite the STATIC (non-animated) overlay layers --
+    treatment tint/vignette/seam over the photo rect, plus the full-frame
+    scrim/band -- into ONE full-frame RGBA canvas, in the SAME bottom-to-top order
+    they were previously overlaid one ffmpeg input at a time. Source-over
+    compositing is associative, so one canvas overlaid over the photo is
+    equivalent to N sequential overlays -- but hands ffmpeg ONE looped input
+    instead of N, and each avoided full-frame looped input saved ~150MB peak RSS
+    (the OOM driver on a 1GB box). Layers are clipped to the frame exactly as
+    ffmpeg's `overlay` clips at the edges. Returns None when there are no static
+    layers, so no extra input is added."""
+    if not layers:
+        return None
+    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    for img, x, y in layers:
+        rgba = img.convert("RGBA")
+        lw, lh = rgba.size
+        cx0, cy0 = max(x, 0), max(y, 0)
+        cx1, cy1 = min(x + lw, w), min(y + lh, h)
+        if cx0 >= cx1 or cy0 >= cy1:
+            continue
+        sub = rgba.crop((cx0 - x, cy0 - y, cx1 - x, cy1 - y))
+        canvas.alpha_composite(sub, dest=(cx0, cy0))
+    return canvas
+
+
+def _plan_card_render(
+    card: dict, field_values: dict, image_path: str | None, info: dict, layer_dir: str,
+) -> dict:
+    """Do ALL the PIL rasterisation for one intro card -- background, focal-framed
+    photo, the collapsed static overlay, and each bbox-cropped text layer -- writing
+    the PNGs into `layer_dir` under STABLE relative names (`bg.png`, `photo.png`,
+    `static_overlay.png`, `el_0.png`...), and return a plain JSON-serializable PLAN
+    dict describing the ffmpeg graph over them (T7090 Phase 3).
+
+    This is the app-side half of the split: `card_compose_plan.build_intro_card_cmd`
+    turns the returned plan + layer_dir into the ffmpeg command. The split lets the
+    SAME plan drive either the local burn (`_build_card`) or the Modal burn
+    (`compose_serve_time_modal`): the app renders the (cheap, bounded) PNGs, the
+    burn runs wherever the plan is executed. No ffmpeg here -- pure PIL + plan.
+    """
     w, h = info["width"], info["height"]
     fps_str = info["fps_str"]
     pix_fmt = info["pix_fmt"]
@@ -400,175 +448,161 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
 
     elements = _select_elements(card, field_values, composition, aspect, accent, w, h)
 
+    layer_path = Path(layer_dir)
+    layers: list[dict] = []
+
+    # --- Background (PIL, exact CSS parity) ---------------------------------
+    _render_background(treatment["background"], w, h).save(layer_path / "bg.png")
+    layers.append({"kind": "bg", "file": "bg.png"})
+
+    # --- Photo: focal cover-crop (PIL) + Ken Burns push-in (zoompan) --------
+    if image_path is not None:
+        rect = geo["photo"]
+        rw, rh = _even(round(rect["w"] * w)), _even(round(rect["h"] * h))
+        px, py = round(rect["x"] * w), round(rect["y"] * h)
+        fx = card.get("focal_x")
+        fy = card.get("focal_y")
+        zoom = card.get("zoom")
+        framed = _frame_photo(
+            image_path, rw, rh,
+            0.5 if fx is None else float(fx),
+            0.5 if fy is None else float(fy),
+            1.0 if zoom is None else float(zoom),
+        )
+        framed.save(layer_path / "photo.png")
+        z0 = MOTION["photoPushInZoomStart"]
+        dz = MOTION["photoPushInZoomEnd"] - z0
+        maxn = max(nframes - 1, 1)
+        # Ease-out zoom about the centre; constant output size (overlay-safe,
+        # T5240 landmine (a)). Commas inside the single-quoted expr are literal.
+        zexpr = f"{z0}+{dz:.4f}*(1-pow(1-min(on/{maxn},1),2))"
+        layers.append({
+            "kind": "photo", "file": "photo.png", "zexpr": zexpr,
+            "px": px, "py": py, "rw": rw, "rh": rh, "nframes": nframes,
+        })
+
+        # --- Static overlay stack (T7090 fix #2) -----------------------------
+        # Treatment tint/vignette + the seam fade clip to the photo rect
+        # (px,py, rw x rh) exactly as the preview does; the treatment BAND (or,
+        # where there is no band, the bottom/dim SCRIM) grounds the text
+        # full-frame. Band and scrim are mutually exclusive -- the band
+        # replaces the scrim rather than stacking. ALL of these are STATIC
+        # (identical every frame), so they are collapsed into ONE
+        # alpha-composited full-frame input instead of one looped full-frame
+        # ffmpeg input each (each of those cost ~150MB peak RSS -> the OOM
+        # driver). Bottom-to-top order preserved: tint, vignette, seam, scrim,
+        # band. Colours/geometry stay the browser preview's (seamFadeCss etc.).
+        photo_mood = treatment.get("photoMood") or {}
+        static_layers: list[tuple[Image.Image, int, int]] = []
+        tint_img = _render_tint(photo_mood.get("tint"), rw, rh)
+        if tint_img is not None:
+            static_layers.append((tint_img, px, py))
+        vignette_img = _render_vignette(photo_mood.get("vignette"), rw, rh)
+        if vignette_img is not None:
+            static_layers.append((vignette_img, px, py))
+
+        seam_side = geo["reflow"].get("seamSide", "none")
+        seam_feather = geo["reflow"].get("seamFeather", 0.0)
+        seam_img = _render_seam_fade(rect, seam_side, seam_feather, treatment["seamColor"], w, h)
+        if seam_img is not None:
+            static_layers.append((seam_img, px, py))
+
+        band_spec = treatment.get("band") if band_kind(composition) == "bottom" else None
+        scrim_kind = _scrim_kind(composition, True)
+        if band_spec and scrim_kind == "bottom":
+            scrim_kind = "none"
+        scrim = _render_scrim(scrim_kind, w, h)
+        if scrim is not None:
+            static_layers.append((scrim, 0, 0))
+        band_img = _render_band(band_spec, w, h)
+        if band_img is not None:
+            static_layers.append((band_img, 0, 0))
+
+        static_overlay = _composite_static_layers(static_layers, w, h)
+        if static_overlay is not None:
+            static_overlay.save(layer_path / "static_overlay.png")
+            layers.append({"kind": "static", "file": "static_overlay.png"})
+
+    # --- Text PNGs: staggered fade-up (alpha ramp on the PNG + a small rise) -
+    first_st = MOTION["textStaggerFirstSt"]
+    step = MOTION["textStaggerStep"]
+    fade_d = MOTION["textFadeD"]
+    rise_px = round(MOTION["textRiseFrac"] * h)
+    for k, el in enumerate(elements):
+        # T7090 fix #2: crop each text layer to its glyph bbox and overlay at
+        # the crop's own (lx, ly) offset instead of a full-frame layer at x=0.
+        # Pixel-identical placement (the crop is a literal sub-image of the
+        # full-frame render), but ffmpeg holds a small looped input (~47MB)
+        # instead of a full-frame one (~152MB) per text element.
+        layer, (lx, ly) = render_text_layer_cropped(el["spec"], w, h)
+        layer.save(layer_path / f"el_{k}.png")
+        st = first_st + el["stagger"] * step
+        layers.append({
+            "kind": "text", "file": f"el_{k}.png",
+            "lx": lx, "ly": ly, "st": st, "fade_d": fade_d, "rise_px": rise_px,
+        })
+
+    # --- Exit flash timing (applied LAST by the builder) --------------------
+    flash_d = MOTION["flashOutD"]
+    flash_st = max(duration - flash_d, 0.0)
+
+    plan: dict = {
+        "duration": duration,
+        "fps_str": fps_str,
+        "pix_fmt": pix_fmt,
+        "sar": info["sar"],
+        "timescale": info["timescale"],
+        "has_audio": bool(info["has_audio"]),
+        "flash_st": flash_st,
+        "flash_d": flash_d,
+        "layers": layers,
+    }
+    if info["has_audio"]:
+        plan["a_layout"] = "mono" if info["a_channels"] == 1 else "stereo"
+        plan["a_rate"] = info["a_rate"]
+        plan["a_channels"] = info["a_channels"]
+    else:
+        plan["a_layout"] = None
+        plan["a_rate"] = None
+        plan["a_channels"] = None
+    return plan
+
+
+def _build_card(card: dict, field_values: dict, image_path: str | None, info: dict, card_path: str) -> None:
+    """Render the animated card to `card_path`, matching the reel's stream params
+    exactly. All motion lives in ONE filter_complex so the card is encoded once
+    (animation is free at serve time). Raises on failure — the caller catches and
+    returns non-fatally.
+
+    T7090 Phase 3: the PIL render + PLAN construction is `_plan_card_render`; the
+    ffmpeg command is `card_compose_plan.build_intro_card_cmd` (the SHARED pure
+    builder the Modal burn also calls). This function is the local (app-side) burn.
+    """
+    from app.services.card_compose_plan import build_intro_card_cmd
+
     tmp_dir = Path(tempfile.mkdtemp(prefix="rb_intro_build_"))
     try:
-        # --- Background (PIL, exact CSS parity) ---------------------------------
-        bg_png = tmp_dir / "bg.png"
-        _render_background(treatment["background"], w, h).save(bg_png)
-
-        inputs: list[str] = [
-            "-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", bg_png.as_posix(),
-        ]
-        parts = ["[0:v]format=rgba[base]"]
-        last = "[base]"
-        idx = 1
-
-        # --- Photo: focal cover-crop (PIL) + Ken Burns push-in (zoompan) --------
-        if image_path is not None:
-            rect = geo["photo"]
-            rw, rh = _even(round(rect["w"] * w)), _even(round(rect["h"] * h))
-            px, py = round(rect["x"] * w), round(rect["y"] * h)
-            fx = card.get("focal_x")
-            fy = card.get("focal_y")
-            zoom = card.get("zoom")
-            framed = _frame_photo(
-                image_path, rw, rh,
-                0.5 if fx is None else float(fx),
-                0.5 if fy is None else float(fy),
-                1.0 if zoom is None else float(zoom),
-            )
-            photo_png = tmp_dir / "photo.png"
-            framed.save(photo_png)
-            inputs += ["-i", photo_png.as_posix()]
-            z0 = MOTION["photoPushInZoomStart"]
-            dz = MOTION["photoPushInZoomEnd"] - z0
-            maxn = max(nframes - 1, 1)
-            # Ease-out zoom about the centre; constant output size (overlay-safe,
-            # T5240 landmine (a)). Commas inside the single-quoted expr are literal.
-            zexpr = f"{z0}+{dz:.4f}*(1-pow(1-min(on/{maxn},1),2))"
-            parts.append(
-                f"[{idx}:v]zoompan=z='{zexpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-                f"d={nframes}:s={rw}x{rh}:fps={fps_str},format=rgba[photo]"
-            )
-            parts.append(f"{last}[photo]overlay=x={px}:y={py}[withphoto]")
-            last = "[withphoto]"
-            idx += 1
-
-            # --- Treatment photo GRADE (T6580 item 4): tint then vignette, over
-            # the photo rect (px,py, rw x rh) so they clip to the photo exactly as
-            # the preview does. Each is a static PNG overlaid on every frame. -----
-            photo_mood = treatment.get("photoMood") or {}
-            for name, img in (
-                ("tint", _render_tint(photo_mood.get("tint"), rw, rh)),
-                ("vignette", _render_vignette(photo_mood.get("vignette"), rw, rh)),
-            ):
-                if img is None:
-                    continue
-                png = tmp_dir / f"{name}.png"
-                img.save(png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[{name}]")
-                parts.append(f"{last}[{name}]overlay=x={px}:y={py}[with{name}]")
-                last = f"[with{name}]"
-                idx += 1
-
-            # --- Seam fade (T6640, task §C "hard 50/50 seam"): recruiting's
-            # inset photo fades to the treatment's own background colour at its
-            # inner edge, so the photo bleeds into the panel instead of a hard
-            # cut. Static PNG, same seamSide/seamFeather/seamColor the browser
-            # preview's CSS gradient reads (introCardVisual.seamFadeCss). -------
-            seam_side = geo["reflow"].get("seamSide", "none")
-            seam_feather = geo["reflow"].get("seamFeather", 0.0)
-            seam_img = _render_seam_fade(rect, seam_side, seam_feather, treatment["seamColor"], w, h)
-            if seam_img is not None:
-                seam_png = tmp_dir / "seam.png"
-                seam_img.save(seam_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", seam_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[seam]")
-                parts.append(f"{last}[seam]overlay=x={px}:y={py}[withseam]")
-                last = "[withseam]"
-                idx += 1
-
-            # --- Text ground: a treatment BAND (T6580 item 4) grounds the text in
-            # the lower-third looks; where there is no band (photo-forward), the
-            # bottom scrim stays. They are mutually exclusive, so the band replaces
-            # the scrim rather than stacking. -----------------------------------
-            band_spec = treatment.get("band") if band_kind(composition) == "bottom" else None
-            scrim_kind = _scrim_kind(composition, True)
-            if band_spec and scrim_kind == "bottom":
-                scrim_kind = "none"
-            scrim = _render_scrim(scrim_kind, w, h)
-            if scrim is not None:
-                scrim_png = tmp_dir / "scrim.png"
-                scrim.save(scrim_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", scrim_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[scrim]")
-                parts.append(f"{last}[scrim]overlay=x=0:y=0[withscrim]")
-                last = "[withscrim]"
-                idx += 1
-            band_img = _render_band(band_spec, w, h)
-            if band_img is not None:
-                band_png = tmp_dir / "band.png"
-                band_img.save(band_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", band_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[band]")
-                parts.append(f"{last}[band]overlay=x=0:y=0[withband]")
-                last = "[withband]"
-                idx += 1
-
-        # --- Text PNGs: staggered fade-up (alpha ramp on the PNG + a small rise) -
-        first_st = MOTION["textStaggerFirstSt"]
-        step = MOTION["textStaggerStep"]
-        fade_d = MOTION["textFadeD"]
-        rise_px = round(MOTION["textRiseFrac"] * h)
-        for k, el in enumerate(elements):
-            layer = render_text_layer(el["spec"], w, h)  # full-frame RGBA, glyphs at the slot
-            el_png = tmp_dir / f"el_{k}.png"
-            layer.save(el_png)
-            inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", el_png.as_posix()]
-            st = first_st + el["stagger"] * step
-            # Rise: start `rise_px` lower, settle to 0 over the fade (fade-UP).
-            yexpr = (
-                f"if(lt(t,{st}),{rise_px},"
-                f"if(lt(t,{st + fade_d}),{rise_px}*(1-(t-{st})/{fade_d}),0))"
-            )
-            parts.append(f"[{idx}:v]format=rgba,fade=t=in:st={st}:d={fade_d}:alpha=1[el{k}]")
-            parts.append(f"{last}[el{k}]overlay=x=0:y='{yexpr}'[t{k}]")
-            last = f"[t{k}]"
-            idx += 1
-
-        # --- Exit flash LAST (deterministic final frame -> clean cut to footage) -
-        flash_d = MOTION["flashOutD"]
-        flash_st = max(duration - flash_d, 0.0)
-        parts.append(
-            f"{last}fade=t=out:st={flash_st}:d={flash_d}:color=white,"
-            f"setsar={info['sar']},format={pix_fmt}[v]"
-        )
-        filter_complex = ";".join(parts)
-
-        # Silent audio matching the reel's layout, only when the reel has audio,
-        # so the `-c copy` prepend stays stream-aligned (mirrors branded_outro).
-        cmd = ["ffmpeg", "-y", *inputs]
-        audio_idx = idx
-        if info["has_audio"]:
-            audio_layout = "mono" if info["a_channels"] == 1 else "stereo"
-            cmd += ["-f", "lavfi", "-i",
-                    f"anullsrc=channel_layout={audio_layout}:sample_rate={info['a_rate']}"]
-
-        cmd += ["-filter_complex", filter_complex, "-map", "[v]"]
-        if info["has_audio"]:
-            cmd += ["-map", f"{audio_idx}:a"]
-        cmd += ["-t", str(duration)]
-        cmd += ["-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
-                "-pix_fmt", pix_fmt, "-r", fps_str,
-                "-video_track_timescale", str(info["timescale"])]
-        if info["has_audio"]:
-            cmd += ["-c:a", "aac", "-b:a", "128k",
-                    "-ar", str(info["a_rate"]), "-ac", str(info["a_channels"]),
-                    "-t", str(duration)]
-        else:
-            cmd += ["-an"]
-        cmd += ["-f", "mp4", card_path]
+        plan = _plan_card_render(card, field_values, image_path, info, str(tmp_dir))
+        cmd = build_intro_card_cmd(plan, str(tmp_dir), card_path)
         _run(cmd)
     finally:
         import shutil
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _get_or_build_card(card: dict, field_values: dict, image_path: str | None, info: dict) -> str | None:
+def _get_or_build_card(
+    card: dict, field_values: dict, image_path: str | None, info: dict,
+    report: dict | None = None,
+) -> str | None:
     """Return a cached card path for these inputs, building it if absent. Atomic
     rename so concurrent callers never read a partial file. Returns None on any
-    failure (never raises)."""
+    failure (never raises).
+
+    `report`: OPTIONAL out-dict. On a SIGNAL-terminated render (an OOM/SIGKILL,
+    returncode < 0) it is set `report["degraded_reason"] = INTRO_DEGRADED_KILLED`
+    and the failure is logged at CRITICAL (the always-on ops signal, fired even
+    when no report is passed) -- so an infrastructure kill is distinguishable
+    from an ordinary "no card" miss (T7090 fix #3)."""
     try:
         _CARD_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -599,7 +633,23 @@ def _get_or_build_card(card: dict, field_values: dict, image_path: str | None, i
     except Exception as e:
         stderr = getattr(e, "stderr", None)
         detail = stderr[-600:] if isinstance(stderr, str) else str(e)
-        logger.error(f"[PlayerIntro] card build failed: {detail}", exc_info=not stderr)
+        # A negative returncode means the subprocess was KILLED BY A SIGNAL. On a
+        # memory-starved box that is the kernel OOM killer (SIGKILL/-9) taking out
+        # ffmpeg mid-render -- an INFRASTRUCTURE failure, not an ordinary build
+        # miss. Surface it loudly (CRITICAL) and distinctly (report) so a 200 with
+        # a silently missing intro is never mistaken for "this reel has no intro".
+        returncode = getattr(e, "returncode", None)
+        if isinstance(returncode, int) and returncode < 0:
+            logger.critical(
+                f"[PlayerIntro] INTRO_CARD_OOM: card render subprocess killed by "
+                f"signal {-returncode} (returncode={returncode}); "
+                f"treatment={card.get('treatment')} {info['width']}x{info['height']}. "
+                f"Download will SHIP WITHOUT the intro card. {detail}"
+            )
+            if report is not None:
+                report["degraded_reason"] = INTRO_DEGRADED_KILLED
+        else:
+            logger.error(f"[PlayerIntro] card build failed: {detail}", exc_info=not stderr)
         try:
             os.remove(tmp_card)
         except OSError:
@@ -616,6 +666,7 @@ def build_intro_card(
     image_path: str | None,
     info: dict,
     out_path: str,
+    report: dict | None = None,
 ) -> bool:
     """Render `card` into an animated MP4 at `out_path`, matching `info` (the probe
     of the target reel). Returns True on success, False if it was skipped or failed
@@ -627,7 +678,7 @@ def build_intro_card(
     profile facts + effective focal, and the downloaded image (cut-out if present).
     """
     try:
-        card_path = _get_or_build_card(card, field_values, image_path, info)
+        card_path = _get_or_build_card(card, field_values, image_path, info, report=report)
         if card_path is None:
             return False
         import shutil
