@@ -1150,14 +1150,19 @@ async def download_collection(
                 _stitch_members_local, user_id, profile_id, member_keys, stitched_path, tmp_dir
             )
 
-        # ---- compose intro + outro app-side (cards NEVER on Modal) ----
+        # ---- compose intro + outro (T7090 Phase 3: the card BURN + concat now
+        # dispatch to Modal when enabled, exactly like the member stitch above;
+        # local compose is the Modal-off fallback). The T4947 cache gate below is
+        # unchanged -- it still keys on `compose_report["full_fidelity"]`, now
+        # sourced from the Modal result dict on the dispatched path. ----
         serve_path = stitched_path
         compose_report: dict = {}
         intro = await asyncio.to_thread(_resolve_collection_intro)
         try:
-            from app.services.serve_time_video import compose_serve_time
+            from app.services.serve_time_video import compose_serve_time_dispatched
             if await asyncio.to_thread(
-                compose_serve_time, stitched_path, out_path,
+                compose_serve_time_dispatched, stitched_path, out_path,
+                user_id=user_id, user_prefix=r2_prefix,
                 intro=intro, outro=True, report=compose_report,
             ):
                 serve_path = out_path

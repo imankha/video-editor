@@ -193,10 +193,20 @@ def _get_user_id_from_request(request: Request) -> str | None:
     return request.headers.get("X-User-ID")
 
 
-def _build_video_r2_key(share: dict) -> str:
+def _sharer_r2_prefix(share: dict) -> str:
+    """The SHARER's R2 folder prefix (`{env}/users/{uid}/profiles/{pid}`) for
+    Modal-dispatched compose (T7090 Phase 3). The share objects live under the
+    sharer's profile, NOT the viewer's -- so this is built EXPLICITLY from the
+    share row, never from the request ContextVar (which is the viewer's/none)."""
     return (
         f"{APP_ENV}/users/{share['sharer_user_id']}"
         f"/profiles/{share['sharer_profile_id']}"
+    )
+
+
+def _build_video_r2_key(share: dict) -> str:
+    return (
+        f"{_sharer_r2_prefix(share)}"
         f"/final_videos/{share['video_filename']}"
     )
 
@@ -961,9 +971,13 @@ async def download_shared_video(share_token: str, request: Request):
             serve_path = original_path
             intro = await asyncio.to_thread(_resolve_share_video_intro, share, mode="burn")
             try:
-                from app.services.serve_time_video import compose_serve_time
+                # T7090 Phase 3: dispatch the compose (Modal when enabled, local
+                # otherwise). The R2 scratch objects belong to the SHARER, so pass
+                # the sharer's explicit prefix -- never the viewer's ContextVar.
+                from app.services.serve_time_video import compose_serve_time_dispatched
                 if await asyncio.to_thread(
-                    compose_serve_time, original_path, out_path,
+                    compose_serve_time_dispatched, original_path, out_path,
+                    user_id=share["sharer_user_id"], user_prefix=_sharer_r2_prefix(share),
                     intro=intro, outro=True,
                 ):
                     serve_path = out_path

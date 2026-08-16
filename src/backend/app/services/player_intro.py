@@ -48,7 +48,6 @@ import numpy as np
 from PIL import Image
 
 from app.schemas import TextSpec
-from app.services.ffmpeg_concat import escape_filter_path as _escape_filter_path
 from app.services.ffmpeg_concat import probe_media as _probe_media
 from app.services.ffmpeg_concat import run as _run
 from app.services.intro_card_geometry import MOTION, STAGGER_ORDER, aspect_key, band_kind, geometry_for, treatment_for
@@ -76,7 +75,10 @@ _CARD_VERSION = "v4-collapsed-static-cropped-text"
 # An infrastructure kill is NOT an ordinary "this card could not be built" miss:
 # it is logged at CRITICAL and surfaced distinctly so a shipped-but-degraded
 # download is never confused with a reel that simply has no intro configured.
-INTRO_DEGRADED_KILLED = "intro_card_render_killed"
+# Canonical definition lives in the PURE `card_compose_plan` module so the Modal
+# burn (Phase 3) can reference it WITHOUT importing this heavy render module
+# (player_intro -> intro_cards -> user_db); re-exported here for existing callers.
+from app.services.card_compose_plan import INTRO_DEGRADED_KILLED  # noqa: E402
 
 
 # =============================================================================
@@ -416,11 +418,21 @@ def _composite_static_layers(
     return canvas
 
 
-def _build_card(card: dict, field_values: dict, image_path: str | None, info: dict, card_path: str) -> None:
-    """Render the animated card to `card_path`, matching the reel's stream params
-    exactly. All motion lives in ONE filter_complex so the card is encoded once
-    (animation is free at serve time). Raises on failure — the caller catches and
-    returns non-fatally."""
+def _plan_card_render(
+    card: dict, field_values: dict, image_path: str | None, info: dict, layer_dir: str,
+) -> dict:
+    """Do ALL the PIL rasterisation for one intro card -- background, focal-framed
+    photo, the collapsed static overlay, and each bbox-cropped text layer -- writing
+    the PNGs into `layer_dir` under STABLE relative names (`bg.png`, `photo.png`,
+    `static_overlay.png`, `el_0.png`...), and return a plain JSON-serializable PLAN
+    dict describing the ffmpeg graph over them (T7090 Phase 3).
+
+    This is the app-side half of the split: `card_compose_plan.build_intro_card_cmd`
+    turns the returned plan + layer_dir into the ffmpeg command. The split lets the
+    SAME plan drive either the local burn (`_build_card`) or the Modal burn
+    (`compose_serve_time_modal`): the app renders the (cheap, bounded) PNGs, the
+    burn runs wherever the plan is executed. No ffmpeg here -- pure PIL + plan.
+    """
     w, h = info["width"], info["height"]
     fps_str = info["fps_str"]
     pix_fmt = info["pix_fmt"]
@@ -436,156 +448,142 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
 
     elements = _select_elements(card, field_values, composition, aspect, accent, w, h)
 
+    layer_path = Path(layer_dir)
+    layers: list[dict] = []
+
+    # --- Background (PIL, exact CSS parity) ---------------------------------
+    _render_background(treatment["background"], w, h).save(layer_path / "bg.png")
+    layers.append({"kind": "bg", "file": "bg.png"})
+
+    # --- Photo: focal cover-crop (PIL) + Ken Burns push-in (zoompan) --------
+    if image_path is not None:
+        rect = geo["photo"]
+        rw, rh = _even(round(rect["w"] * w)), _even(round(rect["h"] * h))
+        px, py = round(rect["x"] * w), round(rect["y"] * h)
+        fx = card.get("focal_x")
+        fy = card.get("focal_y")
+        zoom = card.get("zoom")
+        framed = _frame_photo(
+            image_path, rw, rh,
+            0.5 if fx is None else float(fx),
+            0.5 if fy is None else float(fy),
+            1.0 if zoom is None else float(zoom),
+        )
+        framed.save(layer_path / "photo.png")
+        z0 = MOTION["photoPushInZoomStart"]
+        dz = MOTION["photoPushInZoomEnd"] - z0
+        maxn = max(nframes - 1, 1)
+        # Ease-out zoom about the centre; constant output size (overlay-safe,
+        # T5240 landmine (a)). Commas inside the single-quoted expr are literal.
+        zexpr = f"{z0}+{dz:.4f}*(1-pow(1-min(on/{maxn},1),2))"
+        layers.append({
+            "kind": "photo", "file": "photo.png", "zexpr": zexpr,
+            "px": px, "py": py, "rw": rw, "rh": rh, "nframes": nframes,
+        })
+
+        # --- Static overlay stack (T7090 fix #2) -----------------------------
+        # Treatment tint/vignette + the seam fade clip to the photo rect
+        # (px,py, rw x rh) exactly as the preview does; the treatment BAND (or,
+        # where there is no band, the bottom/dim SCRIM) grounds the text
+        # full-frame. Band and scrim are mutually exclusive -- the band
+        # replaces the scrim rather than stacking. ALL of these are STATIC
+        # (identical every frame), so they are collapsed into ONE
+        # alpha-composited full-frame input instead of one looped full-frame
+        # ffmpeg input each (each of those cost ~150MB peak RSS -> the OOM
+        # driver). Bottom-to-top order preserved: tint, vignette, seam, scrim,
+        # band. Colours/geometry stay the browser preview's (seamFadeCss etc.).
+        photo_mood = treatment.get("photoMood") or {}
+        static_layers: list[tuple[Image.Image, int, int]] = []
+        tint_img = _render_tint(photo_mood.get("tint"), rw, rh)
+        if tint_img is not None:
+            static_layers.append((tint_img, px, py))
+        vignette_img = _render_vignette(photo_mood.get("vignette"), rw, rh)
+        if vignette_img is not None:
+            static_layers.append((vignette_img, px, py))
+
+        seam_side = geo["reflow"].get("seamSide", "none")
+        seam_feather = geo["reflow"].get("seamFeather", 0.0)
+        seam_img = _render_seam_fade(rect, seam_side, seam_feather, treatment["seamColor"], w, h)
+        if seam_img is not None:
+            static_layers.append((seam_img, px, py))
+
+        band_spec = treatment.get("band") if band_kind(composition) == "bottom" else None
+        scrim_kind = _scrim_kind(composition, True)
+        if band_spec and scrim_kind == "bottom":
+            scrim_kind = "none"
+        scrim = _render_scrim(scrim_kind, w, h)
+        if scrim is not None:
+            static_layers.append((scrim, 0, 0))
+        band_img = _render_band(band_spec, w, h)
+        if band_img is not None:
+            static_layers.append((band_img, 0, 0))
+
+        static_overlay = _composite_static_layers(static_layers, w, h)
+        if static_overlay is not None:
+            static_overlay.save(layer_path / "static_overlay.png")
+            layers.append({"kind": "static", "file": "static_overlay.png"})
+
+    # --- Text PNGs: staggered fade-up (alpha ramp on the PNG + a small rise) -
+    first_st = MOTION["textStaggerFirstSt"]
+    step = MOTION["textStaggerStep"]
+    fade_d = MOTION["textFadeD"]
+    rise_px = round(MOTION["textRiseFrac"] * h)
+    for k, el in enumerate(elements):
+        # T7090 fix #2: crop each text layer to its glyph bbox and overlay at
+        # the crop's own (lx, ly) offset instead of a full-frame layer at x=0.
+        # Pixel-identical placement (the crop is a literal sub-image of the
+        # full-frame render), but ffmpeg holds a small looped input (~47MB)
+        # instead of a full-frame one (~152MB) per text element.
+        layer, (lx, ly) = render_text_layer_cropped(el["spec"], w, h)
+        layer.save(layer_path / f"el_{k}.png")
+        st = first_st + el["stagger"] * step
+        layers.append({
+            "kind": "text", "file": f"el_{k}.png",
+            "lx": lx, "ly": ly, "st": st, "fade_d": fade_d, "rise_px": rise_px,
+        })
+
+    # --- Exit flash timing (applied LAST by the builder) --------------------
+    flash_d = MOTION["flashOutD"]
+    flash_st = max(duration - flash_d, 0.0)
+
+    plan: dict = {
+        "duration": duration,
+        "fps_str": fps_str,
+        "pix_fmt": pix_fmt,
+        "sar": info["sar"],
+        "timescale": info["timescale"],
+        "has_audio": bool(info["has_audio"]),
+        "flash_st": flash_st,
+        "flash_d": flash_d,
+        "layers": layers,
+    }
+    if info["has_audio"]:
+        plan["a_layout"] = "mono" if info["a_channels"] == 1 else "stereo"
+        plan["a_rate"] = info["a_rate"]
+        plan["a_channels"] = info["a_channels"]
+    else:
+        plan["a_layout"] = None
+        plan["a_rate"] = None
+        plan["a_channels"] = None
+    return plan
+
+
+def _build_card(card: dict, field_values: dict, image_path: str | None, info: dict, card_path: str) -> None:
+    """Render the animated card to `card_path`, matching the reel's stream params
+    exactly. All motion lives in ONE filter_complex so the card is encoded once
+    (animation is free at serve time). Raises on failure — the caller catches and
+    returns non-fatally.
+
+    T7090 Phase 3: the PIL render + PLAN construction is `_plan_card_render`; the
+    ffmpeg command is `card_compose_plan.build_intro_card_cmd` (the SHARED pure
+    builder the Modal burn also calls). This function is the local (app-side) burn.
+    """
+    from app.services.card_compose_plan import build_intro_card_cmd
+
     tmp_dir = Path(tempfile.mkdtemp(prefix="rb_intro_build_"))
     try:
-        # --- Background (PIL, exact CSS parity) ---------------------------------
-        bg_png = tmp_dir / "bg.png"
-        _render_background(treatment["background"], w, h).save(bg_png)
-
-        inputs: list[str] = [
-            "-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", bg_png.as_posix(),
-        ]
-        parts = ["[0:v]format=rgba[base]"]
-        last = "[base]"
-        idx = 1
-
-        # --- Photo: focal cover-crop (PIL) + Ken Burns push-in (zoompan) --------
-        if image_path is not None:
-            rect = geo["photo"]
-            rw, rh = _even(round(rect["w"] * w)), _even(round(rect["h"] * h))
-            px, py = round(rect["x"] * w), round(rect["y"] * h)
-            fx = card.get("focal_x")
-            fy = card.get("focal_y")
-            zoom = card.get("zoom")
-            framed = _frame_photo(
-                image_path, rw, rh,
-                0.5 if fx is None else float(fx),
-                0.5 if fy is None else float(fy),
-                1.0 if zoom is None else float(zoom),
-            )
-            photo_png = tmp_dir / "photo.png"
-            framed.save(photo_png)
-            inputs += ["-i", photo_png.as_posix()]
-            z0 = MOTION["photoPushInZoomStart"]
-            dz = MOTION["photoPushInZoomEnd"] - z0
-            maxn = max(nframes - 1, 1)
-            # Ease-out zoom about the centre; constant output size (overlay-safe,
-            # T5240 landmine (a)). Commas inside the single-quoted expr are literal.
-            zexpr = f"{z0}+{dz:.4f}*(1-pow(1-min(on/{maxn},1),2))"
-            parts.append(
-                f"[{idx}:v]zoompan=z='{zexpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-                f"d={nframes}:s={rw}x{rh}:fps={fps_str},format=rgba[photo]"
-            )
-            parts.append(f"{last}[photo]overlay=x={px}:y={py}[withphoto]")
-            last = "[withphoto]"
-            idx += 1
-
-            # --- Static overlay stack (T7090 fix #2) -----------------------------
-            # Treatment tint/vignette + the seam fade clip to the photo rect
-            # (px,py, rw x rh) exactly as the preview does; the treatment BAND (or,
-            # where there is no band, the bottom/dim SCRIM) grounds the text
-            # full-frame. Band and scrim are mutually exclusive -- the band
-            # replaces the scrim rather than stacking. ALL of these are STATIC
-            # (identical every frame), so they are collapsed into ONE
-            # alpha-composited full-frame input instead of one looped full-frame
-            # ffmpeg input each (each of those cost ~150MB peak RSS -> the OOM
-            # driver). Bottom-to-top order preserved: tint, vignette, seam, scrim,
-            # band. Colours/geometry stay the browser preview's (seamFadeCss etc.).
-            photo_mood = treatment.get("photoMood") or {}
-            static_layers: list[tuple[Image.Image, int, int]] = []
-            tint_img = _render_tint(photo_mood.get("tint"), rw, rh)
-            if tint_img is not None:
-                static_layers.append((tint_img, px, py))
-            vignette_img = _render_vignette(photo_mood.get("vignette"), rw, rh)
-            if vignette_img is not None:
-                static_layers.append((vignette_img, px, py))
-
-            seam_side = geo["reflow"].get("seamSide", "none")
-            seam_feather = geo["reflow"].get("seamFeather", 0.0)
-            seam_img = _render_seam_fade(rect, seam_side, seam_feather, treatment["seamColor"], w, h)
-            if seam_img is not None:
-                static_layers.append((seam_img, px, py))
-
-            band_spec = treatment.get("band") if band_kind(composition) == "bottom" else None
-            scrim_kind = _scrim_kind(composition, True)
-            if band_spec and scrim_kind == "bottom":
-                scrim_kind = "none"
-            scrim = _render_scrim(scrim_kind, w, h)
-            if scrim is not None:
-                static_layers.append((scrim, 0, 0))
-            band_img = _render_band(band_spec, w, h)
-            if band_img is not None:
-                static_layers.append((band_img, 0, 0))
-
-            static_overlay = _composite_static_layers(static_layers, w, h)
-            if static_overlay is not None:
-                static_png = tmp_dir / "static_overlay.png"
-                static_overlay.save(static_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", static_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[statics]")
-                parts.append(f"{last}[statics]overlay=x=0:y=0[withstatics]")
-                last = "[withstatics]"
-                idx += 1
-
-        # --- Text PNGs: staggered fade-up (alpha ramp on the PNG + a small rise) -
-        first_st = MOTION["textStaggerFirstSt"]
-        step = MOTION["textStaggerStep"]
-        fade_d = MOTION["textFadeD"]
-        rise_px = round(MOTION["textRiseFrac"] * h)
-        for k, el in enumerate(elements):
-            # T7090 fix #2: crop each text layer to its glyph bbox and overlay at
-            # the crop's own (lx, ly) offset instead of a full-frame layer at x=0.
-            # Pixel-identical placement (the crop is a literal sub-image of the
-            # full-frame render), but ffmpeg holds a small looped input (~47MB)
-            # instead of a full-frame one (~152MB) per text element.
-            layer, (lx, ly) = render_text_layer_cropped(el["spec"], w, h)
-            el_png = tmp_dir / f"el_{k}.png"
-            layer.save(el_png)
-            inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", el_png.as_posix()]
-            st = first_st + el["stagger"] * step
-            # Rise (fade-UP) unchanged, just re-based onto the crop's y origin
-            # (ly): start `rise_px` below the rest position, settle back to ly.
-            yexpr = (
-                f"if(lt(t,{st}),{ly + rise_px},"
-                f"if(lt(t,{st + fade_d}),{ly}+{rise_px}*(1-(t-{st})/{fade_d}),{ly}))"
-            )
-            parts.append(f"[{idx}:v]format=rgba,fade=t=in:st={st}:d={fade_d}:alpha=1[el{k}]")
-            parts.append(f"{last}[el{k}]overlay=x={lx}:y='{yexpr}'[t{k}]")
-            last = f"[t{k}]"
-            idx += 1
-
-        # --- Exit flash LAST (deterministic final frame -> clean cut to footage) -
-        flash_d = MOTION["flashOutD"]
-        flash_st = max(duration - flash_d, 0.0)
-        parts.append(
-            f"{last}fade=t=out:st={flash_st}:d={flash_d}:color=white,"
-            f"setsar={info['sar']},format={pix_fmt}[v]"
-        )
-        filter_complex = ";".join(parts)
-
-        # Silent audio matching the reel's layout, only when the reel has audio,
-        # so the `-c copy` prepend stays stream-aligned (mirrors branded_outro).
-        cmd = ["ffmpeg", "-y", *inputs]
-        audio_idx = idx
-        if info["has_audio"]:
-            audio_layout = "mono" if info["a_channels"] == 1 else "stereo"
-            cmd += ["-f", "lavfi", "-i",
-                    f"anullsrc=channel_layout={audio_layout}:sample_rate={info['a_rate']}"]
-
-        cmd += ["-filter_complex", filter_complex, "-map", "[v]"]
-        if info["has_audio"]:
-            cmd += ["-map", f"{audio_idx}:a"]
-        cmd += ["-t", str(duration)]
-        cmd += ["-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
-                "-pix_fmt", pix_fmt, "-r", fps_str,
-                "-video_track_timescale", str(info["timescale"])]
-        if info["has_audio"]:
-            cmd += ["-c:a", "aac", "-b:a", "128k",
-                    "-ar", str(info["a_rate"]), "-ac", str(info["a_channels"]),
-                    "-t", str(duration)]
-        else:
-            cmd += ["-an"]
-        cmd += ["-f", "mp4", card_path]
+        plan = _plan_card_render(card, field_values, image_path, info, str(tmp_dir))
+        cmd = build_intro_card_cmd(plan, str(tmp_dir), card_path)
         _run(cmd)
     finally:
         import shutil

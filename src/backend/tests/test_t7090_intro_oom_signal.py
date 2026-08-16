@@ -22,14 +22,13 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.services import player_intro as P  # noqa: E402
-from app.services.player_intro import INTRO_DEGRADED_KILLED, build_intro_card  # noqa: E402
+from app.services import player_intro as P
+from app.services.player_intro import INTRO_DEGRADED_KILLED, build_intro_card
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

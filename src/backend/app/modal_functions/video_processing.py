@@ -37,6 +37,29 @@ image = (
     )
 )
 
+# Image for the CPU-only download-time composer (T7090 Phase 3,
+# `compose_serve_time_modal`). Adds to the bare ffmpeg+boto3 `image` the PIL/numpy
+# deps the intro-card plan builder's helpers touch, and BUNDLES the PURE app modules
+# the burn needs -- the shared filtergraph builder (`card_compose_plan`), the concat
+# ladder (`ffmpeg_concat`), and the branded-outro card build (`branded_outro`) -- plus
+# the font + branding assets `branded_outro` loads by absolute path. It deliberately
+# does NOT pull `player_intro`/`intro_cards`/`text_render`/`user_db`/FastAPI/DB: the
+# PIL card RENDER runs app-side (its PNG layers arrive via R2 as the plan describes),
+# so only the ffmpeg BURN + concat + outro live here.
+_backend_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # src/backend
+_app_dir = os.path.join(_backend_root, "app")
+# Ship the WHOLE `app/` tree (python source AND the font/branding asset files) at
+# /root/app, which is on sys.path in Modal -- so `import app.services.branded_outro`
+# works and its `Path(__file__).parent.parent / "assets"` resolution finds the
+# bundled fonts/branding. `add_local_dir` (not `add_local_python_source`) is used
+# BECAUSE the branded outro loads NON-python assets (.ttf/.png) by absolute path;
+# a python-source-only mount would drop them. Copied at BUILD (copy=True) so the
+# subsequent (none here) build steps could see it; deterministic image contents.
+compose_image = (
+    image.pip_install("pillow", "numpy", "pydantic")
+    .add_local_dir(_app_dir, remote_path="/root/app", copy=True)
+)
+
 # Separate image for YOLO detection (includes ultralytics)
 # Model weights are downloaded during image build to avoid cold-start latency (~140MB)
 yolo_image = (
@@ -3223,6 +3246,141 @@ def stitch_members(user_id: str, input_keys: list, output_key: str) -> dict:
         duration = _stitch_probe(stitched)["duration"]
 
     return {"output_key": output_key, "duration": duration}
+
+
+@app.function(
+    image=compose_image,   # bare ffmpeg+boto3 + pillow/numpy/pydantic + bundled app modules
+    gpu=None,              # CPU only -- ffmpeg card burn + concat, no GPU (T7090 Phase 3)
+    timeout=1800,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def compose_serve_time_modal(
+    user_prefix: str,
+    reel_key: str,
+    card_plan: dict,
+    intro_layer_keys: list,
+    outro_enabled: bool,
+    out_key: str,
+) -> dict:
+    """T7090 Phase 3: burn the intro card + concat `[intro?][reel][outro?]` on
+    Modal's CPU headroom instead of the 1GB Fly web box (the OOM site).
+
+    Inputs (all R2 keys are RELATIVE; the full object is `{user_prefix}/{key}`):
+      - `reel_key`: the reel to compose around.
+      - `card_plan`: the JSON burn plan from `player_intro._plan_card_render`, or
+        None/{} for no intro. Its `layers[].file` names the RELATIVE PNG basenames.
+      - `intro_layer_keys`: the R2 keys of the app-rendered card PNG layers (same
+        basenames the plan references), downloaded into a local layer dir.
+      - `outro_enabled`: whether to build + append the branded outro card.
+      - `out_key`: the disposable scratch key to upload the composed MP4 to.
+
+    Returns `{"out_key", "duration", "full_fidelity", "degraded_reason"}` where
+    `full_fidelity` mirrors `compose_serve_time`'s rule (concat_ok AND
+    intro-landed-or-none AND outro-landed-or-none) and `degraded_reason` carries an
+    intro-build failure. Raises only on a totally unreadable reel (the app caller
+    then falls back to a local compose).
+
+    The intro-card PIL RENDER is NOT here -- it ran app-side and its PNG layers
+    arrive via R2. This function only executes the shared `build_intro_card_cmd`
+    ffmpeg graph over them, so the filtergraph never drifts from the local burn.
+    """
+    import shutil as _shutil
+    import subprocess
+
+    from app.services.branded_outro import _get_or_build_card
+    from app.services.branded_outro import outro_enabled as _outro_flag
+    from app.services.card_compose_plan import build_intro_card_cmd
+    from app.services.ffmpeg_concat import concat_segments, probe_media
+
+    bucket = os.environ["R2_BUCKET_NAME"]
+    r2 = get_r2_client()
+
+    degraded_reason = None
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # --- download the reel ------------------------------------------------
+        reel_path = os.path.join(temp_dir, "reel.mp4")
+        r2.download_file(bucket, f"{user_prefix}/{reel_key}", reel_path)
+        try:
+            reel_probe = probe_media(reel_path)
+        except Exception as e:
+            raise RuntimeError(f"reel unreadable on Modal: {e}") from e
+
+        segments = []
+
+        # --- intro: download the app-rendered layers + run the shared burn ----
+        expected_intro = bool(card_plan) and bool(intro_layer_keys)
+        intro_landed = False
+        if expected_intro:
+            layer_dir = os.path.join(temp_dir, "layers")
+            os.makedirs(layer_dir, exist_ok=True)
+            try:
+                for key in intro_layer_keys:
+                    basename = os.path.basename(key)
+                    r2.download_file(bucket, f"{user_prefix}/{key}", os.path.join(layer_dir, basename))
+                intro_path = os.path.join(temp_dir, "intro.mp4")
+                cmd = build_intro_card_cmd(card_plan, layer_dir, intro_path)
+                subprocess.run(cmd, capture_output=True, text=True, check=True)
+                segments.append(intro_path)
+                intro_landed = True
+            except subprocess.CalledProcessError as e:
+                rc = e.returncode
+                logger.error(
+                    f"[compose_serve_time_modal] intro burn failed (returncode={rc}); "
+                    f"composing without intro. {e.stderr[-400:] if e.stderr else ''}"
+                )
+                # Preserve the T7090 fix-#3 signal shape for a signal-kill. Import
+                # from the PURE card_compose_plan module (already in this image),
+                # NOT player_intro -- that would pull the render/user_db tree onto
+                # Modal, which this function deliberately never packages.
+                if isinstance(rc, int) and rc < 0:
+                    from app.services.card_compose_plan import INTRO_DEGRADED_KILLED
+                    degraded_reason = INTRO_DEGRADED_KILLED
+            except Exception as e:
+                logger.error(f"[compose_serve_time_modal] intro burn error; no intro: {e}")
+
+        segments.append(reel_path)
+
+        # --- outro: build the cached branded card (bundled fonts/branding) ----
+        expected_outro = bool(outro_enabled) and _outro_flag()
+        outro_landed = False
+        if expected_outro:
+            try:
+                outro_path = _get_or_build_card(reel_probe)
+                if outro_path:
+                    segments.append(outro_path)
+                    outro_landed = True
+                else:
+                    logger.warning("[compose_serve_time_modal] outro build returned None; no outro")
+            except Exception as e:
+                logger.error(f"[compose_serve_time_modal] outro build error; no outro: {e}")
+
+        # --- concat [intro?][reel][outro?] ------------------------------------
+        composed = os.path.join(temp_dir, "composed.mp4")
+        concat_ok = True
+        if len(segments) == 1:
+            _shutil.copyfile(reel_path, composed)
+        else:
+            concat_ok = concat_segments(segments, composed, reel_probe)
+            if not concat_ok:
+                logger.error("[compose_serve_time_modal] concat failed; degrading to reel-only")
+                _shutil.copyfile(reel_path, composed)
+
+        duration = probe_media(composed)["duration"]
+
+        # --- upload the composed result to the scratch key --------------------
+        r2.upload_file(composed, bucket, f"{user_prefix}/{out_key}")
+
+    full_fidelity = (
+        concat_ok
+        and (intro_landed or not expected_intro)
+        and (outro_landed or not expected_outro)
+    )
+    return {
+        "out_key": out_key,
+        "duration": duration,
+        "full_fidelity": full_fidelity,
+        "degraded_reason": degraded_reason,
+    }
 
 
 # Local testing entrypoint

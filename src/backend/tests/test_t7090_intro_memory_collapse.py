@@ -29,10 +29,10 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.services import player_intro as P  # noqa: E402
-from app.schemas import TextSpec  # noqa: E402
-from app.services.player_intro import _composite_static_layers  # noqa: E402
-from app.services.text_render import render_text_layer, render_text_layer_cropped  # noqa: E402
+from app.schemas import TextSpec
+from app.services import player_intro as P
+from app.services.player_intro import _composite_static_layers
+from app.services.text_render import render_text_layer, render_text_layer_cropped
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

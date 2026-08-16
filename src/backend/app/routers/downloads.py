@@ -801,10 +801,12 @@ async def download_file(download_id: int):
                     serve_path = original_path
                     intro = await asyncio.to_thread(_resolve_download_intro)
                     try:
-                        from app.services.serve_time_video import compose_serve_time
+                        # T7090 Phase 3: dispatch the compose (Modal when enabled,
+                        # local otherwise). `user_id` owns the reel/intro R2 scratch.
+                        from app.services.serve_time_video import compose_serve_time_dispatched
                         if await asyncio.to_thread(
-                            compose_serve_time, original_path, out_path,
-                            intro=intro, outro=True,
+                            compose_serve_time_dispatched, original_path, out_path,
+                            user_id=user_id, intro=intro, outro=True,
                         ):
                             serve_path = out_path
                     except Exception as exc:
@@ -850,10 +852,12 @@ async def download_file(download_id: int):
                 serve_path = str(file_path)
                 intro = await asyncio.to_thread(_resolve_download_intro)
                 try:
-                    from app.services.serve_time_video import compose_serve_time
+                    # T7090 Phase 3: dispatch the compose (Modal when enabled, local
+                    # otherwise). `user_id` owns the reel/intro R2 scratch.
+                    from app.services.serve_time_video import compose_serve_time_dispatched
                     if await asyncio.to_thread(
-                        compose_serve_time, str(file_path), out_path,
-                        intro=intro, outro=True,
+                        compose_serve_time_dispatched, str(file_path), out_path,
+                        user_id=user_id, intro=intro, outro=True,
                     ):
                         serve_path = out_path
                 except Exception as exc:
