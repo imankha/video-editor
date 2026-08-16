@@ -1,6 +1,6 @@
 # T7100: My Reel download has no visible feedback (menu closes before it's watchable)
 
-**Status:** WIP
+**Status:** STAGING — merged 2026-08-16
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-16
