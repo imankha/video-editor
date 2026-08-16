@@ -30,4 +30,8 @@ kill_timeout = 30
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 1024
+  # T7090 stopgap: bumped 1024 -> 2048 while download-time compose is moved off
+  # this box to Modal (Phase 3). The intro-card ffmpeg render peaked ~1.7GB on a
+  # 1GB box and was OOM-killed, silently dropping the intro from downloads.
+  # Revert candidate once compose no longer runs local ffmpeg here.
+  memory_mb = 2048

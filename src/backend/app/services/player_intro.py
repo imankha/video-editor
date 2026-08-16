@@ -70,6 +70,14 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_intro_cards"
 # (text_elements is no longer read) -- every existing cache entry is stale.
 _CARD_VERSION = "v3-template-typography"
 
+# T7090 (fix #3): the `degraded_reason` a caller's report out-dict receives when
+# the intro-card render subprocess was KILLED BY A SIGNAL (e.g. the kernel OOM
+# killer's SIGKILL/-9 on a memory-starved box) rather than failing ordinarily.
+# An infrastructure kill is NOT an ordinary "this card could not be built" miss:
+# it is logged at CRITICAL and surfaced distinctly so a shipped-but-degraded
+# download is never confused with a reel that simply has no intro configured.
+INTRO_DEGRADED_KILLED = "intro_card_render_killed"
+
 
 # =============================================================================
 # ffmpeg probe/run/escape helpers -- imported from the shared ffmpeg_concat
@@ -565,10 +573,19 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _get_or_build_card(card: dict, field_values: dict, image_path: str | None, info: dict) -> str | None:
+def _get_or_build_card(
+    card: dict, field_values: dict, image_path: str | None, info: dict,
+    report: dict | None = None,
+) -> str | None:
     """Return a cached card path for these inputs, building it if absent. Atomic
     rename so concurrent callers never read a partial file. Returns None on any
-    failure (never raises)."""
+    failure (never raises).
+
+    `report`: OPTIONAL out-dict. On a SIGNAL-terminated render (an OOM/SIGKILL,
+    returncode < 0) it is set `report["degraded_reason"] = INTRO_DEGRADED_KILLED`
+    and the failure is logged at CRITICAL (the always-on ops signal, fired even
+    when no report is passed) -- so an infrastructure kill is distinguishable
+    from an ordinary "no card" miss (T7090 fix #3)."""
     try:
         _CARD_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -599,7 +616,23 @@ def _get_or_build_card(card: dict, field_values: dict, image_path: str | None, i
     except Exception as e:
         stderr = getattr(e, "stderr", None)
         detail = stderr[-600:] if isinstance(stderr, str) else str(e)
-        logger.error(f"[PlayerIntro] card build failed: {detail}", exc_info=not stderr)
+        # A negative returncode means the subprocess was KILLED BY A SIGNAL. On a
+        # memory-starved box that is the kernel OOM killer (SIGKILL/-9) taking out
+        # ffmpeg mid-render -- an INFRASTRUCTURE failure, not an ordinary build
+        # miss. Surface it loudly (CRITICAL) and distinctly (report) so a 200 with
+        # a silently missing intro is never mistaken for "this reel has no intro".
+        returncode = getattr(e, "returncode", None)
+        if isinstance(returncode, int) and returncode < 0:
+            logger.critical(
+                f"[PlayerIntro] INTRO_CARD_OOM: card render subprocess killed by "
+                f"signal {-returncode} (returncode={returncode}); "
+                f"treatment={card.get('treatment')} {info['width']}x{info['height']}. "
+                f"Download will SHIP WITHOUT the intro card. {detail}"
+            )
+            if report is not None:
+                report["degraded_reason"] = INTRO_DEGRADED_KILLED
+        else:
+            logger.error(f"[PlayerIntro] card build failed: {detail}", exc_info=not stderr)
         try:
             os.remove(tmp_card)
         except OSError:
@@ -616,6 +649,7 @@ def build_intro_card(
     image_path: str | None,
     info: dict,
     out_path: str,
+    report: dict | None = None,
 ) -> bool:
     """Render `card` into an animated MP4 at `out_path`, matching `info` (the probe
     of the target reel). Returns True on success, False if it was skipped or failed
@@ -627,7 +661,7 @@ def build_intro_card(
     profile facts + effective focal, and the downloaded image (cut-out if present).
     """
     try:
-        card_path = _get_or_build_card(card, field_values, image_path, info)
+        card_path = _get_or_build_card(card, field_values, image_path, info, report=report)
         if card_path is None:
             return False
         import shutil

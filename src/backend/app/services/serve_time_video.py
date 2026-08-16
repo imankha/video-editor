@@ -27,13 +27,19 @@ from app.services import ffmpeg_concat
 logger = logging.getLogger(__name__)
 
 
-def _try_build_intro_card(intro, info: dict, tmp_intro_path: str) -> str | None:
+def _try_build_intro_card(
+    intro, info: dict, tmp_intro_path: str, report: dict | None = None,
+) -> str | None:
     """Non-fatal: build the intro card MP4 to `tmp_intro_path` from `intro`
     (an `IntroSpec`), matched to the reel's own probe `info`. Returns the
-    path on success, None on ANY failure (never raises)."""
+    path on success, None on ANY failure (never raises).
+
+    `report`: OPTIONAL out-dict threaded to `build_intro_card` so an OOM/SIGKILL
+    of the render surfaces `degraded_reason` distinctly (T7090 fix #3)."""
     try:
         from app.services.player_intro import build_intro_card
-        if build_intro_card(intro.card, intro.field_values, intro.image_path, info, tmp_intro_path):
+        if build_intro_card(intro.card, intro.field_values, intro.image_path,
+                            info, tmp_intro_path, report=report):
             return tmp_intro_path
         logger.warning("[serve_time_video] intro card build returned False; serving without intro")
     except Exception as e:
@@ -130,8 +136,10 @@ def compose_serve_time(
 
     expected_intro = intro is not None
     intro_path = None
+    intro_report: dict = {}
     if expected_intro:
-        intro_path = _try_build_intro_card(intro, probe, os.path.join(tmp_dir, "_compose_intro.mp4"))
+        intro_path = _try_build_intro_card(
+            intro, probe, os.path.join(tmp_dir, "_compose_intro.mp4"), report=intro_report)
         if intro_path:
             segments.append(intro_path)
 
@@ -163,4 +171,9 @@ def compose_serve_time(
             and (intro_path is not None or not expected_intro)
             and (outro_path is not None or not expected_outro)
         )
+        # T7090: surface an infra-level intro kill (OOM/SIGKILL) distinctly, so a
+        # caller (e.g. the T4947 collection cache) can tell a shipped-but-degraded
+        # artifact apart from a transient miss. `full_fidelity` is already False.
+        if intro_report.get("degraded_reason"):
+            report["degraded_reason"] = intro_report["degraded_reason"]
     return True
