@@ -69,6 +69,7 @@ export function DownloadsPanel({
     downloadFile,
     downloadCollection,
     downloadingId,
+    downloadProgress,
     renameDownload,
     setIntroCard,
     pruneDanglingIntroCards,
@@ -464,11 +465,18 @@ export function DownloadsPanel({
     }
   };
 
-  const handleDownload = (e, download) => {
+  // T7100: downloadFile now re-throws on failure (previously swallowed into an
+  // unread `error` state -- downloads failed 100% silently). Surface it the
+  // same way onDownloadCollection does.
+  const handleDownload = async (e, download) => {
     e.stopPropagation();
-    console.log('[DownloadsPanel] handleDownload:', { id: download.id, project_name: download.project_name });
     // Filename is controlled by backend's Content-Disposition header (single source of truth)
-    downloadFile(download.id);
+    try {
+      await downloadFile(download.id);
+    } catch (err) {
+      console.error('[DownloadsPanel] reel download failed:', err);
+      toast.error('Could not download reel');
+    }
   };
 
   const handlePlay = async (e, download) => {
@@ -676,6 +684,7 @@ export function DownloadsPanel({
       onCopyLink={copyReelLink}
       onDownload={handleDownload}
       downloadingId={downloadingId}
+      downloadProgress={downloadProgress}
       onBeforeAfter={handleBeforeAfter}
       exportingBeforeAfter={exportingBeforeAfter}
       showBeforeAfter={!import.meta.env.PROD}
@@ -831,7 +840,10 @@ export function DownloadsPanel({
           title={storyPlayer.title}
           onReelChange={handleReelWatched}
           onClose={closeStoryPlayer}
-          onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId) : undefined}
+          onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId).catch((err) => {
+            console.error('[DownloadsPanel] story-player download failed:', err);
+            toast.error('Could not download reel');
+          }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={onOpenProject ? openReelAsProject : undefined}
           reEditLoadingId={restoringId}

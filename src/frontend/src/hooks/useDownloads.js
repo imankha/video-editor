@@ -28,6 +28,9 @@ export function useDownloads(isOpen = false) {
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState(null); // null | SourceType value
   const [downloadingId, setDownloadingId] = useState(null); // ID of currently downloading file
+  // T7100: {receivedBytes, totalBytes} for the in-flight downloadFile call,
+  // paired 1:1 with downloadingId (null when nothing is downloading).
+  const [downloadProgress, setDownloadProgress] = useState(null);
 
   // AbortController ref for cancelling requests
   const abortControllerRef = useRef(null);
@@ -162,7 +165,17 @@ export function useDownloads(isOpen = false) {
 
   /**
    * Trigger file download in browser
-   * Uses backend proxy which streams from R2 to avoid CORS issues
+   * Uses backend proxy which streams from R2 to avoid CORS issues.
+   *
+   * T7100: `GET /downloads/{id}/file` composes the whole file server-side
+   * (R2 fetch + ffmpeg concat + metadata stamp) before the first byte, and
+   * sends no Content-Length -- the same response shape as downloadCollection
+   * (T7050), so it gets the same treatment: stream via
+   * response.body.getReader() and report {receivedBytes, totalBytes} as
+   * downloadProgress (paired 1:1 with downloadingId) so the caller can render
+   * an indeterminate spinner + live byte readout. Failures now RE-THROW
+   * (previously swallowed into an `error` state nothing read, so download
+   * failures were 100% silent) -- every caller must catch.
    * @param {number} downloadId - Download ID
    */
   const downloadFile = useCallback(async (downloadId) => {
@@ -170,6 +183,7 @@ export function useDownloads(isOpen = false) {
     const url = getDownloadUrl(downloadId);
 
     setDownloadingId(downloadId);
+    setDownloadProgress({ receivedBytes: 0, totalBytes: null });
 
     try {
       const response = await apiFetch(url);
@@ -178,7 +192,26 @@ export function useDownloads(isOpen = false) {
         throw new Error(`Download failed: ${response.status} ${response.statusText}`);
       }
 
-      const blob = await response.blob();
+      const contentLength = response.headers.get('Content-Length');
+      const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
+
+      let blob;
+      if (typeof response.body?.getReader === 'function') {
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedBytes = 0;
+        setDownloadProgress({ receivedBytes, totalBytes });
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedBytes += value.length;
+          setDownloadProgress({ receivedBytes, totalBytes });
+        }
+        blob = new Blob(chunks, { type: response.headers.get('Content-Type') || 'video/mp4' });
+      } else {
+        blob = await response.blob();
+      }
 
       // Get filename from Content-Disposition header or generate from metadata
       const contentDisposition = response.headers.get('Content-Disposition');
@@ -203,9 +236,10 @@ export function useDownloads(isOpen = false) {
       URL.revokeObjectURL(objectUrl);
     } catch (err) {
       console.error('[useDownloads] downloadFile error:', err);
-      setError(`Download failed: ${err.message}`);
+      throw err;
     } finally {
       setDownloadingId(null);
+      setDownloadProgress(null);
     }
   }, [downloads, getDownloadUrl]);
 
@@ -525,6 +559,7 @@ export function useDownloads(isOpen = false) {
     error,
     filter,
     downloadingId,
+    downloadProgress,
     hasDownloads: downloads.length > 0,
 
     // Computed

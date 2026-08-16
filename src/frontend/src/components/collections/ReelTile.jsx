@@ -13,6 +13,15 @@ import { TilePreviewVideo } from './TilePreviewVideo';
 import { IntroCardPicker } from '../introcards/IntroCardPicker';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 
+// T7100: compact byte readout for the in-flight download scrim row (mirrors
+// CollectionHeader's formatBytes, minus the GB rung a single reel never needs).
+function formatBytesShort(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /**
  * ReelTile - a PUBLISHED reel as a poster tile (T5673).
  *
@@ -67,6 +76,7 @@ export function ReelTile({
   onCopyLink,
   onDownload,
   downloadingId,
+  downloadProgress,
   onBeforeAfter,
   exportingBeforeAfter,
   showBeforeAfter,
@@ -107,6 +117,15 @@ export function ReelTile({
   // opening releases the inline stream (EPIC invariant).
   const previewStreamUrl = `${API_BASE}/api/downloads/${download.id}/stream`;
   const preview = useTilePreview({ streamUrl: previewStreamUrl });
+
+  // T7100: this reel's own download in flight. Drives both the scrim status
+  // row and the kebab icon swap -- both survive the menu closing (the
+  // download itself is fire-and-forget from the menu's perspective; this
+  // state lives on the panel via downloadingId, not the menu's mount).
+  const isDownloading = downloadingId === download.id;
+  const downloadStatusText = downloadProgress?.receivedBytes
+    ? `Downloading… ${formatBytesShort(downloadProgress.receivedBytes)}`
+    : 'Preparing…';
 
   const isLandscape = download.aspect_ratio === RATIO.LANDSCAPE;
   // Landscape tiles are wider + shorter; portrait match DraftTile's footprint.
@@ -282,7 +301,12 @@ export function ReelTile({
             </button>
           </div>
         )}
-        {metaLine && (
+        {isDownloading ? (
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-cyan-300">
+            <Loader size={11} className="animate-spin shrink-0" />
+            <span className="truncate">{downloadStatusText}</span>
+          </div>
+        ) : metaLine && (
           <div className="mt-0.5 text-[11px] text-gray-300 truncate">{metaLine}</div>
         )}
       </div>
@@ -315,12 +339,14 @@ export function ReelTile({
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         className={`absolute top-1.5 right-1.5 z-40 ${actionBtnClass} transition-opacity ${
-          isCoarsePointer
+          isCoarsePointer || isDownloading
             ? 'opacity-100'
             : 'opacity-0 group-hover/tile:opacity-100 focus:opacity-100'
         } ${menuOpen ? 'opacity-100' : ''}`}
       >
-        <MoreVertical size={16} />
+        {isDownloading
+          ? <Loader size={16} className="text-cyan-300 animate-spin" />
+          : <MoreVertical size={16} />}
       </button>
       {menuOpen && isCoarsePointer ? (
           <div ref={menuRef} className="fixed inset-0 z-50 flex flex-col">
