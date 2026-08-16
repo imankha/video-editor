@@ -1,6 +1,6 @@
 # T7090: Intro cards silently drop on OOM — move download-time compose to Modal
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-08-16
