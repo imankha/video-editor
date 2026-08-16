@@ -1,8 +1,8 @@
 # Collection Download (Stitched MP4)
 
-**Status:** IN PROGRESS — T4945 shipped 2026-08-14 (staging); Decision 4 resolved 2026-08-14
-(free), unblocking T4946
+**Status:** COMPLETE — deployed to production 2026-08-16
 **Started:** 2026-08-14 (unparked by explicit user decision, ahead of the T5140 reshoot sequencing)
+**Completed:** 2026-08-16
 
 ## Goal
 
@@ -84,19 +84,19 @@ mechanism is reachable at all) next; caching last, since it needs the credit mod
 
 | ID | Task | Status |
 |----|------|--------|
-| T4945 | [Core stitch + owner download](T4945-core-stitch-owner-download.md) | STAGING |
-| T4946 | [Access control (permission + sign-in only, free)](T4946-access-control-and-credits.md) | TODO — unblocked, ready to start |
-| T4947 | [Cache stitched downloads](T4947-cache-stitched-downloads.md) | TODO — depends on T4946 |
+| T4945 | [Core stitch + owner download](T4945-core-stitch-owner-download.md) | DONE |
+| T4946 | [Access control (permission + sign-in only, free)](T4946-access-control-and-credits.md) | DONE |
+| T4947 | [Cache stitched downloads](T4947-cache-stitched-downloads.md) | DONE |
 
 ## Completion Criteria
 
-- [ ] A collection can be downloaded as one MP4 whose segment order matches playback order
-- [ ] The file ends with exactly one branded outro; flag off → no outro; one intro card at the
+- [x] A collection can be downloaded as one MP4 whose segment order matches playback order
+- [x] The file ends with exactly one branded outro; flag off → no outro; one intro card at the
       front when the collection has one, never per member
-- [ ] Mixed-resolution member reels produce a valid (non-corrupt) stitched file
-- [ ] Stitch/outro/cache failure never corrupts or loses a member reel
-- [ ] Compute location honors `MODAL_ENABLED` — local ffmpeg in dev, Modal-routed in prod
-- [ ] Access is gated on collection permission + sign-in (free — no credit check, Decision 4)
-- [ ] Repeat downloads of an unchanged collection serve from cache (no charge to skip — free)
-- [ ] Tests pass; knowledge doc (`export-pipeline.md`) updated with the new entry point + cache
+- [x] Mixed-resolution member reels produce a valid (non-corrupt) stitched file
+- [x] Stitch/outro/cache failure never corrupts or loses a member reel
+- [x] Compute location honors `MODAL_ENABLED` — local ffmpeg in dev, Modal-routed in prod
+- [x] Access is gated on collection permission + sign-in (free — no credit check, Decision 4)
+- [x] Repeat downloads of an unchanged collection serve from cache (no charge to skip — free)
+- [x] Tests pass; knowledge doc (`export-pipeline.md`) updated with the new entry point + cache
       key pattern

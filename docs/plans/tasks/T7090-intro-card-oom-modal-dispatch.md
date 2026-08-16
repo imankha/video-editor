@@ -1,11 +1,8 @@
 # T7090: Intro cards silently drop on OOM — move download-time compose to Modal
 
-**Status:** STAGING — merged 2026-08-16. `compose_serve_time_modal` added to
-`app/modal_functions/video_processing.py` but NOT YET DEPLOYED — requires
-`modal deploy app/modal_functions/video_processing.py` before Modal dispatch is live; until
-then `MODAL_ENABLED` prod path gracefully falls back to local compose (Phase 1+2 fixes still
-apply). Live OOM-avoidance/latency/cost on Modal is an explicit staging-verification gap
-(Modal is off by default in dev containers) — same posture as T6360's platform sweep.
+**Status:** DONE — deployed 2026-08-16 prod. `compose_serve_time_modal` deployed to Modal same
+day; verified working on staging (intro cards downloading correctly via Modal dispatch) before
+promotion.
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-08-16

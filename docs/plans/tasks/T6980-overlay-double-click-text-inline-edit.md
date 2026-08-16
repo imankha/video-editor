@@ -1,6 +1,6 @@
 # T6980: Overlay — double-click/double-tap a text element edits it in place (+ Text tab sync)
 
-**Status:** TODO
+**Status:** DONE — deployed 2026-08-16 prod.
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-08-13

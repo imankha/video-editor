@@ -1,6 +1,6 @@
 # T6890: Rename icons should sit next to the name they rename (standardize the pattern)
 
-**Status:** STAGING
+**Status:** DONE — deployed 2026-08-16 prod.
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-12

@@ -1,6 +1,6 @@
 # T7040: Collection download fails with "TypeError: Failed to fetch"
 
-**Status:** STAGING
+**Status:** DONE — deployed 2026-08-16 prod.
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-08-14

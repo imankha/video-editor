@@ -1,6 +1,6 @@
 # T6820: Hover preview for Not Started drafts (source clip window)
 
-**Status:** STAGING
+**Status:** DONE — deployed 2026-08-16 prod.
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-11

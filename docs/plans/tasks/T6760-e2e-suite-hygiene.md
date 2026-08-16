@@ -1,6 +1,6 @@
 # T6760: E2E suite hygiene — stop rediscovering the same rot every sweep
 
-**Status:** STAGING — merged 2026-08-15
+**Status:** DONE — deployed 2026-08-16 prod.
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-11

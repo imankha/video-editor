@@ -1,6 +1,6 @@
 # T7050: Collection download has no in-app progress feedback
 
-**Status:** STAGING
+**Status:** DONE — deployed 2026-08-16 prod.
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-15
