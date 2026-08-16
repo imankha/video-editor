@@ -224,3 +224,28 @@ def render_text_layer(spec: TextSpec, frame_w: int, frame_h: int) -> Image.Image
 
     _cache_put(key, layer)
     return layer
+
+
+def render_text_layer_cropped(
+    spec: TextSpec, frame_w: int, frame_h: int
+) -> tuple[Image.Image, tuple[int, int]]:
+    """T7090 fix #2: the SAME rasterisation as `render_text_layer`, but CROPPED to
+    the drawn text's non-transparent bounding box. Returns `(cropped_layer,
+    (x0, y0))` where `(x0, y0)` is the crop's top-left in full-frame coordinates.
+
+    A card's text occupies a small fraction of the frame, yet handing ffmpeg one
+    full-frame looped RGBA input per text element cost ~150MB peak RSS each and
+    OOM-killed the intro-card render on a 1GB box. A caller composites the crop at
+    an explicit `overlay=x=x0:y=y0` offset instead of a full-frame `x=0:y=0`; that
+    is pixel-identical to overlaying the full-frame layer (the crop is a literal
+    sub-image of it) but ~3x cheaper in ffmpeg decode memory (~152MB -> ~47MB).
+
+    `getbbox()` includes the blurred-shadow + stroke extents automatically (they
+    are non-transparent), so the crop is the true union box. An all-transparent
+    layer (no drawable glyphs) returns a 1x1 transparent tile at (0, 0)."""
+    layer = render_text_layer(spec, frame_w, frame_h)
+    bbox = layer.getbbox()
+    if bbox is None:
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0)), (0, 0)
+    x0, y0, _x1, _y1 = bbox
+    return layer.crop(bbox), (x0, y0)

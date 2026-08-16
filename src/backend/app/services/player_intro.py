@@ -54,7 +54,7 @@ from app.services.ffmpeg_concat import run as _run
 from app.services.intro_card_geometry import MOTION, STAGGER_ORDER, aspect_key, band_kind, geometry_for, treatment_for
 from app.services.intro_card_geometry import layout as compute_layout
 from app.services.intro_cards import derive_composition
-from app.services.text_render import render_text_layer
+from app.services.text_render import render_text_layer_cropped
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_intro_cards"
 # hash, which changes when the user edits the card.
 # T6640: template-owned typography + measured layout replaced per-slot styling
 # (text_elements is no longer read) -- every existing cache entry is stale.
-_CARD_VERSION = "v3-template-typography"
+_CARD_VERSION = "v4-collapsed-static-cropped-text"
 
 # T7090 (fix #3): the `degraded_reason` a caller's report out-dict receives when
 # the intro-card render subprocess was KILLED BY A SIGNAL (e.g. the kernel OOM
@@ -388,6 +388,34 @@ def _content_hash(
 # =============================================================================
 # Card build (the one filter_complex, encoded once)
 # =============================================================================
+def _composite_static_layers(
+    layers: list[tuple[Image.Image, int, int]], w: int, h: int
+) -> Image.Image | None:
+    """T7090 fix #2: alpha-composite the STATIC (non-animated) overlay layers --
+    treatment tint/vignette/seam over the photo rect, plus the full-frame
+    scrim/band -- into ONE full-frame RGBA canvas, in the SAME bottom-to-top order
+    they were previously overlaid one ffmpeg input at a time. Source-over
+    compositing is associative, so one canvas overlaid over the photo is
+    equivalent to N sequential overlays -- but hands ffmpeg ONE looped input
+    instead of N, and each avoided full-frame looped input saved ~150MB peak RSS
+    (the OOM driver on a 1GB box). Layers are clipped to the frame exactly as
+    ffmpeg's `overlay` clips at the edges. Returns None when there are no static
+    layers, so no extra input is added."""
+    if not layers:
+        return None
+    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    for img, x, y in layers:
+        rgba = img.convert("RGBA")
+        lw, lh = rgba.size
+        cx0, cy0 = max(x, 0), max(y, 0)
+        cx1, cy1 = min(x + lw, w), min(y + lh, h)
+        if cx0 >= cx1 or cy0 >= cy1:
+            continue
+        sub = rgba.crop((cx0 - x, cy0 - y, cx1 - x, cy1 - y))
+        canvas.alpha_composite(sub, dest=(cx0, cy0))
+    return canvas
+
+
 def _build_card(card: dict, field_values: dict, image_path: str | None, info: dict, card_path: str) -> None:
     """Render the animated card to `card_path`, matching the reel's stream params
     exactly. All motion lives in ONE filter_complex so the card is encoded once
@@ -452,66 +480,51 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
             last = "[withphoto]"
             idx += 1
 
-            # --- Treatment photo GRADE (T6580 item 4): tint then vignette, over
-            # the photo rect (px,py, rw x rh) so they clip to the photo exactly as
-            # the preview does. Each is a static PNG overlaid on every frame. -----
+            # --- Static overlay stack (T7090 fix #2) -----------------------------
+            # Treatment tint/vignette + the seam fade clip to the photo rect
+            # (px,py, rw x rh) exactly as the preview does; the treatment BAND (or,
+            # where there is no band, the bottom/dim SCRIM) grounds the text
+            # full-frame. Band and scrim are mutually exclusive -- the band
+            # replaces the scrim rather than stacking. ALL of these are STATIC
+            # (identical every frame), so they are collapsed into ONE
+            # alpha-composited full-frame input instead of one looped full-frame
+            # ffmpeg input each (each of those cost ~150MB peak RSS -> the OOM
+            # driver). Bottom-to-top order preserved: tint, vignette, seam, scrim,
+            # band. Colours/geometry stay the browser preview's (seamFadeCss etc.).
             photo_mood = treatment.get("photoMood") or {}
-            for name, img in (
-                ("tint", _render_tint(photo_mood.get("tint"), rw, rh)),
-                ("vignette", _render_vignette(photo_mood.get("vignette"), rw, rh)),
-            ):
-                if img is None:
-                    continue
-                png = tmp_dir / f"{name}.png"
-                img.save(png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[{name}]")
-                parts.append(f"{last}[{name}]overlay=x={px}:y={py}[with{name}]")
-                last = f"[with{name}]"
-                idx += 1
+            static_layers: list[tuple[Image.Image, int, int]] = []
+            tint_img = _render_tint(photo_mood.get("tint"), rw, rh)
+            if tint_img is not None:
+                static_layers.append((tint_img, px, py))
+            vignette_img = _render_vignette(photo_mood.get("vignette"), rw, rh)
+            if vignette_img is not None:
+                static_layers.append((vignette_img, px, py))
 
-            # --- Seam fade (T6640, task §C "hard 50/50 seam"): recruiting's
-            # inset photo fades to the treatment's own background colour at its
-            # inner edge, so the photo bleeds into the panel instead of a hard
-            # cut. Static PNG, same seamSide/seamFeather/seamColor the browser
-            # preview's CSS gradient reads (introCardVisual.seamFadeCss). -------
             seam_side = geo["reflow"].get("seamSide", "none")
             seam_feather = geo["reflow"].get("seamFeather", 0.0)
             seam_img = _render_seam_fade(rect, seam_side, seam_feather, treatment["seamColor"], w, h)
             if seam_img is not None:
-                seam_png = tmp_dir / "seam.png"
-                seam_img.save(seam_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", seam_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[seam]")
-                parts.append(f"{last}[seam]overlay=x={px}:y={py}[withseam]")
-                last = "[withseam]"
-                idx += 1
+                static_layers.append((seam_img, px, py))
 
-            # --- Text ground: a treatment BAND (T6580 item 4) grounds the text in
-            # the lower-third looks; where there is no band (photo-forward), the
-            # bottom scrim stays. They are mutually exclusive, so the band replaces
-            # the scrim rather than stacking. -----------------------------------
             band_spec = treatment.get("band") if band_kind(composition) == "bottom" else None
             scrim_kind = _scrim_kind(composition, True)
             if band_spec and scrim_kind == "bottom":
                 scrim_kind = "none"
             scrim = _render_scrim(scrim_kind, w, h)
             if scrim is not None:
-                scrim_png = tmp_dir / "scrim.png"
-                scrim.save(scrim_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", scrim_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[scrim]")
-                parts.append(f"{last}[scrim]overlay=x=0:y=0[withscrim]")
-                last = "[withscrim]"
-                idx += 1
+                static_layers.append((scrim, 0, 0))
             band_img = _render_band(band_spec, w, h)
             if band_img is not None:
-                band_png = tmp_dir / "band.png"
-                band_img.save(band_png)
-                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", band_png.as_posix()]
-                parts.append(f"[{idx}:v]format=rgba[band]")
-                parts.append(f"{last}[band]overlay=x=0:y=0[withband]")
-                last = "[withband]"
+                static_layers.append((band_img, 0, 0))
+
+            static_overlay = _composite_static_layers(static_layers, w, h)
+            if static_overlay is not None:
+                static_png = tmp_dir / "static_overlay.png"
+                static_overlay.save(static_png)
+                inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", static_png.as_posix()]
+                parts.append(f"[{idx}:v]format=rgba[statics]")
+                parts.append(f"{last}[statics]overlay=x=0:y=0[withstatics]")
+                last = "[withstatics]"
                 idx += 1
 
         # --- Text PNGs: staggered fade-up (alpha ramp on the PNG + a small rise) -
@@ -520,18 +533,24 @@ def _build_card(card: dict, field_values: dict, image_path: str | None, info: di
         fade_d = MOTION["textFadeD"]
         rise_px = round(MOTION["textRiseFrac"] * h)
         for k, el in enumerate(elements):
-            layer = render_text_layer(el["spec"], w, h)  # full-frame RGBA, glyphs at the slot
+            # T7090 fix #2: crop each text layer to its glyph bbox and overlay at
+            # the crop's own (lx, ly) offset instead of a full-frame layer at x=0.
+            # Pixel-identical placement (the crop is a literal sub-image of the
+            # full-frame render), but ffmpeg holds a small looped input (~47MB)
+            # instead of a full-frame one (~152MB) per text element.
+            layer, (lx, ly) = render_text_layer_cropped(el["spec"], w, h)
             el_png = tmp_dir / f"el_{k}.png"
             layer.save(el_png)
             inputs += ["-loop", "1", "-framerate", fps_str, "-t", str(duration), "-i", el_png.as_posix()]
             st = first_st + el["stagger"] * step
-            # Rise: start `rise_px` lower, settle to 0 over the fade (fade-UP).
+            # Rise (fade-UP) unchanged, just re-based onto the crop's y origin
+            # (ly): start `rise_px` below the rest position, settle back to ly.
             yexpr = (
-                f"if(lt(t,{st}),{rise_px},"
-                f"if(lt(t,{st + fade_d}),{rise_px}*(1-(t-{st})/{fade_d}),0))"
+                f"if(lt(t,{st}),{ly + rise_px},"
+                f"if(lt(t,{st + fade_d}),{ly}+{rise_px}*(1-(t-{st})/{fade_d}),{ly}))"
             )
             parts.append(f"[{idx}:v]format=rgba,fade=t=in:st={st}:d={fade_d}:alpha=1[el{k}]")
-            parts.append(f"{last}[el{k}]overlay=x=0:y='{yexpr}'[t{k}]")
+            parts.append(f"{last}[el{k}]overlay=x={lx}:y='{yexpr}'[t{k}]")
             last = f"[t{k}]"
             idx += 1
 
