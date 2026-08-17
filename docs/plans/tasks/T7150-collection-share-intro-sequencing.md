@@ -1,6 +1,6 @@
 # T7150: Collection public-share link freezes "no intro" before the intro picker is used
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-08-17
