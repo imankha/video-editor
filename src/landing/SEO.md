@@ -188,6 +188,13 @@ duplicate titles or descriptions across pages, canonical, OG + Twitter tags, exa
 `<h1>`, `<main>` and `<nav>`, valid JSON-LD, FAQ answers actually being visible in the
 page text, and the banned rating/review markup. It exits non-zero on failure.
 
+Two more (T6370): **no sitemap URL may serve `noindex`** (a sitemap entry actively asks
+Google to index that URL -- a noindex page listed there contradicts itself), and **no
+`<nav>` link may point at a noindex page** (the exact waste T6370 found: `/guides` was
+noindex while empty, but still linked from the header nav on every page, so every crawl
+of every page found a dead-end link). Both are cross-page checks, driven off the same
+`noindex` computed per page -- there is nowhere else for this data to drift from.
+
 **The CI-identical build check still applies** (see the `deploy-landing` skill): the
 landing shares editor files via the `@editor` alias, and `resolve.dedupe` in
 `astro.config.ts` is what makes them resolve in CI where `src/frontend/node_modules` does
@@ -200,16 +207,41 @@ not exist. Removing that line breaks the deploy but not your local build.
 Tracked separately — Search Console verification, sitemap submission, social profiles, and
 directory listings. See the handoff checklist in the task write-up.
 
+## GSC Page Indexing report: by-design buckets (T6370, 2026-08-02)
+
+When a "Page indexing" email arrives, triage against this table first — it's the record of
+which buckets are *expected* on this site and why, so re-reading it takes two minutes
+instead of re-running the whole audit. Full evidence (curl output, live checks) is in
+[T6370's Findings section](../../docs/plans/tasks/T6370-seo-indexing-gsc-cleanup.md#findings-verified-live-2026-08-02-curl-against-production)
+— this table is a pointer to that record, not a replacement for it.
+
+| GSC reason | Verdict | Why |
+|---|---|---|
+| Page with redirect | By design | `www` → apex (301), `/index.html` → `/` (307), `/soccer/` → `/soccer` (307, `trailingSlash:'never'`). GSC reports the redirecting URL as "not indexed" because the target is the indexed one. |
+| Alternate page with proper canonical tag | By design (probable) | The sitemap emits the homepage as `https://reelballers.com` while the canonical is `https://reelballers.com/` — same resource (RFC 3986), cosmetic only. Confirm each reported URL resolves to a canonical we intend before dismissing. |
+| Excluded by 'noindex' tag | By design, now smaller | `/guides` was noindex while `PUBLISHED_GUIDES` was empty. Fixed 2026-08-17 (T6370 Part C) by publishing the first guide — `/guides` is indexable again. Any *future* noindex page here should also be by design (check `astro.config.ts`'s sitemap filter uses the same source data). |
+| Blocked due to unauthorized request (401) | **Not yet triaged** | Needs the GSC export to identify the exact URL (Part A, out of scope for T6370's implementation pass). Could not be reproduced externally as of 2026-08-02 (every probed `app.reelballers.com` path returned 200). Most likely candidate given the Part B robots.txt work: an `/api/*` route on the app host, which the app-host robots.txt (`Disallow: /` + `Allow: /shared/`) now also keeps out of the crawl anyway. |
+| Discovered / Crawled - currently not indexed | Partially addressed | This was the bulk of the 40 URLs (34) and a page-authority/value problem, not a crawl-blocking bug — see T6370 Part C (sport-page content, first guide, internal linking). Re-check indexed-page count in GSC ~4 weeks after this deploys; that outcome still needs recording in the task file. |
+
 ## Known gaps
 
-- `/guides` is `noindex` until the first guide is published (`data/guides.ts` →
-  `published: true`). It is excluded from the sitemap while empty.
+- `/guides` carries `noindex` only while `PUBLISHED_GUIDES` is empty; it flips to
+  indexable automatically once a guide is published (`data/guides.ts` → `published: true`
+  + `src/content/guides/{slug}.mdx`). The first guide,
+  `filming-youth-sports-from-the-sideline`, published 2026-08-17 (T6370 Part C) --
+  `/guides/[slug].astro` is the route, metadata lives in `data/guides.ts`, the body is
+  the sibling MDX file. Four more guides are outlined in `data/guides.ts` and awaiting
+  approval before their bodies get written.
 - `/about` has no founder story yet; the section is deliberately absent rather than
   placeholder text.
 - Pricing is stated only as "Free to start". If paid tiers become public, update
   `FACTS.pricingSummary` and `softwareApplication()`'s `offers` — those two places only.
-- The app at `app.reelballers.com` still serves `/*` as a 200 SPA shell, so unknown app
-  URLs are soft-404s and it has no `robots.txt`. That is a separate fix in `src/frontend`.
+- ~~The app at `app.reelballers.com` still serves `/*` as a 200 SPA shell...~~ Fixed
+  2026-08-17 (T6370 Part B): `src/frontend/public/robots.txt` now disallows the whole app
+  host except `/shared/` (public share links stay crawlable for link-preview unfurls),
+  and the app shell carries `noindex,follow`. See
+  `docs/plans/tasks/T6370-design.md` for the scope reasoning -- a blanket `Disallow: /`
+  would have broken Slack/X/LinkedIn unfurls of `/shared/*`, which lives on that host.
 
 ## IndexNow (Bing / Yandex auto-submit)
 

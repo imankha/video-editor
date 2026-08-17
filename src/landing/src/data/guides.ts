@@ -1,15 +1,15 @@
 /**
  * Guides (the blog).
  *
- * Per the owner's instruction, the first five guides are OUTLINED here and
- * awaiting approval before the bodies get written. Only guides with
+ * Five guides are OUTLINED here; only guides with a written body and
  * `published: true` generate a page, appear in /guides, enter the sitemap, or
  * get listed in llms.txt -- so an unapproved outline can never leak as a thin,
- * half-finished page.
+ * half-finished page. The remaining outlines await approval before their
+ * bodies get written.
  *
  * To publish an approved guide:
  *   1. Create src/content/guides/{slug}.mdx with the body.
- *   2. Flip `published` to true here and set `dateModified`.
+ *   2. Flip `published` to true here and set `datePublished`/`dateModified`.
  * See SEO.md.
  */
 
@@ -57,9 +57,9 @@ export const GUIDES: Guide[] = [
       'Common mistakes that make footage unusable',
       'What to do with the footage afterwards',
     ],
-    datePublished: '',
-    dateModified: '',
-    published: false,
+    datePublished: '2026-08-17',
+    dateModified: '2026-08-17',
+    published: true,
   },
   {
     slug: 'how-long-should-a-recruiting-video-be',
