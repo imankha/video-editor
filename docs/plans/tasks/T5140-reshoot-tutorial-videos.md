@@ -339,13 +339,13 @@ added/removed talk line; keep `mark(N,'word')` words in sync with re-worded sent
 ## Acceptance
 
 Phase A (tutorial project):
-- [ ] All 4 roughcuts rebuilt against the current UI; contact-sheet audit passes per sentence
-- [ ] Narration pace comfortable at **1x** (tts rate baked in), verified by a human listen
-- [ ] `.vtt` + `.chapters.vtt` regenerated + uploaded; `verify_assets.py` green (all 12 URLs)
-- [ ] Accounts restored (no-footprint teardown + preflight re-run clean); app-repo e2e files reverted, no app-repo commits
+- [x] All 4 roughcuts rebuilt against the current UI; contact-sheet audit passes per sentence
+- [x] Narration pace comfortable at **1x** (tts rate baked in), verified by a human listen
+- [x] `.vtt` + `.chapters.vtt` regenerated + uploaded; `verify_assets.py` green (all 12 URLs) — re-verified 2026-08-17
+- [x] Accounts restored (no-footprint teardown + preflight re-run clean); app-repo e2e files reverted, no app-repo commits
 
 Phase B (this repo, after Phase A is fully green):
-- [ ] `DEFAULT_RATE = 1` in TutorialVideoModal.jsx AND landing TutorialModal.tsx, committed as `T5140:`
+- [x] `DEFAULT_RATE = 1` in TutorialVideoModal.jsx AND landing TutorialModal.tsx, committed as `T5140:`
 
 ## References
 
