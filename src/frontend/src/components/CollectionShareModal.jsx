@@ -77,20 +77,34 @@ export function CollectionShareModal({ definition, title, onClose }) {
     return resp.json();
   };
 
-  const handleTogglePublic = async () => {
-    if (isPublic) { setIsPublic(false); return; }
-    setIsPublic(true);
-    if (publicLink) return;
+  // T7150: flipping the switch is now a pure local toggle -- it no longer
+  // creates a share. The link is created only by an explicit "Get Link" click
+  // (createPublicLink), so it freezes whatever intro the user has selected by
+  // then rather than the null default before they reach the picker.
+  const handleTogglePublic = () => {
+    setIsPublic((prev) => !prev);
+  };
+
+  const createPublicLink = async () => {
+    setError(null);
     setCreatingPublicLink(true);
     try {
       const data = await createShare([], true);
       if (data.shares?.length) setPublicLink(collectionLink(data.shares[0].share_token));
     } catch (e) {
+      // Leave isPublic true so the "Get Link" button stays available for retry.
       setError(e.message);
-      setIsPublic(false);
     } finally {
       setCreatingPublicLink(false);
     }
+  };
+
+  // T7150: changing the intro after a link exists makes the displayed link no
+  // longer match the on-screen selection -- clear it so "Get Link" returns and
+  // the user regenerates a fresh (backend-deduped) share.
+  const handleIntroSelect = (id) => {
+    setIntroCardId(id);
+    if (publicLink) setPublicLink(null);
   };
 
   const handleCopy = async () => {
@@ -159,6 +173,19 @@ export function CollectionShareModal({ definition, title, onClose }) {
           </p>
 
           <div>
+            <label className="block text-sm text-gray-400 mb-1">Intro</label>
+            <IntroCardCarousel
+              cards={introCards}
+              profile={currentProfile}
+              selectedId={introCardId}
+              hasConsent={!!currentProfile?.introConsentAt}
+              onSelect={handleIntroSelect}
+              onRequestConsent={handleRequestIntroConsent}
+              frozenNote="Frozen when you share -- changing this reel's intro later won't change this link."
+            />
+          </div>
+
+          <div>
             <label className="block text-sm text-gray-400 mb-1">Add people</label>
             <UserPicker
               emails={emails}
@@ -200,23 +227,15 @@ export function CollectionShareModal({ definition, title, onClose }) {
                     </button>
                   </>
                 ) : (
-                  <span className="text-sm text-gray-500">Creating link...</span>
+                  <button
+                    onClick={createPublicLink}
+                    className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                  >
+                    Get Link
+                  </button>
                 )}
               </div>
             )}
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Intro</label>
-            <IntroCardCarousel
-              cards={introCards}
-              profile={currentProfile}
-              selectedId={introCardId}
-              hasConsent={!!currentProfile?.introConsentAt}
-              onSelect={setIntroCardId}
-              onRequestConsent={handleRequestIntroConsent}
-              frozenNote="Frozen when you share -- changing this reel's intro later won't change this link."
-            />
           </div>
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
