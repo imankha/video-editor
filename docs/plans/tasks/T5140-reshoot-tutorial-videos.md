@@ -21,91 +21,28 @@ repo). Read that project's `CLAUDE.md` first — it is the complete map (pipelin
 capture guide, selector gotchas, no-footprint teardown). This task file adds only what
 CHANGED since the last shoot. Prereq: local dev stack on :5173/:8000 against master.
 
-## Do this LAST in the UI runway (not last in the milestone anymore)
+**Updated 2026-08-16:** Part 1 talk tracks revised against the Aug 4–16 landings (Athlete
+Intro Card at every egress, Overlay's three-tab settings panel with the Text layer and
+Thumbnail frame choice, collection download, quest_4 "Watch Your Preview" step). The
+2026-08-03 draft's publish line about uploading a cover photo was removed — the preview
+image is now always a frame, chosen in Overlay's Thumbnail tab (T6510/T6590).
 
-**Updated 2026-08-10 — PLAN.md is the live source, this note only summarizes it.** Every
-UI-visible near/mid-term task must land first: the
-[Player Intro + Rich Text epic](tasks/player-intro/EPIC.md) (all remaining children, not just
-the original T5190-T5230 waves — this now includes T6480/T6600/T6610/T6630/T6640/T6650/T6660/
-T6670/T6680/T6690/T6700; T6520 closed/superseded 2026-08-10, no longer a gate). [Collection
-Download](tasks/collection-download/EPIC.md) (formerly T4945) is **no longer a gate** — it's a
-backend feature with no UI-runway visibility, sequenced AFTER this task per user decision
-2026-08-10.
-**Also moved to gate this task (user-ordered 2026-08-10, despite having no visible UI):**
-[T6350](tasks/T6350-move-reels-half-apply-on-sync-failure.md),
-[T6345](tasks/T6345-postgres-migration-runner-skips-version-gaps.md),
-[T6410](tasks/T6410-migration-swap-discards-unsynced-writes.md) — see PLAN.md for the rows.
-Explicitly NOT gating the reshoot: T6500 (pushed out, polish-only), T5750 (evidence-gated),
-Multi-File Prep epic (deprioritized), Movement Tracking / Dual-Camera milestones (when those
-land later, the affected quest gets a touch-up reshoot, not a full redo), and Collection
-Download (see above). If Player Intro slips badly, the reshoot may jump it — tutorials don't
-have to demo intro CARDS specifically (T6680/T6690/T6700/T6710 are lower-risk to slip), but the
-Overlay quest's text-editor rail IS on-screen in the current tutorial and is a real drift risk
-if it lands after the shoot.
+## Gating — CLEARED as of the 2026-08-16 prod deploy
 
-## Part 1 — Speed: slow the recording, default playback to 1x
+**Updated 2026-08-16.** Every UI-visible gate listed in earlier revisions of this note
+(Player Intro + Rich Text epic children, T6345/T6350/T6410, the overlay text-editor rail)
+has landed on master and shipped. Collection Download also landed (T4945/T7050/T4946/T4947),
+so its footage-visible pieces are stable too. The reshoot is unblocked; shoot against
+current master. When Movement Tracking / Dual-Camera land later, the affected quest gets a
+touch-up reshoot, not a full redo.
 
-- Today: `tts.txt` renders at `rate = +12%` and the app compensates with
-  `DEFAULT_RATE = 0.8` ([TutorialVideoModal.jsx:17](../../src/frontend/src/components/TutorialVideoModal.jsx))
-  plus the landing twin (`TutorialModal.tsx`). Net perceived pace ≈ 1.12 × 0.8 ≈ **0.90x**.
-- Change per quest `tts.txt`: `rate = -10%` (≈ the same perceived pace at 1x). Render one
-  quest, listen, adjust ±3% before rendering the rest — this is the single knob.
-- Side benefit: slower narration = longer warp windows, so on-screen actions get MORE time
-  and fewer jump-cuts. No spec timing changes needed for pace alone.
-- **After the new assets are uploaded:** set `DEFAULT_RATE = 1` in BOTH modals (app +
-  landing) in this repo, same commit as flipping any speed-menu default. The speed menu
-  itself stays (users can still slow down further).
+## Part 1 — The scripts: recommended talk tracks (shoot with THESE)
 
-## Part 2 — What changed since the 2026-07-18 shoot (per quest)
-
-### annotate (biggest drift — full rework)
-
-| Change | Task | Impact on video |
-|---|---|---|
-| Games tab = landscape poster-tile GRID with month captions (was text rows) | T5681/T6310 | Line 2 footage + spec selector (`getByText('at Legends Mar 28')` now lands on a `GameTile`) |
-| Home header/hero redesign | T5675 | Opening shot |
-| Reel Drafts = portrait poster tiles in per-game carousels (`DraftTile` + `CardCarousel`) | T5672 | "Open a Draft" chapter footage; the framing-chip regex `/\[.+\]: .*\(click to open\)/` is DEAD |
-| **Team / My Athlete layer**: per-clip `LayerSegmentedControl` replaces the My Athlete toggle; new clips inherit the last layer (no "New clips go to" toggle) | T5700/T6400 | "The My Athlete toggle marks that this is your player" is now WRONG |
-| **Teammate tagging exists ONLY on Team clips** | T5725 | The current track tags a teammate on the My Athlete demo clip — no longer possible |
-| Share modal = Google-Docs style: per-recipient clip scope + General-access **public game link** | T5720/T5740 | Share beat footage; public link is a headline feature worth a line |
-| Sport list gained Softball (11 sports) | T5695 | The fake in-page sport dropdown (`SPORTS` in the spec) must mirror `tagRegistry.js` again |
-
-### framing (WORKFLOW.md said "don't reshoot" — that no longer holds)
-
-| Change | Task | Impact |
-|---|---|---|
-| Draft entry = poster tile in carousel (chip selector dead) | T5672 | Opening beat + selectors |
-| Export button shows live **output length + credit cost** (1 credit/output-second, slow-mo counted) | T5780/T5790 | New talk line at the Export beat |
-| Straighten/rotation tool (hidden-by-default dial) | T5640 | Optional — recommend SKIP to keep the video tight |
-
-### overlay
-
-| Change | Task | Impact |
-|---|---|---|
-| Primary play = **"Play spotlight" (loops the region)**; de-emphasized "Play full" | T5370/T5570 | "Play it back a couple of times" beat: click the loop button instead of the `currentTime=0` ×3 replay hack |
-| Spotlight reveal animation always-on (fade-out at region end) | T5250 | Cosmetic; contact sheets will show fades |
-| Tap the circle to edit even with tracking ON | T5610 | Current wording ("turn the player tracker off") still TRUE — keep it; it's the deterministic path |
-| Game name + game clock in the clip-info card | T5670 | Cosmetic |
-| Aspect-aware video stage (9:16 no longer letterboxed in a 16:9 stage) | T5676 | Scroll choreography in the spec needs re-tuning |
-
-### publish
-
-| Change | Task | Impact |
-|---|---|---|
-| My Reels = visual tiles; batch Select REMOVED; persistent Play + kebab on tiles | T5673/T5678/T6300 | All My Reels footage + panel selectors |
-| Top Play rank badge on ranked tiles | T5679 | Visible during "compilations" beat — optional half-line |
-| Smart grouping by tournament / month / opponent | T5880 | Optional half-line at the compilations beat |
-| Ready draft has explicit paired CTAs (full-width "Move to My Reels" + preview; corner kebab) | T6180 | "Move to My Reels" wording still right; selectors changed |
-| Editable cover image ("View/edit preview image" on completed drafts) + real Remove | T5410/T6380 | Worth one new line |
-| Sport-ball playhead handle; segmented progress on ProgressTrack | T5130/T6320 | Cosmetic |
-| Animated branded outro + tagline on every export | T5240/T3950 | Optional half-line |
-
-## Part 3 — Recommended talk tracks (full drafts, per quest)
-
-Full recommended replacement tracks below — one sentence per line, ready to paste into
+Full replacement tracks below — one sentence per line, ready to paste into
 `<quest>/talk_track.txt` after the user's wording pass. Lines are flagged **[NEW]** /
-**[REWORDED]**; unflagged lines are unchanged from the current tracks (their anchors
-re-attach automatically). **Any added/removed line shifts every later `mark(N)` — renumber.**
+**[REWORDED]** relative to the currently-recorded tracks; unflagged lines are unchanged
+(their anchors re-attach automatically). **Any added/removed line shifts every later
+`mark(N)` — renumber.**
 
 ### Narration principles (why these tracks read the way they do)
 
@@ -114,12 +51,13 @@ re-attach automatically). **Any added/removed line shifts every later `mark(N)` 
    Framing/Overlay Clarity epic (T3710) validated in-app.
 2. **One action per sentence**; the action verb is the `mark(N,'word')` target.
 3. **Name UI elements exactly as labeled** (Add Clip, Playback Annotations, Move to My Reels,
-   My Athlete / Team, Add Spotlight) — the ring and the noun must agree.
+   My Athlete / Team, Add Spotlight, Athlete Intro Card) — the ring and the noun must agree.
 4. **Every feature gets its payoff in the same breath** (tag a teammate → share to their
    family; rank reels → best highlights lead the compilations). Features narrated without a
    "so that" don't stick.
 5. **Don't compensate for the slower voice by cutting words** — the pace is the fix. Cut
-   ideas that aren't core instead (Straighten, kebab menus, smart-group mechanics).
+   ideas that aren't core instead (Straighten, kebab menus, smart-group mechanics, hover
+   previews).
 
 ### annotate
 
@@ -159,8 +97,7 @@ Or copy one public link for the team chat — anyone can watch the team's plays 
 Your best clips are now reel drafts.
 Before you can publish a draft, you first frame it.
 Framing crops the video down to the action, trims it, and adds slow motion.                    [REWORDED]
-Each draft shows as a poster card under its game — the progress strip shows how far along it is.   [REWORDED — carousel/DraftTile replaced the row list]
-Pick a draft.
+Each game groups its drafts by stage — pick one that's Not Started to begin.                   [REWORDED — T6810 stage-labeled rows replaced the progress-strip carousel wording]
 ## Frame Your Player
 The white box is your reel's frame — everything inside it is what viewers will see.            [REWORDED — names the box's ROLE, not just its contents]
 Drag and resize the box to keep your player, the ball, and nearby players inside.
@@ -199,6 +136,8 @@ Next, set how the spotlight looks.
 Pick a highlight color that stands out.
 Then choose the shape.
 Body wraps the spotlight around the player; Ground puts a glow at their feet.
+The Text tab lets you burn a title or caption right into the video.                            [NEW — T5225/T6630 text layer; ring the Text tab, don't demo it]
+In the Thumbnail tab, drag the marker to choose the frame used as your reel's cover image.     [NEW — T6510/T6590; replaces the old publish-quest cover-image beat]
 When you're all set, click Add Spotlight — the app renders it into your reel.                  [REWORDED — says what the button DOES, not just its name]
 ```
 
@@ -209,27 +148,101 @@ When you're all set, click Add Spotlight — the app renders it into your reel. 
 Finally, it's time to publish your reel by adding it to My Reels.
 Your spotlight has finished rendering, and the draft is now marked Done.
 First, preview it to check that the framing, slow motion, and spotlight all look right.
-You can also change the cover image — pick any frame from the reel, or upload your own photo.  [NEW — T5410/T6380 editable preview]
 Then click the Move to My Reels button to publish.
 ## In My Reels
 Your reel now appears as its own card under the game.                                          [REWORDED — tiles, not rows]
+From the reel's menu, you can attach an Athlete Intro Card — an animated opening with your player's name, photo, and position.   [NEW — T5215 attachment picker]
+It plays everywhere the reel goes — shares, downloads, and playback.                           [NEW — T5220 every-egress]
 From My Reels, you can play any reel, download it, and share it.
 On mobile, you can even upload directly to your favorite platform.
 It's also grouped into compilations, like Top Plays and Game Highlights, and by tournament and month.   [REWORDED — adds T5880 smart groups, half a breath]
+You can download a whole compilation as one video, too.                                        [NEW — T4945 collection download]
 ## Rank Your Reels
 To get the most out of compilations, rank your reels from time to time by clicking the first entry in My Reels.
 The app shows you two reels side by side and asks which is better.                             [REWORDED — trims "During Reel ranking"]
 Each choice sorts your best reels to the top, so your strongest highlights show first within their compilations.
+That's the whole loop — from full game footage to a highlight reel you can download and share anywhere.   [NEW — closing payoff; the series' goal is a downloaded reel]
 ```
 
 **Structural notes for the shoot:**
 - publish's "On mobile…" line stays the **beacon-less prep window** (no `mark()`) — the spec
   collapses the published game + scrolls/expands the Game Highlights target there. Keep a
   no-mark line in that slot if the track is re-worded.
-- annotate's Team-layer beat adds ~2 lines mid-track: every `mark(N)` from the Create Reel
-  toggle onward shifts by +1 or +2 — renumber carefully (`##` lines don't count).
-- Chapter titles above are unchanged except annotate's new final chapter **"Share The Game"**
-  (was part of Save & Review) — 5–6 chapters per quest is within the 3–6 budget.
+- publish's preview line doubles as the quest_4 **"Watch Your Preview"** step (T6840) — the
+  capture must actually press play on the Done draft so the step visibly completes.
+- annotate's Team-layer beat adds ~2 lines mid-track; overlay adds 2 (Text/Thumbnail);
+  publish adds 3 and the old cover-image line is GONE — every `mark(N)` after each insertion
+  point shifts; renumber carefully (`##` lines don't count).
+- The Athlete Intro Card beat is narrate-over-footage of opening the reel kebab -> picker
+  (SELECT -> PREVIEW). Do NOT demo card creation/editing — that's its own future tutorial;
+  the attach gesture is the core-loop part.
+- Chapter titles are unchanged except annotate's final chapter **"Share The Game"** —
+  4–5 chapters per quest is within the 3–6 budget.
+
+## Part 2 — What changed since the 2026-07-18 shoot (per quest)
+
+### annotate (biggest drift — full rework)
+
+| Change | Task | Impact on video |
+|---|---|---|
+| Games tab = landscape poster-tile GRID with month captions (was text rows) | T5681/T6310 | Line 2 footage + spec selector (`getByText('at Legends Mar 28')` now lands on a `GameTile`) |
+| Home header/hero redesign | T5675 | Opening shot |
+| Reel Drafts = portrait poster tiles in per-game carousels (`DraftTile` + `CardCarousel`) | T5672 | "Open a Draft" chapter footage; the framing-chip regex `/\[.+\]: .*\(click to open\)/` is DEAD |
+| **Team / My Athlete layer**: per-clip `LayerSegmentedControl` replaces the My Athlete toggle; new clips inherit the last layer (no "New clips go to" toggle) | T5700/T6400 | "The My Athlete toggle marks that this is your player" is now WRONG |
+| **Teammate tagging exists ONLY on Team clips** | T5725 | The current track tags a teammate on the My Athlete demo clip — no longer possible |
+| Share modal = Google-Docs style: per-recipient clip scope + General-access **public game link** | T5720/T5740 | Share beat footage; public link is a headline feature worth a line |
+| Sport list gained Softball (11 sports) | T5695 | The fake in-page sport dropdown (`SPORTS` in the spec) must mirror `tagRegistry.js` again |
+
+### framing (WORKFLOW.md said "don't reshoot" — that no longer holds)
+
+| Change | Task | Impact |
+|---|---|---|
+| Draft entry = poster tile in carousel (chip selector dead) | T5672 | Opening beat + selectors |
+| Game groups render one labeled draft row per pipeline stage; Not Started tiles at source aspect | T6810/T6800 | Opening beat wording ("by stage") + selectors |
+| Export button shows live **output length + credit cost** (1 credit/output-second, slow-mo counted) | T5780/T5790 | New talk line at the Export beat |
+| Straighten/rotation tool (hidden-by-default dial) | T5640 | Optional — recommend SKIP to keep the video tight |
+
+### overlay
+
+| Change | Task | Impact |
+|---|---|---|
+| Primary play = **"Play spotlight" (loops the region)**; de-emphasized "Play full" | T5370/T5570 | "Play it back a couple of times" beat: click the loop button instead of the `currentTime=0` ×3 replay hack |
+| **Settings panel is now three tabs: Overlay / Text / Thumbnail** (`OverlaySettingsTabs`) | T6630/T6590 | On-screen the whole quest; selectors + one talk line each for Text and Thumbnail |
+| **Text layer**: burned-in rich text — regions/elements on the timeline, drag-to-position on the preview, double-click inline edit, fade-out | T5225/T5180/T6610/T6630/T6720/T6980/T6990 | New [NEW] talk line; do not demo in depth |
+| **Thumbnail = frame choice via draggable timeline marker; upload/clear REMOVED** | T6510/T6560/T6590/T5410 | New [NEW] talk line; the old publish-quest "upload your own photo" idea is dead |
+| Spotlight reveal animation always-on (fade-out at region end) | T5250 | Cosmetic; contact sheets will show fades |
+| Tap the circle to edit even with tracking ON | T5610 | Current wording ("turn the player tracker off") still TRUE — keep it; it's the deterministic path |
+| Game name + game clock in the clip-info card | T5670 | Cosmetic |
+| Aspect-aware video stage (9:16 no longer letterboxed in a 16:9 stage) | T5676 | Scroll choreography in the spec needs re-tuning |
+
+### publish
+
+| Change | Task | Impact |
+|---|---|---|
+| My Reels = visual tiles; batch Select REMOVED; persistent Play + kebab on tiles | T5673/T5678/T6300 | All My Reels footage + panel selectors |
+| **Athlete Intro Card**: attach from reel kebab / collection picker (SELECT -> PREVIEW -> CONFIRM); plays at every egress (share, download, in-app) | T5215/T5220/T6660/T6700/T6710 | Two [NEW] talk lines; footage of the picker |
+| Quest_4 gained a **"Watch Your Preview"** step before Move to My Reels | T6840 | Capture must press play on the Done draft |
+| **Collection download**: any compilation downloads as one stitched MP4 with progress | T4945/T7050/T4946 | Half-line [NEW] at the download beat |
+| Downloads carry poster cover art + rich metadata | T6360 | Cosmetic (nice in the camera-roll shot if visible) |
+| Home defaults to Games; dead-end Reel Drafts tab disabled for new users | T6830 | Opening-shot state; spec staging |
+| Top Play rank badge on ranked tiles | T5679 | Visible during "compilations" beat — optional half-line |
+| Smart grouping by tournament / month / opponent | T5880 | Optional half-line at the compilations beat |
+| Ready draft has explicit paired CTAs (full-width "Move to My Reels" + preview; corner kebab) | T6180 | "Move to My Reels" wording still right; selectors changed |
+| Sport-ball playhead handle; segmented progress on ProgressTrack | T5130/T6320 | Cosmetic |
+| Animated branded outro + tagline on every export | T5240/T3950 | Optional half-line |
+
+## Part 3 — Speed: slow the recording, default playback to 1x
+
+- Today: `tts.txt` renders at `rate = +12%` and the app compensates with
+  `DEFAULT_RATE = 0.8` ([TutorialVideoModal.jsx:17](../../src/frontend/src/components/TutorialVideoModal.jsx))
+  plus the landing twin (`TutorialModal.tsx`). Net perceived pace ≈ 1.12 × 0.8 ≈ **0.90x**.
+- Change per quest `tts.txt`: `rate = -10%` (≈ the same perceived pace at 1x). Render one
+  quest, listen, adjust ±3% before rendering the rest — this is the single knob.
+- Side benefit: slower narration = longer warp windows, so on-screen actions get MORE time
+  and fewer jump-cuts. No spec timing changes needed for pace alone.
+- **After the new assets are uploaded:** set `DEFAULT_RATE = 1` in BOTH modals (app +
+  landing) in this repo, same commit as flipping any speed-menu default. The speed menu
+  itself stays (users can still slow down further).
 
 ## Part 4 — Capture-spec triage (workflow/capture_specs/)
 
@@ -241,15 +254,22 @@ the tutorial project's "Adapting" section):
    (`role=radiogroup`), teammate beat needs the clip on Team, share modal structure
    (per-recipient rows + General access), `SPORTS` list + softball.
 2. `tutorial-capture-framing.spec.js` — draft chip regex -> DraftTile poster tile inside
-   CardCarousel; Export beat unchanged but button text/area now includes cost.
+   CardCarousel under stage-labeled rows (T6810); Export beat unchanged but button text/area
+   now includes cost.
 3. `tutorial-capture-overlay.spec.js` — replace the replay-×3 hack with one click of
    "Play spotlight (loops)" (`button[title="Play spotlight (loops)"]`); re-tune scrolls for
-   the aspect-fit stage; color/shape beats re-verify (controls layout may have shifted).
+   the aspect-fit stage; color/shape beats re-verify (controls moved into the three-tab
+   `OverlaySettingsTabs` panel); new beats ring the Text tab and the Thumbnail tab (drag the
+   `Thumbnail marker` on the timeline).
 4. `tutorial-capture-publish.spec.js` — drawer tiles not rows; panel-scoping
    (`boundingBox().x > 1490`) re-measure; ready-draft CTAs (T6180); kebab/Play persistent;
-   Select-mode staging code (if any) must go; Ranking Progress card CTA re-verify.
+   Select-mode staging code (if any) must go; Ranking Progress card CTA re-verify; new
+   intro-card beat opens the reel kebab -> Athlete Intro Card picker (SELECT -> PREVIEW,
+   cancel without committing, or commit + detach in teardown); preview beat must actually
+   play (quest_4 Watch Your Preview); home-tab staging respects T6830 defaults.
 5. `preflight.py` — re-verify staged data assumptions (project 53, Legends unlock, ranking
-   pool >= 2) still hold on the current dev account.
+   pool >= 2) still hold on the current dev account; the demo profile needs at least one
+   Athlete Intro Card in its library for the attach beat.
 
 ## Process (per quest, from the tutorial project)
 
@@ -270,6 +290,8 @@ added/removed talk line; keep `mark(N,'word')` words in sync with re-worded sent
 
 - Producer truth: `ReelBallersTutroials/workflow/contract.py`; app copy `tutorialVideos.js`;
   keys `tutorials/{quest}.{mp4,vtt,chapters.vtt}` at assets.reelballers.com.
+- Marketing feature inventory (same 2026-08 sweep that produced the Part 1 corrections):
+  [docs/marketing/feature-inventory.md](../../marketing/feature-inventory.md).
 - Original tutorial task: [T4780](T4780-quest-tutorial-videos.md). Landing tutorial:
   [T3300](T3300-tutorial-video-landing-page.md) — same footage can feed it; consider
   scheduling immediately after this task.
