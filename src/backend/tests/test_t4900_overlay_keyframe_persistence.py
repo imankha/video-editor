@@ -6,8 +6,10 @@ Two things are pinned here:
 1. The render read path honours a region's CURRENT (possibly extended) bounds,
    so manual keyframes the user added PAST the original auto-segment boundary are
    NOT clipped at render (failure mode 3 explicitly ruled out). The bounds reader
-   is tolerant of both the camelCase blob that surgical overlay actions write and
-   the snake_case blob the framing->overlay transform writes.
+   tolerates a camelCase-only blob (pre-T7180 action writes, or an un-migrated
+   row) as well as the snake_case blob every writer produces post-T7180 (see
+   test_t7180_overlay_region_key_mismatch.py) -- this tolerance is read-side
+   back-compat only, not a statement about what current writes produce.
 
 2. When the surgical overlay actions LAND, the manual keyframes + the extended
    segment survive into the stored blob the render reads (failure mode 1 is a
@@ -78,7 +80,8 @@ class TestNormalizeRegionKeys:
 
 class TestRegionBounds:
     def test_bounds_tolerate_camelcase_action_blob(self):
-        # overlay_action writes camelCase startTime/endTime
+        # Read-side back-compat for pre-T7180 rows / un-migrated data; current
+        # writers (create_region, update_region) write snake_case (T7180).
         assert _region_bounds({"startTime": 1.0, "endTime": 6.0}) == (1.0, 6.0)
 
     def test_bounds_tolerate_snakecase_transform_blob(self):

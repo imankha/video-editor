@@ -538,11 +538,14 @@ def _normalize_region_keys(region: dict) -> dict:
     local ``KeyframeInterpolator`` spline, request-body parse) receives canonical
     keyframes and never KeyErrors:
 
-    1. **Region time keys** (T4900): surgical overlay actions (create_region,
-       update_region) persist ``startTime``/``endTime``; the framing->overlay
-       transform uses ``start_time``/``end_time``. The Modal renderer
-       (video_processing.py) uses direct bracket access ``region["start_time"]``,
-       so camelCase blobs KeyError in prod. Normalize to snake_case.
+    1. **Region time keys** (T4900, write side fixed T7180): surgical overlay
+       actions (create_region, update_region) and the framing->overlay
+       transform now BOTH persist canonical ``start_time``/``end_time``. This
+       normalizer stays as READ-side back-compat for rows written before
+       T7180 (or any blob that slipped in camelCase-only some other way) --
+       the Modal renderer (video_processing.py) uses direct bracket access
+       ``region["start_time"]``, so a camelCase-only blob still KeyErrors in
+       prod without this. Normalize to snake_case.
     2. **Keyframe opacity keys** (T5120 / prod bug 32p): keyframes that went
        through the framing->overlay transform/restore (highlight_transform.py)
        carry only a single ``opacity`` field and DROP ``strokeOpacity``/
@@ -570,13 +573,15 @@ def _normalize_region_keys(region: dict) -> dict:
 def _region_bounds(region: dict) -> tuple[float, float]:
     """Read a region's [start, end] time bounds tolerant of BOTH key formats.
 
-    Both ``startTime``/``endTime`` (camelCase, action-written) and
-    ``start_time``/``end_time`` (snake_case, transform-written) are handled.
-    Callers that go through ``render_overlay`` will have already been normalized
-    by ``_normalize_region_keys``, so both keys exist; the local renderer keeps
-    this helper as defence-in-depth for any caller that bypasses normalization.
-    The ``0`` default only applies when BOTH keys are absent (corrupt blob);
-    a present-but-None bound surfaces as a TypeError in arithmetic (visible bug).
+    Both ``startTime``/``endTime`` (camelCase) and ``start_time``/``end_time``
+    (snake_case, canonical since T7180 -- every current writer produces this)
+    are handled; the camelCase path is READ-side back-compat for rows written
+    before T7180. Callers that go through ``render_overlay`` will have already
+    been normalized by ``_normalize_region_keys``, so both keys exist; the
+    local renderer keeps this helper as defence-in-depth for any caller that
+    bypasses normalization. The ``0`` default only applies when BOTH keys are
+    absent (corrupt blob); a present-but-None bound surfaces as a TypeError in
+    arithmetic (visible bug).
     """
     start = region.get('start_time', region.get('startTime', 0))
     end = region.get('end_time', region.get('endTime', 0))
@@ -678,8 +683,12 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 )
                 new_region = {
                     "id": region_id,
-                    "startTime": action.data.start_time,
-                    "endTime": action.data.end_time or (action.data.start_time + 2.0),
+                    # Canonical snake_case (T7180) -- see the comment on
+                    # update_region below for why this MUST match the key the
+                    # auto-generator (multi_clip.py generate_default_highlight_regions)
+                    # and every reader (_region_bounds, restoreRegions) use.
+                    "start_time": action.data.start_time,
+                    "end_time": action.data.end_time or (action.data.start_time + 2.0),
                     "enabled": True,
                     "keyframes": seed_keyframes,
                     "detections": [],
@@ -710,10 +719,25 @@ async def overlay_action(project_id: int, action: OverlayAction):
 
                 region = highlights[idx]
                 if action.data:
+                    # T7180 (prod bug 44p): write canonical snake_case, and drop
+                    # a stale camelCase pair if one exists. Auto-generated
+                    # regions (multi_clip.py generate_default_highlight_regions)
+                    # are created with snake_case start_time/end_time; every
+                    # reader (_region_bounds, frontend restoreRegions) prefers
+                    # snake_case WHEN PRESENT over camelCase. This action used to
+                    # write only startTime/endTime, so a lever drag on an
+                    # auto-generated region updated a key nothing read -- the
+                    # render and a fresh page load kept using the original
+                    # auto-placed bounds forever, silently dropping every
+                    # keyframe the user placed outside them. Writing the same
+                    # key every reader prefers, and removing the shadowed
+                    # camelCase pair, makes this action's write actually visible.
                     if action.data.start_time is not None:
-                        region['startTime'] = action.data.start_time
+                        region['start_time'] = action.data.start_time
+                        region.pop('startTime', None)
                     if action.data.end_time is not None:
-                        region['endTime'] = action.data.end_time
+                        region['end_time'] = action.data.end_time
+                        region.pop('endTime', None)
                 logger.info(f"[Overlay Action] Updated region {action.target.region_id}")
 
             elif action.action == "toggle_region":
@@ -2822,11 +2846,12 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             logger.warning(f"[Overlay Render] Failed to create export_jobs record: {e}")
 
     # Parse highlight regions and normalize to canonical snake_case keys.
-    # T4900: create_region/update_region write camelCase startTime/endTime;
-    # the Modal renderer reads region["start_time"] directly (KeyError on
-    # camelCase blobs). Normalizing here — the single DB-read boundary — fixes
-    # both the local and Modal paths without touching the stored blob or the
-    # action writer.
+    # T4900: the Modal renderer reads region["start_time"] directly (KeyError
+    # on a camelCase-only blob). create_region/update_region write canonical
+    # snake_case since T7180, so this is now read-side back-compat for rows
+    # written before T7180 rather than the primary defense — kept as the
+    # single DB-read boundary so both the local and Modal paths stay covered
+    # without touching the stored blob.
     highlight_regions = []
     if project['highlights_data']:
         try:
@@ -2898,10 +2923,32 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     # way; they heal on the user's next keyframe edit, but until then this is
     # the only place the discrepancy is observable. Surface it.
     for region in highlight_regions:
-        if region.get('enabled', True) and not region.get('keyframes'):
+        if not region.get('enabled', True):
+            continue
+        if not region.get('keyframes'):
             logger.warning(
                 f"[Overlay Render] Enabled region {region.get('id')} has NO keyframes - "
                 f"nothing will be drawn for it (pre-fix create_region data)"
+            )
+            continue
+        # T7180 (prod bug 44p): a region can have keyframes yet still render
+        # nothing if its bounds are inverted (start >= end) or if every
+        # keyframe falls outside the current [start, end] window -- both are
+        # silent (export still completes 200/success) and were previously
+        # only discoverable by reading raw DB state. Log loudly; do not
+        # self-repair the bounds here (that would mask the real write-site
+        # bug for whichever caller produced them).
+        r_start, r_end = _region_bounds(region)
+        if r_start >= r_end:
+            logger.error(
+                f"[Overlay Render] CRITICAL: enabled region {region.get('id')} has "
+                f"inverted bounds start={r_start} end={r_end} - nothing will be drawn for it"
+            )
+        elif not _keyframes_within_bounds(region):
+            logger.error(
+                f"[Overlay Render] CRITICAL: enabled region {region.get('id')} "
+                f"[{r_start}, {r_end}] has {len(region['keyframes'])} keyframe(s) but "
+                f"NONE fall within its bounds - nothing will be drawn for it"
             )
 
     if not has_keyframes and not has_text:

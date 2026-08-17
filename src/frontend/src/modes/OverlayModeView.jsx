@@ -158,6 +158,8 @@ export function OverlayModeView({
   onDeleteHighlightRegion,
   onMoveHighlightRegionStart,
   onMoveHighlightRegionEnd,
+  onCommitHighlightRegionStart,
+  onCommitHighlightRegionEnd,
   onRemoveHighlightKeyframe,
   onToggleHighlightRegion,
   onSelectedKeyframeChange,
@@ -890,6 +892,8 @@ export function OverlayModeView({
             onDeleteHighlightRegion={onDeleteHighlightRegion}
             onMoveHighlightRegionStart={onMoveHighlightRegionStart}
             onMoveHighlightRegionEnd={onMoveHighlightRegionEnd}
+            onCommitHighlightRegionStart={onCommitHighlightRegionStart}
+            onCommitHighlightRegionEnd={onCommitHighlightRegionEnd}
             onRemoveHighlightKeyframe={onRemoveHighlightKeyframe}
             onToggleHighlightRegion={onToggleHighlightRegion}
             onSelectedKeyframeChange={onSelectedKeyframeChange}
@@ -981,6 +985,8 @@ export function OverlayModeView({
                         onDeleteHighlightRegion={onDeleteHighlightRegion}
                         onMoveHighlightRegionStart={onMoveHighlightRegionStart}
                         onMoveHighlightRegionEnd={onMoveHighlightRegionEnd}
+                        onCommitHighlightRegionStart={onCommitHighlightRegionStart}
+                        onCommitHighlightRegionEnd={onCommitHighlightRegionEnd}
                         onRemoveHighlightKeyframe={onRemoveHighlightKeyframe}
                         onToggleHighlightRegion={onToggleHighlightRegion}
                         onSelectedKeyframeChange={onSelectedKeyframeChange}

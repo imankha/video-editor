@@ -240,3 +240,73 @@ describe('useHighlightRegions - video-level detections survive reset (T5646)', (
     expect(result.current.regions[0].detections.map(d => d.timestamp)).toEqual([0.5, 1.0]);
   });
 });
+
+/**
+ * T7180 / prod bug 44p — same "return the applied entity" contract as
+ * addRegion (T5644), extended to the lever-drag movers. OverlayScreen's
+ * commit-on-release handler (RegionLayer.jsx's onCommitRegionStart/End) sends
+ * exactly what these functions RETURN, not a re-read of `highlightRegions`
+ * React state and not the caller's raw requested time — the whole point
+ * being that a drag past a clamp boundary must persist the CLAMPED value,
+ * never the raw pointer position (a latent bug the old
+ * dispatchOverlayAction-per-pointermove code had: it forwarded the caller's
+ * raw newStartTime/newEndTime straight to the backend, bypassing this clamp
+ * entirely).
+ */
+describe('useHighlightRegions - moveRegionStart/End return contract (T7180)', () => {
+  const videoMetadata = { width: 1920, height: 1080, fps: 30, duration: 10 };
+
+  it('moveRegionStart returns the region with the CLAMPED start, not the raw requested time', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+    act(() => result.current.initializeWithDuration(10));
+    act(() => { result.current.addRegion(3); }); // [3, 5]
+
+    let returned;
+    // Request far past the clamp (maxStart = endTime - MIN_REGION_DURATION = 4.5)
+    act(() => { returned = result.current.moveRegionStart(result.current.regions[0].id, 4.9); });
+
+    expect(returned).toBeTruthy();
+    expect(returned.startTime).toBeCloseTo(4.5, 5);
+    expect(returned.startTime).not.toBeCloseTo(4.9, 1);
+    // What's returned matches what actually landed in state (the value a
+    // caller reading state instead would also see -- proving there is no
+    // divergence introduced by returning synchronously).
+    expect(result.current.regions[0].startTime).toBe(returned.startTime);
+  });
+
+  it('moveRegionEnd returns the region with the CLAMPED end, not the raw requested time', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+    act(() => result.current.initializeWithDuration(10));
+    act(() => { result.current.addRegion(3); }); // [3, 5]
+
+    let returned;
+    // Request past video duration (maxEnd = duration = 10)
+    act(() => { returned = result.current.moveRegionEnd(result.current.regions[0].id, 15); });
+
+    expect(returned).toBeTruthy();
+    expect(returned.endTime).toBeCloseTo(10, 5);
+    expect(result.current.regions[0].endTime).toBe(returned.endTime);
+  });
+
+  it('moveRegionStart returns null for an unknown region id — commit then persists nothing', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+    act(() => result.current.initializeWithDuration(10));
+    act(() => { result.current.addRegion(3); });
+
+    let returned;
+    act(() => { returned = result.current.moveRegionStart('not-a-real-region', 1); });
+    expect(returned).toBeNull();
+  });
+
+  it('a start-lever drag snaps to a frame boundary (matches the value later committed)', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+    act(() => result.current.initializeWithDuration(10));
+    act(() => { result.current.addRegion(3); }); // [3, 5]
+
+    let returned;
+    act(() => { returned = result.current.moveRegionStart(result.current.regions[0].id, 3.5001); });
+
+    // Snapped to an exact frame at 30fps -- not the raw sub-frame value.
+    expect(returned.startTime).toBe(frameToTime(Math.round(3.5001 * 30), 30));
+  });
+});

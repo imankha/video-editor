@@ -23,8 +23,10 @@ import { useIsCoarsePointer } from '../../hooks/useIsMobile';
  * @param {Function} onAddBoundary - Callback when clicking to add a boundary (segment mode)
  * @param {Function} onAddRegion - Callback when clicking to add a region (highlight mode)
  * @param {Function} onRemoveBoundary - Callback to remove a boundary (segment mode)
- * @param {Function} onMoveRegionStart - Callback to move region start (highlight mode lever drag)
- * @param {Function} onMoveRegionEnd - Callback to move region end (highlight mode lever drag)
+ * @param {Function} onMoveRegionStart - Callback to move region start (highlight mode lever drag, called every pointermove -- local/optimistic only, must NOT persist)
+ * @param {Function} onMoveRegionEnd - Callback to move region end (highlight mode lever drag, called every pointermove -- local/optimistic only, must NOT persist)
+ * @param {Function} onCommitRegionStart - Callback fired ONCE on pointerup/cancel, only if the start lever actually moved (highlight mode) -- the gesture's single surgical persistence point
+ * @param {Function} onCommitRegionEnd - Callback fired ONCE on pointerup/cancel, only if the end lever actually moved (highlight mode) -- the gesture's single surgical persistence point
  * @param {Function} onRemoveKeyframe - Callback to remove a keyframe (highlight mode)
  * @param {Function} onRegionAction - Callback for region-specific action (speed change, trim, toggle enable, delete)
  * @param {Function} onSelectedKeyframeChange - Callback when selected keyframe changes (highlight mode)
@@ -47,6 +49,8 @@ export default function RegionLayer({
   onRemoveBoundary,
   onMoveRegionStart,
   onMoveRegionEnd,
+  onCommitRegionStart,
+  onCommitRegionEnd,
   onRemoveKeyframe,
   onRegionAction,
   onSelectedKeyframeChange,
@@ -66,6 +70,13 @@ export default function RegionLayer({
   const [hoveredRegionIndex, setHoveredRegionIndex] = useState(null);
   const [draggingLever, setDraggingLever] = useState(null); // { regionId, type: 'start' | 'end', pointerId }
   const trackRef = useRef(null);
+  // T7180: whether the CURRENT drag has moved. A ref (not a plain closure var
+  // in the drag effect below) because `regions` changes identity on every
+  // pointermove (the hook updates state each move for live optimistic
+  // display), which re-runs that effect on every move -- a closure var would
+  // reset to false on each resubscribe. Reset once per gesture, in
+  // onPointerDown below.
+  const leverMovedRef = useRef(false);
 
   // Coarse (touch/pen) pointers get a larger lever hit-target so the begin/end
   // trim handles are draggable with a fingertip (>=44px per the touch-target
@@ -98,6 +109,16 @@ export default function RegionLayer({
   useEffect(() => {
     if (!draggingLever) return;
 
+    // T7180: onMoveRegionStart/End below are LOCAL/optimistic only (they must
+    // not persist -- see the JSDoc on those props). Persistence happens ONCE,
+    // on release, via onCommitRegionStart/End -- one surgical write per drag
+    // gesture, not one per pointermove (CLAUDE.md gesture-based persistence:
+    // "no useEffect writes" extends here to "no write-per-pointer-frame"
+    // either). `leverMovedRef` (not a plain closure var) because `regions`
+    // changes identity on every pointermove, re-running this effect on every
+    // move -- a closure var would reset to false on each resubscribe. It's
+    // reset once per gesture in onPointerDown, so it survives resubscribes.
+
     const handlePointerMove = (e) => {
       // Only react to the pointer that started this drag (ignore a second finger).
       if (draggingLever.pointerId != null && e.pointerId !== draggingLever.pointerId) return;
@@ -108,6 +129,7 @@ export default function RegionLayer({
       const region = regions.find(r => r.id === draggingLever.regionId);
       if (!region) return;
 
+      leverMovedRef.current = true;
       if (draggingLever.type === 'start' && onMoveRegionStart) {
         onMoveRegionStart(draggingLever.regionId, newTime);
       } else if (draggingLever.type === 'end' && onMoveRegionEnd) {
@@ -117,6 +139,13 @@ export default function RegionLayer({
 
     const handlePointerUp = (e) => {
       if (draggingLever.pointerId != null && e.pointerId !== draggingLever.pointerId) return;
+      if (leverMovedRef.current) {
+        if (draggingLever.type === 'start' && onCommitRegionStart) {
+          onCommitRegionStart(draggingLever.regionId);
+        } else if (draggingLever.type === 'end' && onCommitRegionEnd) {
+          onCommitRegionEnd(draggingLever.regionId);
+        }
+      }
       setDraggingLever(null);
     };
 
@@ -129,7 +158,7 @@ export default function RegionLayer({
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [draggingLever, regions, onMoveRegionStart, onMoveRegionEnd, pixelToTimeValue]);
+  }, [draggingLever, regions, onMoveRegionStart, onMoveRegionEnd, onCommitRegionStart, onCommitRegionEnd, pixelToTimeValue]);
 
   /**
    * Determine which keyframe is "selected" based on selectedKeyframeIndex
@@ -416,6 +445,7 @@ export default function RegionLayer({
                       e.stopPropagation();
                       e.preventDefault();
                       e.currentTarget.setPointerCapture?.(e.pointerId);
+                      leverMovedRef.current = false;
                       setDraggingLever({ regionId: region.id, type: 'start', pointerId: e.pointerId });
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -438,6 +468,7 @@ export default function RegionLayer({
                       e.stopPropagation();
                       e.preventDefault();
                       e.currentTarget.setPointerCapture?.(e.pointerId);
+                      leverMovedRef.current = false;
                       setDraggingLever({ regionId: region.id, type: 'end', pointerId: e.pointerId });
                     }}
                     onClick={(e) => e.stopPropagation()}

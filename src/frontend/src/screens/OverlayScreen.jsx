@@ -821,27 +821,57 @@ export function OverlayScreen({
     setOverlayChangedSinceExport(true);
   }, [deleteHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
 
-  // Wrapped handler: Move region start
-  const wrappedMoveHighlightRegionStart = useCallback((regionId, newStartTime) => {
-    moveHighlightRegionStart(regionId, newStartTime);
-    if (canSyncActions) {
-      dispatchOverlayAction('updateRegionStart', () =>
-        overlayActions.updateRegion(projectId, regionId, newStartTime, null));
-    }
-    setOverlayChangedSinceExport(true);
-  }, [moveHighlightRegionStart, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  // T7180: holds the last region moveHighlightRegionStart/End actually
+  // APPLIED (clamped + frame-snapped by the hook), keyed so a start-lever
+  // commit can't accidentally read an end-lever's last move. A ref, not
+  // state -- purely gesture-scoped bookkeeping between "move" and "commit"
+  // callbacks, never rendered. Reading `highlightRegions` state instead (a
+  // `.find()` at commit time) would repeat the exact stale-state bug T5644
+  // fixed for region creation: React state updates from a `window`
+  // pointermove listener are not guaranteed to have committed by the time a
+  // same-gesture pointerup fires (input-lane scheduling can race a commit).
+  // The hook's move functions now RETURN the applied region specifically so
+  // this can be synchronous and race-free.
+  const lastAppliedRegionEdgeRef = useRef({ start: null, end: null });
 
-  // Wrapped handler: Move region end
-  const wrappedMoveHighlightRegionEnd = useCallback((regionId, newEndTime) => {
-    moveHighlightRegionEnd(regionId, newEndTime);
-    if (canSyncActions) {
-      // Extend/shrink segment end. On failure this queues for Retry — the extended
-      // bound is what lets manual keyframes past the original range survive (T4900).
-      dispatchOverlayAction('updateRegionEnd', () =>
-        overlayActions.updateRegion(projectId, regionId, null, newEndTime));
-    }
+  // Wrapped handler: Move region start (T7180: LOCAL/optimistic only, fired on
+  // every pointermove during a lever drag — persistence moved to
+  // wrappedCommitHighlightRegionStart, fired once on release, so a multi-second
+  // drag no longer fires one network POST per pointer frame).
+  const wrappedMoveHighlightRegionStart = useCallback((regionId, newStartTime) => {
+    lastAppliedRegionEdgeRef.current.start = moveHighlightRegionStart(regionId, newStartTime);
     setOverlayChangedSinceExport(true);
-  }, [moveHighlightRegionEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
+  }, [moveHighlightRegionStart, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Move region end (LOCAL/optimistic only — see above)
+  const wrappedMoveHighlightRegionEnd = useCallback((regionId, newEndTime) => {
+    lastAppliedRegionEdgeRef.current.end = moveHighlightRegionEnd(regionId, newEndTime);
+    setOverlayChangedSinceExport(true);
+  }, [moveHighlightRegionEnd, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Commit region start (T7180). Fired ONCE, on lever
+  // release, by RegionLayer's pointerup — the gesture's single surgical
+  // write. Sends the value the LAST wrappedMoveHighlightRegionStart call
+  // actually applied (clamped + frame-snapped), never a re-read of
+  // `highlightRegions` state and never the raw pointer position.
+  const wrappedCommitHighlightRegionStart = useCallback((regionId) => {
+    const region = lastAppliedRegionEdgeRef.current.start;
+    if (region?.id === regionId && canSyncActions) {
+      dispatchOverlayAction('updateRegionStart', () =>
+        overlayActions.updateRegion(projectId, regionId, region.startTime, null));
+    }
+  }, [projectId, canSyncActions]);
+
+  // Wrapped handler: Commit region end (T7180) — see wrappedCommitHighlightRegionStart.
+  // Extend/shrink segment end. On failure this queues for Retry — the extended
+  // bound is what lets manual keyframes past the original range survive (T4900).
+  const wrappedCommitHighlightRegionEnd = useCallback((regionId) => {
+    const region = lastAppliedRegionEdgeRef.current.end;
+    if (region?.id === regionId && canSyncActions) {
+      dispatchOverlayAction('updateRegionEnd', () =>
+        overlayActions.updateRegion(projectId, regionId, null, region.endTime));
+    }
+  }, [projectId, canSyncActions]);
 
   // Wrapped handler: Toggle region enabled
   const wrappedToggleHighlightRegion = useCallback((regionIndex, enabled) => {
@@ -1276,6 +1306,8 @@ export function OverlayScreen({
     deleteHighlightRegion: wrappedDeleteHighlightRegion,  // Use wrapped version
     moveHighlightRegionStart: wrappedMoveHighlightRegionStart,  // Use wrapped version
     moveHighlightRegionEnd: wrappedMoveHighlightRegionEnd,  // Use wrapped version
+    commitHighlightRegionStart: wrappedCommitHighlightRegionStart,  // T7180: fires the surgical POST once, on release
+    commitHighlightRegionEnd: wrappedCommitHighlightRegionEnd,  // T7180: fires the surgical POST once, on release
     toggleHighlightRegion: wrappedToggleHighlightRegion,  // Use wrapped version
     addHighlightRegionKeyframe: wrappedAddHighlightRegionKeyframe,  // Use wrapped version
     removeHighlightRegionKeyframe: wrappedRemoveHighlightRegionKeyframe,  // Use wrapped version
@@ -1522,6 +1554,8 @@ export function OverlayScreen({
       onDeleteHighlightRegion={wrappedDeleteHighlightRegion}
       onMoveHighlightRegionStart={wrappedMoveHighlightRegionStart}
       onMoveHighlightRegionEnd={wrappedMoveHighlightRegionEnd}
+      onCommitHighlightRegionStart={wrappedCommitHighlightRegionStart}
+      onCommitHighlightRegionEnd={wrappedCommitHighlightRegionEnd}
       onRemoveHighlightKeyframe={wrappedRemoveHighlightRegionKeyframe}
       onToggleHighlightRegion={wrappedToggleHighlightRegion}
       onSelectedKeyframeChange={setSelectedHighlightKeyframeTime}
