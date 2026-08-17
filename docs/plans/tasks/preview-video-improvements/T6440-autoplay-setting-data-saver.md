@@ -5,7 +5,11 @@
 **Complexity:** 2
 **Created:** 2026-08-03
 
-Epic child 3/3 — see [EPIC.md](EPIC.md). Depends on T6420 (+T6430 for the touch surface).
+**Moved from the Tile Video Preview epic on 2026-08-17** (that epic is merged into this one —
+see [EPIC.md](EPIC.md)'s merge note). Scope unchanged from its original filing; only the touch
+dependency below was repointed from T6430 to T7160.
+
+Epic child 3/3 — see [EPIC.md](EPIC.md). Depends on T6420 (+T7160 for the touch surface).
 
 ## Problem
 
@@ -34,7 +38,7 @@ Off = zero preview behavior: no warm, no observers doing work beyond cheap regis
   `/api/settings` read is already in the boot set per the HAR epic)
 
 ### Related Tasks
-- T6420/T6430 (the surfaces being gated)
+- T6420/T7160 (the surfaces being gated)
 
 ### Technical Notes
 - `navigator.connection` is Chromium-only — absence means "no signal", never "saveData on".
@@ -45,7 +49,7 @@ Off = zero preview behavior: no warm, no observers doing work beyond cheap regis
 
 ## Acceptance Criteria
 
-- [ ] Toggle OFF: no previews anywhere (hover + viewport), zero video requests; ON restores
+- [ ] Toggle OFF: no previews anywhere (hover + touch tap-select), zero video requests; ON restores
 - [ ] Preference persists across reload/devices via the existing settings path,
       gesture-based write only
 - [ ] `saveData` connections get no previews regardless of toggle

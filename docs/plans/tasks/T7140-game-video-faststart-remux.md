@@ -1,10 +1,15 @@
-# T7020: Remux uploaded game videos with faststart (moov at front)
+# T7140: Remux uploaded game videos with faststart (moov at front)
 
 **Status:** TODO — deliberately deferred, sequenced first after T5140 (see Progress Log)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-14
-**Updated:** 2026-08-14
+**Updated:** 2026-08-17
+
+**Renumbered from T7020 on 2026-08-17** — T7020 was repurposed as the
+[Preview Video Improvements epic](preview-video-improvements/EPIC.md) (user request: "removing
+any delay before playing the preview" + mobile tap-to-play, unrelated to this task). This task's
+content, scope, and sequencing ("first after T5140") are otherwise unchanged.
 
 ## Problem
 
@@ -129,6 +134,9 @@ NOT carry forward as-is is the `finalize_upload` integration point itself (the s
 `remux_game_faststart(r2_key)` call) — that's exactly what the Modal-dispatch redesign replaces;
 see Option A in the [design artifact](https://claude.ai/code/artifact/27a9f3e5-38fb-44bd-8dcb-50655873f81c)
 for the fire-and-forget dispatch shape to build instead.
+
+**2026-08-17: renumbered T7020 -> T7140.** No content change — see the note at the top of this
+file. T7020's PLAN.md slot is now the Preview Video Improvements epic.
 
 ## Preserved Implementation (from the parked branch, pre-Modal-redesign)
 

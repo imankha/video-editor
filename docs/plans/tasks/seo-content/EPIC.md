@@ -8,7 +8,8 @@
 **Sequencing:** After Milestone TOP (the Durable Sync campaign) completes in full —
 NOT merely after the T5140 reshoot. Per PLAN.md's Priority Policy, growth work sits
 behind open infrastructure bugs; this epic is deliberately excluded from the
-"queued directly after the reshoot" group (T7020, JIT Migration, Collection Download),
+"queued directly after the reshoot" group (T7140 [renumbered from T7020], JIT Migration,
+Collection Download),
 which is durability/infra-adjacent work that gets priority even though it also follows
 the reshoot chronologically.
 
