@@ -1,6 +1,6 @@
 # T7130: Reel aspect ratio (9:16 / 16:9) cannot be changed on a phone
 
-**Status:** WAITING ON USER — branch `feature/T7130-mobile-aspect-ratio-toggle` pushed, awaiting your test + merge
+**Status:** STAGING — merged to master 2026-08-17 (auto-deploys staging)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-17
