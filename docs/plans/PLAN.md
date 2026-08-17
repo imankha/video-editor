@@ -32,7 +32,9 @@ rest. This is a sequenced campaign with design approvals, NOT a parallel fan-out
 
 Bugs reported by users on production. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate.
 
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T7130 | [Reel aspect ratio (9:16 / 16:9) cannot be changed on a phone](tasks/T7130-mobile-aspect-ratio-toggle.md) | 6 | 2 | 3.0 | STAGING | [ ] | Bugs **41p** (primary) + **42p** (duplicate, linked 2026-08-17), both from arshia on build 23eda79d. **Not an iOS/Safari issue** despite the reports — reproduced in desktop Chrome by narrowing the window. The interactive selector sat in a `hidden lg:flex` controls bar (`FramingModeView.jsx:352`), so it vanished below 1024px (iPads in portrait too), and what mobile got instead was `<AspectRatioSelector readOnly />` (T5780): a div styled like the control whose only "not tappable" signal is a `title` tooltip touch never surfaces — so users tapped it forever and reported a broken button. Ratio was therefore only choosable at reel-creation time; auto-generated reels default to 9:16 and a phone-only user could never reshape one. Fix: one controls bar at every width holding the one real selector (dim/straighten/zoom stay desktop-only), 44px touch targets with a `lg:` reset so desktop geometry is byte-identical, read-only look-alike deleted (zero call sites after this, and the fake-control shape IS the bug). Verified in a real browser at 376px (tap 16:9 → persisted, tap back → restored) and 1280px. |
 
 ### Staging Reported Bugs
 
