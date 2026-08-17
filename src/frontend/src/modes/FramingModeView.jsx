@@ -349,15 +349,18 @@ export function FramingModeView({
       <div className={`${(isFullscreen || mobileFs) ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen and on mobile */}
         {videoUrl && !isFullscreen && !mobileFs && (
-          <div className="hidden lg:flex mb-3 lg:mb-6 gap-4 items-center">
-            {/* Reel-level aspect ratio (T3910): applies to ALL clips, re-fitting their crop. */}
+          <div className="flex mb-3 lg:mb-6 gap-4 items-center">
+            {/* Reel-level aspect ratio (T3910): applies to ALL clips, re-fitting their crop.
+                Rendered at EVERY width (T7130) — it is the only way to reshape a reel after
+                creation, so gating it behind lg: stranded phone users on the default 9:16. */}
             <div className="flex items-center gap-2">
               <AspectRatioSelector
                 aspectRatio={globalAspectRatio}
                 onAspectRatioChange={onAspectRatioChange}
               />
             </div>
-            <div className="ml-auto flex items-center gap-2">
+            {/* Precision-pointer tools stay desktop-only: dim, straighten, zoom. */}
+            <div className="ml-auto hidden lg:flex items-center gap-2">
               <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-400 mr-2">Background:</span>
                 <span className="text-xs text-gray-300 mr-1.5">Dim</span>
@@ -520,16 +523,16 @@ export function FramingModeView({
                 <span className="font-medium text-white">{clipTitle}</span>
                 {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
               </div>
-              {/* T5780: output length + reel-wide aspect (read-only on mobile). */}
-              <div className="flex items-center gap-2 shrink-0">
-                {selectedClipEffectiveDuration != null && (
+              {/* T5780: output length. The reel aspect ratio is NOT repeated here — it
+                  lives in the controls bar above the video at every width (T7130). */}
+              {selectedClipEffectiveDuration != null && (
+                <div className="shrink-0">
                   <OutputLengthChip
                     seconds={selectedClipEffectiveDuration}
                     emphasized={outputDiffersFromSource}
                   />
-                )}
-                <AspectRatioSelector aspectRatio={globalAspectRatio} readOnly />
-              </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -1,7 +1,13 @@
 # Tile Video Preview (My Drafts + My Reels)
 
-**Status:** TODO
+**Status:** MERGED 2026-08-17 into [Preview Video Improvements](../preview-video-improvements/EPIC.md)
 **Started:** —
+
+**This epic is merged, not standalone anymore.** T6420/T6441 shipped (DONE, archived) and
+remain the foundation. T6440 (autoplay setting) moved unchanged into the new epic folder.
+T6430 (touch: in-viewport autoplay) is SUPERSEDED by the new epic's T7160 (tap-to-select) —
+see that file for why. Kept here for history; new work happens in
+[preview-video-improvements/](../preview-video-improvements/EPIC.md).
 
 ## Goal
 
@@ -39,10 +45,10 @@ primitive; the setting gates both.
 
 | ID | Task | Status |
 |----|------|--------|
-| T6420 | [Preview primitive + desktop hover](T6420-preview-primitive-desktop-hover.md) | STAGING |
-| T6430 | [Touch: in-viewport autoplay](T6430-touch-in-viewport-autoplay.md) | TODO |
-| T6440 | [Autoplay-previews setting + data-saver](T6440-autoplay-setting-data-saver.md) | TODO |
-| T6441 | [Extend hover preview to "In Overlay" drafts](T6441-hover-preview-in-overlay-drafts.md) | TODO |
+| T6420 | [Preview primitive + desktop hover](T6420-preview-primitive-desktop-hover.md) | DONE |
+| T6430 | [Touch: in-viewport autoplay](T6430-touch-in-viewport-autoplay.md) | SUPERSEDED by [T7160](../preview-video-improvements/T7160-mobile-tap-select-plays-preview.md) |
+| T6440 | [Autoplay-previews setting + data-saver](../preview-video-improvements/T6440-autoplay-setting-data-saver.md) | MOVED to [Preview Video Improvements](../preview-video-improvements/EPIC.md) |
+| T6441 | [Extend hover preview to "In Overlay" drafts](T6441-hover-preview-in-overlay-drafts.md) | DONE |
 
 ## Shared invariants (bind every child)
 

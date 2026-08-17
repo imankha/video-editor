@@ -1,12 +1,22 @@
 # T6430: Touch — in-viewport autoplay of the most-visible tile
 
-**Status:** TODO
+**Status:** SUPERSEDED (2026-08-17) — never implemented
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-03
 
-Epic child 2/3 — see [EPIC.md](EPIC.md) for the design authority and shared invariants.
-Depends on T6420 (reuses `TilePreviewVideo` + the single-active registry).
+**Superseded 2026-08-17** by [T7160](../preview-video-improvements/T7160-mobile-tap-select-plays-preview.md)
+in the [Preview Video Improvements epic](../preview-video-improvements/EPIC.md): user direction
+2026-08-17 prefers a tap-to-select trigger over in-viewport scroll-autoplay. Kept in place
+(not deleted) because the rationale below — why long-press/tap was originally rejected — is
+real prior-art reasoning worth keeping visible, even though the user has since chosen a
+tap-driven design anyway; T7160 addresses the "hidden gesture" concern differently (the tap
+has an immediate visible effect — selection — so it isn't hidden the way a bare long-press
+would be).
+
+Was epic child 2/3 of the (now-merged) Tile Video Preview epic — see [EPIC.md](EPIC.md).
+Depended on T6420 (reuses `TilePreviewVideo` + the single-active registry); T7160 keeps that
+same dependency.
 
 ## Problem
 

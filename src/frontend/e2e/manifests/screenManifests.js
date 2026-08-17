@@ -105,6 +105,12 @@ export const SCREENS = [
       // "Reel Drafts" breadcrumb; mobile collapses to a single "Back" arrow. Match
       // either so this asserts reachability cross-viewport, not desktop-only chrome.
       { label: 'Home / Back nav', locator: (p) => p.getByRole('button', { name: /^(Home|Back)$/ }).first() },
+      // T7130 (prod bugs 41p/42p): the reel aspect-ratio toggle was `hidden lg:flex`, so
+      // it vanished below 1024px and mobile got a read-only look-alike instead — the same
+      // control-unreachable-on-a-phone class as T4880 above, found by a user again. The
+      // audit's trial click asserts visible/stable/hit-target without firing the refit.
+      { label: 'Aspect ratio 9:16', locator: (p) => p.locator('[title="9:16 Portrait"]') },
+      { label: 'Aspect ratio 16:9', locator: (p) => p.locator('[title="16:9 Landscape"]') },
     ],
     // T5360 (invariant #4, coarse-pointer projects only): the icon-only playback
     // controls (shared Button size="sm" iconOnly via Controls.jsx) that collapsed to
@@ -116,6 +122,10 @@ export const SCREENS = [
     // mobile/tablet Framing layout, so they are not listed here; the shared-Button
     // fix covers them on any touch layout that DOES render them.)
     touchTargets: [
+      // T7130: sized via `coarse-pointer:` (phone AND tablet), deliberately NOT a `lg:`
+      // breakpoint — a tablet in landscape is >= 1024px but still a finger.
+      { label: 'Aspect ratio 9:16', locator: (p) => p.locator('[title="9:16 Portrait"]') },
+      { label: 'Aspect ratio 16:9', locator: (p) => p.locator('[title="16:9 Landscape"]') },
       { label: 'Step backward', locator: (p) => p.locator('[title="Step backward (one frame)"]') },
       // Play/Pause share one control; its title toggles with playback state.
       { label: 'Play/Pause', locator: (p) => p.locator('[title="Play"], [title="Pause"]') },
