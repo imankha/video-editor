@@ -114,7 +114,7 @@ search listings). Skip if time-boxed out — do not let it delay Phases A–C.
 - `src/landing/SEO.md` — read BEFORE anything
 
 ### Related Tasks
-- Part of: [SEO Content & Landing Value Props epic](EPIC.md) — child 2/2, sequenced after the T5140 reshoot
+- Part of: [SEO Content & Landing Value Props epic](EPIC.md) — child 2/2, sequenced after Milestone TOP completes (not merely after the T5140 reshoot — see the epic's Sequencing note)
 - Depends on: T7110 (TrustStrip component, FACTS entries, homepage sections to re-point)
 - Sibling: T6370 — **do not duplicate**: app-subdomain robots/soft-404 work, GSC
   cleanup, and index-request submission belong to T6370. This task feeds T6370's Part C

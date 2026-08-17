@@ -5,10 +5,12 @@
 **Complexity:** 4
 **Priority:** 1.8
 **Created:** 2026-08-16
-**Sequencing:** After the T5140 tutorial reshoot (user-ordered 2026-08-16) — member of the
-"queued directly after the reshoot" group in PLAN.md, alongside the JIT Migration and
-Collection Download epics (T7020 remains first in that group; relative order among the
-epics not specified).
+**Sequencing:** After Milestone TOP (the Durable Sync campaign) completes in full —
+NOT merely after the T5140 reshoot. Per PLAN.md's Priority Policy, growth work sits
+behind open infrastructure bugs; this epic is deliberately excluded from the
+"queued directly after the reshoot" group (T7020, JIT Migration, Collection Download),
+which is durability/infra-adjacent work that gets priority even though it also follows
+the reshoot chronologically.
 
 ## Goal
 
@@ -31,6 +33,9 @@ targets):
 
 ## Boundaries
 
+- **Do not start before Milestone TOP is closed out.** The epic and both task files are
+  fully specced now so they're ready to pick up the moment the durability campaign clears
+  — this is a "file now, work later" ticket, not a "start now" one.
 - **T6370** (GSC indexing cleanup + app-subdomain soft-404/robots) stays a standalone
   sibling in the same PLAN.md milestone — this epic feeds its Part C (page value /
   boilerplate reduction) from the content side but must not duplicate its scope.
