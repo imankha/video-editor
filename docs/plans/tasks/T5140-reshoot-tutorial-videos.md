@@ -1,6 +1,6 @@
 # T5140: Reshoot Tutorial Videos (carousel/poster UI + Team layer; slow narration baked in, 1x playback)
 
-**Status:** TODO
+**Status:** STAGING
 **Priority:** P1 (last task of the "UI Runway -> Tutorial Reshoot" milestone)
 **Impact:** 7 | **Complexity:** 4
 
