@@ -154,6 +154,7 @@ the generators don't pick it up automatically (check `src/pages/llms.txt.ts` and
 - `src/landing/SEO.md` — read BEFORE touching anything; content rules are enforced by the verifier
 
 ### Related Tasks
+- Part of: [SEO Content & Landing Value Props epic](EPIC.md) — child 1/2, sequenced after the T5140 reshoot
 - Blocks: T7120 (reuses TrustStrip, re-points C3 link, adds C8 FAQs to other pages)
 - Sibling: T6370 (GSC indexing cleanup — do NOT duplicate its app-subdomain work here)
 
