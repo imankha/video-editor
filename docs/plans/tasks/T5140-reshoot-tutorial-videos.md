@@ -20,6 +20,8 @@ Reshoot all four in-app quest tutorials (annotate / framing / overlay / publish)
 repo). Read that project's `CLAUDE.md` first — it is the complete map (pipeline, per-quest
 capture guide, selector gotchas, no-footprint teardown). This task file adds only what
 CHANGED since the last shoot. Prereq: local dev stack on :5173/:8000 against master.
+**Execution is split across the two projects — see "How to run this task" below, which
+includes the kickoff prompt to paste into a session started in the tutorial project.**
 
 **Updated 2026-08-16:** Part 1 talk tracks revised against the Aug 4–16 landings (Athlete
 Intro Card at every egress, Overlay's three-tab settings panel with the Text layer and
@@ -35,6 +37,62 @@ has landed on master and shipped. Collection Download also landed (T4945/T7050/T
 so its footage-visible pieces are stable too. The reshoot is unblocked; shoot against
 current master. When Movement Tracking / Dual-Camera land later, the affected quest gets a
 touch-up reshoot, not a full redo.
+
+## How to run this task (split across two projects)
+
+The reshoot itself (talk tracks, tts rate, capture specs, shooting, building, uploading)
+is done **from a Claude session started inside `ReelBallersTutroials`** — that project's
+`CLAUDE.md` auto-loads there and is the operating manual; duplicating its pipeline
+knowledge here would rot. This repo keeps only what is app-repo work:
+
+| Phase | Where | What |
+|---|---|---|
+| A. Reshoot all 4 quests | `ReelBallersTutroials` session | Parts 1–4 below: tracks → tts rate → spec triage → shoot/build/upload per quest |
+| B. Playback-rate flip | This repo | `DEFAULT_RATE = 1` in `TutorialVideoModal.jsx` + landing `TutorialModal.tsx`, one commit prefixed `T5140:`, AFTER all 4 quests verify green on R2 |
+
+Phase A makes **no commits in this repo** — specs are copied into `src/frontend/e2e/` for
+each shoot and reverted after (the tutorial project's teardown rule). Phase B is the only
+app-repo diff and lands last, so users never see 0.8×-compensated playback of the new
+slower-voiced videos (double-slow) or 1x playback of the old fast ones.
+
+### Kickoff prompt for the tutorial-project session (paste verbatim)
+
+```
+Work app-repo task T5140: reshoot all four quest tutorials (annotate, framing,
+overlay, publish) against the current app UI.
+
+Read first, in order:
+1. This project's CLAUDE.md (and WORKFLOW.md if you need pipeline internals).
+2. The task file in the app repo — it is the delta since the 2026-07-18 shoot:
+   C:/Users/imank/projects/video-editor/docs/plans/tasks/T5140-reshoot-tutorial-videos.md
+   Part 1 = full replacement talk tracks (shoot with THESE, after confirming any
+   wording tweaks with me). Part 2 = per-quest UI-drift tables. Part 3 = the tts
+   pace change. Part 4 = capture-spec triage list. The structural notes after
+   Part 1 flag every mark(N) insertion/removal point.
+
+Scope for this session (Phase A of the task):
+- Copy the Part 1 tracks into <quest>/talk_track.txt; renumber mark(N) in the
+  specs for every added/removed line (## chapter lines don't count).
+- Set rate = -10% in each quest's tts.txt. Render ONE quest's audio first, have
+  me listen at 1x, adjust +/-3%, then apply to the rest.
+- Re-derive the broken selectors listed in Part 4 from current app markup
+  (C:/Users/imank/projects/video-editor/src/frontend/src/) before shooting.
+- Re-verify preflight staging assumptions (Part 4 item 5), including at least
+  one Athlete Intro Card in the demo profile's library for the publish attach
+  beat.
+- Per quest: preflight --fix -> copy specs into the app repo's e2e/ -> shoot ->
+  from_capture -> build_video --warp -> contact_sheet audit (stop and show me
+  sheets that look off) -> upload_r2 -> verify_assets.
+- After each shoot, revert the app repo's e2e files and re-run preflight to
+  confirm no footprint. Make NO commits in the app repo.
+
+Out of scope here (Phase B, done from an app-repo session after all 4 quests
+are live and verified): DEFAULT_RATE = 1 in TutorialVideoModal.jsx and the
+landing TutorialModal.tsx.
+
+Prereq: app dev stack on :5173/:8000 against current master (backend with
+--reload). Tell me if preflight or dev-login fails rather than working around it.
+```
 
 ## Part 1 — The scripts: recommended talk tracks (shoot with THESE)
 
@@ -271,7 +329,7 @@ the tutorial project's "Adapting" section):
    pool >= 2) still hold on the current dev account; the demo profile needs at least one
    Athlete Intro Card in its library for the attach beat.
 
-## Process (per quest, from the tutorial project)
+## Process (per quest, from the tutorial project — Phase A)
 
 `preflight.py <quest> --fix` -> copy specs into `src/frontend/e2e/` -> shoot via Playwright
 -> `from_capture.py` -> `build_video.py --warp` -> `contact_sheet.py` audit ->
@@ -280,11 +338,14 @@ added/removed talk line; keep `mark(N,'word')` words in sync with re-worded sent
 
 ## Acceptance
 
+Phase A (tutorial project):
 - [ ] All 4 roughcuts rebuilt against the current UI; contact-sheet audit passes per sentence
 - [ ] Narration pace comfortable at **1x** (tts rate baked in), verified by a human listen
-- [ ] `DEFAULT_RATE = 1` in TutorialVideoModal.jsx AND landing TutorialModal.tsx (this repo)
 - [ ] `.vtt` + `.chapters.vtt` regenerated + uploaded; `verify_assets.py` green (all 12 URLs)
-- [ ] Accounts restored (no-footprint teardown + preflight re-run clean)
+- [ ] Accounts restored (no-footprint teardown + preflight re-run clean); app-repo e2e files reverted, no app-repo commits
+
+Phase B (this repo, after Phase A is fully green):
+- [ ] `DEFAULT_RATE = 1` in TutorialVideoModal.jsx AND landing TutorialModal.tsx, committed as `T5140:`
 
 ## References
 
