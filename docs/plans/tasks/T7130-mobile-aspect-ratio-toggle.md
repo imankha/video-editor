@@ -1,6 +1,6 @@
 # T7130: Reel aspect ratio (9:16 / 16:9) cannot be changed on a phone
 
-**Status:** WIP
+**Status:** WAITING ON USER — branch `feature/T7130-mobile-aspect-ratio-toggle` pushed, awaiting your test + merge
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-17
@@ -47,8 +47,9 @@ control to keep in sync.
   `clipTitle` and is never shown twice (responsiveness skill: never show redundant information).
 - **`AspectRatioSelector.jsx`**: the `readOnly` branch is DELETED — after the above it has zero
   call sites, and a component that renders a fake control is what produced this bug. The
-  buttons get `min-h-11 min-w-11 lg:min-h-0 lg:min-w-0` (44px touch target per the
-  responsiveness skill, desktop geometry byte-identical) and `aria-pressed`.
+  buttons get `coarse-pointer:min-h-11 coarse-pointer:min-w-11` (44px touch target) and
+  `aria-pressed`; options derive from the existing `constants/aspectRatios.js`
+  (`RATIO_ORDER` + `ratioLabel`) instead of a second hard-coded list.
 
 No new state, no new props, no persistence change. The change handler already exists and is
 already correct: `handleAspectRatioChange` (`FramingScreen.jsx:110-120`) is a single gesture ->
@@ -62,8 +63,12 @@ nothing and there is no reactive write.
   and keep the no-op guard meaningful.
 - **Keeping `readOnly` for a future viewer surface** — dead code today; the fake-control shape
   is the bug's root cause and should not survive.
-- **Making the touch sizing unconditional** — would change desktop geometry for no reason; the
-  `lg:` reset keeps 1280px byte-identical.
+- **Sizing the touch target off a `lg:` breakpoint** (the first implementation, caught in
+  review) — `lg:` is 1024px, so a tablet in LANDSCAPE would have lost the 44px floor while
+  still being driven by a finger: exactly the T5360 sub-44px-on-tablet regression. The project
+  already owns a pointer-keyed variant (`coarse-pointer`, `tailwind.config.js`, 26 existing
+  uses) which covers phone and tablet and leaves fine-pointer desktop untouched by
+  construction — no reset breakpoint needed.
 
 ## Context
 
@@ -88,6 +93,34 @@ nothing and there is no reactive write.
   renders, it is interactive (never `readOnly`), and no ancestor of it carries a bare `hidden`
   class. Visibility itself is verified in a real browser at 352px / 375px / 1280px.
 
+### Reviewed and disproved (do not re-raise without re-running this)
+
+Review flagged the ratio change as a one-tap **lossy** refit that "collapses every clip's
+framing to the full frame" on a 16:9 source, and asked for a confirm dialog. **False.**
+`default_crop_size` returns the fixed product box `(640, 360)` for `16:9` (and `(205, 365)`
+for `9:16`) from `DEFAULT_CROP_SIZES` — it never reaches the largest-fitting-rectangle branch
+that would yield a full frame. So `max_x = 1920-640 = 1280`, the clamp does not bite, and
+`refit_crop_keyframes` preserves each box CENTER as documented. Measured round trip on a
+1920x1080 source, box centered at (800.5, 400.5):
+
+```
+9:16 (205x365) -> 16:9 (640x360) -> 9:16 (205x365);  keyframe identical to the original
+```
+
+A mis-tap is therefore reversible by tapping back, so no confirm dialog is warranted and the
+two-explicit-buttons rejection above stands unchanged.
+
+### Known pre-existing gap (NOT introduced here)
+
+`1:1` is offered at reel creation (`GameClipSelectorModal.jsx:778`) and accepted by the
+backend, but the Framing selector only offers the two product ratios — so a `1:1` reel shows
+two unpressed buttons and one tap silently converts it. This is **desktop's long-standing
+behaviour**, unchanged by this task; only the short-lived mobile read-only chip ever displayed
+`1:1`. Mitigated here by a `role="group"` + `aria-label` carrying the live ratio. The real
+question — whether `1:1`/`4:3` should be creatable at all, given
+`constants/aspectRatios.js` declares portrait/landscape the only valid published ratios — is a
+product decision, not part of this bug fix.
+
 ## Implementation
 
 ### Steps
@@ -96,7 +129,10 @@ nothing and there is no reactive write.
 3. [x] `AspectRatioSelector.jsx`: delete the `readOnly` branch; 44px touch targets; `aria-pressed`
 4. [x] Vitest: `FramingModeView.mobileAspect.test.jsx` (one interactive selector, no `hidden`
        ancestor, no `readOnly` instance) + `AspectRatioSelector.test.jsx`
-5. [x] Real-browser verification at 352px (reporter's viewport) and 1280px
+5. [x] Real-browser verification at 376px (reporter's device class) and 1280px
+6. [x] Extend the committed usability harness — the aspect buttons are now in the `framing`
+       manifest's `actions` (reachability) AND `touchTargets` (44px), so the T4880/T7130
+       control-unreachable-on-a-phone class is guarded in CI, not just by an ad-hoc session
 
 ### Progress Log
 

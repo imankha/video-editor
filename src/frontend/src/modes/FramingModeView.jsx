@@ -525,14 +525,14 @@ export function FramingModeView({
               </div>
               {/* T5780: output length. The reel aspect ratio is NOT repeated here — it
                   lives in the controls bar above the video at every width (T7130). */}
-              <div className="flex items-center gap-2 shrink-0">
-                {selectedClipEffectiveDuration != null && (
+              {selectedClipEffectiveDuration != null && (
+                <div className="shrink-0">
                   <OutputLengthChip
                     seconds={selectedClipEffectiveDuration}
                     emphasized={outputDiffersFromSource}
                   />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 

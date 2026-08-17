@@ -1,3 +1,5 @@
+import { RATIO, RATIO_ORDER, ratioLabel } from '../constants/aspectRatios';
+
 /**
  * AspectRatioSelector component - Visual icon-based toggle for crop aspect ratio
  * Displays two clickable rectangle shapes: tall (9:16) and wide (16:9)
@@ -9,31 +11,30 @@
  * There is deliberately no read-only variant: a control-shaped element that cannot be
  * tapped reads as a broken button on touch (prod bugs 41p/42p, T7130).
  */
-const ASPECT_RATIOS = [
-  { value: '9:16', label: 'Portrait' },
-  { value: '16:9', label: 'Landscape' }
-];
-
 export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }) {
   return (
-    <div className="flex items-center gap-2">
-      {ASPECT_RATIOS.map((ratio) => {
-        const isSelected = aspectRatio === ratio.value;
-        const isRatioTall = ratio.value === '9:16';
+    <div
+      className="flex items-center gap-2"
+      role="group"
+      aria-label={`Reel aspect ratio, currently ${aspectRatio}`}
+    >
+      {RATIO_ORDER.map((value) => {
+        const isSelected = aspectRatio === value;
+        const isRatioTall = value === RATIO.PORTRAIT;
 
         return (
           <button
-            key={ratio.value}
-            onClick={() => onAspectRatioChange(ratio.value)}
+            key={value}
+            onClick={() => onAspectRatioChange(value)}
             className={`
               relative flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all
-              min-h-11 min-w-11 lg:min-h-0 lg:min-w-0
+              coarse-pointer:min-h-11 coarse-pointer:min-w-11
               ${isSelected
                 ? 'bg-purple-600 ring-2 ring-purple-400'
                 : 'bg-gray-800 hover:bg-gray-700 border border-gray-600'
               }
             `}
-            title={`${ratio.value} ${ratio.label}`}
+            title={`${value} ${ratioLabel(value)}`}
             aria-pressed={isSelected}
           >
             {/* Rectangle icon */}
@@ -46,7 +47,7 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
             />
             {/* Ratio label */}
             <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
-              {ratio.value}
+              {value}
             </span>
           </button>
         );

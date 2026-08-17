@@ -117,11 +117,16 @@ describe('FramingModeView aspect-ratio reachability on mobile (T7130)', () => {
     expect(hiddenAncestorOf(selector)).toBeNull();
   });
 
-  it('still shows the ratio when the clip has no title (was coupled to clipTitle)', () => {
+  it('keeps the selector interactive and reachable when the clip has no title', () => {
+    // Pre-fix the mobile chip lived inside a `clipTitle &&` guard, so an untitled clip
+    // showed no ratio at all — and the only other instance was the `hidden` desktop bar.
     isMobileMock.mockReturnValue(true);
     renderView({ clipTitle: undefined });
 
-    expect(screen.getAllByTestId('aspect-selector')).toHaveLength(1);
+    const selectors = screen.getAllByTestId('aspect-selector');
+    expect(selectors).toHaveLength(1);
+    expect(selectors[0].getAttribute('data-interactive')).toBe('true');
+    expect(hiddenAncestorOf(selectors[0])).toBeNull();
   });
 
   it('still renders one interactive selector on desktop (no regression)', () => {

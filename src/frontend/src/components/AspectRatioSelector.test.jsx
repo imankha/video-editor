@@ -29,15 +29,27 @@ describe('AspectRatioSelector (T7130)', () => {
     expect(onAspectRatioChange).toHaveBeenCalledWith('16:9');
   });
 
-  it('meets the 44px touch target on mobile without changing desktop geometry', () => {
+  it('enforces the 44px touch target by POINTER, not by viewport width', () => {
     render(<AspectRatioSelector aspectRatio="9:16" onAspectRatioChange={vi.fn()} />);
 
     for (const button of screen.getAllByRole('button')) {
-      expect(button.className).toContain('min-h-11');
-      expect(button.className).toContain('min-w-11');
-      // Reset at lg: so the desktop controls bar keeps its existing sizing.
-      expect(button.className).toContain('lg:min-h-0');
-      expect(button.className).toContain('lg:min-w-0');
+      // `coarse-pointer:` (tailwind.config.js) covers phone AND tablet, including a
+      // tablet in landscape at >= 1024px — a `lg:` breakpoint would drop the floor
+      // exactly there and re-introduce the T5360 sub-44px-on-tablet regression.
+      expect(button.className).toContain('coarse-pointer:min-h-11');
+      expect(button.className).toContain('coarse-pointer:min-w-11');
+      // Fine-pointer desktop keeps its existing sizing by construction (no reset needed).
+      expect(button.className).not.toMatch(/\blg:min-[hw]-/);
+    }
+  });
+
+  it('exposes the current ratio even when it matches neither option', () => {
+    // 1:1 reels are creatable (GameClipSelectorModal) but have no button here.
+    render(<AspectRatioSelector aspectRatio="1:1" onAspectRatioChange={vi.fn()} />);
+
+    expect(screen.getByRole('group', { name: /currently 1:1/ })).toBeTruthy();
+    for (const button of screen.getAllByRole('button')) {
+      expect(button.getAttribute('aria-pressed')).toBe('false');
     }
   });
 });
