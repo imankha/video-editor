@@ -1,6 +1,6 @@
 # T7180: Overlay highlight region key-format mismatch drops the spotlight silently
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-17
@@ -167,9 +167,13 @@ No schema or migration impact either way.
 **2026-08-17**: Task filed after expert-agent root cause + live prod DB confirmation.
 Implemented backend key-canonicalization + diagnostic, frontend commit-on-release dispatch, and
 the return-contract refactor a fresh-context reviewer's round 1 pass asked for (avoiding a
-same-gesture stale-state re-read). Backend (63) + frontend (53) targeted tests green. Stale
-comments claiming "actions write camelCase" fixed in `overlay.py` and the knowledge doc. Not yet
-merged; step 6 (live browser verify) still open.
+same-gesture stale-state re-read). Backend (59) + frontend (78) targeted tests green. Stale
+comments claiming "actions write camelCase" fixed in `overlay.py` and the knowledge doc.
+Committed to `feature/T7180-overlay-region-key-mismatch` (c60ab5a8). Reviewer agent
+infrastructure hit repeated transient 500s on round 2 (5 consecutive failures across 2 agent
+spawns); per user direction, did a final self-review pass instead (re-read every changed file,
+re-verified the round-1 MAJOR fixes and their tests) before committing. Not yet pushed/merged;
+step 6 (live browser verify) still open — status WAITING ON USER pending push/merge decision.
 
 ## Acceptance Criteria
 
