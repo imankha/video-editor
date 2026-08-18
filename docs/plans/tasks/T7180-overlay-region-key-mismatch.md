@@ -1,6 +1,6 @@
 # T7180: Overlay highlight region key-format mismatch drops the spotlight silently
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-18 prod)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-17

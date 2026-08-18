@@ -1,6 +1,6 @@
 # T7150: Collection public-share link freezes "no intro" before the intro picker is used
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-18 prod)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-08-17
@@ -77,24 +77,25 @@ public-link path.
 ## Implementation
 
 ### Steps
-1. [ ] `CollectionShareModal.jsx`: move the Intro (`IntroCardCarousel`) block to be the first
+1. [x] `CollectionShareModal.jsx`: move the Intro (`IntroCardCarousel`) block to be the first
        field, above "Add people" and the public/restricted toggle
-2. [ ] `handleTogglePublic`: stop calling `createShare` on toggle-on; just set `isPublic`
-3. [ ] Add a "Get Link" action (visible when `isPublic && !publicLink`) that calls
+2. [x] `handleTogglePublic`: stop calling `createShare` on toggle-on; just set `isPublic`
+3. [x] Add a "Get Link" action (visible when `isPublic && !publicLink`) that calls
        `createShare([], true)` and sets `publicLink`; on failure show the error and keep the
        retry available
-4. [ ] Clear `publicLink` when the intro selection changes after a link was created
-5. [ ] Vitest: regression test pinning bug 43p (picked card id reaches the POST body), plus
-       the toggle/Get-Link/email-flow/DOM-order cases
-6. [ ] Manual verify in browser: pick an intro card, then toggle public + get link -> shared
+4. [x] Clear `publicLink` when the intro selection changes after a link was created
+5. [x] Vitest: regression test pinning bug 43p (picked card id reaches the POST body), plus
+       the toggle/Get-Link/email-flow/DOM-order cases (`CollectionShareModal.test.jsx`, 8 cases)
+6. [x] Manual verify in browser: pick an intro card, then toggle public + get link -> shared
        link plays the intro; toggle public without picking -> link explicitly has no intro
-       (matches the visible "No intro" tile)
+       (matches the visible "No intro" tile) — done as a live-drive real-browser QA spec
+       (`e2e/T7150-collection-share-intro-sequencing.qa.spec.js`, 3/3 pass)
 
 ## Acceptance Criteria
-- [ ] Opening the modal shows the Intro picker before the public-link toggle
-- [ ] Flipping "Anyone with the link" on does NOT create a share by itself
-- [ ] A new explicit action creates the public link, using the intro selection visible at
+- [x] Opening the modal shows the Intro picker before the public-link toggle
+- [x] Flipping "Anyone with the link" on does NOT create a share by itself
+- [x] A new explicit action creates the public link, using the intro selection visible at
       that moment
-- [ ] Changing the intro after a link exists clears the stale link
-- [ ] The recipient-email share flow (`handleSubmit`) is unchanged
+- [x] Changing the intro after a link exists clears the stale link
+- [x] The recipient-email share flow (`handleSubmit`) is unchanged
 - [ ] A collection with an explicitly picked intro card plays it on the shared link

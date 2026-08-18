@@ -1,6 +1,6 @@
 # T7130: Reel aspect ratio (9:16 / 16:9) cannot be changed on a phone
 
-**Status:** STAGING — merged to master 2026-08-17 (auto-deploys staging)
+**Status:** DONE (deployed 2026-08-18 prod)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-17
