@@ -1,6 +1,6 @@
 # T6370: SEO — get the landing pages actually indexed (GSC coverage cleanup + page value)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-02
@@ -265,6 +265,26 @@ path with no robots.txt, no robots meta, no canonical, and a `<title>` that cont
 `site.ts`. Measured sport-page template similarity at 109/156 identical rendered-text lines
 (`/soccer` vs `/volleyball`). Site was 9 days old at the time of the email — the 34
 discovered/crawled-not-indexed pages are as much an authority/value problem as a technical one.
+
+**2026-08-17**: Parts B + C implemented via /dotask container worker, merged to master
+(`feature/T6370-seo-indexing-gsc-cleanup`), Branch CI green, auto-deploying to staging.
+**Part A excluded from this run** — steps 1-5 need a GSC Page Indexing export only the user
+can pull; stays TODO. Part B: `robots.txt` added to `app.reelballers.com` (`Disallow: /` +
+`Allow: /shared/` — design doc at `docs/plans/tasks/T6370-design.md` covers why a blanket
+disallow was rejected, share previews live on this host); `noindex,follow` +
+`<title>ReelBallers</title>` added to the app shell. Verified locally via `wrangler pages dev`
+(robots.txt serves `text/plain` ahead of the SPA catch-all) and the 57 existing share-page
+unit tests still pass — **a live staging unfurl check with a real share token is the next
+step**, merge unblocks it. Part C: sport-page unique-content share re-measured and raised
+(whole-page 40.4%→42.6%, content-area-only 63.3%→66.7%, via per-sport
+`framingWhy`/`recruitingWhy` FAQ answers that were previously byte-identical across all 11
+pages); first guide published (`/guides/filming-youth-sports-from-the-sideline`), lifting the
+`/guides` noindex; internal links favoring `/soccer` added from 6 core pages;
+`verify-seo.mjs` extended with sitemap-noindex and nav-noindex invariants (stress-tested
+against synthetic violations); a pre-existing unrelated `verify-seo.mjs` bug (GSC
+ownership-verification file walked as a content page) fixed in the same pass. Still open:
+the staging/prod unfurl check above, GSC "request indexing" (manual GSC action, step 13),
+and the ~4-week indexed-page re-check (acceptance criteria).
 
 ## Acceptance Criteria
 
