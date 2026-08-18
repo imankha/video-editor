@@ -43,6 +43,8 @@ export function OverlayMode({
   onDeleteHighlightRegion,
   onMoveHighlightRegionStart,
   onMoveHighlightRegionEnd,
+  onCommitHighlightRegionStart,
+  onCommitHighlightRegionEnd,
   onRemoveHighlightKeyframe,
   onToggleHighlightRegion,
   onSelectedKeyframeChange,
@@ -297,6 +299,8 @@ export function OverlayMode({
                 onAddRegion={onAddHighlightRegion}
                 onMoveRegionStart={onMoveHighlightRegionStart}
                 onMoveRegionEnd={onMoveHighlightRegionEnd}
+                onCommitRegionStart={onCommitHighlightRegionStart}
+                onCommitRegionEnd={onCommitHighlightRegionEnd}
                 onRemoveKeyframe={onRemoveHighlightKeyframe}
                 onRegionAction={handleRegionAction}
                 onSelectedKeyframeChange={onSelectedKeyframeChange}

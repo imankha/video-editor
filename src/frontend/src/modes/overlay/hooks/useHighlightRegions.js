@@ -457,92 +457,105 @@ export default function useHighlightRegions(videoMetadata) {
   }, [regions, deleteRegion]);
 
   /**
-   * Move region start boundary (for lever dragging)
+   * Move region start boundary (for lever dragging). Returns the APPLIED
+   * (clamped + frame-snapped) region, or null if the region wasn't found.
+   *
+   * T7180: computes off the `regions` closure (not `prev` inside the
+   * `setRegions` updater) so the clamped/snapped result can be RETURNED
+   * synchronously to the caller -- the same "return what was applied,
+   * never re-read state on a later gesture callback" contract T5644 set for
+   * addRegion and useTextOverlays. The caller (OverlayScreen) stashes this
+   * return value and sends THAT to the backend on commit, instead of
+   * re-`.find()`ing `highlightRegions` React state at pointerup time (which
+   * is exactly the stale-state class of bug T5644 fixed for region create).
    */
   const moveRegionStart = useCallback((regionId, newStartTime) => {
-    setRegions(prev => prev.map(region => {
-      if (region.id !== regionId) return region;
+    const region = regions.find(r => r.id === regionId);
+    if (!region) return null;
 
-      // Clamp to valid range
-      const minStart = 0;
-      const maxStart = region.endTime - MIN_REGION_DURATION;
-      const clampedStart = Math.max(minStart, Math.min(newStartTime, maxStart));
+    // Clamp to valid range
+    const minStart = 0;
+    const maxStart = region.endTime - MIN_REGION_DURATION;
+    const clampedStart = Math.max(minStart, Math.min(newStartTime, maxStart));
 
-      // Check for overlap with previous region
-      const prevRegion = prev.filter(r => r.endTime <= region.startTime).pop();
-      const actualStart = prevRegion
-        ? Math.max(clampedStart, prevRegion.endTime)
-        : clampedStart;
+    // Check for overlap with previous region
+    const prevRegion = regions.filter(r => r.endTime <= region.startTime).pop();
+    const actualStart = prevRegion
+      ? Math.max(clampedStart, prevRegion.endTime)
+      : clampedStart;
 
-      // Update start keyframe frame number
-      const startFrame = timeToFrame(actualStart, framerate);
-      // Snap time to exact frame boundary to avoid floating point precision issues
-      const snappedStart = frameToTime(startFrame, framerate);
+    // Update start keyframe frame number
+    const startFrame = timeToFrame(actualStart, framerate);
+    // Snap time to exact frame boundary to avoid floating point precision issues
+    const snappedStart = frameToTime(startFrame, framerate);
 
-      const updatedKeyframes = region.keyframes.map((kf, idx) => {
-        // First keyframe is always the start boundary
-        if (idx === 0) {
-          return { ...kf, frame: startFrame };
-        }
-        return kf;
-      });
+    const updatedKeyframes = region.keyframes.map((kf, idx) => {
+      // First keyframe is always the start boundary
+      if (idx === 0) {
+        return { ...kf, frame: startFrame };
+      }
+      return kf;
+    });
 
-      return {
-        ...region,
-        startTime: snappedStart,
-        keyframes: updatedKeyframes,
-        // T5649: re-slice the video-level detection payload to the region's NEW
-        // [start, end] so dragging the begin lever to 0 pulls in the frame-0
-        // detection (and shrinking drops out-of-range ones). Slice mirrors
-        // addRegion; detections are never persisted per-region (read-time
-        // projection, T5600), so this is memory-only render state.
-        detections: sliceDetections(videoDetections, snappedStart, region.endTime),
-      };
-    }));
-  }, [framerate, videoDetections]);
+    const updated = {
+      ...region,
+      startTime: snappedStart,
+      keyframes: updatedKeyframes,
+      // T5649: re-slice the video-level detection payload to the region's NEW
+      // [start, end] so dragging the begin lever to 0 pulls in the frame-0
+      // detection (and shrinking drops out-of-range ones). Slice mirrors
+      // addRegion; detections are never persisted per-region (read-time
+      // projection, T5600), so this is memory-only render state.
+      detections: sliceDetections(videoDetections, snappedStart, region.endTime),
+    };
+    setRegions(prev => prev.map(r => (r.id === regionId ? updated : r)));
+    return updated;
+  }, [regions, framerate, videoDetections]);
 
   /**
-   * Move region end boundary (for lever dragging)
+   * Move region end boundary (for lever dragging). Returns the APPLIED
+   * (clamped + frame-snapped) region -- see moveRegionStart's doc.
    */
   const moveRegionEnd = useCallback((regionId, newEndTime) => {
-    setRegions(prev => prev.map(region => {
-      if (region.id !== regionId) return region;
+    const region = regions.find(r => r.id === regionId);
+    if (!region) return null;
 
-      // Clamp to valid range
-      const minEnd = region.startTime + MIN_REGION_DURATION;
-      const maxEnd = duration || Infinity;
-      const clampedEnd = Math.max(minEnd, Math.min(newEndTime, maxEnd));
+    // Clamp to valid range
+    const minEnd = region.startTime + MIN_REGION_DURATION;
+    const maxEnd = duration || Infinity;
+    const clampedEnd = Math.max(minEnd, Math.min(newEndTime, maxEnd));
 
-      // Check for overlap with next region
-      const nextRegion = prev.find(r => r.startTime >= region.endTime);
-      const actualEnd = nextRegion
-        ? Math.min(clampedEnd, nextRegion.startTime)
-        : clampedEnd;
+    // Check for overlap with next region
+    const nextRegion = regions.find(r => r.startTime >= region.endTime);
+    const actualEnd = nextRegion
+      ? Math.min(clampedEnd, nextRegion.startTime)
+      : clampedEnd;
 
-      // Update end keyframe frame number
-      const endFrame = timeToFrame(actualEnd, framerate);
-      // Snap time to exact frame boundary to avoid floating point precision issues
-      const snappedEnd = frameToTime(endFrame, framerate);
+    // Update end keyframe frame number
+    const endFrame = timeToFrame(actualEnd, framerate);
+    // Snap time to exact frame boundary to avoid floating point precision issues
+    const snappedEnd = frameToTime(endFrame, framerate);
 
-      const updatedKeyframes = region.keyframes.map((kf, idx) => {
-        // Last keyframe is always the end boundary
-        if (idx === region.keyframes.length - 1) {
-          return { ...kf, frame: endFrame };
-        }
-        return kf;
-      });
+    const updatedKeyframes = region.keyframes.map((kf, idx) => {
+      // Last keyframe is always the end boundary
+      if (idx === region.keyframes.length - 1) {
+        return { ...kf, frame: endFrame };
+      }
+      return kf;
+    });
 
-      return {
-        ...region,
-        endTime: snappedEnd,
-        keyframes: updatedKeyframes,
-        // T5649: re-slice detections to the region's NEW [start, end] (mirror of
-        // moveRegionStart) so shrinking the end drops out-of-range detections and
-        // growing it pulls newly-covered ones in. Memory-only, never persisted.
-        detections: sliceDetections(videoDetections, region.startTime, snappedEnd),
-      };
-    }));
-  }, [duration, framerate, videoDetections]);
+    const updated = {
+      ...region,
+      endTime: snappedEnd,
+      keyframes: updatedKeyframes,
+      // T5649: re-slice detections to the region's NEW [start, end] (mirror of
+      // moveRegionStart) so shrinking the end drops out-of-range detections and
+      // growing it pulls newly-covered ones in. Memory-only, never persisted.
+      detections: sliceDetections(videoDetections, region.startTime, snappedEnd),
+    };
+    setRegions(prev => prev.map(r => (r.id === regionId ? updated : r)));
+    return updated;
+  }, [regions, duration, framerate, videoDetections]);
 
   /**
    * Toggle enabled state for a region by index

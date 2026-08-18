@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-30 (T6190 Framing does NOT fetch games/clips on mount — bootstrap-hydrated games + one-clip-fetch-owner-per-entry-gesture invariant, invalidateClips on leave-annotate + downloads re-edit, dead clipsLoadedAt removed, ConnectionStatus hoisted above the home/editor split; see Invariants §; 2026-07-28 T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-08-17 (T7180 / prod bug 44p: overlay region key-format mismatch — update_region wrote camelCase startTime/endTime and never removed a pre-existing snake_case pair, so a lever drag on an auto-generated region silently never reached the render path, which prefers snake_case when present; fix canonicalizes all region writers on snake_case; see Overlay render read path §); 2026-07-30 (T6190 Framing does NOT fetch games/clips on mount — bootstrap-hydrated games + one-clip-fetch-owner-per-entry-gesture invariant, invalidateClips on leave-annotate + downloads re-edit, dead clipsLoadedAt removed, ConnectionStatus hoisted above the home/editor split; see Invariants §; 2026-07-28 T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -261,9 +261,20 @@ gesture lands — no save/export.
 `overlay.py` now has two canonical helpers for reading region bounds and filtering keyframes:
 
 - **`_region_bounds(region)`** — tolerates BOTH key formats: camelCase `startTime`/`endTime`
-  (written by surgical overlay actions / `overlay_action`) AND snake_case `start_time`/`end_time`
-  (written by `highlight_transform.py` during framing export). Before T4900, the render path
-  read `region['start_time']` directly → KeyError on action-written blobs.
+  AND snake_case `start_time`/`end_time`. Before T4900, the render path read
+  `region['start_time']` directly → KeyError on action-written blobs. **Since T7180, every
+  writer (surgical `update_region`/`create_region` AND `highlight_transform.py`) produces
+  canonical snake_case** — the camelCase tolerance is now READ-side back-compat for
+  pre-T7180 rows, not a live write-format split. `_region_bounds` prefers snake_case WHEN
+  PRESENT (`region.get('start_time', region.get('startTime', 0))`), which is exactly what
+  made T7180 (prod bug 44p) possible: `update_region` used to write ONLY camelCase and never
+  removed a pre-existing snake_case pair, so a lever drag on an auto-generated region (which
+  starts life with snake_case bounds) updated a key nothing read — the render path and a
+  fresh page load kept using the ORIGINAL auto-placed bounds forever, silently dropping every
+  keyframe the user placed outside them, with the export completing 200/success. Fix:
+  `update_region`/`create_region` now write snake_case and `.pop()` any stale camelCase pair.
+  **If you ever add a new region write site, it MUST write snake_case and pop camelCase, or
+  this bug class reopens.**
 - **`_keyframes_within_bounds(region, eps=0.04)`** — keeps keyframes inside the region's
   CURRENT (possibly extended) `[start, end]` bounds from `_region_bounds`. T4900 failure mode
   3: when the user extends a segment and adds keyframes past the original auto-boundary, the
