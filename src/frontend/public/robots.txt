@@ -1,0 +1,12 @@
+# app.reelballers.com -- the logged-in editor SPA. It should not compete for
+# the search index: every unknown path is a soft-404 copy of the app shell
+# (see public/_redirects `/* /index.html 200`). Block crawling of the app,
+# but KEEP the public share surfaces fetchable so link unfurls still work
+# (Slack/Twitter/LinkedIn/iMessage honor robots.txt; a blanket Disallow would
+# break their previews of /shared/* links). See docs/plans/tasks/T6370-design.md.
+#
+# The marketing site has its own robots.txt on reelballers.com (deliberately
+# permissive to AI crawlers) -- do not confuse the two hosts.
+User-agent: *
+Allow: /shared/
+Disallow: /

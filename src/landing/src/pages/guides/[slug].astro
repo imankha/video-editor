@@ -1,0 +1,86 @@
+---
+/**
+ * Guide page -- /guides/{slug}.
+ *
+ * One route, one page per published guide (mirrors [sport].astro's pattern:
+ * metadata lives in data/guides.ts, the body is a separate MDX file). Only
+ * PUBLISHED_GUIDES generate a path, so an unapproved outline in guides.ts can
+ * never leak as a live URL.
+ */
+import { getEntry, render } from 'astro:content'
+import PageLayout from '../../layouts/PageLayout.astro'
+import Faq from '../../components/Faq.astro'
+import Cta from '../../components/Cta.astro'
+import { PUBLISHED_GUIDES, type Guide } from '../../data/guides'
+import { article, softwareApplication, webPage, breadcrumbs, faqPage, type FaqItem } from '../../lib/schema'
+
+export function getStaticPaths() {
+  return PUBLISHED_GUIDES.map((guide) => ({ params: { slug: guide.slug }, props: { guide } }))
+}
+
+interface Props {
+  guide: Guide
+}
+
+const { guide } = Astro.props as Props
+const path = `/guides/${guide.slug}`
+
+// The body lives in the `guides` content collection (content/guides/{slug}.mdx)
+// with no frontmatter of its own -- all metadata comes from data/guides.ts, so
+// there is exactly one place each guide's title/description/dates live.
+const entry = await getEntry('guides', guide.slug)
+const { Content } = entry ? await render(entry) : { Content: null }
+
+const faqs: FaqItem[] = [
+  { q: guide.targetQuery.charAt(0).toUpperCase() + guide.targetQuery.slice(1) + '?', a: guide.answer },
+]
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: guide.h1, description: guide.description, path }),
+  breadcrumbs([
+    { name: 'Guides', path: '/guides' },
+    { name: guide.title, path },
+  ]),
+  article({
+    headline: guide.h1,
+    description: guide.description,
+    path,
+    datePublished: guide.datePublished,
+    dateModified: guide.dateModified,
+  }),
+  faqPage(faqs),
+]
+---
+
+<PageLayout
+  title={guide.title}
+  description={guide.description}
+  path={path}
+  schemas={schemas}
+  dateModified={guide.dateModified}
+  trail={[{ name: 'Guides', path: '/guides' }, { name: guide.title, path }]}
+  current="/guides"
+>
+  <section class="container mx-auto px-4 pt-10 pb-6">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">{guide.h1}</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">{guide.answer}</p>
+      {
+        guide.dateModified && (
+          <p class="mt-4 text-xs text-gray-500">
+            Updated <time datetime={guide.dateModified}>{guide.dateModified}</time>
+          </p>
+        )
+      }
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-6">
+    <div class="guide-body max-w-3xl">{Content && <Content />}</div>
+  </section>
+
+  <Faq items={faqs} heading="Common questions" />
+
+  <Cta heading="Ready to build the reel?" />
+</PageLayout>

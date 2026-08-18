@@ -43,6 +43,15 @@ export interface Sport {
   challenge: string
   /** What college/club evaluators look for. Sport-specific, not generic. */
   scouting: string
+  /**
+   * Short (~1 sentence) answer to "why does auto-follow framing matter for
+   * THIS sport" -- feeds the framing FAQ. Distinct wording from `challenge`
+   * (which is the longer prose version of the same underlying fact) so the
+   * page reads as two takes on one idea rather than a repeated paragraph.
+   */
+  framingWhy: string
+  /** Short (~1 sentence) answer to "what should a {sport} recruiting reel show" -- feeds the recruiting FAQ. Distinct wording from `scouting`. */
+  recruitingWhy: string
 }
 
 export const SPORTS: Sport[] = [
@@ -62,6 +71,10 @@ export const SPORTS: Sport[] = [
       'Soccer is the hardest sport to film from the sideline. The field is huge, play switches ends in seconds, and a wide shot that captures the run leaves your player eight pixels tall. That is the exact problem auto-follow framing solves: keep the wide camera, and let the crop chase the player.',
     scouting:
       'College soccer coaches watch for first touch, decision speed, and what a player does off the ball. A reel of nothing but goals hides all three, so clips that show the two seconds before the pass are worth as much as the finish.',
+    framingWhy:
+      'A wide-enough shot to cover the pitch makes your player small in frame. Auto-follow closes that gap without you needing to zoom in and lose the run of play around them.',
+    recruitingWhy:
+      'Lead with first touch and off-ball movement, not just finishes -- a reel of goals alone tells a coach less than the decisions that set them up.',
   },
   {
     slug: 'basketball',
@@ -79,6 +92,10 @@ export const SPORTS: Sport[] = [
       'Basketball footage is usually shot from one corner of the gym, so half the possessions run away from the camera and the rim is at an angle. Tight auto-framing on the ball-handler recovers a usable shot from that fixed angle without a second camera.',
     scouting:
       'College basketball coaches want to see defensive effort and shot selection, not just made buckets. Clips that include the possession before the shot -- the screen, the read, the closeout -- tell them more than a montage of makes.',
+    framingWhy:
+      'Filmed from one corner of the gym, the ball-handler is usually the only player worth tracking tightly. Auto-follow keeps them framed through the possession without a second camera.',
+    recruitingWhy:
+      'Show the possession before the shot -- the screen, the closeout, the defensive rotation -- since coaches judge effort and reads more than made buckets.',
   },
   {
     slug: 'football',
@@ -96,6 +113,10 @@ export const SPORTS: Sport[] = [
       'Football film is only useful if the viewer can tell which of the twenty-two players is yours. Without a spotlight, a coach watching an offensive lineman has no idea where to look, and stops watching. The spotlight effect solves the single biggest reason football reels get skipped.',
     scouting:
       'College football coaches evaluate by position and want to see the same technique repeated, not one spectacular play. They also want the play to start before the snap so they can see alignment and the read.',
+    framingWhy:
+      'With twenty-two players on screen, a spotlight is what tells a viewer which one is yours. Without it, most football film is unwatchable to anyone outside the family.',
+    recruitingWhy:
+      'Start the clip before the snap so alignment and the read are visible, and repeat the same technique on multiple plays rather than including one highlight-reel moment.',
   },
   {
     slug: 'flag-football',
@@ -113,6 +134,10 @@ export const SPORTS: Sport[] = [
       'Flag football is almost always filmed on a phone from the sideline by a parent, at a field with no elevated angle. That footage is wide and shaky by default, which is why stabilised auto-framing and upscaling matter more here than in any other sport.',
     scouting:
       'With flag football now an Olympic sport and growing fast in schools, reels are increasingly used for team and select-squad selection. Coaches look for separation on routes and clean flag-pull technique.',
+    framingWhy:
+      'Sideline phone footage of flag football is wide and shaky by default, so stabilised auto-follow framing does more work here than in almost any other sport.',
+    recruitingWhy:
+      'Selectors increasingly use flag football reels for team and squad selection, and look for separation on routes plus clean flag-pull technique, not just touchdowns.',
   },
   {
     slug: 'baseball',
@@ -130,6 +155,10 @@ export const SPORTS: Sport[] = [
       'Baseball has enormous dead time between moments that matter, so the editing job is mostly finding the twelve useful seconds inside three hours. Marking plays live as you watch, rather than scrubbing afterwards, is what makes a baseball reel tractable.',
     scouting:
       'College baseball recruiters typically want mechanics over outcomes: the same swing or delivery from a consistent angle, repeated. Many also want unedited at-bat sequences alongside the highlight cut.',
+    framingWhy:
+      'Most of a baseball game is dead time, so auto-follow framing matters less here than fast, accurate marking of the few seconds -- a pitch, an at-bat, a play -- actually worth keeping.',
+    recruitingWhy:
+      "Recruiters want repeatable mechanics from a consistent angle -- the same swing or delivery shown more than once -- often alongside unedited at-bat sequences.",
   },
   {
     slug: 'softball',
@@ -147,6 +176,10 @@ export const SPORTS: Sport[] = [
       'Fastpitch is a reaction-time sport: the windmill delivery covers the 43-foot circle in a blink, and a rise ball only reads its late jump on video when the camera holds the pitcher and batter tight. From the backstop or the outfield fence a wide phone shot flattens that movement, which is exactly what auto-follow framing recovers -- it crops in so the spin and the swing stay legible.',
     scouting:
       'College and travel-ball softball evaluators want repeatable mechanics from a steady angle -- a pitcher spin and release, a slapper footwork out of the box, a middle infielder transfer on the double play. Showcase and club-tournament reels carry more weight when they show full at-bats and defensive sequences than a cut of results alone.',
+    framingWhy:
+      "A rise ball's late jump and a windmill delivery only read on video when the pitcher and batter stay tight in frame. Auto-follow recovers that from a wide backstop or fence shot.",
+    recruitingWhy:
+      "Evaluators want repeatable mechanics -- a pitcher's spin and release, a slapper's footwork -- shown across full at-bats and defensive sequences, not just a highlight cut.",
   },
   {
     slug: 'volleyball',
@@ -164,6 +197,10 @@ export const SPORTS: Sport[] = [
       'Volleyball is filmed from behind the baseline or up in the stands, where six players in identical uniforms move as a unit. A libero or setter is genuinely hard to pick out, which makes the spotlight and follow-crop the difference between a usable reel and an unwatchable one.',
     scouting:
       'College volleyball coaches want position-specific evidence -- a setter is judged on hands and tempo, a libero on platform and range -- plus full rallies rather than isolated terminal swings.',
+    framingWhy:
+      'Six players in identical uniforms, filmed from behind the baseline, make a libero or setter genuinely hard to pick out without a spotlight and a tight follow-crop.',
+    recruitingWhy:
+      'Coaches judge by position -- hands and tempo for a setter, platform and range for a libero -- and want full rallies, not isolated terminal swings.',
   },
   {
     slug: 'lacrosse',
@@ -181,6 +218,10 @@ export const SPORTS: Sport[] = [
       'Lacrosse combines a big field with fast transition, so sideline footage is wide and the ball moves faster than a parent can pan. Auto-follow framing recovers a tight shot from wide footage without anyone having to operate the camera well.',
     scouting:
       'College lacrosse coaches recruit early and watch for ground-ball effort and off-ball movement as much as finishing. Ground balls are the clips most players under-include and coaches most want to see.',
+    framingWhy:
+      'The ball carrier changes constantly inside a moving pack on a big field. Auto-follow tracks whoever has it without a second camera operator chasing the play.',
+    recruitingWhy:
+      'Coaches recruit early and weight ground-ball effort and off-ball movement heavily -- the clips most players under-include and coaches most want to see.',
   },
   {
     slug: 'hockey',
@@ -198,6 +239,10 @@ export const SPORTS: Sport[] = [
       'Hockey is filmed through glass, from height, with every skater in a helmet and identical sweater. Jersey numbers are unreadable at that distance, so a spotlight marker is often the only way a viewer can follow one player.',
     scouting:
       'Junior and college hockey scouts watch skating stride and puck support away from the play. Shift-length clips are usually more informative than isolated goals.',
+    framingWhy:
+      'Filmed through glass with every skater helmeted and numbers unreadable at distance, a spotlight marker is often the only way a viewer can follow one player.',
+    recruitingWhy:
+      'Scouts watch skating stride and puck support away from the play, so shift-length clips usually tell them more than a cut of isolated goals.',
   },
   {
     slug: 'rugby',
@@ -215,6 +260,10 @@ export const SPORTS: Sport[] = [
       'Rugby footage is wide by necessity and the ball carrier changes constantly inside a moving pack. Following one player through phase play is the specific thing manual editing cannot do without a second camera operator.',
     scouting:
       'Rugby selectors look for work rate between carries -- the rucks hit, the tackles made off camera-side. Continuous phase clips show that; a montage of tries does not.',
+    framingWhy:
+      'Wide-by-necessity footage with a ball carrier that changes inside a moving pack is exactly the situation a second camera operator would normally be needed for. Auto-follow replaces that.',
+    recruitingWhy:
+      'Selectors look for work rate between carries -- rucks hit, tackles made off the ball -- which continuous phase-play clips show and a highlight cut of tries does not.',
   },
   {
     slug: 'tennis',
@@ -232,6 +281,10 @@ export const SPORTS: Sport[] = [
       'Tennis is usually filmed from behind the baseline on a fence-mounted phone, so the far player is small and the near player is cropped. A follow-crop that tracks one player keeps them at a usable size through the whole point.',
     scouting:
       'College tennis coaches want full points, not winners in isolation -- they are evaluating construction and movement. Serve mechanics from a consistent angle is the other clip they consistently ask for.',
+    framingWhy:
+      'Filmed from behind the baseline on a fence-mounted phone, the far player is small and the near player is often cropped. A follow-crop keeps one player a usable size for the whole point.',
+    recruitingWhy:
+      "College coaches want full points, not winners in isolation, since they're evaluating point construction and movement -- plus serve mechanics from a consistent angle.",
   },
 ]
 
