@@ -1,10 +1,10 @@
 # T7180: Overlay highlight region key-format mismatch drops the spotlight silently
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-17
-**Updated:** 2026-08-17
+**Updated:** 2026-08-18
 
 ## Problem
 
@@ -172,8 +172,16 @@ comments claiming "actions write camelCase" fixed in `overlay.py` and the knowle
 Committed to `feature/T7180-overlay-region-key-mismatch` (c60ab5a8). Reviewer agent
 infrastructure hit repeated transient 500s on round 2 (5 consecutive failures across 2 agent
 spawns); per user direction, did a final self-review pass instead (re-read every changed file,
-re-verified the round-1 MAJOR fixes and their tests) before committing. Not yet pushed/merged;
-step 6 (live browser verify) still open — status WAITING ON USER pending push/merge decision.
+re-verified the round-1 MAJOR fixes and their tests) before committing.
+
+**2026-08-18**: User tested locally and approved ("looks good, push and merge"). Pushed branch,
+merged to master (`--no-ff`, commit `99551af6`) with one conflict in `PLAN.md` (an unrelated
+T6370 row a concurrent session had advanced to STAGING — resolved by keeping the newer STAGING
+status, not reverting it). Push raced a concurrent session also working in this shared checkout;
+their subsequent push carried this merge commit to `origin/master` (confirmed present via
+`git merge-base --is-ancestor`). Feature branch deleted (local + remote). Master auto-deploys
+staging — status STAGING. Step 6 (live browser verify) still not done as a dedicated pass, but
+the user did exercise the local dev build before approving.
 
 ## Acceptance Criteria
 
