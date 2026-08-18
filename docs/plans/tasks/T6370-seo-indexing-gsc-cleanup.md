@@ -282,9 +282,21 @@ pages); first guide published (`/guides/filming-youth-sports-from-the-sideline`)
 `/guides` noindex; internal links favoring `/soccer` added from 6 core pages;
 `verify-seo.mjs` extended with sitemap-noindex and nav-noindex invariants (stress-tested
 against synthetic violations); a pre-existing unrelated `verify-seo.mjs` bug (GSC
-ownership-verification file walked as a content page) fixed in the same pass. Still open:
-the staging/prod unfurl check above, GSC "request indexing" (manual GSC action, step 13),
-and the ~4-week indexed-page re-check (acceptance criteria).
+ownership-verification file walked as a content page) fixed in the same pass.
+
+**2026-08-18**: Post-merge staging unfurl check completed (closes the item left open above).
+Deploy Frontend/Landing/Backend + Master CI all green on the merge commit. Live-verified on
+`https://reel-ballers-staging.pages.dev`: `dev-login`'d as the real `imankh@gmail.com`
+staging account, created a live public share via `POST /api/gallery/{video_id}/share`,
+curled the resulting `/shared/{token}` URL with `facebookexternalhit`/`Googlebot`/`Twitterbot`
+user agents — all 200, correct `og:title`/`og:description`/`og:video`/`og:type`, confirming
+`Allow: /shared/` correctly overrides the blanket `Disallow: /`. Also confirmed `robots.txt`
+serves `text/plain` on the live staging host and the app-shell `noindex`/title fix is live.
+**Found, not fixed (out of T6370 scope):** the share page's `og:site_name` still reads
+"Reel Ballers" (with a space) — same entity-name rule this task fixed elsewhere, but in a
+different file (`functions/shared/[token].js`, not `index.html`); candidate follow-up task.
+Still open: GSC "request indexing" (manual GSC action, step 13), the ~4-week indexed-page
+re-check (acceptance criteria), and all of Part A (needs the user's GSC export).
 
 ## Acceptance Criteria
 
