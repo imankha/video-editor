@@ -33,20 +33,17 @@ function fmtDuration(seconds) {
 }
 
 test('T5770 admin Avg/wk + Last 7d columns render real numbers', async ({ context, page }) => {
-  skipOnDeployedTarget(test, "import()s /src/stores/authStore.js to call checkAdmin() (Vite-dev path; 404s on a deployed build)");
+  // Still import()s /src/utils/apiFetch.js in-page below (Vite-dev path; 404s
+  // on a deployed build) for the rendered-vs-API cross-check.
+  skipOnDeployedTarget(test, "import()s /src/utils/apiFetch.js (Vite-dev path; 404s on a deployed build)");
   test.setTimeout(120000);
 
   await loginAsRealUser(context, ADMIN_EMAIL);
-  await page.goto('/');
-  await expect(page.getByRole('button', { name: ADMIN_EMAIL })).toBeVisible({ timeout: 30000 });
-  await page.evaluate(async () => {
-    const { useAuthStore } = await import('/src/stores/authStore.js');
-    await useAuthStore.getState().checkAdmin();
-  });
-
-  const adminBtn = page.locator('[title="Admin Panel"]');
-  await adminBtn.waitFor({ state: 'visible', timeout: 30000 });
-  await adminBtn.click();
+  // T7200: checkAdmin() now always runs on session init, so navigating straight
+  // to the admin route reflects admin status without a manual in-page
+  // checkAdmin() call (no separate header button anymore either — Admin is now
+  // a row in the profile switcher).
+  await page.goto('/admin');
 
   const usersTable = page.locator('table').filter({ has: page.locator('[title="Grant credits"]') });
   await expect(usersTable.locator('tbody tr').first()).toBeVisible({ timeout: 30000 });

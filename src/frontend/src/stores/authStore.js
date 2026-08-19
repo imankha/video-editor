@@ -33,11 +33,14 @@ export const useAuthStore = create((set, get) => ({
     _checkAdminPromise = (async () => {
       try {
         const res = await apiFetch(`${API_BASE}/api/admin/me`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          console.warn(`[Auth] checkAdmin: /api/admin/me returned ${res.status}`);
+          return;
+        }
         const data = await res.json();
         set({ isAdmin: data.is_admin, adminEnvironment: data.environment || null });
-      } catch {
-        // Best-effort — non-critical
+      } catch (err) {
+        console.warn('[Auth] checkAdmin failed:', err.message || err);
       } finally {
         _checkAdminPromise = null;
       }
@@ -121,7 +124,11 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // Called on app load after session check.
-  // skipFetches: true when bootstrap will provide credits/admin data.
+  // skipFetches: true when bootstrap will provide credits data. Admin status is
+  // NEVER covered by bootstrap (GET /api/bootstrap has no is_admin field) so
+  // checkAdmin() always runs on its own — otherwise isAdmin silently resets to
+  // false on every hard reload (e.g. impersonate/stop-impersonate) and never
+  // gets recomputed.
   setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null, { skipFetches = false } = {}) => {
     console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}${impersonator ? ` (impersonated by ${impersonator.email})` : ''}`);
     set({
@@ -131,9 +138,11 @@ export const useAuthStore = create((set, get) => ({
       impersonator,
       isCheckingSession: false,
     });
-    if (!skipFetches && isAuthenticated) {
-      useCreditStore.getState().fetchCredits();
+    if (isAuthenticated) {
       useAuthStore.getState().checkAdmin();
+      if (!skipFetches) {
+        useCreditStore.getState().fetchCredits();
+      }
     }
   },
 
