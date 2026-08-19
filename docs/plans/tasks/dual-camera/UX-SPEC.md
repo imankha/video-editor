@@ -542,8 +542,13 @@ Format (Full Game/Per Half) · dropzone · Add Game. What changes:
      goal — before committing; the rectangle stays fixed while the preview scrubs (ONE
      static crop for the whole upload: acquisition correction, not creative framing —
      T5750 family).
-   - **Live savings line**, prominent: `Upload cropped — {newSize} GB · {n} credits
-     (was {oldSize} GB · {m} credits)`.
+   - **Why-line**, above the savings (`text-sm text-gray-300`): *"Cropping out unused
+     pixels — sky, ceiling, empty stands — makes the video smaller, which lowers your
+     storage and upload cost."* The user must understand the point before they drag.
+   - **Live savings line**, prominent, **recomputed continuously as the crop rectangle
+     changes** (estimate ∝ kept-pixel fraction of the source bitrate): `Upload cropped —
+     {newSize} GB · {n} credits (was {oldSize} GB · {m} credits)`. Dragging the rect
+     visibly moves the number — the size IS the feedback.
    - Footer: `<Button variant="success">Apply crop & continue</Button>` /
      `<Button variant="ghost">Upload uncropped</Button>` / back.
    **Everything happens on the device:** decode → crop → re-encode via WebCodecs
