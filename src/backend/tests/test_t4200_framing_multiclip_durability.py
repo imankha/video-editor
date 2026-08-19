@@ -24,9 +24,9 @@ import app.routers.export.multi_clip as mc
 import app.services.export_helpers as helpers
 from app.constants import ExportStatus
 from app.database import get_db_connection
-from app.user_context import set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.session_init import _init_cache
+from app.user_context import set_current_user_id
 
 TEST_USER_ID = f"test_t4200_{uuid.uuid4().hex[:8]}"
 TEST_PROFILE_ID = "testdefault"
@@ -74,7 +74,7 @@ def _patch_modal_pipeline(monkeypatch, sent):
     async def fake_detect(**kwargs):
         return [], {"videoWidth": None, "videoHeight": None, "fps": 30, "detections": []}
 
-    async def fake_delete(*a, **k):
+    def fake_delete(*a, **k):
         return True
 
     monkeypatch.setattr(mc, "modal_enabled", lambda: True)
@@ -107,16 +107,23 @@ async def _run(project_id):
 
 
 @pytest.mark.asyncio
-async def test_sync_ok_announces_complete(project, monkeypatch):
+async def test_sync_ok_announces_complete(project, monkeypatch, caplog):
     sent = []
     _patch_modal_pipeline(monkeypatch, sent)
     monkeypatch.setattr(helpers, "sync_export_db_to_r2", lambda *a, **k: True)
 
-    await _run(project)
+    with caplog.at_level("WARNING"):
+        await _run(project)
 
     terminal = sent[-1]
     assert terminal["status"] == ExportStatus.COMPLETE, terminal
     assert not terminal.get("retryable")
+    # Regression: delete_from_r2 is synchronous (storage.py) -- `await`ing it
+    # directly threw on its plain bool return, silently swallowed by the
+    # cleanup try/except and logged as a false "failed to delete" every time
+    # the scratch source cleanup ran (T7210 follow-up, found live on staging).
+    assert not any("Failed to delete temp file" in r.message for r in caplog.records), \
+        "temp source cleanup should not warn when delete_from_r2 succeeds"
 
 
 @pytest.mark.asyncio

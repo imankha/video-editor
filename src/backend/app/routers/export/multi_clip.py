@@ -1431,10 +1431,14 @@ async def _export_clips(
                 error = result.get("error", "Unknown error")
                 raise RuntimeError(f"Modal multi-clip processing failed: {error}")
 
-            # Clean up temp source files from R2
+            # Clean up temp source files from R2. delete_from_r2 is synchronous
+            # (blocking network I/O) -- offload via asyncio.to_thread like the
+            # upload above, not `await` directly (that awaited its plain bool
+            # return value, which always threw and got logged as a false
+            # "failed to delete" even though the delete had already succeeded).
             for source_key in source_keys:
                 try:
-                    await delete_from_r2(user_id, source_key)
+                    await asyncio.to_thread(delete_from_r2, user_id, source_key)
                 except Exception as e:
                     logger.warning(f"[Multi-Clip Export] Failed to delete temp file {source_key}: {e}")
 

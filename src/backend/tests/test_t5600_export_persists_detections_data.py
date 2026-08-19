@@ -88,7 +88,7 @@ def _patch_modal_pipeline(monkeypatch, sent, detect_fn):
     async def fake_modal(**kwargs):
         return {"status": "success", "gpu_seconds": 1.0, "modal_function": "test", "clips_processed": 1}
 
-    async def fake_delete(*a, **k):
+    def fake_delete(*a, **k):
         return True
 
     monkeypatch.setattr(mc, "modal_enabled", lambda: True)
