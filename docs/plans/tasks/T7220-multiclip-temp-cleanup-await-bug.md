@@ -1,6 +1,6 @@
 # T7220: Multi-clip temp-source cleanup awaited a sync function
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-19 prod)
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-08-19
