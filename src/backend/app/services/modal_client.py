@@ -110,6 +110,12 @@ MODAL_JOB_RETRY_ATTEMPTS = 3  # total attempts (1 initial + 2 retries)
 MODAL_JOB_RETRY_DELAY = 3.0  # initial delay in seconds
 MODAL_JOB_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
 
+# E6 benchmark anchor (.claude/knowledge/modal-gpu.md): T4 GPU sequential upscale
+# throughput. A rough per-clip expected-duration estimate for the slow-job warning
+# below, not a hard guarantee -- GPU contention/cold draws vary this legitimately.
+MODAL_UPSCALE_SECONDS_PER_FRAME_ANCHOR = 0.681
+SLOW_MODAL_JOB_THRESHOLD_MULTIPLIER = 2.0
+
 
 def _is_transient_network_error(error: Exception) -> bool:
     """
@@ -143,11 +149,7 @@ def _is_transient_network_error(error: Exception) -> bool:
         "broken pipe",
     ]
 
-    for keyword in network_keywords:
-        if keyword in error_msg:
-            return True
-
-    return False
+    return any(keyword in error_msg for keyword in network_keywords)
 
 
 def classify_modal_error(error: Exception) -> str:
@@ -224,7 +226,7 @@ def _log_modal_job_start(
     job_id: str,
     user_id: str,
     modal_app: str,
-    extra: dict = None,
+    extra: dict | None = None,
 ):
     """Log structured context at Modal job start."""
     parts = [
@@ -247,10 +249,10 @@ def _log_modal_job_end(
     modal_app: str,
     elapsed: float,
     status: str,
-    error: Exception = None,
-    error_class: str = None,
-    attempt: int = None,
-    extra: dict = None,
+    error: Exception | None = None,
+    error_class: str | None = None,
+    attempt: int | None = None,
+    extra: dict | None = None,
 ):
     """Log structured context at Modal job completion or failure."""
     parts = [
@@ -277,7 +279,7 @@ def _log_modal_job_end(
         logger.info(" ".join(parts))
 
 
-def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: dict = None):
+def log_progress_event(job_id: str, phase: str, elapsed: float | None = None, extra: dict | None = None):
     """
     Log structured progress event for timing analysis.
 
@@ -370,7 +372,7 @@ def _get_render_overlay_fn():
         return _render_overlay_fn
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to render_overlay: {e}")
-        raise RuntimeError(f"Modal render_overlay not available: {e}")
+        raise RuntimeError(f"Modal render_overlay not available: {e}") from e
 
 
 def _get_process_framing_ai_fn():
@@ -387,7 +389,7 @@ def _get_process_framing_ai_fn():
         return _process_framing_ai_fn
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to process_framing_ai: {e}")
-        raise RuntimeError(f"Modal process_framing_ai not available: {e}")
+        raise RuntimeError(f"Modal process_framing_ai not available: {e}") from e
 
 
 def _get_process_framing_ai_parallel_fn():
@@ -404,7 +406,7 @@ def _get_process_framing_ai_parallel_fn():
         return _process_framing_ai_parallel_fn
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to process_framing_ai_parallel: {e}")
-        raise RuntimeError(f"Modal process_framing_ai_parallel not available: {e}")
+        raise RuntimeError(f"Modal process_framing_ai_parallel not available: {e}") from e
 
 
 # GPU thresholds for framing AI parallelization (mirrors video_processing.py)
@@ -443,7 +445,7 @@ def _get_detect_players_fn():
         return _detect_players_fn
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to detect_players_modal: {e}")
-        raise RuntimeError(f"Modal detect_players_modal not available: {e}")
+        raise RuntimeError(f"Modal detect_players_modal not available: {e}") from e
 
 
 def _get_detect_players_batch_fn():
@@ -460,7 +462,7 @@ def _get_detect_players_batch_fn():
         return _detect_players_batch_fn
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to detect_players_batch_modal: {e}")
-        raise RuntimeError(f"Modal detect_players_batch_modal not available: {e}")
+        raise RuntimeError(f"Modal detect_players_batch_modal not available: {e}") from e
 
 
 # Cached reference for unified function
@@ -589,7 +591,7 @@ def _get_process_clips_ai_fn():
         return _process_clips_ai_fn
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to process_clips_ai: {e}")
-        raise RuntimeError(f"Modal process_clips_ai not available: {e}")
+        raise RuntimeError(f"Modal process_clips_ai not available: {e}") from e
 
 
 
@@ -603,15 +605,15 @@ async def call_modal_framing_ai(
     output_width: int = 810,
     output_height: int = 1440,
     fps: int = 30,
-    segment_data: dict = None,
-    video_duration: float = None,
+    segment_data: dict | None = None,
+    video_duration: float | None = None,
     progress_callback = None,
     call_id_callback = None,
     include_audio: bool = True,
     export_mode: str = "quality",
     test_mode: bool = False,
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
     profile_id: str | None = None,
 ) -> dict:
     """
@@ -732,7 +734,7 @@ async def call_modal_framing_ai(
                 process_fn = _get_process_framing_ai_parallel_fn()
                 logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
 
-                def get_generator():
+                def get_generator(process_fn=process_fn):
                     return process_fn.remote_gen(
                         job_id=job_id,
                         user_id=user_id,
@@ -755,7 +757,7 @@ async def call_modal_framing_ai(
                 else:
                     logger.info("[Modal] Using sequential processing (short video)")
 
-                def get_generator():
+                def get_generator(process_fn=process_fn):
                     return process_fn.remote_gen(
                         job_id=job_id,
                         user_id=user_id,
@@ -774,14 +776,10 @@ async def call_modal_framing_ai(
             # Get the generator in executor (Modal API is sync)
             gen = await loop.run_in_executor(None, get_generator)
 
-            # Capture Modal call ID for correlation
+            # remote_gen() returns a plain generator with no call-id handle (unlike
+            # call_modal_clips_ai, this path doesn't have the Modal function emit its
+            # own call id as a stream item) -- not available for this call type.
             modal_call_id = None
-            try:
-                if hasattr(gen, 'object_id'):
-                    modal_call_id = gen.object_id
-                    logger.info(f"[Modal] Framing AI call_id: {modal_call_id}")
-            except Exception:
-                pass
 
             log_progress_event(job_id, "modal_streaming_started")
             logger.info(f"[Modal] Streaming progress from Modal for job {job_id}")
@@ -901,7 +899,7 @@ async def call_modal_clips_ai(
     target_height: int = 1440,
     fps: int = 30,
     include_audio: bool = True,
-    transition: dict = None,
+    transition: dict | None = None,
     progress_callback = None,
     call_id_callback = None,
 ) -> dict:
@@ -925,7 +923,9 @@ async def call_modal_clips_ai(
         include_audio: Include audio track (default True)
         transition: Optional {type: "cut"|"fade", duration: float} for multi-clip
         progress_callback: async callable(progress: float, message: str, phase: str) for updates
-        call_id_callback: Optional callable(modal_call_id: str) to store call ID for recovery
+        call_id_callback: Optional callable(modal_call_id: str), invoked when the Modal
+            container emits its own call id as the first stream item (remote_gen() gives
+            the caller no handle to it directly -- see process_clips_ai's first yield)
 
     Returns:
         {"status": "success", "output_key": "...", "clips_processed": N} or
@@ -939,6 +939,10 @@ async def call_modal_clips_ai(
     user_id = _resolve_modal_user_id(user_id)
 
     total_clips = len(clips_data)
+
+    # Rough expected-duration estimate for the slow-job warning below (E6 anchor).
+    expected_total_frames = sum((c.get('duration', 15.0) or 15.0) * fps for c in clips_data)
+    expected_seconds = expected_total_frames * MODAL_UPSCALE_SECONDS_PER_FRAME_ANCHOR
 
     _log_modal_job_start(
         job_type="clips_ai",
@@ -965,7 +969,7 @@ async def call_modal_clips_ai(
             # Use remote_gen() to stream real progress from Modal
             loop = asyncio.get_running_loop()
 
-            def get_generator():
+            def get_generator(process_clips_ai=process_clips_ai):
                 return process_clips_ai.remote_gen(
                     job_id=job_id,
                     user_id=user_id,
@@ -981,22 +985,16 @@ async def call_modal_clips_ai(
 
             gen = await loop.run_in_executor(None, get_generator)
 
-            # Try to get the Modal call_id for recovery
-            try:
-                if hasattr(gen, 'object_id'):
-                    modal_call_id = gen.object_id
-                    if call_id_callback and modal_call_id:
-                        call_id_callback(modal_call_id)
-                        logger.info(f"[Modal] Stored call_id for recovery: {modal_call_id[:20]}...")
-            except Exception as e:
-                logger.warning(f"[Modal] Could not get call_id for recovery: {e}")
-
             log_progress_event(job_id, "modal_streaming_started")
             logger.info(f"[Modal] Streaming progress for job {job_id}")
 
             result = None
             last_progress = None
             job_started = False  # Track if Modal actually started processing
+            modal_call_id = None  # gen has no .object_id (plain generator, not a
+            # FunctionCall) -- captured from the first stream item instead, which the
+            # Modal function emits via modal.current_function_call_id().
+            slow_job_warned = False
 
             def next_item(generator):
                 try:
@@ -1033,6 +1031,28 @@ async def call_modal_clips_ai(
 
                 job_started = True  # We received at least one update
 
+                if modal_call_id is None:
+                    cid = update.get("modal_call_id")
+                    if cid:
+                        modal_call_id = cid
+                        if call_id_callback:
+                            call_id_callback(cid)
+                        logger.info(f"[Modal] Stored call_id for recovery: {cid}")
+                        # This item is a pure dispatch marker (progress=0, no real
+                        # status) -- forwarding it to progress_callback would show
+                        # the UI a backwards jump after the 5% "Starting..." tick.
+                        continue
+
+                if not slow_job_warned and expected_seconds > 0:
+                    elapsed_so_far = time.time() - job_start_time
+                    if elapsed_so_far > expected_seconds * SLOW_MODAL_JOB_THRESHOLD_MULTIPLIER:
+                        slow_job_warned = True
+                        logger.warning(
+                            f"[SLOW MODAL JOB] job={job_id} elapsed={elapsed_so_far:.1f}s "
+                            f"expected~{expected_seconds:.1f}s (E6 anchor) -- still running, "
+                            f"not necessarily stuck (see modal app logs for per-frame progress)"
+                        )
+
                 if "status" in update:
                     result = update
                     logger.info(f"[Modal] Received final result: {result.get('status')}")
@@ -1059,7 +1079,7 @@ async def call_modal_clips_ai(
                 "status": result.get("status", "unknown") if result else "no_result",
                 "clips": clips_processed
             })
-            logger.info(f"[Modal] Clips AI job {job_id} completed: {result}")
+            logger.info(f"[Modal] Clips AI job {job_id} completed (call_id={modal_call_id}): {result}")
             final = result or {"status": "error", "error": "No result received from Modal"}
             final["gpu_seconds"] = round(total_elapsed, 2)
             final["modal_function"] = "overlay"
@@ -1100,12 +1120,12 @@ async def call_modal_overlay(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-    video_duration: float = None,
+    video_duration: float | None = None,
     progress_callback = None,
     call_id_callback = None,
-    overlay_settings: dict = None,
+    overlay_settings: dict | None = None,
     profile_id: str | None = None,
-    text_layers: list = None,
+    text_layers: list | None = None,
 ) -> dict:
     """
     Call Modal render_overlay function for highlight overlays.
@@ -1196,14 +1216,10 @@ async def call_modal_overlay(
             # Get the generator in executor (Modal API is sync)
             gen = await loop.run_in_executor(None, get_generator)
 
-            # Capture Modal call ID for correlation
+            # remote_gen() returns a plain generator with no call-id handle (unlike
+            # call_modal_clips_ai, this path doesn't have the Modal function emit its
+            # own call id as a stream item) -- not available for this call type.
             modal_call_id = None
-            try:
-                if hasattr(gen, 'object_id'):
-                    modal_call_id = gen.object_id
-                    logger.info(f"[Modal] Overlay call_id: {modal_call_id}")
-            except Exception:
-                pass
 
             log_progress_event(job_id, "modal_streaming_started")
             logger.info(f"[Modal] Streaming progress from Modal for overlay job {job_id}")
@@ -1319,12 +1335,12 @@ async def call_modal_overlay_auto(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-    video_duration: float = None,
+    video_duration: float | None = None,
     progress_callback = None,
     call_id_callback = None,
-    overlay_settings: dict = None,
+    overlay_settings: dict | None = None,
     profile_id: str | None = None,
-    text_layers: list = None,
+    text_layers: list | None = None,
 ) -> dict:
     """
     Call Modal overlay with sequential processing.

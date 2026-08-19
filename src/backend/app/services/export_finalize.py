@@ -53,6 +53,48 @@ def _set_export_stage(job_id: str, stage: str) -> None:
         logger.warning(f"[Finalize] Could not set stage={stage} for job {job_id}: {e}")
 
 
+def _claim_stage_for_finalize(job_id: str, expected_stage, new_stage: str) -> bool:
+    """Compare-and-swap the stage column: only the caller whose `expected_stage`
+    (its own snapshot read) still matches the DB gets to proceed into detect/persist.
+
+    T7210: the in-band Modal path and a `/modal-status` recovery poll can now both
+    reach `finalize_export` for the same job (recovery previously never finalized
+    -- `modal_call_id` was always NULL). Both read a `job` snapshot before calling
+    in, so a plain `UPDATE ... WHERE id = ?` would let both proceed and double-insert
+    a working_videos row (the T5630 idempotency guard only catches an already-
+    COMPLETE job, not two callers racing through detect/persist at once). Gating the
+    stage transition on the caller's own snapshot makes only the first CAS win --
+    SQLite serializes the UPDATE, so the loser's WHERE simply matches 0 rows.
+    A legitimate sequential resume (previous attempt crashed) is unaffected: it
+    re-reads the job fresh, so its snapshot's stage matches the DB and its CAS wins.
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE export_jobs SET stage = ? WHERE id = ? AND stage IS ?",
+                (new_stage, job_id, expected_stage),
+            )
+            if cursor.rowcount > 0:
+                conn.commit()
+                return True
+            # No row matched the CAS. Distinguish "no export_jobs row exists at
+            # all for this id" (some callers -- e.g. tests driving _export_clips
+            # directly, and possibly other legacy entry points -- never insert
+            # one; _set_export_stage's UPDATE has always silently no-op'd on
+            # this before T7210, so there's nothing to race against) from "a
+            # row exists but someone else already claimed it" (genuine
+            # contention -- bail).
+            exists = cursor.execute("SELECT 1 FROM export_jobs WHERE id = ?", (job_id,)).fetchone()
+            conn.commit()
+            return not exists
+    except Exception as e:
+        logger.warning(f"[Finalize] Could not claim stage={new_stage} for job {job_id}: {e}")
+        # Below-head DB (deploy->v028 window, stage column absent) -- fail open,
+        # matching _set_export_stage's existing best-effort behavior for that case.
+        return True
+
+
 def upsert_working_video(
     job: dict,
     *,
@@ -230,7 +272,13 @@ async def finalize_export(
             return {"finalized": False, "error": "Project not found"}
 
     # ---- detect -----------------------------------------------------------
-    _set_export_stage(job_id, ExportStage.DETECTING.value)
+    # CAS on the caller's own snapshot -- see _claim_stage_for_finalize. Losing
+    # the race is not an error: the winner (in-band export or a concurrent
+    # recovery poll) is already finalizing this job.
+    if not _claim_stage_for_finalize(job_id, job.get("stage"), ExportStage.DETECTING.value):
+        logger.info(f"[Finalize] Job {job_id} is already being finalized elsewhere — skipping")
+        return {"finalized": False, "already_finalizing": True}
+
     input_data = decode_data(job.get("input_data")) or {}
     clips = input_data.get("clips", [])
     transition = input_data.get("transition")

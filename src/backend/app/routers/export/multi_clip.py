@@ -1232,6 +1232,27 @@ def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, t
         logger.warning(f"[Multi-Clip Export] Could not persist rendered stage/output_key for {export_id}: {e}")
 
 
+async def _await_concurrent_finalize(export_id: str, timeout: float = 15.0, interval: float = 1.0) -> dict | None:
+    """Poll export_jobs for a job being finalized by a concurrent caller (T7210's
+    finalize CAS loser path). Returns a finalize_export-shaped dict once the
+    winner reaches a terminal state, or None if it hasn't resolved within
+    `timeout` (caller should report "still processing", not error)."""
+    from ...routers.exports import get_export_job
+
+    elapsed = 0.0
+    while elapsed < timeout:
+        await asyncio.sleep(interval)
+        elapsed += interval
+        job = get_export_job(export_id)
+        if not job:
+            return None
+        if job.get("status") == "complete":
+            return {"finalized": True, "working_video_id": job.get("output_video_id"), "output_filename": job.get("output_filename")}
+        if job.get("status") == "error":
+            return {"finalized": False, "error": job.get("error", "Export finalize failed (concurrent finalizer)")}
+    return None
+
+
 async def _export_clips(
     export_id: str,
     clips: list[ClipExportData],
@@ -1328,7 +1349,10 @@ async def _export_clips(
             output_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
             output_key = f"working_videos/{output_filename}"
 
-            # Callback to store Modal call_id for job recovery
+            # Callback to store Modal call_id for job recovery. output_key is written
+            # here too (not just later at _persist_rendered_checkpoint) so a mid-render
+            # restart/reconnect has an output key to finalize with as soon as the call
+            # id itself is recoverable.
             def store_modal_call_id(modal_call_id: str):
                 if project_id:
                     try:
@@ -1340,9 +1364,9 @@ async def _export_clips(
                             try:
                                 cursor.execute("""
                                     UPDATE export_jobs
-                                    SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP, stage = ?
+                                    SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP, stage = ?, output_key = ?
                                     WHERE id = ?
-                                """, (modal_call_id, ExportStage.RENDERING.value, export_id))
+                                """, (modal_call_id, ExportStage.RENDERING.value, output_key, export_id))
                             except Exception:
                                 cursor.execute("""
                                     UPDATE export_jobs
@@ -1478,6 +1502,21 @@ async def _export_clips(
                     export_progress[export_id] = sync_failed
                     await manager.send_progress(export_id, sync_failed)
                     return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+
+                # T7210: lost the finalize CAS to a concurrent caller (a /modal-status
+                # recovery poll racing this same in-band request -- see
+                # _claim_stage_for_finalize). The job is NOT failed, someone else is
+                # finalizing it right now -- wait briefly for their result instead of
+                # raising (which would wrongly refund credits and error out a
+                # succeeding export).
+                if finalize_result.get("already_finalizing"):
+                    finalize_result = await _await_concurrent_finalize(export_id)
+                    if finalize_result is None:
+                        return JSONResponse({
+                            "status": "processing",
+                            "export_id": export_id,
+                            "message": "Export is finalizing (recovered by a concurrent request) -- check back shortly.",
+                        })
 
                 # T4200: a persist failure is TERMINAL (no false success). Re-raise so
                 # the outer handler refunds credits, marks the job error, and errors.

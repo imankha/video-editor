@@ -494,7 +494,7 @@ async def start_framing_export(
     try:
         keyframes = json.loads(keyframes_json)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {e}") from e
 
     if not keyframes:
         raise HTTPException(status_code=400, detail="No keyframes provided")
@@ -505,7 +505,7 @@ async def start_framing_export(
         try:
             segment_data = json.loads(segment_data_json)
         except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {e}") from e
 
     # Generate job ID
     job_id = f"export_{uuid.uuid4().hex[:12]}"
@@ -521,7 +521,7 @@ async def start_framing_export(
             f.write(content)
         logger.info(f"[Exports] Staged video for job {job_id}: {staged_video_path}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}") from e
 
     # T890: Credit reservation — reserve before job creation, confirm after
     from ..services.credit_ledger import CreditsUnavailable, confirm_reservation, release_reservation, reserve_credits
@@ -740,7 +740,7 @@ async def list_unacknowledged_exports():
 
 
 @router.post("/acknowledge")
-async def acknowledge_exports(job_ids: list[str] = None):
+async def acknowledge_exports(job_ids: list[str] | None = None):
     """
     T12: Mark exports as acknowledged (notification shown).
 
@@ -855,6 +855,41 @@ async def check_modal_status(job_id: str):
         # Try non-blocking get to check if complete
         try:
             result = call.get(timeout=0)
+
+            if not isinstance(result, dict):
+                # Generator-based calls (process_clips_ai etc, called via .remote_gen())
+                # return a GeneratorDone marker here, not the dict the function actually
+                # yielded as its last item -- FunctionCall.get() can't replay the stream,
+                # so "done" alone can't distinguish success from a caught-and-yielded
+                # error (process_clips_ai yields {"status": "error"} then returns
+                # normally on failure -- still GeneratorDone either way). T7210 writes
+                # output_key at DISPATCH time now (store_modal_call_id), not only after
+                # a confirmed upload, so its mere presence is no longer proof the object
+                # exists -- HEAD-probe R2 as the actual boundary check before treating
+                # this as success (T4240: never finalize a row pointing at a missing
+                # R2 object).
+                from ..storage import file_exists_in_r2
+                recovery_user_id = get_current_user_id()
+                recovered_output_key = job.get('output_key')
+                if recovered_output_key and file_exists_in_r2(recovery_user_id, recovered_output_key):
+                    logger.info(
+                        f"[ExportJobs] Modal call {modal_call_id} for job {job_id} finished "
+                        f"(generator call) -- output object confirmed in R2, finalizing "
+                        f"from persisted output_key"
+                    )
+                    result = {"status": "success"}
+                else:
+                    error_msg = (
+                        "Modal render finished but produced no output object "
+                        f"(output_key={recovered_output_key!r})"
+                    )
+                    logger.warning(f"[ExportJobs] {error_msg} for job {job_id}, call {modal_call_id}")
+                    if job['status'] == 'processing':
+                        update_job_error(job_id, error_msg)
+                    return {
+                        "status": "error",
+                        "error": error_msg,
+                    }
 
             # Job is complete - finalize if our DB still shows 'processing'
             if job['status'] == 'processing':

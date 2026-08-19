@@ -20,6 +20,7 @@ sequential. All overlay processing uses sequential mode.
 import logging
 import os
 import tempfile
+import time
 
 import modal
 
@@ -293,8 +294,8 @@ def render_overlay(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-    overlay_settings: dict = None,
-    text_layers: list = None,
+    overlay_settings: dict | None = None,
+    text_layers: list | None = None,
 ):
     """
     Apply highlight overlays to video on GPU.
@@ -807,7 +808,7 @@ def _spotlight_reveal(current_time, start_time, end_time):
     return 1.0, 1.0
 
 
-def _render_highlight(frame, region: dict, current_time: float, effect_type: str, overlay_settings: dict = None):
+def _render_highlight(frame, region: dict, current_time: float, effect_type: str, overlay_settings: dict | None = None):
     """
     Render highlight overlay on a single frame.
 
@@ -1332,10 +1333,10 @@ def process_framing_ai(
     output_width: int = 810,
     output_height: int = 1440,
     fps: int = 30,
-    segment_data: dict = None,
+    segment_data: dict | None = None,
     include_audio: bool = True,
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
     rotation: float = 0,
 ):
     """
@@ -1811,9 +1812,9 @@ def process_framing_ai_l4(
     output_width: int = 810,
     output_height: int = 1440,
     fps: int = 30,
-    segment_data: dict = None,
+    segment_data: dict | None = None,
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
     rotation: float = 0,
 ) -> dict:
     """
@@ -2231,7 +2232,7 @@ def process_framing_ai_parallel(
     num_chunks: int = 2,
     include_audio: bool = True,
     source_start_time: float = 0.0,
-    source_end_time: float = None,
+    source_end_time: float | None = None,
 ):
     """
     Orchestrate parallel Real-ESRGAN processing using multiple GPUs.
@@ -2573,7 +2574,7 @@ def process_clips_ai(
     target_height: int = 1440,
     fps: int = 30,
     include_audio: bool = True,
-    transition: dict = None,
+    transition: dict | None = None,
 ):
     """
     Unified AI video processing - handles single-clip and multi-clip exports.
@@ -2604,6 +2605,24 @@ def process_clips_ai(
     import cv2
 
     total_clips = len(clips_data)
+
+    # remote_gen() gives the caller no handle to the function-call id (it's a
+    # plain generator, not a FunctionCall), so emit it as the first stream item
+    # -- see modal_client.call_modal_clips_ai's modal_call_id capture.
+    _own_call_id = modal.current_function_call_id()
+    if not _own_call_id:
+        # Documented Optional[str] -- a None here means the recovery path stays
+        # broken for this job (same failure mode this fix closes) but silently,
+        # so make it loud instead of a quiet no-op on the client side.
+        logger.warning(f"[{job_id}] current_function_call_id() returned None -- modal_call_id will not be recoverable")
+    yield {
+        "progress": 0,
+        "phase": "dispatched",
+        "message": "Starting...",
+        "clip": 0,
+        "total_clips": total_clips,
+        "modal_call_id": _own_call_id,
+    }
 
     try:
         logger.info(f"[{job_id}] Starting AI upscaling for {total_clips} clip(s)")
@@ -2757,6 +2776,7 @@ def process_clips_ai(
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                 output_frame_idx = 0
                 last_yield_frame = 0
+                clip_loop_start = time.time()
 
                 for frame_num in range(start_frame, end_frame):
                     ret, frame = cap.read()
@@ -2837,9 +2857,20 @@ def process_clips_ai(
                             "total_frames": frames_to_process
                         }
                         last_yield_frame = output_frame_idx
+                        elapsed = time.time() - clip_loop_start
+                        rate = output_frame_idx / elapsed if elapsed > 0 else 0
+                        logger.info(
+                            f"[{job_id}] Clip {clip_idx+1}: frame {output_frame_idx}/{frames_to_process} "
+                            f"({progress}%) elapsed={elapsed:.1f}s rate={rate:.2f}fps"
+                        )
 
                 cap.release()
-                logger.info(f"[{job_id}] Clip {clip_idx+1}: {output_frame_idx} frames upscaled")
+                clip_elapsed = time.time() - clip_loop_start
+                clip_rate = output_frame_idx / clip_elapsed if clip_elapsed > 0 else 0
+                logger.info(
+                    f"[{job_id}] Clip {clip_idx+1}: {output_frame_idx} frames upscaled "
+                    f"in {clip_elapsed:.1f}s ({clip_rate:.2f}fps avg)"
+                )
 
                 # === Encode this clip ===
                 yield {
