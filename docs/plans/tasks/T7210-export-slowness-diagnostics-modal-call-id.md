@@ -1,6 +1,6 @@
 # T7210: Export slowness diagnostics + Modal call_id recovery bug
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-19
