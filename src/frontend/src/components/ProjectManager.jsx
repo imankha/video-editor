@@ -312,8 +312,14 @@ export function ProjectManager({
       if (urls.length > 0) prioritizeUrls(urls);
     }, { threshold: 0.1 });
 
-    for (const child of container.children) {
-      observer.observe(child);
+    // T7320: query DESCENDANTS, not direct children. The callback reads
+    // `dataset.gameId`, so the observed element must be the tile wrapper itself --
+    // but the grouping render puts month/tournament blocks between the container and
+    // the tiles, and observing those made every callback entry a no-op (warming was
+    // silently dead from T5681 until this fix). Depth-independent by construction, so
+    // another wrapper level cannot break it again. Matches the T5820 lookup below.
+    for (const tile of container.querySelectorAll('[data-game-id]')) {
+      observer.observe(tile);
     }
 
     return () => observer.disconnect();
