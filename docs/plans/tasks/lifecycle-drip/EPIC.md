@@ -3,6 +3,8 @@
 **Status:** TODO (design gate: user approval of this EPIC before T7230 starts)
 **Started:** —
 **Filed:** 2026-08-19
+**Placement:** For Alpha - Polish (user decision 2026-08-19 — resolves the sequencing open
+item; not queued behind Milestone TOP)
 
 ## Goal
 
