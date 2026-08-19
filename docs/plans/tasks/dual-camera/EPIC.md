@@ -1,168 +1,164 @@
-# Dual-Camera Shared Games Epic
+# Game Pools — Multi-Feed Shared Games Epic
 
-**Status:** TODO
-**Started:** —
-**Created:** 2026-07-19
+**Status:** TODO (design approved 2026-08-19; supersedes the 2026-07-19 "Dual-Camera
+Shared Games" draft of this file — same tasks, generalized scope)
+**Created:** 2026-07-19 · **Redesigned:** 2026-08-19
+**Companion specs (normative):** [UX-SPEC.md](UX-SPEC.md) (every changed screen, exact
+copy/classes/states/gestures) · [ALIGNMENT.md](ALIGNMENT.md) (auto-alignment algorithm
+cascade + the 2026-08-19 real-file metadata evidence)
 
-## Goal
+## Goal — the value chain
 
-At most youth games there are TWO cameras — one parent per team — usually standing right next
-to each other, each operator following their own kid's side of the action. Today each family
-only ever sees their own footage, so action on the far side of the field is compressed mush
-(the exact problem the Upscale Quality epic fights pixel-by-pixel; this epic fights it at the
-source: *someone else already filmed that moment better*).
+When a player is far from the camera, quality collapses — and the better pixels usually
+already exist: the other team's Veo filmed from the opposite side, and three iPhones
+caught the goal up close. **A game becomes a pool**: up to 50 contributors (parents from
+BOTH teams) add their cameras and phone clips via a simple link; every feed aligns to one
+game clock; each family picks the best camera per play of their kid. Competitive white
+space confirmed by research: Trace MultiCam is single-team + own-hardware; Veo can't
+multi-cam; nobody does cross-team pooled angle-picking.
 
-The feature: the parent who sets up a camera creates a **Shared Game** (name, date, time,
-location), gets a link, and texts/emails it to the other team's camera parent. Each side
-uploads their own footage to the shared game from their own account. In Annotate, each user
-can **toggle between the two cameras** at the same game moment. Once the Movement Tracking
-epic lands, the system can **suggest (and auto-switch to) the better camera** for any given
-timestamp.
+Value → UX → architecture → task, one line each:
 
-Side effect that matters: every shared-game link is an organic acquisition channel — the
-other team's parent has to sign up to join. This is the first feature where inviting a
-stranger (not a teammate) is the core loop.
+| User value | UX (UX-SPEC §) | Architecture | Task |
+|---|---|---|---|
+| Single-clip parent skips Annotate | T7280 flow | duration branch at the one nav seam + auto clip via existing save rails | T7280 (filed, standalone) |
+| Simple upload of anything (halves, folders, clips) with no format quiz | §5b optional video, metadata-ordered role chips (Per Half REMOVED — evidence-backed) | client mvhd creation_time parse; role inference; T1180 zero-video exception | T5495 |
+| Giant sky-heavy files get cheap | §5b/6b full-screen crop stage, live size/cost | on-device WebCodecs crop re-encode; cropped bytes are the master | T5498 |
+| One link in the WhatsApp chat pools everyone's footage | §1 invite (Anyone default, side-tagged optional), §2 status page, §3 join, §4b no-video Annotate | Postgres pool tables + per-side tokens on shares/claim rails; sport + team-name snapshots | T5500 (backend), T5510 (UX) |
+| Everyone sees every camera, cheaply and safely | §4 tiles, §6 live-sync poll | reference propagation (global blake3 media), per-feed storage refs, rent enforcement at presign | T5520 |
+| Feeds just line up | §7 line-up view + waveforms; badges | ALIGNMENT.md cascade: fingerprint primary, metadata seed (order-only for export stamps), manual authoritative | T5530 |
+| Pick the right camera at any moment | §6 lanes (packed clips), Main default, prefer pill | wall-clock mapping; feed_preferences (member-local) | T5540 |
+| The clip exports the best pixels | §8 per-clip picker (full-coverage only) | raw_clips.feed_id + feed_time_map export twin | T5550 |
+| Keep only what's worth paying for | §9 keep checklist | per-feed hash-selective extend; per-member rent | T7300 |
+| Heavy pools stay fast | §5b dual-asset note | .LRF/generated proxies; preview = proxy, export = master | T7310 (evidence-gated) |
+| The app suggests the better camera | §6 Main upgrade to "Auto" | per-source movement profiles (blake3-keyed) | T5560 (blocked by T5460) |
 
 ## Non-Goals (this epic)
 
-- **Shared annotations.** Each parent annotates their own kid in their own account. Clip
-  sharing between accounts stays on the existing teammate-share rails. Nothing in this epic
-  reads or writes another user's annotations.
-- **More than 2 cameras.** Schema allows N members, product caps at 2 for now.
-- **Auto-trim / auto-editing across cameras.** T5560 only *suggests/switches* during
-  playback; multi-camera auto-cut reels are a future epic.
-- **Live/near-real-time collaboration.** Propagation of the other camera is
-  refresh-on-load, not push.
+- **Shared annotations.** Each family annotates in their own account; clip sharing stays
+  on the existing teammate-share rails. Nothing reads/writes another user's annotations.
+- **Push infrastructure.** Freshness is a poll while a pool game is open (~60s + focus +
+  after own writes) — good enough for "his upload appeared while I annotate."
+- **Multi-camera auto-cut reels.** T5560 only suggests/switches during playback.
+- **Refund mechanics.** Upload charge is not auto-refunded on withdraw (stated honestly
+  in the confirm; product knob, revisit if it stings).
 
-## Architecture Decisions (reference from task files, don't duplicate)
+## Architecture Decisions (settled; task files reference, don't duplicate)
 
-1. **Coordination in Postgres, playback data local.** The Shared Game is a small Postgres
-   coordination object (`shared_games` + `shared_game_members` + `shared_game_videos`,
-   T5500) — cross-account state MUST live in Postgres (per-user SQLite is per-account by
-   construction). Each member keeps a **normal local game row** in their profile DB; it is
-   the single source of truth for that member's annotations, clips, and reels, linked by
-   `games.shared_game_id`.
-2. **The other camera propagates as references, never copies.** Game sources are globally
-   content-addressed (`games/{blake3}.mp4`, no env/user prefix). Registering the remote
-   camera into a member's account = inserting `game_videos` rows (with `camera` set) +
-   `game_storage_refs` for the remote blake3 keys — the same T2830/T2850 game-reference
-   mechanism teammate shares use. R2 holds ONE copy of each source regardless of how many
-   accounts reference it.
-3. **`camera` is a new axis on `game_videos`, orthogonal to `sequence`.** `sequence` remains
-   "halves concatenated in time" within one camera; `camera` = the shared-game
-   `member_index` that uploaded it (0 = creator, 1 = joiner; plain non-shared games are all
-   `camera 0`). Local schema: `game_videos.camera INTEGER NOT NULL DEFAULT 0`, uniqueness
-   `(game_id, camera, sequence)` (profile_db migration in T5520). A member's **primary
-   camera** is their own `member_index`; if they haven't uploaded yet, the only camera
-   present is primary-by-default.
-4. **Time model: one shared wall-clock, per-video offsets.** Each `shared_game_videos` row
-   carries `wall_offset` = seconds on the shared game clock at which that video's t=0
-   occurs (slot-0's first video defines wall_offset 0 by convention). This ONE model
-   handles per-half videos, different recording start times, and one camera rolling through
-   halftime while the other stops — no special cases. All cross-camera mapping is:
-   `virtual t → (video, local t) → local t + wall_offset = shared t → containing video on
-   the other camera → its virtual t`. No containing video = a **coverage gap** (toggle
-   disabled/clamped there).
-5. **Annotations stay keyed to the member's primary-camera virtual timeline.** The
-   `(game_id, end_time, video_sequence)` natural key and every existing clip flow are
-   untouched by camera toggling; viewing another camera is a *display mapping*. The ONE
-   deliberate extension is T5550: `raw_clips.camera` stamps which camera a clip should be
-   **extracted** from (you clip what you were looking at), with times still stored in
-   primary-camera terms and mapped at export time.
-6. **Alignment is gesture-persisted and shared.** Audio cross-correlation *suggests* the
-   offsets (the two cameras stand next to each other — near-identical audio makes this
-   unusually reliable); a human confirms/nudges; the confirmed offsets are written to
-   Postgres via a surgical endpoint from the confirm gesture (never reactively). Either
-   member may re-adjust; last write wins.
-7. **Reuse the share/claim machinery, don't parallel-build.** Invite tokens follow the
-   `shares.py` token pattern; the no-account join path follows the
-   `pending_teammate_shares` / T2915 link-snapshot deferred-resolution pattern; the join
-   materialization routes through the T2830/T2850 game-reference helper and stamps
-   `shared_by` provenance exactly like `materialize_game_share` (T5330 NUF-blindness).
-   **Coordinate with the Share the Game epic** (T5720 public game link + T5730 claim flow,
-   which superseded T4910): whichever lands first owns the token-landing-claim plumbing; the
-   other reuses it.
-8. **Quest provenance nuance:** a game row created at *join* is shared-in content
-   (`shared_by` set — onboarding stays blind to it, T5330). But a member later uploading
-   their OWN camera to that game is a genuine upload and SHOULD count for `upload_game`.
-   T5500's design doc must settle the mechanism (recommended: quest probe counts games
-   having ≥1 `camera = own member_index` video, independent of `shared_by`).
-9. **Expiry:** each member holds their own `game_storage_refs` for both cameras' sources; a
-   source is reclaimable only when NO live refs remain (verify against the sweep — T4820
-   lesson: status must track R2 reality; guard ref insertion with `head_object`).
-10. **Movement profiles are per-source, keyed by blake3** (coordinate with T5460 so the
-    artifact key is source-addressed): computed once, valid for every account referencing
-    that source — the auto-best-camera comparison (T5560) gets the second camera's profile
-    for free.
+1. **Coordination in Postgres, truth-per-family in profile SQLite, bytes on R2.**
+   Pool tables: `shared_games` (invite tokens PER SIDE, side names, sport snapshot,
+   wall-clock origin as a STORED CONSTANT), `shared_game_members` (cap 50, side,
+   joined_at), `shared_game_feeds` (owner, kind full|clip, label, withdrawn/delisted),
+   `shared_game_feed_videos` (sequence, blake3, wall_offset + source + confidence +
+   `updated_by`/`updated_at` audit columns, creation_time). `shared_game_members` also
+   carries `pool_seen_at` (bumped by the open-game gesture; powers the new-camera dot and
+   the re-line-up toast — deliberately NOT `games.last_accessed_at`, which presigns also
+   bump). Offsets are written PER VIDEO. Each member keeps a normal private `games` row
+   (their name, clips, reels) linked by `games.shared_game_id`; the member's
+   **preference spans live in their OWN profile.sqlite** (`feed_preferences`, T5540's
+   migration — member-scoped by construction, never pool state). ("No new Postgres
+   state" was a lifecycle-drip-scoped directive, corrected by the user 2026-08-19 — not
+   a rule here.)
+2. **Feeds propagate as references, never copies.** Sources are globally
+   content-addressed (`games/{blake3}.mp4`); joining/refreshing materializes
+   `game_videos` reference rows (new `feed_id` axis, uniqueness `(game_id, feed_id,
+   sequence)`) + per-hash `game_storage` refs, head-guarded (T4820). Provenance
+   `shared_by` stamps join-created rows (quest-blind, T5330); uploading your OWN feed to
+   a pool is a genuine `upload_game`.
+3. **One shared wall-clock, per-video offsets** (unchanged from the July draft — it
+   survived N feeds and short clips without modification). Coverage = `[offset,
+   offset+duration]`; clips are just short feeds. Clock origin = creator's first
+   full-length feed; clips-only pools get a provisional origin re-anchored by a constant
+   shift when the first full feed arrives.
+4. **Alignment: audio is the compelling default; metadata seeds; humans stay
+   authoritative.** Full cascade + evidence in ALIGNMENT.md: per-source cached artifacts
+   (envelope + fingerprints, blake3-keyed), fingerprint coarse match + GCC-PHAT refine,
+   confidence gates, transitive cross-validation. Real-file evidence (prod + local)
+   binds two rules: export-rendered files stamp RENDER time (order-only, never seed
+   windows/offsets) and `File.lastModified` is banned. Manual line-up (waveform strips,
+   whistle anchor, ± nudge, any lined-up camera as the comparison side) writes
+   `source='manual'`, never overwritten by auto.
+5. **Rent model.** Uploader pays the initial 30-day window (covers the whole pool —
+   refs copy the uploader's expiry, teammate-share precedent). After that, continued
+   access is per-member per-feed with their own credits; access = your OWN live refs
+   (today's `storage_status` semantics, enforced at the media presign path, not just
+   UI). Object reclaim only when NO live refs remain anywhere + grace; the sweep's
+   authoritative recount must provably cover cross-ACCOUNT refs.
+6. **Names are perspectives.** The pool stores canonical facts (sides, date); each
+   member's `games.name` derives from their claimed side (invert Home↔Away only for
+   other-team joiners; same-team inherits verbatim) and stays freely editable. The
+   sharer's team name is captured at share time when missing (saved to their profile +
+   the pool side; becomes cross-team joiners' opponent prefill).
+7. **Reuse the share/claim machinery** (tokens on `shares.py` rails, claim survives
+   signup via the URL-path token, T5730/T2915 patterns) and the materialization
+   primitives (`_insert_game_with_videos`, provenance stamping).
+8. **Progressive disclosure is a hard requirement.** A basic user (1 game, 1 video) sees
+   ZERO new pool chrome (the invite lives inside the Share modal they already open);
+   lanes/picker appear only at ≥2 feeds; alignment/manage surfaces sit behind the
+   unaligned badge and Manage cameras. §5b's upload upgrades (optional video, folder,
+   crop, role chips) are general features for everyone, deliberately outside that claim.
+9. **Vocabulary is product surface:** "shared game", "camera", "clips", "line up" —
+   never feed/pool/sync in UI (one sanctioned "Auto-synced by sound" banner). "Main" is
+   the honest name for the default camera until T5560 earns "Auto". **One concept, one
+   name in code too:** route `/shared-game/{token}`, API `/api/shared-games`, tables
+   `shared_games*` — "pool" never leaves internal prose.
+10. **Movement profiles are per-source (blake3-keyed)** — computed once, valid for every
+    account referencing the source; T5560 gets other members' profiles for free
+    (coordinate keying with T5460 NOW).
 
-## UX Flows (settled here; UI Designer refines visuals per task)
-
-1. **Create** — entry points: (a) the Add Game flow ("Two cameras at this game? Invite the
-   other team's camera") and (b) an existing game card's menu ("Invite the other camera",
-   pre-fills metadata and binds that game as slot 0). Modal collects: game name (required),
-   date (required, default today), time + location (optional). Result screen = share sheet:
-   `navigator.share` on mobile, copy-link fallback, prefilled message ("Join my ReelBallers
-   shared game: {name}, {date} — upload your camera and we both get both angles").
-2. **Join** — `/shared-game/{token}` shows a game-info card (name, date/time, location,
-   creator's display name, camera slots + status) with one CTA: signed-in → "Join this
-   game"; signed-out → sign-up/sign-in, claim completes after auth (deferred resolution).
-   Optional (stretch, reuse T4840/T4890 patterns): edge-rendered OG unfurl so the text
-   message shows the game name/date.
-3. **Slots** — both members see the shared game as a normal game card plus a two-row camera
-   status block: "Your camera — 2 videos ✓" / "Sam's camera — waiting". Upload CTA routes
-   through the EXISTING Add Game upload path bound to the shared game + own slot.
-4. **Sync** — once both slots have video and offsets are unconfirmed, the game card and
-   Annotate show a "Sync cameras" banner → auto-suggestion runs → side-by-side confirm UI
-   at one shared moment with a ± nudge control → Confirm persists offsets.
-5. **Toggle (Annotate)** — a flip-camera button in the player controls + `C` keyboard
-   shortcut; switch preserves the playhead via the wall-clock mapping; when the other
-   camera has no coverage at the playhead the button is disabled with a tooltip ("Sam's
-   camera doesn't cover this moment"). Toggle is session state, never persisted
-   (no-persisted-view-state rule).
-6. **Best camera (post-Movement-Tracking)** — a subtle "better angle available" badge on
-   the toggle when the other camera's activity score meaningfully beats the current one,
-   plus an opt-in "Auto camera" mode during playback that switches at state boundaries.
-
-## Tasks (implement strictly in order — each builds on the last)
+## Tasks (strict order; each hands learnings to the next)
 
 | ID | Task | Status |
 |----|------|--------|
-| T5500 | [Shared Game Entity + Invite/Join Backend](T5500-shared-game-backend.md) | TODO |
-| T5510 | [Create + Join UX](T5510-create-join-ux.md) | TODO |
-| T5520 | [Upload Binding + Cross-Account Camera Propagation](T5520-upload-binding-propagation.md) | TODO |
-| T5530 | [Camera Time Alignment (audio auto-suggest + manual confirm)](T5530-time-alignment.md) | TODO |
-| T5540 | [Annotate Camera Toggle](T5540-annotate-camera-toggle.md) | TODO |
-| T5550 | [Clip Extraction From the Active Camera](T5550-clip-from-active-camera.md) | TODO |
-| T5560 | [Auto Best-Camera Suggestions](T5560-auto-best-camera.md) | TODO |
+| T7280 | Single-clip upload straight to Framing (STANDALONE — Next Up, ships first) | TODO (filed) |
+| T5495 | [Add Game overhaul: optional video, folder upload, metadata-ordered role chips, Per-Half removal](T5495-add-game-overhaul.md) | TODO |
+| T5498 | [Crop-before-upload: full-screen client-side stage](T5498-crop-before-upload.md) | TODO |
+| T5500 | [Pool entity + invite/join backend](T5500-shared-game-backend.md) | TODO |
+| T5510 | [Invite, status page, join + no-video Annotate UX](T5510-create-join-ux.md) | TODO |
+| T5520 | [Upload binding + feed propagation + rent enforcement + live sync](T5520-upload-binding-propagation.md) | TODO |
+| T5530 | [Feed alignment: autosync + line-up view](T5530-time-alignment.md) | TODO |
+| T5540 | [Annotate camera lanes + Main + preference pill](T5540-annotate-camera-toggle.md) | TODO |
+| T5550 | [Per-clip camera picker + extraction from the picked feed](T5550-clip-from-active-camera.md) | TODO |
+| T7300 | [Per-feed keep checklist (rent UX)](T7300-per-feed-keep-checklist.md) | TODO |
+| T7310 | [Preview proxies (evidence-gated on real pools feeling slow)](T7310-preview-proxies.md) | TODO |
+| T5560 | [Auto best-camera suggestions](T5560-auto-best-camera.md) | BLOCKED by T5460 + T5540 |
 
-Dependency notes: T5560 is additionally **BLOCKED by T5460** (Movement Tracking Modal job —
-per-source profiles). T5550 is the only task that touches the export pipeline; T5540 ships
-user value without it (view-only toggle).
+Dependency notes: T7280/T5495/T5498 are pool-independent (T5495 before T5510 because the
+pool upload modal builds on the reworked Add Game). T5550 is the only export-pipeline
+task; T5540 ships user value without it. T7310 gates on evidence, not order.
 
 ## Completion Criteria
 
-- [ ] A user can create a shared game, send the link, and the other parent can join
-      (including the no-account → sign-up path)
-- [ ] Both members upload their own footage; each sees both cameras on their game
-- [ ] Cameras are time-aligned (audio auto-suggest verified, manual nudge works)
-- [ ] Camera toggle in Annotate preserves the game moment; coverage gaps handled gracefully
-- [ ] Creating a clip while viewing camera B extracts camera B's pixels
-- [ ] (Post-T5460) Better-camera badge + auto-camera playback live behind profile presence
-- [ ] Migrations for all three schema changes runnable via admin endpoint
+- [ ] A parent can create a game with or without video, copy ONE link, paste it in
+      WhatsApp; anyone with it can join and upload (cap 50), including through signup
+- [ ] Side-tagged links flip the game info correctly; joiner's game derives its name
+      from their side and stays editable; sharer's missing team name is captured once
+- [ ] Halves/folders/clips upload without a format question; roles inferred from
+      metadata, always editable; ≥4K sources get the client-side crop stage
+- [ ] Every feed lands on the shared clock: auto by audio where possible, honest badges
+      and a manual line-up path everywhere else; offsets never fabricated
+- [ ] Lanes/picker appear only at ≥2 feeds; clips pack into minimal lanes; Main plays a
+      complete game with zero configuration; per-clip picks export the picked pixels
+- [ ] Rent enforced at the media path: initial window covers the pool, then per-member
+      per-feed renewal via the keep checklist; reclaim only at zero live refs + grace,
+      verified cross-account
+- [ ] Live sync: another member's upload appears while annotating (poll), never a reload
+- [ ] Basic users see zero new pool chrome anywhere (audited, not asserted)
+- [ ] Migrations (postgres pool tables + profile_db feed columns) runnable via the admin
+      endpoint; version numbers checked against sibling branches
 - [ ] `.claude/knowledge/` docs updated (annotate.md, backend-services.md,
-      persistence-sync.md, modal-gpu.md if T5560 touches profile keying)
+      persistence-sync.md, export-pipeline.md, modal-gpu.md for the alignment job)
 
 ## References
 
-- Sharing rails: `src/backend/app/services/pg.py` (`shares`/`share_games`/
-  `pending_teammate_shares` DDL), `src/backend/app/routers/shares.py` (token pattern),
-  `src/backend/app/services/materialization.py` (provenance), T2830/T2850 game-reference
-  helper, T2915 link-snapshot pattern, [Share the Game epic](../team-game-share/EPIC.md)
-  (T5720/T5730 — overlapping token/claim plumbing; superseded T4910)
-- Multi-video timeline: `src/frontend/src/modes/annotate/hooks/useVirtualTimeline.js`
-  (`buildFullVideoTimeline`), [.claude/knowledge/annotate.md](../../../.claude/knowledge/annotate.md)
-- Upload/dedupe: `src/backend/app/routers/games_upload.py` (blake3 upload/finalize)
-- Movement profiles: [movement-tracking/EPIC.md](../movement-tracking/EPIC.md) (artifact
-  format, T5460 keying)
-- Audio alignment: cross-correlation of audio RMS envelopes (scipy.signal) — see T5530 for
-  the validation protocol
+- Normative UX: [UX-SPEC.md](UX-SPEC.md) (screen-by-screen; changelog documents every
+  design round). Mockups artifact kept in lockstep (session artifact, 2026-08-19).
+- Alignment algorithm + evidence: [ALIGNMENT.md](ALIGNMENT.md)
+- Sharing rails: `shares.py`, `materialization.py`, T5720/T5730 (game_link + claim)
+- Multi-video timeline: `useVirtualTimeline.js`, annotate.md knowledge doc
+- Upload/dedupe: `games_upload.py` (blake3 multipart; pending_uploads cancel rail)
+- Storage/credits/expiry: `storage_credits.py`, `sweep_scheduler.py` (ref_count drift —
+  the recount is load-bearing), credits in Postgres (T5840)
+- Prepare-stage epic (T5650 study, T5651–T5657): the §5b folder/crop/dual-asset work
+  pulls its locked decisions forward; reconcile scopes when picking those tasks up
+- Movement profiles: movement-tracking epic (T5460 keying)

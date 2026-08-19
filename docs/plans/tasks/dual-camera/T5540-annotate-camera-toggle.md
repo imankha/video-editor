@@ -1,96 +1,130 @@
-# T5540: Annotate Camera Toggle
+# T5540: Annotate Camera Lanes + Main + Preference Pill
 
 **Status:** TODO
 **Impact:** 9
-**Complexity:** 6
+**Complexity:** 8
 **Created:** 2026-07-19
-**Updated:** 2026-07-19
+**Updated:** 2026-08-19
 
 ## Problem
 
-The payoff task: while annotating, far-side action is unwatchable on your own camera but
-was probably filmed well by the other parent's camera. The user needs a one-keystroke
-toggle to the other camera **at the same game moment**, and back. Both cameras' videos are
-already in local `game_videos` (T5520, `camera` column) with confirmed `wall_offset`s
-(T5530). Time model + UX are settled in [EPIC.md](EPIC.md) decisions 4-5 and UX flow 5.
+The payoff task: far-side action is unwatchable on your own camera but another feed
+probably filmed it well. With up to 50 feeds (full cameras AND short clips) the old
+"one toggle button" design is dead; the normative UX is [UX-SPEC.md §6](UX-SPEC.md) —
+**camera LANES** with a resolved **Main** track, appearing only at ≥2 feeds (one feed =
+Annotate byte-identical to today; progressive-disclosure ladder).
 
 ## Solution
 
-1. **Per-camera virtual timelines.** `buildFullVideoTimeline(gameVideos)` currently
-   concatenates ALL videos; it must build one timeline per camera:
-   `buildFullVideoTimeline(gameVideos.filter(v => v.camera === activeCamera))`. The active
-   camera lives in Annotate state (`useAnnotateState` — session-only, NEVER persisted:
-   no-persisted-view-state rule). Primary camera = own member slot (or the only camera
-   present); T5520's temporary primary-filter in `applyGameData` is removed here.
-2. **Cross-camera time mapping** (pure functions, new module
-   `src/frontend/src/modes/annotate/utils/cameraTimeMap.js`):
-   - `toShared(virtualT, cameraTimeline, offsets)` → shared-clock seconds
-   - `fromShared(sharedT, cameraTimeline, offsets)` → `{virtualT} | {gap: true, nearest}`
-   - `mapAcross(virtualT, fromCam, toCam)` composed from the two.
-   Exhaustive unit tests: multi-video halves, differing start times, one camera rolling
-   through halftime, out-of-coverage before/after, NULL offsets (→ mapping unavailable).
-3. **Toggle UI.** Flip-camera button in the Annotate player controls + `C` keyboard
-   shortcut. On toggle: compute mapped virtual time for the other camera, swap the video
-   source set (same mechanism as the existing multi-video source switching), seek, resume
-   prior play/pause state. Coverage gap at current playhead → button disabled with
-   tooltip ("{Name}'s camera doesn't cover this moment"). Offsets NULL (not yet aligned)
-   → button shows the "Sync cameras" affordance (routes to T5530's modal) instead of
-   toggling blind.
-4. **Annotations are camera-agnostic in v1.** Clip regions remain keyed to the PRIMARY
-   camera's virtual timeline. While viewing the secondary camera, the timeline/clip strip
-   continues to render in primary time (the playhead position is mapped for display);
-   creating/editing clips while on the secondary camera stores primary-time values via
-   `mapAcross`. If the mapped moment falls in a primary-camera coverage gap, block clip
-   creation with a toast (edge case; do not invent extrapolated times). Extraction from
-   the secondary camera's pixels is T5550 — in this task exported clips still cut from
-   primary sources exactly as today.
+### A. Lane stack (desktop, §6 — implement the spec, don't re-design)
+
+Below the existing clip lanes, only when the pool has ≥2 feeds:
+1. **Main lane** first: the resolved feed choice over time as contiguous segments
+   (winning feed's color, owner first name in segments ≥~48px, aria switch schedule).
+   Precedence **clip stamp → preference spans → reference feed** — computed, never
+   editable here. A thin preference strip + `Pin` glyphs under it makes every preference
+   span visible (never invisible state).
+2. **One lane per FULL-LENGTH camera** (owner initial badge + name, coverage bars via the
+   shared `EDGE_PADDING` formula, active-at-playhead full opacity).
+3. **Clip-kind feeds PACK into minimal lanes** (greedy interval packing by start time —
+   deterministic, stable): non-intersecting clips share a lane; intersecting clips split.
+   Chips in the OWNER's feed color; tap = watch that clip's angle (session switch).
+4. **ONE height model:** rows `1.625rem`; `totalLayerHeight = 9.75rem + 1.625rem ×
+   min(feedLanes + 1, 3)` where `feedLanes` = full camera lanes + PACKED clip lanes;
+   beyond the cap the region scrolls with **Main + active lane sticky** and a `+{n} more`
+   hint.
+5. **Short-viewport fallback:** `window.innerHeight < 800` (any pointer) → no lane stack;
+   the mobile chip path renders instead. One rule, no per-surface exceptions.
+
+### B. Mobile: active-camera chip + bottom-sheet picker
+
+Chip in the player controls (≥2 feeds only) → GameTile-style bottom sheet: Main first,
+full cameras with coverage notes, then a **Clips section listing only moment-covering
+clips** (non-covering omitted, not disabled). Unavailable rows use the single treatment +
+inline Renew → T7300's checklist.
+
+### C. Interactions
+
+- Lane/chip/sheet tap and **`C` cycle** (skips no-coverage feeds; existing focus guards in
+  `useKeyboardShortcuts.js`) switch the VIEWING camera — session state only, never
+  persisted (no-persisted-view-state). Video swaps via the wall-clock mapping with the
+  playhead preserved; transient over-video chip (`● Sarah's camera`, 1.5s); gap tap →
+  `No coverage here` chip.
+- **"Prefer this camera from here" pill — the ONLY preference gesture**, at the player
+  (never a lane menu; right-click/long-press do nothing): shown while watched ≠ Main's
+  resolution; click writes the span, updates the strip, confirms via chip.
+- **One-time coach-mark** on first ≥2-feed render; the Got-it click is the persisting
+  gesture (user-prefs flag). First Main render adds the one-line Main helper.
+- **Unaligned lane:** yellow badge, feed EXCLUDED from Main until confirmed (Main must
+  never cut to a misaligned feed); badge tap opens T5530's §7. **Unavailable lane:**
+  single grayscale+Lock treatment; tap → renew popover → T7300. Line-up drag mode exists
+  here but is entered only from §7 (T5530 owns it).
+- **Live arrivals:** T5520's poll materializes new lanes in place + one-time arrival
+  toast; re-lined-up toast derived from `offset_updated_by/at` vs `last_opened_at` —
+  no new persisted state.
+
+### D. Time machinery (kept from the original design — still valid)
+
+- Per-feed virtual timelines: `buildFullVideoTimeline(gameVideos.filter(v => v.feed_id ===
+  activeFeed))`; remove T5520's temporary own-feed filter in `applyGameData`.
+- Pure mapping module `src/frontend/src/modes/annotate/utils/feedTimeMap.js`:
+  `toShared` / `fromShared` (→ `{virtualT} | {gap}`) / `mapAcross`, exhaustively
+  unit-tested (halves, offsets, gaps, NULL offsets → unavailable). T5550 implements the
+  Python twin with SHARED test vectors — name and vectors agreed here.
+- **Annotations stay keyed to the member's own primary timeline.** While viewing another
+  feed, clip create/edit maps back via `mapAcross`; a mapped moment in a primary coverage
+  gap blocks creation with a toast (never extrapolate). Playhead save/resume stays in
+  primary time (map before `saveLastPlayhead` on tab-hide).
+- Main resolution (`resolveMainFeed(t)`) is a pure function over (clip stamps, preference
+  spans, reference feed) — unit-tested; renamed to "Auto" only when T5560 ships.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/frontend/src/modes/annotate/hooks/useVirtualTimeline.js` — `buildFullVideoTimeline` (L136-217) per-camera
-- NEW `src/frontend/src/modes/annotate/utils/cameraTimeMap.js` + unit tests
-- `src/frontend/src/modes/annotate/hooks/useAnnotateState.js` — `activeCamera` session state
-- `src/frontend/src/containers/AnnotateContainer.jsx` — `applyGameData` (remove T5520 filter, thread camera), source-swap + seek handler
-- `src/frontend/src/screens/AnnotateScreen.jsx` — toggle button + `C` shortcut wiring
-- `src/frontend/src/stores/gamesDataStore.js` — member display names for tooltip
-- `src/frontend/e2e/` — NEW toggle spec
+- `src/frontend/src/modes/annotate/AnnotateTimeline.jsx` + `TimelineBase.jsx` — lane stack, height model, sticky scroll
+- NEW `src/frontend/src/modes/annotate/utils/feedTimeMap.js` + `resolveMainFeed.js` + `packClipLanes.js` (pure, unit-tested)
+- NEW `src/frontend/src/modes/annotate/constants/feedColors.js` — FEED_COLORS by `member_index % 4` + MAIN_COLOR (§ Conventions; never cyan/amber/green/blue-500/red/yellow)
+- `src/frontend/src/modes/annotate/hooks/useVirtualTimeline.js` — per-feed `buildFullVideoTimeline`
+- `src/frontend/src/modes/annotate/hooks/useAnnotateState.js` — `activeFeed` session state
+- `src/frontend/src/containers/AnnotateContainer.jsx` — remove T5520 filter; source-swap + seek handler; pill wiring
+- `src/frontend/src/screens/AnnotateScreen.jsx` — `C` shortcut; mobile chip + bottom sheet
+- `src/frontend/e2e/` — NEW lanes/switch spec
 
 ### Related Tasks
-- Depends on: T5520 (camera rows local), T5530 (offsets)
-- Blocks: T5550, T5560
-- Related: T4060 landmine (never gate load paths on "some video src exists"); T3960 select-on-load timing
+- Depends on: T5520 (feed rows + poll), T5530 (offsets/verdicts; §7 entry)
+- Blocks: T5550 (picker + stamps), T5560 (Main→Auto)
+- References: UX-SPEC §6 (normative — all copy/classes/states/gestures), § Conventions (feed colors, unavailable treatment, ladder), [EPIC.md](EPIC.md) decisions 3, 8, 9
 
 ### Technical Notes
-- Knowledge docs: [annotate.md](../../../.claude/knowledge/annotate.md) — READ the landmines section; the virtual-timeline and load-order code is timing-sensitive.
-- **Keep the mapping pure and the toggle dumb**: all camera math in `cameraTimeMap.js`
-  (unit-tested exhaustively), the toggle handler just calls it. No reactive effects — the
-  toggle is a gesture; source swap + seek happen in its handler.
-- `C` shortcut must not fire while typing in clip fields (follow the existing keyboard
-  handler's focus guards).
-- Playhead persistence (`saveLastPlayhead`, resume) stays in PRIMARY camera time — map
-  before saving if the user is on the secondary camera when tab-hide fires.
-- **Real-browser verification required** (source swap + seek is exactly the class jsdom
-  lies about). Verify: toggle mid-play resumes playing at the same moment; toggle near a
-  coverage edge; toggle with keyboard while a clip is selected.
-- M/L-tier judgment: no schema change, but timing-sensitive core screen → include
-  Reviewer; Architect optional (design is settled here + EPIC).
+- Knowledge docs: [annotate.md](../../../../.claude/knowledge/annotate.md) — READ the landmines; virtual-timeline/load-order code is timing-sensitive (T4060, T3960)
+- **Preference spans persistence:** gesture = the pill click → `POST /api/pools/{id}/preferences {feed_id, from_shared_t}`; clearing lives ONLY in Manage cameras (§10 `DELETE .../preferences`). Storage home is member-scoped `feed_preferences` — **flag: EPIC decision 1's four-table list omits it; UX-SPEC's cross-cutting table says "Pool, member-scoped". Architect settles the home (5th PG table vs member-local) at design** — either way member-local semantics: only this member's Main reads it
+- Gesture-based persistence: viewing switches write NOTHING; the pill click and Got-it
+  click are the only new write gestures on this surface
+- Keep mapping/packing/resolution pure and the handlers dumb; no reactive effects
+- Coarse pointers: transparent `min-h-11` hit overlays per lane row (§6 a11y); color never
+  sole signal (initial badges, icons)
+- **Real-browser verification required** (source swap + seek, drag, sticky scroll — jsdom
+  lies); migrations: none expected frontend-side (preferences schema rides the architect
+  call above — never auto-run)
 
 ## Implementation
 
 ### Steps
-1. [ ] `cameraTimeMap.js` + exhaustive unit tests (write these FIRST — they pin the time model)
-2. [ ] Per-camera `buildFullVideoTimeline` + `activeCamera` state; remove T5520 primary filter
-3. [ ] Toggle button + shortcut + source-swap/seek handler + gap/unaligned states
-4. [ ] Clip create/edit mapping while on secondary camera (+ gap toast)
-5. [ ] Playhead save/resume mapping
-6. [ ] E2E + real-browser verification session
+1. [ ] `feedTimeMap.js` + `resolveMainFeed.js` + `packClipLanes.js` with exhaustive unit tests (write FIRST — they pin the model; agree shared vectors with T5550)
+2. [ ] Architect call: preference-span storage home (see flag) + endpoint
+3. [ ] Lane stack: Main lane + strips, camera lanes, packed clip lanes, height model + sticky scroll + short-viewport fallback
+4. [ ] Mobile chip + bottom-sheet picker (Clips section, unavailable rows)
+5. [ ] Switching: lane/chip/C/session state + transient chips; remove T5520 filter; clip create/edit mapping + gap toast; playhead mapping
+6. [ ] Pill + preference write + strip/pin render; coach-mark + Got-it persist
+7. [ ] Unaligned/unavailable lane states + badge entry to §7; live-arrival + re-lined-up toasts off the poll
+8. [ ] E2E + real-browser verification session
 
 ## Acceptance Criteria
 
-- [ ] `C` / button toggles cameras with the playhead staying on the same game moment (verified visually in a real browser against a synced pair)
-- [ ] Coverage gaps disable the toggle with an explanatory tooltip; unaligned games route to Sync instead
-- [ ] Clips created while viewing the secondary camera land at the correct primary-time position; export output is byte-identical behavior to today
-- [ ] Playhead resume works regardless of which camera was active at exit
-- [ ] `cameraTimeMap` unit tests cover halves, offsets, gaps, NULL offsets; all tests pass
-- [ ] Active camera is session state only — nothing persisted
+- [ ] One feed → Annotate byte-identical to today; ≥2 feeds → lanes (desktop) / chip (mobile, and any viewport <800px tall)
+- [ ] Main plays a complete game with zero configuration; precedence (stamp → span → reference) unit-tested; unaligned feeds never enter Main
+- [ ] Ten scattered clips pack to one lane (+1 per overlap); chips tap-switch; sheet lists only moment-covering clips
+- [ ] Switching preserves the game moment (real-browser verified); C cycles skipping gaps; viewing state never persisted
+- [ ] The pill is the only preference gesture; spans always visible via the strip; clearing only in Manage cameras
+- [ ] Clips created on another feed land at correct primary-time positions; export behavior unchanged until T5550
+- [ ] Mapping/packing/resolution unit tests + E2E pass

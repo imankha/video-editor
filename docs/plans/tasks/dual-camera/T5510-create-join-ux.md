@@ -1,81 +1,109 @@
-# T5510: Create + Join UX
+# T5510: Invite, Status Page, Join + No-Video Annotate UX
 
 **Status:** TODO
 **Impact:** 8
-**Complexity:** 6
+**Complexity:** 7
 **Created:** 2026-07-19
-**Updated:** 2026-07-19
+**Updated:** 2026-08-19
 
 ## Problem
 
-T5500's backend exists but there is no way to create a shared game, send the link, or join
-from it. See [EPIC.md](EPIC.md) § UX Flows 1-3 for the settled flows (create modal + share
-sheet, `/shared-game/{token}` landing card, camera-slot status block).
+T5500's backend exists but there is no way to invite other cameras, see a pool's status
+from a texted link, join it, or work with a game that has no video yet. The normative
+screen-by-screen spec is [UX-SPEC.md](UX-SPEC.md) §§1-4b — this task implements those
+surfaces exactly (copy, classes, states, and gesture→write tables are all specified there;
+do not re-design).
 
 ## Solution
 
 Frontend only (T5500's endpoints are the contract):
 
-1. **Create entry points** — (a) in the Add Game flow: a low-key "Two cameras at this game?
-   Invite the other team's camera" affordance; (b) on an existing game card's menu: "Invite
-   the other camera" (passes `local_game_id`, pre-fills name/date from the game).
-2. **Create modal** — fields: name (required), date (required, default today), time
-   (optional), location (optional). Submit → `POST /api/shared-games/` → success state
-   shows the link with `navigator.share` (mobile) / copy-to-clipboard (desktop) and a
-   prefilled message. No backdrop-close (project rule).
-3. **Landing route `/shared-game/{token}`** — SPA route rendering the game-info card from
-   `GET /api/shared-games/token/{token}`: name, date/time, location, creator display name,
-   slot statuses. CTA: signed-in → "Join this game" → `POST .../join` → navigate to the new
-   game; signed-out → sign-up/sign-in (existing auth flow), join completes via T5500's
-   deferred resolution, user lands on the game after auth. Revoked/unknown token → friendly
-   dead-link state.
-4. **Camera-slot status block** — on the game card (and/or game detail) for games with
-   `shared_game_id`: two rows ("Your camera — 2 videos ✓" / "Sam's camera — waiting"),
-   driven by `GET /api/shared-games/{id}`. Upload CTA appears on your own empty slot and
-   routes into the EXISTING Add Game upload (binding is T5520's job — until it lands the
-   CTA can navigate to plain upload).
+1. **Entry point: inside the Share game modal ONLY (§1.1).** No new kebab item, no
+   post-upload toast. `ShareGameModal.jsx` gains one block ("Another parent filmed this
+   game?" + "Invite their camera" cyan button) below General access. This is the single
+   pool-related surface a basic user can ever encounter (progressive-disclosure ladder).
+2. **Invite sheet (§1.2).** "Invite other cameras" modal: explainer, game summary,
+   storage note, **"Who is this link for?" segmented control — `Anyone` (DEFAULT,
+   one-tap copy) | `My team` | `The other team`**. Selecting The-other-team with no team
+   fact reveals the required "What's your team called?" input — the Copy/Share click
+   saves it to the sharer's profile fact AND the pool side in the same gesture. Pool +
+   link are created by the FIRST Copy/Share click (T7150 rule: never on modal open).
+   States: no pool / exists ({n} of 50 joined) / at cap 50 / create failed / no video yet.
+3. **Share-first (§1.3).** The link can exist before any video: an `awaiting video` game
+   (T5495) shares from the same §1.1 block or the §4b panel; the pool is created by the
+   share gesture, never as a side effect of deferring an upload.
+4. **Public pool status page `/pool/{token}` (§2).** SharedAnnotationView state-machine
+   idiom: brand lockup, game card, camera status list showing **kinds and counts, never
+   member names** (uploaded ✓ / uploading pulse / joined-no-camera summary / dashed
+   "You" row), one CTA per auth state (Sign up to join / Join this game / Open in your
+   library for existing members — no confirm re-run), revoked/full/no-cameras/error
+   states, `SharePageInstallBanner` + `GoogleOneTap`. Page title/OG carry the game title
+   only (privacy). NUF suppression sessionStorage flag (T5330b precedent).
+5. **Join confirm (§3).** Card, not the Add Game modal: profile block FIRST
+   (multi-profile chips, no default / single-profile display row / **new-account =
+   profile creation inline**, sport prefilled from the pool snapshot), display-only date,
+   **"Which team are you with?"** segmented control pre-answered by the link's side tag,
+   opponent prefill per side, consequence block (visibility + who pays until when),
+   derived-name preview updating live. One write: the Join click. Success → straight
+   into Annotate on the new game.
+6. **Pool tile states (§4).** `GameTile.jsx`: pool chip (count, cyan new-camera dot,
+   uploading pulse — all derived from `created_at`/`last_opened_at`, no new persisted
+   state), "Add camera" action chip (persistent, 44px, `data-pool-upload` guard), kebab
+   rows for pool games only (Invite more cameras / Manage cameras / Shared game info —
+   recompute the flip-aware menu height), **No-video tile state** (placeholder + Upload
+   video chip + "invite link live — no video yet" scrim line).
+7. **No-video Annotate setup panel (§4b).** Opening an `awaiting video` game lands in
+   Annotate; the video area renders the setup panel (bug-27p `AnnotateModeView` panel
+   precedent): "No video yet" + Upload video + Copy game link, status line refreshed by
+   the live-sync poll, upload-progress state with Cancel. Swaps to the player in place
+   when the first feed activates — no reload. (The panel itself ships with T5495; this
+   task adds the pool-aware share action + joined-count status line.)
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/frontend/src/App.jsx` — route registration for `/shared-game/{token}`
-- Game card / games list components (`src/frontend/src/components/` — locate GameCard + its menu; Code Expert confirms exact files) — create entry point (b) + slot status block
-- Add Game / upload entry component — create entry point (a)
-- NEW: `src/frontend/src/components/SharedGameCreateModal.jsx`, `src/frontend/src/screens/SharedGameLanding.jsx` (names per ui-style-guide conventions)
-- `src/frontend/src/stores/gamesDataStore.js` — shared-game state lives HERE (selectors), not new component-local useState graphs
-- `src/frontend/e2e/` — NEW spec for create→copy-link→join
+- `src/frontend/src/components/ShareGameModal.jsx` — §1.1 block; link lifecycle + `RevokeConfirmDialog` patterns reused
+- NEW `src/frontend/src/components/InviteCamerasModal.jsx` (§1.2 sheet) + `sharePoolInvite(url, text)` helper (extract the `navigator.share`-vs-clipboard branch — `useWebShare` is hardwired to `downloadId`, don't force-fit)
+- NEW `src/frontend/src/screens/PoolStatusPage.jsx` (§2) + `PoolJoinConfirm.jsx` (§3); route `/pool/{token}` in `src/frontend/src/App.jsx`
+- `src/frontend/src/components/GameTile.jsx` — §4 chips, kebab rows, no-video state
+- `src/frontend/src/modes/AnnotateModeView.jsx` — §4b pool-aware panel additions
+- `src/frontend/src/stores/gamesDataStore.js` — pool state selectors (fetched, never persisted view state)
+- `src/frontend/e2e/` — NEW spec: share→copy→status→join (two users)
 
 ### Related Tasks
-- Depends on: T5500 (all endpoints)
-- Blocks: T5520 (upload CTA binding target)
-- Related: T4890/T4840 edge OG-unfurl pattern — optional stretch so the texted link unfurls with game name/date; do NOT block on it
+- Depends on: T5500 (all endpoints), T5495 (reworked Add Game modal + awaiting-video state + §4b panel)
+- Blocks: T5520 (Add-camera chip routes into the §5 pool upload variant)
+- References: [EPIC.md](EPIC.md) decisions 6, 8, 9 (derived names, progressive disclosure, vocabulary); UX-SPEC § Conventions (feed colors = member_index-keyed initial badges; modal shell; copy-link lifecycle)
 
 ### Technical Notes
-- Knowledge docs: [annotate.md](../../../.claude/knowledge/annotate.md) (games store patterns), [backend-services.md](../../../.claude/knowledge/backend-services.md)
-- **UI Designer pass required** before implementation (modal, landing card, slot block —
-  match ui-style-guide.md; landing page is seen by brand-new users, it is a first
-  impression).
-- Auth-gated join: the landing page must survive the auth round-trip (token in the URL is
-  the state carrier; after login/signup the app returns to `/shared-game/{token}` or the
-  deferred resolution has already joined — handle both idempotently, T5500 join is
-  idempotent by contract).
-- No persisted view state; slot statuses are fetched, never cached to storage.
-- E2E: use the real-auth helper (`e2e/helpers/realAuth.js`) + two test users to drive
-  create-on-A / join-on-B; real browser verification for the share-sheet fallback path.
+- Knowledge docs: [annotate.md](../../../../.claude/knowledge/annotate.md), [backend-services.md](../../../../.claude/knowledge/backend-services.md)
+- UX-SPEC is the design doc — no UI Designer pass needed; deviations require spec change,
+  not improvisation. Vocabulary is absolute: camera/clips/shared game/line up; never
+  feed/pool/sync in copy
+- Auth round-trip: token in the URL path is the state carrier; after auth either the §3
+  confirm renders or deferred resolution already joined — handle both (join is idempotent
+  by T5500 contract)
+- Gesture→write tables in §1.2/§2/§3/§4 are normative: modal opens, chips, and status
+  pages write NOTHING; the only writes are first-Copy (pool create + optional team-name),
+  later-Copy (idempotent link read), and Join
+- E2E: real-auth helper (`e2e/helpers/realAuth.js`) + two test users (A shares, B joins
+  signed-in, B' via signup); real-browser verification of navigator.share fallback and
+  the mobile status page
 
 ## Implementation
 
 ### Steps
-1. [ ] UI Designer: modal + landing + slot block specs — user approval gate
-2. [ ] Create modal + both entry points + share-sheet/copy success state
-3. [ ] `/shared-game/{token}` landing route (signed-in, signed-out, revoked states)
-4. [ ] Slot status block on shared game cards (gamesDataStore selector + component)
-5. [ ] E2E: A creates → link → B joins signed-in; B' joins via signup (deferred); revoked link state
+1. [ ] §1.1 block + §1.2 invite sheet (Anyone default, side tags, team-name capture, cap/error states)
+2. [ ] §2 status page + route (all auth states, privacy rules, revoked/full states)
+3. [ ] §3 join confirm (profile binding incl. new-account creation, side derivation preview)
+4. [ ] §4 tile chips + kebab rows + no-video state; §4b pool-aware panel additions
+5. [ ] E2E two-user flow + signup-claim flow + revoked link; real-browser mobile pass
 
 ## Acceptance Criteria
 
-- [ ] Create works from both entry points; existing-game entry pre-fills and binds slot 0
-- [ ] Link share sheet works on mobile (navigator.share) and desktop (copy)
-- [ ] Landing page renders game info without auth; join CTA behaves correctly signed-in, signed-out (via signup), and on revoked/unknown tokens
-- [ ] After join, the joiner has the game in their account and both sides see two slot rows with correct statuses
-- [ ] E2E specs pass; verified in a real browser on mobile viewport
+- [ ] A basic (non-pool) user sees zero new chrome anywhere except the §1.1 block inside a modal they opened — audited against the ladder, not asserted
+- [ ] `Anyone` link copies in one tap; side-tagged links pre-answer §3's team question; missing team name is captured once and prefills cross-team joiners' Opponent
+- [ ] Status page renders kinds/counts only (no names pre-join) and behaves per the §2 state table for all auth/cap/revoked states
+- [ ] Join binds a profile (creating one for new accounts), previews the derived name live, and lands the joiner in Annotate
+- [ ] Pool tiles show count/new/uploading/no-video states with no new persisted state; awaiting-video games share and upload from the §4b panel
+- [ ] E2E specs pass; real-browser verification done

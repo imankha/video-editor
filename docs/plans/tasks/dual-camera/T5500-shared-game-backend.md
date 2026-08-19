@@ -1,134 +1,154 @@
-# T5500: Shared Game Entity + Invite/Join Backend
+# T5500: Pool Entity + Invite/Join Backend
 
 **Status:** TODO
 **Impact:** 7
-**Complexity:** 5
+**Complexity:** 6
 **Created:** 2026-07-19
-**Updated:** 2026-07-19
+**Updated:** 2026-08-19
 
 ## Problem
 
 There is no cross-account "same real-world game" object. Sharing today is one-directional
-(sharer → recipient copies); a dual-camera game needs a symmetric coordination object both
-accounts can write to (metadata, membership, each side's uploaded videos, alignment
-offsets). See [EPIC.md](EPIC.md) for the architecture decisions (Postgres coordination +
-local game rows; camera = member slot; wall-clock time model).
+(sharer → recipient copies); a game pool needs a symmetric coordination object up to **50
+contributors** (both teams) can join and register feeds against. See [EPIC.md](EPIC.md)
+decisions 1, 3, 5-7 (Postgres coordination + private per-member game rows; N-feed
+registry; wall-clock origin as stored constant; names are perspectives; share/claim reuse).
 
 ## Solution
 
-Postgres schema + FastAPI endpoints for the Shared Game lifecycle: create → invite token →
-join (signed-in and deferred no-account) → membership/state reads. This task is
-**backend + schema only** (frontend in T5510; video registration in T5520).
+Postgres schema + FastAPI endpoints for the pool lifecycle: create → per-side invite
+links → public status → join (signed-in and claim-through-signup) → membership reads +
+rotate/leave. **Backend + schema only** (UX in T5510; feed registration in T5520).
 
-### Schema (Postgres — add to `_SCHEMA_DDL` in `pg.py` AND a versioned migration)
+### Schema (Postgres — `_SCHEMA_DDL` in `pg.py` AND a versioned migration; **check sibling
+unmerged branches for the next version number at implementation**)
+
+DDL sketch per EPIC decision 1 (exact shapes are the design gate's to settle):
 
 ```sql
 CREATE TABLE IF NOT EXISTS shared_games (
     id SERIAL PRIMARY KEY,
-    invite_token TEXT UNIQUE NOT NULL,          -- same token style as shares.share_token
-    name TEXT NOT NULL,
     game_date DATE NOT NULL,
-    game_time TEXT,                             -- free-form "10:30 AM" (no TZ headaches)
-    location TEXT,
+    sport TEXT NOT NULL,                  -- creator's sport SNAPSHOT at pool creation (§3 new-account prefill, T2915 rails)
+    game_type TEXT NOT NULL,              -- creator's Home/Away/Tournament (joiner side-derivation inverts it)
+    side_a_name TEXT,                     -- creator's team; captured at share time when missing (§1.2)
+    side_b_name TEXT,                     -- other team (creator's Opponent snapshot)
+    invite_token_any TEXT UNIQUE NOT NULL,    -- 'Anyone' link (default, untagged)
+    invite_token_side_a TEXT UNIQUE,          -- side-tagged links, issued on demand (§1.2)
+    invite_token_side_b TEXT UNIQUE,
+    wall_clock_origin_blake3 TEXT,        -- STORED CONSTANT: anchor of shared-clock 0 (creator's first
+                                          -- full feed; survives feed deletion — UX-SPEC §10 settled
+                                          -- outcome; exact representation = architect call, incl. the
+                                          -- clips-only provisional origin re-anchored by constant shift)
     created_by_user_id TEXT NOT NULL REFERENCES users(user_id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at TIMESTAMPTZ,                     -- creator can kill the invite link
-    alignment_confirmed_at TIMESTAMPTZ          -- set by T5530 confirm gesture
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS shared_game_members (
     shared_game_id INTEGER NOT NULL REFERENCES shared_games(id) ON DELETE CASCADE,
-    member_index INTEGER NOT NULL,              -- 0 = creator, 1 = joiner (cap 2 in v1)
+    member_index INTEGER NOT NULL,        -- join order; drives FEED_COLORS; 0 = creator
     user_id TEXT NOT NULL REFERENCES users(user_id),
-    profile_id TEXT NOT NULL,                   -- which profile the game lives in
-    local_game_id INTEGER,                      -- that member's games.id (set on bind/join)
-    display_name TEXT,                          -- what the other side sees ("Sam")
+    profile_id TEXT NOT NULL,             -- the join BINDS to a profile (§3)
+    side TEXT NOT NULL,                   -- 'a' | 'b' (from the join's team question)
+    local_game_id INTEGER,                -- that member's private games.id
+    display_name TEXT,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (shared_game_id, member_index),
-    UNIQUE (shared_game_id, user_id)
+    UNIQUE (shared_game_id, user_id)      -- cap 50 enforced in the join handler
 );
 
-CREATE TABLE IF NOT EXISTS shared_game_videos (
+CREATE TABLE IF NOT EXISTS shared_game_feeds (
     id SERIAL PRIMARY KEY,
     shared_game_id INTEGER NOT NULL REFERENCES shared_games(id) ON DELETE CASCADE,
     member_index INTEGER NOT NULL,
-    sequence INTEGER NOT NULL,                  -- half ordering within one camera
+    kind TEXT NOT NULL,                   -- 'full' | 'clip' (one full camera per member; clips unlimited — §5)
+    label TEXT,
+    withdrawn_at TIMESTAMPTZ,             -- remove-my-camera / creator removal (§10; delisted, refs survive)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS shared_game_feed_videos (
+    id SERIAL PRIMARY KEY,
+    feed_id INTEGER NOT NULL REFERENCES shared_game_feeds(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL,
     blake3_hash TEXT NOT NULL,
-    duration REAL,
-    video_width INTEGER,
-    video_height INTEGER,
-    fps REAL,
-    wall_offset REAL,                           -- shared-clock seconds at this video's t=0
-                                                -- (NULL until T5530 aligns; slot-0 first
-                                                -- video conventionally 0)
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (shared_game_id, member_index, sequence)
+    duration REAL, video_width INTEGER, video_height INTEGER, fps REAL,
+    creation_time TIMESTAMPTZ,            -- mvhd stamp (T5495 client parse; ordering/seed per ALIGNMENT.md)
+    wall_offset REAL,                     -- shared-clock seconds at t=0; NULL = never fabricated
+    offset_source TEXT,                   -- 'auto' | 'metadata' | 'manual' (+ confidence; T5530 verdict ladder)
+    offset_confidence REAL,
+    offset_updated_by TEXT, offset_updated_at TIMESTAMPTZ,  -- drives the §6 re-lined-up toast (derived, LWW)
+    UNIQUE (feed_id, sequence)
 );
 ```
 
-Deferred no-account join: reuse the `pending_teammate_shares` pattern — design decides
-between a new `pending_shared_game_joins` table or generalizing the existing one. The
-pending row stores `(shared_game_id, recipient_email-or-nothing, created_at, resolved_at,
-resolved_user_id)`; resolution runs at first login after signup (same hook point
-`resolve_pending_shares` uses in `clips.py`).
+`games.shared_game_id INTEGER DEFAULT NULL` (profile_db) is needed at join time —
+coordinate the profile_db migration file with T5520 (which adds `game_videos.feed_id`):
+one file if they land together, never a reused version number.
 
-### Endpoints (new router `src/backend/app/routers/shared_games.py`, prefix `/api/shared-games`)
+### Endpoints (new router `src/backend/app/routers/pools.py`, prefix `/api/pools` — routes
+per UX-SPEC gesture tables; "pool" is internal vocabulary, fine in routes, never in UI copy)
 
-| Endpoint | Gesture | Behavior |
+| Endpoint | Gesture (UX-SPEC §) | Behavior |
 |---|---|---|
-| `POST /` | Create button | body `{name, game_date, game_time?, location?, local_game_id?}` → creates `shared_games` + member row 0 (display_name from the user's profile); returns `{id, invite_token}`. `local_game_id` binds an existing game as slot 0. |
-| `GET /token/{invite_token}` | Landing page load | PUBLIC (no auth): `{name, game_date, game_time, location, creator_display_name, members:[{member_index, display_name, video_count}], revoked}`. Never leaks emails/user_ids. |
-| `POST /token/{invite_token}/join` | Join button | Auth required. Creates member row 1 + materializes a local game row in the caller's active profile (name/date from shared game metadata; `games.shared_game_id` set; `shared_by` provenance stamped — see EPIC decision 8 / T5330). Idempotent: joining twice returns the existing membership. Full (2 members) → 409. Revoked → 410. |
-| `GET /{id}` | Game load / refresh | Member-only: full state incl. `shared_game_videos` + `wall_offset`s. This is what T5520's propagation reads. |
-| `POST /{id}/revoke` | Revoke menu item | Creator-only: sets `revoked_at` (kills the token; existing members unaffected). |
+| `POST /api/pools` | First Copy/Share click in the invite sheet (§1.2) | `{game_id}` → creates pool from that game's metadata, member row 0, snapshots sport + game type + team names, binds the game as reference. Idempotent per game. |
+| `POST /api/pools/{id}/link` | Later Copy clicks (§1.2) | Read-or-return existing tokens; side-tagged token issued on demand; writing the sharer's team name (when the same gesture captured it) also updates profile team fact + pool side name. |
+| `GET /api/pools/token/{token}` | Status page load (§2) | PUBLIC, no auth: date, side names, creator first name, camera **kinds and counts — never member names** (§2 privacy), cap state, the token's side tag. Revoked → 410. |
+| `POST /api/pools/{token}/join` | "Join game" (§3) | Auth required. `{profile_id \| new_profile: {name, sport}, team_side, opponent_name}` — one write: creates profile if needed (sport prefilled from snapshot), member row (side from the answer), private `games` row (name DERIVED from side: other-team inverts Home↔Away, same-team inherits verbatim — EPIC decision 6; `shared_game_id` set; `shared_by` provenance), registers existing feeds as references (delegates to T5520's materialization). Idempotent; at cap 50 → 409; revoked → 410. |
+| `GET /api/pools/{id}` | Member game load / T5520 live-sync poll | Member-only: full registry (members, feeds, feed videos + offsets). |
+| `POST /api/pools/{id}/rotate-link` | Replace invite link confirm (§10) | Creator-only; replaces ALL tokens; old ones 410. |
+| `POST /api/pools/{id}/leave` | Stop sharing confirm (§10) | Member-only; releases the slot (count against 50 drops); the invite link re-admits later. |
 
-`games.shared_game_id INTEGER DEFAULT NULL` is a **profile_db** column needed at join/bind
-time — coordinate with T5520 (which owns the profile_db migration adding `camera`): this
-task's migration adds `shared_game_id` in the SAME profile_db migration file if T5520 has
-not landed first; otherwise T5520's file carries both. One migration file, no collisions
-(never reuse versions — see reference_running_migrations).
+**Claim-through-signup:** the token rides the URL path through auth (T5730/T2915 deferred
+resolution rails — the pending-claim hook `resolve_pending_shares` in `clips.py` ~2578);
+after signup the §3 confirm runs with the token's side tag intact.
+
+**T1180 exception:** a pool game legitimately exists with zero videos (§1.3 share-first
+AND T5495's general awaiting-video creation). Coordinate the `create_game` exception shape
+with T5495 — one exception, not two.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/backend/app/services/pg.py` — `_SCHEMA_DDL` additions (~L97-170 near shares DDL)
-- `src/backend/app/routers/shared_games.py` — NEW router
-- `src/backend/app/main.py` — router registration (~L154-158)
-- `src/backend/app/routers/shares.py` — token generation pattern to copy
-- `src/backend/app/routers/clips.py` — `resolve_pending_shares` (~2578): deferred-join hook point
-- `src/backend/app/services/materialization.py` — provenance stamping pattern (`shared_by`)
-- `src/backend/app/database.py` — `ensure_database()` `games` table: add `shared_game_id`
-- `src/backend/app/migrations/postgres/` + `src/backend/app/migrations/profile_db/` — NEW migration files (Migration agent)
-- `src/backend/tests/test_shared_games.py` — NEW
+- `src/backend/app/services/pg.py` — `_SCHEMA_DDL` additions (near shares DDL)
+- NEW `src/backend/app/routers/pools.py` + registration in `src/backend/app/main.py`
+- `src/backend/app/routers/shares.py` — token generation pattern
+- `src/backend/app/routers/clips.py` — `resolve_pending_shares` (~2578) deferred-join hook
+- `src/backend/app/services/materialization.py` — `_insert_game_with_videos` + `shared_by` provenance (T5330 quest-blind)
+- `src/backend/app/database.py` — `ensure_database()` `games.shared_game_id`
+- `src/backend/app/migrations/postgres/` + `migrations/profile_db/` — NEW versioned files (Migration agent; **never auto-run — `POST /api/admin/migrate`**)
+- `src/backend/tests/test_pools.py` — NEW
 
 ### Related Tasks
-- Part of [dual-camera epic](EPIC.md); blocks T5510-T5560
-- Reuses: shares.py token pattern; T2915 deferred link-resolution; T5330 provenance rules
-- Coordinate: Share the Game epic T5720/T5730 (superseded T4910) — overlapping token/claim plumbing, whichever lands first owns it
+- Part of [Game Pools epic](EPIC.md); blocks T5510–T7310
+- Depends on: T5495 (T1180 exception coordination)
+- Reuses: shares.py tokens; T5720/T5730 claim rails; T2915 inherited-sport; T5330 provenance
+- Normative UX contract: UX-SPEC §1.2 (writes table), §2, §3, §10
 
 ### Technical Notes
-- Knowledge docs: [backend-services.md](../../../.claude/knowledge/backend-services.md), [persistence-sync.md](../../../.claude/knowledge/persistence-sync.md)
-- L-tier task (schema + new router) → Architect design gate before implementation. Design
-  must settle: pending-join table shape, quest-provenance mechanism (EPIC decision 8), and
-  whether `GET /token/{...}` gets an edge-cacheable variant for unfurl (stretch).
-- `%s` params + RealDictCursor for Postgres (rows are dicts); `_require_admin`-style
-  imperative member checks in every `/{id}` handler (membership check helper, one place).
-- All writes trace to explicit gestures (create/join/revoke buttons) — no reactive writes.
+- Knowledge docs: [backend-services.md](../../../../.claude/knowledge/backend-services.md), [persistence-sync.md](../../../../.claude/knowledge/persistence-sync.md)
+- L-tier → Architect design gate. Must settle: wall-clock-origin storage shape (§10 flags
+  this explicitly, incl. clips-only provisional origin re-anchoring — EPIC decision 3),
+  token-per-side representation, member-check helper, pending-claim table shape
+- `%s` params + RealDictCursor; membership check helper in ONE place, used by every `/{id}` handler
+- Every write above traces to a named gesture (Copy/Share click, Join click, Replace
+  confirm, Leave second tap) — opening modals writes nothing (T7150 rule)
 
 ## Implementation
 
 ### Steps
-1. [ ] Architect design doc (pending-join shape, provenance, member-check helper) — user approval gate
-2. [ ] `_SCHEMA_DDL` + Postgres migration (3 tables) + profile_db `games.shared_game_id` migration
-3. [ ] Router: create / token-info / join / get / revoke + membership helper
-4. [ ] Deferred-join resolution wired into the existing pending-share resolution hook
-5. [ ] Tests: create→join happy path, idempotent join, 409 full, 410 revoked, token info leaks nothing private, deferred join resolves at signup, provenance stamped
+1. [ ] Architect design doc (origin constant, token shape, pending-claim, member helper) — user approval gate
+2. [ ] `_SCHEMA_DDL` + Postgres migration (4 tables) + profile_db `games.shared_game_id` (coordinated with T5520)
+3. [ ] Router: create / link / public status / join / get / rotate-link / leave + member helper
+4. [ ] Claim-through-signup wired into the existing pending-share resolution hook
+5. [ ] T1180 awaiting-video exception (with T5495)
+6. [ ] Tests: create idempotent; side derivation (invert vs inherit); join idempotent / 409 at 50 / 410 revoked+rotated; public status leaks no names; signup claim keeps side tag; provenance stamped; leave releases slot + rejoin works
 
 ## Acceptance Criteria
 
-- [ ] Creator can create a shared game (optionally binding an existing local game) and gets a working invite token
-- [ ] `GET /token/{token}` returns game info with no auth and no private data
-- [ ] Signed-in join creates membership + a local game row with `shared_game_id` and `shared_by` provenance set
-- [ ] Join is idempotent; full game 409s; revoked token 410s; existing members survive revoke
-- [ ] No-account visitor's join completes automatically after signup (deferred resolution)
-- [ ] Backend tests pass; migrations runnable via `POST /api/admin/migrate`
+- [ ] One Copy click creates the pool + Anyone link; side-tagged links issue on demand; team-name capture writes profile fact + pool side in the same gesture
+- [ ] Public status endpoint requires no auth and exposes kinds/counts only — no member names, emails, or user_ids
+- [ ] Join binds to a profile (or creates one with the sport snapshot), derives the game name from the chosen side, and is idempotent; cap 50 and revoked/rotated tokens behave per spec
+- [ ] Claim-through-signup completes with the side tag intact
+- [ ] Pool, members, offsets, and the stored wall-clock origin survive the creator's game deletion (§10 settled outcome)
+- [ ] Migrations runnable via `POST /api/admin/migrate`; version numbers checked against sibling branches; backend tests pass

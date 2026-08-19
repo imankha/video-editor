@@ -1,6 +1,11 @@
 # Game Pools (Multi-Feed Shared Games) — UX Specification
 
-**Status:** DRAFT — revised after design review; awaiting user approval
+**Status:** APPROVED 2026-08-19 (design rounds complete; final review findings applied).
+This spec is the NORMATIVE UX; EPIC.md is the epic's source of truth for architecture
+decisions and task boundaries — they are reconciled as of this date.
+**Naming rule (greppability):** user-visible route `/shared-game/{token}`, API prefix
+`/api/shared-games`, Postgres tables `shared_games*` — one concept, one name; "pool"
+never leaves internal prose.
 **Scope:** UI only. Architecture (Postgres pool coordination object, per-member private game
 rows, wall-clock offsets, rent-based storage) is settled — see [EPIC.md](EPIC.md).
 **Companions:** high-fidelity mockups of every changed screen live in the session's
@@ -35,7 +40,7 @@ Every proposal below is grounded in an existing component or a rule from
 | Idiom | Source of truth | Used by sections |
 |-------|-----------------|------------------|
 | Modal shell: `fixed inset-0 z-50`, **inert** `bg-black/70 backdrop-blur-sm` backdrop (never closes on click), `bg-gray-800 rounded-xl border border-gray-700 max-w-md mx-4`, **`max-h-[90dvh] flex flex-col` with the body region `overflow-y-auto`** (headers/footers never scroll away), header icon chip `p-2 bg-{color}-600/20 rounded-lg` + `text-lg font-semibold` title + X button | `GameDetailsModal.jsx`, `StorageExtensionModal.jsx` | 1, 3, 5, 7, 9, 10 |
-| Segmented control: `flex gap-2`, buttons `flex-1 px-3 py-2 rounded-lg text-sm font-medium`, active `bg-green-600 text-white`, inactive `bg-gray-700 text-gray-300 hover:bg-gray-600` | `GameDetailsModal.jsx` (Game Type / Video Format) | 3, 5 |
+| Segmented control: `flex gap-2`, buttons `flex-1 px-3 py-2 rounded-lg text-sm font-medium`, active `bg-green-600 text-white`, inactive `bg-gray-700 text-gray-300 hover:bg-gray-600` | `GameDetailsModal.jsx` (Game Type; the Video Format control is DELETED by §5b) | 3 |
 | Form inputs: `bg-gray-900 border border-gray-600 rounded-lg`, `focus:border-green-500 focus:ring-1 focus:ring-green-500`, date inputs add `[color-scheme:dark]` | `GameDetailsModal.jsx` | 3, 5 |
 | Dashed dropzone with drag/selected states | `GameDetailsModal.jsx:427-455` | 5 |
 | Cost/balance row: `px-3 py-2 rounded-lg bg-gray-700/50 text-gray-300` + `Coins size={14} className="text-yellow-400"` + `Balance: {n}` right-aligned; `BuyCreditsModal` lazy fallback when short | `GameDetailsModal.jsx:509-517`, `StorageExtensionModal.jsx` | 5, 9 |
@@ -78,6 +83,17 @@ in the feed color, rendering the owner's first initial — so two violet feeds s
 name, and every feed element carries an `aria-label` naming the owner. A member's own feed
 is additionally labeled "You".
 
+### Duration taxonomy + role vocabulary — ONE table, referenced everywhere
+
+| Duration | Role inference | UI kind strings |
+|---|---|---|
+| ≤ 120 s (`SINGLE_CLIP_THRESHOLD_SECONDS` — the SAME shared constant as T7280's fast path) | `clip` | `Phone clips ({n})` (§2), `clip` chip (§5b/§9) |
+| 120 s – 20 min | **`unassigned` — the user picks; never silently "clip" or "half"** | `unassigned` chip with a role selector |
+| > 20 min | `full game`, or `1st half`/`2nd half` (two >20-min groups), or `one recording — part {i}` (contiguous segments) | `Full-game camera`, `First half`, `Second half`, `Both halves` (§2) |
+
+§2's status kinds, §5b's role chips, §8's tiles, and §9's rows all draw from this table —
+no section re-derives durations or invents synonyms.
+
 ### "Camera unavailable" — ONE treatment, everywhere
 
 Whenever a camera cannot play for this member — expired for them, removed by its owner,
@@ -112,7 +128,9 @@ below "General access", separated by `pt-4 border-t border-gray-700`:
    the invite sheet (§1.2).
 
 For a game already in a pool the button label becomes **"Invite more cameras"** and opens
-the same sheet. The block inherits the Share game modal's own gates (it never opens for
+the same sheet. On an `awaiting video` game (§1.3), the modal's recap/clip share blocks —
+which have nothing to share yet — collapse to one quiet line (*"Sharing unlocks once
+there's video."*) above this block, so the modal never renders as an empty shell. The block inherits the Share game modal's own gates (it never opens for
 expired games), so no new gating logic is needed. Nothing else on the tile, kebab, or
 upload flow changes — the basic-user ladder cell above is literally true.
 
@@ -165,8 +183,8 @@ into a `sharePoolInvite(url, text)` helper — `useWebShare` is currently hardwi
 | State | Appearance |
 |-------|-----------|
 | No pool yet | Buttons as above; the pool + link are created by the first Share/Copy click (spinner in-button: `Loader size={14} animate-spin` + "Creating link…"). |
-| Pool exists | Same modal; the click returns the existing link (idempotent, like game share-link). Explainer line 1 appends: *"{n} of 50 cameras joined."* |
-| **At cap (50 cameras)** | Copy/Share buttons **disabled**; inline `text-sm text-yellow-300` under the link row: *"This game has all 50 cameras. Remove one in Manage cameras to invite another."* |
+| Pool exists | Same modal; the click returns the existing link (idempotent, like game share-link). Explainer line 1 appends: *"{n} of 50 people joined."* |
+| **At cap (50 MEMBERS — the cap counts people, not cameras)** | Copy/Share buttons **disabled**; inline `text-sm text-yellow-300` under the link row: *"This game has 50 people — the maximum. Remove someone in Manage cameras to invite another."* |
 | Create failed | `text-red-400 text-sm` inline error under the link row: *"Couldn't create the link. Check your connection and try again."* Button stays enabled for retry. |
 | No video yet (share-first, §1.3) | Sheet works identically; the game summary line appends *"— no video yet. The link works now; videos can come later."* |
 
@@ -178,8 +196,8 @@ into a `sharePoolInvite(url, text)` helper — `useWebShare` is currently hardwi
 **Gestures → writes.**
 | Gesture | Write |
 |---------|-------|
-| Click "Copy link" / "Share link" (first time) | `POST /api/pools` `{game_id}` → creates pool + invite token, binds this game as the reference feed, **snapshots the creator's sport into the pool** (feeds §3's new-account profile creation). **The only write in this flow.** Opening the modal writes nothing (T7150 rule). |
-| Click again later | `POST /api/pools/{id}/link` idempotent read-or-return; no new state. |
+| Click "Copy link" / "Share link" (first time) | `POST /api/shared-games` `{game_id}` → creates pool + invite token, binds this game as the reference feed, **snapshots the creator's sport into the pool** (feeds §3's new-account profile creation). **The only write in this flow.** Opening the modal writes nothing (T7150 rule). |
+| Click again later | `POST /api/shared-games/{id}/link` idempotent read-or-return; no new state. |
 | Copy/Share with "The other team" + a typed team name | The same click ALSO writes the team name to the sharer's profile team fact and the pool's side name — one gesture, both canonical homes; never a reactive write on typing. |
 
 **Accessibility.** Buttons are real `<button>`s with visible text (no icon-only). Copied
@@ -198,13 +216,16 @@ camera parent from the sideline). Two doors:
 2. The **Share game modal** on an `awaiting video` game tile — the same §1.1 block.
 
 The creator's tile shows the `No video yet` state (§4) until they upload via §5.
-**Implementation note for T5500:** this is the one place a `games` row legitimately
-exists with zero videos — the T1180 zero-video rejection needs a pool-scoped exception
-(architect call: metadata-only local row now vs pool-only until first upload).
+**Implementation note — owned by T5495, GENERAL not pool-scoped:** video-optional create
+is a feature for every user (§5b item 4), so `awaiting video` is a NEW games lifecycle
+value (today's `GameStatus` has only PENDING — invisible downstream — and READY). T5495
+names the status and audits every `status = ready`-only consumer for the new state:
+games list, expiry sweep, poster endpoint, recap, quest probes, `/video` presign. T5500
+owns only the pool binding of such games.
 
 ---
 
-## 2. Public Pool Status Page (`/pool/{token}`)
+## 2. Public Pool Status Page (`/shared-game/{token}`)
 
 This is a stranger's first impression — it reuses the public shared-view idiom
 (`SharedAnnotationView.jsx` state machine + `SharedCollectionView` chrome) but is a
@@ -219,7 +240,8 @@ This is a stranger's first impression — it reuses the public shared-view idiom
      {Month D, YYYY}` and creator's display name: *"Started by {firstName}"*.
    - **Camera status list** (`divide-y divide-gray-700/60 rounded-lg border border-gray-700`
      wrapper, rows `px-3 py-2` — the `ShareGameModal` "People with access" list idiom).
-     **Pre-join, rows show kinds and counts — never member names** (this page is visible
+     **Pre-join, rows show kinds and counts — no names beyond the creator's first name
+     in the "Started by" line** (this page is visible
      to anyone holding the link): 
      - Uploaded: neutral gray dot + `text-sm text-gray-200` kind + `Check size={14}
        className="text-green-400"` — `Full-game camera ✓`, `Phone clips (3) ✓`
@@ -250,7 +272,7 @@ This is a stranger's first impression — it reuses the public shared-view idiom
 | Signed in, not a member | CTA label **"Join this game"** → §3 confirm. |
 | Already a member | **No confirm step.** CTA label **"Open in your library"** → `setPendingGame(gameId)` navigation + toast *"You're already in this game."* Status list marks their row "You ✓". |
 | Link revoked/replaced | Error card (`AlertCircle text-red-400`): *"This invite link is no longer active. Ask the person who shared it for a new one."* |
-| Pool full (50) | CTA disabled (`Button disabled`) + `text-sm text-yellow-300`: *"This game already has 50 cameras — the maximum."* |
+| Pool full (50 members) | CTA disabled (`Button disabled`) + `text-sm text-yellow-300`: *"This game already has 50 people — the maximum."* |
 | No cameras yet (share-first pool) | Status list is one dashed row: *"No cameras yet — be the first to upload."* CTA unchanged (join first, upload after). |
 | Fetch error | *"Could not load this game. Please try again."* + Retry ghost button. |
 
@@ -294,7 +316,7 @@ Body, top to bottom:
 | Field | Behavior |
 |-------|----------|
 | Game Date | Pool's date. **Display-only** — plain value row (`text-sm text-white` next to a `Calendar size={14}` gray label), NOT a disabled input. It's the same physical game. |
-| **"Which team are you with?"** | Segmented control, two options: **`{creatorTeamName}`** (fallback label when the creator has no team fact: **`Same team as {firstName}`**) and **`The other team`**. **Pre-selected from the invite link's side tag** (§1.2 — the sharer already said who this link was for), still changeable; with an untagged/legacy link there is no default and Join stays disabled until chosen. Same team → inherits the creator's game type AND opponent **verbatim**. Other team → **inverts** the game type (Home ↔ Away; Tournament stays Tournament) and prefills Opponent with the creator's team name. |
+| **"Which team are you with?"** | Segmented control, two options: **`{creatorTeamName}`** (fallback label when the creator has no team fact: **`Same team as {firstName}`**) and **`The other team`**. **With the default `Anyone` link (the common case) there is NO pre-selection** — Join stays disabled until the joiner answers. A side-TAGGED link (§1.2's optional refinement) pre-answers it, still changeable. Same team → inherits the creator's game type AND opponent **verbatim**. Other team → **inverts** the game type (Home ↔ Away; Tournament stays Tournament) and prefills Opponent with the creator's team name. |
 | Opponent Team | Text input, prefilled per the team-side choice above (editable; `autoFocus` when blank and a side is chosen). |
 
 **3. Consequence block** — `bg-gray-900/50 rounded-lg p-3` with two `text-xs text-gray-400`
@@ -332,7 +354,7 @@ with different logic).
 **Gestures → writes.**
 | Gesture | Write |
 |---------|-------|
-| Click **"Join game"** | `POST /api/pools/{token}/join` `{profile_id \| new_profile: {name, sport}, team_side, opponent_name}` — the single write: creates the profile if needed, the member row, and the joiner's private `games` row (date from pool; game type derived from team side; derived name), registers existing feeds as references (`shared_by` provenance per epic decision 7). Chip taps, segmented-control taps and typing before Confirm are local state only. |
+| Click **"Join game"** | `POST /api/shared-games/{token}/join` `{profile_id \| new_profile: {name, sport}, team_side, opponent_name}` — the single write: creates the profile if needed, the member row, and the joiner's private `games` row (date from pool; game type derived from team side; derived name), registers existing feeds as references (`shared_by` provenance per epic decision 7). Chip taps, segmented-control taps and typing before Confirm are local state only. |
 | Later edits | The existing Edit Game flow (pencil in the tile scrim) — already gesture-persisted; no new surface. |
 
 **Accessibility.** The fixed date row has `aria-label="Game date: {date} (set by the shared
@@ -351,17 +373,24 @@ user's tile renders byte-identical to today):
    text-[10px] font-semibold bg-gray-900/70 text-gray-200 z-20` with `Video size={10}` +
    `{feedCount}`. When the expiry chip is also present, the pool chip stacks **below** it
    (`top-7 left-1.5` when `isExpired || isNearExpiry`, else `top-1.5`) — chips never overlap.
-   - **New-camera signal:** when any feed's `created_at` > this member's `last_opened_at`
-     for the game (both already stored — **no new persisted state**), the chip gains a
-     cyan dot (`w-1.5 h-1.5 rounded-full bg-cyan-400`) and its `title`/`aria-label`
-     becomes `Shared game — {n} cameras, {k} new`.
+   - **The chip counts CAMERAS (camera-kind feeds) only**, appending clips when present:
+     `title`/`aria-label` `Shared game — {n} cameras · {m} clips` — never "5 cameras" for
+     2 cameras + 3 clips (vocabulary rule).
+   - **New-camera signal:** when any feed's `created_at` > this member's
+     `shared_game_members.pool_seen_at` — a NEW per-member column (owned by T5500's
+     schema, bumped by T5520 as part of the existing open-game gesture for pool games;
+     deliberately NOT `games.last_accessed_at`, which the `/video` presign also bumps and
+     would silently clear the signal on a poster fetch) — the chip gains a cyan dot
+     (`w-1.5 h-1.5 rounded-full bg-cyan-400`) and its title appends `, {k} new`.
    - **Uploading signal:** while any feed is mid-upload, the chip's dot pulses
      (`animate-pulse`) and the `title` appends `, {m} uploading`.
    - Deliberate deviation from the brief's "pool indicator + feed count" as scrim content:
      the scrim is the minimal name/date/clip-count surface (T5681 decision, annotate.md
      § Games-tab surface) — a chip in the badge zone matches the established tile grammar.
-2. **"Add camera" chip** — only when the member has NOT contributed a feed AND the pool
-   has ≥1 other feed: a second badge-zone chip stacked directly below the pool chip, same
+2. **"Add camera" chip — PERSISTENT, relabeling by state:** `Add camera` while the member
+   has no camera-kind feed; **`Add clips`** once they do (clips are unlimited). Rendered
+   whenever the pool exists (this and §4b's panel button are the two everyday entry
+   points into §5): a second badge-zone chip stacked directly below the pool chip, same
    chip geometry but action-styled: `bg-cyan-600/90 hover:bg-cyan-500 text-white` with
    `Upload size={10}` + **"Add camera"**. It is a real `<button>`; on coarse pointers it
    carries `min-h-11` via a transparent hit-area extension (`before:` pseudo or padding —
@@ -382,39 +411,6 @@ user's tile renders byte-identical to today):
 **Mobile.** Identical (GameTile is already responsive; the kebab bottom sheet carries the
 new rows automatically).
 
-### 4b. Opening a game with no video — the no-video Annotate state
-
-(Supersedes the earlier separate "setup lobby" card — user simplification 2026-08-19:
-fewer surfaces; the user is already where the game lives.)
-
-Opening an `awaiting video` game lands in **Annotate as usual**, but the video area
-renders a **setup panel instead of a player** — the bug-27p expired-source precedent
-(`AnnotateModeView` renders a deliberate panel in the video area, never a broken/empty
-`<video>`). The goal of this screen is exactly two actions: **upload video or share the
-link.**
-
-Panel content, centered in the video area:
-1. Title `text-sm font-semibold text-gray-200`: **"No video yet"**.
-2. Two actions side by side:
-   `<Button variant="success" icon={Upload}>Upload video</Button>` (→ the §5/§5b flow;
-   labeled **"Add your camera"** for a joiner in a pool) and
-   `<Button variant="cyan" icon={Link2}>Copy game link</Button>` (the one-tap `Anyone`
-   link — creates the pool on first copy, §1.2 lifecycle; long-form Share… on mobile via
-   the same capability gating).
-3. Status line `text-xs text-gray-500`, refreshed by the §6 live-sync poll: *"Anyone with
-   the link can add their camera or clips"*, appending *"· {n} parents joined and are
-   waiting"* when members exist, *"· link copied"* after the first copy. While an upload
-   runs, the panel becomes the progress state (*"Uploading… 42%"*) with the §5b
-   `Cancel upload` affordance.
-
-The timeline area renders its normal empty frame with one lane hint (`text-[10px]
-text-gray-500`): *"clips will appear here once there's video"*. When the first feed
-activates — the member's own upload finishing, or another member's discovered by the
-poll — the panel swaps for the player in place, no reload.
-
-**Gestures → writes:** none of its own — upload, share, and cancel delegate to §5, §1.2,
-and §5b's existing gestures.
-
 **Components reused.** `GameTile` chip/kebab/scrim structures verbatim; `Upload` icon.
 
 **States.**
@@ -434,19 +430,55 @@ uploading` when applicable). Action chip: `Add camera`.
 
 **Gestures → writes.** None on the tile itself (chips are display/navigation; the kebab
 opens surfaces that own their writes). The new-camera dot clears as a side effect of the
-existing open-game gesture updating `last_opened_at` — no new write path.
+existing open-game gesture updating `shared_game_members.pool_seen_at` (the one new
+column that gesture writes — see the New-camera signal above).
 
 **Accessibility.** Both chips pair icon+count/label with `title` + `aria-label` (color
 never sole signal — the pool chip is neutral gray; the action chip has a text label).
+
+### 4b. Opening a game with no video — the no-video Annotate state
+
+(Supersedes the earlier separate "setup lobby" card — user simplification 2026-08-19:
+fewer surfaces; the user is already where the game lives.)
+
+Opening an `awaiting video` game lands in **Annotate as usual**, but the video area
+renders a **setup panel instead of a player** — the bug-27p expired-source precedent
+(`AnnotateModeView` renders a deliberate panel in the video area, never a broken/empty
+`<video>`). The goal of this screen is exactly two actions: **upload video or share the
+link.**
+
+Panel content, centered in the video area:
+1. Title `text-sm font-semibold text-gray-200`: **"No video yet"**.
+2. Two actions side by side:
+   `<Button variant="success" icon={Upload}>Upload video</Button>` (→ the §5/§5b flow;
+   labeled **"Add your camera"** for a joiner in a pool) and
+   `<Button variant="cyan" icon={Link2}>Copy game link</Button>` (the one-tap `Anyone`
+   link — creates the pool on first copy, §1.2 lifecycle; long-form Share… on mobile via
+   the same capability gating).
+3. Status line `text-xs text-gray-500`: *"Anyone with the link can add their camera or
+   clips"*, appending *"· {n} parents joined and are waiting"* when members exist,
+   *"· link copied"* after the first copy. **Static until a pool exists — the §6
+   live-sync poll starts with the pool**, and refreshes this line thereafter. While an
+   upload runs, the panel becomes the progress state (*"Uploading… 42%"*) with the §5b
+   `Cancel upload` affordance.
+
+The timeline area renders its normal empty frame with one lane hint (`text-[10px]
+text-gray-500`): *"clips will appear here once there's video"*. When the first feed
+activates — the member's own upload finishing, or another member's discovered by the
+poll — the panel swaps for the player in place, no reload.
+
+**Gestures → writes:** none of its own — upload, share, and cancel delegate to §5, §1.2,
+and §5b's existing gestures.
 
 ---
 
 ## 5. Upload Binding — "Add Your Camera"
 
-**Entry points (a member adding their clip or Veo to the pool):** the tile's **"Add
-camera" chip** (§4), the **no-video Annotate panel's upload button** (§4b, labeled "Add
-your camera" for a joiner), and the kebab's `Invite more cameras` sheet which links
-"…or add your own camera". All three open this modal.
+**Entry points (a member adding their clip or Veo to the pool) — the complete list, all
+opening this modal:** (1) the tile's persistent **"Add camera" / "Add clips" chip** (§4);
+(2) the **no-video Annotate panel's upload button** (§4b, labeled "Add your camera" for a
+joiner); (3) the no-video TILE's centered "Upload video" chip (§4 states). The §1.2
+invite sheet carries NO upload affordance (it shares links; it does not upload).
 
 **Layout.** A trimmed variant of `GameDetailsModal` (same file, new `poolGame` prop —
 reuse, don't fork). **When `poolGame` is absent, `GameDetailsModal` renders byte-identical
@@ -459,8 +491,9 @@ camera"**, header chip unchanged (`Gamepad2` green), and:
 - **REMOVED: the "Video Format" segmented control** (evidence-based decision 2026-08-19 —
   ALIGNMENT.md § Half-order evidence). The selection itself determines the shape: ONE
   dropzone accepts 1..n files or a folder, and every selected row gets an inferred,
-  **editable role chip** per §5b's ordering rules — files >20 min → `full game` /
-  `1st half` / `2nd half`; short files → `clip`. Basis: 100% of real multi-file uploads
+  **editable role chip** per §5b's ordering rules and the Conventions § Duration
+  taxonomy (≤120 s → `clip`; >20 min → full/half; 2–20 min → `unassigned`, the user
+  picks). Basis: 100% of real multi-file uploads
   probed (sarkarati's prod half-pairs + local Trace/Veo/DJI files) carried embedded
   creation_time that ordered the halves correctly — strictly better than the blind slot
   assignment the old Per Half control trusted.
@@ -493,7 +526,7 @@ are tap-to-pick).
 | Uploading | Existing submitting state ("Adding Camera…"). |
 | Insufficient credits | Existing `BuyCreditsModal` intercept. |
 | Upload failed | Existing error handling/toast. |
-| Duplicate feed (member already has a camera-kind feed) | Entry CTA labeled "Add more clips"; a second >20-min file is refused inline (*"You already added a camera to this game — this file looks like another full recording."*) — one full-game camera per member; clips unlimited. |
+| Duplicate feed (member already has a camera-kind FEED) | One camera-kind FEED per member — a feed may contain several videos (halves, contiguous folder segments); the limit is on feeds, never files. A LATER submission whose role inference lands on full/half is refused inline (*"You already added a camera to this game."*); clips unlimited (entry CTA relabels "Add clips"). |
 | Wrong file picked | Cancellable at every stage — selected-row X / `Clear selection` before upload, `Cancel upload` (two-tap) mid-upload, Remove my camera after activation. Full table: §5b "Cancel at every stage". |
 
 **Copy.** As inlined. Cost row unchanged: `{n} credit{s} for 30 days of storage`.
@@ -574,12 +607,14 @@ Format (Full Game/Per Half) · dropzone · Add Game. What changes:
    touch — flagged honestly in the stage when the browser can't encode). Audio passes
    through untouched (alignment unaffected).
 3. **Low-res in Annotate, full-res in Framing (dual-asset).** When a preview rendition
-   exists (shipped `.LRF`, or a generated proxy — T5580), **Annotate and all preview
+   exists (shipped `.LRF`, or a generated proxy — T7310, evidence-gated), **Annotate and all preview
    surfaces stream the low-res rendition; Framing and export always resolve the full-res
    master** (`resolve_clip_source` — already the architecture: clips are pointers,
    extraction reads the source). No user-facing toggle; it is simply how high-res games
-   stay light. Data model + conform path: prepare-stage epic T5651/T5654/T5655, whose UX
-   this section pulls forward.
+   stay light. **Scope discipline:** this epic ships only shipped-`.LRF` DETECTION
+   (T5495) — proxy GENERATION is T7310, evidence-gated, and the deeper conform-from-master
+   machinery stays in the deprioritized prepare-stage epic (T5651/T5654/T5655) until that
+   epic is revived; nothing here depends on it.
 4. **Video is OPTIONAL at create** (user simplification 2026-08-19 — supersedes the
    earlier "Create & invite cameras first" ghost button, which made the dialog confusing).
    The field label becomes **`Game Video (optional — add now or later)`** and **"Add Game"
@@ -602,8 +637,8 @@ must be recoverable at all three points:
 | **After upload** (activated) | Own non-pool game: the existing Delete game flow. Own pool feed: **Remove my camera** (§10 member row — the withdraw gesture). Clips: delete the clip feed row in §10 / the clip chip's context in Manage cameras. | Existing delete/withdraw machinery. The activation charge is NOT auto-refunded (storage was provisioned); surface it honestly in the confirm: *"Storage credits for this upload aren't refunded."* (Product knob — revisit if it stings in practice.) |
 
 **Gestures → writes.** Folder pick, crop dragging, and Apply crop write nothing (local
-upload config); **"Add Game"** / **"Create & invite cameras first"** stay the only write
-gestures. Cancel-during-upload's confirm tap is the abort gesture (rides the existing
+upload config); **"Add Game" stays the only write gesture (with or without a file).**
+Cancel-during-upload's confirm tap is the abort gesture (rides the existing
 pending-upload delete rail).
 
 ---
@@ -624,8 +659,9 @@ Row order inside `TimelineBase`, top → bottom:
      choice over time** as contiguous segments, each filled with the winning feed's color
      at 35% opacity (`{color}59`) with a solid 2px top border in the feed color — a "who
      wins when" map. **Segments wider than ~48px render the owner's first name**
-     (`text-[9px] text-white/80 truncate px-1`). Precedence (clip stamp → preferred-camera
-     spans → reference feed) is computed, never editable here.
+     (`text-[9px] text-white/80 truncate px-1`). **Precedence, ONE ordered list used
+     everywhere:** raw-clip export stamp (within that clip's span) → member preference
+     span → covering clip-kind feed → reference feed. Computed, never editable here.
      - **Preference-span strip:** directly under the Main segments, a thin `h-[3px]` strip
        marks each preferred-camera span in the preferred feed's color, with a `Pin
        size={10}` glyph (feed-colored, on a `bg-gray-900` chip) at each span start —
@@ -643,13 +679,20 @@ Row order inside `TimelineBase`, top → bottom:
      superseding the earlier one-aggregated-lane + `×n` cluster design): all clips share a
      lane as long as they don't intersect in time; when clips overlap, the later one
      spills to the next clip lane (greedy interval packing by start time — deterministic,
-     stable as clips arrive). Ten scattered phone clips = ONE lane; the two that overlap
+     with a STABILITY RULE: a clip's lane is assigned once, at arrival — later arrivals
+     never reshuffle existing assignments; a new overlapping clip takes the next free
+     lane). Ten scattered phone clips = ONE lane; the two that overlap
      the goal moment = one extra lane just there. First clip lane label: `Film size={14}`
      + `Clips · {n}` (n = total clips across all packed lanes); overflow lanes get a
      blank label cell with `aria-label="More clips"`. Each clip renders as a **chip** at
      its coverage — the same `h-3 rounded-sm` bar in its OWNER's feed color, rendering
      the owner's initial when ≥16px wide. Tap a chip → watch that clip's angle (the same
      session-only switch as a lane tap). Chip `aria-label="{owner}'s clip — {t0}–{t1}"`.
+     **Unplaced tray:** a clip with NO offset (ALIGNMENT.md's NULL row — no audio match,
+     no usable creation_time) has no coverage to render, so its chip parks in a trailing
+     tray at the lane's right edge (dashed outline, `AlertTriangle` badge, `title` "Not
+     placed yet — tap to line up"); tapping it opens §7's short-clip variant. Unplaced
+     clips are excluded from Main and the picker until placed.
    - **ONE height model:** lane rows are `1.625rem` tall (label cells match) and
      `totalLayerHeight = 9.75rem + 1.625rem × min(feedLanes + 1, 3)` (the `+1` is the
      Main lane; at most 3 lane rows contribute height). **`feedLanes` = full-length camera
@@ -660,14 +703,19 @@ Row order inside `TimelineBase`, top → bottom:
      active feed's lane are sticky**, remaining lanes scroll beneath them, and a
      `+{n} more` hint (`text-[10px] text-gray-500`, right-aligned at the region's bottom
      edge) signals overflow.
-   - **Short-viewport fallback:** whenever `window.innerHeight < 800` — regardless of
-     pointer type — the lane stack does not render at all; the mobile active-camera chip
-     (below) is used instead. One rule, no per-surface exceptions.
+   - **Short-viewport fallback — MEASURED, not a constant:** whenever the timeline
+     region's available height (measured after the video track + clip lanes) cannot fit
+     Main + 2 camera lanes, the lane stack does not render; the mobile active-camera chip
+     (below) is used instead. (A fixed `innerHeight < 800` gate would hide the epic's
+     centerpiece on a stock 1366×768 laptop, whose viewport is ~650px.) One rule, no
+     per-surface exceptions.
 
 **First-use education (one coach-mark).** On the first render where `feedCount >= 2`, a
 one-time coach-mark anchors to the lane stack (desktop) or the camera chip (mobile):
 `bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-3 text-sm text-gray-200 max-w-xs`
-— *"{name} added a camera. Tap a row to watch their angle at this moment."* +
+— desktop: *"{name} added a camera. Tap a row to watch their angle at this moment."*;
+mobile (anchored to the camera chip, where there are no rows): *"{name} added a camera.
+Tap here to switch angles."* +
 `<Button size="sm" variant="secondary">Got it</Button>`. **The Got-it click is the
 persisting gesture** (writes the dismissed flag to user prefs); no reactive writes. The
 first time the Main lane renders, its label cell shows a one-line helper beneath the
@@ -723,7 +771,7 @@ video always on a backdrop): `● Sarah's camera`, auto-fades after 1.5s.
 ### Mobile layout
 
 No lane stack (T4933: no tall stacks; a landscape phone is height-starved). Gated on
-`useIsMobile()` OR `window.innerHeight < 800` (the §6 desktop fallback shares this path):
+`useIsMobile()` OR the §6 measured short-viewport fallback (shared path, same rule):
 
 - **Active-camera chip** in the player controls row: `inline-flex items-center gap-1.5
   px-2.5 py-1 rounded-full bg-gray-800 border border-gray-700 text-xs text-gray-200
@@ -759,8 +807,8 @@ classes, GameTile bottom-sheet shell, `useIsMobile`, Pointer-Events drag pattern
 | Feed processing (upload/alignment running) | Lane bars pulse (`animate-pulse` on the bar fill); label suffix `aria-label` "— processing". |
 | Coverage gap at playhead | Other lanes tappable only where bars exist; C-cycle skips them. |
 | Many phone clips (e.g. 10) | Clips PACK into minimal lanes: non-intersecting clips share a lane, intersecting clips split to extra lanes. Only chips covering the playhead render at full opacity. Main precedence unchanged — a covering clip wins over full-length cameras. |
-| **Another member uploads while you're annotating** | Live sync (user requirement): while a pool game is open, the pool registry is re-read on a ~60s interval, on window focus, and after your own pool writes. A new feed materializes in place — its lane/chip appears and the one-time arrival toast fires (*"{name} added a camera"*). Read-only polling while a pool game is open; no push infrastructure, no reactive writes. Alignment-job completion surfaces the same way (badge clears on the next poll). |
-| Someone re-lined-up the cameras | One-time on-load toast to every member EXCEPT the one whose write won (last-write-wins — the winner sees nothing): *"{name} adjusted how the cameras line up."* Derived from the offset's `updated_by ≠ me` and `updated_at > last_opened_at` — no new persisted state. |
+| **Another member uploads while you're annotating** | Live sync (user requirement): while a pool game is open, the pool registry is re-read on a ~60s interval, on window focus, and after your own pool writes. A new feed materializes in place — its lane/chip appears and the one-time arrival toast fires (*"{name} added a camera"*). Read-only polling while a pool game is open; no push infrastructure, no reactive writes. Alignment-job completion surfaces the same way (badge clears on the next poll). (Polling over WebSockets is deliberate — src/frontend/CLAUDE.md's WS preference is honored where WS infra exists, but ours is export-job-scoped; cross-account fan-out would need a broker, and a 60s poll on an open game is proportionate.) |
+| Someone re-lined-up the cameras | One-time on-load toast to every member EXCEPT the one whose write won (last-write-wins — the winner sees nothing): *"{name} adjusted how the cameras line up."* Derived from the offset row's `updated_by ≠ me` and `updated_at > pool_seen_at` — the audit columns (`updated_by`, `updated_at`) live on `shared_game_feed_videos`, owned by T5500's schema. |
 
 **Copy.** Gap chip: `No coverage here`. Unaligned badge: `Not lined up yet — tap to fix`.
 Unavailable popover: `Sarah's camera expired for you.` / button `Renew — {n} credits`.
@@ -771,9 +819,9 @@ here`.
 | Gesture | Write |
 |---------|-------|
 | Tap lane / C key / sheet row (switch viewing camera) | **None.** Viewing camera is session state (no-persisted-view-state rule; epic decision 5 — viewing is a display mapping). |
-| **"Prefer this camera from here" pill click** | `POST /api/pools/{id}/preferences` `{feed_id, from_shared_t}` — surgical, member-scoped. The only preference-creating gesture. |
+| **"Prefer this camera from here" pill click** | `PUT /api/games/{game_id}/feed-preference` `{feed_id, from_shared_t}` — surgical, stored in the MEMBER'S OWN `profile.sqlite` `feed_preferences` table (T5540's profile_db migration owns it; member-scoped by construction, rides normal TrackedConnection sync). The only preference-creating gesture. |
 | Coach-mark **"Got it"** | User-prefs dismissed flag — the click is the gesture. |
-| **"They're lined up"** (after line-up-mode drag) | `POST /api/pools/{id}/feeds/{feed_id}/offset` `{wall_offset}` — the confirm gesture, per epic decision 6. Drag movement itself writes nothing. |
+| **"They're lined up"** (after line-up-mode drag) | `POST /api/shared-games/{id}/feeds/{feed_id}/videos/{seq}/offset` `{wall_offset}` (PER VIDEO — a two-half feed lines up each half; contiguous folder segments chain from segment 1 automatically, ALIGNMENT.md § folder segments) — the confirm gesture, per epic decision 6. Drag movement itself writes nothing. |
 | "Cancel" in line-up mode | Nothing; local offset preview discarded. |
 | (Clearing preferences) | Not here — `Clear all camera preferences` lives in Manage cameras (§10). |
 
@@ -866,7 +914,7 @@ short-wide viewport) with the nudge row overlaid at the bottom — never a verti
 | Auto-alignment running | Players replaced by centered `Loader animate-spin` + *"Listening for a match…"*; nudge disabled. |
 | Saving | Confirm button `Saving…` disabled. |
 | Concurrent write (another member confirmed meanwhile — last-write-wins per epic) | The later write silently wins; **no toast for the winner** (their screen already shows their own result). Members whose view is now stale get the one-time on-load toast (§6 states). No conflict UI. |
-| No audio on one side | Waveform strips hidden (both), `Play 1s` hidden, banner `bg-gray-800 border-gray-700 text-gray-300`: *"This camera has no sound — line it up by eye. A kickoff or throw-in works best."* Initial offset = creation-time estimate when available, else the feed starts unplaced (ALIGNMENT.md § no-signal fallback). |
+| No audio on one side | Waveform strips hidden (both), `Play 1s` hidden, banner `bg-gray-800 border-gray-700 text-gray-300`: *"This camera has no sound — line it up by eye. A kickoff or throw-in works best."* Initial position matches ALIGNMENT.md's ladder EXACTLY, by kind: creation-time estimate when usable; else a FULL-LENGTH feed starts at game start (explicit low prior, `metadata`/confidence 0, badged); else a CLIP starts unplaced (§6 tray). |
 | Video load error | Standard error text in the player box: *"Couldn't load this camera."* |
 
 **Copy.** As above. Nudge buttons `aria-label`: `Nudge back 1 second`, `Nudge back 0.1
@@ -876,7 +924,7 @@ seconds`, etc.
 | Gesture | Write |
 |---------|-------|
 | ± nudge clicks, scrubbing, A/B toggling, Play 1s | **None** — all local preview state. |
-| **"They're lined up"** click | `POST /api/pools/{id}/feeds/{feed_id}/offset` `{wall_offset}` — the single surgical write (epic decision 6), shared pool-wide, last write wins. |
+| **"They're lined up"** click | `POST /api/shared-games/{id}/feeds/{feed_id}/videos/{seq}/offset` `{wall_offset}` (PER VIDEO — a two-half feed lines up each half; contiguous folder segments chain from segment 1 automatically, ALIGNMENT.md § folder segments) — the single surgical write (epic decision 6), shared pool-wide, last write wins. |
 | Cancel / X / Escape | Nothing persisted; suggestion remains unconfirmed (badge stays). |
 
 **Accessibility.** Nudge buttons have text labels beside icons (not icon-only). The offset
@@ -896,7 +944,8 @@ editor), placed after the rating/layer controls, labeled like sibling fields
 
 Directly under the label, an **always-visible helper line** `text-xs text-gray-500`:
 *"This camera's video is used when the clip is exported."* — the stakes are stated before
-any pick, not discovered after.
+any pick, not discovered after. **Exporting from Main resolves ONCE, at the clip's start
+moment — Main never cuts mid-clip on export.**
 
 Content: a horizontal strip of poster tiles (`flex gap-2 overflow-x-auto pb-1`, the
 `CardCarousel` scroll idiom without chevrons — the strip is short). Each tile:
@@ -981,8 +1030,10 @@ storage", and every "Renew" affordance in §6/§8.
 header/total/footer never do). Header: chip `bg-yellow-600/20` + `Calendar
 text-yellow-400` (StorageExtensionModal's exact header), title **"Keep this game's
 cameras"**. Subhead `text-sm text-gray-400`: *"{firstName} paid to keep this game live
-until {date}. After that, each camera needs its own credits to stay playable."* (Honest:
-the free period is a person's money, not a product grace — name them.)
+until {date}. After that, each camera needs its own credits to stay playable."* — with a
+first-person variant when the viewer IS the payer: *"You paid to keep this game live
+until {date}…"* (Honest: the free period is a person's money, not a product grace —
+name them, and never render someone's own name back at them.)
 
 **Per-camera checklist** (`ShareGameModal` recipient-list wrapper: `rounded-lg border
 border-gray-700 divide-y divide-gray-700/60 overflow-y-auto`). Each row
@@ -996,8 +1047,9 @@ border-gray-700 divide-y divide-gray-700/60 overflow-y-auto`). Each row
 3. Right-aligned per-row state (see States).
 
 **Pre-check rule (conservative — never pre-spend on inference):** rows are pre-checked
-ONLY when (a) it's the member's own camera, or (b) at least one of the member's clips
-carries an **explicit stamp** (§8) on that camera. Cameras used only via Main's automatic
+ONLY when (a) it's the member's own camera, (b) at least one of the member's clips
+carries an **explicit stamp** (§8) on that camera, or (c) the camera is the target of one
+of the member's **preference spans** (§6 pill — as deliberate a gesture as a stamp). Cameras used only via Main's automatic
 resolution are **unchecked**, with a `text-[10px] text-cyan-400` note under the label —
 `used by {n} of your clips` — and an inline **`Keep`** text button (`text-xs text-cyan-400`)
 that checks the row (an affordance, not a default). Unchecking an explicitly-stamped row
@@ -1044,7 +1096,7 @@ notes and finished reels stay."*
 | Gesture | Write |
 |---------|-------|
 | Checkbox toggles / inline `Keep` clicks | **None** — local selection. |
-| **Confirm button** | `POST /api/pools/{id}/renewals` `{feed_ids: [...]}` — one write for the whole checklist (debits credits, extends the member's per-feed refs). |
+| **Confirm button** | `POST /api/shared-games/{id}/renewals` `{feed_ids: [...]}` — one write for the whole checklist (debits credits, extends the member's per-feed refs). |
 | `Keep nothing for now` / `Not now` | **None** — close only. |
 | `BuyCreditsModal` success | Existing purchase flow, then the same renewal POST resumes (GameDetailsModal `handlePaymentSuccess` pattern). |
 
@@ -1068,7 +1120,10 @@ Body:
    Each row: owner initial badge + name (+ `You` / `Started the game` sublabels) + camera
    summary `text-xs text-gray-500` (`full game · 2.1 GB` / `3 clips` / `no camera yet`)
    + per-row overflow menu:
-   - **`Line up this camera…`** (any member, rows with a camera, not the reference feed) —
+   - **`Line up this camera…`** (any member, rows with a camera; hidden only for the
+     video that DEFINES the wall-clock origin — a stored constant, so a former reference
+     feed remains line-up-able after the creator deletes their game) — clip rows expand
+     to per-clip **`Line up this clip…`** entries (each opens §7's short-clip variant) —
      opens §7 for that camera. This row + the §6 unaligned badge are the ONLY entries to
      the line-up view.
    - Creator, on others' cameras: **`Remove this camera`** — `text-red-400`, **two-tap
@@ -1128,11 +1183,11 @@ pattern (`ShareGameModal.jsx:151-179`), two-tap destructive idiom (`GameTile.han
 **Gestures → writes.**
 | Gesture | Write |
 |---------|-------|
-| Second tap of `Remove this camera` (creator on another's) | `DELETE /api/pools/{id}/feeds/{feed_id}` (creator-authorized). |
+| Second tap of `Remove this camera` (creator on another's) | `DELETE /api/shared-games/{id}/feeds/{feed_id}` (creator-authorized). |
 | Second tap of `Remove this camera` (own row) | Same endpoint, self-authorized. |
-| Second tap of `Clear all camera preferences` | `DELETE /api/pools/{id}/preferences` — clears all of THIS member's spans (member-scoped). |
-| `Replace` in the confirm dialog | `POST /api/pools/{id}/rotate-link` → new token returned; old token 410s (§2 revoked state). |
-| Second tap of `Stop sharing this game` | `POST /api/pools/{id}/leave` — removes membership AND releases the member slot; the member's private game row and own clips remain; the invite link re-admits them later. |
+| Second tap of `Clear all camera preferences` | `DELETE /api/games/{game_id}/feed-preferences` — clears all of THIS member's local spans (`feed_preferences` in their own profile.sqlite; member-scoped by construction). |
+| `Replace` in the confirm dialog | `POST /api/shared-games/{id}/rotate-link` → new token returned; old token 410s (§2 revoked state). |
+| Second tap of `Stop sharing this game` | `POST /api/shared-games/{id}/leave` — removes membership AND releases the member slot; the member's private game row and own clips remain; the invite link re-admits them later. |
 | `Delete` in the creator-delete confirm | The existing game-delete write + pool membership removal; the pool object, offsets and stored wall-clock origin are untouched. |
 | Opening the modal, first tap of any two-tap | **None.** |
 
@@ -1218,3 +1273,4 @@ Escape ordering, `ShareGameModal.jsx:325-335`).
 | Mockup pass (2026-08-19) | Clip-kind feeds AGGREGATE into one "Clips" lane (chips w/ owner initials, overlap stacking, ×n clusters) — ten phone clips no longer mean ten lanes; `feedLanes` redefined = full-length lanes + (1 if any clips); mobile sheet gains a Clips section listing only moment-covering clips. |
 | Alignment pass (2026-08-19) | §7 gains audio **waveform strips** under both players (drawn from the cached 8 kHz envelope, sliding with the nudge, hidden when either side lacks audio) + a no-audio state; auto-alignment algorithm cascade split out to ALIGNMENT.md (audio fingerprint primary, metadata seed, honest no-signal fallback — offsets never fabricated). |
 | Round 3 (2026-08-19, user directives) | (a) §1.2 side-tagged invite links (`My team`/`The other team`), with the sharer's team name prompted when missing — saved to profile + pool, prefilling cross-team joiners' Opponent; §3 pre-answers the team question from the link's tag. (b) §1.3 share-before-upload (pool + link with zero videos; `awaiting video` tile state in §4; T1180 exception flagged for T5500). (c) NEW §5b: initial Add Game modal gains folder upload (contiguous-segment detection, DJI class), ≥4K crop-before-upload (client-side re-encode, charged on cropped size), `.LRF` dual-asset detection — low-res in Annotate, full-res master in Framing/export. (d) §6 clip lanes now PACK (non-intersecting clips share a lane; intersecting split) — replaces the aggregated-lane `×n` cluster design. (e) §6 live sync: pool registry re-read ~60s/on-focus/after-own-writes while a pool game is open — another member's upload appears without reload. (f) §7 states which two videos line up + left-player selector among lined-up cameras (transitive offsets). (g) §8 partial-coverage cameras OMITTED from the picker entirely (were disabled tiles). (h) §5b cancel-at-every-stage table: pre-upload deselect, mid-upload `Cancel upload` (two-tap, rides the pending-uploads delete rail, no charge), post-activation remove/withdraw (charge not auto-refunded, stated honestly). (i) §1.2 default link flavor is `Anyone` — one-tap copy for WhatsApp, side-tagging optional. (j) NEW §4b setup lobby: opening a zero-video game walks the user through Upload + Share (inline link row, live camera status via the poll) instead of empty Annotate; disappears once a feed is active. (k) §5b crop is a FULL-SCREEN client-side stage (large preview + crop handles + filmstrip sanity-scrub + savings line; WebCodecs on-device re-encode, uncropped bytes never leave the machine; honest fallback when the browser can't encode). (l) §5 names the three entry points for adding a clip/camera to a pool (tile chip, §4b panel, invite sheet link). (m) §5b: video is OPTIONAL at create — "Add Game" enables on valid metadata with or without a file; the "Create & invite cameras first" ghost button is REMOVED (one primary button). (n) §4b reframed: the separate lobby card is superseded by a no-video ANNOTATE state — the video area renders an upload-or-share setup panel (bug-27p expired-panel precedent), swapping to the player in place when the first feed activates. (o) §5b multi-file selections auto-order by creation-time metadata with editable role chips (one recording — part i / 1st half / 2nd half / unassigned), drag-reorderable — metadata proposes, the user disposes. (p) **"Per Half" REMOVED (evidence-based):** probe of every real multi-file upload findable (sarkarati prod pairs + local Trace/Veo/DJI) — 16/16 files had embedded creation_time, 8/8 ordered sets correct, fs mtime wrong on one real pair; the Video Format control is deleted from §5/§5b, roles inferred (>20 min = half/full, short = clip) and always editable. Full evidence: ALIGNMENT.md § Half-order evidence. |
+| Final once-over (2026-08-19, GO) | Reviewer pass applied: ghost-button leftover purged from §5b's gestures; §4b re-slotted after §4's own States/Copy/Gestures blocks; one-feed-per-member rule scoped to FEEDS not files; ONE duration taxonomy in Conventions (clip ≤120s shared with T7280, 2–20min = unassigned, >20min = full/half); `awaiting video` promoted to a GENERAL games lifecycle value owned by T5495 (consumer audit list); keep-checklist + proxies re-ID'd T7300/T7310 (old IDs were taken); Main precedence unified into one ordered list + export-resolves-once-at-clip-start; unplaced-clip tray + per-clip line-up entries; upload entry points unified (persistent Add camera/Add clips chip); cap counts PEOPLE; new-camera dot + re-line-up toast get real columns (`shared_game_members.pool_seen_at`, offset `updated_by/updated_at` — T5500); preference spans live in the member's own profile.sqlite `feed_preferences` (T5540); offsets written PER VIDEO; `.LRF`-detection-only scope (generation = T7310); §7 no-audio state split by kind; naming unified (`/shared-game/{token}`, `/api/shared-games`, `shared_games*`); short-viewport fallback is measured, not `innerHeight<800`; assorted copy fixes (You-paid variant, per-surface coach-mark, poll-over-WS justification, zero-video Share modal body). |

@@ -98,7 +98,7 @@ Match the new feed against **every already-aligned feed**, not only the referenc
 | Fingerprint pass + fine xcorr agrees | yes | `auto` + confidence | Lined up: included in Main, no badge; §7 opens in confirm mode ("Auto-synced by sound…") |
 | Fingerprint medium (gate partially met, or pair disagreement) | yes (best estimate) | `auto`, low confidence | Positioned but **"Not lined up yet"** badge; EXCLUDED from Main until a human confirms in §7 |
 | No audio on one side, `creation_time` on both | yes (metadata) | `metadata` | Positioned, badged, excluded from Main; §7 no-audio state ("line it up by eye") |
-| No audio, no usable `creation_time` — **full-length feed** | yes, `0` vs reference **only as an explicit low prior** (`metadata`, confidence 0 — both filmed the same game; recordings start near kickoff) | `metadata` | Positioned at game start, badged, excluded from Main |
+| No audio, no usable `creation_time` — **full-length feed** | yes, `0` vs reference **only as an explicit low prior** (`metadata`, confidence 0 — both filmed the same game; recordings start near kickoff) | `metadata` | Positioned at game start, badged, excluded from Main. Surfaces ONLY as `metadata`/confidence 0 → "Not lined up yet" — never presented as `auto`; the badge is what keeps this prior honest under the no-silent-fallback rule |
 | No audio, no usable `creation_time` — **clip** | **NULL — never fabricated** | — | Chip parks in the Clips lane's trailing "unplaced" tray state; §7 short-clip variant is the placement gesture |
 | Music-overdubbed / replaced-audio clip (fingerprints hit nothing) | falls through to the metadata rows above | | |
 | **Manual confirm/nudge (§7)** | yes | `manual` | Authoritative: auto re-runs NEVER overwrite a `manual` offset |
