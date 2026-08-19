@@ -98,7 +98,7 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
   // GameMetaRow renders "Uploaded <date>", "Footage quality N/100" and the rating
   // chips. T5681's poster grid replaced that list with GameTile -- a compact tile
   // (as short as ~90px at the 2-up 390px breakpoint) whose scrim deliberately carries
-  // only name / short date / clip count. Asserting the old tokens here failed on a
+  // only name / clip count (T7290 dropped the date). Asserting the old tokens here failed on a
   // surface that no longer renders them; GameCard itself is unchanged and still
   // covered by Vitest (ProjectManager.metaLegibility.test.jsx), so no coverage is
   // lost. What legibility means on THIS surface is asserted instead:
@@ -114,10 +114,14 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
     scrim.spans.some((t) => /\d+\s+clips?$/.test(t)),
     `clip count is labeled with its unit (got ${JSON.stringify(scrim.spans)})`,
   ).toBe(true);
+  // T7290: the scrim no longer carries a date at all. Match date reads from the tile
+  // NAME ("at Sporting Mar 21") and from the month header the tile sits under; the
+  // upload date that used to sit here contradicted both. What still must hold is that
+  // no raw timestamp leaks onto the tile.
   expect(
-    scrim.spans.some((t) => /[A-Za-z]{3}\s+\d{1,2}/.test(t)),
-    `date renders as a readable month+day, not a raw timestamp (got ${JSON.stringify(scrim.spans)})`,
-  ).toBe(true);
+    scrim.spans.some((t) => /\d{4}-\d{2}-\d{2}|T\d{2}:\d{2}/.test(t)),
+    `no raw timestamp on the tile scrim (got ${JSON.stringify(scrim.spans)})`,
+  ).toBe(false);
 
   await saveEvidence(page, 'criterion-3-gamecard-legibility');
 

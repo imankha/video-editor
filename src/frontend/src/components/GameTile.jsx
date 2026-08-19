@@ -255,10 +255,10 @@ export function GameTile({
             <Pencil size={14} />
           </button>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-1 text-xs">
-          <span className="text-gray-300">
-            {new Date(game.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-          </span>
+        {/* T7290: clip count only. The upload date used to sit here, but the match date
+            is already the title suffix ("at Sporting Mar 21") and now the month header
+            too -- a third date, of a kind the user never asked for, was just noise. */}
+        <div className="mt-0.5 flex items-center justify-end gap-1 text-xs">
           <span className="text-gray-400">
             {game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}
           </span>

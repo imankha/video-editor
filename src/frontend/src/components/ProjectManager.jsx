@@ -106,16 +106,45 @@ function DraftStageRows({
   });
 }
 
-// Group games by month (YYYY-MM) in chronological order (newest first)
-function groupGamesByMonth(games) {
+// game_date is a date-only TEXT column ("YYYY-MM-DD"). Parse it as a LOCAL calendar
+// date -- `new Date("2026-03-01")` is UTC midnight, which reads as Feb 28 in any
+// negative-UTC-offset timezone and would file the game under the wrong month.
+function parseMatchDate(gameDate) {
+  if (typeof gameDate !== 'string') return null;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(gameDate.trim());
+  if (!parts) return null;
+  return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+}
+
+// T7290: the Games tab organizes by MATCH date, the date the user thinks in and the
+// one already shown in the tile title -- not by upload date. Games predating the
+// required-field rule, plus materialized/shared rows, can carry a NULL game_date;
+// that is an external-data edge case, so they are placed by their upload timestamp
+// rather than dropped from the list. The backend logs the missing metadata loudly
+// (games.py, list_games) -- this path stays silent so there is only one signal.
+function gameOrganizingDate(game) {
+  return parseMatchDate(game.game_date) ?? new Date(game.created_at);
+}
+
+// Group games by match month, newest month first, newest match first inside a month
+// (exported for unit tests -- the grouping rules are the whole point of T7290)
+export function groupGamesByMonth(games) {
   const groups = {};
   const order = [];
 
-  // Sort games by created_at (newest first)
-  const sorted = [...games].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // ONE comparable date per game, computed once and reused for both the month key and
+  // the comparator -- so the header a game renders under can never disagree with the
+  // bucket it sorted into. Ties (two games on one tournament day, where game_date has
+  // no time to separate them) break on upload time, newest first -- the same tiebreak
+  // list_games applies, so server order and rendered order agree.
+  const dated = games.map(game => ({
+    game,
+    date: gameOrganizingDate(game),
+    uploadedAt: new Date(game.created_at),
+  }));
+  dated.sort((a, b) => (b.date - a.date) || (b.uploadedAt - a.uploadedAt));
 
-  sorted.forEach(game => {
-    const date = new Date(game.created_at);
+  dated.forEach(({ game, date }) => {
     const key = date.toLocaleString('default', { month: 'long', year: 'numeric' });
     if (!groups[key]) {
       groups[key] = [];

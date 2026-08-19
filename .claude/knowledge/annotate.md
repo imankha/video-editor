@@ -356,10 +356,26 @@ The full checklist for an 11th→Nth sport:
   asserted `Uploaded`, `Footage quality N/100` and the rating chips that live only in `GameMetaRow`,
   so the E2E broke while the unit tests stayed green. Lesson: a component only reachable from its own
   tests is dead, not covered. The tile's verbose meta row is GONE by design — the scrim shows only
-  name + short date + clip count; all game actions live behind the tile's kebab menu. NOTE the tile
+  name + clip count (the date was dropped in T7290, see below); all game actions live behind the
+  tile's kebab menu. NOTE the tile
   gates the recap entry on `recap_video_url` (hasRecap), NOT on clip_count, and shows no recap entry
   for an expired game with no recap video — a deliberate divergence from the old GameCard.
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
+
+- **The Games tab organizes by MATCH date (`game_date`), never upload date (T7290).** Month headers,
+  cross-group order and within-group order all key off `game_date` — the date the user thinks in and
+  the one already baked into the tile title by `generate_game_display_name`. Two halves that must stay
+  in agreement: `groupGamesByMonth` (ProjectManager.jsx, exported for tests) and
+  `GAMES_MATCH_DATE_ORDER_BY` (games.py, the `_read_games_for_list` ORDER BY). Invariants: `game_date`
+  is date-only TEXT `YYYY-MM-DD`, so the frontend parses it as a **local calendar date** — `new
+  Date("2026-03-01")` is UTC midnight and files a March 1st game under February west of Greenwich;
+  a NULL/empty `game_date` (games predating the required field, plus materialized/shared rows) falls
+  back to `created_at` for PLACEMENT ONLY and is never dropped from the list, with the pre-existing
+  missing-metadata warning in `_list_games_impl` left as the single loud signal; same-match-day ties
+  break on upload time newest-first on BOTH sides. Deliberately untouched: Reel Drafts grouping
+  (already keyed on `project.game_dates`) and the "Continue where you left off" card (genuinely
+  recency-of-activity). Covering specs: `ProjectManager.gameGrouping.test.jsx`,
+  `tests/test_t7290_games_list_order.py`.
 
 - **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
   (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).

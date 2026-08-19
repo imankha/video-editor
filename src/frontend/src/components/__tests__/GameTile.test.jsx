@@ -188,12 +188,25 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     expect(heading.getAttribute('title')).toBe(longName);
   });
 
-  it('keeps date + clip count as the secondary line under the name', () => {
+  it('keeps the clip count as the secondary line under the name', () => {
     render(<GameTile game={baseGame} {...handlers()} />);
     const heading = screen.getByRole('heading', { level: 3 });
     // T6890: the name shares a row with the edit pencil, so the secondary line
-    // (date/clip count) sits below that name-row wrapper, not the bare heading.
+    // (clip count) sits below that name-row wrapper, not the bare heading.
     const secondary = heading.closest('div').nextElementSibling;
     expect(secondary.textContent).toContain('3 clips');
+  });
+
+  // T7290: the footer used to print the UPLOAD date, which contradicted both the match
+  // date in the title and the match-date month header the tile now sits under.
+  it('renders NO date in the footer -- clip count only', () => {
+    const game = { ...baseGame, created_at: '2026-07-01T12:00:00Z', game_date: '2026-03-21' };
+    render(<GameTile game={game} {...handlers()} />);
+    const heading = screen.getByRole('heading', { level: 3 });
+    const secondary = heading.closest('div').nextElementSibling;
+
+    expect(secondary.textContent.trim()).toBe('3 clips');
+    // Neither the upload date ("Jul 1") nor the match date is echoed here.
+    expect(secondary.textContent).not.toMatch(/Jul|Mar|\d{1,2}\/\d{1,2}/);
   });
 });
