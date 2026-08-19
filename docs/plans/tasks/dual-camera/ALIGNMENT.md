@@ -126,6 +126,30 @@ alignment failure never blocks upload/activation.
 4. **Wind/silence stress:** clips with wind-dominated and near-silent audio must land in
    `medium`-or-below, never `auto`-confident.
 
+## Folder segments (multi-file recordings — DJI/GoPro splits)
+
+Contiguous segments of ONE recording (detected at upload: creation-time abutment within
+tolerance + filename runs — UX-SPEC §5b) are one feed with sequential parts:
+`wall_offset(seg N+1) = wall_offset(seg N) + duration(seg N)`. **Only segment 1 is
+aligned** (metadata/fingerprint/manual as above); the chain is arithmetic, never audio.
+A detected gap between segments (camera stopped) splits the feed into separately-aligned
+parts — never silently bridged.
+
+## Crop-before-upload interaction
+
+The client-side crop re-encode (UX-SPEC §5b) changes the uploaded bytes, so the `blake3`
+— and therefore the alignment artifact — is computed on the CROPPED master (the only
+bytes that exist server-side). Audio passes through the crop untouched, so envelopes and
+fingerprints are unaffected in content. No special handling.
+
+## Line-up comparison feed (§7 left side)
+
+The manual Line-Up view compares the subject feed against ANY already-lined-up feed
+(user-selectable — e.g. a behind-goal clip against the far Veo). The confirmed write is
+still ONE number on the shared clock: `wall_offset(subject) = wall_offset(comparison) +
+confirmed_relative_offset` (transitive composition, §5). The comparison choice is never
+persisted.
+
 ## Failure-mode table (design inputs, not edge cases)
 
 | Reality | Behavior |
