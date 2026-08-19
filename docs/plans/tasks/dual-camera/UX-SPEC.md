@@ -3,6 +3,9 @@
 **Status:** DRAFT — revised after design review; awaiting user approval
 **Scope:** UI only. Architecture (Postgres pool coordination object, per-member private game
 rows, wall-clock offsets, rent-based storage) is settled — see [EPIC.md](EPIC.md).
+**Companions:** high-fidelity mockups of every changed screen live in the session's
+mockups artifact (kept in lockstep with this spec); the auto-alignment algorithm cascade
+is specified in [ALIGNMENT.md](ALIGNMENT.md).
 
 > **Supersedes EPIC.md where they differ** (member cap, feed count, "name" field, rent
 > model, entry points): this spec follows the revised design — up to 50 contributors,
@@ -450,16 +453,28 @@ Row order inside `TimelineBase`, top → bottom:
        preferences are always visible, never invisible state.
      - The Main lane carries `aria-label` listing the switch schedule:
        `"Main — Sarah's camera 0:00–12:40, Mike's camera 12:40–31:05, …"`.
-   - **One lane per feed**, ordered by `member_index`, own feed first. Label cell:
-     the owner **initial badge** (§ Feed colors) + owner first name (own = "You"),
-     `text-xs truncate max-w-[72px]`. Track: **coverage bars** — `h-3 rounded-sm` blocks
-     positioned with the shared `EDGE_PADDING` formula (never bare `%` — style guide
-     § Positioning math), filled `{feedColor}` at 45% opacity, full opacity when this feed
-     is the active one at the playhead. Gaps = `bg-gray-800` (track base). Clip-kind feeds
-     render as short bars (they are just short coverage).
+   - **One lane per FULL-LENGTH camera** (kind full/half), ordered by `member_index`, own
+     feed first. Label cell: the owner **initial badge** (§ Feed colors) + owner first
+     name (own = "You"), `text-xs truncate max-w-[72px]`. Track: **coverage bars** —
+     `h-3 rounded-sm` blocks positioned with the shared `EDGE_PADDING` formula (never bare
+     `%` — style guide § Positioning math), filled `{feedColor}` at 45% opacity, full
+     opacity when this feed is the active one at the playhead. Gaps = `bg-gray-800`
+     (track base).
+   - **ALL clip-kind feeds share ONE aggregated "Clips" lane** (mockup-pass decision: ten
+     phone clips as ten separate lanes would be ten mostly-empty rows — sparse feeds
+     aggregate). Label cell: `Film size={14}` + `Clips · {n}`. Track: each phone clip is a
+     **chip** at its coverage — the same `h-3 rounded-sm` bar in its OWNER's feed color,
+     rendering the owner's initial when ≥16px wide. Chips overlapping in time stack in two
+     mini-rows inside the lane (the lane stays ONE height-model row); 3+ deep collapses to
+     a cluster chip (`×3`) that expands on tap into a popover (desktop) / the bottom-sheet
+     clip list (mobile). Tap a chip → watch that clip's angle (same session-only switch as
+     a lane tap). Chip `aria-label="{owner}'s clip — {t0}–{t1}"`. The Clips lane counts as
+     ONE lane in the height model regardless of clip count.
    - **ONE height model:** lane rows are `1.625rem` tall (label cells match) and
      `totalLayerHeight = 9.75rem + 1.625rem × min(feedLanes + 1, 3)` (the `+1` is the
-     Main lane; at most 3 lane rows contribute height). With more than 2 camera lanes,
+     Main lane; at most 3 lane rows contribute height). **`feedLanes` = full-length camera
+     lanes + (1 if any clip-kind feeds exist)** — so 2 Veos + 10 phone clips is exactly
+     3 lane rows + Main, no scrolling. With more than 2 camera lanes,
      the lane region becomes a scroll area of that fixed height: the **Main lane and the
      active feed's lane are sticky**, remaining lanes scroll beneath them, and a
      `+{n} more` hint (`text-[10px] text-gray-500`, right-aligned at the region's bottom
@@ -537,10 +552,13 @@ No lane stack (T4933: no tall stacks; a landscape phone is height-starved). Gate
   (`fixed inset-0 z-50`, `flex-1 bg-black/40` top spacer that closes the SHEET on tap — a
   sheet is not a modal; the no-backdrop-close rule applies to modals — `bg-gray-800
   rounded-t-2xl border-t border-gray-700`, grabber). Rows (`px-4 py-3`, 44px floor):
-  Main first (`Star` + `Main · {ownerName}` sublabel), then each camera: initial badge +
-  name + coverage note `text-xs text-gray-500` (`covers this moment` / `no coverage
-  here` — grayed + disabled) + `Check` on the active row. Unavailable cameras use the
-  single unavailable treatment + `Renew` inline text button → §9.
+  Main first (`Star` + `Main · {ownerName}` sublabel), then each full-length camera:
+  initial badge + name + coverage note `text-xs text-gray-500` (`covers this moment` /
+  `no coverage here` — grayed + disabled) + `Check` on the active row, then a **Clips
+  section** listing only the phone clips that cover this moment (owner badge +
+  "{owner}'s clip" + duration; clips not covering the moment are omitted entirely, not
+  disabled — a list of 10 grayed rows would bury the 2 useful ones). Unavailable cameras
+  use the single unavailable treatment + `Renew` inline text button → §9.
 - The **"Prefer this camera from here" pill** overlays the player on mobile exactly as on
   desktop (it is the one preference gesture everywhere; the sheet carries no preference
   row). Line-up drag stays desktop-only (the drag needs pixel precision; mobile users get
@@ -559,6 +577,7 @@ classes, GameTile bottom-sheet shell, `useIsMobile`, Pointer-Events drag pattern
 | Camera unavailable for this member | Single unavailable treatment; excluded from Main; renew affordance. |
 | Feed processing (upload/alignment running) | Lane bars pulse (`animate-pulse` on the bar fill); label suffix `aria-label` "— processing". |
 | Coverage gap at playhead | Other lanes tappable only where bars exist; C-cycle skips them. |
+| Many phone clips (e.g. 10) | Still ONE Clips lane: overlap stacking + `×n` clusters; only chips covering the playhead render at full opacity. Main precedence unchanged — a covering clip wins over full-length cameras. |
 | Someone re-lined-up the cameras | One-time on-load toast to every member EXCEPT the one whose write won (last-write-wins — the winner sees nothing): *"{name} adjusted how the cameras line up."* Derived from the offset's `updated_by ≠ me` and `updated_at > last_opened_at` — no new persisted state. |
 
 **Copy.** Gap chip: `No coverage here`. Unaligned badge: `Not lined up yet — tap to fix`.
@@ -591,7 +610,10 @@ while every touch target meets the 44px floor.
 
 Reachable from exactly two places: the unaligned badge (§6) and Manage cameras → a
 camera row's **"Line up this camera…"** action (§10). Never from the timeline at rest,
-never from a context menu. Auto audio-sync runs first; this UI is confirm/fix.
+never from a context menu. Auto audio-sync runs first (full algorithm cascade:
+[ALIGNMENT.md](ALIGNMENT.md) — audio fingerprint + cross-correlation primary,
+creation-time metadata as seed/fallback, never a fabricated offset); this UI is
+confirm/fix.
 
 **Layout — desktop.** Modal shell, wider: `max-w-3xl`. Header chip `bg-yellow-600/20` +
 `SlidersHorizontal size={20} className="text-yellow-400"` (alignment = calibration family,
@@ -605,14 +627,22 @@ Body:
    owner chip (initial badge + name, `bg-black/60` backdrop) top-left. Both paused at the
    same shared-clock moment; a shared scrub bar underneath (reuse `ProgressTrack` from
    `components/shared/` — store-free) moves both in lockstep.
-3. **Nudge row**, centered `flex items-center justify-center gap-2`:
+3. **Waveform strips** — one under each player (`h-8 rounded bg-gray-900`), rendering that
+   side's audio as a mirrored amplitude envelope (`{feedColor}` at 70%): drawn from the
+   cached 8 kHz onset envelope the auto-sync already computed (ALIGNMENT.md § artifacts —
+   no extra decode). A shared vertical hairline marks the current moment on both. The
+   aligning side's waveform **slides live with the nudge**, so the user can match the
+   waves by eye (PluralEyes-style) — a whistle is a visible spike on both strips even when
+   it's hard to hear. Both strips hidden when EITHER side has no audio track (never one
+   strip alone — an unmatched waveform invites false confidence).
+4. **Nudge row**, centered `flex items-center justify-center gap-2`:
    `[-1s] [-0.1s] [±offset readout] [+0.1s] [+1s]` — ghost `Button size="sm"` pairs with
    `ChevronLeft`/`ChevronsLeft` icons + labels; readout `ui-monospace text-sm text-white
    w-20 text-center` showing the delta vs. the suggested offset (e.g. `+0.3s`). A
    `Play 1s` ghost button plays both players simultaneously for one second (the actual
    "does the whistle match" test — audio from the adjusted feed only, reference muted at
    50% volume; simultaneous audio is the point).
-4. Footer: `<Button variant="ghost">Cancel</Button>` +
+5. Footer: `<Button variant="ghost">Cancel</Button>` +
    `<Button variant="success">They're lined up</Button>`. A tertiary text link (desktop
    only) `text-xs text-gray-500 hover:text-gray-300`: *"Adjust on the timeline instead"*
    → closes and enters §6's line-up mode.
@@ -644,6 +674,7 @@ short-wide viewport) with the nudge row overlaid at the bottom — never a verti
 | Auto-alignment running | Players replaced by centered `Loader animate-spin` + *"Listening for a match…"*; nudge disabled. |
 | Saving | Confirm button `Saving…` disabled. |
 | Concurrent write (another member confirmed meanwhile — last-write-wins per epic) | The later write silently wins; **no toast for the winner** (their screen already shows their own result). Members whose view is now stale get the one-time on-load toast (§6 states). No conflict UI. |
+| No audio on one side | Waveform strips hidden (both), `Play 1s` hidden, banner `bg-gray-800 border-gray-700 text-gray-300`: *"This camera has no sound — line it up by eye. A kickoff or throw-in works best."* Initial offset = creation-time estimate when available, else the feed starts unplaced (ALIGNMENT.md § no-signal fallback). |
 | Video load error | Standard error text in the player box: *"Couldn't load this camera."* |
 
 **Copy.** As above. Nudge buttons `aria-label`: `Nudge back 1 second`, `Nudge back 0.1
@@ -992,3 +1023,5 @@ Escape ordering, `ShareGameModal.jsx:325-335`).
 | m16 | The §9 dismiss actions sit directly under the persistent consequence line — no silent close. |
 | m17 | Picker poster fallback = frame from the reference camera (branded mark only as last resort). |
 | m18 | Header now states this spec supersedes EPIC.md where they differ and that EPIC.md is reconciled at approval (EPIC.md itself untouched). |
+| Mockup pass (2026-08-19) | Clip-kind feeds AGGREGATE into one "Clips" lane (chips w/ owner initials, overlap stacking, ×n clusters) — ten phone clips no longer mean ten lanes; `feedLanes` redefined = full-length lanes + (1 if any clips); mobile sheet gains a Clips section listing only moment-covering clips. |
+| Alignment pass (2026-08-19) | §7 gains audio **waveform strips** under both players (drawn from the cached 8 kHz envelope, sliding with the nudge, hidden when either side lacks audio) + a no-audio state; auto-alignment algorithm cascade split out to ALIGNMENT.md (audio fingerprint primary, metadata seed, honest no-signal fallback — offsets never fabricated). |
