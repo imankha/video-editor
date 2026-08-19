@@ -1,6 +1,6 @@
 ---
 domain: modal-gpu
-updated: 2026-07-11 (T4240 recovery bugs fixed; T3950 branded outro - NOT in Modal)
+updated: 2026-08-19 (T7210: fixed modal_call_id recovery capture, dead since ~forever - see Recovery section); 2026-07-11 (T4240 recovery bugs fixed; T3950 branded outro - NOT in Modal)
 ---
 # Modal GPU / Local Render — Domain Knowledge
 
@@ -45,7 +45,33 @@ graph LR
 - **Dispatch/monitoring:** Modal functions are Python generators; the backend iterates `fn.remote_gen(...)` in an executor and forwards each `{progress, phase, message}` yield to the async `progress_callback` (framing loop `modal_client.py:689-715`; clips `:897-943`; overlay `:1106-1131`).
   - There is **no webhook and no Modal→backend callback** — progress is consumed in-process, then pushed over the export WebSocket via `export_helpers.send_progress`.
   - `progress_reporter.py` is pure weighted-phase math (`DEFAULT_PHASE_WEIGHTS`, UPSCALING weight 0.50); it never talks to Modal.
-- **Recovery:** `gen.object_id` is captured as `modal_call_id` and stored on `export_jobs` (`modal_client.py:875-880`; `multi_clip.py:1287-1298`; `export_helpers.store_modal_call_id:130`).
+- **Recovery (T7210, 2026-08-19 — corrects prior "gen.object_id" claim, which was dead code):**
+  `<fn>.remote_gen(...)` returns a plain generator with no `.object_id` attribute in the installed
+  SDK (1.3.1, confirmed by reading `.venv/Lib/site-packages/modal/_functions.py` +
+  `synchronicity/synchronizer.py`) — `hasattr(gen, 'object_id')` was unconditionally False, so
+  `export_jobs.modal_call_id` never populated for ANY generator-based export. `.spawn()` is not a
+  substitute (`InvalidError` for generator functions). The supported mechanism:
+  `modal.current_function_call_id()`, callable only from inside the running container. Fixed for
+  `process_clips_ai`/`call_modal_clips_ai` only (the path the backend-authoritative `/render` +
+  multi-clip endpoints actually use): the Modal function yields `{"modal_call_id": ...}` as its
+  FIRST stream item; `modal_client.py` reads it off that item inside the existing `next(gen)`
+  polling loop and fires `call_id_callback` once (`modal_client.py`'s `call_modal_clips_ai`).
+  `call_modal_framing_ai`/`call_modal_overlay` still have NO working call_id capture — their "NOT
+  USED with remote_gen" docstrings are accurate, not fixed by T7210.
+  - Recovering a **generator** call via `FunctionCall.get(timeout=0)` returns a `GeneratorDone`
+    marker, NOT the dict the function yielded as its last item (the SDK can't replay the stream)
+    — `/modal-status` (`exports.py`) treats this as "Modal is done" but HEAD-probes R2
+    (`file_exists_in_r2`) against the job's `output_key` before finalizing, since a caught-and-
+    yielded Modal-side error is *also* `GeneratorDone` and indistinguishable from success by
+    completion alone. `export_jobs.output_key` is now written at DISPATCH time (`multi_clip.py`'s
+    `store_modal_call_id`), not only after upload — so its mere presence is no longer proof the
+    object exists; the R2 check is the actual boundary.
+  - Recovery finalizing at all (previously impossible — `modal_call_id` was always NULL) means the
+    in-band export and a recovery poll can now race to finalize the SAME job concurrently.
+    `export_finalize.py`'s `_claim_stage_for_finalize` is a CAS on `export_jobs.stage` gating entry
+    into detect/persist — only the caller whose stage snapshot still matches the DB proceeds; the
+    loser (`multi_clip.py`'s `_await_concurrent_finalize`) waits briefly for the winner's result
+    instead of raising a false failure.
   - Mid-stream connection loss after job start → clips returns `{"status":"connection_lost","recoverable":True}` (`modal_client.py:908-914`).
   - Later, `GET /api/exports/{job_id}/modal-status` polls `modal.FunctionCall.from_id(call_id).get(timeout=0)` (`exports.py:843-847`; `TimeoutError` = still running) and finalizes via `finalize_modal_export` (`exports.py:191`).
   - `POST /api/exports/{job_id}/resume-progress` (`exports.py:1004`) simulates progress from elapsed time while polling Modal.
