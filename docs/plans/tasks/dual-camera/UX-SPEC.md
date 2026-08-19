@@ -456,12 +456,16 @@ camera"**, header chip unchanged (`Gamepad2` green), and:
 - **Hidden entirely:** Opponent Team, Game Date, Game Type, Tournament Name — they are
   pool-fixed / already set on the member's own game row. In their place, one read-only
   summary line `text-sm text-gray-400`: `{game.name} · {date}`.
-- **Kept:** the "Video Format" segmented control, **extended to three options**:
-  `Full Game | Per Half | Clips`. First two reuse the existing dropzones verbatim
-  (`GameDetailsModal.jsx:411-505`).
-- **New "Clips" variant:** the full-game dropzone with `multiple` file input. Selected files
-  render as a list of rows (`text-xs text-green-400 truncate` name + size, X to remove —
-  the half-file selected-state idiom, stacked). Helper text under the dropzone,
+- **REMOVED: the "Video Format" segmented control** (evidence-based decision 2026-08-19 —
+  ALIGNMENT.md § Half-order evidence). The selection itself determines the shape: ONE
+  dropzone accepts 1..n files or a folder, and every selected row gets an inferred,
+  **editable role chip** per §5b's ordering rules — files >20 min → `full game` /
+  `1st half` / `2nd half`; short files → `clip`. Basis: 100% of real multi-file uploads
+  probed (sarkarati's prod half-pairs + local Trace/Veo/DJI files) carried embedded
+  creation_time that ordered the halves correctly — strictly better than the blind slot
+  assignment the old Per Half control trusted.
+- Selected files render as the §5b ordered role-chip list (drag `≡` + editable chips +
+  X to remove). Helper text under the dropzone when short files are present,
   `text-xs text-gray-500`: *"Short phone clips are fine — we'll line them up on the game
   clock for you, and flag any we can't match so you can line them up yourself."*
   (Honest promise: auto-alignment can fail; §7's short-clip variant is the fix path.)
@@ -489,7 +493,7 @@ are tap-to-pick).
 | Uploading | Existing submitting state ("Adding Camera…"). |
 | Insufficient credits | Existing `BuyCreditsModal` intercept. |
 | Upload failed | Existing error handling/toast. |
-| Duplicate feed (member already has a camera-kind feed) | Entry CTA labeled "Add more clips" and Video Format locked to `Clips` (one full-game camera per member; clips unlimited). |
+| Duplicate feed (member already has a camera-kind feed) | Entry CTA labeled "Add more clips"; a second >20-min file is refused inline (*"You already added a camera to this game — this file looks like another full recording."*) — one full-game camera per member; clips unlimited. |
 | Wrong file picked | Cancellable at every stage — selected-row X / `Clear selection` before upload, `Cancel upload` (two-tap) mid-upload, Remove my camera after activation. Full table: §5b "Cancel at every stage". |
 
 **Copy.** As inlined. Cost row unchanged: `{n} credit{s} for 30 days of storage`.
@@ -526,8 +530,19 @@ Format (Full Game/Per Half) · dropzone · Add Game. What changes:
    part {i}`; files separated by a real gap → `1st half` / `2nd half`; ambiguous →
    `unassigned` with a per-row role selector. Rows are drag-reorderable (`≡` handle) and
    every role is editable — **metadata proposes, the user disposes**; never silent
-   concatenation of different recordings. Video Format does NOT grow an option: a folder
-   is an input method, not a format. Companion `.LRF`
+   concatenation of different recordings. **The Video Format control is REMOVED outright**
+   — "Per Half" rolled into role inference (evidence: ALIGNMENT.md § Half-order
+   evidence); a folder is an input method, not a format.
+   **Shipped ordering heuristic (evidence-backed):** parse mvhd `creation_time`
+   client-side (the upload path already reads every byte for hashing; `File.lastModified`
+   is **BANNED** as a fallback — it ordered a real half-pair wrong). Sort by stamp;
+   contiguity (end N ≈ start N+1 within ±5s) → `one recording — part i` (only
+   camera-original stamps abut; export-time stamps fail closed into the halves branch);
+   exactly 2 groups each >20 min → `1st half` / `2nd half` in creation order (do NOT
+   require similar durations — a real prod pair was 33 vs 44 min; do NOT use gap size as
+   a halftime check — export stamps carry artificial ~14-min gaps); missing/equal stamps
+   → selection order, chips shown, no blocking question. Evidence: 16/16 real multi-file
+   uploads had creation_time, 8/8 ordered sets correct (all prod pairs included). Companion `.LRF`
    low-res proxies (DJI ships them beside the masters) are auto-detected and uploaded as
    the feed's PREVIEW rendition (see 3); one quiet line confirms: *"Preview files
    detected — fast editing enabled."*
@@ -1202,4 +1217,4 @@ Escape ordering, `ShareGameModal.jsx:325-335`).
 | m18 | Header now states this spec supersedes EPIC.md where they differ and that EPIC.md is reconciled at approval (EPIC.md itself untouched). |
 | Mockup pass (2026-08-19) | Clip-kind feeds AGGREGATE into one "Clips" lane (chips w/ owner initials, overlap stacking, ×n clusters) — ten phone clips no longer mean ten lanes; `feedLanes` redefined = full-length lanes + (1 if any clips); mobile sheet gains a Clips section listing only moment-covering clips. |
 | Alignment pass (2026-08-19) | §7 gains audio **waveform strips** under both players (drawn from the cached 8 kHz envelope, sliding with the nudge, hidden when either side lacks audio) + a no-audio state; auto-alignment algorithm cascade split out to ALIGNMENT.md (audio fingerprint primary, metadata seed, honest no-signal fallback — offsets never fabricated). |
-| Round 3 (2026-08-19, user directives) | (a) §1.2 side-tagged invite links (`My team`/`The other team`), with the sharer's team name prompted when missing — saved to profile + pool, prefilling cross-team joiners' Opponent; §3 pre-answers the team question from the link's tag. (b) §1.3 share-before-upload (pool + link with zero videos; `awaiting video` tile state in §4; T1180 exception flagged for T5500). (c) NEW §5b: initial Add Game modal gains folder upload (contiguous-segment detection, DJI class), ≥4K crop-before-upload (client-side re-encode, charged on cropped size), `.LRF` dual-asset detection — low-res in Annotate, full-res master in Framing/export. (d) §6 clip lanes now PACK (non-intersecting clips share a lane; intersecting split) — replaces the aggregated-lane `×n` cluster design. (e) §6 live sync: pool registry re-read ~60s/on-focus/after-own-writes while a pool game is open — another member's upload appears without reload. (f) §7 states which two videos line up + left-player selector among lined-up cameras (transitive offsets). (g) §8 partial-coverage cameras OMITTED from the picker entirely (were disabled tiles). (h) §5b cancel-at-every-stage table: pre-upload deselect, mid-upload `Cancel upload` (two-tap, rides the pending-uploads delete rail, no charge), post-activation remove/withdraw (charge not auto-refunded, stated honestly). (i) §1.2 default link flavor is `Anyone` — one-tap copy for WhatsApp, side-tagging optional. (j) NEW §4b setup lobby: opening a zero-video game walks the user through Upload + Share (inline link row, live camera status via the poll) instead of empty Annotate; disappears once a feed is active. (k) §5b crop is a FULL-SCREEN client-side stage (large preview + crop handles + filmstrip sanity-scrub + savings line; WebCodecs on-device re-encode, uncropped bytes never leave the machine; honest fallback when the browser can't encode). (l) §5 names the three entry points for adding a clip/camera to a pool (tile chip, §4b panel, invite sheet link). (m) §5b: video is OPTIONAL at create — "Add Game" enables on valid metadata with or without a file; the "Create & invite cameras first" ghost button is REMOVED (one primary button). (n) §4b reframed: the separate lobby card is superseded by a no-video ANNOTATE state — the video area renders an upload-or-share setup panel (bug-27p expired-panel precedent), swapping to the player in place when the first feed activates. (o) §5b multi-file selections auto-order by creation-time metadata with editable role chips (one recording — part i / 1st half / 2nd half / unassigned), drag-reorderable — metadata proposes, the user disposes. |
+| Round 3 (2026-08-19, user directives) | (a) §1.2 side-tagged invite links (`My team`/`The other team`), with the sharer's team name prompted when missing — saved to profile + pool, prefilling cross-team joiners' Opponent; §3 pre-answers the team question from the link's tag. (b) §1.3 share-before-upload (pool + link with zero videos; `awaiting video` tile state in §4; T1180 exception flagged for T5500). (c) NEW §5b: initial Add Game modal gains folder upload (contiguous-segment detection, DJI class), ≥4K crop-before-upload (client-side re-encode, charged on cropped size), `.LRF` dual-asset detection — low-res in Annotate, full-res master in Framing/export. (d) §6 clip lanes now PACK (non-intersecting clips share a lane; intersecting split) — replaces the aggregated-lane `×n` cluster design. (e) §6 live sync: pool registry re-read ~60s/on-focus/after-own-writes while a pool game is open — another member's upload appears without reload. (f) §7 states which two videos line up + left-player selector among lined-up cameras (transitive offsets). (g) §8 partial-coverage cameras OMITTED from the picker entirely (were disabled tiles). (h) §5b cancel-at-every-stage table: pre-upload deselect, mid-upload `Cancel upload` (two-tap, rides the pending-uploads delete rail, no charge), post-activation remove/withdraw (charge not auto-refunded, stated honestly). (i) §1.2 default link flavor is `Anyone` — one-tap copy for WhatsApp, side-tagging optional. (j) NEW §4b setup lobby: opening a zero-video game walks the user through Upload + Share (inline link row, live camera status via the poll) instead of empty Annotate; disappears once a feed is active. (k) §5b crop is a FULL-SCREEN client-side stage (large preview + crop handles + filmstrip sanity-scrub + savings line; WebCodecs on-device re-encode, uncropped bytes never leave the machine; honest fallback when the browser can't encode). (l) §5 names the three entry points for adding a clip/camera to a pool (tile chip, §4b panel, invite sheet link). (m) §5b: video is OPTIONAL at create — "Add Game" enables on valid metadata with or without a file; the "Create & invite cameras first" ghost button is REMOVED (one primary button). (n) §4b reframed: the separate lobby card is superseded by a no-video ANNOTATE state — the video area renders an upload-or-share setup panel (bug-27p expired-panel precedent), swapping to the player in place when the first feed activates. (o) §5b multi-file selections auto-order by creation-time metadata with editable role chips (one recording — part i / 1st half / 2nd half / unassigned), drag-reorderable — metadata proposes, the user disposes. (p) **"Per Half" REMOVED (evidence-based):** probe of every real multi-file upload findable (sarkarati prod pairs + local Trace/Veo/DJI) — 16/16 files had embedded creation_time, 8/8 ordered sets correct, fs mtime wrong on one real pair; the Video Format control is deleted from §5/§5b, roles inferred (>20 min = half/full, short = clip) and always editable. Full evidence: ALIGNMENT.md § Half-order evidence. |

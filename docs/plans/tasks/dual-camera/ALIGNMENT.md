@@ -48,10 +48,12 @@ audio is the most compelling default alignment** — metadata only seeds/bounds 
 
 ## 2. Candidate window from metadata (cheap prior, never a verdict)
 
-If both sides carry `creation_time`:
+If both sides carry `creation_time` **with recording-time semantics** (see § Half-order
+evidence — export-rendered files stamp RENDER time, classified by the impossible-timeline
+test, and must never seed a window):
 `candidate = creation_diff`, window = **±10 min** (covers real device skew; phones are
-NTP-true within ~1 s, standalone cameras drift minutes). If either side lacks it, or
-`tz_reliable=false` on either: window = the whole reference duration. A metadata
+NTP-true within ~1 s, standalone cameras drift minutes). If either side lacks it, has
+export-time semantics, or `tz_reliable=false`: window = the whole reference duration. A metadata
 candidate is NEVER written as an offset by itself for full-length feeds — it only bounds
 the audio search (exception: the no-audio fallback, §6).
 
@@ -125,6 +127,37 @@ alignment failure never blocks upload/activation.
    falls to metadata) — a confident wrong answer is the worst outcome.
 4. **Wind/silence stress:** clips with wind-dominated and near-silent audio must land in
    `medium`-or-below, never `auto`-confident.
+
+## Half-order & creation-time evidence (2026-08-19 probe of real files)
+
+Probed read-only: every multi-file game findable on the dev machine PLUS
+sarkarati@gmail.com's prod account (8 multi-video games; 4 still had sources in R2 —
+expired ones 404 and are unprobeable). Findings that BIND this design:
+
+1. **16/16 real multi-file uploads carried embedded `creation_time`; 8/8 ordered sets
+   (7 half-pairs — ALL prod pairs included — + 1 DJI 4-segment chain) ordered CORRECTLY
+   by it.** Zero counterexamples. This is the basis for removing "Per Half"
+   (UX-SPEC §5/§5b): today's slot assignment trusts the user blindly
+   (`uploadManager.js` `sequence = i + 1`, no metadata check at all).
+2. **Two stamp semantics exist — classify before trusting.** Camera originals (DJI
+   Osmo Action 6) stamp RECORDING START, UTC; consecutive segments abut to ~2s; the real
+   halftime showed as an 8m51s gap. Platform half exports (Trace/Veo class, and every
+   prod pair) stamp **EXPORT-RENDER time**: inter-half stamp gaps (10–15 min) were
+   SMALLER than the first half's duration (27–44 min) in every pair — impossible for
+   recording starts; one pair's stamps postdated the game by 5 days. **Consequence:
+   relative ORDER is trustworthy (platforms render half 1 first); absolute stamps are
+   NOT.** The classifier: a file set whose stamps imply an impossible timeline vs
+   durations (overlap, or inter-file gap < file duration) has export-time semantics →
+   usable for ORDERING only, never to seed the fingerprint window or any wall_offset.
+3. **ffmpeg/Lavf-transcoded files strip `creation_time` entirely AND can lack an audio
+   track** (12/12 local transcodes had neither) — the no-signal fallback rows above are
+   load-bearing, not theoretical.
+4. **`File.lastModified` / fs mtime is BANNED for ordering** — it ordered a real
+   half-pair wrong (mtime = download-completion order, not game order).
+5. DJI bonus signals: a drop-frame `timecode` data stream exists (future ordering/sync
+   signal); the filename encodes local recording time.
+6. Any probe/backfill job must tolerate `game_videos` rows whose global R2 object is
+   gone (expired games 404) — observed on half of the prod multi-video games.
 
 ## Folder segments (multi-file recordings — DJI/GoPro splits)
 
