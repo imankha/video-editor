@@ -40,6 +40,20 @@ describe('ReferenceGameCard (T5820)', () => {
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(refGame.name);
   });
 
+  // T7290: reference cards share the Games grid, which now groups by MATCH date. The
+  // owner's UPLOAD date used to print under the name, so a March match uploaded in
+  // June read "Jun 11, 2026" under a "March 2026" header. The match date is already
+  // in the frozen name; the caption is gone.
+  it('renders no date under the name', () => {
+    const { container } = render(
+      <ReferenceGameCard game={{ ...refGame, name: 'Vs Rivals Mar 21' }} onOpen={vi.fn()} />
+    );
+    const heading = screen.getByRole('heading', { level: 3 });
+    expect(heading.nextElementSibling).toBeNull();
+    // Neither the upload date ("Jul 1") nor a raw timestamp survives anywhere.
+    expect(container.textContent).not.toMatch(/Jul|2026-07-01|\d{1,2}\/\d{1,2}/);
+  });
+
   it('has NONE of the real tile actions — no kebab / edit / delete / recap / expiry chip', () => {
     render(<ReferenceGameCard game={refGame} onOpen={vi.fn()} />);
     expect(screen.queryByLabelText('More actions')).toBeNull();

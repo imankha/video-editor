@@ -116,11 +116,14 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
   ).toBe(true);
   // T7290: the scrim no longer carries a date at all. Match date reads from the tile
   // NAME ("at Sporting Mar 21") and from the month header the tile sits under; the
-  // upload date that used to sit here contradicted both. What still must hold is that
-  // no raw timestamp leaks onto the tile.
+  // upload date that used to sit here contradicted both. This is the OLD assertion
+  // negated -- i.e. it genuinely goes red if a rendered date comes back. `scrim.spans`
+  // is scoped to `div > span`, so the name's own "Mar 21" suffix (an h3) can't
+  // false-positive; the expiry chip renders "Expired"/"5d", which won't match either.
   expect(
-    scrim.spans.some((t) => /\d{4}-\d{2}-\d{2}|T\d{2}:\d{2}/.test(t)),
-    `no raw timestamp on the tile scrim (got ${JSON.stringify(scrim.spans)})`,
+    scrim.spans.some((t) => /[A-Za-z]{3}\s+\d{1,2}/.test(t)),
+    `no date on the tile scrim -- match date lives in the name and the month header `
+      + `(got ${JSON.stringify(scrim.spans)})`,
   ).toBe(false);
 
   await saveEvidence(page, 'criterion-3-gamecard-legibility');

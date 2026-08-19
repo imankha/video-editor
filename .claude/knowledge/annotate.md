@@ -368,14 +368,23 @@ The full checklist for an 11th→Nth sport:
   in agreement: `groupGamesByMonth` (ProjectManager.jsx, exported for tests) and
   `GAMES_MATCH_DATE_ORDER_BY` (games.py, the `_read_games_for_list` ORDER BY). Invariants: `game_date`
   is date-only TEXT `YYYY-MM-DD`, so the frontend parses it as a **local calendar date** — `new
-  Date("2026-03-01")` is UTC midnight and files a March 1st game under February west of Greenwich;
-  a NULL/empty `game_date` (games predating the required field, plus materialized/shared rows) falls
-  back to `created_at` for PLACEMENT ONLY and is never dropped from the list, with the pre-existing
-  missing-metadata warning in `_list_games_impl` left as the single loud signal; same-match-day ties
-  break on upload time newest-first on BOTH sides. Deliberately untouched: Reel Drafts grouping
-  (already keyed on `project.game_dates`) and the "Continue where you left off" card (genuinely
-  recency-of-activity). Covering specs: `ProjectManager.gameGrouping.test.jsx`,
-  `tests/test_t7290_games_list_order.py`.
+  Date("2026-03-01")` is UTC midnight and files a March 1st game under February west of Greenwich.
+  A NULL/empty `game_date` (games predating the required field, plus materialized/shared rows) falls
+  back to `created_at` for PLACEMENT ONLY and is never dropped, with the pre-existing
+  missing-metadata warning in `_list_games_impl` left as the single loud signal; a non-empty but
+  unparseable `game_date` is a DATA BUG, not that edge case, and warns. **The fallback compares the
+  upload CALENDAR DAY (`substr(created_at,1,10)` / `String(created_at).slice(0,10)`), never the full
+  timestamp** — review caught the timestamp version making the two orders disagree (a May 9 match
+  uploaded in June vs a dateless game uploaded May 9: the server ties them on the day and settles on
+  `created_at DESC`, a timestamp key wins the primary comparison outright). Same-match-day ties break
+  on upload time newest-first on BOTH sides. The two suites share fixtures row-for-row so a change to
+  one half goes red in the other. Consumers that render raw server order without re-sorting (e.g.
+  `GameClipSelectorModal`) are why the agreement matters, not just the tab. Deliberately untouched:
+  Reel Drafts grouping (already keyed on `project.game_dates`) and the "Continue where you left off"
+  card (genuinely recency-of-activity). `ReferenceGameCard` dropped its `created_at` caption for the
+  same reason `GameTile` did — it sits in these same match-date groups. Covering specs:
+  `ProjectManager.gameGrouping.test.jsx`, `tests/test_t7290_games_list_order.py`,
+  `ReferenceGameCard.test.jsx`.
 
 - **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
   (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).

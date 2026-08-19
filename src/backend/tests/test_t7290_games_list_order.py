@@ -55,6 +55,9 @@ def test_orders_by_match_date_not_upload_date():
 
 
 def test_missing_match_date_falls_back_to_upload_date_without_dropping_the_game():
+    """SHARED FIXTURE with ProjectManager.gameGrouping.test.jsx ("agrees with the
+    list_games server order") -- same rows, same expected order. The frontend grouping
+    and this clause are two halves of one contract; change one side and both go red."""
     conn = _conn()
     _add(conn, 1, "2026-05-09", "2026-06-11 18:00:00")
     _add(conn, 2, None, "2026-04-02 09:00:00")        # pre-requirement / shared row
@@ -75,11 +78,22 @@ def test_same_match_day_breaks_the_tie_on_upload_time_newest_first():
     assert _ordered_ids(conn) == [2, 3, 1]
 
 
-def test_iso_created_at_with_t_separator_still_compares_as_a_date():
+def test_a_dated_game_and_a_dateless_upload_on_the_same_day_tie_on_the_day():
+    """SHARED FIXTURE with ProjectManager.gameGrouping.test.jsx ("...land on the SAME
+    day"). The fallback compares the upload CALENDAR DAY, not the timestamp: game 2's
+    upload time never outranks game 1's match date, it only ties with it -- and the
+    tie then goes to the newer upload. Keying the frontend off the full timestamp made
+    the two orders disagree here, which is what this pair of tests pins down."""
     conn = _conn()
-    # created_at is CURRENT_TIMESTAMP ("YYYY-MM-DD HH:MM:SS") for rows this code
-    # writes, but older/imported rows can carry an ISO "T" form. substr(1, 10) leaves
-    # both as "YYYY-MM-DD", so the fallback ordering holds either way.
-    _add(conn, 1, None, "2026-05-09T18:00:00Z")
-    _add(conn, 2, None, "2026-03-21 18:00:00")
+    _add(conn, 1, "2026-05-09", "2026-06-11 18:00:00")   # old footage, uploaded in June
+    _add(conn, 2, None, "2026-05-09 08:00:00")           # dateless row, uploaded May 9
+    assert _ordered_ids(conn) == [1, 2]
+
+
+def test_upload_time_does_not_outrank_a_later_match_date():
+    conn = _conn()
+    # A dateless row uploaded TODAY still sorts below a match played later than its
+    # upload day -- the fallback is a placement, never a promotion to "most recent".
+    _add(conn, 1, "2026-05-10", "2026-06-11 18:00:00")
+    _add(conn, 2, None, "2026-05-09 23:00:00")
     assert _ordered_ids(conn) == [1, 2]

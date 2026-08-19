@@ -228,7 +228,8 @@ export function GameTile({
         </div>
       )}
 
-      {/* Bottom scrim: game name (primary line) + date/clip count (secondary line).
+      {/* Bottom scrim: game name (primary line) + clip count (secondary line; T7290
+          dropped the date that used to share it).
           One structure for BOTH the poster and the fallback -- this div is always
           rendered (not gated on posterState), so it overlays whichever variant is
           showing beneath it. Name is a single truncated line (tiles run as small

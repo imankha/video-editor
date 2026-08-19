@@ -109,11 +109,25 @@ function DraftStageRows({
 // game_date is a date-only TEXT column ("YYYY-MM-DD"). Parse it as a LOCAL calendar
 // date -- `new Date("2026-03-01")` is UTC midnight, which reads as Feb 28 in any
 // negative-UTC-offset timezone and would file the game under the wrong month.
-function parseMatchDate(gameDate) {
-  if (typeof gameDate !== 'string') return null;
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(gameDate.trim());
+function parseLocalCalendarDate(value) {
+  if (typeof value !== 'string') return null;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
   if (!parts) return null;
   return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+}
+
+function parseMatchDate(gameDate) {
+  // NULL/empty is a real external-data case (see gameOrganizingDate). A non-empty
+  // value that will not parse is not -- both writers are <input type="date">, so a
+  // malformed game_date means our own data is wrong. Say so instead of quietly
+  // treating it as missing.
+  if (gameDate === null || gameDate === undefined || gameDate === '') return null;
+  const parsed = parseLocalCalendarDate(gameDate);
+  if (!parsed) {
+    console.warn(`[games] Unparseable game_date ${JSON.stringify(gameDate)} -- expected `
+      + 'YYYY-MM-DD. Falling back to upload date for placement; the row is a data bug.');
+  }
+  return parsed;
 }
 
 // T7290: the Games tab organizes by MATCH date, the date the user thinks in and the
@@ -122,8 +136,25 @@ function parseMatchDate(gameDate) {
 // that is an external-data edge case, so they are placed by their upload timestamp
 // rather than dropped from the list. The backend logs the missing metadata loudly
 // (games.py, list_games) -- this path stays silent so there is only one signal.
+// Note the fallback is the CALENDAR DAY of the upload, not its timestamp: list_games
+// keys on substr(created_at, 1, 10) and tiebreaks on the full timestamp separately, so
+// a full-timestamp key here would win comparisons the server settles on the tiebreak
+// and the two orders would disagree (a May 9 match uploaded in June vs a dateless game
+// uploaded on May 9). Same reason it must not go through `new Date(created_at)`: an
+// ISO-Z timestamp would shift a day west of Greenwich and change the month bucket.
 function gameOrganizingDate(game) {
-  return parseMatchDate(game.game_date) ?? new Date(game.created_at);
+  const matchDate = parseMatchDate(game.game_date);
+  if (matchDate) return matchDate;
+
+  const uploadDay = parseLocalCalendarDate(String(game.created_at ?? '').slice(0, 10));
+  if (uploadDay) return uploadDay;
+
+  // created_at is NOT NULL-by-default in the schema and every writer sets it, so this
+  // is our own data being broken, not an edge case. The game still renders (dropping
+  // it would hide the bug); it just sorts last, and says why.
+  console.error(`[games] Game ${game.id} has neither a usable game_date nor created_at `
+    + `(created_at=${JSON.stringify(game.created_at)}) -- placing it last. Data bug.`);
+  return new Date(0);
 }
 
 // Group games by match month, newest month first, newest match first inside a month
