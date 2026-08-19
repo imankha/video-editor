@@ -25,6 +25,10 @@ const faqs: FaqItem[] = [
     a: 'Three steps. Upload your game video, watch it and mark the plays worth keeping (tagging each by position and play type), then export. ReelBallers crops and follows your player through each clip and stitches them into one reel you can share with a link.',
   },
   {
+    q: 'How does it keep the focus on my player?',
+    a: 'You film wide from the sideline with any camera. ReelBallers zooms into the frame and follows the player you choose, then uses AI upscaling to keep the close-up sharp -- so the finished clip looks like it was filmed close-up, following only your athlete. There is no hardware to buy.',
+  },
+  {
     q: 'What footage does ReelBallers work with?',
     a: 'Any standard video file. That includes iPhone and Android video, GoPro and other action cameras, XbotGo and similar auto-follow mounts, camcorders, and match video exported from team systems like Veo, Trace, or Hudl. There is no hardware to buy and no camera integration to set up.',
   },
@@ -75,7 +79,7 @@ const steps = [
   {
     n: 3,
     title: 'Export and share one link',
-    body: 'ReelBallers crops and follows your player, upscales the footage, adds the spotlight, and stitches it together. Share the finished reel with a single link.',
+    body: 'ReelBallers puts the focus on your player &mdash; zoomed in and following every play &mdash; adds the spotlight, and stitches it into one sharp reel. Share it with a single link.',
   },
 ]
 ---
@@ -94,8 +98,8 @@ const steps = [
     <div class="max-w-3xl mx-auto text-center">
       <h1 class="text-4xl md:text-6xl font-bold text-white mb-5 leading-tight">{TAGLINE}</h1>
       <p class="text-lg md:text-2xl text-gray-300">
-        The purpose-built way to turn game footage into highlight reels &mdash; without the
-        video-editing grind.
+        Film the game from the sideline like you always do. ReelBallers puts the focus on your
+        athlete &mdash; zoomed in, followed through every play, in crisp HD.
       </p>
     </div>
 
@@ -108,6 +112,9 @@ const steps = [
         afterPoster={HERO_MEDIA.after.poster}
         label={HERO_MEDIA.alt}
       />
+      <p class="text-center text-sm text-gray-400 mt-4">
+        Same play, same phone. Left: what you filmed. Right: your athlete, in focus.
+      </p>
     </div>
 
     <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
@@ -209,9 +216,12 @@ const steps = [
           Elevate
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Lift raw game film into something that looks pro. AI upscales your footage toward {FACTS.upscaleTarget},
-          auto-frames to follow your player across the field, and adds animated highlights that make
-          every play readable.
+          Your athlete, in focus. Your wide sideline video becomes close-up footage that follows
+          your player through every play &mdash; centered, sharp, impossible to lose in the crowd.
+          Animated spotlights tell everyone exactly who to watch.
+        </p>
+        <p class="text-sm text-gray-500 mt-2">
+          Under the hood: AI tracking, reframing, and upscaling toward {FACTS.upscaleTarget}.
         </p>
       </div>
     </div>

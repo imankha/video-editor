@@ -128,7 +128,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What changes',
         body: [
-          'You watch the game once, the way you would anyway, and tap to mark the moments worth keeping. That is the whole input. From there the reel builds itself: the crop follows your player, the footage is upscaled, and you get a link.',
+          'You watch the game once, the way you would anyway, and tap to mark the moments worth keeping. That is the whole input. From there the reel builds itself: the focus stays on your player, zoomed in and sharp, and you get a link.',
           'Because each clip is tagged, the library compounds. By mid-season you can pull every goal, or everything from one tournament, without touching the original footage again.',
         ],
       },

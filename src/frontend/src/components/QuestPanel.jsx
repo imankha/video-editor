@@ -225,7 +225,7 @@ export function QuestPanel({ inline = false }) {
           <div className="space-y-3 sm:space-y-5 text-gray-300 text-base sm:text-xl leading-relaxed">
             <p>Annotate every touch so your baller can take their game to the next level.</p>
             <p>Extract highlights anytime to post to Insta or send to college coaches.</p>
-            <p className="text-white font-medium">Use your credits to create more AI-upscaled highlights!</p>
+            <p className="text-white font-medium">Use your credits to put the focus on more highlights!</p>
           </div>
           <button
             onClick={() => setShowCompletionModal(false)}

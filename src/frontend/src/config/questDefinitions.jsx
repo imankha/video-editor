@@ -149,7 +149,7 @@ export const STEP_TITLES = {
 export const STEP_DESCRIPTIONS = {
   // Quest tutorial steps — T4780
   watch_annotate_tutorial: 'Watch how to clip your best plays from a game.',
-  watch_framing_tutorial: 'Watch how to crop and upscale your highlight.',
+  watch_framing_tutorial: 'Watch how to put the focus on your player.',
   watch_overlay_tutorial: 'Watch how to spotlight your player on the highlight.',
   watch_publish_tutorial: 'Watch how to publish your finished reel.',
   // Quest 1 — Get Started
@@ -163,7 +163,7 @@ export const STEP_DESCRIPTIONS = {
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.DRAFTS}</MiniButton> and tap your reel's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a clip's start or end also lets you trim it.</>,
-  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
+  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll render your close-up in crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p -- this takes a minute. Sit tight; next you will add a spotlight to your player on this same reel.',
   // Quest 3 — Spotlight Your Player
   open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,
