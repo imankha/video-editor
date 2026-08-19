@@ -127,6 +127,13 @@ Dependency notes: T7280/T5495/T5498 are pool-independent (T5495 before T5510 bec
 pool upload modal builds on the reworked Add Game). T5550 is the only export-pipeline
 task; T5540 ships user value without it. T7310 gates on evidence, not order.
 
+**Named prerequisites OUTSIDE the epic (user-approved 2026-08-19):** T6770 (derived
+ref-set — the rent model multiplies the ref population the drifting counter guards) and
+T6780 part B (unguarded materialization writes — the join flow reuses that path) land
+BEFORE T5520; T7140 (faststart remux, Modal-dispatch) lands first anyway per standing
+order and provides the upload-post-processing Modal rail that `align_feed` (T5530) and
+T7310 ride.
+
 ## Completion Criteria
 
 - [ ] A parent can create a game with or without video, copy ONE link, paste it in

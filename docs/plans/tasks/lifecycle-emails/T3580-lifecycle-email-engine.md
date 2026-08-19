@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-08-19 (user-approved) by the Lifecycle Email Drip epic (docs/plans/tasks/lifecycle-drip/EPIC.md, T7230-T7270)** - same day-N funnel emails, newer settled design (zero new Postgres state). Do not implement from this file.
+
 # T3580: Lifecycle Email Engine
 
 **Status:** TODO
