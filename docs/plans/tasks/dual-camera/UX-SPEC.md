@@ -133,10 +133,13 @@ Body, top to bottom:
    to type; the pool inherits this game's metadata and binds it as the reference feed).
 3. Storage note, `text-xs text-gray-500` with `Coins size={12} className="text-yellow-400"`:
    *"Your storage credits cover everyone's access for the first 30 days."*
-4. **"Who is this link for?"** segmented control (user decision 2026-08-19): **`My team`**
-   | **`The other team`** — the pool issues one invite token PER SIDE, and the copied link
-   carries the recipient's side, so the join screen (§3) opens with the team question
-   pre-answered (still changeable) and the right game info in view.
+4. **"Who is this link for?"** segmented control, three options: **`Anyone` (default)** |
+   **`My team`** | **`The other team`**. The DEFAULT makes Copy a **one-tap, zero-question
+   gesture** — open sheet, Copy, paste into the team WhatsApp; the `Anyone` link is
+   untagged and the join screen simply asks the team question with no default (§3).
+   Side-tagged links are the optional refinement: the pool issues one token per side, and
+   a tagged link opens the join screen with the team question pre-answered (still
+   changeable) and the right game info in view.
    - Selecting **`The other team`** when the sharer's own profile has no team fact reveals
      a required inline input beneath: label **"What's your team called?"** (GameDetailsModal
      input classes) + helper `text-xs text-gray-500`: *"They'll see this as their
@@ -380,6 +383,34 @@ user's tile renders byte-identical to today):
 **Mobile.** Identical (GameTile is already responsive; the kebab bottom sheet carries the
 new rows automatically).
 
+### 4b. Opening a game with no video — the setup lobby
+
+Tapping an `awaiting video` tile does NOT open Annotate (nothing to annotate — a broken
+player teaches the wrong lesson). It opens a **setup lobby**: a focused card walking the
+user through getting the game going.
+
+1. **Header:** derived game name + date + the pool chip.
+2. **Step list** (numbered rows, done-states as they complete):
+   - **1 · Upload your video** — primary green button → §5. Sub-line: *"Full game, halves,
+     a folder, or short clips."* While uploading, the row becomes the progress state
+     (*"Uploading… 42%"*) with the `Cancel upload` affordance (§5b); done → `Check`.
+   - **2 · Share the game link** — the §1.2 link row INLINE (Copy / Share…, one tap,
+     default `Anyone` link). Sub-line: *"Paste it in the team WhatsApp — anyone with the
+     link can add their video."* After first copy → *"Link copied · {n} joined"*.
+3. **Camera status list** — §2's status-row component verbatim (kinds/counts, uploading
+   pulse), refreshed by the §6 live-sync poll. The lobby is where *"I texted the link
+   from the sideline — did the other camera guy upload yet?"* gets answered.
+4. Quiet exit for the insistent: `Open anyway` text link (`text-xs text-gray-500`) →
+   the existing empty Annotate.
+
+The lobby renders for ANY member while the pool has ZERO active feeds (a joiner's step 1
+reads **"Add your camera"**). Steps are guidance, not a wizard — both are always tappable
+in any order. Once ≥1 feed is active, the tile opens Annotate as today and the lobby
+never appears again.
+
+**Gestures → writes:** none of its own — the upload button, link row, and cancel all
+delegate to §5/§1.2/§5b's existing gestures.
+
 **Components reused.** `GameTile` chip/kebab/scrim structures verbatim; `Upload` icon.
 
 **States.**
@@ -407,6 +438,11 @@ never sole signal — the pool chip is neutral gray; the action chip has a text 
 ---
 
 ## 5. Upload Binding — "Add Your Camera"
+
+**Entry points (a member adding their clip or Veo to the pool):** the tile's **"Add
+camera" chip** (§4), the **setup lobby's step 1** (§4b, reads "Add your camera" for a
+joiner), and the kebab's `Invite more cameras` sheet which links "…or add your own
+camera". All three open this modal.
 
 **Layout.** A trimmed variant of `GameDetailsModal` (same file, new `poolGame` prop —
 reuse, don't fork). **When `poolGame` is absent, `GameDetailsModal` renders byte-identical
@@ -486,15 +522,28 @@ Format (Full Game/Per Half) · dropzone · Add Game. What changes:
    low-res proxies (DJI ships them beside the masters) are auto-detected and uploaded as
    the feed's PREVIEW rendition (see 3); one quiet line confirms: *"Preview files
    detected — fast editing enabled."*
-2. **Crop before upload (high-res, sky-heavy footage).** For sources ≥4K, an optional step
-   renders between the dropzone and the cost row: a preview frame (mid-file) with a
-   draggable/resizable crop rectangle (16:9-locked, Framing's crop-handle idiom) and a
-   live savings line: `Upload cropped — {newSize} GB · {n} credits (was {oldSize} GB ·
-   {m} credits)`. `Apply crop` / `Skip` (ghost). ONE static crop for the whole upload —
-   this is acquisition correction (cut the sky), not creative framing (T5750 family).
-   The crop re-encodes client-side during upload (WebCodecs — browser-ceiling spike per
-   the T5650 study applies); the CROPPED output is what gets hashed, uploaded, and
-   charged. Audio passes through untouched (alignment unaffected).
+2. **Crop before upload (high-res, sky-heavy footage) — a FULL-SCREEN stage, all
+   client-side.** Picking a ≥4K source expands into a dedicated full-viewport crop stage
+   (`fixed inset-0 z-50 bg-gray-900`, the crop deserves room — a thumbnail-sized crop
+   control on 5.3K footage is unusable):
+   - **Large preview** filling the available height, with a draggable/resizable crop
+     rectangle (16:9-locked, Framing's crop-handle idiom + dim-outside-crop treatment).
+   - **A filmstrip scrubber** along the bottom (sampled thumbnails across the recording)
+     so the crop can be sanity-checked at several moments — kickoff, midfield, the far
+     goal — before committing; the rectangle stays fixed while the preview scrubs (ONE
+     static crop for the whole upload: acquisition correction, not creative framing —
+     T5750 family).
+   - **Live savings line**, prominent: `Upload cropped — {newSize} GB · {n} credits
+     (was {oldSize} GB · {m} credits)`.
+   - Footer: `<Button variant="success">Apply crop & continue</Button>` /
+     `<Button variant="ghost">Upload uncropped</Button>` / back.
+   **Everything happens on the device:** decode → crop → re-encode via WebCodecs
+   (hardware-accelerated) as part of the upload pipeline — no uncropped byte ever leaves
+   the machine; the CROPPED output is what gets hashed, uploaded, and charged. The T5650
+   study's browser-ceiling spike governs feasibility limits (codec support matrix,
+   fallback = upload uncropped with the ROI stored for server-side crop at first Modal
+   touch — flagged honestly in the stage when the browser can't encode). Audio passes
+   through untouched (alignment unaffected).
 3. **Low-res in Annotate, full-res in Framing (dual-asset).** When a preview rendition
    exists (shipped `.LRF`, or a generated proxy — T5580), **Annotate and all preview
    surfaces stream the low-res rendition; Framing and export always resolve the full-res
@@ -1132,4 +1181,4 @@ Escape ordering, `ShareGameModal.jsx:325-335`).
 | m18 | Header now states this spec supersedes EPIC.md where they differ and that EPIC.md is reconciled at approval (EPIC.md itself untouched). |
 | Mockup pass (2026-08-19) | Clip-kind feeds AGGREGATE into one "Clips" lane (chips w/ owner initials, overlap stacking, ×n clusters) — ten phone clips no longer mean ten lanes; `feedLanes` redefined = full-length lanes + (1 if any clips); mobile sheet gains a Clips section listing only moment-covering clips. |
 | Alignment pass (2026-08-19) | §7 gains audio **waveform strips** under both players (drawn from the cached 8 kHz envelope, sliding with the nudge, hidden when either side lacks audio) + a no-audio state; auto-alignment algorithm cascade split out to ALIGNMENT.md (audio fingerprint primary, metadata seed, honest no-signal fallback — offsets never fabricated). |
-| Round 3 (2026-08-19, user directives) | (a) §1.2 side-tagged invite links (`My team`/`The other team`), with the sharer's team name prompted when missing — saved to profile + pool, prefilling cross-team joiners' Opponent; §3 pre-answers the team question from the link's tag. (b) §1.3 share-before-upload (pool + link with zero videos; `awaiting video` tile state in §4; T1180 exception flagged for T5500). (c) NEW §5b: initial Add Game modal gains folder upload (contiguous-segment detection, DJI class), ≥4K crop-before-upload (client-side re-encode, charged on cropped size), `.LRF` dual-asset detection — low-res in Annotate, full-res master in Framing/export. (d) §6 clip lanes now PACK (non-intersecting clips share a lane; intersecting split) — replaces the aggregated-lane `×n` cluster design. (e) §6 live sync: pool registry re-read ~60s/on-focus/after-own-writes while a pool game is open — another member's upload appears without reload. (f) §7 states which two videos line up + left-player selector among lined-up cameras (transitive offsets). (g) §8 partial-coverage cameras OMITTED from the picker entirely (were disabled tiles). (h) §5b cancel-at-every-stage table: pre-upload deselect, mid-upload `Cancel upload` (two-tap, rides the pending-uploads delete rail, no charge), post-activation remove/withdraw (charge not auto-refunded, stated honestly). |
+| Round 3 (2026-08-19, user directives) | (a) §1.2 side-tagged invite links (`My team`/`The other team`), with the sharer's team name prompted when missing — saved to profile + pool, prefilling cross-team joiners' Opponent; §3 pre-answers the team question from the link's tag. (b) §1.3 share-before-upload (pool + link with zero videos; `awaiting video` tile state in §4; T1180 exception flagged for T5500). (c) NEW §5b: initial Add Game modal gains folder upload (contiguous-segment detection, DJI class), ≥4K crop-before-upload (client-side re-encode, charged on cropped size), `.LRF` dual-asset detection — low-res in Annotate, full-res master in Framing/export. (d) §6 clip lanes now PACK (non-intersecting clips share a lane; intersecting split) — replaces the aggregated-lane `×n` cluster design. (e) §6 live sync: pool registry re-read ~60s/on-focus/after-own-writes while a pool game is open — another member's upload appears without reload. (f) §7 states which two videos line up + left-player selector among lined-up cameras (transitive offsets). (g) §8 partial-coverage cameras OMITTED from the picker entirely (were disabled tiles). (h) §5b cancel-at-every-stage table: pre-upload deselect, mid-upload `Cancel upload` (two-tap, rides the pending-uploads delete rail, no charge), post-activation remove/withdraw (charge not auto-refunded, stated honestly). (i) §1.2 default link flavor is `Anyone` — one-tap copy for WhatsApp, side-tagging optional. (j) NEW §4b setup lobby: opening a zero-video game walks the user through Upload + Share (inline link row, live camera status via the poll) instead of empty Annotate; disappears once a feed is active. (k) §5b crop is a FULL-SCREEN client-side stage (large preview + crop handles + filmstrip sanity-scrub + savings line; WebCodecs on-device re-encode, uncropped bytes never leave the machine; honest fallback when the browser can't encode). (l) §5 names the three entry points for adding a clip/camera to a pool (tile chip, lobby step 1, invite sheet link). |
