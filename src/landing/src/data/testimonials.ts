@@ -44,6 +44,11 @@ export const TESTIMONIALS: Testimonial[] = [
     topic: 'framing',
   },
   {
+    quote: 'Wow, does the app simulate the camera focusing on my son?',
+    attribution: 'Parent of a youth athlete',
+    topic: 'framing',
+  },
+  {
     quote: 'Clutch!',
     attribution: 'ReelBallers user',
     topic: 'general',
