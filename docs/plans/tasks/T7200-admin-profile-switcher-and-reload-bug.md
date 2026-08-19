@@ -1,6 +1,6 @@
 # T7200: Admin loses admin status after impersonation reload; move Admin entry point into the profile switcher
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-18
@@ -66,7 +66,7 @@ None.
 4. [x] Add gated "Admin" row to `ManageProfilesModal.jsx`
 5. [x] Manual verification in browser (impersonate -> stop -> admin access retained; profile switcher shows Admin row only for admin)
 6. [x] Reviewer pass on diff
-7. [ ] Commit + push, user to merge
+7. [x] Commit + push, merged to master (2026-08-19, ff-merge via `feature/T7200-admin-profile-switcher`, Branch CI green)
 
 ### Progress Log
 
