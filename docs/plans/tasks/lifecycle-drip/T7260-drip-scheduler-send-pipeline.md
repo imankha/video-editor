@@ -19,16 +19,25 @@ until deliberately enabled.
 
 ## Solution
 
-### Scheduler: `services/drip_scheduler.py`
-Modeled line-for-line on `services/sweep_scheduler.py`'s lifecycle (module-level task,
-`start_drip_loop()` / `stop_drip_loop()`, called from `main.py`'s lifespan next to the sweep
-hooks, STARTUP_DELAY, CancelledError-clean shutdown, catch-all except → sleep and retry).
-Differences: fixed 6h tick (calendar-driven, no `get_next_expiry` analogue); the loop body
-is `await asyncio.to_thread(run_drip_tick)`.
+### Tick: Fly scheduled machine + one-shot entrypoint (EPIC §5, revised)
+NO in-process loop, NO `main.py` lifespan hooks (see EPIC §5 for the full rejection
+rationale: suspend-fighting keepalives, N redundant ticks on a scaled fleet, and shared
+fate with request serving on a box that has already OOM'd once).
 
-Gate: `start_drip_loop()` returns without creating the task unless
-`os.getenv("DRIP_EMAILS_ENABLED") == "true"` — log one INFO line either way so the state is
-always visible in startup logs.
+- `app/drip_tick.py` — one-shot entrypoint: if `os.getenv("DRIP_EMAILS_ENABLED") != "true"`,
+  log one INFO line and exit 0 (the kill switch); else `run_drip_tick()`, log the result
+  summary, exit (non-zero on unhandled exception so the failed run is visible in
+  `fly machine` status/logs).
+- Created once per env:
+  `fly machine run <image> --schedule daily -a reel-ballers-api --vm-memory 512 "python -m app.drip_tick"`
+  (staging: `-a reel-ballers-api-staging`). Record the machine id in the task file's
+  Progress Log.
+- **Deploy integration (required, same task):** `deploy_production.sh` gains a
+  `fly machine update <machine-id> --image <new-ref>` step — `fly deploy` does not update
+  machines created via `fly machine run`, and a stale-image tick would run old code
+  against a new schema. The deploy skill doc gets the same note.
+- The admin endpoint below is the manual trigger and the dry-run tool; the DB claim makes
+  any overlap between it and the scheduled machine safe.
 
 ### Pipeline: `run_drip_tick(now=None, dry_run=False) -> list[dict]`
 (`now` injectable for tests; returns the plan/results — the admin endpoint reuses it.)
@@ -75,11 +84,12 @@ Also `GET /api/admin/drip/sends?limit=100` — recent send-log rows for T7270's 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/backend/app/services/drip_scheduler.py` — NEW (loop + `run_drip_tick`)
-- `src/backend/app/main.py` — start/stop hooks beside the sweep's (lines ~545-556)
+- `src/backend/app/services/drip_pipeline.py` — NEW (`run_drip_tick` + candidate/suppression/claim logic)
+- `src/backend/app/drip_tick.py` — NEW (one-shot scheduled-machine entrypoint)
+- `scripts/deploy_production.sh` — add the `fly machine update --image` step
 - `src/backend/app/routers/admin.py` — the two endpoints (small; the real logic lives in
   the service — respects the T5940 don't-grow-admin concern as much as practical)
-- `src/backend/tests/test_drip_scheduler.py` — NEW
+- `src/backend/tests/test_drip_pipeline.py` — NEW
 
 ### Related Tasks
 - Depends on: T7230 (tables), T7240 (engine), T7250 (send + unsubscribe check)
@@ -105,7 +115,7 @@ Also `GET /api/admin/drip/sends?limit=100` — recent send-log rows for T7270's 
 1. [ ] `run_drip_tick` with injectable `now` + candidate/window query
 2. [ ] Suppression chain + tests (each rule independently)
 3. [ ] Claim-then-send + race test + failed-keeps-claim test
-4. [ ] Loop + lifespan hooks + `DRIP_EMAILS_ENABLED` gate (off = task never created)
+4. [ ] `app/drip_tick.py` entrypoint + `DRIP_EMAILS_ENABLED` kill switch + scheduled machine created per env + deploy-script image-update step
 5. [ ] Admin run/sends endpoints + dry-run zero-writes test
 6. [ ] Staging verification: dry-run plan inspected against staging users (all suppressed → empty plan is the expected result; seed one fake non-suppressed user to see a real plan row)
 
@@ -117,6 +127,7 @@ Also `GET /api/admin/drip/sends?limit=100` — recent send-log rows for T7270's 
 - [ ] Dry-run writes nothing (assert row counts unchanged) and reports the exact plan
 - [ ] User active 20 days pre-launch: zero candidates
 - [ ] Suppressed (each rule) and unsubscribed users: never claimed
-- [ ] `DRIP_EMAILS_ENABLED` unset → loop absent from startup; set → one tick per 6h
+- [ ] `DRIP_EMAILS_ENABLED` unset → entrypoint exits 0 without touching the DB; set → one full tick
+- [ ] Scheduled machine exists per env, runs the entrypoint daily in isolation from app servers, and `deploy_production.sh` updates its image on deploy
 - [ ] Progressing user gets new-stage copy at the next step (integration test across two frozen times)
 - [ ] Tests pass (relevant set)

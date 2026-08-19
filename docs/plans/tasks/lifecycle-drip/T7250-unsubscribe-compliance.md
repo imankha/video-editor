@@ -26,14 +26,20 @@ signing and reuse it; introduce `EMAIL_UNSUB_SECRET` env only if none exists. To
 `{user_id}.{hex_digest}` — stateless verification, no DB lookup to validate, constant-time
 compare (`hmac.compare_digest`).
 
-### Endpoint
-`GET /api/email/unsubscribe?token=...` — **public, no auth** (clicked from an email, often
-logged out). Valid token → `INSERT INTO email_unsubscribes (user_id, scope) VALUES (%s,
-'lifecycle') ON CONFLICT DO NOTHING`, respond with a minimal branded HTML confirmation
-("You're unsubscribed from Reel Ballers tips. Transactional emails — login codes, shares —
-are unaffected."). Idempotent: already-unsubscribed shows the same page. Invalid token →
-400 with a plain "link invalid" page, log a WARNING, no detail leak. New router file
-`routers/email_prefs.py` (admin.py is already flagged oversized — T5940 — don't grow it).
+### Endpoint — both verbs on `/api/email/unsubscribe?token=...`, **public, no auth**
+(clicked from an email, often logged out). Valid token → `INSERT INTO email_unsubscribes
+(user_id, scope) VALUES (%s, 'lifecycle') ON CONFLICT DO NOTHING`. Idempotent both verbs.
+Invalid token → 400, WARNING log, no detail leak. New router file `routers/email_prefs.py`
+(admin.py is already flagged oversized — T5940 — don't grow it).
+
+- **GET** — a human's click: minimal branded HTML confirmation ("You're unsubscribed from
+  Reel Ballers tips. Transactional emails — login codes, shares — are unaffected.").
+- **POST** — RFC 8058 one-click: mail clients (Gmail/Yahoo's native "Unsubscribe" button)
+  POST `List-Unsubscribe=One-Click` form data to the header URL with NO user confirmation
+  step. Same write, plain 200, no HTML needed. Gmail/Yahoo's 2024 bulk-sender rules mandate
+  this above ~5k/day — we're far under the threshold, but it's ~10 lines now vs a
+  compliance scramble later, and their native button improves spam-score signals at any
+  volume.
 
 Also register the suppression read helper here: `is_unsubscribed(cur, user_id, scope=
 'lifecycle') -> bool` (lives in `drip_engine.py` or a small `services/email_prefs.py`
@@ -49,9 +55,11 @@ safe, but never a silent behavior change to existing sends).
 
 New `send_drip_email(to_email, subject, body_html, unsubscribe_url) -> bool` following
 `send_admin_update_email`'s exact conventions: `RESEND_API_KEY` unset → log + return True
-(dev mode); `retry_async_call(..., **TIER_1)`; same from-address `ADMIN_FROM_ADDRESS`. Also
-set the `List-Unsubscribe` header (Resend supports custom headers) so mail clients render
-their native unsubscribe affordance.
+(dev mode); `retry_async_call(..., **TIER_1)`; same from-address `ADMIN_FROM_ADDRESS`.
+Headers (Resend `headers` field on the send API):
+`List-Unsubscribe: <{unsubscribe_url}>` AND
+`List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058 pair — both required for
+mail clients to render/use their native unsubscribe affordance).
 
 ### OPEN ITEM (blocks completion, not start)
 The physical mailing address string — **WAITING ON USER**. Wire it as
@@ -82,7 +90,7 @@ verbatim. Task is code-complete with the env read + a loud startup WARNING when
 
 ### Steps
 1. [ ] Token make/verify helpers + constant-time compare tests (tampered, truncated, wrong user)
-2. [ ] Public endpoint + confirmation/invalid pages + idempotency test
+2. [ ] Public GET (confirmation page) + POST (RFC 8058 one-click, bare 200) + idempotency tests for both
 3. [ ] `_build_drip_email` + `send_drip_email` (+ `List-Unsubscribe` header) + dev-mode test
 4. [ ] `COMPANY_MAILING_ADDRESS` env read + missing-address startup warning
 5. [ ] Router registration + auth-middleware exclusion verified by test

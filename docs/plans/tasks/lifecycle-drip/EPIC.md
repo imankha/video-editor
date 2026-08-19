@@ -84,15 +84,51 @@ or manual admin runs produce at most one email per (user, step). A `failed` send
 claim (no auto-retry blast) — failures surface in the admin log and CRITICAL logs, retry is
 a deliberate admin gesture.
 
-### 5. Scheduler: sibling of the existing sweep loop
+### 5. Tick: a Fly **scheduled machine**, NOT an in-process loop
 
-New `services/drip_scheduler.py` modeled directly on `services/sweep_scheduler.py`
-(asyncio task, `start_drip_loop()`/`stop_drip_loop()` from `main.py` lifespan, startup
-delay, tick every 6h — any cadence < 24h is correct given 48h windows). NOT folded into the
-sweep itself (sweep is expiry-event-driven, drip is calendar-driven; different failure
-domains). Gated on `DRIP_EMAILS_ENABLED=true` — absent means the loop never starts (prod
-enables only after staging verification). `RESEND_API_KEY` unset = dev log-only sends
-(existing `send_admin_update_email` convention).
+**(Revised 2026-08-19 after user review — the original draft used an in-process asyncio
+loop like `sweep_scheduler.py`; rejected for the reasons below.)**
+
+The tick is a separate one-shot Fly machine in the same app:
+
+```
+fly machine run <current-image> --schedule daily -a reel-ballers-api \
+  --vm-memory 512 "python -m app.drip_tick"
+```
+
+`app/drip_tick.py` is a tiny entrypoint: check `DRIP_EMAILS_ENABLED` (exit 0 with one log
+line if unset — the kill switch), call `run_drip_tick()`, exit. Daily cadence is sufficient:
+48h windows guarantee every step is evaluated at least once while due.
+
+Why this beats the alternatives:
+- **In-process loop (rejected):** the app fleet runs `auto_stop_machines = "suspend"` +
+  `auto_start`, so a machine's timers only fire while traffic keeps it awake — the sweep
+  works around this with a keepalive ping that defeats suspend (cost + fighting the
+  platform). With several app servers it also runs N redundant ticks, and it shares CPU/RAM
+  with request serving on a 1-vCPU box that has already been OOM-killed once (T7090).
+  Isolation requirement: a drip bug must not be able to take down an app server.
+- **Cloudflare Worker cron → admin endpoint (runner-up):** exact cron and zero image drift,
+  but the work still executes ON an app server (isolation only as strong as one HTTP
+  request), and it adds a second platform holding a shared secret. Kept as a documented
+  fallback; the admin endpoint it would call already exists for manual/dry-run.
+- **Scheduled machine (chosen):** own process/memory — cannot take down an app server; a
+  crash affects only that run and the next schedule retries; exactly ONE runner regardless
+  of app-fleet size; same image/secrets as the app (no cross-platform secret sharing);
+  billed only for seconds of runtime; no keepalive hacks.
+
+Operational note (goes in T7260 + the deploy skill): a machine created via `fly machine
+run` is NOT updated by `fly deploy` — `deploy_production.sh` gains a
+`fly machine update <id> --image <new-ref>` step so the tick never runs stale code. Windows
+are 48h, so scheduled-run timing slop (Fly schedules relative to machine creation, not
+cron-exact) is harmless.
+
+The DB claim (§4) makes the trigger choice reversible and combinable — manual admin runs,
+a CF cron fallback, and the scheduled machine can all fire without double-sending.
+
+`RESEND_API_KEY` unset = dev log-only sends (existing `send_admin_update_email`
+convention). NOT folded into the sweep (expiry-event-driven vs calendar-driven; different
+failure domains — and the sweep runs heavy video work in-process, which is precisely what
+the drip tick must not sit behind).
 
 ### 6. Suppression (checked before claim)
 
