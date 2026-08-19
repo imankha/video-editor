@@ -1,6 +1,6 @@
 # T7200: Admin loses admin status after impersonation reload; move Admin entry point into the profile switcher
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-19 prod)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-18
@@ -106,8 +106,8 @@ the `checkAdmin` call fired automatically right after the stop-impersonate reloa
 
 ## Acceptance Criteria
 
-- [ ] Impersonate a user, stop impersonating -> Admin entry still present in profile switcher and `/api/admin/*` calls succeed
-- [ ] Floating bottom-of-screen Admin button is gone
-- [ ] "Admin" row appears at top of Manage Profiles modal, admin-only, opens Admin panel on click
-- [ ] Non-admin users see no Admin row and no behavior change to their profile list
-- [ ] Frontend unit tests pass for touched files
+- [x] Impersonate a user, stop impersonating -> Admin entry still present in profile switcher and `/api/admin/*` calls succeed
+- [x] Floating bottom-of-screen Admin button is gone
+- [x] "Admin" row appears at top of Manage Profiles modal, admin-only, opens Admin panel on click
+- [x] Non-admin users see no Admin row and no behavior change to their profile list
+- [x] Frontend unit tests pass for touched files

@@ -1,6 +1,6 @@
 # T7190: Quest panel occludes home-screen content
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-19 prod)
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-08-18

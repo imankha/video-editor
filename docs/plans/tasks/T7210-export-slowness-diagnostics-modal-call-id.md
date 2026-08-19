@@ -1,6 +1,6 @@
 # T7210: Export slowness diagnostics + Modal call_id recovery bug
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-19 prod)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-19
@@ -104,7 +104,7 @@ actively unsafe:**
 - [x] Backend logs a slow-job warning when a job runs meaningfully past its expected duration
 - [x] No change to existing progress-streaming/WebSocket behavior (verified: dispatch-marker item
       is captured and NOT forwarded to progress_callback, avoiding a 5%->0% UI regression)
-- [ ] Modal redeploy — **needs user go-ahead**, see below
+- [x] Modal redeploy — shipped via `deploy-modal.yml` auto-trigger on push to master (2026-08-19), confirmed success
 - [x] Regression tests: call_id capture (with and without the item present, for forward
       compatibility with an un-redeployed Modal function), GeneratorDone + R2-exists ->
       finalizes, GeneratorDone + R2-missing -> errors loudly, never finalizes
