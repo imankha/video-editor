@@ -44,7 +44,7 @@ export const TESTIMONIALS: Testimonial[] = [
     topic: 'framing',
   },
   {
-    quote: 'Wow, does the app simulate the camera focusing on my son?',
+    quote: 'Wow, does the app simulate the camera focusing on my son? This is cool!',
     attribution: 'Parent of a youth athlete',
     topic: 'framing',
   },
