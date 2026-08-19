@@ -205,10 +205,11 @@ export function QuestPanel({ inline = false }) {
 
   // T1030: Smart repositioning — pick position per screen mode to avoid overlapping controls
   const isSm = window.innerWidth >= 640;
-  const positionStyle = getPositionForMode(editorMode, isSm, addClipFormOpen);
-
-  // T1600: On home screen, make quest panel static (below content) instead of fixed overlay.
-  // Static positioning ignores left/bottom inline styles, so positionStyle is harmless.
+  // T1600: On home screen (inline), the panel flows after the page content, so no
+  // positioning offset is applied — `relative` (unlike `static`) still honors
+  // top/left/bottom/right, and applying the fixed-overlay offsets here made it
+  // ride up over the content above it (e.g. the games list) instead of flowing below it.
+  const positionStyle = inline ? undefined : getPositionForMode(editorMode, isSm, addClipFormOpen);
 
   return (
     <>
