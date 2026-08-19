@@ -44,9 +44,11 @@ If a required variable can't be produced (no game row despite `uploaded` stage �
 inconsistency), raise `DripRenderError` — the caller records `failed`, never guesses
 (no-silent-fallbacks rule).
 
-### `select_template(cur, drip_day: int, stage: str) -> row | None`
-One SELECT on `drip_templates`. Returns `None` when the row is absent OR `enabled = false`
-(caller records `skipped` with detail).
+### `select_template(templates_doc: dict, drip_day: int, stage: str) -> dict | None`
+Pure lookup of `templates["{day}:{stage}"]` in the R2 templates doc (T7230's
+`drip_store` fetches it once per run). Returns `None` when the cell is absent OR
+`enabled: false` (caller records `skipped` with detail). No DB involved — templates live
+in R2, not Postgres (EPIC §3, zero-new-PG directive).
 
 ### `render_template(subject: str, body: str, context: dict) -> tuple[str, str]`
 Substitutes `{{var}}` tokens in subject + body. ANY unresolved token after substitution →
@@ -64,13 +66,13 @@ variables only; complexity in copy stays in copy.
   `src/backend/app/services/user_db.py` (`get_profiles`)
 
 ### Related Tasks
-- Depends on: T7230 (`drip_templates` table for `select_template` tests)
+- Depends on: T7230 (`drip_store` templates-doc shape for `select_template`)
 - Blocks: T7260 (pipeline composes these functions)
 
 ### Technical Notes
-- Backend tests TRUNCATE the real dev Postgres — warn the user before the first run
-  (memory `feedback_tests_wipe_dev_db`); tests not importing `app.main` must load `.env`
-  (memory `feedback_test_dotenv`).
+- `resolve_stage`/`select_template`/`render_template` are pure — their tests need no DB at
+  all. Only `build_context` touches storage (read-only profile SQLite). Tests not importing
+  `app.main` must load `.env` manually (memory `feedback_test_dotenv`).
 - Stage-ladder tests should use REAL fixtures from the win-back campaign's users (e.g.
   lisagee: 13 clip_created + 5 framing_opened + 0 framing_exported → `clipped`;
   drewsoccerati: 4 export_completed + 0 share_completed → `exported`; cschwartz:

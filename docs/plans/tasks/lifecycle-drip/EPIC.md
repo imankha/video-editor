@@ -63,28 +63,47 @@ Tutorial URLs: `https://assets.reelballers.com/tutorials/{quest}.mp4` (truth =
 `contract.py`, see memory `reference_tutorial_assets_contract`; reshot in T5140, deployed
 2026-08-17).
 
-### 3. Templates are data, not code
+### 3. Storage: ZERO new Postgres fields/rows (user directive 2026-08-19)
 
-`drip_templates` Postgres rows keyed `UNIQUE(drip_day, stage)` — 4 days × 7 stages = 28
-cells. Plain text bodies in the exact format `body_text_to_html()` already accepts (blank
-line = paragraph), plus a whitelisted variable syntax (`{{game_name}}`, `{{clip_count}}`).
-Seeded by migration; edited live via a new admin panel section (T7270). A disabled row
-(`enabled = false`) means that cell sends nothing — how "day-1 completed users get no email"
-is expressed as data rather than code.
+**Postgres is the most expensive part of the stack — this epic adds nothing to it.** The
+tick only READS existing tables (`users`, `user_actions`, `user_segments`). Drip state is
+partitioned **by writer**, because that's what makes SQLite safe here: a SQLite file shared
+across machines is the clobber class T1960 moved auth/sharing OUT of SQLite to escape, so
+each store lives where its writer runs.
 
-Rendering **fails loudly** on an unresolvable variable (send recorded as `failed`, CRITICAL
-log) — never sends literal `{{game_name}}`, never silently substitutes (no-silent-fallbacks
-rule). Seed copy only uses variables its stage guarantees (e.g. `{{game_name}}` exists for
-`uploaded`+ stages only).
+| Store | Writer | Where it lives |
+|---|---|---|
+| Send log / claims | tick process ONLY | `drip.sqlite` — dedicated SQLite file, R2-persisted at `drip/drip.sqlite` |
+| Templates | admin panel (app servers, rare) | R2 JSON doc `drip/templates.json`, etag If-Match CAS on write |
+| Unsubscribes | public endpoint (any app server, any time) | R2 marker objects `drip/unsubscribed/{user_id}` — PUT-only, idempotent, existence = suppressed; distinct keys never conflict, so app servers write them with zero race |
 
-### 4. Idempotency: claim-then-send
+Templates + unsubscribes go to R2 objects rather than into the tick's SQLite precisely
+because their writers are app servers — folding them into `drip.sqlite` would recreate the
+multi-machine write race. The admin send-log VIEW reads a downloaded copy of
+`drip/drip.sqlite` (read-only, precedent: `share_view_counts` reads per-user SQLite
+server-side); it never opens the tick's live file.
 
-`drip_sends` has `UNIQUE(user_id, drip_day)`. The pipeline **claims first**
-(`INSERT ... ON CONFLICT DO NOTHING RETURNING`) and only the claim winner sends. This is the
-hard guarantee that makes everything else safe: any number of overlapping ticks, machines,
-or manual admin runs produce at most one email per (user, step). A `failed` send keeps its
-claim (no auto-retry blast) — failures surface in the admin log and CRITICAL logs, retry is
-a deliberate admin gesture.
+Templates: 28 entries keyed `"{day}:{stage}"` → `{subject, body, enabled, updated_at}`.
+Plain text bodies in the exact format `body_text_to_html()` already accepts (blank line =
+paragraph), plus whitelisted variables (`{{game_name}}`, `{{clip_count}}`). Seeded by a
+checked-in seed file uploaded once; edited live via the admin panel (T7270). `enabled:
+false` = that cell sends nothing. Rendering **fails loudly** on an unresolvable variable
+(send recorded as `failed`, CRITICAL log) — never sends literal `{{game_name}}`, never
+silently substitutes. Seed copy only uses variables its stage guarantees.
+
+### 4. Idempotency: single writer + claim-before-send
+
+`drip.sqlite` has `drip_sends UNIQUE(user_id, drip_day)`, and the tick process is its ONLY
+writer — "only 1 tick user" is made structurally true: the scheduled machine is the sole
+place sends execute (manual run = starting that same machine, §5), and Fly does not
+double-start a machine, so there are never two writers.
+
+At-most-once across crashes comes from **upload ordering**: download `drip.sqlite` → write
+ALL claims for this run locally → **upload to R2 (CAS)** → send emails → record
+sent/failed → final upload. Claims are durable in R2 BEFORE the first email leaves, so a
+crash mid-run can never double-send on the next run; it leaves `claimed`-never-sent rows
+that surface in the admin log for a deliberate decision. A `failed` send keeps its claim
+(no auto-retry blast) — retry is an admin gesture, never automatic.
 
 ### 5. Tick: a Fly **scheduled machine**, NOT an in-process loop
 
@@ -124,8 +143,11 @@ run` is NOT updated by `fly deploy` — `deploy_production.sh` gains a
 are 48h, so scheduled-run timing slop (Fly schedules relative to machine creation, not
 cron-exact) is harmless.
 
-The DB claim (§4) makes the trigger choice reversible and combinable — manual admin runs,
-a CF cron fallback, and the scheduled machine can all fire without double-sending.
+**Manual live run = `fly machine start <tick-machine-id>`** (start the scheduled machine
+early). Same machine ⇒ Fly won't double-start it ⇒ the single-writer guarantee (§4) holds
+for manual runs too. The admin endpoint is **dry-run only** (read-only plan preview on an
+app server); there is deliberately NO app-server code path that executes sends — that would
+add a second writer to `drip.sqlite`.
 
 `RESEND_API_KEY` unset = dev log-only sends (existing `send_admin_update_email`
 convention). NOT folded into the sweep (expiry-event-driven vs calendar-driven; different
@@ -134,7 +156,8 @@ the drip tick must not sit behind).
 
 ### 6. Suppression (checked before claim)
 
-Skip a user when ANY of: unsubscribed (`email_unsubscribes`, scope `lifecycle`); `is_admin`;
+Skip a user when ANY of: unsubscribed (R2 marker `drip/unsubscribed/{user_id}` exists —
+the tick lists the prefix into a set once per run); `is_admin`;
 email in `DRIP_SUPPRESSED_EMAILS` (comma-separated env, seeded with the win-back campaign's
 team/tester exclusions: imankh@gmail.com, iman@launchitlabs.io, hello@reelballers.com,
 arshia.kalantari@gmail.com, sarkarati@gmail.com); email matches test patterns
@@ -171,7 +194,7 @@ string. Transactional email (OTP, share notifications) is out of scope and untou
 
 | ID | Task | Status |
 |----|------|--------|
-| T7230 | [Schema + seed migration (templates, sends, unsubscribes)](T7230-drip-schema-templates.md) | TODO |
+| T7230 | [Drip stores + seed copy (drip.sqlite, R2 templates doc, unsubscribe markers)](T7230-drip-schema-templates.md) | TODO |
 | T7240 | [Stage resolver + template selection/render engine](T7240-stage-resolver-selection-engine.md) | TODO |
 | T7250 | [Unsubscribe endpoint + compliance footer](T7250-unsubscribe-compliance.md) | TODO |
 | T7260 | [Drip scheduler + idempotent send pipeline + admin dry-run](T7260-drip-scheduler-send-pipeline.md) | TODO |
@@ -197,4 +220,5 @@ string. Transactional email (OTP, share notifications) is out of scope and untou
 - [ ] Founder edits a template in the admin panel and the next send uses the new copy — no deploy
 - [ ] Missed windows are skipped, never sent late (test: user created 20 days ago gets nothing)
 - [ ] Physical mailing address present in the footer (user-provided)
-- [ ] Migration applied via admin endpoint (never auto-run); `_SCHEMA_DDL` updated in `pg.py`
+- [ ] ZERO new Postgres fields/rows (user directive 2026-08-19) — grep-provable: no migration
+      file, no `_SCHEMA_DDL` change; drip state lives in `drip.sqlite` + R2 objects only

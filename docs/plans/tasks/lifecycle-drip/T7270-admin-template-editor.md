@@ -17,11 +17,14 @@ dry-run plan view — the operational surface for the whole drip system.
 
 ## Solution
 
-### Backend (small, CRUD only)
-- `GET /api/admin/drip/templates` — all rows, ordered (drip_day, stage)
-- `PUT /api/admin/drip/templates/{id}` — `{subject, body, enabled}`; validate with the SAME
-  caps as bulk email (`BULK_SUBJECT_MAX`/`BULK_BODY_MAX`); stamp `updated_at`
-- `POST /api/admin/drip/templates/{id}/test` — renders with SAMPLE context (`game_name:
+### Backend (small, CRUD onto the R2 templates doc — no Postgres, EPIC §3)
+- `GET /api/admin/drip/templates` — returns `drip/templates.json` + its etag
+- `PUT /api/admin/drip/templates/{key}` — `{subject, body, enabled, etag}`; validate with
+  the SAME caps as bulk email (`BULK_SUBJECT_MAX`/`BULK_BODY_MAX`); read-modify-write the
+  doc with **If-Match on the client-supplied etag** (two admin tabs editing concurrently:
+  loser gets 409 + "reload and re-apply", never a silent clobber — the T4310 rule at
+  document scale); stamp `updated_at`; key must be one of the 28 known cells (400 otherwise)
+- `POST /api/admin/drip/templates/{key}/test` — renders with SAMPLE context (`game_name:
   "Aloha Summer Sizzle"`, `clip_count: 13`) and sends to the calling admin's own address
   via `send_drip_email` — mirrors `admin_bulk_email`'s `test=true` behavior exactly,
   including the unsubscribe footer (admin sees the real thing; their click on it is
@@ -67,8 +70,10 @@ raw API shapes stored — no transformation before store per frontend rules).
 - Reuse `BulkEmailModal.jsx`'s validation/test-send/confirm patterns — same file is the
   style reference; do not extract a shared abstraction yet (2 uses < abstract-on-3rd rule).
 - No delete endpoint: the 28 cells are the fixed universe; `enabled=false` is the off
-  switch. No create endpoint either — new stages/days are schema-level decisions (a
-  migration), not runtime data.
+  switch. No create endpoint either — new stages/days change the seed file + stage ladder
+  (a code change), not runtime data.
+- Editor save surfaces the 409 etag-conflict path in the UI ("Someone else saved this —
+  reload") rather than retrying silently.
 - Editor must not strip/alter whitespace — blank lines are the paragraph format.
 
 ## Implementation

@@ -40,46 +40,56 @@ fate with request serving on a box that has already OOM'd once).
   any overlap between it and the scheduled machine safe.
 
 ### Pipeline: `run_drip_tick(now=None, dry_run=False) -> list[dict]`
-(`now` injectable for tests; returns the plan/results — the admin endpoint reuses it.)
+(`now` injectable for tests; returns the plan/results.) Storage per EPIC §3: claims/log in
+`drip.sqlite` (this process is its ONLY writer); templates + unsubscribe markers read from
+R2 via T7230's `drip_store`. Postgres is READ-ONLY here (existing tables only).
 
-1. **Candidates** — one query: users whose `created_at` puts them inside ANY step window
-   (EPIC §1: due = `created_at + N days`, expires = due + 48h, N ∈ {1,3,7,14}) LEFT JOIN
-   `drip_sends` to exclude already-claimed `(user_id, drip_day)` pairs. LEFT JOIN
-   `user_segments` (nullable — T4970 lesson: segmentless users still exist and still get
-   drips; only `users.created_at` is required).
-2. **Suppression** (EPIC §6, checked in this order, cheapest first): email pattern
-   (`@test.local` / `@e2e.local`), `DRIP_SUPPRESSED_EMAILS` env list, `is_admin`,
-   `is_unsubscribed`. Suppressed users get NO `drip_sends` row (they're permanently
-   filtered, not one-time skipped — writing rows for them would just be noise).
-3. **Stage** — aggregate `user_actions` per candidate (one grouped query for the whole
+0. **Load state** — download `drip/drip.sqlite` from R2 (note its etag), fetch
+   `drip/templates.json`, list `drip/unsubscribed/` into a set.
+1. **Candidates** — one Postgres READ: users whose `created_at` puts them inside ANY step
+   window (EPIC §1: due = `created_at + N days`, expires = due + 48h, N ∈ {1,3,7,14}).
+   LEFT JOIN `user_segments` (nullable — T4970 lesson: segmentless users still exist and
+   still get drips; only `users.created_at` is required). Already-claimed
+   `(user_id, drip_day)` pairs are filtered against the LOCAL `drip_sends` table.
+2. **Suppression** (EPIC §6, cheapest first): email pattern (`@test.local` /
+   `@e2e.local`), `DRIP_SUPPRESSED_EMAILS` env list, `is_admin`, unsubscribe-marker set.
+   Suppressed users get NO `drip_sends` row (permanently filtered, not one-time skipped).
+3. **Stage** — aggregate `user_actions` per candidate (one grouped READ for the whole
    batch, `user_id = ANY(%s)`, same shape as `admin.py:list_users`), then
    `drip_engine.resolve_stage`.
-4. **Template** — `select_template(day, stage)`. `None` → record `skipped` with detail
-   (`disabled` / `absent`) — the row still claims the slot so the cell isn't re-evaluated
-   every tick.
-5. **Claim** — `INSERT INTO drip_sends (user_id, drip_day, stage, template_id, status)
-   VALUES (%s,%s,%s,%s,'claimed') ON CONFLICT (user_id, drip_day) DO NOTHING RETURNING id`.
-   No row returned = another tick/machine won; stop.
-6. **Render + send** — `build_context` → `render_template` → `send_drip_email` (with
-   per-user unsubscribe URL). Update the claim row: `sent` + `sent_at`, or `failed` +
-   detail. `DripRenderError` and transport failure both → `failed`, CRITICAL log, claim
-   kept (no auto-retry — EPIC §4).
-7. **Dry-run** short-circuits between steps 4 and 5: returns
-   `[{user_id, email, drip_day, stage, template_id, subject}]` — no claims, no sends, no
-   writes at all.
+4. **Template** — `select_template(templates_doc, day, stage)`. `None` → record `skipped`
+   with detail (`disabled` / `absent`) — the row still claims the slot so the cell isn't
+   re-evaluated every run.
+5. **Claim batch + upload** — INSERT all `claimed`/`skipped` rows locally
+   (`INSERT OR IGNORE`, UNIQUE(user_id, drip_day)), then **upload `drip.sqlite` to R2
+   (etag-asserted) BEFORE any email is sent** — the crash-safety ordering from EPIC §4. An
+   etag mismatch means a second writer exists: ABORT the whole run with a CRITICAL log,
+   send nothing (should be impossible — single machine — so treat it as an incident, not a
+   retry).
+6. **Render + send** — `build_context` → `render_template` → `send_drip_email` (per-user
+   unsubscribe URL). Update each row: `sent` + `sent_at`, or `failed` + detail
+   (`DripRenderError` and transport failure both → `failed`, CRITICAL log, claim kept, no
+   auto-retry). Final upload of `drip.sqlite` when the batch completes.
+7. **Dry-run** short-circuits before step 5: returns
+   `[{user_id, email, drip_day, stage, template_key, subject}]` — no claims, no sends, no
+   writes, no uploads.
 
-Sends are sequential (the manual campaign's scale — single-digit users per tick — makes
-concurrency pointless; revisit only with evidence).
+Sends are sequential (single-digit users per run at current scale; revisit only with
+evidence).
 
-### Admin endpoint: `POST /api/admin/drip/run`
-Body `{dry_run: bool = true}`. `_require_admin()`. Dry-run returns the plan; live run
-executes one tick immediately (same `run_drip_tick`) and returns results. This is the
-staging/prod verification tool (EPIC rollout steps 1–2) and the manual-retry path for
-`failed` rows is deliberately NOT built (delete the row via SQL if a resend is truly wanted
-— an admin gesture, not a button, until there's evidence it's needed).
-
-Also `GET /api/admin/drip/sends?limit=100` — recent send-log rows for T7270's log view
-(plain SELECT, newest first, joined to `users.email` + template subject).
+### Admin endpoints (dry-run + log — READ-ONLY, EPIC §5)
+- `POST /api/admin/drip/run` — **dry-run only** (reject `dry_run: false` with 400 and a
+  pointer to the real trigger). Runs steps 0–4 read-only on the app server and returns the
+  plan. There is deliberately NO app-server code path that executes sends — that would add
+  a second writer to `drip.sqlite`. **Manual live run = `fly machine start
+  <tick-machine-id>`** (same machine as the schedule ⇒ Fly won't double-start ⇒
+  single-writer holds).
+- `GET /api/admin/drip/sends?limit=100` — downloads a read-only COPY of
+  `drip/drip.sqlite` (precedent: `share_view_counts` reads per-user SQLite server-side),
+  returns recent rows newest-first joined to `users.email`. Never opens the tick's live
+  file; never writes.
+- Failed-row retry is deliberately NOT built (delete the row in the sqlite via an admin
+  gesture if a resend is truly wanted, until there's evidence a button is needed).
 
 ## Context
 
@@ -96,14 +106,18 @@ Also `GET /api/admin/drip/sends?limit=100` — recent send-log rows for T7270's 
 - Blocks: T7270 (UI consumes the endpoints)
 
 ### Technical Notes
-- **Multi-machine safety comes ONLY from the claim** (unique constraint), never from "we
-  run one machine" — prod is 1 box today but T5950 documents that assumption as temporary.
+- **At-most-once = single-writer discipline + claim-upload-before-send ordering** (EPIC
+  §4). The etag assertion on upload is the tripwire that turns an accidental second writer
+  into a loud abort instead of a silent merge — same philosophy as the user-DB CAS, but
+  implemented standalone (this file must never enter the per-user sync machinery).
+- App-fleet size is irrelevant by construction: app servers never write `drip.sqlite`.
 - Windows math in SQL against `now()`, half-open: `now() >= created_at + INTERVAL 'N days'
-  AND now() < created_at + INTERVAL 'N days' + INTERVAL '48 hours'`.
-- A user due MULTIPLE steps in one tick (impossible with 48h windows and these offsets, but
-  assert it): process only the LOWEST due day this tick.
-- Test the claim race: two concurrent `run_drip_tick` calls → exactly one `sent` row
-  (thread the two calls; the DB constraint is the arbiter).
+  AND now() < created_at + INTERVAL 'N days' + INTERVAL '48 hours'` (a READ of existing
+  Postgres tables — zero new PG fields/rows, user directive 2026-08-19).
+- A user due MULTIPLE steps in one run (impossible with 48h windows and these offsets, but
+  assert it): process only the LOWEST due day this run.
+- Crash-ordering test: simulate death between claim-upload and send (kill after step 5) →
+  next run sends NOTHING for those users; rows sit `claimed` in the log.
 - Freeze-time tests via the injectable `now` — no sleeping tests.
 - Backend tests TRUNCATE dev Postgres — warn first (memory `feedback_tests_wipe_dev_db`).
 - The 20-days-old-user case (all windows expired) must yield zero candidates — the EPIC's
@@ -123,8 +137,11 @@ Also `GET /api/admin/drip/sends?limit=100` — recent send-log rows for T7270's 
 
 ## Acceptance Criteria
 
-- [ ] Double tick / concurrent ticks: exactly one email per (user, step) — DB-proven
-- [ ] Dry-run writes nothing (assert row counts unchanged) and reports the exact plan
+- [ ] Repeated runs: exactly one email per (user, step); crash between claim-upload and
+      send never double-sends (kill-injection test)
+- [ ] Etag mismatch on upload aborts the run loudly with zero sends
+- [ ] Dry-run writes nothing (no claims, no uploads) and reports the exact plan;
+      `dry_run: false` on the app-server endpoint is rejected
 - [ ] User active 20 days pre-launch: zero candidates
 - [ ] Suppressed (each rule) and unsubscribed users: never claimed
 - [ ] `DRIP_EMAILS_ENABLED` unset → entrypoint exits 0 without touching the DB; set → one full tick

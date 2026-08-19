@@ -1,87 +1,87 @@
-# T7230: Drip Schema + Seed Migration (templates, sends, unsubscribes)
+# T7230: Drip Stores + Seed Copy (drip.sqlite, R2 templates doc, unsubscribe markers)
 
 **Status:** TODO
 **Impact:** 7
-**Complexity:** 3
+**Complexity:** 2
 **Created:** 2026-08-19
-**Updated:** 2026-08-19
+**Updated:** 2026-08-19 (rewritten same day: was a Postgres migration; user directive —
+Postgres is the most expensive part of the stack, ZERO new PG fields/rows; see EPIC §3)
 
-Epic task 1/5 — see [EPIC.md](EPIC.md) for design decisions: stage model, send windows,
-claim idempotency, suppression, content rules.
+Epic task 1/5 — see [EPIC.md](EPIC.md) for design decisions: writer-partitioned storage
+(§3), single-writer idempotency (§4), stage model (§2), content rules (§8).
 
 ## Problem
 
-The drip system needs three Postgres tables (templates as editable data, a send log that
-doubles as the idempotency guarantee, and an unsubscribe registry) plus seeded starting
-copy, before any engine or scheduler code can exist.
+The drip system needs its three stores — send log, templates, unsubscribe registry —
+WITHOUT adding a single field or row to Postgres. Each store must live where its writer
+runs (EPIC §3), or we recreate the multi-machine SQLite clobber class that T1960 escaped.
 
 ## Solution
 
-One postgres-track migration creating all three tables and seeding all 28 template cells,
-plus the same DDL added to `_SCHEMA_DDL` in `pg.py` for fresh deployments.
+### Store 1: `drip.sqlite` (tick-machine local, persisted to R2 `drip/drip.sqlite`)
 
-### Schema (exact)
+Created lazily by the tick process (`_ensure_drip_db()`, `PRAGMA user_version` for future
+schema bumps — mirrors `ensure_database()`'s pattern, but this is NOT a per-user/profile DB
+and must NOT touch those code paths):
 
 ```sql
-CREATE TABLE drip_templates (
-    id          SERIAL PRIMARY KEY,
-    drip_day    INTEGER NOT NULL,              -- 1 | 3 | 7 | 14
-    stage       TEXT NOT NULL,                 -- stage key from EPIC.md §2
-    subject     TEXT NOT NULL,                 -- plain text, <= 200 chars (BULK_SUBJECT_MAX parity)
-    body        TEXT NOT NULL,                 -- plain text, body_text_to_html() format, <= 10000 chars
-    enabled     BOOLEAN NOT NULL DEFAULT true,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (drip_day, stage)
-);
-
-CREATE TABLE drip_sends (
-    id           SERIAL PRIMARY KEY,
-    user_id      TEXT NOT NULL,                -- users.user_id
-    drip_day     INTEGER NOT NULL,
-    stage        TEXT,                         -- stage resolved at claim time (audit only)
-    template_id  INTEGER REFERENCES drip_templates(id),
-    status       TEXT NOT NULL,                -- 'claimed' | 'sent' | 'failed' | 'skipped'
-    detail       TEXT,                         -- failure reason / skip reason
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    sent_at      TIMESTAMPTZ,
-    UNIQUE (user_id, drip_day)                 -- THE idempotency guarantee (EPIC §4)
-);
-CREATE INDEX idx_drip_sends_user ON drip_sends (user_id);
-
-CREATE TABLE email_unsubscribes (
-    user_id     TEXT NOT NULL,
-    scope       TEXT NOT NULL DEFAULT 'lifecycle',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, scope)
+CREATE TABLE IF NOT EXISTS drip_sends (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      TEXT NOT NULL,
+    drip_day     INTEGER NOT NULL,          -- 1 | 3 | 7 | 14
+    stage        TEXT,                      -- stage at claim time (point-in-time audit)
+    template_key TEXT,                      -- "{day}:{stage}" into templates.json
+    status       TEXT NOT NULL,             -- 'claimed' | 'sent' | 'failed' | 'skipped'
+    detail       TEXT,                      -- failure/skip reason
+    created_at   TEXT NOT NULL,             -- ISO8601 UTC
+    sent_at      TEXT,
+    UNIQUE (user_id, drip_day)              -- the idempotency guarantee (EPIC §4)
 );
 ```
 
-Notes:
-- `stage` on `drip_sends` is a **point-in-time audit value** (what stage the user was in
-  when emailed), not derivable later — recording it does not violate no-redundant-state.
-- No FK from `drip_sends.user_id` to `users` — a deleted account must not cascade away the
-  send log (and `delete_user.py` flows shouldn't fail on it). Same reasoning as
-  `user_actions`.
+Download/upload helpers for the R2 object (plain get/put of the file — the tick is the
+only writer, so no version negotiation is needed on download; upload still asserts the R2
+etag it downloaded via If-Match so a rogue second writer is REFUSED loudly, never merged.
+Never reuse the per-user CAS/sync machinery — this file is outside the user-DB universe).
+
+### Store 2: `drip/templates.json` (R2, written by admin endpoints, read by tick)
+
+```json
+{
+  "version": 1,
+  "templates": {
+    "1:uploaded": {"subject": "...", "body": "...", "enabled": true,
+                    "updated_at": "2026-08-19T00:00:00Z"},
+    "...": {}
+  }
+}
+```
+
+All 28 cells. Defaults: every cell enabled EXCEPT `1:completed` and `3:completed`. The
+seed lives as a checked-in file `src/backend/app/drip_seed_templates.json` (greppable,
+reviewable in git) plus an idempotent uploader `python -m app.drip_seed` that PUTs it to R2
+**only if the object is absent** (If-None-Match: `*`) — a re-run can never clobber
+admin-edited copy.
+
+### Store 3: unsubscribe markers (R2, written by the public endpoint — T7250 wires it)
+
+`drip/unsubscribed/{user_id}` — empty object (or `{"at": iso}` body for audit). PUT-only,
+idempotent, distinct keys never conflict: app servers write these with zero coordination.
+This task only documents the key layout; T7250 implements the writer.
 
 ### Seed copy
 
-Seed **all 28 cells**. Defaults: every row `enabled = true` EXCEPT `(1, completed)` and
-`(3, completed)` (someone who shared in their first days needs no nudge). Copy drafts follow
-the tone matrix below; the four fully-drafted examples define the voice — remaining cells
-are drafted at implementation following the same pattern and reviewed by the user in the
-admin editor (T7270) before prod enable (EPIC rollout step 3).
+Same tone matrix + 4 fully-drafted cells as before (they set the voice; remaining cells
+drafted at implementation per the matrix, user-reviewed in the admin editor before prod
+enable — EPIC rollout step 3):
 
-Tone matrix (EPIC §8): day 1 = helpful nudge with tutorial; day 3 = value-prop reminder
-("what the finished reel looks like"); day 7 = direct support ask ("what blocked you? reply
-and tell us"); day 14 = last touch, short, pure reply invitation.
+Tone: day 1 = helpful nudge with tutorial; day 3 = value-prop reminder; day 7 = direct
+support ask ("what blocked you? reply and tell us"); day 14 = last touch, short, pure reply
+invitation. Every body MUST contain the support line (memory
+`feedback_winback_email_support_framing`): a variant of *"reply and tell us exactly where
+you got stuck -- we'll walk you through it or fix it."* At most ONE link per email.
 
-Every body MUST contain the support line (memory `feedback_winback_email_support_framing`):
-a variant of *"reply and tell us exactly where you got stuck — we'll walk you through it or
-fix it."*
-
-Drafted examples (final copy, seed verbatim):
-
-**(1, `uploaded`)** — subject: `Your game is in — here's the 60-second next step`
+**(`1:uploaded`)** — subject: `Your game is in -- here's the 60-second next step`
 ```
 Hi there,
 
@@ -95,7 +95,7 @@ got stuck -- we'll walk you through it or fix it.
 -- Iman, Reel Ballers
 ```
 
-**(1, `not_uploaded`)** — subject: `One upload turns your sideline video into a highlight reel`
+**(`1:not_uploaded`)** — subject: `One upload turns your sideline video into a highlight reel`
 ```
 Hi there,
 
@@ -111,7 +111,7 @@ rather fix a problem than send another email.
 -- Iman, Reel Ballers
 ```
 
-**(7, `clipped`)** — subject: `You did the hard part -- framing takes two minutes`
+**(`7:clipped`)** — subject: `You did the hard part -- framing takes two minutes`
 ```
 Hi there,
 
@@ -125,7 +125,7 @@ exactly where you got stuck and we'll walk you through it, or fix it.
 -- Iman, Reel Ballers
 ```
 
-**(14, `not_uploaded`)** — subject: `Should we keep your Reel Ballers spot?`
+**(`14:not_uploaded`)** — subject: `Should we keep your Reel Ballers spot?`
 ```
 Hi there,
 
@@ -140,48 +140,57 @@ https://assets.reelballers.com/tutorials/annotate.mp4
 ```
 
 Variable whitelist per stage (renderer contract, enforced in T7240): `not_uploaded` — none;
-`uploaded`+ — `{{game_name}}` (most recent game); `clipped`+ — `{{clip_count}}`. Seeds must
-not use a variable outside their stage's whitelist.
+`uploaded`+ — `{{game_name}}`; `clipped`+ — `{{clip_count}}`. Seeds must not use a variable
+outside their stage's whitelist.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/backend/app/migrations/postgres/v0NN_drip_emails.py` — NEW migration (all 3 tables + seeds)
-- `src/backend/app/services/pg.py` — `_SCHEMA_DDL` gains the same tables (fresh-deploy parity)
-
-### Migration number
-Head on master is **v022** (`v022_user_usage_daily.py`). Number this head+1 **at
-implementation time** and check sibling unmerged branches first (memory
-`project_migration_version_collision_across_branches`).
+- `src/backend/app/services/drip_store.py` — NEW: `_ensure_drip_db`, R2 download/upload
+  (etag-asserted), templates-doc get/put helpers, unsubscribe-prefix list helper, key
+  constants (`drip/drip.sqlite`, `drip/templates.json`, `drip/unsubscribed/`)
+- `src/backend/app/drip_seed_templates.json` — NEW: the 28-cell seed (checked in)
+- `src/backend/app/drip_seed.py` — NEW: idempotent one-shot uploader (If-None-Match: `*`)
+- `src/backend/tests/test_drip_store.py` — NEW
 
 ### Related Tasks
-- Blocks: T7240, T7250, T7260, T7270 (everything reads these tables)
+- Blocks: T7240 (reads templates doc), T7250 (writes markers), T7260 (owns drip.sqlite),
+  T7270 (edits templates doc)
 
 ### Technical Notes
-- Migration `up(conn)` receives TUPLE rows — index positionally (memory
-  `reference_migration_runner_rowfactory`).
-- Migrations do NOT auto-run: applied post-deploy via `POST /api/admin/migrate`.
-- Seed INSERTs must be idempotent (`ON CONFLICT (drip_day, stage) DO NOTHING`) so a re-run
-  never clobbers admin-edited copy.
-- Subject/body length caps mirror the bulk-email constants (`BULK_SUBJECT_MAX=200`,
-  `BULK_BODY_MAX=10000` in `routers/admin.py`) — enforced at the API layer (T7270), not as
-  DB constraints.
+- **NO Postgres migration, NO `_SCHEMA_DDL` change, NO Migration agent** — that is the
+  point of this task's rewrite. Grep-provable at review.
+- R2 access via the existing `r2_storage`/`storage` helpers — these are GLOBAL keys
+  (env-prefixed like other non-user objects; confirm the env-prefix convention in
+  `storage.py` so staging and prod never share drip state — the `games/` shared-namespace
+  exception is exactly what we don't want here).
+- SQLite: `?` params, `sqlite3.Row`, no `.get()` on rows (backend house rules). Do NOT
+  route through `ensure_database()`/user-DB sync — this file must never enter the per-user
+  CAS machinery or its version tables.
+- Subject/body caps mirror bulk email (200 / 10000 chars) — enforced at the edit API
+  (T7270), documented in the seed file header comment.
 
 ## Implementation
 
 ### Steps
-1. [ ] Confirm migration head incl. sibling branches; create `v0NN_drip_emails.py`
-2. [ ] Add tables to `_SCHEMA_DDL` in `pg.py`
-3. [ ] Write all 28 seed cells (4 drafted above verbatim; rest per tone matrix + content rules)
-4. [ ] Backend tests: migration applies on a fresh DB; seeds idempotent; unique constraints hold
-5. [ ] Run migration on dev via admin endpoint; verify rows
+1. [ ] `drip_store.py`: schema + `_ensure_drip_db` + R2 file helpers (etag-asserted upload)
+2. [ ] Templates doc get/put + If-None-Match seed uploader
+3. [ ] Write all 28 seed cells (4 above verbatim; rest per tone matrix + content rules)
+4. [ ] Tests: ensure-db idempotent; UNIQUE(user_id, drip_day) enforced; seed uploader
+       refuses to overwrite an existing doc; etag-mismatch upload REFUSES loudly
+5. [ ] Run the seeder against dev R2; verify layout
 
 ### Progress Log
 
+**2026-08-19**: Rewritten from a Postgres-migration task to SQLite+R2 stores per user
+directive (zero new PG fields/rows). Original PG DDL preserved in git history if ever
+needed.
+
 ## Acceptance Criteria
 
-- [ ] Fresh `init_pg_schema()` and migrated existing DB produce identical drip tables
-- [ ] 28 template rows seeded; `(1|3, completed)` disabled; re-running the migration changes nothing
+- [ ] Zero Postgres changes (no migration file, no `_SCHEMA_DDL` diff) — grep-proven
+- [ ] `drip.sqlite` created lazily with UNIQUE(user_id, drip_day) verified by test
+- [ ] Etag-asserted upload refuses a concurrent-writer conflict loudly (test with forced mismatch)
+- [ ] 28 seed cells; `1:completed`/`3:completed` disabled; re-seeding cannot clobber edits
 - [ ] Every seeded body contains the support-framing line and at most one CTA link
-- [ ] `UNIQUE(user_id, drip_day)` and `UNIQUE(drip_day, stage)` verified by test
 - [ ] Tests pass (relevant set)

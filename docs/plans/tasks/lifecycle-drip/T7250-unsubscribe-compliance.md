@@ -27,10 +27,13 @@ signing and reuse it; introduce `EMAIL_UNSUB_SECRET` env only if none exists. To
 compare (`hmac.compare_digest`).
 
 ### Endpoint — both verbs on `/api/email/unsubscribe?token=...`, **public, no auth**
-(clicked from an email, often logged out). Valid token → `INSERT INTO email_unsubscribes
-(user_id, scope) VALUES (%s, 'lifecycle') ON CONFLICT DO NOTHING`. Idempotent both verbs.
-Invalid token → 400, WARNING log, no detail leak. New router file `routers/email_prefs.py`
-(admin.py is already flagged oversized — T5940 — don't grow it).
+(clicked from an email, often logged out). Valid token → PUT the R2 marker object
+`drip/unsubscribed/{user_id}` (key layout from T7230's `drip_store`; body `{"at": iso}` for
+audit). **No database write at all** (EPIC §3, zero-new-PG directive): a PUT to a
+per-user key is naturally idempotent and race-free across any number of app servers — no
+read-modify-write, nothing to clobber. Idempotent both verbs. Invalid token → 400, WARNING
+log, no detail leak. New router file `routers/email_prefs.py` (admin.py is already flagged
+oversized — T5940 — don't grow it).
 
 - **GET** — a human's click: minimal branded HTML confirmation ("You're unsubscribed from
   Reel Ballers tips. Transactional emails — login codes, shares — are unaffected.").
@@ -41,9 +44,9 @@ Invalid token → 400, WARNING log, no detail leak. New router file `routers/ema
   compliance scramble later, and their native button improves spam-score signals at any
   volume.
 
-Also register the suppression read helper here: `is_unsubscribed(cur, user_id, scope=
-'lifecycle') -> bool` (lives in `drip_engine.py` or a small `services/email_prefs.py`
-consumed by T7260's pipeline).
+The suppression read side is T7230's `drip_store` prefix-list helper (the tick lists
+`drip/unsubscribed/` into a set once per run — one R2 LIST, not a per-user HEAD); this task
+only implements the writer.
 
 ### Drip email shell
 New `_build_drip_email(subject, body_html, unsubscribe_url)` in `services/email.py` —
@@ -76,15 +79,15 @@ verbatim. Task is code-complete with the env read + a loud startup WARNING when
 - `src/backend/tests/test_email_unsubscribe.py` — NEW
 
 ### Related Tasks
-- Depends on: T7230 (`email_unsubscribes` table)
-- Blocks: T7260 (pipeline must check `is_unsubscribed` + use `send_drip_email`)
+- Depends on: T7230 (`drip_store` marker key layout)
+- Blocks: T7260 (pipeline lists the marker prefix + uses `send_drip_email`)
 
 ### Technical Notes
 - The endpoint is public and unauthenticated by design — confirm it's excluded from any
   auth middleware allowlist the same way `/api/health` and share-view routes are.
-- Scope column exists so a future `marketing` vs `lifecycle` split needs no schema change;
-  only `lifecycle` is used now.
-- Do not offer resubscribe UI — out of scope; deleting the row via SQL is the admin path.
+- A future `marketing` vs `lifecycle` scope split is a key-prefix change
+  (`drip/unsubscribed/{scope}/{user_id}`), not a schema change; only `lifecycle` exists now.
+- Do not offer resubscribe UI — out of scope; deleting the R2 marker is the admin path.
 
 ## Implementation
 
@@ -101,6 +104,7 @@ verbatim. Task is code-complete with the env read + a loud startup WARNING when
 
 - [ ] Clicking the link logged-out unsubscribes and shows confirmation; second click identical
 - [ ] Tampered token → 400, nothing written
-- [ ] `is_unsubscribed` true after click (consumed by T7260 suppression test)
+- [ ] R2 marker exists after click; the prefix-list helper reports the user suppressed
+      (consumed by T7260's suppression test)
 - [ ] Drip shell renders address + unsubscribe link; admin bulk-email shell unchanged
 - [ ] Tests pass (relevant set)
