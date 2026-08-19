@@ -1,5 +1,4 @@
 import { useState, useMemo, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
-import { ShieldCheck } from 'lucide-react';
 import { scheduleWarmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -348,7 +347,6 @@ function App() {
     return () => unsubAuth();
   }, []);
 
-  const isAdmin = useAuthStore(state => state.isAdmin);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
 
@@ -813,8 +811,6 @@ function App() {
         <SyncStatusIndicator />
         {/* T430: Account Settings panel */}
         <AccountSettings />
-        {/* Admin button — fixed top-right, visible only to admins */}
-        {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
         {/* T1780: Shared video overlay */}
         {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
         {/* T4780: Tutorial video modal — also available on home screen */}
@@ -968,19 +964,6 @@ function App() {
     </AppStateProvider>
     </ProjectProvider>
     </>
-  );
-}
-
-function AdminButton({ onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white text-sm"
-      title="Admin Panel"
-    >
-      <ShieldCheck size={15} />
-      <span className="hidden sm:inline font-medium">Admin</span>
-    </button>
   );
 }
 

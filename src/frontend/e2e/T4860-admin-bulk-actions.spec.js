@@ -24,27 +24,17 @@ async function readCredits(row) {
 }
 
 test('T4860 admin bulk grant + email test-send + confirm', async ({ context, page }) => {
-  // T5420: surfaces the admin-only header by import()ing /src/stores/authStore.js in-page
-  // to call checkAdmin() — that Vite-dev /src path 404s on a deployed CF Pages BUILD (and
-  // the admin panel requires admin rights in the target env). Skip loudly on a deployed target.
-  skipOnDeployedTarget(test, "import()s /src/stores/authStore.js to call checkAdmin() (Vite-dev path; 404s on a deployed build)");
+  // The admin panel requires admin rights in the target env — skip loudly on a
+  // deployed target rather than fail confusingly if the account isn't admin there.
+  skipOnDeployedTarget(test, "requires admin rights in the target env");
   test.setTimeout(120000);
   await loginAsRealUser(context, ADMIN_EMAIL);
-  await page.goto('/');
-  await expect(page.getByRole('button', { name: ADMIN_EMAIL })).toBeVisible({ timeout: 30000 });
-
-  // The dev-login helper injects the session cookie directly, bypassing the
-  // frontend login handler that normally fires checkAdmin() — so trigger the
-  // real admin-status check, which makes the (admin-only) header button appear.
-  await page.evaluate(async () => {
-    const { useAuthStore } = await import('/src/stores/authStore.js');
-    await useAuthStore.getState().checkAdmin();
-  });
-
-  // Enter the admin panel via the header Admin button (admin-only).
-  const adminBtn = page.locator('[title="Admin Panel"]');
-  await adminBtn.waitFor({ state: 'visible', timeout: 30000 });
-  await adminBtn.click();
+  // T7200: checkAdmin() now always runs on session init (was gated behind
+  // skipFetches, which every cold load sets — see authStore.js), so navigating
+  // straight to the admin route (no separate header button anymore; Admin is
+  // now a row in the profile switcher) reflects admin status without a manual
+  // in-page checkAdmin() call.
+  await page.goto('/admin');
 
   // The admin screen renders several tables (analytics + users). Scope to the
   // users table — the only one with per-row "Grant credits" buttons.

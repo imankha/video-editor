@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Pencil, Trash2, ArrowLeft, Check, ChevronDown } from 'lucide-react';
+import { X, Pencil, Trash2, ArrowLeft, Check, ChevronDown, ShieldCheck } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { Z } from '../constants/zLayers';
-import { useProfileStore } from '../stores';
+import { useProfileStore, useEditorStore, EDITOR_MODES } from '../stores';
+import { useAuthStore } from '../stores/authStore';
 import { ProfileIntroSection } from './ProfileIntroSection';
 import { IntroCardsModal } from './introcards/IntroCardsModal';
 import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji } from '../modes/annotate/constants/tagRegistry';
@@ -223,6 +224,8 @@ export function ManageProfilesModal({ isOpen, onClose }) {
   const updateProfile = useProfileStore(state => state.updateProfile);
   const deleteProfile = useProfileStore(state => state.deleteProfile);
   const switchProfile = useProfileStore(state => state.switchProfile);
+  const isAdmin = useAuthStore(state => state.isAdmin);
+  const setEditorMode = useEditorStore(state => state.setEditorMode);
 
   const [mode, setMode] = useState('list');
   // Track only the id; derive the profile object LIVE from the store so store
@@ -293,6 +296,14 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     onClose();
   }, [switchProfile, onClose]);
 
+  // T7200: Admin panel is not a real profile (no data of its own to switch
+  // into) but is surfaced here as a "switch to" row so the admin doesn't need
+  // a separate floating control to find it.
+  const handleOpenAdmin = useCallback(() => {
+    onClose();
+    setEditorMode(EDITOR_MODES.ADMIN);
+  }, [onClose, setEditorMode]);
+
   // Names of all profiles (for duplicate checking)
   const allProfileNames = useMemo(
     () => profiles.map(p => p.name).filter(Boolean),
@@ -329,6 +340,22 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
             {/* Profile list */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleOpenAdmin}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-left"
+                    title="Open Admin Panel"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-600 flex-shrink-0">
+                      <ShieldCheck size={16} className="text-gray-300" />
+                    </div>
+                    <span className="flex-1 min-w-0 text-white text-sm font-medium">Admin</span>
+                  </button>
+                  <div className="border-t border-gray-700 my-2" />
+                </>
+              )}
               {profiles.map(p => (
                 <div
                   key={p.id}

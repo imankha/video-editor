@@ -24,6 +24,8 @@ vi.mock('../../stores', () => ({
     deleteProfile: vi.fn(),
     switchProfile: h.switchProfile,
   }),
+  useEditorStore: (sel) => sel({ setEditorMode: vi.fn() }),
+  EDITOR_MODES: { ADMIN: 'admin' },
 }));
 vi.mock('../ProfileIntroSection', () => ({
   ProfileIntroSection: () => <div data-testid="profile-intro-section" />,
