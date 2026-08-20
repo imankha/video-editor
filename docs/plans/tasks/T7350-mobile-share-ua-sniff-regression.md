@@ -1,6 +1,6 @@
 # T7350: Mobile Share Skips the Native OS Sheet (UA-Sniff Regression)
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-08-20, CI green — user waived real-device staging test, merged on the container QA's Playwright coarse-pointer/fine-pointer evidence)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-19
