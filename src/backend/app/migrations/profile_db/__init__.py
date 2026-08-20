@@ -40,6 +40,7 @@ from .v040_backfill_intro_card_default import V040BackfillIntroCardDefault
 from .v041_intro_min_duration import V041IntroMinDuration
 from .v042_text_overlays_regions import V042TextOverlaysRegions
 from .v043_drop_intro_min_duration import V043DropIntroMinDuration
+from .v044_working_clips_framing_version import V044WorkingClipsFramingVersion
 
 MIGRATIONS = [
     V001Baseline(),
@@ -83,6 +84,7 @@ MIGRATIONS = [
     V041IntroMinDuration(),
     V042TextOverlaysRegions(),
     V043DropIntroMinDuration(),
+    V044WorkingClipsFramingVersion(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

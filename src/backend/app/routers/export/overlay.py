@@ -642,14 +642,18 @@ async def overlay_action(project_id: int, action: OverlayAction):
         if working_video_id is None:
             raise HTTPException(status_code=404, detail="Project not found or has no working video")
 
-        # Future: Check expected_version for conflict detection
-        # if action.expected_version is not None and action.expected_version != version:
-        #     return JSONResponse(status_code=409, content={
-        #         "success": False,
-        #         "error": "version_conflict",
-        #         "current_version": version,
-        #         "message": "Data was modified. Refresh and retry."
-        #     })
+        # T4330: conflict detection -- a mismatched expected_version means
+        # another writer committed since this caller last read. Pure
+        # comparison against the already-read `version`, no I/O -- must stay
+        # before any mutation and add no `await` before the commit below
+        # (persistence-sync.md invariant 6, RMW atomicity).
+        if action.expected_version is not None and action.expected_version != version:
+            return JSONResponse(status_code=409, content={
+                "success": False,
+                "error": "version_conflict",
+                "current_version": version,
+                "message": "This project was edited elsewhere. Refresh to see the latest.",
+            })
 
         new_version = version + 1
         region_id = None

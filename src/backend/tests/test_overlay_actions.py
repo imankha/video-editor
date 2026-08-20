@@ -265,3 +265,100 @@ class TestOverlayActions:
             }
         )
         assert response.json()["version"] == 3
+
+
+class TestOverlayActionVersionConflict:
+    """
+    T4330 -- two-writer 409 `version_conflict` (design doc section 2.6).
+
+    The `expected_version` field has existed on `OverlayAction` for a while, but
+    the check in `overlay_action` (overlay.py ~645-652) is commented out --
+    plumbing that protects nothing. These tests are written test-first (Stage 3)
+    and are expected to FAIL until the scaffold is uncommented and wired.
+    """
+
+    def test_stale_expected_version_returns_409(self, test_project_with_working_video):
+        """Writer A commits (version 0 -> 1); writer B's stale expected_version=0 conflicts."""
+        project_id = test_project_with_working_video
+
+        # Writer A: reads version 0 (implicitly, via the fixture's overlay_version=0),
+        # then commits an action -- version goes 0 -> 1.
+        response_a = client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 0.0, "end_time": 2.0, "region_id": "writer-a-region"},
+            },
+        )
+        assert response_a.status_code == 200
+        assert response_a.json()["version"] == 1
+
+        # Writer B: still holds the STALE version it read before writer A committed
+        # (0), and posts with expected_version=0 -- must conflict against the NEW
+        # current version (1).
+        response_b = client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 3.0, "end_time": 5.0, "region_id": "writer-b-region"},
+                "expected_version": 0,
+            },
+        )
+
+        assert response_b.status_code == 409
+        body = response_b.json()
+        assert body["success"] is False
+        assert body["error"] == "version_conflict"
+        assert body["current_version"] == 1
+
+    def test_null_expected_version_still_succeeds_back_compat(self, test_project_with_working_video):
+        """An action with no expected_version (today's/first-write behavior) must keep landing."""
+        project_id = test_project_with_working_video
+
+        # Bump the version once so current_version != 0, to prove the check is
+        # genuinely being SKIPPED (not just coincidentally matching).
+        client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 0.0, "end_time": 2.0, "region_id": "seed"},
+            },
+        )
+
+        response = client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 6.0, "end_time": 8.0, "region_id": "no-version-check"},
+                # expected_version omitted entirely
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_matching_expected_version_succeeds(self, test_project_with_working_video):
+        """A writer that reads the CURRENT version and echoes it back is not conflicted."""
+        project_id = test_project_with_working_video
+
+        first = client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 0.0, "end_time": 2.0, "region_id": "r1"},
+            },
+        )
+        current_version = first.json()["version"]
+
+        response = client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 3.0, "end_time": 5.0, "region_id": "r2"},
+                "expected_version": current_version,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert response.json()["version"] == current_version + 1

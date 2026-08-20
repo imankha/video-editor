@@ -54,7 +54,7 @@ POST_V023_COLUMNS = {
     "games": ["shared_by", "source_profile_id", "source_game_id"],                       # v026, v030
     "working_videos": ["detections_data"],                                              # v027
     "export_jobs": ["stage", "output_key"],                                             # v028
-    "working_clips": ["rotation"],                                                       # v029
+    "working_clips": ["rotation", "framing_version"],                                     # v029, v044
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
@@ -95,8 +95,15 @@ POST_V023_COLUMNS = {
     #   is covered instead by the v043 migration's own idempotent/absent-column-safe tests in
     #   test_t6850_drop_intro_min_duration.py). The two consumer endpoints/helpers this column
     #   used to feed were removed outright in the same T6850 change, not left column-guarded.
+    # v044 (T4330 framing action version_conflict) adds working_clips.framing_version.
+    #   _get_clip_framing_data (clips.py) guards the SELECT with column_exists and returns
+    #   framing_version=None on a below-head DB; the 409 check/bump/response are all skipped
+    #   when None (back-compat, no 500) -- covered directly by
+    #   test_framing_action_version_conflict.py::TestFramingActionPreMigration. No hot LIST
+    #   read (list_project_clips) names the new column, so nothing else in this fixture needs
+    #   to change.
 }
-HEAD_VERSION_AUDITED = 43
+HEAD_VERSION_AUDITED = 44
 
 
 def _cleanup(user_id: str) -> None:
