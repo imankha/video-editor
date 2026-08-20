@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, FileVideo, Loader2, Share2 } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, FileVideo, Loader2, Share2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -9,6 +9,7 @@ import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
+import { parseLocalCalendarDate, parseMatchDate, formatMatchDateRange } from '../utils/matchDate';
 import { compareGameTime } from '../utils/timeFormat';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
@@ -48,7 +49,24 @@ import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stag
 // can never drift from the real layout again (the T6310 bug). If the grid shape
 // changes, change it here and both surfaces move together.
 const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
-const GAMES_TILE_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4';
+
+// T7330: the desktop column count now follows the data (see gamesGridColumns), so the grid
+// class is SELECTED from this map, never built by interpolation -- Tailwind's purge only
+// keeps class names that appear as literals in the source. Mobile stays 2-up and tablet 3-up,
+// each clamped by the same derived count so a 2-column layout doesn't jump to 3 on a tablet.
+// The loading skeleton consumes this map too, so the two can never drift (the T6310 bug).
+export const GAMES_TILE_GRID_BY_COLUMNS = {
+  2: 'grid grid-cols-2 gap-2 sm:gap-3 lg:gap-4',
+  3: 'grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4',
+  4: 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4',
+};
+
+// The group header sits in a sticky left rail at lg+ (removing ~64px of vertical chrome per
+// group) and stacks above the tiles below lg, exactly as it always has. minmax(0,1fr) is
+// mandatory: without it the tile grid's min-content can blow the track out.
+const GAMES_GROUP_SECTION_CLASS = 'lg:grid lg:grid-cols-[8rem_minmax(0,1fr)] lg:gap-x-4';
+const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start '
+  + 'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:block';
 
 // T6810: the stage-labeled carousel rows for one draft list (a game group or
 // "Other reels"). ONE renderer for both call sites so the two surfaces can
@@ -106,25 +124,173 @@ function DraftStageRows({
   });
 }
 
-// Group games by month (YYYY-MM) in chronological order (newest first)
-function groupGamesByMonth(games) {
-  const groups = {};
-  const order = [];
+// T7290: the Games tab organizes by MATCH date, the date the user thinks in and the
+// one already shown in the tile title -- not by upload date. Games predating the
+// required-field rule, plus materialized/shared rows, can carry a NULL game_date;
+// that is an external-data edge case, so they are placed by their upload timestamp
+// rather than dropped from the list. The backend logs the missing metadata loudly
+// (games.py, list_games) -- this path stays silent so there is only one signal.
+// Note the fallback is the CALENDAR DAY of the upload, not its timestamp: list_games
+// keys on substr(created_at, 1, 10) and tiebreaks on the full timestamp separately, so
+// a full-timestamp key here would win comparisons the server settles on the tiebreak
+// and the two orders would disagree (a May 9 match uploaded in June vs a dateless game
+// uploaded on May 9). Same reason it must not go through `new Date(created_at)`: an
+// ISO-Z timestamp would shift a day west of Greenwich and change the month bucket.
+// Takes the ALREADY-PARSED match date rather than re-parsing: parseMatchDate warns on a
+// malformed value, and parsing the same game twice would emit that warning twice for one
+// bad row, which reads as two separate data bugs.
+function gameOrganizingDate(game, matchDate) {
+  if (matchDate) return matchDate;
 
-  // Sort games by created_at (newest first)
-  const sorted = [...games].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const uploadDay = parseLocalCalendarDate(String(game.created_at ?? '').slice(0, 10));
+  if (uploadDay) return uploadDay;
 
-  sorted.forEach(game => {
-    const date = new Date(game.created_at);
-    const key = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-    if (!groups[key]) {
-      groups[key] = [];
-      order.push(key);
-    }
-    groups[key].push(game);
+  // created_at is NOT NULL-by-default in the schema and every writer sets it, so this
+  // is our own data being broken, not an edge case. The game still renders (dropping
+  // it would hide the bug); it just sorts last, and says why.
+  console.error(`[games] Game ${game.id} has neither a usable game_date nor created_at `
+    + `(created_at=${JSON.stringify(game.created_at)}) -- placing it last. Data bug.`);
+  return new Date(0);
+}
+
+// T7330: a tournament name recurs every year, so the NAME alone cannot be the group key --
+// "Surf Cup" in 2025 and 2026 must not collapse into one block. Games under one name are cut
+// into instances wherever consecutive matches sit more than this far apart. 90 days splits
+// an annual recurrence (~365) comfortably while keeping a multi-week cup series together.
+const TOURNAMENT_INSTANCE_GAP_DAYS = 90;
+
+// Difference in CALENDAR days between two local-midnight dates. Math.round absorbs the
+// +/-1h a DST boundary adds to the raw millisecond difference -- a pair exactly 90 days
+// apart must not split (or chain) depending on whether the season changed between them.
+// Same landmine family as the UTC-midnight parse this file is careful about.
+function calendarDaysBetween(newer, older) {
+  return Math.round((newer - older) / 86400000);
+}
+
+// One game does not make a tournament group: it stays in its month, where its title already
+// reads "Surf Cup: Vs Rebels Jul 4". A group only earns its own header at two or more.
+const MIN_TOURNAMENT_GAMES = 2;
+
+function normalizeTournamentName(name) {
+  if (typeof name !== 'string') return null;
+  const key = name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return key || null;
+}
+
+/**
+ * Group games for the Games tab (T7330, extends T7290's month grouping).
+ *
+ * Returns ONE ordered array rather than the old {groups, order} pair: with two kinds of
+ * group a bare string-keyed map stops being expressive, and every caller only iterates.
+ * Each entry is { key, kind: 'month'|'tournament', label, sublabel, sortDate, games }.
+ *
+ * Ordering is a single descending timeline over BOTH kinds — every group sorts by its newest
+ * member, so a tournament sits at its newest match. That deliberately breaks strict month
+ * monotonicity when an instance straddles a boundary (Mar 28 - Apr 2 sorts above a Mar 31
+ * league game), which is exactly why a tournament header carries its date range.
+ *
+ * Exported for unit tests: these rules are the whole point of the task.
+ */
+export function groupGamesForTab(games) {
+  // ONE comparable date per game, computed once and reused for the group key AND the
+  // comparator -- so the header a game renders under can never disagree with the bucket it
+  // sorted into. Ties (two games on one tournament day, where game_date carries no time)
+  // break on upload time, newest first: the same tiebreak list_games applies, so server
+  // order and rendered order agree. (That agreement holds for MONTH placement; a tournament
+  // group intentionally hoists its games out of month order -- see the knowledge doc.)
+  const dated = games.map(game => {
+    const matchDate = parseMatchDate(game.game_date);   // real match date only, or null
+    return {
+      game,
+      matchDate,
+      date: gameOrganizingDate(game, matchDate),
+      uploadedAt: new Date(game.created_at),
+    };
   });
+  dated.sort((a, b) => (b.date - a.date) || (b.uploadedAt - a.uploadedAt));
 
-  return { groups, order };
+  // Cluster tournament candidates into instances (already date-descending within a name).
+  const byName = new Map();
+  for (const entry of dated) {
+    const key = normalizeTournamentName(entry.game.tournament_name);
+    if (!key) continue;
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(entry);
+  }
+
+  const tournamentGroups = [];
+  const claimed = new Set();
+  for (const [key, members] of byName) {
+    let instance = [members[0]];
+    const instances = [];
+    for (const member of members.slice(1)) {
+      // Gap is measured against the PREVIOUS member, not the instance's first: a season
+      // of games every few weeks chains into one instance no matter how long it runs.
+      const gap = calendarDaysBetween(instance[instance.length - 1].date, member.date);
+      if (gap <= TOURNAMENT_INSTANCE_GAP_DAYS) instance.push(member);
+      else { instances.push(instance); instance = [member]; }
+    }
+    instances.push(instance);
+
+    for (const inst of instances) {
+      if (inst.length < MIN_TOURNAMENT_GAMES) continue;   // singles fall back to their month
+      inst.forEach(entry => claimed.add(entry));
+      tournamentGroups.push({
+        // Instance-scoped so two years of one tournament get distinct React keys.
+        key: `tournament:${key}:${inst[0].date.getFullYear()}-${inst[0].date.getMonth() + 1}`,
+        kind: 'tournament',
+        label: inst[0].game.tournament_name.trim(),       // original casing of the newest
+        sublabel: formatMatchDateRange(inst.map(e => e.matchDate)),
+        sortDate: inst[0].date,
+        sortUploaded: inst[0].uploadedAt,
+        games: inst.map(e => e.game),
+      });
+    }
+  }
+
+  // Everything not claimed by a tournament falls into its match month. Insertion order is
+  // already date-descending, so a month emptied by a hoist simply never gets created.
+  // `claimed` holds ENTRY objects (not game ids), so a hypothetical id-less row can
+  // never alias another and silently vanish from both groupings.
+  const months = new Map();
+  for (const entry of dated) {
+    if (claimed.has(entry)) continue;
+    const key = `${entry.date.getFullYear()}-${String(entry.date.getMonth() + 1).padStart(2, '0')}`;
+    if (!months.has(key)) months.set(key, []);
+    months.get(key).push(entry);
+  }
+  const monthGroups = [...months].map(([key, members]) => ({
+    key: `month:${key}`,
+    kind: 'month',
+    label: members[0].date.toLocaleString('default', { month: 'long', year: 'numeric' }),
+    sublabel: null,
+    sortDate: members[0].date,
+    sortUploaded: members[0].uploadedAt,
+    games: members.map(e => e.game),
+  }));
+
+  return [...tournamentGroups, ...monthGroups].sort((a, b) =>
+    (b.sortDate - a.sortDate) ||
+    (b.sortUploaded - a.sortUploaded) ||
+    (a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === 'tournament' ? -1 : 1)
+  );
+}
+
+/**
+ * Desktop column count, derived from the data rather than fixed (T7330, user's choice).
+ *
+ * A six-up grid was sized for a library several times bigger than a typical account: with
+ * one or two games per month, rows filled two of six columns and the right two-thirds of
+ * every row sat empty. Tracking the largest group fills rows completely at small libraries
+ * and converges on a normal 4-up as they grow. Capped at 4 so tiles never get so large that
+ * a full month becomes a scroll marathon; floored at 2 to match mobile.
+ *
+ * This is a pure function of the rendered data -- not a user setting, so nothing is
+ * persisted and the no-persisted-view-state rule is untouched.
+ */
+export function gamesGridColumns(groups) {
+  const biggest = groups.reduce((n, group) => Math.max(n, group.games.length), 0);
+  return Math.min(4, Math.max(2, biggest));
 }
 
 // The active tab is URL state (/home/games -> Games, /home/reels -> Reel Drafts),
@@ -252,8 +418,14 @@ export function ProjectManager({
       if (urls.length > 0) prioritizeUrls(urls);
     }, { threshold: 0.1 });
 
-    for (const child of container.children) {
-      observer.observe(child);
+    // T7320: query DESCENDANTS, not direct children. The callback reads
+    // `dataset.gameId`, so the observed element must be the tile wrapper itself --
+    // but the grouping render puts month/tournament blocks between the container and
+    // the tiles, and observing those made every callback entry a no-op (warming was
+    // silently dead from T5681 until this fix). Depth-independent by construction, so
+    // another wrapper level cannot break it again. Matches the T5820 lookup below.
+    for (const tile of container.querySelectorAll('[data-game-id]')) {
+      observer.observe(tile);
     }
 
     return () => observer.disconnect();
@@ -1045,27 +1217,45 @@ export function ProjectManager({
               );
             })()}
 
-            {/* Your Games Section - Chronological Poster Grid (T5681) */}
+            {/* Your Games Section - Chronological Poster Grid (T5681, regrouped T7330) */}
             {games.length > 0 && (() => {
-              const { groups, order } = groupGamesByMonth(games);
+              const gameGroups = groupGamesForTab(games);
+              const tileGridClass = GAMES_TILE_GRID_BY_COLUMNS[gamesGridColumns(gameGroups)];
               return (
                 <>
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
                     Your Games
                   </h2>
-                  <div ref={gamesContainerRef} className="space-y-6">
-                    {order.map(monthKey => (
-                      <div key={monthKey}>
-                        {/* Month header with game count */}
-                        <div className="mb-3 flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-gray-300">{monthKey}</h3>
-                          <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
-                            {groups[monthKey].length} game{groups[monthKey].length !== 1 ? 's' : ''}
+                  <div ref={gamesContainerRef} className="space-y-6 lg:space-y-8">
+                    {gameGroups.map(group => (
+                      <section key={group.key} data-group-kind={group.kind} className={GAMES_GROUP_SECTION_CLASS}>
+                        {/* Group header. A tournament must never read as an oddly-named
+                            month, so it differs on THREE axes -- icon, colour, and a date
+                            range no month header ever has. Colour alone would fail WCAG
+                            1.4.1 (T7330). */}
+                        <header className={GAMES_GROUP_HEADER_CLASS}>
+                          <h3 className={group.kind === 'tournament'
+                            ? 'flex items-baseline gap-1.5 text-base lg:text-[15px] font-semibold text-amber-200 leading-snug break-words'
+                            : 'text-base lg:text-[15px] font-semibold text-gray-300 leading-snug break-words'}
+                          >
+                            {group.kind === 'tournament' && (
+                              <Trophy size={14} className="flex-shrink-0 translate-y-0.5 text-amber-400" aria-hidden />
+                            )}
+                            <span>{group.label}</span>
+                          </h3>
+                          {group.sublabel && (
+                            <p className="text-[11px] text-amber-300/70 lg:mt-0.5">{group.sublabel}</p>
+                          )}
+                          <span className={group.kind === 'tournament'
+                            ? 'text-xs text-amber-200/80 bg-amber-900/30 px-2 py-0.5 rounded-full lg:inline-block lg:mt-1.5'
+                            : 'text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full lg:inline-block lg:mt-1.5'}
+                          >
+                            {group.games.length} game{group.games.length !== 1 ? 's' : ''}
                           </span>
-                        </div>
-                        {/* Landscape tile grid: 6-up desktop, 3-up tablet, 2-up mobile */}
-                        <div className={GAMES_TILE_GRID_CLASS}>
-                          {groups[monthKey].map(game => (
+                        </header>
+                        {/* Landscape tile grid: column count derived from the data (T7330) */}
+                        <div className={tileGridClass}>
+                          {group.games.map(game => (
                             <div
                               key={game.id}
                               data-game-id={game.id}
@@ -1091,7 +1281,7 @@ export function ProjectManager({
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </section>
                     ))}
                   </div>
                 </>
@@ -1525,27 +1715,40 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 
 /**
  * GamesListSkeleton - placeholder shown while the Games tab loads (T4771, rebuilt
- * T6310). Mirrors the loaded poster grid (GameTile, T5681): same container width
- * and same responsive tile grid as the real list (shared via GAMES_GRID_CONTAINER_CLASS
- * / GAMES_TILE_GRID_CLASS), with `aspect-video` shells instead of GameTiles, so data
- * arriving does not snap the layout. Pure render — no fetching, no subscribing.
+ * T6310, re-shaped T7330). Mirrors the loaded poster grid (GameTile, T5681): same
+ * container width, same rail-header group shape, and a tile grid taken from the SHARED
+ * GAMES_TILE_GRID_BY_COLUMNS map, with `aspect-video` shells instead of GameTiles.
+ * Pure render — no fetching, no subscribing.
  *
- * `count` defaults to 6: the grid is 6-up on desktop, 3-up on tablet, 2-up on
- * mobile, and 6 divides all three, so it fills exactly one desktop row / two tablet
- * rows / three mobile rows with no ragged partial row at any breakpoint.
+ * The real grid's column count is derived from the loaded groups, which do not exist yet
+ * here, so the skeleton must pick one blind. It uses the 2-COLUMN entry: `grid-cols-2` at
+ * every breakpoint, so the default 4 shells make exactly two full rows on mobile, tablet
+ * and desktop alike (no ragged partial row anywhere), and the geometry matches the loaded
+ * layout EXACTLY for any library whose largest group is <= 2 games — the small-library
+ * shape this layout was redesigned for. For a bigger library the loaded grid arrives at
+ * 3-4 columns and tiles shrink at that moment; a blind skeleton cannot match every
+ * outcome, and matching the small library keeps the no-snap case where the tab is
+ * busiest. (Reviewer-accepted trade, T7330 — no unconditional "never snaps" claim.)
  */
-export function GamesListSkeleton({ count = 6 }) {
+export function GamesListSkeleton({ count = 4 }) {
   return (
     <div className={GAMES_GRID_CONTAINER_CLASS} data-testid="games-skeleton">
       {/* "Your Games" heading placeholder */}
       <div className="h-3.5 w-24 bg-gray-700/70 rounded mb-4 animate-pulse" />
-      <div className={GAMES_TILE_GRID_CLASS}>
-        {Array.from({ length: count }).map((_, i) => (
-          <div
-            key={i}
-            className="aspect-video bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
-          />
-        ))}
+      <div className={GAMES_GROUP_SECTION_CLASS}>
+        {/* Rail header placeholder: group label + count pill, same slots as the real one */}
+        <div className={GAMES_GROUP_HEADER_CLASS}>
+          <div className="h-4 w-20 bg-gray-700/70 rounded animate-pulse" />
+          <div className="h-4 w-14 bg-gray-700/50 rounded-full animate-pulse lg:mt-1.5" />
+        </div>
+        <div className={GAMES_TILE_GRID_BY_COLUMNS[2]}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div
+              key={i}
+              className="aspect-video bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

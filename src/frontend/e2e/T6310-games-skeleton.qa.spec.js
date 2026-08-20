@@ -64,9 +64,14 @@ test.describe('T6310 games skeleton mirrors the poster grid', () => {
     // Shells are landscape 16:9, matching a GameTile's aspect-video tile.
     expect(skelGeom.shellH).toBeGreaterThan(0);
     expect(Math.abs(skelGeom.shellW / skelGeom.shellH - 16 / 9)).toBeLessThan(0.06);
-    // Desktop is 6-up: default count fills exactly one row.
-    expect(skelGeom.shellCount).toBe(6);
-    // A skeleton shell is the same width as a real tile (same grid, same columns).
+    // T7330: the skeleton is 2-up at every breakpoint (the loaded grid's column count is
+    // data-derived, so the skeleton picks the small-library shape blind); default count 4
+    // fills exactly two rows.
+    expect(skelGeom.shellCount).toBe(4);
+    // A skeleton shell is the same width as a real tile ON THIS ACCOUNT: the e2e account's
+    // largest group is <= 2 games, so the loaded grid is also 2-up and the geometries
+    // match exactly. A bigger library would load at 3-4 columns and this assertion would
+    // need the account named here to have grown -- that's a fixture change, not drift.
     expect(Math.abs(skelGeom.shellW - loadedContainer.tileW)).toBeLessThanOrEqual(2);
   });
 

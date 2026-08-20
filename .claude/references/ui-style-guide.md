@@ -295,20 +295,22 @@ status chip, or "Ready" publish badge.
 ### Game tile (`GameTile`)
 
 The Games tab's poster tile (T5681) — a landscape **16:9** tile (game footage aspect)
-rendered in a chronological responsive grid. Unlike DraftTile (portrait, single-game
+rendered in a grouped responsive grid. Unlike DraftTile (portrait, single-game
 progress pipeline) and ReelTile (per-profile reel aspect), GameTile uses a fixed
-landscape aspect and groups games by month with game-count badges.
+landscape aspect and is grouped by match month or tournament with count badges.
 
 - **Poster source:** `GET /api/games/{id}/poster.jpg` (owner-facing endpoint for the
   game's recap poster; per-profile, generate-on-first-request, 404 → branded fallback).
-- **Grid layout:** Responsive CSS grid:
-  - Mobile (390px): `grid-cols-2` gap-2
-  - Tablet (768px): `grid-cols-3` gap-3
-  - Desktop (1280px+): `grid-cols-6` gap-4
+- **Grid layout:** see § Grouped grid with rail header below — the desktop column count is
+  DERIVED from the data (T7330), not fixed, so it is documented with the grouping.
 - **Minimal overlay** (always visible): bottom gradient scrim `from-black/90 via-black/40
-  to-transparent`, contains date + clip count in `text-xs` (no game name on tile).
-- **Expiry chip** (top-right, if applicable): `bg-yellow-900/70 text-yellow-300`,
+  to-transparent`. Primary line: the game name (`truncate`) sharing its row with the edit
+  pencil (T6890). Secondary line `text-xs`: **match date with weekday** ("Sat, Mar 21",
+  `text-gray-300`, from `game_date`) left, clip count (`text-gray-400`) right (T7330).
+  The date renders empty — never the upload date — when `game_date` is absent.
+- **Expiry chip** (top-LEFT, if applicable): `bg-yellow-900/70 text-yellow-300`,
   shows "Expired" or "{N}d left" (days until expiry). Only visible on near/expired games.
+  Top-left, not top-right, so it never collides with the kebab.
 - **Expired variant:** `grayscale filter opacity-60` on the poster, border `border-yellow-800/40`
   instead of `border-gray-700`, primary action is Extend (if eligible) or Play Recap (fallback).
 - **Actions** (reveal on `group-hover:` desktop / long-press 500ms mobile):
@@ -319,10 +321,40 @@ landscape aspect and groups games by month with game-count badges.
   - Delete Game (with 3s confirm on second click)
 - **Poster loading:** Skeleton pulse (gray-700 animate-pulse) until loaded; 404 → branded
   fallback (⚾ icon + "Reel Ballers" + "No poster" text on a gradient to-gray-900).
-- **Month grouping:** Games sorted chronological descending (newest first), grouped by
-  "Month Year" (e.g. "September 2026"). Header shows count badge: "September 2026 • 6 games".
 - **Container width:** `max-w-6xl` (same as the Reel Drafts grid to maximize canvas for
   landscape tiles). Games tab only; Projects tab stays `max-w-6xl` (Reel Drafts).
+
+### Grouped grid with rail header (Games tab)
+
+The Games tab's grouping pattern (T5681 → T7290 → T7330). Two rules make it work at any
+library size, from one game to hundreds:
+
+- **Derived column count.** `columns = clamp(2, largest group size, 4)` at `lg`+, selected
+  from the literal-string map `GAMES_TILE_GRID_BY_COLUMNS` (never interpolated — Tailwind's
+  purge only keeps class names that appear literally in source). Mobile stays 2-up, tablet
+  3-up, both clamped by the same count. A fixed 6-up left rows two-thirds empty on a typical
+  account; tracking the largest group fills them and converges on a normal 4-up as the
+  library grows. It is a pure function of the rendered data, so nothing is persisted.
+- **Header in a sticky left rail** at `lg`+ (`lg:grid lg:grid-cols-[8rem_minmax(0,1fr)]`,
+  header `lg:sticky lg:top-2 lg:self-start`), stacked above the tiles below `lg`. This
+  removes ~64px of vertical chrome per group and matters most for a long group, where one
+  label sits beside many rows. `minmax(0,1fr)` is mandatory or the tile track can blow out.
+- **Two group kinds, distinguished on THREE axes** (colour alone would fail WCAG 1.4.1):
+  - *Month* — `text-gray-300` label, gray count pill, no sublabel.
+  - *Tournament* — `Trophy` icon + `text-amber-200` label + amber count pill + a **date
+    range sublabel** (`Jul 3 – Jul 6`), which no month header ever has. The range is
+    functional, not decorative: a tournament sorts at its newest match, so a straddling
+    instance is a legitimately non-monotonic block in a date-ordered page.
+- **Never share one visual row between two groups.** It was considered and rejected:
+  flex-flow orphans headers (no CSS prevents a header landing as the last item of a row),
+  and header-as-grid-cell spends a whole tile slot per group. Position telling you the group
+  without reading is the property that makes a grouped grid worth having.
+- **The loading skeleton mirrors this shape** and takes its grid class from the same
+  exported map — the `[2]` entry (2-up at every breakpoint): 4 shells = two full rows
+  everywhere, and the geometry matches the loaded layout exactly for a library whose largest
+  group is ≤ 2 games. Bigger libraries load into 3-4 columns and shrink at that moment — an
+  accepted trade (a blind skeleton can't match every outcome), not a bug. A private copy of
+  the class string here is exactly the T6310 drift bug.
 
 ### Card carousel (`CardCarousel`)
 

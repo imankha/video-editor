@@ -40,6 +40,32 @@ describe('ReferenceGameCard (T5820)', () => {
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(refGame.name);
   });
 
+  // T7290 removed the owner's UPLOAD date from under the name (it contradicted the
+  // match-date header this card sits under); T7330 puts the MATCH date there instead, so
+  // reference cards and GameTiles don't disagree inside one group.
+  it('renders the match date under the name, never the upload date', () => {
+    const { container } = render(
+      <ReferenceGameCard
+        game={{ ...refGame, name: 'Vs Rivals Mar 21', game_date: '2026-03-21' }}
+        onOpen={vi.fn()}
+      />
+    );
+    const heading = screen.getByRole('heading', { level: 3 });
+
+    expect(heading.nextElementSibling.textContent).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), Mar 21$/);
+    // The owner's upload date ("Jul 1, 2026") and raw timestamps stay off the card.
+    expect(container.textContent).not.toMatch(/Jul|2026-07-01/);
+  });
+
+  it('renders an EMPTY date line when the referenced game has no match date', () => {
+    // The line stays (min-h reserves it) so a dateless card keeps the same scrim height
+    // as its neighbors in the group -- but no upload date, no "Invalid Date" leaks in.
+    render(<ReferenceGameCard game={{ ...refGame, game_date: null }} onOpen={vi.fn()} />);
+    const line = screen.getByRole('heading', { level: 3 }).nextElementSibling;
+    expect(line).not.toBeNull();
+    expect(line.textContent.trim()).toBe('');
+  });
+
   it('has NONE of the real tile actions — no kebab / edit / delete / recap / expiry chip', () => {
     render(<ReferenceGameCard game={refGame} onOpen={vi.fn()} />);
     expect(screen.queryByLabelText('More actions')).toBeNull();

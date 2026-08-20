@@ -350,16 +350,71 @@ The full checklist for an 11th→Nth sport:
   selecting a clip to mount the tall editor at 844×390.
 - **The Games-tab surface is `GameTile` (poster grid), NOT a list (T5681 → T5990).** The home Games
   tab renders a chronological landscape-tile grid of `<GameTile>` (ProjectManager.jsx:~881,
-  `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`). The older `GameCard`/`GameMetaRow`/`RatingChip`
+  grid classes now DERIVED per T7330 — see the T7330 entry below). The older `GameCard`/`GameMetaRow`/`RatingChip`
   list component was fully removed (T5990) — it had been dead since T5681 but its Vitest specs still
   rendered it directly and passed green, which masked real drift: `T5675-home-hero-legibility.spec.js`
   asserted `Uploaded`, `Footage quality N/100` and the rating chips that live only in `GameMetaRow`,
   so the E2E broke while the unit tests stayed green. Lesson: a component only reachable from its own
   tests is dead, not covered. The tile's verbose meta row is GONE by design — the scrim shows only
-  name + short date + clip count; all game actions live behind the tile's kebab menu. NOTE the tile
+  name + clip count (the date was dropped in T7290, see below); all game actions live behind the
+  tile's kebab menu. NOTE the tile
   gates the recap entry on `recap_video_url` (hasRecap), NOT on clip_count, and shows no recap entry
   for an expired game with no recap video — a deliberate divergence from the old GameCard.
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
+
+- **The Games tab organizes by MATCH date (`game_date`), never upload date (T7290).** Month headers,
+  cross-group order and within-group order all key off `game_date` — the date the user thinks in and
+  the one already baked into the tile title by `generate_game_display_name`. Two halves that must stay
+  in agreement: `groupGamesByMonth` (ProjectManager.jsx, exported for tests) and
+  `GAMES_MATCH_DATE_ORDER_BY` (games.py, the `_read_games_for_list` ORDER BY). Invariants: `game_date`
+  is date-only TEXT `YYYY-MM-DD`, so the frontend parses it as a **local calendar date** — `new
+  Date("2026-03-01")` is UTC midnight and files a March 1st game under February west of Greenwich.
+  A NULL/empty `game_date` (games predating the required field, plus materialized/shared rows) falls
+  back to `created_at` for PLACEMENT ONLY and is never dropped, with the pre-existing
+  missing-metadata warning in `_list_games_impl` left as the single loud signal; a non-empty but
+  unparseable `game_date` is a DATA BUG, not that edge case, and warns. **The fallback compares the
+  upload CALENDAR DAY (`substr(created_at,1,10)` / `String(created_at).slice(0,10)`), never the full
+  timestamp** — review caught the timestamp version making the two orders disagree (a May 9 match
+  uploaded in June vs a dateless game uploaded May 9: the server ties them on the day and settles on
+  `created_at DESC`, a timestamp key wins the primary comparison outright). Same-match-day ties break
+  on upload time newest-first on BOTH sides. The two suites share fixtures row-for-row so a change to
+  one half goes red in the other. Consumers that render raw server order without re-sorting (e.g.
+  `GameClipSelectorModal`) are why the agreement matters, not just the tab. Deliberately untouched:
+  Reel Drafts grouping (already keyed on `project.game_dates`) and the "Continue where you left off"
+  card (genuinely recency-of-activity). Covering specs: `ProjectManager.gameGrouping.test.jsx`,
+  `tests/test_t7290_games_list_order.py`, `ReferenceGameCard.test.jsx`.
+
+- **T7330 supersedes two of T7290's decisions — read this before trusting the entry above.**
+  (1) **The tile date is BACK**, on both `GameTile` and `ReferenceGameCard`, as weekday + short
+  match date ("Sat, Mar 21") from `game_date`. T7290's reasoning for removing it (already the
+  title suffix) was wrong in practice: the name is `truncate`d in ~120px and the suffix sits at
+  the truncation end, so it is the FIRST thing lost — and a game with no `opponent_name` gets no
+  suffix at all from `generate_game_display_name`. Empty when there is no match date; NEVER an
+  upload-date fallback. (2) **`groupGamesByMonth` is gone**, replaced by `groupGamesForTab`,
+  which returns ONE ORDERED ARRAY of `{key, kind: 'month'|'tournament', label, sublabel,
+  sortDate, games}` instead of `{groups, order}`.
+  **The server-order invariant above now has a caveat:** rendered flat order equals
+  `GAMES_MATCH_DATE_ORDER_BY` only while NO tournament group forms — a tournament instance
+  deliberately hoists its games out of month order and sorts at its newest match. That is
+  correct, not a bug: the agreement exists so month PLACEMENT cannot contradict the server, and
+  raw-order consumers (`GameClipSelectorModal`) still receive the server's order untouched.
+  Tournament rules: `>= 2` games in one INSTANCE (a name is split at gaps > 90 days measured
+  PAIRWISE between consecutive matches, so annual recurrences never merge); a lone tournament
+  game stays in its month; a month emptied by a hoist is not rendered; the range sublabel is
+  built from real match dates only. Two accepted consequences, not bugs: (1) pairwise chaining
+  makes an instance's total span UNBOUNDED — a league typed into `tournament_name` with games
+  every ≤90 days collapses its whole history into one amber group above every month header;
+  fine until roughly a season's worth, revisit if real data hits it. (2) Collections (T5880,
+  `collections.py`) groups tournaments by NAME ONLY, server-side, no instance split, no >=2
+  rule — so "Surf Cup" across two years is ONE group there and TWO here, and a lone tournament
+  game gets a tournament group there but a month group here. Divergence known and deliberate;
+  unify only if a user reports the mismatch.
+  Date parsing for ALL of this lives in `src/frontend/src/utils/matchDate.js` — one parser, on
+  purpose, because the UTC-midnight landmine must not get a second implementation.
+  Layout: desktop column count is derived (`gamesGridColumns`, clamp 2-4) and group headers sit
+  in a sticky left rail at `lg`+; see `.claude/references/ui-style-guide.md` § Grouped grid with
+  rail header. `GamesListSkeleton` consumes the same exported grid map — a private copy is the
+  T6310 drift bug.
 
 - **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
   (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).

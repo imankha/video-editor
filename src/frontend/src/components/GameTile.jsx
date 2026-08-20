@@ -4,6 +4,7 @@ import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical } from 'lu
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useProfileStore } from '../stores';
 import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
+import { formatMatchDateLabel } from '../utils/matchDate';
 import { Logo } from './Logo';
 import { getDaysUntil } from './ExpirationBadge';
 import { API_BASE } from '../config';
@@ -228,7 +229,8 @@ export function GameTile({
         </div>
       )}
 
-      {/* Bottom scrim: game name (primary line) + date/clip count (secondary line).
+      {/* Bottom scrim: game name (primary line) + clip count (secondary line; T7290
+          dropped the date that used to share it).
           One structure for BOTH the poster and the fallback -- this div is always
           rendered (not gated on posterState), so it overlays whichever variant is
           showing beneath it. Name is a single truncated line (tiles run as small
@@ -255,11 +257,17 @@ export function GameTile({
             <Pencil size={14} />
           </button>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-1 text-xs">
-          <span className="text-gray-300">
-            {new Date(game.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-          </span>
-          <span className="text-gray-400">
+        {/* T7330: the MATCH date, with its weekday ("Sat, Mar 21"). T7290 removed the date
+            entirely on the reasoning that it was already the title suffix -- wrong in
+            practice: the name above is `truncate`d in ~120px (it shares its row with the
+            pencil), so the suffix is structurally the FIRST thing clipped, and a game with
+            no opponent recorded gets no suffix at all. The weekday earns the second copy
+            its place (youth sport is weekend-shaped) and keeps it from reading as an echo.
+            Empty when there is no match date -- NEVER the upload date, which would
+            contradict the match-date header this tile sits under. */}
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
+          <span className="text-gray-300 truncate">{formatMatchDateLabel(game.game_date)}</span>
+          <span className="flex-shrink-0 text-gray-400">
             {game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}
           </span>
         </div>

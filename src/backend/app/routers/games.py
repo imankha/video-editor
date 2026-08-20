@@ -897,6 +897,21 @@ async def list_games():
     return await _list_games_impl(skip_presigned_urls=False)
 
 
+# T7290: the games list is ordered by MATCH date descending, matching how the Games tab
+# groups and renders it (ProjectManager.groupGamesForTab) -- the first paint, and any
+# consumer that trusts server order, must not contradict the rendered order. game_date is
+# date-only TEXT ("YYYY-MM-DD"), so it sorts lexicographically; substr() reduces the
+# created_at timestamp to that same shape for rows whose game_date is missing (games
+# predating the required field, plus materialized/shared rows), placing them by upload
+# date instead of dropping them off the list. Ties on a match date -- which carries no
+# time -- fall back to upload time, newest first, the same tiebreak the frontend applies.
+# Named so tests/test_t7290_games_list_order.py asserts the EXACT production expression.
+GAMES_MATCH_DATE_ORDER_BY = (
+    "ORDER BY COALESCE(NULLIF(g.game_date, ''), substr(g.created_at, 1, 10)) DESC, "
+    "g.created_at DESC"
+)
+
+
 def _read_games_for_list():
     """T6200: every blocking read for the games list, on ONE worker thread.
 
@@ -938,7 +953,7 @@ def _read_games_for_list():
                 FROM game_videos
                 GROUP BY game_id
             ) gv_sum ON gv_sum.game_id = g.id
-            ORDER BY g.created_at DESC
+            {GAMES_MATCH_DATE_ORDER_BY}
         """)
         rows = cursor.fetchall()
 

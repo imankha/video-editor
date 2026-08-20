@@ -188,12 +188,42 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     expect(heading.getAttribute('title')).toBe(longName);
   });
 
-  it('keeps date + clip count as the secondary line under the name', () => {
+  it('keeps the clip count as the secondary line under the name', () => {
     render(<GameTile game={baseGame} {...handlers()} />);
     const heading = screen.getByRole('heading', { level: 3 });
     // T6890: the name shares a row with the edit pencil, so the secondary line
-    // (date/clip count) sits below that name-row wrapper, not the bare heading.
+    // (clip count) sits below that name-row wrapper, not the bare heading.
     const secondary = heading.closest('div').nextElementSibling;
     expect(secondary.textContent).toContain('3 clips');
+  });
+
+  // T7330 (reversing T7290's removal): the footer shows the MATCH date with its weekday.
+  // T7290 dropped it as redundant with the title suffix, but the title is truncated in
+  // ~120px and the suffix sits at the truncation end, so it is the first thing lost.
+  it('renders the match date with its weekday, from game_date', () => {
+    const game = { ...baseGame, created_at: '2026-07-01T12:00:00Z', game_date: '2026-03-21' };
+    render(<GameTile game={game} {...handlers()} />);
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
+
+    expect(secondary.textContent).toContain('Mar 21');
+    expect(secondary.textContent).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/);
+    expect(secondary.textContent).toContain('3 clips');
+    // The UPLOAD date is never shown -- it would contradict the match-date header above.
+    expect(secondary.textContent).not.toContain('Jul');
+  });
+
+  it.each([
+    ['null', null],
+    ['empty', ''],
+    ['malformed', '03/21/2026'],
+  ])('renders NO date when game_date is %s, and never the upload date', (_label, gameDate) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const game = { ...baseGame, created_at: '2026-07-01T12:00:00Z', game_date: gameDate };
+    render(<GameTile game={game} {...handlers()} />);
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
+
+    expect(secondary.textContent.trim()).toBe('3 clips');
+    expect(secondary.textContent).not.toMatch(/Jul|Invalid|NaN/);
+    warn.mockRestore();
   });
 });
