@@ -1,6 +1,7 @@
 # T7280: Single-Clip Upload Goes Straight to Framing
 
-**Status:** WIP (design approved 2026-08-20 — Option B placeholder; implementation resumed)
+**Status:** SUPERSEDED (2026-08-20) — folded into the Game Pools / Dual-Camera epic instead of
+shipping standalone. See Progress Log below.
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-19
@@ -102,6 +103,40 @@ in `extractVideoMetadata`):
 
 **2026-08-19**: Filed from the Game Pools design session (user: "let's do the straight
 to Framing task as an Upcoming priority and different than the rest of this epic").
+
+**2026-08-20**: Design approved (Option B processing-placeholder), implementation ~90%
+complete (useGameUploadFlow hook, ProjectsScreen delegation, FramingScreen placeholder +
+notice, reviewer-fix pass landed — see the now-deleted `feature/T7280-single-clip-
+straight-to-framing` branch, last commit `3f053f1f`). During live user testing, product
+direction shifted through discussion:
+1. User reframed the goal from "detect a single-clip upload and auto-redirect" to "some
+   users just have a single clip they want to frame, they should be able to" — a
+   different problem (give an explicit, honest affordance) than a duration heuristic
+   solves.
+2. Discussed communicating this via an explicit toggle in the upload modal itself
+   (duration-defaulted) rather than a silent branch + after-the-fact notice.
+3. User added: these standalone clips may later need to be organized/merged into a
+   real game. This clashes with `raw_clips.game_id` being write-once by design (T7010) —
+   a real reparenting mechanism, not a UI tweak — and lines up with the Game Pools /
+   Dual-Camera epic's clip-contributor pooling model.
+4. **Decision: integrate this requirement into the Game Pools epic rather than quick-
+   deploying the standalone version.** Branch deleted, task superseded. Requirements
+   captured in `docs/plans/tasks/dual-camera/EPIC.md` § "Captured requirements (not yet
+   assigned a task)".
+
+**Preserved for whoever designs the eventual epic task:**
+- Design doc with full current-state analysis (upload chain, the Framing blob-source
+  hazard, threshold/escape-hatch/dedup reasoning): `docs/plans/tasks/T7280-design.md`
+  (kept on master as reference even though this task didn't ship).
+- Code-level findings (Framing has no blob-playback path for a still-uploading clip;
+  `onGameCreated` is the earliest point `game_id` exists; a React 18 StrictMode lazy-
+  initializer trap; a Zustand whole-object-selector re-render trap) written into
+  `.claude/knowledge/keyframes-framing.md` and `.claude/knowledge/annotate.md`
+  Landmines sections, both dated 2026-08-20.
+- An "Activate Game Failed" 500 the user hit during testing was root-caused as a
+  container-local testing artifact (the worker's own dependency install triggered an
+  `uvicorn --reload` mid-request), NOT a code regression — noted here so it isn't
+  mistaken for a real bug carried into the next attempt.
 
 ## Acceptance Criteria
 

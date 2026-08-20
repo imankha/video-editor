@@ -21,7 +21,7 @@ Value → UX → architecture → task, one line each:
 
 | User value | UX (UX-SPEC §) | Architecture | Task |
 |---|---|---|---|
-| Single-clip parent skips Annotate | T7280 flow | duration branch at the one nav seam + auto clip via existing save rails | T7280 (filed, standalone) |
+| Single-clip parent can frame directly, and later organize loose clips into a game | see "Captured requirements" above | explicit upload-time affordance (not a silent duration branch) + a real clip-reparenting mechanism (`raw_clips.game_id` is write-once today, T7010) | not yet filed — T7280 superseded 2026-08-20 |
 | Simple upload of anything (halves, folders, clips) with no format quiz | §5b optional video, metadata-ordered role chips (Per Half REMOVED — evidence-backed) | client mvhd creation_time parse; role inference; T1180 zero-video exception | T5495 |
 | Giant sky-heavy files get cheap | §5b/6b full-screen crop stage, live size/cost | on-device WebCodecs crop re-encode; cropped bytes are the master | T5498 |
 | One link in the WhatsApp chat pools everyone's footage | §1 invite (Anyone default, side-tagged optional), §2 status page, §3 join, §4b no-video Annotate | Postgres pool tables + per-side tokens on shares/claim rails; sport + team-name snapshots | T5500 (backend), T5510 (UX) |
@@ -32,6 +32,30 @@ Value → UX → architecture → task, one line each:
 | Keep only what's worth paying for | §9 keep checklist | per-feed hash-selective extend; per-member rent | T7300 |
 | Heavy pools stay fast | §5b dual-asset note | .LRF/generated proxies; preview = proxy, export = master | T7310 (evidence-gated) |
 | The app suggests the better camera | §6 Main upgrade to "Auto" | per-source movement profiles (blake3-keyed) | T5560 (blocked by T5460) |
+
+## Captured requirements (not yet assigned a task)
+
+- **Explicit, visible single-clip-vs-full-game choice at upload time (2026-08-20, user
+  decision).** T7280 ships as originally scoped — silent duration-based fast path +
+  post-hoc inline notice in Framing ("jumped to framing · Treat as full game") — but the
+  user is open to a friendlier communication pattern: a lightweight toggle/choice
+  surfaced IN the upload modal itself ("What is this? Full game / Single play to frame"),
+  duration-defaulted so most people never touch it, rather than inferred silently and
+  only surfaced after the fact. Natural home: **T5495** (Add Game overhaul already
+  reworks this exact modal for optional-video/folder/role-chip upload) — fold this in
+  when T5495 is designed rather than treating it as a separate task.
+- **Reorganizing standalone single-clip uploads into a shared/target game later (2026-08-20,
+  user decision).** The user explicitly does NOT want this rushed into T7280 — "I'm
+  totally in line with integrating this requirement into the Game Pools epic instead of
+  quick deploying it." Real constraint: `raw_clips.game_id` is write-once by design (T7010
+  — prevents silent game misattribution), so this is a genuine reparenting/merge
+  mechanism, not a UI tweak. T7280's fast path already gives every single clip its own
+  lightweight game container underneath (same upload pipeline), so nothing is lost by
+  waiting — those per-clip game containers are valid future merge targets. Closest
+  existing task: **T5520** (upload binding + feed propagation) or **T5500** (pool entity
+  backend) — neither currently covers "merge an existing standalone game's clip into
+  another game," so this needs explicit design attention (likely a new task) when those
+  are picked up, not an assumption that feed-propagation covers it for free.
 
 ## Non-Goals (this epic)
 
@@ -110,7 +134,7 @@ Value → UX → architecture → task, one line each:
 
 | ID | Task | Status |
 |----|------|--------|
-| T7280 | Single-clip upload straight to Framing (STANDALONE — Next Up, ships first) | TODO (filed) |
+| T7280 | Single-clip upload straight to Framing — SUPERSEDED 2026-08-20, folded into this epic (see "Captured requirements" above) instead of shipping standalone; a proper task is not yet filed | SUPERSEDED |
 | T5495 | [Add Game overhaul: optional video, folder upload, metadata-ordered role chips, Per-Half removal](T5495-add-game-overhaul.md) | TODO |
 | T5498 | [Crop-before-upload: full-screen client-side stage](T5498-crop-before-upload.md) | TODO |
 | T5500 | [Pool entity + invite/join backend](T5500-shared-game-backend.md) | TODO |

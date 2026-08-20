@@ -556,6 +556,27 @@ keyframed** — camera tilt is constant for a recording.
   MAX_ROT range).
 
 ## Landmines & history
+- **Framing has NO working blob-playback path for a freshly-uploaded clip (T7280 finding,
+  2026-08-20 — task abandoned mid-implementation, capturing for whoever revisits this via
+  the Game Pools epic).** `getClipVideoConfig` (FramingScreen.jsx ~L416-456) resolves a game
+  clip's source via `GET .../clips/{id}/playback-url` → presigned R2, which does NOT resolve
+  until upload bytes land AND `activateGame` completes (a few seconds after `onGameCreated`).
+  The mount `useLayoutEffect` (~L515) and the streaming branch (~L578) both explicitly bail on
+  a `blob:` URL; there IS a blob `else` branch (~L582-588) that calls `loadVideoFromUrl`, but it
+  only triggers when `getClipVideoConfig` RETURNS a blob URL — for a game clip it always returns
+  the R2 playback-url, never a blob, so that branch is dead for this flow. Unlike Annotate
+  (`useAnnotateState`'s early-src + upload-store restore effects give instant blob playback),
+  **Framing cannot preview a still-uploading source today.** Any future "land the user in
+  Framing right after upload" flow (T7280's fast path, or Game Pools' clip-contributor landing)
+  hits this. Two resolution options analyzed (T7280-design.md §3, preserved at
+  `docs/plans/tasks/T7280-design.md` even though the task itself was abandoned): (A) teach
+  Framing to play the upload blob and swap to R2 on activation — high complexity, touches the
+  most timing-sensitive load effects in the app, risks the T6190 no-mount-fetch rule and borders
+  the reactive-persistence ban if the swap is implemented as a state-watching effect instead of a
+  gesture continuation; (B) a "Preparing your clip…" placeholder gated on "source not resolvable
+  yet," swapped to the live stream via the EXISTING `invalidateClips` gesture once upload
+  activation completes — low complexity, no changes to `getClipVideoConfig` or the load effects.
+  (B) was the approved direction when the task was live.
 - **Region trim levers are Pointer Events, not mouse (T5644, 2026-07-21).**
   `RegionLayer.jsx` highlight-mode begin/end levers (the region start/end trim
   handles) used `onMouseDown` + `document` `mousemove`/`mouseup`. On a phone, touch

@@ -287,6 +287,39 @@ The full checklist for an 11th→Nth sport:
   Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
+- **T7280 findings (2026-08-20, task abandoned mid-implementation in favor of the Game Pools
+  epic — capturing before the branch is deleted).** T7280 attempted a duration-based fast path
+  (single short clip → skip Annotate, land in Framing) via `handleAnnotateWithFile`
+  (ProjectsScreen.jsx ~L339, the one nav seam that decides Annotate BEFORE any file inspection)
+  and a new `useGameUploadFlow` hook. Real findings worth keeping regardless of the eventual
+  design (likely to differ — see EPIC.md "Captured requirements"):
+  - **The upload chain's earliest point `game_id` exists is `onGameCreated`**, fired from
+    `uploadManager.uploadGame` → `createGame('pending')` → `options.onGameCreated({game_id,
+    name})`, well BEFORE `ensureVideoInR2`/`activateGame`. Any auto-action keyed on the new
+    game (an auto-clip save, a auto-navigation) must fire from THIS callback — never a stale
+    "active game" ref (T7010) and never a reactive effect watching upload state.
+  - **`AnnotateContainer.handleGameVideoSelect`'s upload+metadata+clip logic was deliberately
+    NOT unified into the new shared hook**, despite the DRY temptation — it carries its own
+    timing-sensitive load-order landmines (T4060, T3960) that a shared abstraction risked
+    disturbing for a path that must stay byte-identical. If a future attempt tries to
+    consolidate these two upload paths, budget real time for re-verifying T4060/T3960 don't
+    regress, don't assume it's a mechanical extraction.
+  - **React 18 StrictMode double-invokes `useState` lazy initializers in dev** — an
+    impure "read-and-clear" one-shot breadcrumb consumer (reading a module-level flag and
+    clearing it inside a `useState(() => ...)` initializer) can silently drop the value before
+    it's ever used for real. Fix pattern: consume one-shot breadcrumbs from a `useRef`-guarded
+    `useEffect` on mount instead (the ref persists across StrictMode's synthetic
+    unmount/remount of the same instance) — never from a lazy initializer.
+  - **A Zustand selector on a whole mutable object (e.g. `activeUpload`) re-renders on every
+    field change of ANY tracked upload**, including unrelated background ones, if the object
+    gets a new reference per progress tick. Narrow to a boolean/primitive selector for
+    effect-heavy screens instead of subscribing to the whole object.
+  - **Framing's blob-source gap** (Framing cannot preview a still-uploading clip) is captured
+    in keyframes-framing.md's Landmines section — read that before attempting any
+    "land the user in Framing right after upload" flow again.
+  - Design doc with full architecture analysis preserved at `docs/plans/tasks/T7280-design.md`
+    on master (task itself superseded — see PLAN.md / dual-camera/EPIC.md "Captured
+    requirements" for where this direction actually landed).
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
   width-only, so a phone in LANDSCAPE ≥640px wide (iPhone 14 844x390, Pixel 7 915x412) renders the
   full desktop `ClipsSidePanel` (`hidden sm:flex`, `w-[352px]`) — NOT the mobile sidebar. Its
