@@ -287,3 +287,90 @@ describe('overlayActionStore — retryability of deterministic failures', () => 
     expect(useToastStore.getState().toasts.some((t) => t.action?.label === 'Retry')).toBe(false);
   });
 });
+
+/**
+ * T4330 -- a 409 `version_conflict` result (from the new actionClient, design
+ * doc section 5/9) is a THIRD category, distinct from both the retryable queue
+ * and the deterministic "undo it" rejection toast:
+ *   - it must NOT enter the retry queue (re-sending the same expected_version
+ *     can only 409 again)
+ *   - it must NOT show `_surfaceRejectionToast`'s "Undo it and try again" copy
+ *     (there is nothing to undo -- the other tab's edit is legitimate)
+ *   - it must be routed to the shared conflict-prompt util instead
+ *
+ * This routing does not exist yet -- `dispatch`/`isRetryableFailure` currently
+ * classify a 409 as a deterministic (non-retryable) failure and send it through
+ * `_surfaceRejectionToast`, which is the WRONG prompt. These tests are written
+ * test-first and are expected to FAIL until the conflict routing is wired in
+ * `overlayActionStore.js` (importing `surfaceConflictPrompt` or equivalent from
+ * `src/frontend/src/utils/actionConflictPrompt.js`, per the design doc).
+ */
+describe('overlayActionStore -- 409 version_conflict routing (T4330)', () => {
+  beforeEach(() => {
+    useOverlayActionStore.setState({ failedActions: [], isRetrying: false, _toastId: null });
+    useToastStore.setState({ toasts: [] });
+    vi.useRealTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('a 409 version_conflict result is NOT queued for retry', async () => {
+    const run = vi.fn().mockResolvedValue({
+      success: false,
+      status: 409,
+      error: 'version_conflict',
+      current_version: 9,
+    });
+
+    await dispatchOverlayAction('updateRegion', run);
+
+    // Only ONE attempt -- a 409 must not be retried (isRetryableFailure or an
+    // earlier short-circuit must stop it before the retry loop spends attempts).
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(useOverlayActionStore.getState().failedActions).toHaveLength(0);
+  });
+
+  it('a 409 version_conflict does NOT show the generic "undo it" rejection toast', async () => {
+    const run = vi.fn().mockResolvedValue({
+      success: false,
+      status: 409,
+      error: 'version_conflict',
+      current_version: 9,
+    });
+
+    await dispatchOverlayAction('updateRegion', run);
+
+    const toasts = useToastStore.getState().toasts;
+    // The rejection toast copy is "Undo it and try again" (_surfaceRejectionToast).
+    // A 409 must never produce that message.
+    expect(toasts.some((t) => /undo it and try again/i.test(t.message || ''))).toBe(false);
+  });
+
+  it('a 409 version_conflict routes to a refresh/conflict prompt distinct from the retry-queue toast', async () => {
+    const run = vi.fn().mockResolvedValue({
+      success: false,
+      status: 409,
+      error: 'version_conflict',
+      current_version: 9,
+    });
+
+    await dispatchOverlayAction('updateRegion', run);
+
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts.length).toBeGreaterThan(0);
+    // The conflict prompt offers a Refresh action (design doc section 5), not
+    // the retry-queue's "Retry" action.
+    expect(toasts.some((t) => t.action?.label === 'Refresh')).toBe(true);
+    expect(toasts.some((t) => t.action?.label === 'Retry')).toBe(false);
+  });
+
+  it('isRetryableFailure classifies a 409 version_conflict as non-retryable (handled, not queued)', () => {
+    expect(
+      isRetryableFailure({ success: false, status: 409, error: 'version_conflict' }),
+    ).toBe(false);
+  });
+});
