@@ -137,8 +137,10 @@ def test_registry_head_is_v043():
     # it merged master and found v037 already past the v040 head; T6630 was
     # renumbered from v039 to v042 (text_overlays regions) for the same reason
     # once T5215 landed first; T6850 added v043 (drops
-    # intro_min_duration_seconds -- T6680 made the v041 threshold dead).
-    assert max(m.version for m in MIGRATIONS) == 43
+    # intro_min_duration_seconds -- T6680 made the v041 threshold dead); T4330
+    # added v044 (working_clips.framing_version mutation counter for the
+    # unified action client's two-writer 409 conflict detection).
+    assert max(m.version for m in MIGRATIONS) == 44
     # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 35) == 1
@@ -148,11 +150,12 @@ def test_registry_head_is_v043():
     assert sum(1 for m in MIGRATIONS if m.version == 41) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 42) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 43) == 1
+    assert sum(1 for m in MIGRATIONS if m.version == 44) == 1
     # Every registered migration is REACHABLE: the runner applies versions above a
     # DB's user_version, so a class that never made it into MIGRATIONS is dead code
     # (v040 shipped unregistered once -- CI caught it here).
     registered = {m.version for m in MIGRATIONS}
-    assert {34, 35, 36, 38, 40, 41, 42, 43} <= registered
+    assert {34, 35, 36, 38, 40, 41, 42, 43, 44} <= registered
     # v037 / v039 belong to the sibling T5215 / T6630 branches' PRE-RENUMBER
     # claims. They must be renumbered ABOVE this head before they merge, or the
     # runner skips them. Both already did (T5215 -> v041, T6630 -> v042, above).
