@@ -350,8 +350,11 @@ library size, from one game to hundreds:
   and header-as-grid-cell spends a whole tile slot per group. Position telling you the group
   without reading is the property that makes a grouped grid worth having.
 - **The loading skeleton mirrors this shape** and takes its grid class from the same
-  exported map (`[4]`, the cap — never promise a wider row than data can produce). A private
-  copy of the class string here is exactly the T6310 drift bug.
+  exported map — the `[2]` entry (2-up at every breakpoint): 4 shells = two full rows
+  everywhere, and the geometry matches the loaded layout exactly for a library whose largest
+  group is ≤ 2 games. Bigger libraries load into 3-4 columns and shrink at that moment — an
+  accepted trade (a blind skeleton can't match every outcome), not a bug. A private copy of
+  the class string here is exactly the T6310 drift bug.
 
 ### Card carousel (`CardCarousel`)
 

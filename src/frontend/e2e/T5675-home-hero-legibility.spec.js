@@ -97,8 +97,8 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
   // SURFACE CHANGED: the Games home used to list ProjectManager's GameCard, whose
   // GameMetaRow renders "Uploaded <date>", "Footage quality N/100" and the rating
   // chips. T5681's poster grid replaced that list with GameTile -- a compact tile
-  // (as short as ~90px at the 2-up 390px breakpoint) whose scrim deliberately carries
-  // only name / clip count (T7290 dropped the date). Asserting the old tokens here failed on a
+  // (as short as ~90px at the 2-up 390px breakpoint) whose scrim carries
+  // name / match date / clip count (T7330). Asserting the old tokens here failed on a
   // surface that no longer renders them; GameCard itself is unchanged and still
   // covered by Vitest (ProjectManager.metaLegibility.test.jsx), so no coverage is
   // lost. What legibility means on THIS surface is asserted instead:
@@ -114,17 +114,16 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
     scrim.spans.some((t) => /\d+\s+clips?$/.test(t)),
     `clip count is labeled with its unit (got ${JSON.stringify(scrim.spans)})`,
   ).toBe(true);
-  // T7290: the scrim no longer carries a date at all. Match date reads from the tile
-  // NAME ("at Sporting Mar 21") and from the month header the tile sits under; the
-  // upload date that used to sit here contradicted both. This is the OLD assertion
-  // negated -- i.e. it genuinely goes red if a rendered date comes back. `scrim.spans`
-  // is scoped to `div > span`, so the name's own "Mar 21" suffix (an h3) can't
-  // false-positive; the expiry chip renders "Expired"/"5d", which won't match either.
+  // T7330: the scrim carries the MATCH date again, with its weekday ("Sat, Mar 21") --
+  // T7290 removed it as redundant with the title suffix, but the truncated title loses
+  // its suffix first, so T7330 restored it. What legibility means here: the date is
+  // present, weekday-labeled, and reads from game_date (the weekday prefix is what the
+  // title suffix never has, so this can't be satisfied by the name leaking into a span
+  // -- and `scrim.spans` is scoped to `div > span`, excluding the h3 anyway).
   expect(
-    scrim.spans.some((t) => /[A-Za-z]{3}\s+\d{1,2}/.test(t)),
-    `no date on the tile scrim -- match date lives in the name and the month header `
-      + `(got ${JSON.stringify(scrim.spans)})`,
-  ).toBe(false);
+    scrim.spans.some((t) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+[A-Za-z]{3}\s+\d{1,2}$/.test(t)),
+    `match date renders with its weekday on the tile scrim (got ${JSON.stringify(scrim.spans)})`,
+  ).toBe(true);
 
   await saveEvidence(page, 'criterion-3-gamecard-legibility');
 

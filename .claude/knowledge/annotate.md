@@ -350,7 +350,7 @@ The full checklist for an 11th→Nth sport:
   selecting a clip to mount the tall editor at 844×390.
 - **The Games-tab surface is `GameTile` (poster grid), NOT a list (T5681 → T5990).** The home Games
   tab renders a chronological landscape-tile grid of `<GameTile>` (ProjectManager.jsx:~881,
-  `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`). The older `GameCard`/`GameMetaRow`/`RatingChip`
+  grid classes now DERIVED per T7330 — see the T7330 entry below). The older `GameCard`/`GameMetaRow`/`RatingChip`
   list component was fully removed (T5990) — it had been dead since T5681 but its Vitest specs still
   rendered it directly and passed green, which masked real drift: `T5675-home-hero-legibility.spec.js`
   asserted `Uploaded`, `Footage quality N/100` and the rating chips that live only in `GameMetaRow`,
@@ -398,9 +398,17 @@ The full checklist for an 11th→Nth sport:
   deliberately hoists its games out of month order and sorts at its newest match. That is
   correct, not a bug: the agreement exists so month PLACEMENT cannot contradict the server, and
   raw-order consumers (`GameClipSelectorModal`) still receive the server's order untouched.
-  Tournament rules: `>= 2` games in one INSTANCE (a name is split at gaps > 90 days, so annual
-  recurrences never merge); a lone tournament game stays in its month; a month emptied by a
-  hoist is not rendered; the range sublabel is built from real match dates only.
+  Tournament rules: `>= 2` games in one INSTANCE (a name is split at gaps > 90 days measured
+  PAIRWISE between consecutive matches, so annual recurrences never merge); a lone tournament
+  game stays in its month; a month emptied by a hoist is not rendered; the range sublabel is
+  built from real match dates only. Two accepted consequences, not bugs: (1) pairwise chaining
+  makes an instance's total span UNBOUNDED — a league typed into `tournament_name` with games
+  every ≤90 days collapses its whole history into one amber group above every month header;
+  fine until roughly a season's worth, revisit if real data hits it. (2) Collections (T5880,
+  `collections.py`) groups tournaments by NAME ONLY, server-side, no instance split, no >=2
+  rule — so "Surf Cup" across two years is ONE group there and TWO here, and a lone tournament
+  game gets a tournament group there but a month group here. Divergence known and deliberate;
+  unify only if a user reports the mismatch.
   Date parsing for ALL of this lives in `src/frontend/src/utils/matchDate.js` — one parser, on
   purpose, because the UTC-midnight landmine must not get a second implementation.
   Layout: desktop column count is derived (`gamesGridColumns`, clamp 2-4) and group headers sit

@@ -7,9 +7,11 @@ import { GamesListSkeleton, GAMES_TILE_GRID_BY_COLUMNS } from './ProjectManager'
 // container/grid classes and the aspect-video shells against drift.
 //
 // T7330: the loaded grid's column count is now DERIVED from the groups, which do not
-// exist yet at skeleton time. The skeleton uses the 4-column entry -- the cap, so it can
-// never promise a wider row than real data could produce -- and takes it from the SAME
-// exported map the real grid selects from, which is what keeps the drift guard honest.
+// exist yet at skeleton time. The skeleton uses the 2-COLUMN entry -- grid-cols-2 at
+// every breakpoint, so 4 shells are two full rows everywhere and the geometry matches
+// the loaded layout exactly for a small library (largest group <= 2), the shape the
+// redesign targeted -- and takes it from the SAME exported map the real grid selects
+// from, which is what keeps the drift guard honest.
 
 const hasClasses = (el, ...classes) => {
   const set = new Set(el.className.split(/\s+/));
@@ -33,10 +35,8 @@ describe('GamesListSkeleton (T6310)', () => {
     expect(shellGrid).toBeTruthy();
     // Uses the SHARED map rather than a private copy -- a class string spelled out here
     // would be exactly the drift T6310 was filed for.
-    expect(shellGrid.className).toBe(GAMES_TILE_GRID_BY_COLUMNS[4]);
-    expect(
-      hasClasses(shellGrid, 'grid-cols-2', 'sm:grid-cols-3', 'lg:grid-cols-4', 'gap-2', 'sm:gap-3', 'lg:gap-4'),
-    ).toBe(true);
+    expect(shellGrid.className).toBe(GAMES_TILE_GRID_BY_COLUMNS[2]);
+    expect(hasClasses(shellGrid, 'grid-cols-2', 'gap-2', 'sm:gap-3', 'lg:gap-4')).toBe(true);
     // No vertical list stack.
     expect(getByTestId('games-skeleton').querySelector('.space-y-2')).toBeNull();
   });
@@ -58,12 +58,11 @@ describe('GamesListSkeleton (T6310)', () => {
     });
   });
 
-  it('defaults count to 4 so every breakpoint (2/3/4-up) fills full rows', () => {
+  it('defaults count to 4: two full 2-up rows at every breakpoint', () => {
     const { getByTestId } = render(<GamesListSkeleton />);
     const shells = getByTestId('games-skeleton').querySelectorAll('.aspect-video');
-    // 4 fills exactly one desktop row and two mobile rows. The tablet column is 3, which
-    // 4 does not divide -- accepted: the skeleton's job is holding the layout's shape, and
-    // over-filling to 12 shells would flash far more chrome than the real list ever shows.
+    // The 2-column grid holds at all widths, so 4 shells = exactly two full rows
+    // everywhere -- no ragged partial row at any breakpoint.
     expect(shells.length).toBe(4);
   });
 

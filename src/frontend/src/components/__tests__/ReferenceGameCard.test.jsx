@@ -57,9 +57,13 @@ describe('ReferenceGameCard (T5820)', () => {
     expect(container.textContent).not.toMatch(/Jul|2026-07-01/);
   });
 
-  it('renders no date line at all when the referenced game has no match date', () => {
+  it('renders an EMPTY date line when the referenced game has no match date', () => {
+    // The line stays (min-h reserves it) so a dateless card keeps the same scrim height
+    // as its neighbors in the group -- but no upload date, no "Invalid Date" leaks in.
     render(<ReferenceGameCard game={{ ...refGame, game_date: null }} onOpen={vi.fn()} />);
-    expect(screen.getByRole('heading', { level: 3 }).nextElementSibling).toBeNull();
+    const line = screen.getByRole('heading', { level: 3 }).nextElementSibling;
+    expect(line).not.toBeNull();
+    expect(line.textContent.trim()).toBe('');
   });
 
   it('has NONE of the real tile actions — no kebab / edit / delete / recap / expiry chip', () => {

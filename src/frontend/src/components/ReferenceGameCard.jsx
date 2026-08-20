@@ -84,9 +84,9 @@ export function ReferenceGameCard({ game, onOpen }) {
         <h3 className="text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
           {game.name}
         </h3>
-        {matchDate && (
-          <div className="mt-0.5 text-xs text-gray-300 truncate">{matchDate}</div>
-        )}
+        {/* min-h reserves the line even when empty, so a dateless reference card keeps
+            the same scrim height as its GameTile neighbors in the group (reviewer, T7330). */}
+        <div className="mt-0.5 min-h-4 text-xs text-gray-300 truncate">{matchDate}</div>
       </div>
     </button>
   );

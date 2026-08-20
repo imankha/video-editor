@@ -898,7 +898,7 @@ async def list_games():
 
 
 # T7290: the games list is ordered by MATCH date descending, matching how the Games tab
-# groups and renders it (ProjectManager.groupGamesByMonth) -- the first paint, and any
+# groups and renders it (ProjectManager.groupGamesForTab) -- the first paint, and any
 # consumer that trusts server order, must not contradict the rendered order. game_date is
 # date-only TEXT ("YYYY-MM-DD"), so it sorts lexicographically; substr() reduces the
 # created_at timestamp to that same shape for rows whose game_date is missing (games

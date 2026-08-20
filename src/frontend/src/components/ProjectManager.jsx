@@ -158,7 +158,14 @@ function gameOrganizingDate(game, matchDate) {
 // into instances wherever consecutive matches sit more than this far apart. 90 days splits
 // an annual recurrence (~365) comfortably while keeping a multi-week cup series together.
 const TOURNAMENT_INSTANCE_GAP_DAYS = 90;
-const TOURNAMENT_INSTANCE_GAP_MS = TOURNAMENT_INSTANCE_GAP_DAYS * 86400000;
+
+// Difference in CALENDAR days between two local-midnight dates. Math.round absorbs the
+// +/-1h a DST boundary adds to the raw millisecond difference -- a pair exactly 90 days
+// apart must not split (or chain) depending on whether the season changed between them.
+// Same landmine family as the UTC-midnight parse this file is careful about.
+function calendarDaysBetween(newer, older) {
+  return Math.round((newer - older) / 86400000);
+}
 
 // One game does not make a tournament group: it stays in its month, where its title already
 // reads "Surf Cup: Vs Rebels Jul 4". A group only earns its own header at two or more.
@@ -217,15 +224,17 @@ export function groupGamesForTab(games) {
     let instance = [members[0]];
     const instances = [];
     for (const member of members.slice(1)) {
-      const gap = instance[instance.length - 1].date - member.date;
-      if (gap <= TOURNAMENT_INSTANCE_GAP_MS) instance.push(member);
+      // Gap is measured against the PREVIOUS member, not the instance's first: a season
+      // of games every few weeks chains into one instance no matter how long it runs.
+      const gap = calendarDaysBetween(instance[instance.length - 1].date, member.date);
+      if (gap <= TOURNAMENT_INSTANCE_GAP_DAYS) instance.push(member);
       else { instances.push(instance); instance = [member]; }
     }
     instances.push(instance);
 
     for (const inst of instances) {
       if (inst.length < MIN_TOURNAMENT_GAMES) continue;   // singles fall back to their month
-      inst.forEach(entry => claimed.add(entry.game.id));
+      inst.forEach(entry => claimed.add(entry));
       tournamentGroups.push({
         // Instance-scoped so two years of one tournament get distinct React keys.
         key: `tournament:${key}:${inst[0].date.getFullYear()}-${inst[0].date.getMonth() + 1}`,
@@ -241,9 +250,11 @@ export function groupGamesForTab(games) {
 
   // Everything not claimed by a tournament falls into its match month. Insertion order is
   // already date-descending, so a month emptied by a hoist simply never gets created.
+  // `claimed` holds ENTRY objects (not game ids), so a hypothetical id-less row can
+  // never alias another and silently vanish from both groupings.
   const months = new Map();
   for (const entry of dated) {
-    if (claimed.has(entry.game.id)) continue;
+    if (claimed.has(entry)) continue;
     const key = `${entry.date.getFullYear()}-${String(entry.date.getMonth() + 1).padStart(2, '0')}`;
     if (!months.has(key)) months.set(key, []);
     months.get(key).push(entry);
@@ -1706,13 +1717,18 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
  * GamesListSkeleton - placeholder shown while the Games tab loads (T4771, rebuilt
  * T6310, re-shaped T7330). Mirrors the loaded poster grid (GameTile, T5681): same
  * container width, same rail-header group shape, and a tile grid taken from the SHARED
- * GAMES_TILE_GRID_BY_COLUMNS map, with `aspect-video` shells instead of GameTiles, so data
- * arriving does not snap the layout. Pure render — no fetching, no subscribing.
+ * GAMES_TILE_GRID_BY_COLUMNS map, with `aspect-video` shells instead of GameTiles.
+ * Pure render — no fetching, no subscribing.
  *
  * The real grid's column count is derived from the loaded groups, which do not exist yet
- * here — 4 is the honest neutral: it is the cap, so the skeleton never promises a wider row
- * than the data can produce. `count` defaults to 4 to fill exactly one desktop row (and
- * two tablet/mobile rows) with no ragged partial row at any breakpoint.
+ * here, so the skeleton must pick one blind. It uses the 2-COLUMN entry: `grid-cols-2` at
+ * every breakpoint, so the default 4 shells make exactly two full rows on mobile, tablet
+ * and desktop alike (no ragged partial row anywhere), and the geometry matches the loaded
+ * layout EXACTLY for any library whose largest group is <= 2 games — the small-library
+ * shape this layout was redesigned for. For a bigger library the loaded grid arrives at
+ * 3-4 columns and tiles shrink at that moment; a blind skeleton cannot match every
+ * outcome, and matching the small library keeps the no-snap case where the tab is
+ * busiest. (Reviewer-accepted trade, T7330 — no unconditional "never snaps" claim.)
  */
 export function GamesListSkeleton({ count = 4 }) {
   return (
@@ -1725,7 +1741,7 @@ export function GamesListSkeleton({ count = 4 }) {
           <div className="h-4 w-20 bg-gray-700/70 rounded animate-pulse" />
           <div className="h-4 w-14 bg-gray-700/50 rounded-full animate-pulse lg:mt-1.5" />
         </div>
-        <div className={GAMES_TILE_GRID_BY_COLUMNS[4]}>
+        <div className={GAMES_TILE_GRID_BY_COLUMNS[2]}>
           {Array.from({ length: count }).map((_, i) => (
             <div
               key={i}

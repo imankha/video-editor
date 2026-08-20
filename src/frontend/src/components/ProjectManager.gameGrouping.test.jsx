@@ -31,6 +31,10 @@ function groupGamesByMonth(games) {
   const groups = {};
   const order = [];
   for (const group of groupGamesForTab(games)) {
+    // Guard, not assumption: these fixtures carry no tournament_name, so no two groups
+    // can share a label. If one ever did, the object write below would silently merge
+    // them and weaken every assertion reading through this adapter.
+    expect(groups[group.label], `duplicate group label ${group.label}`).toBeUndefined();
     groups[group.label] = group.games;
     order.push(group.label);
   }
@@ -252,6 +256,36 @@ describe('groupGamesForTab — tournament grouping (T7330)', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].kind).toBe('tournament');
     expect(groups[0].games.map(g => g.id)).toEqual([1, 2, 3]);
+  });
+
+  it('chains PAIRWISE: gaps under 90 days keep one instance even when it spans far more', () => {
+    // Four games 45 days apart, 135 days end to end. An implementation that measured
+    // each gap from the instance's FIRST member (instead of the previous one) would
+    // split this at game 3 -- the reviewer flagged that nothing pinned the difference.
+    const games = [
+      tournamentGame(1, '2026-08-15', 'Season Series'),
+      tournamentGame(2, '2026-07-01', 'Season Series'),
+      tournamentGame(3, '2026-05-17', 'Season Series'),
+      tournamentGame(4, '2026-04-02', 'Season Series'),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].games.map(g => g.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('produces three instances from one name when two gaps exceed 90 days', () => {
+    // Exercises the split loop more than once: three seasons of a recurring cup.
+    const games = [
+      tournamentGame(1, '2026-07-06', 'Surf Cup'), tournamentGame(2, '2026-07-03', 'Surf Cup'),
+      tournamentGame(3, '2025-07-06', 'Surf Cup'), tournamentGame(4, '2025-07-03', 'Surf Cup'),
+      tournamentGame(5, '2024-07-06', 'Surf Cup'), tournamentGame(6, '2024-07-03', 'Surf Cup'),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(groups.map(g => g.kind)).toEqual(['tournament', 'tournament', 'tournament']);
+    expect(groups.map(g => g.games.map(x => x.id))).toEqual([[1, 2], [3, 4], [5, 6]]);
+    expect(new Set(groups.map(g => g.key)).size).toBe(3);
   });
 
   it('normalizes case and whitespace when matching a tournament name', () => {

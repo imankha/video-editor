@@ -49,8 +49,8 @@ export function formatMatchDateLabel(gameDate) {
 }
 
 /**
- * Range label for a tournament group: "Jul 3 - Jul 6", or "Apr 18" when every match shares a
- * day. Built from REAL match dates only — a member with no game_date contributes nothing —
+ * Range label for a tournament group: "Jul 3 – Jul 6" (en dash), or "Apr 18" when every
+ * match shares a day. Built from REAL match dates only — a member with no game_date contributes nothing —
  * and returns null when no member has one, so the header simply omits the line rather than
  * inventing a range out of upload timestamps.
  */
