@@ -1,17 +1,13 @@
 import { useMemo, useCallback } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { useIsCoarsePointer } from './useIsMobile';
 
 export const ShareCapability = {
   FULL: 'full',
   LINK_ONLY: 'link',
   NONE: 'none',
 };
-
-function isMobileDevice() {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
-}
 
 // In-flight dedup: rapid repeat clicks await the SAME request instead of
 // queueing N identical POSTs behind the backend's per-user write lock (the
@@ -52,7 +48,18 @@ async function copyToClipboard(text) {
 }
 
 export function useWebShare() {
-  const isMobile = useMemo(() => isMobileDevice(), []);
+  // T7350: mobile-vs-desktop routing MUST use pointer capability, never a
+  // navigator.userAgent regex. This is the THIRD occurrence of the same
+  // landmine: T6300 removed a UA sniff from ReelTile/DownloadsPanel because it
+  // misdetected touch-Windows as desktop; T5220 (8a051985) then reintroduced a
+  // UA regex here to keep desktop Chromium (which exposes navigator.share) on
+  // ShareModal — but that regex silently misclassifies in-app webviews,
+  // "Request Desktop Site" mode, and unlisted UA strings, dropping those real
+  // mobile users onto the desktop modal with no native OS share sheet.
+  // useIsCoarsePointer() is the same live matchMedia gate ReelTile/DraftTile
+  // already use: coarse pointer (touch/pen) => mobile share path; fine pointer
+  // (mouse) => ShareModal, even on Chromium builds exposing navigator.share.
+  const isMobile = useIsCoarsePointer();
 
   const capability = useMemo(() => {
     if (!navigator.share || !isMobile) return ShareCapability.NONE;
