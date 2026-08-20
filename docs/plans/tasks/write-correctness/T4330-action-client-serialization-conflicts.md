@@ -1,6 +1,6 @@
 # T4330: Unified Action Client — Serialization + Versioning + 409 Conflicts
 
-**Status:** WIP
+**Status:** WAITING ON USER (design gate — T4330-design.md awaiting approval)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03
