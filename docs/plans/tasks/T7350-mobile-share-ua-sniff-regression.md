@@ -1,6 +1,6 @@
 # T7350: Mobile Share Skips the Native OS Sheet (UA-Sniff Regression)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-19
