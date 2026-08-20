@@ -30,11 +30,21 @@ logger = logging.getLogger(__name__)
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 # T2880: Module-level presigned URL cache. URLs are valid for hours (expires_in param);
-# 3.5h TTL keeps cache < expiry with margin. Keyed on (r2_key, expires_in).
-# timer=time.time: monotonic clock pauses during Fly.io machine suspension,
-# causing expired URLs to be served from cache after wake-up.
+# 3.5h outer TTL bounds memory and evicts long-lived entries eventually. Keyed on
+# (r2_key, expires_in). timer=time.time: monotonic clock pauses during Fly.io machine
+# suspension, causing expired URLs to be served from cache after wake-up.
+# T7380: the outer TTL alone is NOT sufficient to guarantee freshness -- it only bounds
+# the OLDEST an entry can be, not whether a given entry's own `expires_in` has already
+# elapsed. A caller passing expires_in SHORTER than the outer ttl (e.g. poster.py's
+# expires_in=3600 against this cache's 12600s ttl) would otherwise get an
+# already-R2-expired URL served back for the remaining window, causing real 403s.
+# Values are (url, expires_at) so every read validates the URL's OWN signature window,
+# never just the cache's.
 _PRESIGNED_URL_CACHE: TTLCache = TTLCache(maxsize=1000, ttl=12600, timer=time.time)
 _PRESIGNED_URL_CACHE_LOCK = threading.Lock()
+# Regenerate this many seconds before the actual R2 expiry so a URL handed to a caller
+# doesn't expire mid-use (e.g. an ffmpeg process that opens it a few seconds later).
+_PRESIGNED_URL_EXPIRY_SAFETY_MARGIN_SEC = 30
 
 # T1539: Per-user, per-db-type upload locks. Prevents concurrent PutObject on
 # the same R2 key from different code paths (middleware sync vs export worker
@@ -2604,10 +2614,14 @@ def generate_presigned_url_global(
         Presigned URL string, or None if failed
     """
     cache_key = (key, expires_in)
+    now = time.time()
     with _PRESIGNED_URL_CACHE_LOCK:
         cached = _PRESIGNED_URL_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+        # T7380: validate the URL's OWN expiry, not just the outer cache's TTL --
+        # an entry can still be present in the outer TTLCache after its actual
+        # R2 signature window has elapsed (see cache comment above).
+        if cached is not None and cached[1] - _PRESIGNED_URL_EXPIRY_SAFETY_MARGIN_SEC > now:
+            return cached[0]
 
     client = get_r2_client()
     if not client:
@@ -2625,7 +2639,7 @@ def generate_presigned_url_global(
         logger.debug(f"Generated presigned URL for global object: {key}")
         if url:
             with _PRESIGNED_URL_CACHE_LOCK:
-                _PRESIGNED_URL_CACHE[cache_key] = url
+                _PRESIGNED_URL_CACHE[cache_key] = (url, now + expires_in)
         return url
     except Exception as e:
         logger.error(f"Failed to generate presigned URL for {key}: {e}")
