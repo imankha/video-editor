@@ -1,6 +1,6 @@
 # T4330: Unified Action Client — Serialization + Versioning + 409 Conflicts
 
-**Status:** WIP (design approved 2026-08-20 — skip-check window behavior, full reload on conflict; implementation resumed)
+**Status:** WAITING ON USER (branch pushed, awaiting test + merge — feature/T4330-action-client-serialization @ 6d0ba8d2)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03
