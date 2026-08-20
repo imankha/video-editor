@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { render, cleanup, act } from '@testing-library/react';
+import { render, cleanup, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import CropOverlay from './CropOverlay';
 
@@ -9,14 +9,19 @@ import CropOverlay from './CropOverlay';
  * Root cause (fixed): the window mousemove/mouseup listeners used to be attached in
  * a useEffect gated on isDragging. The effect commits a tick AFTER the mousedown
  * state update, so a fast first down->move fired before the listeners existed and the
- * move was lost. The fix attaches the listeners synchronously inside the pointer-down
- * handler (transient state in refs, no gated effect), so the first move is captured.
+ * move was lost. The original fix attached the listeners synchronously inside the
+ * pointer-down handler (transient state in refs, no gated effect).
  *
- * These tests exercise that directly by dispatching NATIVE events without an act()
- * flush between mousedown and mousemove — which is exactly the window in which the old
- * effect-gated attach had not yet run. On the old code the window 'mousemove' listener
- * would be absent at that moment (assert #1) and onCropChange would never fire on the
- * first move (assert #2). On the fixed code both hold.
+ * T7390 — window mouse/touch listeners replaced by Pointer Events + setPointerCapture
+ * (matches the straighten tool's established pattern, T5640/T5644/T5450): the old
+ * `onTouchStart` binding is passive-by-default at React's root listener, so
+ * `e.preventDefault()` inside it silently no-opped (real bug, not just a console
+ * warning — the browser's own touch scroll/bounce was never actually blocked).
+ * `onPointerDown` is not part of that passive-by-default set. Pointer capture routes
+ * all subsequent pointermove/pointerup/pointercancel for that pointerId to the
+ * capturing element itself (armed synchronously in the pointerdown handler, same
+ * "no gated effect" guarantee T5380 required) — so these tests now dispatch Pointer
+ * Events directly on the crop box element instead of Mouse Events on window.
  *
  * The video->screen transform is mocked to a unit-scale identity rect so the drag math
  * is deterministic (screen delta == video delta, scaleX/Y == 1).
@@ -25,6 +30,10 @@ import CropOverlay from './CropOverlay';
  * with its warm-up prime removed — but that spec HONEST-SKIPS in the /dotask container
  * because this env has no framing-ready reel draft (openFramingDraft times out on the
  * "Reel Drafts" chip). This component test is the standing guard in that environment.
+ * Per this project's real-browser-for-pointer-fixes rule, jsdom does not simulate true
+ * pointer-capture event REROUTING — these tests dispatch events on the same element
+ * pointerdown captured, which is sufficient to prove the synchronous-arming and
+ * guard-state behavior but not a substitute for the live e2e proof above.
  */
 
 vi.mock('../../../hooks/useVideoDisplayRect', () => {
@@ -76,31 +85,30 @@ afterEach(() => {
 });
 
 describe('T5380 CropOverlay first-drag gesture', () => {
-  it('attaches the window drag listeners synchronously on mousedown (not via a gated effect)', () => {
+  it('arms pointer capture synchronously on pointerdown (not via a gated effect)', () => {
     const onCropChange = vi.fn();
     const onCropComplete = vi.fn();
-    // render() flushes initial effects; no drag listeners exist yet.
+    // render() flushes initial effects; nothing is captured yet.
     const { container } = render(
       <Harness onCropChange={onCropChange} onCropComplete={onCropComplete} />
     );
     const cropBox = getCropBox(container);
     expect(cropBox).toBeTruthy();
 
-    const addSpy = vi.spyOn(window, 'addEventListener');
+    // jsdom does not define setPointerCapture at all (unlike a real browser) — the
+    // component guards the call with optional chaining for exactly this reason. Define
+    // it here so the spy has something to attach to.
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const captureSpy = vi.spyOn(HTMLElement.prototype, 'setPointerCapture');
 
-    // Native mousedown, dispatched WITHOUT act() — so no passive effect runs between
-    // this and the assert. The fix must attach the move/up listeners inside the
-    // handler itself. (Old effect-gated code attaches nothing here.)
-    cropBox.dispatchEvent(
-      new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200, clientY: 175 })
-    );
+    // Pointerdown dispatched WITHOUT an act() flush between this and the assert —
+    // capture must be requested inside the handler itself, not a gated effect.
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
 
-    const events = addSpy.mock.calls.map((c) => c[0]);
-    expect(events).toContain('mousemove');
-    expect(events).toContain('mouseup');
+    expect(captureSpy).toHaveBeenCalledWith(1);
 
-    // Clean up the drag so no window listeners leak into the next test.
-    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    // Clean up the drag so state doesn't leak into the next test.
+    fireEvent.pointerUp(cropBox, { pointerId: 1 });
   });
 
   it('moves the crop on the FIRST drag after mount, with no warm-up prime', () => {
@@ -112,10 +120,10 @@ describe('T5380 CropOverlay first-drag gesture', () => {
     const cropBox = getCropBox(container);
 
     // First gesture, no prior pointer activity: down at (200,175), then a +40,+30 move.
-    cropBox.dispatchEvent(
-      new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200, clientY: 175 })
-    );
-    window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 240, clientY: 205 }));
+    // Pointer capture routes both to the SAME element in a real browser; dispatching on
+    // cropBox directly here matches that routing.
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    fireEvent.pointerMove(cropBox, { pointerId: 1, clientX: 240, clientY: 205 });
 
     // The very first move must reach onCropChange (the dropped-gesture regression).
     expect(onCropChange).toHaveBeenCalled();
@@ -126,12 +134,12 @@ describe('T5380 CropOverlay first-drag gesture', () => {
     expect(moved.width).toBeCloseTo(200, 3);
     expect(moved.height).toBeCloseTo(150, 3);
 
-    // Mouseup ends the drag and emits the completed crop exactly once.
-    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    // Pointerup ends the drag and emits the completed crop exactly once.
+    fireEvent.pointerUp(cropBox, { pointerId: 1 });
     expect(onCropComplete).toHaveBeenCalledTimes(1);
   });
 
-  it('detaches the window listeners on mouseup so a dropped move does nothing after release', () => {
+  it('ignores a stray move after pointerup releases the drag', () => {
     const onCropChange = vi.fn();
     const onCropComplete = vi.fn();
     const { container } = render(
@@ -139,19 +147,17 @@ describe('T5380 CropOverlay first-drag gesture', () => {
     );
     const cropBox = getCropBox(container);
 
-    cropBox.dispatchEvent(
-      new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200, clientY: 175 })
-    );
-    window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 220, clientY: 175 }));
-    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    fireEvent.pointerMove(cropBox, { pointerId: 1, clientX: 220, clientY: 175 });
+    fireEvent.pointerUp(cropBox, { pointerId: 1 });
 
     onCropChange.mockClear();
-    // A stray move after release must be ignored (listeners removed).
-    window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 300, clientY: 175 }));
+    // A stray move after release must be ignored (draggingRef cleared on pointerup).
+    fireEvent.pointerMove(cropBox, { pointerId: 1, clientX: 300, clientY: 175 });
     expect(onCropChange).not.toHaveBeenCalled();
   });
 
-  it('unmounting mid-drag removes the window listeners (no leak / no stale update)', () => {
+  it('unmounting mid-drag does not throw (pointer capture is released by the browser, no manual listener cleanup needed)', () => {
     const onCropChange = vi.fn();
     const onCropComplete = vi.fn();
     const { container, unmount } = render(
@@ -159,13 +165,9 @@ describe('T5380 CropOverlay first-drag gesture', () => {
     );
     const cropBox = getCropBox(container);
 
-    cropBox.dispatchEvent(
-      new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200, clientY: 175 })
-    );
-    act(() => { unmount(); });
+    vi.spyOn(HTMLElement.prototype, 'setPointerCapture').mockImplementation(() => {});
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
 
-    onCropChange.mockClear();
-    window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 300, clientY: 175 }));
-    expect(onCropChange).not.toHaveBeenCalled();
+    expect(() => act(() => { unmount(); })).not.toThrow();
   });
 });

@@ -272,11 +272,20 @@ export default function CropOverlay({
   }, []);
 
   /**
-   * Handle pointer/touch up (end drag or resize). Detaches the window listeners
-   * and emits the completed crop. Reads currentCrop from a ref so the final
-   * keyframe reflects the drag, not the value captured at mousedown.
+   * Handle pointer up/cancel (end drag or resize) and emit the completed crop.
+   * Reads currentCrop from a ref so the final keyframe reflects the drag, not
+   * the value captured at pointerdown.
+   *
+   * T7390: Pointer Events + setPointerCapture (matches the straighten tool's
+   * established real-browser pattern, T5640/T5644/T5450) instead of dual
+   * mouse+touch handlers + window-level listeners. Capture routes all
+   * subsequent pointermove/pointerup/pointercancel for this pointerId to the
+   * element that captured it — even once the finger/cursor leaves its visual
+   * bounds — so no window listener attach/detach is needed, and preventDefault
+   * works (onTouchStart is passive-by-default at React's root listener;
+   * onPointerDown is not).
    */
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e) => {
     const wasActive = draggingRef.current || resizingRef.current;
 
     draggingRef.current = false;
@@ -284,10 +293,7 @@ export default function CropOverlay({
     resizeHandleRef.current = null;
     cropStartRef.current = null;
 
-    window.removeEventListener('mousemove', handlePointerMove);
-    window.removeEventListener('mouseup', handlePointerUp);
-    window.removeEventListener('touchmove', handlePointerMove);
-    window.removeEventListener('touchend', handlePointerUp);
+    e?.currentTarget?.releasePointerCapture?.(e.pointerId);
 
     if (wasActive) {
       // Notify parent that crop change is complete (create keyframe)
@@ -302,61 +308,38 @@ export default function CropOverlay({
         height: round3(crop.height)
       });
     }
-  }, [handlePointerMove]);
+  }, []);
 
   /**
-   * Attach the window move+up listeners synchronously (mouse + touch). Called from
-   * the pointer-down handlers so the first move is captured with zero re-render lag.
-   */
-  const attachDragListeners = useCallback(() => {
-    window.addEventListener('mousemove', handlePointerMove);
-    window.addEventListener('mouseup', handlePointerUp);
-    window.addEventListener('touchmove', handlePointerMove, { passive: false });
-    window.addEventListener('touchend', handlePointerUp);
-  }, [handlePointerMove, handlePointerUp]);
-
-  /**
-   * Handle pointer/touch down on crop rectangle (start drag)
+   * Handle pointer down on crop rectangle (start drag)
    */
   const handleCropPointerDown = (e) => {
     if (e.target.classList.contains('crop-handle')) return;
 
     e.preventDefault();
     e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
 
-    const pos = getEventPosition(e);
     draggingRef.current = true;
     resizingRef.current = false;
-    dragStartRef.current = { x: pos.clientX, y: pos.clientY };
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
     cropStartRef.current = currentCrop;
-    attachDragListeners();
   };
 
   /**
-   * Handle pointer/touch down on resize handle
+   * Handle pointer down on resize handle
    */
   const handleResizePointerDown = (e, handle) => {
     e.preventDefault();
     e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
 
-    const pos = getEventPosition(e);
     resizingRef.current = true;
     draggingRef.current = false;
     resizeHandleRef.current = handle;
-    dragStartRef.current = { x: pos.clientX, y: pos.clientY };
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
     cropStartRef.current = currentCrop;
-    attachDragListeners();
   };
-
-  // Safety net: if the component unmounts mid-drag, detach the window listeners.
-  useEffect(() => {
-    return () => {
-      window.removeEventListener('mousemove', handlePointerMove);
-      window.removeEventListener('mouseup', handlePointerUp);
-      window.removeEventListener('touchmove', handlePointerMove);
-      window.removeEventListener('touchend', handlePointerUp);
-    };
-  }, [handlePointerMove, handlePointerUp]);
 
   // ==========================================================================
   // T5640 straighten tool — Pointer Events (real-browser rule: touch-action:none
@@ -613,8 +596,10 @@ export default function CropOverlay({
           boxShadow: `0 0 0 9999px rgba(0, 0, 0, ${dimOpacity})`,
           touchAction: 'none'
         }}
-        onMouseDown={handleCropPointerDown}
-        onTouchStart={handleCropPointerDown}
+        onPointerDown={handleCropPointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         title="Drag to move the crop box. Drag corners or edges to resize. This sets the visible area of your highlight."
       >
         {/* Grid lines */}
@@ -667,8 +652,10 @@ export default function CropOverlay({
               zIndex: 10,
               touchAction: 'none'
             }}
-            onMouseDown={(e) => handleResizePointerDown(e, handle.name)}
-            onTouchStart={(e) => handleResizePointerDown(e, handle.name)}
+            onPointerDown={(e) => handleResizePointerDown(e, handle.name)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
           />
         ))}
       </div>
