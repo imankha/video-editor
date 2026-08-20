@@ -10,19 +10,30 @@ import { fileURLToPath } from 'url';
  * value) could exceed a short spotlight span before Overlay's own video ever
  * loaded, showing the "Reset" pill floating over a stuck loading spinner.
  *
+ * First fix attempt gated on `duration > 0` -- insufficient, because
+ * duration/currentTime live in the SHARED useVideo hook and keep Framing's
+ * last values while Overlay's own video is loading or has failed to load
+ * (confirmed by live user re-test 2026-08-20: the pill still showed). The
+ * real fix gates on `effectiveOverlayVideoUrl`, the container's own useMemo
+ * that is truthy ONLY once a working-video load has actually succeeded or a
+ * valid framing-passthrough applies.
+ *
  * OverlayContainer has no existing test harness (it takes ~30 props injected
  * by App.jsx, per its own file docstring) — building one from scratch is out
  * of scope for a one-line boolean guard. This pins the fix at the source
- * level instead: a future edit to this line must keep the duration > 0 gate.
+ * level instead: a future edit to this line must keep the
+ * effectiveOverlayVideoUrl gate, not revert to duration.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe('OverlayContainer isPastSpotlight (T7370)', () => {
-  it('gates on duration > 0 so the Reset pill cannot appear before the video has loaded', () => {
+  it('gates on effectiveOverlayVideoUrl so the Reset pill cannot appear before the video has loaded', () => {
     const source = fs.readFileSync(path.join(__dirname, 'OverlayContainer.jsx'), 'utf-8');
     const match = source.match(/const isPastSpotlight = ([^;]+);/);
     expect(match).toBeTruthy();
-    expect(match[1]).toContain('duration > 0');
+    expect(match[1]).toContain('effectiveOverlayVideoUrl');
+    // Guard against reverting to the insufficient duration-based gate.
+    expect(match[1]).not.toContain('duration > 0');
   });
 });
