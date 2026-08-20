@@ -277,27 +277,57 @@ class FramingAction(BaseModel):
 def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
     """
     Get current framing data for a clip.
-    Returns (crop_keyframes list, segments_data dict, clip row).
+    Returns (crop_keyframes list, segments_data dict, clip row, framing_version int|None).
+
+    framing_version is None when the v044 column hasn't been migrated yet
+    (deploy->migrate window) -- callers must treat None as "conflict
+    detection unavailable" and skip the check/bump entirely, never error.
     """
-    cursor.execute("""
+    has_framing_version = column_exists(cursor, "working_clips", "framing_version")
+    version_select = ", framing_version" if has_framing_version else ""
+    cursor.execute(f"""
         SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
-               crop_data, timing_data, segments_data
+               crop_data, timing_data, segments_data{version_select}
         FROM working_clips
         WHERE id = ? AND project_id = ?
     """, (clip_id, project_id))
     clip = cursor.fetchone()
 
     if not clip:
-        return None, None, None
+        return None, None, None, None
 
     crop_keyframes = decode_data(clip['crop_data']) or []
     segments_data = decode_data(clip['segments_data']) or {}
+    framing_version = (clip['framing_version'] or 0) if has_framing_version else None
 
-    return crop_keyframes, segments_data, clip
+    return crop_keyframes, segments_data, clip, framing_version
+
+
+def _check_framing_version_conflict(expected_version: int | None, framing_version: int | None):
+    """
+    T4330: pure comparison, no I/O -- must run before any mutation and add no
+    `await`/write between the read and the eventual commit (RMW atomicity,
+    persistence-sync.md invariant 6).
+
+    Returns a 409 JSONResponse on conflict, else None. A None framing_version
+    (column not migrated yet) or a None expected_version (first write of a
+    session, or an un-migrated caller) both skip the check -- back-compat.
+    """
+    if framing_version is None or expected_version is None:
+        return None
+    if expected_version != framing_version:
+        return JSONResponse(status_code=409, content={
+            "success": False,
+            "error": "version_conflict",
+            "current_version": framing_version,
+            "message": "This clip was edited elsewhere. Refresh to see the latest.",
+        })
+    return None
 
 
 def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
-                            crop_keyframes: list, segments_data: dict) -> dict:
+                            crop_keyframes: list, segments_data: dict,
+                            framing_version: int | None) -> dict:
     """
     Save framing data from gesture actions (always update in-place).
 
@@ -305,9 +335,23 @@ def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
     so they must NOT create new versions of exported clips. Version creation is
     handled exclusively by the PUT endpoint which receives full state from the
     frontend's saveCurrentClipState.
+
+    Bumps framing_version in the same UPDATE when the column is present
+    (framing_version is not None); the response only includes new_version
+    when the bump actually happened.
     """
     crop_data_encoded = encode_data(crop_keyframes) if crop_keyframes else None
     segments_data_encoded = encode_data(segments_data) if segments_data else None
+
+    if framing_version is not None:
+        new_version = framing_version + 1
+        cursor.execute("""
+            UPDATE working_clips
+            SET crop_data = ?, segments_data = ?, framing_version = ?
+            WHERE id = ?
+        """, (crop_data_encoded, segments_data_encoded, new_version, clip['id']))
+        conn.commit()
+        return {"success": True, "refresh_required": False, "new_version": new_version}
 
     cursor.execute("""
         UPDATE working_clips
@@ -365,10 +409,17 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
         cursor = conn.cursor()
 
         # Get current framing data
-        crop_keyframes, segments_data, clip = _get_clip_framing_data(cursor, clip_id, project_id)
+        crop_keyframes, segments_data, clip, framing_version = _get_clip_framing_data(cursor, clip_id, project_id)
 
         if clip is None:
             raise HTTPException(status_code=404, detail="Clip not found")
+
+        # T4330: conflict check happens immediately after the read, before any
+        # mutation -- see _check_framing_version_conflict for the RMW-atomicity
+        # note. Applies uniformly to every write path below, including set_rotation.
+        conflict = _check_framing_version_conflict(action.expected_version, framing_version)
+        if conflict is not None:
+            return conflict
 
         try:
             if action.action == "add_crop_keyframe":
@@ -586,6 +637,19 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                         status_code=503,
                         detail="Rotation is unavailable until the v029 migration runs (POST /api/admin/migrate).",
                     )
+                # T4330: same counter bump/skip-if-absent logic as the other
+                # write paths, applied AFTER the pre-existing v029 rotation-column
+                # guard above (that guard is unrelated and must stay untouched).
+                if framing_version is not None:
+                    new_version = framing_version + 1
+                    cursor.execute(
+                        "UPDATE working_clips SET rotation = ?, framing_version = ? WHERE id = ? AND project_id = ?",
+                        (float(action.data.rotation), new_version, clip_id, project_id),
+                    )
+                    conn.commit()
+                    logger.info(f"[Framing Action] Set rotation to {action.data.rotation} deg")
+                    return {"success": True, "refresh_required": False, "new_version": new_version}
+
                 cursor.execute(
                     "UPDATE working_clips SET rotation = ? WHERE id = ? AND project_id = ?",
                     (float(action.data.rotation), clip_id, project_id),
@@ -598,7 +662,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 raise ValueError(f"Unknown action: {action.action}")
 
             # Save changes (handles versioning if needed)
-            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data)
+            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data, framing_version)
             return result
 
         except ValueError as e:

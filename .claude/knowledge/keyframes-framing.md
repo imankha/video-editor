@@ -252,9 +252,22 @@ gesture lands — no save/export.
   `!isPermanent && keyframes.length > 2` (RegionLayer.jsx:302) — that stale pre-flat-list rule IS
   the "can't delete first keyframe" bug, fixed by T4450.
 - **Backend RMW pattern**: `_get_clip_framing_data` → mutate → `_save_clip_framing_data`
-  (clips.py:267-309), in place, no version bump. Atomic only because there is no `await` between
-  read and commit (audit B8 → T4360). Overlay same shape with `overlay_version+1`
-  (overlay.py:379-393); its `expected_version` 409 check is commented out (overlay.py:384-391 → T4330).
+  (clips.py:267-309), in place. Atomic only because there is no `await` between read and commit
+  (audit B8 → T4360). Overlay same shape with `overlay_version+1` (overlay.py:379-393).
+  **T4330 (DONE):** both endpoints now bump a mutation counter and enforce `expected_version` ->
+  409 (`{success:false, error:"version_conflict", current_version, message}`), checked once
+  immediately after the read, still with no `await` before the commit. Framing's counter is a
+  NEW column, `working_clips.framing_version` (profile_db migration v044) — the pre-existing
+  `working_clips.version` is the EXPORT version-row counter (one row per exported version) and is
+  NOT reusable as a CAS counter. `_get_clip_framing_data` returns `framing_version=None` when the
+  column is absent (deploy->migrate window, guarded by `column_exists`); a `None` counter or a
+  `None` `expected_version` both skip the check/bump silently, never a 500. The check covers
+  EVERY framing write path uniformly, including the `set_rotation` branch — which keeps its own,
+  unrelated, pre-existing `column_exists(cursor, "working_clips", "rotation")` 503 guard (v029)
+  untouched, ahead of the new check. All action POSTs (both endpoints) now route through the
+  shared `api/actionClient.js` (per-entity FIFO promise chain + version threading + 409 ->
+  `src/frontend/src/utils/actionConflictPrompt.js`'s refresh toast, full `window.location.reload()`,
+  no auto-rebase) — see persistence-sync.md invariant 8 for the transport-level contract.
 
 ## Overlay render read path (T4900)
 
@@ -1092,8 +1105,5 @@ the numbers below are the answer.
   - **T4460** overlay onto keyframe controller (**Stage 2 design gate**): region-scoped tracks;
     snap direction/window decision (T3820); payload-parity tests per gesture — persistence
     semantics are the T350-class risk.
-- **T4330** (Durability epic): unified action client — per-entity FIFO (actions are
-  fire-and-forget; network reordering + whole-blob RMW = last-arrival wins), version threading,
-  implement the commented-out 409.
 - **T4400**: backend-authoritative export (`mark-exported`) — kills the client full-state PUT
   clobber class (T4020, two tabs).

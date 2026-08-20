@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { toast, useToastStore } from '../components/shared/Toast';
+import { surfaceConflictPrompt } from '../utils/actionConflictPrompt';
 
 /**
  * Overlay Action Failure Store (T4900 / prod bug 31p)
@@ -104,6 +105,17 @@ export const useOverlayActionStore = create((set, get) => ({
   dispatch: async (label, run) => {
     const { success, result, retryable } = await runWithRetry(run);
     if (!success) {
+      if (result?.status === 409 && result?.error === 'version_conflict') {
+        // T4330: a concurrent-edit conflict is a THIRD category, distinct
+        // from both the retry queue and the deterministic "undo it" toast --
+        // there is nothing to undo (the other tab's edit is legitimate) and
+        // re-sending the same expected_version can only 409 again. The
+        // actionClient already called onConflict internally; this is just
+        // the store's own routing so a 409 never falls into the generic
+        // rejection/queue paths below.
+        surfaceConflictPrompt(label, result.current_version);
+        return result;
+      }
       if (retryable === false) {
         // The server rejected this specific action (4xx). Queuing it would
         // offer a Retry that is guaranteed to fail and would jam the export
