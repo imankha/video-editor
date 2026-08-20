@@ -38,6 +38,7 @@ export function ClipsSidePanel({
   videoDuration,
   isLoading = false,
   isVideoUploading = false,
+  isAdmin = false,
   isMobile = false,
   onJumpToClip,
   onSeek,
@@ -202,8 +203,8 @@ export function ClipsSidePanel({
               ))}
             </div>
 
-            {/* Import/Export - desktop only, dev only */}
-            {!isMobile && !import.meta.env.PROD && (
+            {/* Import/Export - desktop only; admin-only in production (T7340), unrestricted in dev */}
+            {!isMobile && (isAdmin || !import.meta.env.PROD) && (
               <div className="flex gap-2">
                 <Button
                   variant="secondary"

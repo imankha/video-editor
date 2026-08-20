@@ -10,6 +10,7 @@ import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
+import { useAuthStore } from '../stores/authStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -41,6 +42,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Editor mode (for navigation between screens)
   const setEditorMode = useEditorStore(state => state.setEditorMode);
   const redirectToMode = useEditorStore(state => state.redirectToMode);
+
+  // T7340: admin-only TSV annotation import/export in production
+  const isAdmin = useAuthStore(state => state.isAdmin);
 
   // Games — Zustand store (reactive to profile switches)
   const uploadGameVideo = useGamesDataStore(state => state.uploadGameVideo);
@@ -614,6 +618,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           videoDuration={effectiveDuration}
           isLoading={isLoadingAnnotations}
           isVideoUploading={isUploadingGameVideo}
+          isAdmin={isAdmin}
           onSeek={effectiveSeek}
           videoController={videoController}
           onScrubLock={lockScrub}
@@ -649,6 +654,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               videoDuration={effectiveDuration}
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
+              isAdmin={isAdmin}
               isMobile
               teammateSuggestions={teammateSuggestions}
               boundaryOffsets={multiVideo?.boundaryOffsets}
