@@ -9,6 +9,14 @@ import { useWebShare, ShareCapability } from './useWebShare';
 // `capability` value -- popping the bare OS share sheet on desktop instead
 // of respecting the mobile-only capability the hook computed. It must gate
 // on `capability !== NONE`, not raw feature detection.
+//
+// T7350 (2026-08-20): the mobile-vs-desktop signal itself moved OFF a
+// navigator.userAgent regex (which misclassified in-app webviews / desktop-
+// site mode as desktop, silently killing native share on real phones) and ONTO
+// the `(pointer: coarse)` matchMedia capability check ReelTile/DraftTile
+// already use. These tests mock matchMedia (coarse => mobile, fine => desktop),
+// NOT the UA string, to pin that mechanism. The T5220 desktop assertions below
+// stay green under it: a fine-pointer desktop is NONE even with navigator.share.
 
 function mockShareResponse(token = 'tok123') {
   globalThis.fetch = undefined;
@@ -22,8 +30,22 @@ vi.mock('../utils/apiFetch', () => ({
   default: (...args) => globalThis.apiFetchImpl(...args),
 }));
 
-describe('useWebShare capability gating (T5220 desktop-share regression)', () => {
-  const originalUserAgent = navigator.userAgent;
+// Mock window.matchMedia so useIsCoarsePointer() reports the desired device.
+// `coarse: true` => a touch/pen primary pointer (phone/tablet); `false` => a
+// fine mouse pointer (desktop). Only the `(pointer: coarse)` query matters here.
+function mockPointer({ coarse }) {
+  window.matchMedia = vi.fn((query) => ({
+    matches: query.includes('pointer: coarse') ? coarse : false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  }));
+}
+
+describe('useWebShare capability gating (T5220 desktop-share regression, T7350 pointer-capability)', () => {
+  const originalMatchMedia = window.matchMedia;
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
 
@@ -33,27 +55,21 @@ describe('useWebShare capability gating (T5220 desktop-share regression)', () =>
   });
 
   afterEach(() => {
-    Object.defineProperty(navigator, 'userAgent', { value: originalUserAgent, configurable: true });
+    window.matchMedia = originalMatchMedia;
     navigator.share = originalShare;
     navigator.clipboard = originalClipboard;
   });
 
-  it('computes NONE capability on a desktop UA even when navigator.share exists', () => {
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0',
-      configurable: true,
-    });
+  it('computes NONE capability on a fine-pointer desktop even when navigator.share exists', () => {
+    mockPointer({ coarse: false });
     navigator.share = vi.fn();
     const { result } = renderHook(() => useWebShare());
     expect(result.current.isMobile).toBe(false);
     expect(result.current.capability).toBe(ShareCapability.NONE);
   });
 
-  it('webShare() on desktop never calls navigator.share, falls back to clipboard', async () => {
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0',
-      configurable: true,
-    });
+  it('webShare() on a fine-pointer desktop never calls navigator.share, falls back to clipboard', async () => {
+    mockPointer({ coarse: false });
     navigator.share = vi.fn().mockResolvedValue();
     const { result } = renderHook(() => useWebShare());
 
@@ -67,11 +83,15 @@ describe('useWebShare capability gating (T5220 desktop-share regression)', () =>
     expect(method).toBe('clipboard');
   });
 
-  it('webShare() on mobile with LINK_ONLY capability does call navigator.share', async () => {
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
-      configurable: true,
-    });
+  it('reports isMobile on a coarse-pointer device (native share path), independent of UA string', () => {
+    mockPointer({ coarse: true });
+    navigator.share = vi.fn().mockResolvedValue();
+    const { result } = renderHook(() => useWebShare());
+    expect(result.current.isMobile).toBe(true);
+  });
+
+  it('webShare() on a coarse-pointer device with LINK_ONLY capability does call navigator.share', async () => {
+    mockPointer({ coarse: true });
     navigator.share = vi.fn().mockResolvedValue();
     navigator.canShare = undefined;
     const { result } = renderHook(() => useWebShare());
@@ -86,5 +106,13 @@ describe('useWebShare capability gating (T5220 desktop-share regression)', () =>
       expect.objectContaining({ title: 't', text: 'x' })
     );
     expect(method).toBe('link');
+  });
+
+  it('computes FULL capability on a coarse-pointer device when canShare({files}) is supported', () => {
+    mockPointer({ coarse: true });
+    navigator.share = vi.fn().mockResolvedValue();
+    navigator.canShare = vi.fn(() => true);
+    const { result } = renderHook(() => useWebShare());
+    expect(result.current.capability).toBe(ShareCapability.FULL);
   });
 });
