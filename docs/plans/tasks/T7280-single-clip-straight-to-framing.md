@@ -1,6 +1,6 @@
 # T7280: Single-Clip Upload Goes Straight to Framing
 
-**Status:** WAITING ON USER (design gate — T7280-design.md awaiting approval)
+**Status:** WIP (design approved 2026-08-20 — Option B placeholder; implementation resumed)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-19
