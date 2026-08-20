@@ -113,7 +113,7 @@ class MockVideoUpscaler:
             stream = ffmpeg_lib.filter(stream, 'scale', 810, 1440)
             out_args = dict(
                 vcodec='libx264', crf=23, preset='ultrafast',
-                pix_fmt='yuv420p', t=10,
+                pix_fmt='yuv420p', t=10, movflags='+faststart',
             )
             if include_audio:
                 out_args.update(acodec='aac', audio_bitrate='128k')
@@ -888,7 +888,7 @@ async def local_framing_mock(
                 stream = ffmpeg_lib.output(stream, output_path,
                                            vcodec='libx264', crf=23, preset='ultrafast',
                                            acodec='aac', audio_bitrate='128k',
-                                           pix_fmt='yuv420p', t=10)
+                                           pix_fmt='yuv420p', t=10, movflags='+faststart')
                 await asyncio.to_thread(
                     ffmpeg_lib.run, stream,
                     overwrite_output=True, capture_stdout=True, capture_stderr=True

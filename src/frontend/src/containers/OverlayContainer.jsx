@@ -167,7 +167,10 @@ export function OverlayContainer({
   useEffect(() => { setSpotlightPlayMode('loop'); }, [effectiveOverlayVideoUrl]);
 
   // The playhead has run past the spotlight — surfaces the "Back to spotlight" pill.
-  const isPastSpotlight = !!spotlightSpan && currentTime > spotlightSpan.end + LOOP_EPS;
+  // Gated on duration > 0 (the standard "video metadata has loaded" signal in this
+  // codebase) so a stale currentTime carried over from Framing can't show the pill
+  // before Overlay's own video has actually loaded (2026-08-20 user report).
+  const isPastSpotlight = !!spotlightSpan && duration > 0 && currentTime > spotlightSpan.end + LOOP_EPS;
 
   // Enforce the loop while playing in loop mode. seek() is ephemeral PLAYBACK
   // control (moves the <video> playhead), not a store/DB write — not a T350-class
