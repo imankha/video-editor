@@ -81,6 +81,7 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 6b. **Cross-profile durable write (T4850, `downloads.py:move_reels_to_profile`)**: when a gesture writes TWO profile DBs of the same user, `durable_sync` only covers the REQUEST profile. Write + explicitly `sync_db_to_r2_explicit(user_id, other_profile_id)` the OTHER DB inside the handler, and order it so the losing side is the request profile (target written+synced FIRST, source deleted+`durable_sync` SECOND) — a mid-op machine death then yields a recoverable DUPLICATE, never data loss. Open the other DB with materialization's `ensure_profile_db_local` + `_open_profile_db` (raw sqlite, NOT TrackedConnection → the middleware won't sync it, which is why the explicit sync is mandatory). **T5340: `sync_db_to_r2_explicit(user_id, target_profile_id)` here now keys R2 off the arg, so it correctly lands on the TARGET's key even though the request ContextVar is the SOURCE.** (Before T5340 it uploaded the target DB to the SOURCE key → corrupted the source copy and lost the move on cold-load.)
 6c. **Public game-link claim (T5730, `materialization.claim_game_link`)** is a CLAIMANT-initiated gesture — NOT `pending_teammate_shares` (that table is recipient-email-keyed; a link claim has no targeted recipient). The deferred no-account path carries the token as the LAST segment of the `/claim/game/{token}` URL (survives the signup reload; T2915 link-snapshot class) and completes via the import dialog's explicit Confirm POST — nothing auto-materializes on auth (no reactive `useEffect`→claim). The write reuses `materialize_game_share`'s existing sync machinery (recipient checkpoint-before-upload + explicit `sync_db_to_r2_explicit` + refuse-to-mark-on-failure, T4315/T5920), so a 503 `sync_failed` is retryable and never a lying success. It confirms the CLAIMER (recipient) is current via `ensure_profile_db_local(require_fresh=True)` before writing, and read-only-pulls the SHARER's source DB via `ensure_profile_db_local(...)` (no require_fresh — source is never written back).
 7. **Fire-and-forget persistence changes are deferred** until sessions are reliably pinned to a single machine (memory: blocked T1537). Machine pinning exists (T1190) but the constraint stands.
+8. **All gesture action POSTs go through `src/frontend/src/api/actionClient.js` (T4330), never a raw `apiFetch` on an `/actions` endpoint.** `createActionClient({url, entityKey, tag, mapResult, onConflict})` owns three concerns transparently for both `framingActions.js` and `overlayActions.js`: (a) **per-entity FIFO** — a `Map<entityKey, Promise>` tail chain serializes same-entity actions in emission order (closes the wire-reorder race on whole-blob RMW; different entities never block each other); (b) **version threading** — tracks the last echoed version per entity, sends it as `expected_version` on the next action, omitted until the first response (no seed-from-GET), deleted on a 409; (c) **409 routing** — `onConflict` fires the shared `src/frontend/src/utils/actionConflictPrompt.js` refresh toast (full `window.location.reload()`, NEVER an auto-rebase/retry) instead of the retry queue. See T4330 section below.
 
 ## Landmines & history
 - **Account deletion MUST purge R2 + local + in-process caches (bugs 33p/34p/35p, fix/bug-33-34-35-newuser-flow).** `user.sqlite`/`profile.sqlite` live in R2 under `{APP_ENV}/users/{user_id}/`. A delete that removes only the local folder leaves the R2 copy, which `ensure_user_database`/`ensure_database` restore on the next login (first-access-only restore) → the account is resurrected. Both delete endpoints now call `auth._purge_user_data`: local rmtree + `storage.delete_user_r2_data` (paginated whole-prefix, raises on error) + cache invalidation (`invalidate_user_cache`, `user_db.forget_user_db`, `database.forget_local_db_state`) + `invalidate_user_sessions`. Cache invalidation is required because `_initialized_user_dbs` / `_user_sqlite_versions` / `_user_db_versions` make `ensure_*` skip the R2 re-check on an already-seen user — a stale cache entry can skip restore or mask the delete. **Corollary:** `is_new_user` derives from the restored user.sqlite's `selected_profile`, so purging R2+caches makes a reregister genuinely new even without deleting the Postgres users row. Residual open race: a cross-machine re-sync between delete and reregister can still resurrect the R2 copy (would need a deletion tombstone to fully close). **Credits (T5840) are a separate purge concern** — they never lived in the R2-restored user.sqlite (so this race doesn't apply to them, and a reregister no longer "seeds credits" via the restored user.sqlite), but `_purge_user_data` must delete `credits`/`credit_transactions`/`credit_reservations` in Postgres or a purge-then-reregister under the same `user_id` collides with the old `signup:{user_id}` idempotency key (`ON CONFLICT DO NOTHING`) and silently grants no signup bonus — the delete must live in the shared `_purge_user_data` helper, not duplicated per caller.
@@ -1025,5 +1026,54 @@ and reconfirmed green (`test_t5870_pending_vs_failed.py`, `test_sync_status.py`,
 
 **T5350 — frontend closes the clip 503 loop (completes T4320's user-visibility).** T4320 made the clip routes return the retryable 503 but the frontend didn't surface it: `useRawClipSave` had no `sync_failed` branch, and the shared `DURABLE_SYNC_FAILED_RESPONSE.detail` ("Your reel was not moved") is nonsensical for a clip. Fix (frontend-only, `src/frontend/src/hooks/useRawClipSave.js`): on `response.status === 503 && (body.code || body.detail?.code) === 'sync_failed'`, each of save/update/delete now sets `error` + calls the exported `surfaceClipSyncFailed(gesture, retry)` — a persistent (`duration:0`, per-gesture `dedupKey`) shared-Toast error with a **Retry action** that re-fires the SAME gesture, then returns `null`/`false` (**never a silent-success toast** on a 503). **Copy is keyed on the GESTURE in the frontend (`CLIP_SYNC_FAILED_COPY`), NOT sourced from the backend `detail`** — the backend message stays reel/move-shaped and shared; do not surface `body.detail` for a clip gesture. **Invariant: the Retry is a user click (gesture), never a reactive `useEffect` re-send** — mirrors the overlay/publish/move durable-fail UX (`overlayActionStore`, `useMoveReels`, `useReEditReel`). Tests: `src/hooks/__tests__/useRawClipSave.syncFailed.test.js` (8 unit: 503→not-saved+Retry+re-fire per gesture, happy path unchanged, non-sync 500 not treated as sync_failed); live-drive `e2e/T5350-clip-sync-failed-frontend-ux.spec.js` renders the real toast via the exported `surfaceClipSyncFailed` against the mounted `ToastContainer`.
 
+## T4330 — Unified action client: per-entity FIFO + version threading + 409 conflicts
+
+**The gap.** `api/framingActions.js` and `api/overlayActions.js` each carried a near-identical
+private `sendAction` (fire-and-forget POST). Two in-flight actions on the SAME entity could arrive
+reordered on the wire; the backend does whole-blob RMW, so last-arrival wins — silent corruption,
+no user-visible cause (the T3800 `persistKeyframeEdit` snap-move `del(old)+add(new)` pair is
+exactly this hazard). Only overlay sent `expected_version`, and its backend check was commented
+out (`overlay.py:645-652`) — plumbing that protected nothing. Framing had no versioning at all.
+
+**The fix.** One transport, `api/actionClient.js` (`createActionClient`), that both wrapper files
+route through declaratively, preserving their exact caller-facing return shapes (`mapResult`):
+- **FIFO** — `Map<entityKey, Promise>` tail chain; a rejected/`success:false` action's REAL result
+  still propagates to the caller (T3800 rollback unaffected), but the STORED tail is
+  `.catch(()=>{})`'d so a failure can never wedge the entity's chain — the next queued action still
+  fires. No coalescing (each queued action still POSTs individually).
+- **Version threading** — tracks the last echoed version per entity (`version` for overlay,
+  `new_version` for framing, both surfaced identically to `expected_version` on the wire), omitted
+  until the first response for that entity, deleted on a 409 (next action re-seeds from its own
+  success).
+- **409 → refresh prompt, never auto-merge.** Both backends return `409 {success:false,
+  error:"version_conflict", current_version, message}` on a stale `expected_version`; the client's
+  `onConflict` fires `actionConflictPrompt.js`'s persistent toast + Refresh action
+  (`window.location.reload()`, full reload — not in-place refetch). `overlayActionStore.dispatch`
+  routes a `version_conflict` result to this prompt BEFORE its existing retryable/non-retryable
+  classification (a 409 used to be misclassified as a deterministic 4xx and shown the WRONG "undo
+  it and try again" toast — nothing to undo, the other tab's edit is legitimate). Framing has no
+  failure store; `actionConflictPrompt.js` is its ONLY conflict surface too (a neutral
+  `src/frontend/src/utils/` helper, not living on `overlayActionStore`, so framing doesn't depend
+  on an overlay store).
+- **Framing's counter is a NEW column**, `working_clips.framing_version` (profile_db migration
+  v044, `ensure_database()` DDL updated for fresh DBs) — the pre-existing `working_clips.version`
+  is the EXPORT version-row counter (one row per exported version) and would corrupt export
+  versioning if reused. **Pre-migration (column absent, deploy->migrate window — this project's
+  migrations do NOT auto-run, and profile_db is per-user so different users' DBs can be at
+  different heads): the check/bump is skipped SILENTLY via `column_exists`, never a 500** — crop/
+  segment/trim/rotation keep editing with no conflict protection until that profile DB migrates.
+  The 409 check runs ONCE, immediately after the read, covering every framing write path uniformly
+  (including `set_rotation`, which keeps its own separate, pre-existing, UNRELATED
+  `column_exists(cursor,"working_clips","rotation")` 503 guard from v029 — untouched by this task).
+  RMW atomicity (invariant 6) is preserved on both endpoints: the 409 check is a pure comparison on
+  the already-read version, no `await` added before the commit.
+
+**Design doc:** `docs/plans/tasks/T4330-design.md`. **Tests:** `actionClient.test.js` (FIFO,
+cross-entity independence, version threading both field shapes, 409 handling, rollback
+determinism, `mapResult` shape preservation), `overlayActionStore.test.js` (409 routing, not
+queued, not the generic rejection toast), backend two-writer 409 per endpoint
+(`test_overlay_actions.py::TestOverlayActionVersionConflict`,
+`test_framing_action_version_conflict.py`), migration idempotency (`test_t4330_migration_v044.py`).
+
 ## Active/upcoming work
-Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330** unified action client (per-entity FIFO, version threading, 409 — overlay's `expected_version` check at overlay.py:384-391 is commented out today); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360** BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
+Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360** BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
