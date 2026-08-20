@@ -1,6 +1,6 @@
 # T7280: Single-Clip Upload Goes Straight to Framing
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-19
