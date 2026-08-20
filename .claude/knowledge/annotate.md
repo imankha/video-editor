@@ -381,10 +381,32 @@ The full checklist for an 11th→Nth sport:
   one half goes red in the other. Consumers that render raw server order without re-sorting (e.g.
   `GameClipSelectorModal`) are why the agreement matters, not just the tab. Deliberately untouched:
   Reel Drafts grouping (already keyed on `project.game_dates`) and the "Continue where you left off"
-  card (genuinely recency-of-activity). `ReferenceGameCard` dropped its `created_at` caption for the
-  same reason `GameTile` did — it sits in these same match-date groups. Covering specs:
-  `ProjectManager.gameGrouping.test.jsx`, `tests/test_t7290_games_list_order.py`,
-  `ReferenceGameCard.test.jsx`.
+  card (genuinely recency-of-activity). Covering specs: `ProjectManager.gameGrouping.test.jsx`,
+  `tests/test_t7290_games_list_order.py`, `ReferenceGameCard.test.jsx`.
+
+- **T7330 supersedes two of T7290's decisions — read this before trusting the entry above.**
+  (1) **The tile date is BACK**, on both `GameTile` and `ReferenceGameCard`, as weekday + short
+  match date ("Sat, Mar 21") from `game_date`. T7290's reasoning for removing it (already the
+  title suffix) was wrong in practice: the name is `truncate`d in ~120px and the suffix sits at
+  the truncation end, so it is the FIRST thing lost — and a game with no `opponent_name` gets no
+  suffix at all from `generate_game_display_name`. Empty when there is no match date; NEVER an
+  upload-date fallback. (2) **`groupGamesByMonth` is gone**, replaced by `groupGamesForTab`,
+  which returns ONE ORDERED ARRAY of `{key, kind: 'month'|'tournament', label, sublabel,
+  sortDate, games}` instead of `{groups, order}`.
+  **The server-order invariant above now has a caveat:** rendered flat order equals
+  `GAMES_MATCH_DATE_ORDER_BY` only while NO tournament group forms — a tournament instance
+  deliberately hoists its games out of month order and sorts at its newest match. That is
+  correct, not a bug: the agreement exists so month PLACEMENT cannot contradict the server, and
+  raw-order consumers (`GameClipSelectorModal`) still receive the server's order untouched.
+  Tournament rules: `>= 2` games in one INSTANCE (a name is split at gaps > 90 days, so annual
+  recurrences never merge); a lone tournament game stays in its month; a month emptied by a
+  hoist is not rendered; the range sublabel is built from real match dates only.
+  Date parsing for ALL of this lives in `src/frontend/src/utils/matchDate.js` — one parser, on
+  purpose, because the UTC-midnight landmine must not get a second implementation.
+  Layout: desktop column count is derived (`gamesGridColumns`, clamp 2-4) and group headers sit
+  in a sticky left rail at `lg`+; see `.claude/references/ui-style-guide.md` § Grouped grid with
+  rail header. `GamesListSkeleton` consumes the same exported grid map — a private copy is the
+  T6310 drift bug.
 
 - **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
   (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).

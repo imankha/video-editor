@@ -21,7 +21,21 @@ vi.mock('../hooks/useIsMobile', () => ({
   useIsLandscape: () => false,
 }));
 
-import { groupGamesByMonth } from './ProjectManager';
+import { groupGamesForTab, gamesGridColumns, GAMES_TILE_GRID_BY_COLUMNS } from './ProjectManager';
+
+// T7330 replaced the {groups, order} pair with ONE ordered array (two kinds of group make a
+// string-keyed map inexpressive). Every T7290 case below keeps its fixtures and assertions
+// BYTE-IDENTICAL and reads through this adapter, so a change of return shape cannot quietly
+// weaken what they pin down. Tournament behaviour is covered separately, further down.
+function groupGamesByMonth(games) {
+  const groups = {};
+  const order = [];
+  for (const group of groupGamesForTab(games)) {
+    groups[group.label] = group.games;
+    order.push(group.label);
+  }
+  return { groups, order };
+}
 
 // created_at deliberately says June for every game -- the reported bug was six games
 // uploaded in one June batch, all filed under "June 2026" despite March/April/May
@@ -171,5 +185,192 @@ describe('groupGamesByMonth — agrees with the list_games server order (T7290)'
       game(2, null, '2026-05-09 08:00:00'),           // dateless row, uploaded May 9
     ];
     expect(flatOrder(games)).toEqual([1, 2]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T7330: tournaments classify instead of months when several games share one.
+// tournament_name is NULL on every game of the reporting account, so this path can
+// only be proven by synthetic fixtures until a real tournament is recorded.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function tournamentGame(id, gameDate, tournamentName, createdAt = '2026-08-01 12:00:00') {
+  return { ...game(id, gameDate, createdAt), tournament_name: tournamentName };
+}
+
+const kinds = (games) => groupGamesForTab(games).map(g => `${g.kind}:${g.label}`);
+
+describe('groupGamesForTab — tournament grouping (T7330)', () => {
+  it('groups two games of one tournament instead of by month, and hoists them out of it', () => {
+    const games = [
+      game(1, '2026-07-26'),
+      tournamentGame(2, '2026-07-06', 'Surf Cup'),
+      tournamentGame(3, '2026-07-03', 'Surf Cup'),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(kinds(games)).toEqual(['month:July 2026', 'tournament:Surf Cup']);
+    expect(groups[1].games.map(g => g.id)).toEqual([2, 3]);
+    // The month keeps only the game that isn't in the tournament.
+    expect(groups[0].games.map(g => g.id)).toEqual([1]);
+  });
+
+  it('leaves a LONE tournament game in its month — one game is not a group', () => {
+    const games = [game(1, '2026-07-26'), tournamentGame(2, '2026-07-06', 'Surf Cup')];
+
+    expect(kinds(games)).toEqual(['month:July 2026']);
+    expect(groupGamesForTab(games)[0].games.map(g => g.id)).toEqual([1, 2]);
+  });
+
+  it('does NOT merge two annual instances of the same tournament name', () => {
+    // The reason the name alone cannot be the key: a yearly cup would otherwise collapse
+    // into one block spanning years.
+    const games = [
+      tournamentGame(1, '2026-07-06', 'Surf Cup'),
+      tournamentGame(2, '2026-07-03', 'Surf Cup'),
+      tournamentGame(3, '2025-07-06', 'Surf Cup'),
+      tournamentGame(4, '2025-07-03', 'Surf Cup'),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(groups.filter(g => g.kind === 'tournament')).toHaveLength(2);
+    expect(groups[0].games.map(g => g.id)).toEqual([1, 2]);
+    expect(groups[1].games.map(g => g.id)).toEqual([3, 4]);
+    expect(new Set(groups.map(g => g.key)).size).toBe(2);   // distinct React keys
+  });
+
+  it('splits one name into instances at the 90-day gap, not at a month boundary', () => {
+    // ~30 days apart -> ONE instance (a long series). Also proves the split is by gap,
+    // not by calendar month: these three span March, April and May.
+    const games = [
+      tournamentGame(1, '2026-05-02', 'Spring League'),
+      tournamentGame(2, '2026-04-02', 'Spring League'),
+      tournamentGame(3, '2026-03-03', 'Spring League'),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].kind).toBe('tournament');
+    expect(groups[0].games.map(g => g.id)).toEqual([1, 2, 3]);
+  });
+
+  it('normalizes case and whitespace when matching a tournament name', () => {
+    const games = [
+      tournamentGame(1, '2026-07-06', 'Surf  Cup'),
+      tournamentGame(2, '2026-07-03', '  surf cup '),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].kind).toBe('tournament');
+    // Label keeps the ORIGINAL text of the newest member, not the normalized key.
+    expect(groups[0].label).toBe('Surf  Cup');
+  });
+
+  it('sorts a tournament at its NEWEST match, interleaved with months', () => {
+    const games = [
+      game(1, '2026-08-15'),
+      tournamentGame(2, '2026-07-06', 'Surf Cup'),
+      tournamentGame(3, '2026-07-03', 'Surf Cup'),
+      game(4, '2026-06-14'),
+    ];
+    expect(kinds(games)).toEqual(['month:August 2026', 'tournament:Surf Cup', 'month:June 2026']);
+  });
+
+  it('a straddling instance leaves BOTH months intact and sorts by its newest match', () => {
+    const games = [
+      game(1, '2026-04-05'),                            // April league game, after the cup
+      tournamentGame(2, '2026-04-02', 'Border Cup'),
+      tournamentGame(3, '2026-03-28', 'Border Cup'),
+      game(4, '2026-03-31'),                            // March league game, mid-cup
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(kinds(games)).toEqual(['month:April 2026', 'tournament:Border Cup', 'month:March 2026']);
+    expect(groups[0].games.map(g => g.id)).toEqual([1]);
+    expect(groups[2].games.map(g => g.id)).toEqual([4]);
+    // The non-monotonic block is exactly why the header must carry its range.
+    expect(groups[1].sublabel).toBe('Mar 28 – Apr 2');
+  });
+
+  it('drops a month left empty by a hoist rather than rendering an empty header', () => {
+    const games = [
+      game(1, '2026-08-15'),
+      tournamentGame(2, '2026-07-06', 'Surf Cup'),
+      tournamentGame(3, '2026-07-03', 'Surf Cup'),
+    ];
+    expect(kinds(games)).not.toContain('month:July 2026');
+    expect(groupGamesForTab(games).every(g => g.games.length > 0)).toBe(true);
+  });
+
+  it('labels a single-day tournament with one date, not a range', () => {
+    const games = [
+      tournamentGame(1, '2026-04-18', 'One Day Cup', '2026-08-01 18:00:00'),
+      tournamentGame(2, '2026-04-18', 'One Day Cup', '2026-08-01 10:00:00'),
+    ];
+    expect(groupGamesForTab(games)[0].sublabel).toBe('Apr 18');
+  });
+
+  it('builds the range from REAL match dates only, and omits it when none exist', () => {
+    const dateless = [
+      tournamentGame(1, null, 'Ghost Cup', '2026-04-05 10:00:00'),
+      tournamentGame(2, null, 'Ghost Cup', '2026-04-03 10:00:00'),
+    ];
+    const [group] = groupGamesForTab(dateless);
+    expect(group.kind).toBe('tournament');       // still grouped, by upload-day fallback
+    expect(group.sublabel).toBeNull();           // never a range invented from upload dates
+
+    const mixed = [
+      tournamentGame(3, '2026-04-05', 'Half Cup'),
+      tournamentGame(4, null, 'Half Cup', '2026-04-03 10:00:00'),
+    ];
+    expect(groupGamesForTab(mixed)[0].sublabel).toBe('Apr 5');
+  });
+
+  it('months never carry a sublabel', () => {
+    const groups = groupGamesForTab([game(1, '2026-05-09'), game(2, '2026-04-26')]);
+    expect(groups.every(g => g.sublabel === null)).toBe(true);
+  });
+
+  it('with no tournament_name anywhere, output is exactly the month grouping', () => {
+    // The degradation that matters: this is the reporting account's real shape.
+    const games = [
+      game(1, '2026-05-09'), game(2, '2026-05-02'),
+      game(3, '2026-04-26'), game(4, '2026-04-25'),
+      game(5, '2026-03-28'), game(6, '2026-03-21'),
+      game(7, '2025-01-11'),
+    ];
+    const groups = groupGamesForTab(games);
+
+    expect(groups.every(g => g.kind === 'month')).toBe(true);
+    expect(groups.map(g => g.label))
+      .toEqual(['May 2026', 'April 2026', 'March 2026', 'January 2025']);
+    expect(groups.map(g => g.games.length)).toEqual([2, 2, 2, 1]);
+  });
+});
+
+describe('gamesGridColumns — desktop density follows the data (T7330)', () => {
+  const groupsOf = (...sizes) => sizes.map(n => ({ games: Array.from({ length: n }) }));
+
+  it('uses the largest group, so rows fill completely', () => {
+    expect(gamesGridColumns(groupsOf(2, 2, 2, 1))).toBe(2);   // the reporting account
+    expect(gamesGridColumns(groupsOf(3, 1))).toBe(3);
+    expect(gamesGridColumns(groupsOf(4, 2))).toBe(4);
+  });
+
+  it('clamps to [2, 4] — never a lone giant tile, never a 30-column row', () => {
+    expect(gamesGridColumns([])).toBe(2);
+    expect(gamesGridColumns(groupsOf(1))).toBe(2);
+    expect(gamesGridColumns(groupsOf(8))).toBe(4);
+    expect(gamesGridColumns(groupsOf(30))).toBe(4);
+  });
+
+  it('every reachable column count has a LITERAL class string (Tailwind purge safety)', () => {
+    for (const n of [0, 1, 2, 3, 4, 8, 30]) {
+      const columns = gamesGridColumns(groupsOf(n));
+      const cls = GAMES_TILE_GRID_BY_COLUMNS[columns];
+      expect(cls, `no grid class for ${columns} columns`).toBeTruthy();
+      expect(cls).toContain('grid-cols-2');   // the mobile floor is always present
+    }
   });
 });

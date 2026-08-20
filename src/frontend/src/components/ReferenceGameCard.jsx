@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { GAME } from '../config/themeColors';
+import { formatMatchDateLabel } from '../utils/matchDate';
 
 /**
  * ReferenceGameCard (T5820) — the Games-tab link-card variant for a CROSS-PROFILE
@@ -43,6 +44,7 @@ export function ReferenceGameCard({ game, onOpen }) {
   }
 
   const ownerLabel = profileName || (nameUnresolved ? 'another profile' : 'Default');
+  const matchDate = formatMatchDateLabel(game.game_date);
 
   return (
     <button
@@ -73,17 +75,18 @@ export function ReferenceGameCard({ game, onOpen }) {
         <span className="truncate">In {ownerLabel}</span>
       </div>
 
-      {/* Bottom scrim: frozen game name only (no clip count — a reference has no local
-          clips; showing "0 clips" would be misleading). T7290: the owner's UPLOAD date
-          used to sit under the name, but reference cards share the Games grid and are
-          now grouped under a MATCH-date month header, which the upload date directly
-          contradicted (a March match uploaded in June, captioned "Jun 11, 2026" under
-          "March 2026"). The match date is already in the frozen name. Same scrim shape
-          as GameTile, which dropped its date for the same reason. */}
+      {/* Bottom scrim: frozen game name + MATCH date (no clip count — a reference has no
+          local clips; showing "0 clips" would be misleading). T7290 removed the owner's
+          UPLOAD date, which contradicted the match-date header this card sits under; T7330
+          puts the MATCH date in that slot instead, so reference cards and GameTiles don't
+          disagree inside one group. Same scrim shape as GameTile. */}
       <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5">
         <h3 className="text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
           {game.name}
         </h3>
+        {matchDate && (
+          <div className="mt-0.5 text-xs text-gray-300 truncate">{matchDate}</div>
+        )}
       </div>
     </button>
   );

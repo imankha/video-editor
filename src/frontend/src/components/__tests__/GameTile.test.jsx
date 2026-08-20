@@ -197,16 +197,33 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     expect(secondary.textContent).toContain('3 clips');
   });
 
-  // T7290: the footer used to print the UPLOAD date, which contradicted both the match
-  // date in the title and the match-date month header the tile now sits under.
-  it('renders NO date in the footer -- clip count only', () => {
+  // T7330 (reversing T7290's removal): the footer shows the MATCH date with its weekday.
+  // T7290 dropped it as redundant with the title suffix, but the title is truncated in
+  // ~120px and the suffix sits at the truncation end, so it is the first thing lost.
+  it('renders the match date with its weekday, from game_date', () => {
     const game = { ...baseGame, created_at: '2026-07-01T12:00:00Z', game_date: '2026-03-21' };
     render(<GameTile game={game} {...handlers()} />);
-    const heading = screen.getByRole('heading', { level: 3 });
-    const secondary = heading.closest('div').nextElementSibling;
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
+
+    expect(secondary.textContent).toContain('Mar 21');
+    expect(secondary.textContent).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/);
+    expect(secondary.textContent).toContain('3 clips');
+    // The UPLOAD date is never shown -- it would contradict the match-date header above.
+    expect(secondary.textContent).not.toContain('Jul');
+  });
+
+  it.each([
+    ['null', null],
+    ['empty', ''],
+    ['malformed', '03/21/2026'],
+  ])('renders NO date when game_date is %s, and never the upload date', (_label, gameDate) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const game = { ...baseGame, created_at: '2026-07-01T12:00:00Z', game_date: gameDate };
+    render(<GameTile game={game} {...handlers()} />);
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
 
     expect(secondary.textContent.trim()).toBe('3 clips');
-    // Neither the upload date ("Jul 1") nor the match date is echoed here.
-    expect(secondary.textContent).not.toMatch(/Jul|Mar|\d{1,2}\/\d{1,2}/);
+    expect(secondary.textContent).not.toMatch(/Jul|Invalid|NaN/);
+    warn.mockRestore();
   });
 });

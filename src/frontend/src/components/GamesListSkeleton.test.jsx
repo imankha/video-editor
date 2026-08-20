@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { GamesListSkeleton } from './ProjectManager';
+import { GamesListSkeleton, GAMES_TILE_GRID_BY_COLUMNS } from './ProjectManager';
 
 // T6310: the startup skeleton must mirror the loaded games poster grid (GameTile,
 // T5681) so data arriving does not snap the layout. These tests pin the shared
 // container/grid classes and the aspect-video shells against drift.
+//
+// T7330: the loaded grid's column count is now DERIVED from the groups, which do not
+// exist yet at skeleton time. The skeleton uses the 4-column entry -- the cap, so it can
+// never promise a wider row than real data could produce -- and takes it from the SAME
+// exported map the real grid selects from, which is what keeps the drift guard honest.
 
 const hasClasses = (el, ...classes) => {
   const set = new Set(el.className.split(/\s+/));
@@ -23,14 +28,25 @@ describe('GamesListSkeleton (T6310)', () => {
 
   it('lays shells out on the same responsive tile grid as the real list', () => {
     const { getByTestId } = render(<GamesListSkeleton />);
-    const grid = getByTestId('games-skeleton').querySelector('.grid');
-    expect(grid).toBeTruthy();
-    // Matches the loaded grid (GAMES_TILE_GRID_CLASS): 2-up mobile, 3-up tablet, 6-up desktop.
+    const shellGrid = [...getByTestId('games-skeleton').querySelectorAll('.grid')]
+      .find(el => el.querySelector('.aspect-video'));
+    expect(shellGrid).toBeTruthy();
+    // Uses the SHARED map rather than a private copy -- a class string spelled out here
+    // would be exactly the drift T6310 was filed for.
+    expect(shellGrid.className).toBe(GAMES_TILE_GRID_BY_COLUMNS[4]);
     expect(
-      hasClasses(grid, 'grid-cols-2', 'sm:grid-cols-3', 'lg:grid-cols-6', 'gap-2', 'sm:gap-3', 'lg:gap-4'),
+      hasClasses(shellGrid, 'grid-cols-2', 'sm:grid-cols-3', 'lg:grid-cols-4', 'gap-2', 'sm:gap-3', 'lg:gap-4'),
     ).toBe(true);
     // No vertical list stack.
     expect(getByTestId('games-skeleton').querySelector('.space-y-2')).toBeNull();
+  });
+
+  it('mirrors the loaded rail-header group shape (T7330)', () => {
+    const { getByTestId } = render(<GamesListSkeleton />);
+    const root = getByTestId('games-skeleton');
+    // The real list wraps each group in a lg-only rail grid; the skeleton must too, or
+    // the tiles shift horizontally the moment data lands.
+    expect(root.querySelector('.lg\\:grid-cols-\\[8rem_minmax\\(0\\,1fr\\)\\]')).toBeTruthy();
   });
 
   it('renders aspect-video shells (matching GameTile), not list rows', () => {
@@ -42,11 +58,13 @@ describe('GamesListSkeleton (T6310)', () => {
     });
   });
 
-  it('defaults count to 6 so every breakpoint (2/3/6-up) fills full rows', () => {
+  it('defaults count to 4 so every breakpoint (2/3/4-up) fills full rows', () => {
     const { getByTestId } = render(<GamesListSkeleton />);
     const shells = getByTestId('games-skeleton').querySelectorAll('.aspect-video');
-    // 6 is divisible by 2, 3 and 6 -> no ragged partial row at any breakpoint.
-    expect(shells.length).toBe(6);
+    // 4 fills exactly one desktop row and two mobile rows. The tablet column is 3, which
+    // 4 does not divide -- accepted: the skeleton's job is holding the layout's shape, and
+    // over-filling to 12 shells would flash far more chrome than the real list ever shows.
+    expect(shells.length).toBe(4);
   });
 
   it('honours an explicit count', () => {
