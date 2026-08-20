@@ -35,6 +35,7 @@ See [EPIC.md](EPIC.md) for design principles (in-house, aggregates-only, no new 
 | Table | Columns | Source |
 |---|---|---|
 | `rollup_action_weekly` | `cohort_week TEXT` (ISO Monday of the user's `user_segments.acquired_at` week), `action TEXT` (FLOW_EVENTS key), `week_index INTEGER` (weeks since cohort_week, 0-based), `distinct_users INTEGER`, PK(cohort_week, action, week_index) | computed: for each user, for each week they have >=1 `user_action_log` row of that action |
+| `rollup_engagement_monthly` | `month TEXT` (YYYY-MM), `action TEXT`, `active_users INTEGER`, `median_count REAL`, `p25 REAL`, `p75 REAL`, PK(month, action) | computed during the same sweep: per-user monthly counts of the action reduced to distribution summaries — per-user rows are NOT stored, only the summary (feeds T7460 criterion 5: "median active user exports 2+ reels/month") |
 | `rollup_meta` | `key TEXT PK`, `value TEXT` | `computed_at` (UTC ISO), `users_swept`, `users_failed`, `log_rows_reduced` |
 | `visit_daily` | reserved for T7410 (created there; version bump) | — |
 

@@ -13,7 +13,7 @@ Requirement 2.2: "a clear majority of new sign-ups reach a first shared reel wit
 
 A backend report endpoint + admin panel section computing, per monthly signup cohort, activation rate and stage-by-stage drop-off — **reads existing Postgres only, zero new storage of any kind**.
 
-Metric definitions are locked in [EPIC.md](EPIC.md): activation = `share_completed` within 14 days of `acquired_at`; secondary aha metric = `export_completed` within 7 days.
+Metric definitions are locked in [EPIC.md](EPIC.md), updated by the success criteria (2026-08-20): PRIMARY activation = `export_completed` within 14 days of `acquired_at` (scorecard target 40%+); `share_completed` <= 14d is tracked alongside as the value-moment metric (requirement 2.2's original framing). Compute both per cohort.
 
 ## Context
 
@@ -31,9 +31,9 @@ Metric definitions are locked in [EPIC.md](EPIC.md): activation = `share_complet
 Stage ladder (subset of `FUNNEL_STEPS`, the requirement's own list): `game_created` (upload) → `clip_created` (tagged play) → `export_completed` (exported reel) → `share_completed` (shared reel).
 
 Per monthly cohort:
-1. **Activation rate**: % with `share_completed.first_at - acquired_at <= 14d`; same for the 7d-export secondary. Cohorts younger than 14d labeled "maturing", never blended in.
+1. **Activation rate**: % with `export_completed.first_at - acquired_at <= 14d` (primary, scored vs the 40% goal) AND % with `share_completed <= 14d` (value-moment). Cohorts younger than 14d labeled "maturing", never blended in.
 2. **Stage conversion**: % reaching each stage EVER + % within 14d, and median days between consecutive stages (percentile_cont over first_at deltas — same technique as the existing `median_days_to_export` query at admin.py:1125).
-3. **Stall distribution**: for non-activated users, their FURTHEST reached stage — this is the "where are the drop-offs" number (upload friction vs tagging effort vs export vs sharing).
+3. **Stall distribution**: for non-activated users, their FURTHEST reached stage — this is the "where are the drop-offs" number (upload friction vs tagging effort vs export vs sharing). Include the MoM series of the largest stall stage's share (success criterion 3: "biggest drop-off point shrinking month over month" — T7460 RAGs this).
 4. Benchmark annotations served with the data (30% median / 50% great — from EPIC.md) so the UI prints them beside actuals.
 
 ### Technical Notes

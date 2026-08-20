@@ -62,9 +62,22 @@ R2 upload with etag assert (single app server today; refuse loudly on etag
 mismatch). Not in the 3 migration tracks; no _SCHEMA_DDL change; no Migration agent.
 ```
 
+## Success criteria (user, 2026-08-20) — the scorecard targets
+
+Tracked in their own dashboard (T7460): goal + our number + green/yellow/red per criterion.
+
+| # | Criterion | Target |
+|---|---|---|
+| 1 | Active users | 1,000 WAU by month 6 (stretch 2,000), 4-week trailing avg; in-season WoW growth ~10% |
+| 2 | Growth | Sign-ups +15% MoM, essentially all organic (>=90%), sources tracked (community, shared reel links, social, clubs/champions) |
+| 3 | Activation | 40%+ of new sign-ups export a reel <= 14d of account creation; biggest drop-off point shrinking MoM |
+| 4 | Retention | 30%+ of activated users still active 30 days later; in-season 50%+ WoW return; cohort curves flatten |
+| 5 | Engagement | In-season WAU/MAU >= 40%; median active user exports 2+ reels/month |
+| 6 | Viral loop | 25%+ of new sign-ups via shared reel links or referrals |
+
 ## Locked metric definitions (defaults — flag disagreement at design review)
 
-- **Activation** = `share_completed` within **14 days** of `user_segments.acquired_at`. (Matches requirement 2.2 "first shared reel within two weeks". Secondary: first `export_completed` ≤ 7d, the playbook's aha-moment #1.)
+- **Activation (primary, scored)** = `export_completed` within **14 days** of `user_segments.acquired_at`, target 40%+ (success criterion 3). **Value-moment metric (tracked alongside)** = `share_completed` ≤ 14d (requirement 2.2's "first shared reel within two weeks"). Both computed per cohort; the scorecard scores export, the share metric tells us whether the sharing story holds.
 - **Active (day)** = a `user_usage_daily` row with seconds > 0.
 - **Retention bins = weekly** (games are weekly; daily retention is noise for this product — playbook §4). Report both **classic** (active in week N) and **unbounded/activity-based** (active in week ≥ N); unbounded is the headline for a seasonal product.
 - **Seasonality**: cohort by **join season**; season-over-season return rate ("% of last-season active parents back this season") is the long-horizon headline; MoM comparisons are YoY-first. Off-season dormancy is surfaced as a labeled band on charts, never silently dropped.
@@ -81,12 +94,14 @@ mismatch). Not in the 3 migration tracks; no _SCHEMA_DDL change; no Migration ag
 | T7430 | [Retention curves & triangle, seasonality-adjusted](T7430-retention-cohort-curves.md) | TODO |
 | T7440 | [Organic growth & attribution report + investor export](T7440-organic-growth-report.md) | TODO |
 | T7450 | [Flow-event coverage: clip-library & repeat-usage signals](T7450-compounding-value-event-coverage.md) | TODO |
+| T7460 | [Success-criteria scorecard (goal vs actual, green/yellow/red)](T7460-success-criteria-scorecard.md) | TODO |
 
-Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level views; T7410 unlocks T7440's visit→signup conversion; T7420 needs nothing new (reads existing `first_at`) and can run in parallel with T7400/T7410. T7450 is independent and small.
+Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level views; T7410 unlocks T7440's visit→signup conversion; T7420 needs nothing new (reads existing `first_at`) and can run in parallel with T7400/T7410. T7450 is independent and small. T7460 is the capstone — it composes the query functions the other tasks build, so it goes last.
 
 ## Completion Criteria
 
 - [ ] From the admin panel, on demand: cohort retention triangle + curves (weekly, classic AND unbounded, season-cohort view), activation rate + stage drop-off, MoM growth by source, WAU chart.
+- [ ] The success-criteria scorecard: all six criteria with goal, current number, and green/yellow/red — off-season and small-N states honest (grey, never false red/green).
 - [ ] Landing visit → sign-up conversion measurable by source.
 - [ ] Every investor view exports (CSV or print-clean) — the "produce it on demand" bar.
 - [ ] Zero new Postgres tables/columns; zero per-event rows outside existing per-user `user_action_log`; no external SDK in any package.json / requirements.

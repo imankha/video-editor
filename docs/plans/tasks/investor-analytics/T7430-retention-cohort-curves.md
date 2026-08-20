@@ -31,7 +31,7 @@ Definitions locked in [EPIC.md](EPIC.md): active day = usage_daily row with seco
 1. **Triangle**: rows = weekly (toggle: monthly) signup cohorts from `user_segments.acquired_at`; columns = weeks since signup; cell = % of cohort active (classic) or active-in-or-after (unbounded toggle). Day-30/60/90 columns derived from the same data for the investor-standard framing.
 2. **Curves**: cohort rows overlaid as retention curves; the flattening (or not) must be visible. Newer-cohorts-above-older is the second story the chart should let the eye find.
 3. **Seasonality**: (a) season-cohort grouping — cohorts bucketed by join season (US youth soccer defaults: Fall = Aug-Nov, Spring = Feb-May; make the boundaries a named constant, they will be tuned); (b) **season-over-season return rate** — % of users active in season S also active in season S+1 — the long-horizon headline; (c) off-season weeks shaded on charts, not dropped. YoY comparisons preferred wherever a MoM would mislead.
-4. **WAU + WAU/MAU** time series (from `user_usage_daily` day rows).
+4. **WAU + WAU/MAU** time series (from `user_usage_daily` day rows), plus the **week-over-week return rate** (% of week N's actives also active in week N+1 — success criterion 4's in-season 50% bar; expose it as a service function T7460 can reuse) and **D30-of-activated retention** (% of activation-cohort users active >= 30d after signup — criterion 4's 30% bar).
 5. **Action-level toggle** (from `rollup_action_weekly`): retention on `export_completed` (north-star habit) and on clip-library/collections usage (T7450's events) — the "structural retention asset" evidence for requirement 2.3.
 6. CSV export per view.
 
