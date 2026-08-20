@@ -69,8 +69,8 @@ manual container testing run in.
 4. [x] Regression test: synthetic ffmpeg source through `MockVideoUpscaler`, assert
        `moov` precedes `mdat` in the output bytes (mirrors `test_t6360_download_metadata.py`'s
        existing faststart assertion pattern)
-5. [ ] Relevant test set green; backend import check clean
-6. [ ] Live re-verify: Framing export -> Overlay loads the working video without error,
+5. [x] Relevant test set green; backend import check clean
+6. [x] Live re-verify: Framing export -> Overlay loads the working video without error,
        Reset pill does not appear before the video has loaded
 
 ### Progress Log
@@ -81,12 +81,24 @@ Root-caused via backend log (`[videoMetadata] FAIL: moov atom at EOF`) and stati
 `-movflags +faststart`). Fixed both mock encoders + the unrelated-but-co-discovered
 Reset-pill gating bug in the same pass since both blocked the same manual test session.
 
+**2026-08-20 (live re-verify)**: Fresh-account Playwright run against `reel-task-t4330`
+(upload -> clip -> Framing export -> Overlay) confirmed both fixes hold: zero `moov atom at
+EOF` across 10 runs, client-side `[FaststartCheck]` probe verdict=FASTSTART on both the
+Framing and Overlay export outputs, and the Reset pill never rendered while the video's
+`readyState` was 0 across 40+ DOM samples. One operational gotcha hit mid-verify (not a
+T7370 bug): the container's backend worker had been running since before the fix commits
+were merged into its checkout and, with no `--reload`, kept serving the old
+`local_processors.py` for the first several runs — restarting it picked up the fix. A
+pre-existing, unrelated flake also observed: the direct presigned-R2-URL HEAD fetch
+intermittently threw `Failed to fetch` (documented container/R2 CORS quirk); the app's
+existing `/working_video/stream` fallback absorbed it every time, no product change needed.
+
 ## Acceptance Criteria
 
-- [ ] A CPU-container (no GPU, Modal disabled) render's working video loads in Overlay
+- [x] A CPU-container (no GPU, Modal disabled) render's working video loads in Overlay
       without a moov-parse failure
-- [ ] The "Reset to spotlight" pill never renders before the Overlay video has loaded
+- [x] The "Reset to spotlight" pill never renders before the Overlay video has loaded
       (`duration > 0`)
-- [ ] Existing `MockVideoUpscaler`/`local_framing_mock` tests (rotation warnings, T4050
+- [x] Existing `MockVideoUpscaler`/`local_framing_mock` tests (rotation warnings, T4050
       reframe pipeline) stay green
-- [ ] New regression test proves faststart output byte-for-byte (moov before mdat)
+- [x] New regression test proves faststart output byte-for-byte (moov before mdat)
