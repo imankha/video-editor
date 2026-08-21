@@ -139,8 +139,9 @@ def test_registry_head_is_v043():
     # once T5215 landed first; T6850 added v043 (drops
     # intro_min_duration_seconds -- T6680 made the v041 threshold dead); T4330
     # added v044 (working_clips.framing_version mutation counter for the
-    # unified action client's two-writer 409 conflict detection).
-    assert max(m.version for m in MIGRATIONS) == 44
+    # unified action client's two-writer 409 conflict detection); T4340 added
+    # v045 (canonicalize working_clips.segments_data.boundaries to full-list).
+    assert max(m.version for m in MIGRATIONS) == 45
     # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 35) == 1
