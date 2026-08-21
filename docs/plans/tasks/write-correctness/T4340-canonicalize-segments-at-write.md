@@ -1,6 +1,6 @@
 # T4340: Canonicalize segments_data at Write Time
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-07-03
