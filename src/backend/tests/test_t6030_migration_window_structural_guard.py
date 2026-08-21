@@ -102,8 +102,15 @@ POST_V023_COLUMNS = {
     #   test_framing_action_version_conflict.py::TestFramingActionPreMigration. No hot LIST
     #   read (list_project_clips) names the new column, so nothing else in this fixture needs
     #   to change.
+    # v045 (T4340 canonicalize working_clips.segments_data.boundaries to full-list) adds NO
+    #   column -> nothing to guard. It rewrites the msgpack segments_data BLOB's internal
+    #   boundaries shape (splits-only -> full-list) for pre-existing rows, joining the
+    #   PRE-EXISTING raw_clips.start_time/end_time columns (not new) to derive duration; no hot
+    #   read gains a new column name to fail on. The write-time canonicalization code (clips.py
+    #   _get_clip_framing_data / _save_clip_framing_data) reads/writes only pre-existing columns
+    #   too.
 }
-HEAD_VERSION_AUDITED = 44
+HEAD_VERSION_AUDITED = 45
 
 
 def _cleanup(user_id: str) -> None:

@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-08-01 (T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
+updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration v045 -- reader cleanup still a known gap, see Invariants; T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
 
@@ -87,15 +87,34 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
-- **segments_data dual format** (working_clips.segments_data, msgpack): gesture `split_segment`
-  stores **splits-only** boundaries (no 0, no duration — clips.py:466-481) while PUT full-state
-  stores the **full list** `[0, ...splits, duration]`. Every consumer MUST call
-  `canonicalize_segments_data` (`src/backend/app/highlight_transform.py:87-131`; detects format by
-  `boundaries[0] <= 0.01`) before walking boundary pairs — `segmentSpeeds` is keyed by interval
-  index over the FULL list, so walking splits-only pairs shifts every speed by one (Bug 20p:
-  slow-mo/realtime swapped). Callers: export/framing.py:456, export/multi_clip.py:1925/2092.
-  **Non-caller (latent)**: export/overlay.py:1307-1320 reads raw and uses `boundaries[-1]` as
-  duration. T4340 moves canonicalization to write time.
+- **segments_data is write-time-canonical as of T4340** (working_clips.segments_data, msgpack).
+  The on-disk `boundaries` format is now **always full-list** `[0, ...splits, duration]` for
+  every NEW write, from BOTH paths: the gesture path (`POST /actions` -> `split_segment` etc.)
+  and the full-state PUT (`saveCurrentClipState`). Mechanism (clips.py): `_get_clip_framing_data`
+  (clips.py:282) LEFT JOINs `raw_clips` for a live `source_duration`
+  (`raw_clips.end_time - start_time` — NOT a stored column, deliberately, to avoid a second
+  canonical home for duration) and strips the decoded blob to **splits-only** via
+  `to_splits_only` (`highlight_transform.py`, next to `canonicalize_segments_data`) before
+  handlers run, so `split_segment`/`remove_segment_split`'s index math (incl. the T4220
+  `segmentSpeeds` reindex) stays untouched. `_save_clip_framing_data` (clips.py:333) then calls
+  `canonicalize_segments_data` (`highlight_transform.py:86-130`; detects format by
+  `boundaries[0] <= 0.01`) immediately before encode, so what lands on disk is always full-list.
+  PUT (`update_working_clip`, clips.py:2326) was already canonical and is unchanged.
+  `segmentSpeeds` is keyed by interval index over the FULL list — walking splits-only pairs
+  shifts every speed by one (Bug 20p: slow-mo/realtime swapped), which is why the write-time fix
+  matters.
+  **Migration v045** (`migrations/profile_db/v045_canonicalize_working_clip_segments.py`)
+  rewrites pre-T4340 rows the same way (JOIN raw_clips, reuse `canonicalize_segments_data`,
+  idempotent, skips+logs orphan rows with no derivable duration rather than guessing) — run
+  manually per env via `POST /api/admin/migrate`, NOT automatic on deploy.
+  **Reader cleanup is NOT done — this is a KNOWN GAP, not finished work.** Every reader still
+  defensively calls `canonicalize_segments_data` (export/framing.py:456,
+  export/multi_clip.py:1925/2092, services/poster.py) and the **non-canonicalizing latent
+  reader `export/overlay.py:1928-1939`** (uses `boundaries[-1]` as duration — wrong for a
+  not-yet-migrated splits-only row) is UNCHANGED. Do not remove any reader's canonicalize call,
+  and do not assume overlay.py is fixed, until a FOLLOW-UP task removes them after the migration
+  has run on every env (deploy-before-migrate window: write code ships before the admin-triggered
+  migration runs, so old-format rows coexist with new-format ones for a while on purpose).
 - **Persistence is gesture-based.** Every ClipDetailsEditor field change is an immediate surgical
   save from its handler. The bulk path `PUT /{game_id}/annotations` → `save_annotations_to_db`
   (games.py:1599-1699) still exists but its frontend caller (`gamesDataStore.saveAnnotations`,
