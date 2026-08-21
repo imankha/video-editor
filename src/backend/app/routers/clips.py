@@ -209,6 +209,11 @@ class WorkingClipResponse(BaseModel):
     fps: float | None = None
     # T5640: per-clip horizon-straighten angle (degrees); NULL/absent -> treated as 0 client-side
     rotation: float | None = None
+    # T4330: framing action mutation counter, seeds the frontend actionClient's
+    # version tracker so a tab's FIRST edit is conflict-checked too (not just
+    # the 2nd+, which is all the client's own echoed-version tracking alone
+    # would ever catch). 0 for legacy rows / pre-migration DBs.
+    framing_version: int = 0
 
 
 class WorkingClipUpdate(BaseModel):
@@ -683,8 +688,8 @@ def _parse_aspect_ratio(value: str) -> tuple[int, int]:
     try:
         w_str, h_str = value.split(":")
         w, h = int(w_str), int(h_str)
-    except (ValueError, AttributeError):
-        raise ValueError(f"Invalid aspect ratio: {value!r} (expected 'W:H')")
+    except (ValueError, AttributeError) as err:
+        raise ValueError(f"Invalid aspect ratio: {value!r} (expected 'W:H')") from err
     if w <= 0 or h <= 0:
         raise ValueError(f"Invalid aspect ratio: {value!r} (W and H must be positive)")
     return w, h
@@ -1476,6 +1481,14 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
             if column_exists(cursor, "working_clips", "rotation")
             else "0.0 as wc_rotation"
         )
+        # T4330: same deploy->migrate tolerance for framing_version (v044) -- a
+        # below-head DB has no counter yet, so the action client's version
+        # seeding just gets 0 (its own "unseeded" default), not a crash.
+        _fv_select = (
+            "wc.framing_version as wc_framing_version"
+            if column_exists(cursor, "working_clips", "framing_version")
+            else "0 as wc_framing_version"
+        )
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -1491,6 +1504,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 wc.height as wc_height,
                 wc.fps as wc_fps,
                 {_rot_select},
+                {_fv_select},
                 rc.filename as raw_filename,
                 rc.name as raw_name,
                 rc.notes as raw_notes,
@@ -1580,7 +1594,9 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 width=clip['wc_width'],
                 height=clip['wc_height'],
                 fps=clip['wc_fps'],
-                rotation=clip['wc_rotation'] if 'wc_rotation' in clip.keys() else 0,
+                # sqlite3.Row has no .get() (CLAUDE.md: bracket notation only) -- noqa the SIM401 suggestion.
+                rotation=clip['wc_rotation'] if 'wc_rotation' in clip else 0,  # noqa: SIM401
+                framing_version=clip['wc_framing_version'] if 'wc_framing_version' in clip else 0,  # noqa: SIM401
             ))
 
     return result
@@ -1735,8 +1751,8 @@ async def add_clip_to_project(
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
@@ -1881,8 +1897,8 @@ async def upload_clip_with_metadata(
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
@@ -1918,8 +1934,8 @@ async def reorder_clips(project_id: int, clip_ids: list[int]):
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
@@ -1977,15 +1993,15 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
                 for attempt in range(TIER_2["max_attempts"]):
                     try:
-                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-                            async with client.stream("GET", presigned_url) as response:
-                                if response.status_code != 200:
-                                    raise HTTPException(
-                                        status_code=response.status_code,
-                                        detail=f"R2 returned {response.status_code}"
-                                    )
-                                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
-                                    yield chunk
+                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, \
+                                   client.stream("GET", presigned_url) as response:
+                            if response.status_code != 200:
+                                raise HTTPException(
+                                    status_code=response.status_code,
+                                    detail=f"R2 returned {response.status_code}"
+                                )
+                            async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
+                                yield chunk
                         return
                     except HTTPException:
                         raise
@@ -2208,8 +2224,8 @@ async def stream_working_clip_bounded(
                     req_start = int(lo_s)
                 if hi_s:
                     req_end = int(hi_s)
-            except ValueError:
-                raise HTTPException(status_code=416, detail="Malformed Range header")
+            except ValueError as err:
+                raise HTTPException(status_code=416, detail="Malformed Range header") from err
 
     # Pick the window this request targets. Moov window takes precedence when
     # the request starts at the head; clip window handles seeks into the body.
@@ -2351,7 +2367,7 @@ async def update_working_clip(
         was_exported = current_clip['exported_at'] is not None
 
         # Current rotation (column may read None on a below-head DB before v029)
-        current_rotation = current_clip['rotation'] if 'rotation' in current_clip.keys() else None
+        current_rotation = current_clip['rotation'] if 'rotation' in current_clip else None  # noqa: SIM401 (sqlite3.Row has no .get())
         if current_rotation is None:
             current_rotation = 0.0
 
@@ -2359,18 +2375,14 @@ async def update_working_clip(
         # Compare by decoding DB bytes and normalizing incoming data to match
         data_actually_changed = False
         if is_framing_change:
-            if update.crop_data is not None:
-                if decode_data(normalize_and_encode(update.crop_data)) != decode_data(current_clip['crop_data']):
-                    data_actually_changed = True
-            if update.timing_data is not None:
-                if decode_data(normalize_and_encode(update.timing_data)) != decode_data(current_clip['timing_data']):
-                    data_actually_changed = True
-            if update.segments_data is not None:
-                if decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
-                    data_actually_changed = True
-            if update.rotation is not None:
-                if float(update.rotation) != float(current_rotation):
-                    data_actually_changed = True
+            if update.crop_data is not None and decode_data(normalize_and_encode(update.crop_data)) != decode_data(current_clip['crop_data']):
+                data_actually_changed = True
+            if update.timing_data is not None and decode_data(normalize_and_encode(update.timing_data)) != decode_data(current_clip['timing_data']):
+                data_actually_changed = True
+            if update.segments_data is not None and decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
+                data_actually_changed = True
+            if update.rotation is not None and float(update.rotation) != float(current_rotation):
+                data_actually_changed = True
 
         if is_framing_change and was_exported and data_actually_changed:
             # Create a NEW version of this clip instead of updating
@@ -2396,9 +2408,9 @@ async def update_working_clip(
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
-                current_clip['width'] if 'width' in current_clip.keys() else None,
-                current_clip['height'] if 'height' in current_clip.keys() else None,
-                current_clip['fps'] if 'fps' in current_clip.keys() else None,
+                current_clip['width'] if 'width' in current_clip else None,  # noqa: SIM401 (sqlite3.Row has no .get())
+                current_clip['height'] if 'height' in current_clip else None,  # noqa: SIM401
+                current_clip['fps'] if 'fps' in current_clip else None,  # noqa: SIM401
                 # exported_at defaults to NULL for new version (not exported yet)
             ]
             if _has_rot:
@@ -2489,8 +2501,8 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id

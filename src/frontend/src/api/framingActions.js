@@ -48,6 +48,20 @@ async function sendAction(projectId, clipId, action, target = null, data = null)
   }
 }
 
+/**
+ * Seed the action client's version tracker for a clip from its initial data
+ * load (T4330). Call once when a clip's framing data is fetched, before any
+ * framing action for that clip can fire -- see actionClient.js's seedVersion
+ * doc for why this is required (a tab's first-ever action needs a version to
+ * compare against too, not just its 2nd+).
+ * @param {number} projectId
+ * @param {number} clipId
+ * @param {number} framingVersion - clip.framing_version from the clips list response
+ */
+export function seedClipVersion(projectId, clipId, framingVersion) {
+  client.seedVersion({ projectId, clipId }, framingVersion);
+}
+
 // =============================================================================
 // Crop Keyframe Actions
 // =============================================================================
@@ -188,4 +202,5 @@ export default {
   setTrimRange,
   clearTrimRange,
   setRotation,
+  seedClipVersion,
 };

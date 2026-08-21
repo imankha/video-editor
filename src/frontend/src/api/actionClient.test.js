@@ -242,6 +242,82 @@ describe('actionClient', () => {
     expect(apiFetch).toHaveBeenCalledTimes(2);
   });
 
+  it('T4330 fix: seedVersion primes the tracker so the FIRST action for a freshly-loaded entity is conflict-checked too', async () => {
+    // Regression: without seeding, a tab's first-ever action always omitted
+    // expected_version (nothing echoed yet), so a stale tab's first edit could
+    // never trigger a 409 -- exactly the "two-tab" scenario this client exists
+    // to protect. seedVersion primes the tracker from the entity's initial GET.
+    const client = await makeClient();
+    client.seedVersion({ key: 'clip1' }, 5);
+
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, version: 6 }),
+    });
+    await client.post({ key: 'clip1' }, 'add', null, {});
+    expect(bodyOf(apiFetch.mock.calls[0]).expected_version).toBe(5);
+  });
+
+  it('seedVersion never overwrites a version already established by this client\'s own echoed action', async () => {
+    const client = await makeClient();
+
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, version: 5 }),
+    });
+    await client.post({ key: 'clip1' }, 'add', null, {});
+
+    // A late/racing seed call (e.g. a slow initial GET resolving after the
+    // user's first action already landed) must NOT regress the tracker.
+    client.seedVersion({ key: 'clip1' }, 1);
+
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, version: 6 }),
+    });
+    await client.post({ key: 'clip1' }, 'add', null, {});
+    expect(bodyOf(apiFetch.mock.calls[1]).expected_version).toBe(5);
+  });
+
+  it('seedVersion is a no-op for undefined/null (e.g. a legacy row with no counter yet)', async () => {
+    const client = await makeClient();
+    client.seedVersion({ key: 'clip1' }, undefined);
+    client.seedVersion({ key: 'clip1' }, null);
+
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, version: 1 }),
+    });
+    await client.post({ key: 'clip1' }, 'add', null, {});
+    expect(bodyOf(apiFetch.mock.calls[0])).not.toHaveProperty('expected_version');
+  });
+
+  it('seedVersion re-primes the tracker after a 409 clears it', async () => {
+    const client = await makeClient();
+
+    apiFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ success: false, error: 'version_conflict', current_version: 9 }),
+    });
+    await client.post({ key: 'clip1' }, 'add', null, {});
+
+    // A refresh (re-fetch of the entity) re-seeds from the server's authoritative version.
+    client.seedVersion({ key: 'clip1' }, 9);
+
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, version: 10 }),
+    });
+    await client.post({ key: 'clip1' }, 'add', null, {});
+    expect(bodyOf(apiFetch.mock.calls[1]).expected_version).toBe(9);
+  });
+
   it('mapResult lets each client preserve its own return shape', async () => {
     const mapResult = vi.fn((raw, status, ok) => ({ success: ok, raw, status }));
     const client = await makeClient({ mapResult });

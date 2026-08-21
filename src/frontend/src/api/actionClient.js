@@ -12,7 +12,7 @@
  *
  * Design doc: docs/plans/tasks/T4330-design.md section 2.3-2.5.
  *
- * `createActionClient(config)` returns `{ post(ids, action, target, data) }`.
+ * `createActionClient(config)` returns `{ post(ids, action, target, data), seedVersion(ids, version) }`.
  *
  * Config:
  *   url(ids)         -> endpoint string for this entity
@@ -20,6 +20,14 @@
  *   tag               -> log prefix (preserves each wrapper's console.error tag)
  *   mapResult(raw, status, ok) -> caller-facing result shape (unchanged per wrapper)
  *   onConflict(ids, currentVersion) -> invoked on a 409, BEFORE mapResult runs
+ *
+ * `seedVersion` primes the tracker from the entity's initial data LOAD (its
+ * GET response), not just from this client's own action echoes. Without it, a
+ * freshly-opened tab's FIRST action always omits `expected_version` (nothing
+ * echoed yet) and the backend's null-check skips the conflict check entirely --
+ * so a tab whose view is already stale relative to the server, but has not yet
+ * sent an action of its own, could never be caught. Call it once after the
+ * screen's initial fetch, before any action for that entity can fire.
  */
 
 import apiFetch from '../utils/apiFetch';
@@ -86,5 +94,15 @@ export function createActionClient({ url, entityKey, tag, mapResult, onConflict 
     return task;
   }
 
-  return { post };
+  // Only fills in an UNSET tracker -- never overwrites a version already
+  // established by this client's own echoed actions (always more current
+  // than a load that may have raced an in-flight action), and correctly
+  // re-seeds after a 409 clears the tracker (versions.delete in sendOne).
+  function seedVersion(ids, version) {
+    if (version === undefined || version === null) return;
+    const key = entityKey(ids);
+    if (!versions.has(key)) versions.set(key, version);
+  }
+
+  return { post, seedVersion };
 }

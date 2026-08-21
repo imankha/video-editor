@@ -29,13 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, field_validator
 from starlette.background import BackgroundTask
 
-from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
-
-# Thread pool for CPU-intensive frame processing (prevents blocking event loop)
-_frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="overlay_")
-
 from ...constants import DEFAULT_HIGHLIGHT_EFFECT, ExportStatus, normalize_effect_type
-from ...schemas import TextSpec
 from ...database import (
     column_exists,
     get_db_connection,
@@ -45,7 +39,9 @@ from ...database import (
 from ...highlight_transform import (
     transform_all_regions_to_working,
 )
+from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from ...profile_context import get_current_profile_id
+from ...schemas import TextSpec
 from ...services.collection_metadata import (
     compute_project_game_ids,
     compute_project_metadata,
@@ -57,7 +53,6 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
-from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.poster import (
     clip_boundary_offsets,
     first_slowmo_section,
@@ -68,6 +63,7 @@ from ...services.poster import (
     revert_to_auto_poster,
     set_project_poster_marker_time,
 )
+from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.video_detections import hoist_video_detections, slice_detections
 from ...storage import (
     delete_from_r2,
@@ -77,6 +73,9 @@ from ...storage import (
 from ...user_context import get_current_user_id
 from ...utils.encoding import decode_data, encode_data
 from ...websocket import export_progress, manager
+
+# Thread pool for CPU-intensive frame processing (prevents blocking event loop)
+_frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="overlay_")
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +122,8 @@ def _finalize_overlay_export(
     output_filename: str,
     export_id: str,
     user_id: str,
-    gpu_seconds: float = None,
-    modal_function: str = None,
+    gpu_seconds: float | None = None,
+    modal_function: str | None = None,
 ) -> tuple[int, tuple[float, float] | None, float, float | None]:
     """Save final_videos record, update project, update export_jobs, archive.
 
@@ -285,7 +284,7 @@ def _finalize_overlay_export(
 # T4200: the sync_failed payload builder now lives in export_helpers so framing and
 # multi-clip share the exact same event shape (no router→router imports). Kept as a
 # thin module-local alias so existing overlay call sites read unchanged.
-from ...services.export_helpers import export_sync_failed_data as _export_sync_failed_data
+from ...services.export_helpers import export_sync_failed_data as _export_sync_failed_data  # noqa: E402, I001 (deliberately mid-file -- see comment above)
 
 # =============================================================================
 # Gesture-Based Overlay Actions API
@@ -1217,8 +1216,8 @@ def _process_frames_to_ffmpeg(
     highlight_regions: list,
     highlight_effect_type: str,
     progress_callback,
-    overlay_settings: dict = None,
-    text_layers: list = None,
+    overlay_settings: dict | None = None,
+    text_layers: list | None = None,
 ) -> int:
     """
     Process video frames with highlight overlays, piping directly to FFmpeg.
@@ -1503,7 +1502,7 @@ async def export_overlay_only(
             for region in highlight_regions:
                 logger.info(f"  Region {region['id']}: {region['start_time']:.2f}s - {region['end_time']:.2f}s, {len(region['keyframes'])} keyframes")
         except (json.JSONDecodeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {e!s}")
+            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {e!s}") from e
     elif highlight_keyframes_json:
         # Legacy flat keyframe format - convert to single region
         try:
@@ -1530,7 +1529,7 @@ async def export_overlay_only(
                 })
             logger.info(f"[Overlay Export] Legacy format: {len(keyframes)} keyframes converted to 1 region")
         except (json.JSONDecodeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {e!s}")
+            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {e!s}") from e
 
     # Create temp directory (no frames_dir needed - we pipe directly to FFmpeg)
     temp_dir = tempfile.mkdtemp()
@@ -1727,7 +1726,7 @@ async def export_overlay_only(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Overlay Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"Overlay export failed: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Overlay export failed: {e!s}") from e
 
 
 @router.post("/final")
@@ -1760,8 +1759,8 @@ async def export_final(
 
     try:
         json.loads(overlay_data)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid overlay_data JSON")
+    except json.JSONDecodeError as err:
+        raise HTTPException(status_code=400, detail="Invalid overlay_data JSON") from err
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2146,7 +2145,7 @@ async def get_overlay_data(project_id: int):
         _has_detections = column_exists(cursor, "working_videos", "detections_data")
         cursor.execute(f"""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
-                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
+                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength, version,
                    {'detections_data' if _has_detections else 'NULL AS detections_data'}
             FROM working_videos
             WHERE project_id = ?
@@ -2167,6 +2166,11 @@ async def get_overlay_data(project_id: int):
         fill_opacity = 0.20
         dim_strength = 0.20
         video_detections = None
+        # T4330: seeds the frontend actionClient's version tracker so a tab's
+        # FIRST overlay edit is conflict-checked too, not just the 2nd+ (which
+        # is all the client's own echoed-version tracking alone would catch).
+        # 0 when there's no working_videos row yet (has_data=False path below).
+        version = 0
 
         if result:
             if result['highlights_data']:
@@ -2191,6 +2195,7 @@ async def get_overlay_data(project_id: int):
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']
             video_duration = result['duration']
+            version = result['version']
             highlight_shape = result['highlight_shape'] or 'body'
             stroke_width = result['stroke_width']
             fill_enabled = bool(result['fill_enabled'])
@@ -2275,6 +2280,7 @@ async def get_overlay_data(project_id: int):
                 poster_filename = poster_row["poster_filename"]
 
         return JSONResponse({
+            'version': version,
             'highlights_data': highlights,
             'detections_data': video_detections,
             'text_overlays': text_overlays,
@@ -2325,7 +2331,7 @@ async def get_highlight_image(filename: str):
 
 
 @router.get("/highlights")
-async def list_highlights(raw_clip_id: int = None):
+async def list_highlights(raw_clip_id: int | None = None):
     """
     List all highlight images, optionally filtered by raw_clip_id.
 
@@ -2628,8 +2634,8 @@ async def _run_overlay_export_background(
     highlight_regions: list,
     effect_type: str,
     video_duration: float,
-    overlay_settings: dict = None,
-    text_overlays: list = None,
+    overlay_settings: dict | None = None,
+    text_overlays: list | None = None,
 ):
     """
     Run overlay export in background via asyncio.create_task.
@@ -2886,7 +2892,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
     # Apply global highlight_color to all keyframes if set
     # This allows users to change the highlight color without re-editing each keyframe
-    global_highlight_color = project['highlight_color'] if 'highlight_color' in project.keys() else None
+    global_highlight_color = project['highlight_color'] if 'highlight_color' in project else None  # noqa: SIM401 (sqlite3.Row has no .get())
     if global_highlight_color:
         logger.info(f"[Overlay Render] Applying global highlight color: {global_highlight_color}")
         for region in highlight_regions:
@@ -3034,7 +3040,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         except Exception as e:
             logger.error(f"[Overlay Render] Copy failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to copy video: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to copy video: {e}") from e
 
     # Check for E2E test mode - skip full overlay rendering, just copy working video as final
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
@@ -3109,12 +3115,13 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         except Exception as e:
             logger.error(f"[Overlay Render] TEST MODE failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Test mode overlay export failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Test mode overlay export failed: {e}") from e
 
     # Always run in background so the per-user write lock is released immediately.
-    # All progress is reported via WebSocket. call_modal_overlay_auto routes to
-    # Modal or local automatically.
-    asyncio.create_task(
+    # All progress is reported via WebSocket (export_progress/manager), not the
+    # task's return value, so this is deliberately fire-and-forget -- no result
+    # to await, no reference needed at this call site.
+    asyncio.create_task(  # noqa: RUF006
         _run_overlay_export_background(
             export_id=export_id,
             project_id=project_id,

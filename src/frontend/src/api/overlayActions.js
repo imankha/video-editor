@@ -58,6 +58,19 @@ async function sendAction(projectId, action, target = null, data = null) {
 }
 
 /**
+ * Seed the action client's version tracker for a project from its initial
+ * overlay-data load (T4330). Call once when overlay-data is fetched, before
+ * any overlay action for that project can fire -- see actionClient.js's
+ * seedVersion doc for why this is required (a tab's first-ever action needs
+ * a version to compare against too, not just its 2nd+).
+ * @param {number} projectId
+ * @param {number} version - the `version` field from GET .../overlay-data
+ */
+export function seedProjectVersion(projectId, version) {
+  client.seedVersion({ projectId }, version);
+}
+
+/**
  * Create a new highlight region
  * @param {number} projectId
  * @param {number} startTime - Region start time in seconds
@@ -350,4 +363,5 @@ export default {
   setHighlightShape,
   setPosterTime,
   revertPoster,
+  seedProjectVersion,
 };

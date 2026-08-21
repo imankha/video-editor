@@ -606,6 +606,11 @@ export function OverlayScreen({
           const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
 
+          // T4330: seed the action client's version tracker from this load,
+          // BEFORE any overlay action can fire -- otherwise a tab's first-ever
+          // edit always omits expected_version and skips the 409 conflict check.
+          overlayActions.seedProjectVersion(projectId, data.version);
+
           // Hold the flat video-level detection payload (T5600) so addRegion can
           // slice instant tracking squares for newly created regions.
           // T5646: this survives the resetHighlightRegions() below — reset() no
@@ -722,6 +727,11 @@ export function OverlayScreen({
           console.log('[OverlayScreen] Loading overlay data for project:', projectId);
           const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
+
+          // T4330: seed the action client's version tracker from this load,
+          // BEFORE any overlay action can fire -- otherwise a tab's first-ever
+          // edit always omits expected_version and skips the 409 conflict check.
+          overlayActions.seedProjectVersion(projectId, data.version);
 
           // Hold the flat video-level detection payload (T5600) so addRegion can
           // slice instant tracking squares for newly created regions.
