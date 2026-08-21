@@ -1594,9 +1594,11 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 width=clip['wc_width'],
                 height=clip['wc_height'],
                 fps=clip['wc_fps'],
-                # sqlite3.Row has no .get() (CLAUDE.md: bracket notation only) -- noqa the SIM401 suggestion.
-                rotation=clip['wc_rotation'] if 'wc_rotation' in clip else 0,  # noqa: SIM401
-                framing_version=clip['wc_framing_version'] if 'wc_framing_version' in clip else 0,  # noqa: SIM401
+                # sqlite3.Row has no .get(), and `in row` checks VALUES not column
+                # names (unlike a dict) -- `in row.keys()` is the only correct
+                # membership check here.
+                rotation=clip['wc_rotation'] if 'wc_rotation' in clip.keys() else 0,  # noqa: SIM118
+                framing_version=clip['wc_framing_version'] if 'wc_framing_version' in clip.keys() else 0,  # noqa: SIM118
             ))
 
     return result
@@ -2367,7 +2369,8 @@ async def update_working_clip(
         was_exported = current_clip['exported_at'] is not None
 
         # Current rotation (column may read None on a below-head DB before v029)
-        current_rotation = current_clip['rotation'] if 'rotation' in current_clip else None  # noqa: SIM401 (sqlite3.Row has no .get())
+        # `in row` checks VALUES not column names for sqlite3.Row -- `.keys()` required.
+        current_rotation = current_clip['rotation'] if 'rotation' in current_clip.keys() else None  # noqa: SIM118
         if current_rotation is None:
             current_rotation = 0.0
 
@@ -2408,9 +2411,10 @@ async def update_working_clip(
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
-                current_clip['width'] if 'width' in current_clip else None,  # noqa: SIM401 (sqlite3.Row has no .get())
-                current_clip['height'] if 'height' in current_clip else None,  # noqa: SIM401
-                current_clip['fps'] if 'fps' in current_clip else None,  # noqa: SIM401
+                # `in row` checks VALUES not column names for sqlite3.Row -- `.keys()` required.
+                current_clip['width'] if 'width' in current_clip.keys() else None,  # noqa: SIM118
+                current_clip['height'] if 'height' in current_clip.keys() else None,  # noqa: SIM118
+                current_clip['fps'] if 'fps' in current_clip.keys() else None,  # noqa: SIM118
                 # exported_at defaults to NULL for new version (not exported yet)
             ]
             if _has_rot:

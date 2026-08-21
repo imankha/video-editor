@@ -19,14 +19,16 @@ These tests are written test-first (Stage 3) and are ALL expected to FAIL until:
     (pre-migration, via `column_exists`)
 """
 
-import pytest
 import uuid
+
+import pytest
 from fastapi.testclient import TestClient
+
+from app.database import column_exists, get_db_connection
 from app.main import app
-from app.database import get_db_connection, column_exists
-from app.user_context import set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.session_init import _init_cache
+from app.user_context import set_current_user_id
 
 TEST_USER_ID = f"test_framing_conflict_{uuid.uuid4().hex[:8]}"
 TEST_PROFILE_ID = "testdefault"
@@ -232,5 +234,42 @@ class TestFramingActionPreMigration:
         assert "new_version" not in body or body["new_version"] is None
 
     def test_column_present_on_a_migrated_db(self):
-        """`ensure_database`/v044 have landed -- fresh test DBs carry the column."""
+        """`ensure_database`/v034 have landed -- fresh test DBs carry the column."""
         assert _framing_column_present() is True
+
+
+class TestClipsListExposesFramingVersion:
+    """T4330: GET /projects/{id}/clips must return the REAL framing_version.
+
+    Regression for a real bug found live-testing the two-tab conflict flow:
+    `list_project_clips`'s response construction used
+    `clip['wc_framing_version'] if 'wc_framing_version' in clip else 0` --
+    but `in` on a sqlite3.Row checks VALUES, not column names (unlike a plain
+    dict), so that check was ALWAYS False and every response silently
+    reported framing_version=0 regardless of the real counter. This is the
+    exact value the frontend actionClient seeds its version tracker from
+    (T4330's fix for the "tab's first action is never conflict-checked" gap)
+    -- a wrong value here would have silently defeated that fix. Confirmed
+    live via a direct curl bypassing the browser/dev-server entirely: the row
+    dict logged framing_version=1 but the JSON response still said 0.
+    """
+
+    def test_list_clips_returns_real_framing_version_not_default(self, test_project_with_clip):
+        project_id, clip_id = test_project_with_clip
+
+        # Bump the counter via a real action (mirrors what live-testing did).
+        bump = client.post(
+            f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
+            json={"action": "set_rotation", "data": {"rotation": 2.0}, "expected_version": 0},
+        )
+        assert bump.status_code == 200
+        assert bump.json()["new_version"] == 1
+
+        response = client.get(f"/api/clips/projects/{project_id}/clips")
+        assert response.status_code == 200
+        clips = response.json()
+        clip = next(c for c in clips if c["id"] == clip_id)
+
+        # The regression: this silently read 0 no matter what the DB held.
+        assert clip["framing_version"] == 1
+        assert clip["rotation"] == 2.0
