@@ -41,6 +41,7 @@ from .v041_intro_min_duration import V041IntroMinDuration
 from .v042_text_overlays_regions import V042TextOverlaysRegions
 from .v043_drop_intro_min_duration import V043DropIntroMinDuration
 from .v044_working_clips_framing_version import V044WorkingClipsFramingVersion
+from .v045_canonicalize_working_clip_segments import V045CanonicalizeWorkingClipSegments
 
 MIGRATIONS = [
     V001Baseline(),
@@ -85,6 +86,7 @@ MIGRATIONS = [
     V042TextOverlaysRegions(),
     V043DropIntroMinDuration(),
     V044WorkingClipsFramingVersion(),
+    V045CanonicalizeWorkingClipSegments(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
