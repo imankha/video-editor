@@ -1,9 +1,8 @@
 # T4330: Unified Action Client — Serialization + Versioning + 409 Conflicts
 
-**Status:** WAITING ON USER (retest branch pushed, awaiting test + merge —
-feature/T4330-unapproved-retest @ dbd38a3e, cut from master + this branch's
-original feature/T4330-action-client-serialization @ 6d0ba8d2, plus two
-live-testing fixes below. NOT merged to master — needs explicit user go-ahead.)
+**Status:** STAGING (merged to master `b3354498` 2026-08-21, user-tested and
+approved the two-tab conflict flow in both Framing and Overlay. Migration v044
+needs `POST /api/admin/migrate` after deploy — migrations never auto-run.)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03
