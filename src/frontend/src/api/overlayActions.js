@@ -12,6 +12,32 @@
 
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { createActionClient } from './actionClient';
+import { surfaceConflictPrompt } from '../utils/actionConflictPrompt';
+
+/**
+ * Overlay's actionClient instance (T4330). Preserves today's return shape --
+ * `{success, version, region_id?, error?, status?}` -- via mapResult, so no
+ * caller changes. `expected_version` is now threaded transparently by the
+ * client (the manual `expectedVersion` param is removed); entity granularity
+ * is one chain per project (one working_video).
+ */
+const client = createActionClient({
+  url: (ids) => `${API_BASE}/api/export/projects/${ids.projectId}/overlay/actions`,
+  entityKey: (ids) => `${ids.projectId}`,
+  tag: 'overlayActions',
+  mapResult: (raw, status, ok) => {
+    if (!ok) {
+      // `status` lets the caller distinguish a TRANSIENT failure (offline, 5xx,
+      // 429) from a DETERMINISTIC rejection (4xx: the server evaluated this
+      // exact request and refused it). Re-sending the latter byte-for-byte can
+      // only fail again -- see overlayActionStore's retryability rule.
+      return { success: false, version: raw.version || 0, error: raw.error, status };
+    }
+    return raw;
+  },
+  onConflict: surfaceConflictPrompt,
+});
 
 /**
  * Send an overlay action to the backend
@@ -19,39 +45,29 @@ import apiFetch from '../utils/apiFetch';
  * @param {string} action - Action type (create_region, delete_region, etc.)
  * @param {Object} target - Target specifier (region_id, keyframe_time)
  * @param {Object} data - Action data
- * @param {number} expectedVersion - Optional version for conflict detection
  * @returns {Promise<{success: boolean, version: number, region_id?: string, error?: string}>}
  */
-async function sendAction(projectId, action, target = null, data = null, expectedVersion = null) {
+async function sendAction(projectId, action, target = null, data = null) {
   try {
-    const payload = { action };
-    if (target) payload.target = target;
-    if (data) payload.data = data;
-    if (expectedVersion !== null) payload.expected_version = expectedVersion;
-
-    const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay/actions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('[overlayActions] Action failed:', result.error);
-      // `status` lets the caller distinguish a TRANSIENT failure (offline, 5xx,
-      // 429) from a DETERMINISTIC rejection (4xx: the server evaluated this
-      // exact request and refused it). Re-sending the latter byte-for-byte can
-      // only fail again -- see overlayActionStore's retryability rule.
-      return { success: false, version: result.version || 0, error: result.error, status: response.status };
-    }
-
-    return result;
+    return await client.post({ projectId }, action, target, data);
   } catch (err) {
     console.error('[overlayActions] Network error:', err);
     // No status: the request never reached the server, so it IS retryable.
     return { success: false, version: 0, error: err.message };
   }
+}
+
+/**
+ * Seed the action client's version tracker for a project from its initial
+ * overlay-data load (T4330). Call once when overlay-data is fetched, before
+ * any overlay action for that project can fire -- see actionClient.js's
+ * seedVersion doc for why this is required (a tab's first-ever action needs
+ * a version to compare against too, not just its 2nd+).
+ * @param {number} projectId
+ * @param {number} version - the `version` field from GET .../overlay-data
+ */
+export function seedProjectVersion(projectId, version) {
+  client.seedVersion({ projectId }, version);
 }
 
 /**
@@ -347,4 +363,5 @@ export default {
   setHighlightShape,
   setPosterTime,
   revertPoster,
+  seedProjectVersion,
 };

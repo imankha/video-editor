@@ -10,7 +10,25 @@
  */
 
 import { API_BASE } from '../config';
-import apiFetch from '../utils/apiFetch';
+import { createActionClient } from './actionClient';
+import { surfaceConflictPrompt } from '../utils/actionConflictPrompt';
+
+/**
+ * Framing's actionClient instance (T4330). Preserves today's return shape
+ * exactly -- `{success, refresh_required?, new_clip_id?, error?}` -- via
+ * mapResult, so no caller changes. FIFO + version threading + 409 routing
+ * are owned by the shared client; entity granularity is one chain per clip.
+ */
+const client = createActionClient({
+  url: (ids) => `${API_BASE}/api/clips/projects/${ids.projectId}/clips/${ids.clipId}/actions`,
+  entityKey: (ids) => `${ids.projectId}:${ids.clipId}`,
+  tag: 'framingActions',
+  mapResult: (raw, status, ok) => {
+    if (!ok) return { success: false, error: raw.error };
+    return raw;
+  },
+  onConflict: surfaceConflictPrompt,
+});
 
 /**
  * Send a framing action to the backend
@@ -23,28 +41,25 @@ import apiFetch from '../utils/apiFetch';
  */
 async function sendAction(projectId, clipId, action, target = null, data = null) {
   try {
-    const payload = { action };
-    if (target) payload.target = target;
-    if (data) payload.data = data;
-
-    const response = await apiFetch(`${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/actions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('[framingActions] Action failed:', result.error);
-      return { success: false, error: result.error };
-    }
-
-    return result;
+    return await client.post({ projectId, clipId }, action, target, data);
   } catch (err) {
     console.error('[framingActions] Network error:', err);
     return { success: false, error: err.message };
   }
+}
+
+/**
+ * Seed the action client's version tracker for a clip from its initial data
+ * load (T4330). Call once when a clip's framing data is fetched, before any
+ * framing action for that clip can fire -- see actionClient.js's seedVersion
+ * doc for why this is required (a tab's first-ever action needs a version to
+ * compare against too, not just its 2nd+).
+ * @param {number} projectId
+ * @param {number} clipId
+ * @param {number} framingVersion - clip.framing_version from the clips list response
+ */
+export function seedClipVersion(projectId, clipId, framingVersion) {
+  client.seedVersion({ projectId, clipId }, framingVersion);
 }
 
 // =============================================================================
@@ -187,4 +202,5 @@ export default {
   setTrimRange,
   clearTrimRange,
   setRotation,
+  seedClipVersion,
 };

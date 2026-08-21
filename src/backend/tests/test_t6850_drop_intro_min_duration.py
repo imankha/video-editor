@@ -112,10 +112,15 @@ class TestMigrationV043:
 
         applied = RUNNER.run(conn, "sqlite")
         assert any(m.version == 43 for m in applied)
+        # T4330 added v044 above this head -- a below-head DB run through the
+        # RUNNER sweeps every version above its starting point, so it now also
+        # picks up v044. Asserting both preserves this test's original intent
+        # (a below-head DB reaches the TRUE head), not just v043 in isolation.
+        assert any(m.version == 44 for m in applied)
 
         cols = {r[1] for r in conn.execute("PRAGMA table_info(user_settings)").fetchall()}
         assert "intro_min_duration_seconds" not in cols
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 43
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 44
         conn.close()
 
     def test_v043_is_still_the_free_version(self):
@@ -130,8 +135,9 @@ class TestMigrationV043:
     def test_registered_and_is_the_new_head(self):
         from app.migrations.profile_db import MIGRATIONS, RUNNER
 
-        assert max(m.version for m in MIGRATIONS) == 43
-        assert RUNNER.latest_version == 43
+        # T4330 (v044) landed above v043 -- v043 is no longer the head.
+        assert max(m.version for m in MIGRATIONS) == 44
+        assert RUNNER.latest_version == 44
 
 
 class TestFreshDbHasNoColumn:

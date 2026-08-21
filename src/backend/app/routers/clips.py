@@ -209,6 +209,11 @@ class WorkingClipResponse(BaseModel):
     fps: float | None = None
     # T5640: per-clip horizon-straighten angle (degrees); NULL/absent -> treated as 0 client-side
     rotation: float | None = None
+    # T4330: framing action mutation counter, seeds the frontend actionClient's
+    # version tracker so a tab's FIRST edit is conflict-checked too (not just
+    # the 2nd+, which is all the client's own echoed-version tracking alone
+    # would ever catch). 0 for legacy rows / pre-migration DBs.
+    framing_version: int = 0
 
 
 class WorkingClipUpdate(BaseModel):
@@ -277,27 +282,57 @@ class FramingAction(BaseModel):
 def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
     """
     Get current framing data for a clip.
-    Returns (crop_keyframes list, segments_data dict, clip row).
+    Returns (crop_keyframes list, segments_data dict, clip row, framing_version int|None).
+
+    framing_version is None when the v044 column hasn't been migrated yet
+    (deploy->migrate window) -- callers must treat None as "conflict
+    detection unavailable" and skip the check/bump entirely, never error.
     """
-    cursor.execute("""
+    has_framing_version = column_exists(cursor, "working_clips", "framing_version")
+    version_select = ", framing_version" if has_framing_version else ""
+    cursor.execute(f"""
         SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
-               crop_data, timing_data, segments_data
+               crop_data, timing_data, segments_data{version_select}
         FROM working_clips
         WHERE id = ? AND project_id = ?
     """, (clip_id, project_id))
     clip = cursor.fetchone()
 
     if not clip:
-        return None, None, None
+        return None, None, None, None
 
     crop_keyframes = decode_data(clip['crop_data']) or []
     segments_data = decode_data(clip['segments_data']) or {}
+    framing_version = (clip['framing_version'] or 0) if has_framing_version else None
 
-    return crop_keyframes, segments_data, clip
+    return crop_keyframes, segments_data, clip, framing_version
+
+
+def _check_framing_version_conflict(expected_version: int | None, framing_version: int | None):
+    """
+    T4330: pure comparison, no I/O -- must run before any mutation and add no
+    `await`/write between the read and the eventual commit (RMW atomicity,
+    persistence-sync.md invariant 6).
+
+    Returns a 409 JSONResponse on conflict, else None. A None framing_version
+    (column not migrated yet) or a None expected_version (first write of a
+    session, or an un-migrated caller) both skip the check -- back-compat.
+    """
+    if framing_version is None or expected_version is None:
+        return None
+    if expected_version != framing_version:
+        return JSONResponse(status_code=409, content={
+            "success": False,
+            "error": "version_conflict",
+            "current_version": framing_version,
+            "message": "This clip was edited elsewhere. Refresh to see the latest.",
+        })
+    return None
 
 
 def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
-                            crop_keyframes: list, segments_data: dict) -> dict:
+                            crop_keyframes: list, segments_data: dict,
+                            framing_version: int | None) -> dict:
     """
     Save framing data from gesture actions (always update in-place).
 
@@ -305,9 +340,23 @@ def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
     so they must NOT create new versions of exported clips. Version creation is
     handled exclusively by the PUT endpoint which receives full state from the
     frontend's saveCurrentClipState.
+
+    Bumps framing_version in the same UPDATE when the column is present
+    (framing_version is not None); the response only includes new_version
+    when the bump actually happened.
     """
     crop_data_encoded = encode_data(crop_keyframes) if crop_keyframes else None
     segments_data_encoded = encode_data(segments_data) if segments_data else None
+
+    if framing_version is not None:
+        new_version = framing_version + 1
+        cursor.execute("""
+            UPDATE working_clips
+            SET crop_data = ?, segments_data = ?, framing_version = ?
+            WHERE id = ?
+        """, (crop_data_encoded, segments_data_encoded, new_version, clip['id']))
+        conn.commit()
+        return {"success": True, "refresh_required": False, "new_version": new_version}
 
     cursor.execute("""
         UPDATE working_clips
@@ -365,10 +414,17 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
         cursor = conn.cursor()
 
         # Get current framing data
-        crop_keyframes, segments_data, clip = _get_clip_framing_data(cursor, clip_id, project_id)
+        crop_keyframes, segments_data, clip, framing_version = _get_clip_framing_data(cursor, clip_id, project_id)
 
         if clip is None:
             raise HTTPException(status_code=404, detail="Clip not found")
+
+        # T4330: conflict check happens immediately after the read, before any
+        # mutation -- see _check_framing_version_conflict for the RMW-atomicity
+        # note. Applies uniformly to every write path below, including set_rotation.
+        conflict = _check_framing_version_conflict(action.expected_version, framing_version)
+        if conflict is not None:
+            return conflict
 
         try:
             if action.action == "add_crop_keyframe":
@@ -586,6 +642,19 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                         status_code=503,
                         detail="Rotation is unavailable until the v029 migration runs (POST /api/admin/migrate).",
                     )
+                # T4330: same counter bump/skip-if-absent logic as the other
+                # write paths, applied AFTER the pre-existing v029 rotation-column
+                # guard above (that guard is unrelated and must stay untouched).
+                if framing_version is not None:
+                    new_version = framing_version + 1
+                    cursor.execute(
+                        "UPDATE working_clips SET rotation = ?, framing_version = ? WHERE id = ? AND project_id = ?",
+                        (float(action.data.rotation), new_version, clip_id, project_id),
+                    )
+                    conn.commit()
+                    logger.info(f"[Framing Action] Set rotation to {action.data.rotation} deg")
+                    return {"success": True, "refresh_required": False, "new_version": new_version}
+
                 cursor.execute(
                     "UPDATE working_clips SET rotation = ? WHERE id = ? AND project_id = ?",
                     (float(action.data.rotation), clip_id, project_id),
@@ -598,7 +667,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 raise ValueError(f"Unknown action: {action.action}")
 
             # Save changes (handles versioning if needed)
-            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data)
+            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data, framing_version)
             return result
 
         except ValueError as e:
@@ -619,8 +688,8 @@ def _parse_aspect_ratio(value: str) -> tuple[int, int]:
     try:
         w_str, h_str = value.split(":")
         w, h = int(w_str), int(h_str)
-    except (ValueError, AttributeError):
-        raise ValueError(f"Invalid aspect ratio: {value!r} (expected 'W:H')")
+    except (ValueError, AttributeError) as err:
+        raise ValueError(f"Invalid aspect ratio: {value!r} (expected 'W:H')") from err
     if w <= 0 or h <= 0:
         raise ValueError(f"Invalid aspect ratio: {value!r} (W and H must be positive)")
     return w, h
@@ -1412,6 +1481,14 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
             if column_exists(cursor, "working_clips", "rotation")
             else "0.0 as wc_rotation"
         )
+        # T4330: same deploy->migrate tolerance for framing_version (v044) -- a
+        # below-head DB has no counter yet, so the action client's version
+        # seeding just gets 0 (its own "unseeded" default), not a crash.
+        _fv_select = (
+            "wc.framing_version as wc_framing_version"
+            if column_exists(cursor, "working_clips", "framing_version")
+            else "0 as wc_framing_version"
+        )
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -1427,6 +1504,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 wc.height as wc_height,
                 wc.fps as wc_fps,
                 {_rot_select},
+                {_fv_select},
                 rc.filename as raw_filename,
                 rc.name as raw_name,
                 rc.notes as raw_notes,
@@ -1516,7 +1594,11 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 width=clip['wc_width'],
                 height=clip['wc_height'],
                 fps=clip['wc_fps'],
-                rotation=clip['wc_rotation'] if 'wc_rotation' in clip.keys() else 0,
+                # sqlite3.Row has no .get(), and `in row` checks VALUES not column
+                # names (unlike a dict) -- `in row.keys()` is the only correct
+                # membership check here.
+                rotation=clip['wc_rotation'] if 'wc_rotation' in clip.keys() else 0,  # noqa: SIM118
+                framing_version=clip['wc_framing_version'] if 'wc_framing_version' in clip.keys() else 0,  # noqa: SIM118
             ))
 
     return result
@@ -1671,8 +1753,8 @@ async def add_clip_to_project(
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
@@ -1817,8 +1899,8 @@ async def upload_clip_with_metadata(
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
@@ -1854,8 +1936,8 @@ async def reorder_clips(project_id: int, clip_ids: list[int]):
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id
@@ -1913,15 +1995,15 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
                 for attempt in range(TIER_2["max_attempts"]):
                     try:
-                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-                            async with client.stream("GET", presigned_url) as response:
-                                if response.status_code != 200:
-                                    raise HTTPException(
-                                        status_code=response.status_code,
-                                        detail=f"R2 returned {response.status_code}"
-                                    )
-                                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
-                                    yield chunk
+                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, \
+                                   client.stream("GET", presigned_url) as response:
+                            if response.status_code != 200:
+                                raise HTTPException(
+                                    status_code=response.status_code,
+                                    detail=f"R2 returned {response.status_code}"
+                                )
+                            async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
+                                yield chunk
                         return
                     except HTTPException:
                         raise
@@ -2144,8 +2226,8 @@ async def stream_working_clip_bounded(
                     req_start = int(lo_s)
                 if hi_s:
                     req_end = int(hi_s)
-            except ValueError:
-                raise HTTPException(status_code=416, detail="Malformed Range header")
+            except ValueError as err:
+                raise HTTPException(status_code=416, detail="Malformed Range header") from err
 
     # Pick the window this request targets. Moov window takes precedence when
     # the request starts at the head; clip window handles seeks into the body.
@@ -2287,7 +2369,8 @@ async def update_working_clip(
         was_exported = current_clip['exported_at'] is not None
 
         # Current rotation (column may read None on a below-head DB before v029)
-        current_rotation = current_clip['rotation'] if 'rotation' in current_clip.keys() else None
+        # `in row` checks VALUES not column names for sqlite3.Row -- `.keys()` required.
+        current_rotation = current_clip['rotation'] if 'rotation' in current_clip.keys() else None  # noqa: SIM118
         if current_rotation is None:
             current_rotation = 0.0
 
@@ -2295,18 +2378,14 @@ async def update_working_clip(
         # Compare by decoding DB bytes and normalizing incoming data to match
         data_actually_changed = False
         if is_framing_change:
-            if update.crop_data is not None:
-                if decode_data(normalize_and_encode(update.crop_data)) != decode_data(current_clip['crop_data']):
-                    data_actually_changed = True
-            if update.timing_data is not None:
-                if decode_data(normalize_and_encode(update.timing_data)) != decode_data(current_clip['timing_data']):
-                    data_actually_changed = True
-            if update.segments_data is not None:
-                if decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
-                    data_actually_changed = True
-            if update.rotation is not None:
-                if float(update.rotation) != float(current_rotation):
-                    data_actually_changed = True
+            if update.crop_data is not None and decode_data(normalize_and_encode(update.crop_data)) != decode_data(current_clip['crop_data']):
+                data_actually_changed = True
+            if update.timing_data is not None and decode_data(normalize_and_encode(update.timing_data)) != decode_data(current_clip['timing_data']):
+                data_actually_changed = True
+            if update.segments_data is not None and decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
+                data_actually_changed = True
+            if update.rotation is not None and float(update.rotation) != float(current_rotation):
+                data_actually_changed = True
 
         if is_framing_change and was_exported and data_actually_changed:
             # Create a NEW version of this clip instead of updating
@@ -2332,9 +2411,10 @@ async def update_working_clip(
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
-                current_clip['width'] if 'width' in current_clip.keys() else None,
-                current_clip['height'] if 'height' in current_clip.keys() else None,
-                current_clip['fps'] if 'fps' in current_clip.keys() else None,
+                # `in row` checks VALUES not column names for sqlite3.Row -- `.keys()` required.
+                current_clip['width'] if 'width' in current_clip.keys() else None,  # noqa: SIM118
+                current_clip['height'] if 'height' in current_clip.keys() else None,  # noqa: SIM118
+                current_clip['fps'] if 'fps' in current_clip.keys() else None,  # noqa: SIM118
                 # exported_at defaults to NULL for new version (not exported yet)
             ]
             if _has_rot:
@@ -2425,8 +2505,8 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
     # call it EARLIER in the same function, and a local import makes the name
     # local to the WHOLE function, breaking that earlier call with
     # UnboundLocalError (confirmed by the full backend test suite).
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     from app.profile_context import get_current_profile_id
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
     fire_and_forget(
         warm_draft_poster_background(
             get_current_user_id(), get_current_profile_id(), project_id

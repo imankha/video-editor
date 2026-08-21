@@ -1,6 +1,9 @@
 # T4330: Unified Action Client — Serialization + Versioning + 409 Conflicts
 
-**Status:** WAITING ON USER (branch pushed, awaiting test + merge — feature/T4330-action-client-serialization @ 6d0ba8d2)
+**Status:** WAITING ON USER (retest branch pushed, awaiting test + merge —
+feature/T4330-unapproved-retest @ dbd38a3e, cut from master + this branch's
+original feature/T4330-action-client-serialization @ 6d0ba8d2, plus two
+live-testing fixes below. NOT merged to master — needs explicit user go-ahead.)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03
@@ -34,9 +37,51 @@ Three related gaps in the gesture-action transport:
 3. [ ] Backend 409 (overlay first — scaffold exists — then framing), each with a two-writer backend test.
 4. [ ] Migrate both action files to the client; grep for any direct `apiFetch` action POSTs bypassing it.
 
+## Progress Log
+
+**2026-08-20/21 (live two-tab testing found + fixed two real bugs)**:
+
+1. **Version tracker never seeded from initial load (`dbd38a3e`'s parent, `134f82fe`).**
+   Live two-tab testing (open the same clip in two tabs, edit in both) found the
+   409 conflict prompt never appeared in either Framing or Overlay. Root cause:
+   `actionClient.js`'s `versions` Map only ever gets set from the client's OWN
+   echoed action responses -- never from the entity's initial GET. A freshly
+   opened tab's FIRST action therefore always omits `expected_version`, and the
+   backend explicitly treats a missing version as "skip the check" (intentional
+   back-compat) -- so a tab's first edit could never trigger a 409, no matter how
+   stale its view actually was. Fixed: `actionClient.seedVersion(ids, version)`,
+   wired into both load paths (`useProjectLoader` for clips'
+   `framing_version`, `OverlayScreen` for the project's `version`), backed by
+   new `WorkingClipResponse.framing_version` / `get_overlay_data`'s `version`
+   response fields (both values already existed in the DB/query, just never
+   returned to the client).
+
+2. **`sqlite3.Row` membership check broken by an UNRELATED lint fix (`dbd38a3e`).**
+   Fixing pre-existing ruff SIM118 warnings in the two touched backend files (a
+   whole-file lint gate, not scoped to new lines) removed `.keys()` from several
+   `'column' in row` presence checks. `in` on a `sqlite3.Row` checks VALUES, not
+   column names (unlike a plain dict, where ruff's suggestion is correct) -- so
+   every one of those checks became permanently False, and `rotation`,
+   `framing_version`, `width`, `height`, `fps`, `highlight_color` silently
+   defaulted regardless of the real DB value. This directly undermined fix #1
+   (seeding from a value that's always 0). Caught via a live curl bypassing the
+   browser/dev-server entirely (debug log showed the row correctly held
+   `framing_version=1`; the JSON response still said 0). Fixed: restored
+   `.keys()` everywhere with an explanatory comment, noqa'd SIM118 instead of
+   "fixing" it. New regression test
+   (`TestClipsListExposesFramingVersion`) asserts the real value round-trips
+   through the endpoint -- the existing rotation-migration-window test only
+   checked a raw SELECT, never the handler's response construction, which is
+   why this slipped through initially.
+
+Both fixes verified live end-to-end (real HTTP calls, not mocks): a stale
+`expected_version` from a simulated "second tab" now correctly returns 409
+with the accurate `current_version` and refresh-prompt message, for both
+Framing and Overlay.
+
 ## Acceptance Criteria
 
-- [ ] One transport implementation; both action files declarative
-- [ ] Same-entity actions provably serialized (unit test with deferred fetch mocks)
-- [ ] Concurrent edit from a second tab → 409 → visible refresh prompt, zero silent loss
-- [ ] No action POST path bypasses the client
+- [x] One transport implementation; both action files declarative
+- [x] Same-entity actions provably serialized (unit test with deferred fetch mocks)
+- [x] Concurrent edit from a second tab → 409 → visible refresh prompt, zero silent loss
+- [x] No action POST path bypasses the client

@@ -8,6 +8,7 @@ import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
+import { seedClipVersion } from '../api/framingActions';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -137,6 +138,14 @@ export function useProjectLoader() {
       const clipsData = await fetchClips(projectId);
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);
+
+      // T4330: seed the action client's version tracker for each clip from
+      // this load, BEFORE any framing action can fire for it -- otherwise a
+      // tab's first-ever edit always omits expected_version (nothing echoed
+      // yet) and skips the 409 conflict check entirely.
+      for (const clip of clipsData) {
+        seedClipVersion(projectId, clip.id, clip.framing_version);
+      }
 
       // T1500: dims (width/height/fps) live on working_clips. Probe fallback
       // only when dims are missing — a backfill gap should not brick the UI.
