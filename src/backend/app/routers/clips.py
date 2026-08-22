@@ -27,6 +27,7 @@ from app.database import (
     get_db_connection,
     get_raw_clips_path,
 )
+from app.highlight_transform import canonicalize_segments_data, to_splits_only
 from app.middleware.db_sync import durable_sync
 from app.queries import derive_clip_name, latest_working_clips_subquery, normalize_rating
 from app.services.default_crop import refit_crop_keyframes
@@ -282,30 +283,51 @@ class FramingAction(BaseModel):
 def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
     """
     Get current framing data for a clip.
-    Returns (crop_keyframes list, segments_data dict, clip row, framing_version int|None).
+    Returns (crop_keyframes list, segments_data dict, clip row, framing_version
+    int|None, source_duration float|None).
 
     framing_version is None when the v044 column hasn't been migrated yet
     (deploy->migrate window) -- callers must treat None as "conflict
     detection unavailable" and skip the check/bump entirely, never error.
+
+    source_duration (T4340) is the clip's raw duration, derived live as
+    raw_clips.end_time - start_time via a LEFT JOIN -- NOT stored on
+    working_clips (design decision: one canonical datum, no drift risk). None
+    when raw_clip_id is NULL (uploaded/orphan clip) or the raw_clips row is
+    missing.
+
+    segments_data['boundaries'] is normalized to SPLITS-ONLY here
+    (to_splits_only) regardless of what's stored on disk, so gesture
+    handlers' index math (split_segment, remove_segment_split's T4220
+    reindex) stays valid whether the stored row is pre- or post-migration
+    (T4340 design Sec 2.4).
     """
     has_framing_version = column_exists(cursor, "working_clips", "framing_version")
-    version_select = ", framing_version" if has_framing_version else ""
+    version_select = ", wc.framing_version" if has_framing_version else ""
     cursor.execute(f"""
-        SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
-               crop_data, timing_data, segments_data{version_select}
-        FROM working_clips
-        WHERE id = ? AND project_id = ?
+        SELECT wc.id, wc.project_id, wc.raw_clip_id, wc.uploaded_filename, wc.exported_at,
+               wc.sort_order, wc.version, wc.crop_data, wc.timing_data, wc.segments_data{version_select},
+               rc.start_time AS raw_start_time, rc.end_time AS raw_end_time
+        FROM working_clips wc
+        LEFT JOIN raw_clips rc ON rc.id = wc.raw_clip_id
+        WHERE wc.id = ? AND wc.project_id = ?
     """, (clip_id, project_id))
     clip = cursor.fetchone()
 
     if not clip:
-        return None, None, None, None
+        return None, None, None, None, None
 
     crop_keyframes = decode_data(clip['crop_data']) or []
     segments_data = decode_data(clip['segments_data']) or {}
     framing_version = (clip['framing_version'] or 0) if has_framing_version else None
 
-    return crop_keyframes, segments_data, clip, framing_version
+    source_duration = None
+    if clip['raw_start_time'] is not None and clip['raw_end_time'] is not None:
+        source_duration = clip['raw_end_time'] - clip['raw_start_time']
+
+    segments_data = to_splits_only(segments_data)
+
+    return crop_keyframes, segments_data, clip, framing_version, source_duration
 
 
 def _check_framing_version_conflict(expected_version: int | None, framing_version: int | None):
@@ -332,7 +354,8 @@ def _check_framing_version_conflict(expected_version: int | None, framing_versio
 
 def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
                             crop_keyframes: list, segments_data: dict,
-                            framing_version: int | None) -> dict:
+                            framing_version: int | None,
+                            source_duration: float | None = None) -> dict:
     """
     Save framing data from gesture actions (always update in-place).
 
@@ -344,7 +367,18 @@ def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
     Bumps framing_version in the same UPDATE when the column is present
     (framing_version is not None); the response only includes new_version
     when the bump actually happened.
+
+    T4340: segments_data['boundaries'] is canonicalized to the full-list
+    format immediately before encoding, using source_duration joined live
+    from raw_clips (_get_clip_framing_data). This is the ONE place the
+    on-disk format becomes full-list -- handlers upstream still operate on
+    splits-only boundaries (read side strips via to_splits_only). If
+    source_duration is unavailable (orphan/uploaded clip),
+    canonicalize_segments_data logs a warning and leaves the blob splits-only
+    -- no fabricated duration (no-silent-fallback, CLAUDE.md).
     """
+    segments_data = canonicalize_segments_data(segments_data, source_duration)
+
     crop_data_encoded = encode_data(crop_keyframes) if crop_keyframes else None
     segments_data_encoded = encode_data(segments_data) if segments_data else None
 
@@ -414,7 +448,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
         cursor = conn.cursor()
 
         # Get current framing data
-        crop_keyframes, segments_data, clip, framing_version = _get_clip_framing_data(cursor, clip_id, project_id)
+        crop_keyframes, segments_data, clip, framing_version, source_duration = _get_clip_framing_data(cursor, clip_id, project_id)
 
         if clip is None:
             raise HTTPException(status_code=404, detail="Clip not found")
@@ -539,11 +573,14 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
 
             elif action.action == "split_segment":
                 # Add a new boundary.
-                # NOTE: gesture-created rows hold user split times only (no 0,
-                # no duration) — the clip duration is unknown here. The PUT
-                # endpoint saves the full [0, ...splits, duration] list instead.
-                # Consumers must run canonicalize_segments_data (highlight_transform)
-                # before walking boundary pairs, or segmentSpeeds indices misalign.
+                # T4340: this handler operates on SPLITS-ONLY boundaries (no 0,
+                # no duration) -- _get_clip_framing_data strips the stored blob
+                # to this shape on read regardless of what's on disk.
+                # _save_clip_framing_data canonicalizes to full-list
+                # [0, ...splits, duration] immediately before encode, using
+                # source_duration joined live from raw_clips. The on-disk
+                # format is now always full-list; only the in-handler shape
+                # stays splits-only.
                 if not action.data or action.data.time is None:
                     raise ValueError("split_segment requires data.time")
 
@@ -667,7 +704,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 raise ValueError(f"Unknown action: {action.action}")
 
             # Save changes (handles versioning if needed)
-            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data, framing_version)
+            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data, framing_version, source_duration)
             return result
 
         except ValueError as e:

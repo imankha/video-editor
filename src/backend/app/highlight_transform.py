@@ -130,6 +130,42 @@ def canonicalize_segments_data(
     return result
 
 
+def to_splits_only(segments_data: dict | None) -> dict | None:
+    """
+    Normalize segments_data['boundaries'] to the splits-only format -- the
+    inverse of canonicalize_segments_data.
+
+    T4340: the gesture handlers (split_segment, remove_segment_split) read and
+    index-math their boundaries as splits-only (no leading 0, no trailing
+    duration). Write-time canonicalization makes the ON-DISK format full-list,
+    so the gesture READ path must strip a full-list stored row back to
+    splits-only before handlers run, or their index math (in particular
+    remove_segment_split's T4220 segmentSpeeds reindex) shifts by one.
+
+    Uses the same boundaries[0] <= 0.01 discriminator as
+    canonicalize_segments_data, inverted: full-list rows have their leading 0
+    and trailing duration stripped; already-splits-only rows pass through
+    unchanged (idempotent).
+    """
+    if not segments_data:
+        return segments_data
+
+    boundaries = segments_data.get('boundaries')
+    if not boundaries:
+        return segments_data
+
+    if boundaries[0] > 0.01:
+        # Already splits-only
+        return segments_data
+
+    sorted_boundaries = sorted(boundaries)
+    duration = sorted_boundaries[-1]
+    splits = [b for b in sorted_boundaries if 0.01 < b < duration - 0.01]
+    result = dict(segments_data)
+    result['boundaries'] = splits
+    return result
+
+
 def get_output_duration(segments_data: dict | None, source_duration: float = None) -> float:
     """
     Calculate the effective output duration accounting for trim and speed changes.
