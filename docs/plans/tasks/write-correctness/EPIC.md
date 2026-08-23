@@ -27,13 +27,15 @@ render or a lost concurrent-tab edit, not a vanished balance or a reverted profi
 
 | ID | Task | Status | Class |
 |----|------|--------|-------|
-| T4330 | [Unified Action Client: Serialization + Versioning + 409](T4330-action-client-serialization-conflicts.md) | TODO | concurrency (two tabs/gestures race whole-blob RMW) |
-| T4340 | [Canonicalize segments_data at Write Time](T4340-canonicalize-segments-at-write.md) | TODO | data format (dual format → inverted-clip / wrong-recap render) |
-| T4350 | [Re-Export Must Re-Transform Carried-Forward Highlights](T4350-reexport-retransform-highlights.md) | TODO | transform correctness (highlights drift after re-time) |
+| T4330 | [Unified Action Client: Serialization + Versioning + 409](T4330-action-client-serialization-conflicts.md) | STAGING | concurrency (two tabs/gestures race whole-blob RMW) |
+| T4340 | [Canonicalize segments_data at Write Time](T4340-canonicalize-segments-at-write.md) | STAGING | data format (dual format → inverted-clip / wrong-recap render) |
+| T4350 | [Re-Export Must Re-Transform Carried-Forward Highlights](T4350-reexport-retransform-highlights.md) | WIP | transform correctness — **re-scoped 2026-08-22**: task premise was invalid (described "verbatim drift" endpoint is dead code); real live bug is re-export silently DISCARDING overlay-edited highlights and reseeding fresh auto-detection. Re-tiered M→L. Scope approved: fix single-clip (L1 stop-discard + L2 real old→raw→new transform, needs a profile_db migration), loud reset notice for multi-clip. See design doc `docs/plans/tasks/T4350-design.md`. |
+| T4355 | [Multi-Clip Highlight Preservation on Re-Export](T4355-multiclip-highlight-preservation.md) | TODO | transform correctness — follow-up filed 2026-08-22 when T4350 was scoped single-clip-first. Needs per-region clip attribution + old/new concat-offset remapping (neither exists today); reuses T4350's snapshot mechanism. Depends on T4350 merged first. |
 | T4360 | [Explicit Orderings: BEGIN IMMEDIATE + Invariant Tests](T4360-explicit-orderings-invariants.md) | TODO | local atomicity / ordering (RMW atomicity is an accident; activation ordering) |
 
-Order: **T4340 before T4350** (T4350 builds on canonical segments). T4330 and T4360 are
-independent. T4360 is a prerequisite for T4640 (games-services extraction).
+Order: **T4340 before T4350** (T4350 builds on canonical segments). **T4350 before T4355**
+(T4355 reuses T4350's OLD-framing snapshot rather than building a second one). T4330 and T4360
+are independent. T4360 is a prerequisite for T4640 (games-services extraction).
 
 ## Relationship to the durability epic
 
@@ -50,6 +52,8 @@ independent. T4360 is a prerequisite for T4640 (games-services extraction).
 
 - [ ] Two concurrent tabs/gestures cannot silently lose an edit (409 + retry UX instead)
 - [ ] `segments_data` has one on-disk format; readers don't defensively canonicalize
-- [ ] Re-export never carries highlights verbatim across a timing change (transform or drop-and-notify)
+- [ ] Re-export never silently discards or mis-times a user's edited highlights — carried
+  verbatim only when nothing timed-changed, transformed old→raw→new when it did, dropped +
+  visibly flagged when it can't map (single-clip: T4350; multi-clip: T4355)
 - [ ] Action-endpoint RMW atomicity is explicit (BEGIN IMMEDIATE) with a race-detector test
 - [ ] Backend import check + full backend tests green after each task
