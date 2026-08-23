@@ -397,6 +397,17 @@ describe('T6390 checkSyncStatus logging', () => {
     expect(errSpy.mock.calls[0][1].reason).toMatch(/no X-Sync-Diag/i);
   });
 
+  it('a PRESENT X-Sync-Diag with no reason field gets a distinct message, not the CORS fallback', () => {
+    // build_marker_diag's real call sites never populate `reason` today — the
+    // diag is present and parseable (db/loaded/etc. all come through), just
+    // missing that one key. Conflating this with a truly-missing header
+    // wrongly points every genuine failure at CORS/expose_headers.
+    checkSyncStatus(resp('failed', 'db=profile;loaded=3'));
+    expect(errSpy.mock.calls[0][1].reason).not.toMatch(/no X-Sync-Diag/i);
+    expect(errSpy.mock.calls[0][1].reason).toMatch(/no reason/i);
+    expect(errSpy.mock.calls[0][1].db).toBe('profile');
+  });
+
   it('does not log when returning to ok', () => {
     useSyncStore.setState({ syncState: 'conflict' });
     checkSyncStatus(resp('ok'));

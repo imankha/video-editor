@@ -218,10 +218,13 @@ export function checkSyncStatus(response, input, init) {
       (input instanceof Request ? input.url : String(input ?? ''));
     // req_id comes from the diag payload (the SERVER stamped it on the marker for
     // the request that actually hit the conflict) — not this response's request.
+    const reason = diag
+      ? (diag.reason ?? '(X-Sync-Diag present but has no reason — backend never populated one for this failure path)')
+      : '(no X-Sync-Diag header — check expose_headers/CORS)';
     console.error(
       `[sync] state -> ${next}`,
       {
-        reason: diag?.reason ?? '(no X-Sync-Diag header — check expose_headers/CORS)',
+        reason,
         db: diag?.db,
         profile_id: diag?.profile_id,
         loaded: diag?.loaded,
