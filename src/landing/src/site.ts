@@ -69,7 +69,22 @@ export const FACTS = {
   install: 'Runs in the browser. There is nothing to download or install.',
   /** Pricing. "Free to start" is the claim already made publicly. */
   pricingSummary: 'Free to start.',
+  /** New-account signup bonus (8) plus all four onboarding quest rewards (15+25+25+15). Source of truth: quest_config.py + storage_credits.NEW_ACCOUNT_CREDITS. */
+  freeCredits: 88,
+  /** Flat render cost: 1 credit per second of finished, exported video -- same rate regardless of resolution, upscaling, or overlays. Source of truth: credits_required = ceil(video_seconds) in exports.py. */
+  creditsPerExportSecond: 1,
 } as const
+
+/**
+ * Credit packs. Mirrored from CREDIT_PACKS in src/backend/app/routers/payments.py --
+ * that file is the actual billing source of truth; keep these numbers in sync with it
+ * by hand, they do not derive from it automatically.
+ */
+export const CREDIT_PACKS = [
+  { name: 'Starter', credits: 80, priceUsd: 3.99 },
+  { name: 'Popular', credits: 160, priceUsd: 6.99 },
+  { name: 'Best Value', credits: 340, priceUsd: 12.99 },
+] as const
 
 /**
  * Input sources. The product accepts uploaded video files, so the honest claim
@@ -89,6 +104,7 @@ export const INPUT_SOURCES = [
 export const NAV = [
   { href: '/how-it-works', label: 'How it works' },
   { href: '/sports', label: 'Sports' },
+  { href: '/#pricing', label: 'Pricing' },
   { href: '/recruiting-videos', label: 'Recruiting' },
   { href: '/guides', label: 'Guides' },
   { href: '/about', label: 'About' },
