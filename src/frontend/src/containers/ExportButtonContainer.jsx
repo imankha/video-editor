@@ -14,6 +14,7 @@ import { clipCropKeyframes } from '../utils/clipSelectors';
 import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { calculateEffectiveDuration, sumEffectiveDurations, buildClipMetadata } from '../utils/effectiveDuration';
+import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 
 // Re-exported for existing importers (T5780: definitions moved to utils/effectiveDuration.js)
 export { calculateEffectiveDuration, buildClipMetadata };
@@ -264,6 +265,12 @@ export function ExportButtonContainer({
         setProgressMessage('Export complete!');
         setIsExporting(false);
         handleExportEnd();
+
+        // T4350: a re-export that dropped/reset carried highlights flags it loudly.
+        const carryMsg = describeHighlightCarryNote(data?.highlightCarryNote);
+        if (carryMsg) {
+          toast.info(carryMsg, { duration: 8000 });
+        }
 
         // T760: Background overlay complete — download available in Gallery
         if (backgroundExportRef.current) {

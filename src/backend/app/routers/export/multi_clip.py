@@ -1877,6 +1877,22 @@ async def _export_clips(
             from ...services.export_finalize import _set_export_stage
             _set_export_stage(export_id, ExportStage.COMPLETE.value)
 
+        # T4350: read the carry note the finalize stamped on the new working video,
+        # so the client can toast "N highlights need re-placement" at export-complete
+        # (the persistent Overlay banner reads the same column via /overlay-data).
+        # Best-effort: the column is absent during the deploy->v046 window.
+        highlight_carry_note = None
+        if working_video_id:
+            try:
+                with get_db_connection() as conn:
+                    _note_row = conn.cursor().execute(
+                        "SELECT highlight_carry_note FROM working_videos WHERE id = ?", (working_video_id,)
+                    ).fetchone()
+                    if _note_row:
+                        highlight_carry_note = _note_row["highlight_carry_note"]
+            except Exception:
+                highlight_carry_note = None
+
         # Complete
         complete_data = {
             "progress": 100,
@@ -1886,7 +1902,8 @@ async def _export_clips(
             "projectName": project_name,
             "type": "framing",
             "workingVideoId": working_video_id,
-            "workingFilename": working_filename
+            "workingFilename": working_filename,
+            "highlightCarryNote": highlight_carry_note,
         }
         export_progress[export_id] = complete_data
         await manager.send_progress(export_id, complete_data)

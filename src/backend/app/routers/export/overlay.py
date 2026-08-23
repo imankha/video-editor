@@ -2143,10 +2143,15 @@ async def get_overlay_data(project_id: int):
         # value during the window (it is the column's own default), and the reader
         # below already falls back to hoisting detections from the regions.
         _has_detections = column_exists(cursor, "working_videos", "detections_data")
+        # T4350: highlight_carry_note (v046) surfaces "N highlights need re-placement"
+        # after a re-export dropped/reset carried highlights. Column-guarded like
+        # detections_data so a below-head profile DB does not 500 the overlay screen.
+        _has_carry_note = column_exists(cursor, "working_videos", "highlight_carry_note")
         cursor.execute(f"""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
                    highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength, version,
-                   {'detections_data' if _has_detections else 'NULL AS detections_data'}
+                   {'detections_data' if _has_detections else 'NULL AS detections_data'},
+                   {'highlight_carry_note' if _has_carry_note else 'NULL AS highlight_carry_note'}
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -2166,6 +2171,7 @@ async def get_overlay_data(project_id: int):
         fill_opacity = 0.20
         dim_strength = 0.20
         video_detections = None
+        highlight_carry_note = None  # T4350
         # T4330: seeds the frontend actionClient's version tracker so a tab's
         # FIRST overlay edit is conflict-checked too, not just the 2nd+ (which
         # is all the client's own echoed-version tracking alone would catch).
@@ -2201,6 +2207,7 @@ async def get_overlay_data(project_id: int):
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
             dim_strength = result['dim_strength']
+            highlight_carry_note = result['highlight_carry_note']  # T4350 (may be None)
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -2294,6 +2301,7 @@ async def get_overlay_data(project_id: int):
             'fill_enabled': fill_enabled,
             'fill_opacity': fill_opacity,
             'dim_strength': dim_strength,
+            'highlight_carry_note': highlight_carry_note,  # T4350: null | "dropped:N" | "multiclip_reset" | "legacy_uncertain"
             'poster_marker_time': poster_marker_time,
             'poster_slowmo_section': list(poster_slowmo_section) if poster_slowmo_section else None,
             'poster_source': poster_source,

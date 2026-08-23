@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Circle, Crosshair, Type } from 'lucide-react';
+import { Film, Circle, Crosshair, Type, AlertTriangle, X } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import RegionLayer from '../../components/timeline/RegionLayer';
 import TextLayer from '../../components/timeline/TextLayer';
@@ -33,6 +33,9 @@ export function OverlayMode({
   metadata,
   currentTime,
   duration,
+  // T4350: dismissible "highlights need re-placement" banner after a re-export
+  highlightCarryMessage = null,
+  onDismissHighlightCarryNote,
   // Highlight regions state (from useHighlightRegions in App.jsx)
   highlightRegions = [],
   highlightBoundaries = [],
@@ -222,6 +225,28 @@ export function OverlayMode({
 
   return (
     <>
+      {/* T4350: persistent notice when a re-export dropped/reset carried highlights. */}
+      {highlightCarryMessage && (
+        <div
+          role="status"
+          data-testid="highlight-carry-banner"
+          className="mt-4 flex items-start gap-2 rounded-lg border border-l-4 border-amber-500/40 border-l-amber-500 bg-amber-500/10 px-3 py-2 text-sm text-amber-200"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
+          <span className="flex-1">{highlightCarryMessage}</span>
+          {onDismissHighlightCarryNote && (
+            <button
+              type="button"
+              onClick={onDismissHighlightCarryNote}
+              aria-label="Dismiss highlight notice"
+              className="shrink-0 rounded p-0.5 text-amber-300/70 hover:text-amber-100"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Video Timeline with Highlight Regions inside */}
       {videoUrl && (
         <div className="mt-6">

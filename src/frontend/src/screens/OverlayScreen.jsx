@@ -9,6 +9,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { extractVideoMetadata, extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
+import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { frameToTime, timeToFrame } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -312,6 +313,8 @@ export function OverlayScreen({
     reset: resetHighlightRegions,
     restoreRegions: restoreHighlightRegions,
     setVideoDetections: setHighlightVideoDetections,
+    highlightCarryNote,
+    setHighlightCarryNote,
   } = useHighlightRegions(effectiveOverlayMetadata);
 
   // =========================================
@@ -619,6 +622,7 @@ export function OverlayScreen({
           // detections. (reset() also nulls `duration`, so it cannot be hoisted
           // above the else-branch addHighlightRegion(0), which needs duration set.)
           setHighlightVideoDetections(data.detections_data || null);
+          setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
 
           // Use video_duration from backend, fall back to video metadata or region end times
           const videoDuration = data.video_duration
@@ -687,7 +691,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections, restoreTextOverlays]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections, setHighlightCarryNote, restoreTextOverlays]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -736,6 +740,7 @@ export function OverlayScreen({
           // Hold the flat video-level detection payload (T5600) so addRegion can
           // slice instant tracking squares for newly created regions.
           setHighlightVideoDetections(data.detections_data || null);
+          setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
 
           if (data.has_data && data.highlights_data?.length > 0) {
             restoreHighlightRegions(data.highlights_data, effectiveDuration);
@@ -781,7 +786,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections, restoreTextOverlays]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections, setHighlightCarryNote, restoreTextOverlays]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -1504,8 +1509,15 @@ export function OverlayScreen({
   // RENDER
   // =========================================
 
+  // T4350: persistent "highlights need re-placement" banner copy (null when nothing
+  // to surface), derived from the carry note the last re-export stamped.
+  const highlightCarryMessage = describeHighlightCarryNote(highlightCarryNote);
+
   return (
     <OverlayModeView
+      // T4350: re-export highlight-carry notice (dismissible banner)
+      highlightCarryMessage={highlightCarryMessage}
+      onDismissHighlightCarryNote={() => setHighlightCarryNote(null)}
       // Fullscreen
       fullscreenContainerRef={fullscreenContainerRef}
       isFullscreen={isFullscreen}
