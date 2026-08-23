@@ -196,6 +196,89 @@ def test_legacy_no_snapshot_carries_verbatim_with_note(project):
     assert row["highlight_carry_note"] == "legacy_uncertain"
 
 
+def test_multiclip_insert_branch_carries_transformed_regions_not_reset(project):
+    """T4355: a multi-clip INSERT-branch finalize must carry the TRANSFORMED
+    regions (per-clip offset shift), NOT reset to freshly-detected regions,
+    for a simple offset-shift case (trim applied to clip 0 only, region lives
+    entirely on unaffected clip 1)."""
+    clip_crop = CROP
+    old_clips = [
+        {"crop_keyframes": clip_crop, "segments_data": NO_MODS, "fps": 30.0, "raw_duration": 15.0},
+        {"crop_keyframes": clip_crop, "segments_data": NO_MODS, "fps": 30.0, "raw_duration": 15.0},
+    ]
+    new_clip0 = {"boundaries": [0.0, 15.0], "segmentSpeeds": {}, "trimRange": {"start": 0.0, "end": 10.0}}
+    new_clips = [
+        {"crop_keyframes": clip_crop, "segments_data": new_clip0, "fps": 30.0, "raw_duration": 15.0},
+        {"crop_keyframes": clip_crop, "segments_data": NO_MODS, "fps": 30.0, "raw_duration": 15.0},
+    ]
+    old_snap = {"clip_count": 2, "video_dims": DIMS, "clips": old_clips, "transition": {"type": "cut", "duration": 0.0}}
+    new_snap = {"clip_count": 2, "video_dims": DIMS, "clips": new_clips, "transition": {"type": "cut", "duration": 0.0}}
+
+    # Region entirely inside clip 1's OLD span [15, 30): global 20.0 -> local 5.0.
+    prior = _seed_prior_version(project, [_region("r1", 20.0, 22.0)], old_snap)
+
+    job = _make_job(project)
+    wv_id = upsert_working_video(
+        job, filename="v2.mp4", duration=25.0,
+        highlights_data=encode_data(DETECTED), detections_data=None,
+        new_framing_snapshot=new_snap,
+    )
+    assert wv_id != prior
+    row = _read_new_version(project, prior)
+    carried = decode_data(row["highlights_data"])
+
+    # Must NOT be the reset (detected-x seed); must carry the transformed r1.
+    assert [r["id"] for r in carried] == ["r1"]
+    assert row["highlight_carry_note"] != "multiclip_reset"
+    # clip1 untouched by framing -> only the concat offset moves: NEW off_1 = 10.0
+    # (clip 0 now 10s), local time unchanged (5.0) -> NEW global = 15.0.
+    assert carried[0]["start_time"] == pytest.approx(15.0, abs=0.05)
+
+
+def test_multiclip_update_branch_leaves_carry_fields_untouched(project):
+    """T4355 regression: the UPDATE/recovery branch must NOT touch
+    highlights_data/framing_snapshot/highlight_carry_note even for a
+    multi-clip project (T4350 Sec 8.1 pt3 invariant, still binding after the
+    multi-clip transform lands)."""
+    clip_crop = CROP
+    old_clips = [
+        {"crop_keyframes": clip_crop, "segments_data": NO_MODS, "fps": 30.0, "raw_duration": 15.0},
+        {"crop_keyframes": clip_crop, "segments_data": NO_MODS, "fps": 30.0, "raw_duration": 15.0},
+    ]
+    new_clip0 = {"boundaries": [0.0, 15.0], "segmentSpeeds": {}, "trimRange": {"start": 0.0, "end": 10.0}}
+    new_clips = [
+        {"crop_keyframes": clip_crop, "segments_data": new_clip0, "fps": 30.0, "raw_duration": 15.0},
+        {"crop_keyframes": clip_crop, "segments_data": NO_MODS, "fps": 30.0, "raw_duration": 15.0},
+    ]
+    old_snap = {"clip_count": 2, "video_dims": DIMS, "clips": old_clips, "transition": {"type": "cut", "duration": 0.0}}
+    new_snap = {"clip_count": 2, "video_dims": DIMS, "clips": new_clips, "transition": {"type": "cut", "duration": 0.0}}
+    prior = _seed_prior_version(project, [_region("r1", 20.0, 22.0)], old_snap)
+
+    job = _make_job(project)
+    wv_id = upsert_working_video(
+        job, filename="v2.mp4", duration=25.0,
+        highlights_data=encode_data(DETECTED), detections_data=None,
+        new_framing_snapshot=new_snap,
+    )
+    first = decode_data(_read_new_version(project, prior)["highlights_data"])
+    first_note = _read_new_version(project, prior)["highlight_carry_note"]
+    first_snapshot = _read_new_version(project, prior)["framing_snapshot"]
+
+    # Recovery re-run: same job, output_video_id now set -> UPDATE branch.
+    resume_job = {"id": job["id"], "project_id": project, "output_video_id": wv_id}
+    wv_id2 = upsert_working_video(
+        resume_job, filename="v2.mp4", duration=25.0,
+        highlights_data=encode_data(DETECTED), detections_data=None,
+        new_framing_snapshot=new_snap,
+    )
+    assert wv_id2 == wv_id
+    row = _read_new_version(project, prior)
+    after = decode_data(row["highlights_data"])
+    assert after == first
+    assert row["highlight_carry_note"] == first_note
+    assert row["framing_snapshot"] == first_snapshot
+
+
 def test_resume_update_preserves_carried_highlights(project):
     """IDEMPOTENCY: a recovery re-run (output_video_id set -> UPDATE branch) must
     NOT re-seed the detected regions over the carried ones."""

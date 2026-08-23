@@ -92,11 +92,21 @@ class ClipExportData:
     crop_keyframes_stored: list | None = None
 
 
-def _build_framing_snapshot(clips: list["ClipExportData"], target_resolution) -> dict:
+def _build_framing_snapshot(
+    clips: list["ClipExportData"],
+    target_resolution,
+    transition: dict[str, Any] | None = None,
+) -> dict:
     """T4350: assemble the decoded framing snapshot for a render — the per-clip
     framing (frame-based crop + canonical full-list segments) plus the render's
     output dims. Stored on the new working_videos row so the NEXT re-export can
-    transform the user's carried highlights old->new (see highlight_carry.py)."""
+    transform the user's carried highlights old->new (see highlight_carry.py).
+
+    T4355: also stores the `transition` config this render used ({"type",
+    "duration"} | None) — additive key, no migration (BLOB column). Needed so a
+    FUTURE re-export's OLD-side concat offsets (`concat_offsets`) can account
+    for dissolve overlap without a finalize-time re-read of live clip data.
+    """
     from app.highlight_transform import canonicalize_segments_data
     from app.services.highlight_carry import SNAPSHOT_FRAMERATE
 
@@ -121,7 +131,37 @@ def _build_framing_snapshot(clips: list["ClipExportData"], target_resolution) ->
             }
             for clip in clips
         ],
+        "transition": transition,
     }
+
+
+def concat_offsets(snapshot: dict) -> list[float]:
+    """T4355: per-clip cumulative concat offsets (seconds) derived from a
+    DECODED framing snapshot — the SAME `Sigma get_output_duration` sum the
+    boundary builders (`build_clip_boundaries_from_durations` /
+    `_from_input`) use, with the identical dissolve-overlap subtraction, so
+    there is exactly ONE offset formula (abstract-on-3rd: boundary builder +
+    OLD-side + NEW-side of the highlight carry transform).
+
+    An absent or None "transition" key is treated as "cut" (Decision 2) --
+    never a silent guess at overlap; legacy snapshots simply get no overlap
+    subtraction.
+    """
+    from app.highlight_transform import get_output_duration
+
+    transition = snapshot.get("transition")
+    transition_type = transition.get("type", "cut") if transition else "cut"
+    transition_duration = transition.get("duration", 0.0) if transition else 0.0
+
+    offsets: list[float] = []
+    current_time = 0.0
+    for i, clip in enumerate(snapshot["clips"]):
+        if i > 0 and transition_type == "dissolve":
+            current_time -= transition_duration
+        offsets.append(current_time)
+        current_time += get_output_duration(clip["segments_data"], clip.get("raw_duration"))
+
+    return offsets
 
 
 # YOLO model singleton for local detection
@@ -1344,7 +1384,7 @@ async def _export_clips(
         # ClipExportData the render uses (captured at export START) so it is NOT the
         # finalize-time re-read the race would corrupt. Threaded into both finalizers
         # + persisted into the job for recovery.
-        new_framing_snapshot = _build_framing_snapshot(clips, target_resolution)
+        new_framing_snapshot = _build_framing_snapshot(clips, target_resolution, transition)
 
         # Get event loop for progress callbacks
         loop = asyncio.get_running_loop()
