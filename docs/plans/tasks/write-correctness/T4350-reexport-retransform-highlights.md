@@ -90,3 +90,29 @@ no multi-clip attribution). The task must be re-scoped against the live finalize
 product/scope question ("is the intended fix: stop DISCARDING overlay-edited highlights on framing
 re-export, and if so transform-or-drop them?") is a user decision. Full report retained by the
 Code Expert agent.
+
+### Stages 2-8 — implemented (2026-08-23)
+
+Design approved (L1+L2, single-clip-first; multi-clip loud fallback -> follow-up **T4355**).
+Implemented, reviewed (APPROVED, no blocking/major), and tested:
+
+- **`services/highlight_carry.py`** — pure `resolve_carried_highlights` decision + single-clip
+  OLD->raw->NEW transform composition; verbatim fast-path; `dropped:N`/`multiclip_reset`/
+  `legacy_uncertain` notes; preserves region metadata.
+- **`upsert_working_video`** — carry decision on INSERT branch only; UPDATE/resume preserves the
+  carry columns (recovery-safe idempotency). `finalize_export` reads the snapshot from job input_data.
+- **Framing snapshot** captured at export START in `_export_clips._build_framing_snapshot` (frame-based
+  crop + canonical segments + render dims), threaded via job input_data + `_persist_rendered_checkpoint`.
+- **profile_db v046** (+ database.py DDL twin): `working_videos.framing_snapshot` + `highlight_carry_note`,
+  no backfill.
+- **Notice**: export-complete toast + persistent dismissible Overlay banner (`highlight_carry_note`).
+
+**Test evidence:** new `test_t4350_highlight_carry.py` (decision matrix + trim-shift/trim-removal/
+speed-change/metadata) + `test_t4350_carry_finalize.py` (carry-through-DB + resume idempotency);
+relevant backend set (transform + finalize + recovery + overlay + migration) all green; frontend
+`highlightCarryNote.test.js` + `useHighlightRegions` suites green; eslint 0 errors; `from app.main import app` OK.
+
+**QA note:** the live visual-placement acceptance check (place highlight -> re-trim -> re-export ->
+confirm the highlight lands on the same action + the notice fires) requires the staging stack (GPU
+export + a real account with an exported project) and is NOT runnable in the headless container
+worker. Deferred to staging per CLAUDE.md ("staging IS the test phase") — supervisor to verify post-merge.
