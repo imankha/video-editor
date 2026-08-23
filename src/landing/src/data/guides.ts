@@ -69,7 +69,7 @@ export const GUIDES: Guide[] = [
     h1: 'How long should a recruiting video be?',
     targetQuery: 'how long should a recruiting video be',
     answer:
-      'Aim for three to five minutes, and treat the first 30 seconds as the whole pitch — many college coaches decide within that window whether to keep watching. Lead with your strongest plays rather than saving them for the end.',
+      'Aim for three to five minutes, and treat the first 30 seconds as the whole pitch: many college coaches decide within that window whether to keep watching. Lead with your strongest plays rather than saving them for the end.',
     outline: [
       'The short answer, by sport',
       'Why the first 30 seconds carry the decision',
@@ -90,7 +90,7 @@ export const GUIDES: Guide[] = [
     slug: 'veo-vs-trace-vs-phone',
     title: 'Veo vs Trace vs Phone: Do You Need a $1,000 Camera?',
     description:
-      'An honest comparison of Veo, Trace, and just using your phone for youth sports footage — what each actually costs, and when the cheap option is enough.',
+      'An honest comparison of Veo, Trace, and just using your phone for youth sports footage: what each actually costs, and when the cheap option is enough.',
     h1: 'Veo vs Trace vs a phone: do you need a $1,000 camera?',
     targetQuery: 'veo vs trace vs phone camera youth sports worth it',
     answer:
@@ -118,7 +118,7 @@ export const GUIDES: Guide[] = [
     h1: 'How to make a highlight reel for free',
     targetQuery: 'how to make a highlight reel for free',
     answer:
-      'You can make a highlight reel for free: import your game footage into a free editor, cut each play to the few seconds that matter, order your best clips first, and export. The real cost is time — expect several hours per reel doing it manually.',
+      'You can make a highlight reel for free: import your game footage into a free editor, cut each play to the few seconds that matter, order your best clips first, and export. The real cost is time. Expect several hours per reel doing it manually.',
     outline: [
       'The short answer',
       'What you need before you start',
@@ -139,7 +139,7 @@ export const GUIDES: Guide[] = [
     slug: 'best-camera-settings-for-youth-sports',
     title: 'Best Camera Settings for Youth Sports Video',
     description:
-      'The resolution, frame rate, shutter, and exposure settings for filming youth sports — plus what changes by sport, indoors, and under floodlights.',
+      'The resolution, frame rate, shutter, and exposure settings for filming youth sports, plus what changes by sport, indoors, and under floodlights.',
     h1: 'Best camera settings for youth sports video',
     targetQuery: 'best camera settings for filming youth sports',
     answer:

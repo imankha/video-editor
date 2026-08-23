@@ -121,7 +121,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'The footage problem every sports parent has',
         body: [
-          'You have hours of game video. It is wide, it is shaky in places, your child is small in the frame, and nobody has ever watched it back — including your child. It sits on a phone until the storage warning arrives.',
+          'You have hours of game video. It is wide, it is shaky in places, your child is small in the frame, and nobody has ever watched it back, including your child. It sits on a phone until the storage warning arrives.',
           'The barrier is not motivation, it is that editing it is genuinely tedious. Finding the four good minutes inside two hours, then cropping each one so your kid is actually visible, is an evening of work per game with normal editing software.',
         ],
       },
@@ -135,7 +135,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'Sharing with family who are not technical',
         body: [
-          'A shared reel is a link. Whoever opens it needs a web browser and nothing else — no app, no account, no sign-up wall. That matters more than it sounds when the audience is grandparents.',
+          'A shared reel is a link. Whoever opens it needs a web browser and nothing else: no app, no account, no sign-up wall. That matters more than it sounds when the audience is grandparents.',
           'It plays at full resolution rather than the compressed version a messaging app would produce, which is usually the difference between being able to follow the play and not.',
         ],
       },
@@ -211,7 +211,7 @@ export const USE_CASES: UseCase[] = [
       },
       {
         q: 'Do I need a team camera system?',
-        a: 'No. Any standard video file works — a phone on a tripod, an action camera on the fence, or an export from a system your club already uses.',
+        a: 'No. Any standard video file works: a phone on a tripod, an action camera on the fence, or an export from a system your club already uses.',
       },
       {
         q: 'Can players see coaching notes?',
@@ -219,7 +219,7 @@ export const USE_CASES: UseCase[] = [
       },
       {
         q: 'Can I share clips with parents?',
-        a: 'Yes, as a link. Recipients need only a web browser — no account and no app.',
+        a: 'Yes, as a link. Recipients need only a web browser, no account and no app.',
       },
       {
         q: 'How much does it cost?',
@@ -232,7 +232,7 @@ export const USE_CASES: UseCase[] = [
     slug: 'for-clubs',
     title: 'Highlight Video for Sports Clubs | ReelBallers',
     description:
-      'Give every family in your club highlight reels from match footage you already capture — without buying camera hardware or a per-team subscription.',
+      'Give every family in your club highlight reels from match footage you already capture, without buying camera hardware or a per-team subscription.',
     h1: 'Highlight video for sports clubs',
     answer:
       'ReelBallers lets a club turn match footage it already captures into per-player highlight reels, without buying camera hardware. It works with the video files your existing setup produces, including exports from systems like Veo, Trace, or Hudl.',
@@ -254,7 +254,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What families get',
         body: [
-          'Per-player reels that can be shared with a link, at full resolution, to anyone — including recruiters and relatives who will not install an app. For recruiting-age players this is the difference between having material to send and not.',
+          'Per-player reels that can be shared with a link, at full resolution, to anyone, including recruiters and relatives who will not install an app. For recruiting-age players this is the difference between having material to send and not.',
         ],
       },
     ],
