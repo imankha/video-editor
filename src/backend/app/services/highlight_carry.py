@@ -141,6 +141,18 @@ def _transform_single_clip(
         framerate=new_clip.get("fps", 30.0),
     )
 
+    # The geometry-only transform reconstructs each region with just
+    # {id, start_time, end_time, enabled, keyframes} — merge the transformed geometry
+    # back onto the original region so region-level metadata (label, per-region
+    # shape/color overrides) survives the carry. `detections` is re-projected read-time
+    # (/overlay-data), so a carried stale value is harmless.
+    prior_by_id = {r.get("id"): r for r in prior_highlights}
+    merged = []
+    for region in new_regions:
+        base = prior_by_id.get(region.get("id"))
+        merged.append({**base, **region} if base else region)
+    new_regions = merged
+
     enabled_prior = sum(1 for r in prior_highlights if r.get("enabled", True))
     dropped = max(0, enabled_prior - len(new_regions))
     return new_regions, dropped

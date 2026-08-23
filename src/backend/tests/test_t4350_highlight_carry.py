@@ -209,6 +209,36 @@ class TestSingleClipTransformTrimShift:
         assert r['start_time'] == pytest.approx(expected_new_start, abs=0.05)
 
 
+class TestSingleClipTransformPreservesMetadata:
+    def test_region_level_metadata_survives_transform(self, video_dims, simple_crop_keyframes, detected_regions_sentinel):
+        """A framing-change transform must preserve region-level metadata (label,
+        color) that the geometry-only transform would otherwise drop."""
+        old_segments = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
+        new_segments = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': {'start': 2.0, 'end': 15.0}}
+        old_snapshot = _snapshot(1, video_dims, [_clip_entry(old_segments, simple_crop_keyframes)])
+        new_snapshot = _snapshot(1, video_dims, [_clip_entry(new_segments, simple_crop_keyframes)])
+
+        region = _region('r1', 5.0, 7.0, kf_time=5.0)
+        region['label'] = 'Great play'
+        region['color'] = '#00FF00'
+        region['shape'] = 'circle'
+
+        result, _ = resolve_carried_highlights(
+            prior_highlights=[region],
+            prior_snapshot=old_snapshot,
+            new_snapshot=new_snapshot,
+            detected_regions=detected_regions_sentinel,
+            clip_count=1,
+        )
+        assert len(result) == 1
+        r = result[0]
+        assert r['label'] == 'Great play'
+        assert r['color'] == '#00FF00'
+        assert r['shape'] == 'circle'
+        # geometry still came from the transform (shifted), not the stale original
+        assert r['start_time'] != pytest.approx(5.0, abs=0.01)
+
+
 class TestSingleClipTransformTrimRemoval:
     def test_region_inside_removed_span_is_dropped_other_survives(self, video_dims, simple_crop_keyframes, detected_regions_sentinel):
         """NEW trim removes [8, 15]. A region entirely inside that span is DROPPED;

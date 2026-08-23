@@ -97,12 +97,16 @@ def _build_framing_snapshot(clips: list["ClipExportData"], target_resolution) ->
     framing (frame-based crop + canonical full-list segments) plus the render's
     output dims. Stored on the new working_videos row so the NEXT re-export can
     transform the user's carried highlights old->new (see highlight_carry.py)."""
+    from app.highlight_transform import canonicalize_segments_data
     from app.services.highlight_carry import SNAPSHOT_FRAMERATE
 
     def _segments(clip) -> dict:
-        # clip.segments is already canonical full-list (or None -> a no-mods list).
+        # Store canonical full-list segments so the fast-path byte-equality check is
+        # robust (single-clip is already canonical; canonicalize is idempotent, and
+        # this makes the multi-clip branch canonical too — a false fast-path miss only
+        # falls to the safe multiclip_reset, never a mis-transform).
         if clip.segments:
-            return clip.segments
+            return canonicalize_segments_data(clip.segments, clip.duration)
         return {"boundaries": [0.0, float(clip.duration or 0)], "segmentSpeeds": {}, "trimRange": None}
 
     return {
