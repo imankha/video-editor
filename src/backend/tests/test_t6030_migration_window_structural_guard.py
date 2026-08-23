@@ -52,7 +52,7 @@ POST_V023_COLUMNS = {
         "intro_card_id",                                                  # v034
     ],
     "games": ["shared_by", "source_profile_id", "source_game_id"],                       # v026, v030
-    "working_videos": ["detections_data"],                                              # v027
+    "working_videos": ["detections_data", "framing_snapshot", "highlight_carry_note"],  # v027, v046
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
     "projects": ["poster_marker_time"],                                                  # v032
@@ -109,8 +109,30 @@ POST_V023_COLUMNS = {
     #   read gains a new column name to fail on. The write-time canonicalization code (clips.py
     #   _get_clip_framing_data / _save_clip_framing_data) reads/writes only pre-existing columns
     #   too.
+    # v046 (T4350 carry overlay-edited highlights across a framing re-export) adds
+    #   working_videos.framing_snapshot + working_videos.highlight_carry_note (above).
+    #   highlight_carry_note is READ on the hot `/overlay-data` GET path
+    #   (export/overlay.py get_overlay_data) -- guarded by `column_exists(cursor,
+    #   "working_videos", "highlight_carry_note")`, selecting a literal NULL when absent;
+    #   exercised directly by test_overlay_data below (unchanged call, now also proves the
+    #   v046 guard). framing_snapshot has no LIST-style hot read in this fixture's driven
+    #   set -- its only reader/writer is the export finalizer's `upsert_working_video`
+    #   (services/export_finalize.py), gated end-to-end by
+    #   `_working_videos_has_carry_columns` (a `PRAGMA table_info` check, not a bare column
+    #   name): when either v046 column is absent it skips the carry read/decision entirely
+    #   and falls back to the pre-T4350 historical INSERT shape (no framing_snapshot /
+    #   highlight_carry_note in the statement at all). The multi_clip.py export-complete
+    #   toast read (`SELECT highlight_carry_note FROM working_videos WHERE id = ?`) is
+    #   wrapped in a bare try/except that swallows OperationalError -> None (best-effort,
+    #   never a 500). Verified directly by test_upsert_working_video_v046_window below,
+    #   which targets the v046 window specifically (NOT the shared floor-v23 below_head
+    #   fixture -- that fixture also drops v027's detections_data, which trips an
+    #   UNRELATED, PRE-EXISTING gap: upsert_working_video's historical-shape INSERT has
+    #   always named detections_data unconditionally, since before T4350. That gap
+    #   predates this task and is out of scope here; flagging it, not fixing it, to avoid
+    #   silently sweeping in an unrelated behavior change under a migration-head bump.
 }
-HEAD_VERSION_AUDITED = 45
+HEAD_VERSION_AUDITED = 46
 
 
 def _cleanup(user_id: str) -> None:
@@ -337,3 +359,75 @@ def test_exports_lists(below_head):
 
     _run(list_active_exports())
     _run(list_recent_exports())  # export_jobs.stage/output_key (v028)
+
+
+def test_upsert_working_video_v046_window(monkeypatch):
+    # T4350: working_videos.framing_snapshot/highlight_carry_note (v046) must not 500
+    # the export finalizer during the deploy->migrate window. This targets the v046
+    # window SPECIFICALLY (a DB with v027..v045 already applied -- detections_data
+    # present -- but not yet v046), not the shared floor-v23 `below_head` fixture:
+    # that fixture also strips v027's detections_data, which trips an unrelated,
+    # PRE-EXISTING gap in upsert_working_video's historical INSERT (it has always
+    # named detections_data unconditionally, since before T4350 -- out of scope
+    # here, flagged separately, not a v046 regression).
+    #
+    # `_working_videos_has_carry_columns` is monkeypatched to report False (mirrors
+    # test_framing_action_version_conflict.py's TestFramingActionPreMigration
+    # pattern -- SQLite's ALTER TABLE DROP COLUMN support is version-dependent, so
+    # simulating the guard's False branch directly is the reliable way to reproduce
+    # "not-yet-migrated" for a specific column pair without depending on the
+    # sqlite3 build under test).
+    import sqlite3
+    import uuid
+
+    import app.services.export_finalize as ef
+    from app.database import get_db_connection
+    from app.profile_context import set_current_profile_id
+    from app.services.export_finalize import upsert_working_video
+    from app.session_init import _init_cache
+    from app.user_context import set_current_user_id
+    from app.utils.encoding import encode_data
+
+    user_id = f"test_t6030_v046w_{uuid.uuid4().hex[:8]}"
+    _init_cache[user_id] = {"profile_id": TEST_PROFILE_ID, "is_new_user": False}
+    set_current_user_id(user_id)
+    set_current_profile_id(TEST_PROFILE_ID)
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('V046 Window', '9:16')")
+        project_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO working_clips (project_id, uploaded_filename, version) VALUES (?, 'wc.mp4', 1)",
+            (project_id,),
+        )
+        conn.commit()
+
+    monkeypatch.setattr(ef, "_working_videos_has_carry_columns", lambda cursor: False)
+
+    job = {"id": f"job-v046-{project_id}", "project_id": project_id, "output_video_id": None}
+    try:
+        wv_id = upsert_working_video(
+            job,
+            filename="v046_window_export.mp4",
+            duration=10.0,
+            highlights_data=encode_data([]),
+            detections_data=encode_data({}),
+            new_framing_snapshot={
+                "clip_count": 1,
+                "video_dims": {"width": 1080, "height": 1920},
+                "clips": [],
+            },
+        )
+    except sqlite3.OperationalError as e:
+        pytest.fail(f"upsert_working_video hit an unguarded missing v046 column: {e}")
+    finally:
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE projects SET working_video_id = NULL WHERE id = ?", (project_id,))
+            cur.execute("DELETE FROM working_videos WHERE project_id = ?", (project_id,))
+            cur.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
+            cur.execute("DELETE FROM export_jobs WHERE project_id = ?", (project_id,))
+            cur.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            conn.commit()
+
+    assert wv_id  # historical-shape INSERT still succeeds; carry is skipped, not crashed

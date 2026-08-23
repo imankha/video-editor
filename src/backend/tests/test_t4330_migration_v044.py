@@ -90,8 +90,9 @@ def test_registered_in_profile_db_migrations_and_is_the_new_head():
 
     versions = [m.version for m in MIGRATIONS]
     assert 44 in versions, "v044 must be registered in profile_db MIGRATIONS"
-    # T4340's v045 landed above v044 -- head moved 44->45, v044 is no longer the tip.
-    assert RUNNER.latest_version == 45, "v044 must be registered (head has since advanced to v045)"
+    # T4340's v045 landed above v044, then T4350's v046 landed above THAT --
+    # head moved 44->45->46, v044 is no longer the tip.
+    assert RUNNER.latest_version == 46, "v044 must be registered (head has since advanced to v046)"
 
 
 def test_fresh_ensure_database_already_has_the_column(tmp_path):
