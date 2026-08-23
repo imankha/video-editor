@@ -1017,6 +1017,8 @@ def ensure_database():
                 fill_opacity REAL DEFAULT 0.20,
                 dim_strength REAL DEFAULT 0.20,
                 detections_data BLOB,
+                framing_snapshot BLOB,
+                highlight_carry_note TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )

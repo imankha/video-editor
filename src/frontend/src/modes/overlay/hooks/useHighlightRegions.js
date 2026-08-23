@@ -68,6 +68,12 @@ export default function useHighlightRegions(videoMetadata) {
   // slices it locally so tracking squares appear instantly for a new region.
   const [videoDetections, setVideoDetections] = useState(null);
 
+  // T4350: the carry note stamped on the current working video when a re-export
+  // dropped/reset carried highlights ("dropped:N" | "multiclip_reset" |
+  // "legacy_uncertain" | null). Memory-only hold set from the /overlay-data
+  // response (never persisted from here); surfaced as a dismissible banner.
+  const [highlightCarryNote, setHighlightCarryNote] = useState(null);
+
   // Get highlight color from store for new highlights
   const highlightColor = useOverlayHighlightColor();
 
@@ -940,12 +946,14 @@ export default function useHighlightRegions(videoMetadata) {
     duration,
     framerate,
     videoDetections,             // Flat video-level detection payload (T5600)
+    highlightCarryNote,          // T4350: re-export carry notice (or null)
 
     // Initialization
     initializeWithDuration,
     initializeFromClipMetadata,  // Auto-create regions from clip boundaries
     restoreRegions,              // Restore saved regions from backend
     setVideoDetections,          // Hold the flat detection payload from /overlay-data (T5600)
+    setHighlightCarryNote,       // T4350: hold the carry notice from /overlay-data
 
     // Region operations (new API)
     addRegion,                   // Creates 2-second region with keyframes
