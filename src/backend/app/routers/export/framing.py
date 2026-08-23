@@ -592,6 +592,11 @@ async def _run_render_background(
             else:
                 logger.warning(f"[Render] clip {clip['id']}: no crop and no source dimensions — cannot apply default crop")
 
+        # T4350: preserve the frame-based crop for the framing snapshot (the
+        # highlight transform's crop interpolation needs the frame-based form) BEFORE
+        # the render-format time-based conversion below.
+        crop_keyframes_stored = [dict(kf) for kf in crop_keyframes] if crop_keyframes else []
+
         if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
             crop_keyframes = [
                 {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
@@ -667,6 +672,7 @@ async def _run_render_background(
             game_id=clip['game_id'],
             clip_name=clip['clip_name'],
             rotation=clip['rotation'] if 'rotation' in clip.keys() else 0,  # noqa: SIM118 -- sqlite3.Row `in` checks values, not keys
+            crop_keyframes_stored=crop_keyframes_stored,  # T4350 framing snapshot
         )
 
         logger.info(f"[Render] Delegating to _export_clips: aspect={aspect_ratio}, test_mode={is_test_mode}")

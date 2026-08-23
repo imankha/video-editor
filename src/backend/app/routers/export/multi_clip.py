@@ -86,6 +86,38 @@ class ClipExportData:
     game_id: int | None = None
     clip_name: str | None = None
     rotation: float = 0
+    # T4350: the STORED (frame-based) crop keyframes, kept alongside the render's
+    # time-based `crop_keyframes`, so the framing snapshot feeds the highlight
+    # transform the frame-based form its crop interpolation expects.
+    crop_keyframes_stored: list | None = None
+
+
+def _build_framing_snapshot(clips: list["ClipExportData"], target_resolution) -> dict:
+    """T4350: assemble the decoded framing snapshot for a render — the per-clip
+    framing (frame-based crop + canonical full-list segments) plus the render's
+    output dims. Stored on the new working_videos row so the NEXT re-export can
+    transform the user's carried highlights old->new (see highlight_carry.py)."""
+    from app.services.highlight_carry import SNAPSHOT_FRAMERATE
+
+    def _segments(clip) -> dict:
+        # clip.segments is already canonical full-list (or None -> a no-mods list).
+        if clip.segments:
+            return clip.segments
+        return {"boundaries": [0.0, float(clip.duration or 0)], "segmentSpeeds": {}, "trimRange": None}
+
+    return {
+        "clip_count": len(clips),
+        "video_dims": {"width": target_resolution[0], "height": target_resolution[1]},
+        "clips": [
+            {
+                "crop_keyframes": clip.crop_keyframes_stored or [],
+                "segments_data": _segments(clip),
+                "fps": SNAPSHOT_FRAMERATE,
+                "raw_duration": clip.duration,
+            }
+            for clip in clips
+        ],
+    }
 
 
 # YOLO model singleton for local detection
@@ -1202,7 +1234,7 @@ def concatenate_clips_with_transition(
             # Continue without chapters - video is still valid
 
 
-def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition):
+def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition, new_framing_snapshot=None):
     """T5630 stage='rendered': the render output now exists in R2. Persist
     output_key AND the config finalize needs to rebuild source_clips so a later
     recovery no longer depends on Modal being reachable.
@@ -1210,8 +1242,16 @@ def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, t
     input_data is written unconditionally (original column, so recovery has the
     clips even during the deploy->v028 window); stage + output_key are
     best-effort (those columns are absent until v028 runs).
+
+    T4350: `new_framing_snapshot` (the framing this render used) is persisted into
+    input_data too, so a recovery finalize carries highlights forward with the
+    render's OWN framing rather than a finalize-time re-read.
     """
-    input_blob = encode_data({"clips": normalized_clips_data, "transition": transition})
+    input_blob = encode_data({
+        "clips": normalized_clips_data,
+        "transition": transition,
+        "framing_snapshot": new_framing_snapshot,
+    })
     try:
         with get_db_connection() as conn:
             conn.cursor().execute(
@@ -1294,6 +1334,13 @@ async def _export_clips(
         # Calculate consistent target resolution for all clips
         target_resolution = calculate_multi_clip_resolution(clips_data, aspect_ratio)
         logger.info(f"[Multi-Clip Export] Target resolution: {target_resolution}")
+
+        # T4350: capture the framing THIS export renders with (frame-based crop +
+        # canonical segments + the render target dims). Built from the same
+        # ClipExportData the render uses (captured at export START) so it is NOT the
+        # finalize-time re-read the race would corrupt. Threaded into both finalizers
+        # + persisted into the job for recovery.
+        new_framing_snapshot = _build_framing_snapshot(clips, target_resolution)
 
         # Get event loop for progress callbacks
         loop = asyncio.get_running_loop()
@@ -1449,7 +1496,7 @@ async def _export_clips(
             # T5630 stage='rendered': the video exists in R2. Persist output_key +
             # the config recovery needs to rebuild source_clips BEFORE detection, so
             # an interruption here finalizes offline (no Modal round-trip).
-            _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition)
+            _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition, new_framing_snapshot)
 
             # Measure video duration (download output + ffprobe)
             video_duration = None
@@ -1479,7 +1526,11 @@ async def _export_clips(
                 job_for_finalize = {
                     "id": export_id,
                     "project_id": project_id,
-                    "input_data": encode_data({"clips": normalized_clips_data, "transition": transition}),
+                    "input_data": encode_data({
+                        "clips": normalized_clips_data,
+                        "transition": transition,
+                        "framing_snapshot": new_framing_snapshot,  # T4350
+                    }),
                     "output_video_id": None,
                     "stage": ExportStage.RENDERED.value,
                     "status": "processing",
@@ -1797,6 +1848,7 @@ async def _export_clips(
                     duration=video_duration if video_duration > 0 else None,
                     highlights_data=encode_data(highlight_regions),
                     detections_data=None,
+                    new_framing_snapshot=new_framing_snapshot,  # T4350 carry-forward
                 )
                 logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
 
@@ -2188,6 +2240,8 @@ async def _run_multi_clip_background(
                     # DB stores frame-based keyframes; pipeline expects time-based
                     if db_clip['crop_data']:
                         raw_kfs = decode_data(db_clip['crop_data'])
+                        # T4350: keep the frame-based stored form for the framing snapshot.
+                        clip_data['cropKeyframesStored'] = raw_kfs
                         framerate = 30  # Default; matches single-clip export fallback
                         if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
                             clip_data['cropKeyframes'] = [
@@ -2331,6 +2385,7 @@ async def _run_multi_clip_background(
                 video_file=video_files.get(clip_index),
                 clip_name=cd.get('clipName') or cd.get('fileName'),
                 rotation=cd.get('rotation', 0),
+                crop_keyframes_stored=cd.get('cropKeyframesStored', cd.get('cropKeyframes', [])),  # T4350
             ))
 
         logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")

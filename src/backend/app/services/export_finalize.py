@@ -95,6 +95,14 @@ def _claim_stage_for_finalize(job_id: str, expected_stage, new_stage: str) -> bo
         return True
 
 
+def _working_videos_has_carry_columns(cursor) -> bool:
+    """T4350 deploy->migrate guard: the carry columns (v046) may be absent on a
+    profile DB that hasn't migrated yet. PRAGMA rows index positionally (row[1] ==
+    column name) under either row factory."""
+    cols = {row[1] for row in cursor.execute("PRAGMA table_info(working_videos)").fetchall()}
+    return "framing_snapshot" in cols and "highlight_carry_note" in cols
+
+
 def upsert_working_video(
     job: dict,
     *,
@@ -102,6 +110,7 @@ def upsert_working_video(
     duration: float | None,
     highlights_data: bytes | None,
     detections_data: bytes | None = None,
+    new_framing_snapshot: dict | None = None,
     gpu_seconds: float | None = None,
     modal_function: str | None = None,
 ) -> int:
@@ -112,10 +121,21 @@ def upsert_working_video(
     (preserving its historical column omission — regions carry embedded
     detections); the Modal path passes both.
 
+    T4350: ``highlights_data`` is the FRESHLY-DETECTED regions (the first-export
+    seed / multi-clip fallback). When ``new_framing_snapshot`` (a DECODED framing
+    snapshot dict of what THIS export rendered with) is supplied, the INSERT branch
+    reads the PRIOR working video's user-edited highlights + framing snapshot and
+    runs ``resolve_carried_highlights`` to CARRY/transform them forward instead of
+    silently discarding them. The decision runs ONLY on the INSERT branch — the
+    resume/UPDATE branch preserves the already-carried columns (the project pointer
+    has already been repointed, so re-reading the prior wv would read the new row
+    itself). Detection output still feeds ``detections_data`` unconditionally.
+
     Returns the working_videos.id (existing row reused, or newly inserted).
     Insert-once-per-job via the ``output_video_id`` back-reference (see module
     docstring).
     """
+    from app.utils.encoding import encode_data
     job_id = job["id"]
     project_id = job["project_id"]
     existing_wv_id = job.get("output_video_id")
@@ -129,30 +149,94 @@ def upsert_working_video(
             if cursor.fetchone():
                 # Resume: UPDATE the existing row in place (same version) — never
                 # a second coexisting version for the same job.
+                # T4350: do NOT re-set highlights_data / framing_snapshot /
+                # highlight_carry_note here. The carry decision ran on the original
+                # INSERT; the project pointer is already repointed at THIS row, so
+                # recomputing carry would read the new row as its own "prior" and
+                # re-seed detected regions over the carried ones (the original bug,
+                # on the recovery path). Only filename/duration/detections refresh.
                 cursor.execute(
                     """
                     UPDATE working_videos
-                    SET filename = ?, duration = ?, highlights_data = ?, detections_data = ?
+                    SET filename = ?, duration = ?, detections_data = ?
                     WHERE id = ?
                     """,
-                    (filename, duration, highlights_data, detections_data, existing_wv_id),
+                    (filename, duration, detections_data, existing_wv_id),
                 )
                 wv_id = existing_wv_id
 
         if wv_id is None:
+            # T4350: carry the prior version's user-edited highlights forward on a
+            # brand-new version, instead of discarding them for `highlights_data`
+            # (the fresh detection). Read the prior wv via the project pointer BEFORE
+            # the repoint below (it still points at the OLD version here).
+            insert_highlights = highlights_data
+            snapshot_blob = None
+            carry_note = None
+            has_carry_cols = _working_videos_has_carry_columns(cursor)
+            if new_framing_snapshot is not None and has_carry_cols:
+                from app.services.highlight_carry import resolve_carried_highlights
+
+                cursor.execute(
+                    """
+                    SELECT wv.highlights_data, wv.framing_snapshot
+                    FROM working_videos wv
+                    JOIN projects p ON p.working_video_id = wv.id
+                    WHERE p.id = ?
+                    """,
+                    (project_id,),
+                )
+                prior = cursor.fetchone()
+                prior_highlights = (
+                    decode_data(prior["highlights_data"]) if prior and prior["highlights_data"] else None
+                )
+                prior_snapshot = (
+                    decode_data(prior["framing_snapshot"]) if prior and prior["framing_snapshot"] else None
+                )
+                detected_regions = decode_data(highlights_data) if highlights_data else []
+                final_regions, carry_note = resolve_carried_highlights(
+                    prior_highlights=prior_highlights,
+                    prior_snapshot=prior_snapshot,
+                    new_snapshot=new_framing_snapshot,
+                    detected_regions=detected_regions,
+                    clip_count=int(new_framing_snapshot.get("clip_count", 1) or 1),
+                )
+                insert_highlights = encode_data(final_regions)
+                snapshot_blob = encode_data(new_framing_snapshot)
+                logger.info(
+                    f"[Finalize] T4350 carry job={job_id}: prior_regions="
+                    f"{len(prior_highlights) if prior_highlights else 0} -> "
+                    f"final_regions={len(final_regions)} note={carry_note}"
+                )
+
             cursor.execute(
                 "SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM working_videos WHERE project_id = ?",
                 (project_id,),
             )
             next_version = cursor.fetchone()["next_version"]
-            cursor.execute(
-                """
-                INSERT INTO working_videos
-                    (project_id, filename, version, duration, highlights_data, detections_data)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (project_id, filename, next_version, duration, highlights_data, detections_data),
-            )
+            if has_carry_cols:
+                cursor.execute(
+                    """
+                    INSERT INTO working_videos
+                        (project_id, filename, version, duration, highlights_data, detections_data,
+                         framing_snapshot, highlight_carry_note)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (project_id, filename, next_version, duration, insert_highlights, detections_data,
+                     snapshot_blob, carry_note),
+                )
+            else:
+                # deploy->migrate window (pre-v046): carry columns absent, INSERT the
+                # historical shape. Carry is skipped this once; the next re-export
+                # after migration takes the legacy_uncertain path.
+                cursor.execute(
+                    """
+                    INSERT INTO working_videos
+                        (project_id, filename, version, duration, highlights_data, detections_data)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (project_id, filename, next_version, duration, insert_highlights, detections_data),
+                )
             wv_id = cursor.lastrowid
 
         # Repoint the project at the new/updated working video.
@@ -308,6 +392,10 @@ async def finalize_export(
         duration=video_duration,
         highlights_data=encode_data(regions),
         detections_data=encode_data(video_detections),
+        # T4350: the framing this export rendered with, captured at export START and
+        # persisted into input_data (survives a recovery restart). None on a
+        # pre-T4350 job -> upsert falls back to seeding the detected regions.
+        new_framing_snapshot=input_data.get("framing_snapshot"),
         gpu_seconds=gpu_seconds,
         modal_function=modal_function,
     )
