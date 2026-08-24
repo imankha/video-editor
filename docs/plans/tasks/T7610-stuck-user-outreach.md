@@ -68,7 +68,8 @@ stuck" (support framing rule); every email carries the booking link; short.
 >
 > Hi, I'm Iman, the founder of ReelBallers. I noticed you signed up but didn't get all
 > the way to a finished highlight reel, and I'd genuinely like to know where things got
-> stuck. Reply to this email and tell me; even one sentence helps.
+> stuck. Reply to this email and tell me; even one sentence helps. Happy to reward your
+> help with credits.
 >
 > Or better, grab 15 minutes with me and I'll walk you through it live: [BOOKING_LINK]
 >
@@ -165,7 +166,8 @@ second cold email in under 2 weeks. The other 9 recipients are net-new to outrea
 
 ## Acceptance Criteria
 
-- [ ] Email copy per segment approved by user (incl. dedup-adjusted variants)
+- [x] Email copy per segment approved by user (2026-08-24, with "Happy to reward your
+      help with credits." added to the base template)
 - [x] Goodwill credit decision for bigajosue recorded (50 credits, 2026-08-24; granted at
       pre-send checklist time, never earlier)
 - [ ] Booking link created (either path), verified working, recorded here
