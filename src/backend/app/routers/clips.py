@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import sqlite3
 import uuid
 from typing import Any
 
@@ -447,6 +448,22 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # T4360: BEGIN IMMEDIATE takes SQLite's RESERVED lock before the read, so this
+        # read-modify-write is atomic at the DB level -- a concurrent writer blocks (up to
+        # busy_timeout) instead of silently losing an update. Do NOT rely on the no-await
+        # accident (persistence-sync.md invariant #6); this guarantee is lock-based.
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.warning(f"[Framing Action] BEGIN IMMEDIATE timed out (lock contention): {e}")
+                return JSONResponse(status_code=503, content={
+                    "success": False,
+                    "error": "database_locked",
+                    "message": "This item is being edited by another request. Please try again.",
+                })
+            raise
+
         # Get current framing data
         crop_keyframes, segments_data, clip, framing_version, source_duration = _get_clip_framing_data(cursor, clip_id, project_id)
 
@@ -710,6 +727,16 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
         except ValueError as e:
             logger.warning(f"[Framing Action] Validation error: {e}")
             return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.warning(f"[Framing Action] Lock timeout during commit: {e}")
+                return JSONResponse(status_code=503, content={
+                    "success": False,
+                    "error": "database_locked",
+                    "message": "This item is being edited by another request. Please try again.",
+                })
+            logger.error(f"[Framing Action] Error: {e}", exc_info=True)
+            return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
         except Exception as e:
             logger.error(f"[Framing Action] Error: {e}", exc_info=True)
             return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
