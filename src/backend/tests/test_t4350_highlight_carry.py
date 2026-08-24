@@ -312,7 +312,19 @@ class TestSingleClipTransformSpeedChange:
 # =============================================================================
 
 class TestMultiClipReset:
-    def test_multiclip_framing_change_returns_detected_with_reset_note(
+    """T4350 shipped multi-clip as an unconditional loud reset (Gap B). T4355
+    (docs/plans/tasks/T4355-design.md, approved) closes that gap: a multi-clip
+    framing change now transforms per-clip instead of always resetting: see
+    tests/test_t4355_multiclip_carry.py for the full per-clip fixture matrix.
+    `multiclip_reset` survives ONLY as the residual genuinely-unmappable case
+    (a legacy prior snapshot with no `transition` key, on a NEW-side dissolve
+    re-export -- covered by TestDissolveTransition in the T4355 test file, not
+    here). This test is kept to lock the now-CORRECT "trim-only multi-clip
+    change transforms, does not reset" behavior at the `resolve_carried_highlights`
+    entry point, mirroring T4350's own single-clip trim-shift test shape.
+    """
+
+    def test_multiclip_trim_change_transforms_not_resets(
         self, video_dims, simple_crop_keyframes, detected_regions_sentinel
     ):
         segs_a = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
@@ -337,8 +349,19 @@ class TestMultiClipReset:
             clip_count=2,
         )
 
-        assert result == detected_regions_sentinel
-        assert note == "multiclip_reset"
+        assert note != "multiclip_reset"
+        assert result != detected_regions_sentinel
+        assert len(result) == 1
+        assert result[0]['id'] == 'r1'
+        # Ground truth via the SAME production helpers the transform uses (never
+        # a hardcoded magic number): region is in clip 0 (old offset 0), untouched
+        # by the trim change -> old->raw->new mirrors T4350's own single-clip math.
+        old_canon = canonicalize_segments_data(segs_a, 15.0)
+        new_canon = canonicalize_segments_data(segs_b, 15.0)
+        expected_start = source_time_to_working_time(working_time_to_source_time(2.0, old_canon), new_canon)
+        expected_end = source_time_to_working_time(working_time_to_source_time(5.0, old_canon), new_canon)
+        assert result[0]['start_time'] == pytest.approx(expected_start, abs=0.05)
+        assert result[0]['end_time'] == pytest.approx(expected_end, abs=0.05)
 
 
 # =============================================================================
