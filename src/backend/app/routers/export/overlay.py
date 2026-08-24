@@ -16,6 +16,7 @@ import logging
 import math
 import os
 import re
+import sqlite3
 import subprocess
 import tempfile
 import threading
@@ -635,6 +636,22 @@ async def overlay_action(project_id: int, action: OverlayAction):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # T4360: BEGIN IMMEDIATE takes SQLite's RESERVED lock before the read, so this
+        # read-modify-write is atomic at the DB level -- a concurrent writer blocks (up to
+        # busy_timeout) instead of silently losing an update. Do NOT rely on the no-await
+        # accident (persistence-sync.md invariant #6); this guarantee is lock-based.
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.warning(f"[Overlay Action] BEGIN IMMEDIATE timed out (lock contention): {e}")
+                return JSONResponse(status_code=503, content={
+                    "success": False,
+                    "error": "database_locked",
+                    "message": "This item is being edited by another request. Please try again.",
+                })
+            raise
+
         # Get current overlay data
         highlights, effect_type, highlight_color, working_video_id, version = _get_overlay_data(cursor, project_id)
 
@@ -1120,6 +1137,21 @@ async def overlay_action(project_id: int, action: OverlayAction):
             error = str(e)
             logger.warning(f"[Overlay Action] Validation error: {error}")
             return JSONResponse(status_code=400, content={
+                "success": False,
+                "version": version,
+                "error": error,
+            })
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.warning(f"[Overlay Action] Lock timeout during commit: {e}")
+                return JSONResponse(status_code=503, content={
+                    "success": False,
+                    "error": "database_locked",
+                    "message": "This item is being edited by another request. Please try again.",
+                })
+            error = str(e)
+            logger.error(f"[Overlay Action] Error: {error}", exc_info=True)
+            return JSONResponse(status_code=500, content={
                 "success": False,
                 "version": version,
                 "error": error,
