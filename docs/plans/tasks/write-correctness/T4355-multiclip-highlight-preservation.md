@@ -1,6 +1,6 @@
 # T4355: Multi-Clip Highlight Preservation on Re-Export
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-08-22
@@ -123,3 +123,24 @@ handling, reorder limitation, and the reviewer-caught guard landmine.
 **Awaiting user's live test** (per T4350's precedent, do not merge on green CI alone — place
 highlights on 2+ clips in a multi-clip project, re-trim one, re-export, confirm each highlight
 lands on its correct visual moment or drops+flags if genuinely unmappable) before merge.
+
+**2026-08-24**: User's live test surfaced two findings while testing on the T4355 container's
+dev stack — neither traces to this task's diff:
+
+1. **Real bug, unrelated, fixed same session (master `21fd971c`):** a false "This project was
+   edited elsewhere" 409 on the first overlay edit after any re-export. Root cause is in T4330
+   (merged 2026-08-21): `GET /overlay-data` seeded the frontend's conflict-check baseline from
+   `working_videos.version` (the export row-counter) instead of `overlay_version` (the mutation
+   counter the actual 409-check compares against) — a field-name collision on the same table.
+   Fixed directly per user request (S-tier), documented in `keyframes-framing.md`.
+2. **Not a bug — container-environment limitation, not new:** no spotlight/tracker visible
+   after a fresh multi-clip export. Reproduced live (Playwright, dev-login as the real account):
+   `ultralytics package not installed` in the dotask container, so local player detection
+   silently returns zero boxes / 0x0 dimensions — a known, documented tradeoff (T4120/T4180,
+   containers run Modal OFF and don't bundle YOLO). Auto-detected regions start keyframe-less
+   by design (user clicks a detection box to place the first keyframe); with zero boxes there
+   is nothing to click. Real verification of highlight-placement/carry behavior needs staging
+   (Modal GPU) or a real account, same gap T4350's own worker hit.
+
+User approved merge given both findings are unrelated to this task. **MERGED to master
+`7c0273e1`.**
