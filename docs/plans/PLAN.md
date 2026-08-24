@@ -34,7 +34,7 @@ Bugs reported by users on production. Populated from Postgres `bug_reports` tabl
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T7650 | [Bug 45p: "Top Plays" locked meter reads as broken](tasks/T7650-top-plays-locked-ui-confusion.md) | 3 | 2 | 1.5 | WIP | [ ] | arshia (2026-08-21): locked Top Plays meter shows for the game but not the clip, sometimes resolving after a wait. Checked against the Cross-Profile Game Attribution epic - NOT related (ranking data is profile-local). Likely 3 visually-identical amber "locked" UIs being conflated, plus summary-vs-lazy-member fetch staleness. |
+| T7650 | [Bug 45p: "Top Plays" locked meter reads as broken](tasks/T7650-top-plays-locked-ui-confusion.md) | 3 | 2 | 1.5 | WAITING ON USER | [ ] | arshia (2026-08-21): locked Top Plays meter shows for the game but not the clip, sometimes resolving after a wait. Checked against the Cross-Profile Game Attribution epic - NOT related (ranking data is profile-local). Likely 3 visually-identical amber "locked" UIs being conflated, plus summary-vs-lazy-member fetch staleness. |
 
 *Bug 46p (NULL description report) is already tracked as [T7560](tasks/T7560-bug-report-null-description.md) - no separate row needed. Prior-complete rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
