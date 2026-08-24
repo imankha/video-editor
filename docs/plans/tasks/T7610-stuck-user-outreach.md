@@ -29,6 +29,7 @@ gate):
 | T7470 no cascade-delete on upload failure | A failed retry must never again destroy the work we invited them to redo |
 | T7540 annotate save tag trap | The no-clips segment is told to Save a clip; Save must not dead-end |
 | T7490 pending uploads visible + retry | rooom1h's segment is told "try again"; his stuck-pending game must be visible/resolvable when he returns |
+| T7590 mobile Add Game entry point | ADDED 2026-08-24 with the mobile-affirming hint revision: the mobile segment is now invited to upload FROM the phone, so the entry point must work there |
 
 Nice-before but NOT blocking (hints route around them): T7590 (mobile Add Game; the
 mobile hint says use desktop), T7580 (Create Reel language; lisagee's email gives exact
@@ -78,19 +79,14 @@ stuck" (support framing rule); every email carries the booking link; short.
 > Iman
 
 **Segment hints:**
-- **1 mobile-wall:** "One quick tip in the meantime: uploading your game works best from
-  a laptop or desktop computer right now. Mobile improvements are coming, but a computer
-  will get your first reel done today."
-  **PROPOSED REVISION (2026-08-24 research, NEEDS USER SIGN-OFF - approved copy above
-  stands until then):** the research challenges the go-to-desktop hint: the game video
-  LIVES ON THE PHONE, so "use a computer" first requires a 1-4GB phone-to-computer file
-  transfer that is harder than the upload itself (Descript precedent: route EDITING to
-  desktop, never the upload). Since sends are already gated on the T7480 upload fix,
-  the truthful post-fix hint is mobile-affirming: "Uploading from your phone works now,
-  even on slower connections - just keep the tab open and your screen unlocked while it
-  uploads." IF this revision is adopted, T7590 (mobile Add Game entry point) must be
-  ADDED to the send gate for this segment (we would be inviting mobile users into the
-  entry-point bug otherwise); with the original desktop hint, T7590 stays non-blocking.
+- **1 mobile-wall (REVISED + APPROVED 2026-08-24, mobile-affirming per research):**
+  "Uploading your game right from your phone works now, even on slower connections -
+  just keep the tab open and your screen unlocked while it uploads. A quick tip: it
+  takes a few minutes for a full game, so start it when you have a moment."
+  Rationale: the game video lives on the phone; the old "use a desktop" hint required a
+  1-4GB phone-to-computer transfer harder than the upload itself (Descript precedent:
+  route editing to desktop, never the upload). CONSEQUENCE: T7590 joins the send gate
+  (below) - we must not invite mobile users into the entry-point bug.
 - **2 desktop-never-started:** "It takes about 10 minutes to get from a game video to a
   shareable highlight reel: upload the game, tap the great plays, and the reel builds
   itself from your clips. If something didn't look worth those 10 minutes, that's exactly
