@@ -2149,7 +2149,8 @@ async def get_overlay_data(project_id: int):
         _has_carry_note = column_exists(cursor, "working_videos", "highlight_carry_note")
         cursor.execute(f"""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
-                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength, version,
+                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
+                   version, overlay_version,
                    {'detections_data' if _has_detections else 'NULL AS detections_data'},
                    {'highlight_carry_note' if _has_carry_note else 'NULL AS highlight_carry_note'}
             FROM working_videos
@@ -2201,7 +2202,14 @@ async def get_overlay_data(project_id: int):
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']
             video_duration = result['duration']
-            version = result['version']
+            # T4330 conflict-check bug fix: `working_videos.version` is the EXPORT
+            # row-counter (bumps once per re-export), not the mutation counter
+            # `overlay_action`'s 409-check actually compares against
+            # (`overlay_version`, see `_get_overlay_data`). Seeding the frontend's
+            # actionClient from the wrong counter made the first overlay edit after
+            # any re-export always fail the version check -- a false "edited
+            # elsewhere" conflict on a single tab, no concurrent editor involved.
+            version = result['overlay_version'] or 0
             highlight_shape = result['highlight_shape'] or 'body'
             stroke_width = result['stroke_width']
             fill_enabled = bool(result['fill_enabled'])

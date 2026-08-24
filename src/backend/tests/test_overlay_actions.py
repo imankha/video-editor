@@ -5,15 +5,16 @@ These tests verify the atomic action endpoints work correctly
 for overlay modifications.
 """
 
-import pytest
-import json
 import uuid
+
+import pytest
 from fastapi.testclient import TestClient
-from app.main import app
+
 from app.database import get_db_connection
-from app.user_context import set_current_user_id
+from app.main import app
 from app.profile_context import set_current_profile_id
 from app.session_init import _init_cache
+from app.user_context import set_current_user_id
 
 TEST_USER_ID = f"test_overlay_{uuid.uuid4().hex[:8]}"
 TEST_PROFILE_ID = "testdefault"
@@ -362,3 +363,48 @@ class TestOverlayActionVersionConflict:
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert response.json()["version"] == current_version + 1
+
+    def test_overlay_data_get_seeds_overlay_version_not_export_row_version(
+        self, test_project_with_working_video
+    ):
+        """Regression: GET /overlay-data must return `overlay_version` (the
+        mutation counter `overlay_action`'s 409-check actually compares against)
+        under its `version` key, never `working_videos.version` (the export
+        row-counter, which bumps once per re-export regardless of overlay edits).
+
+        Before this fix, the frontend seeded its conflict-check baseline from the
+        WRONG counter -- so after any re-export advanced the row-counter past 0,
+        the very FIRST overlay edit always 409'd as "edited elsewhere", with no
+        concurrent writer involved at all.
+        """
+        project_id = test_project_with_working_video
+
+        # Simulate a re-export: a NEW working_videos row lands with a HIGHER
+        # export row-counter but a FRESH overlay_version (0) -- exactly what
+        # `upsert_working_video`'s INSERT branch produces on every re-export.
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO working_videos (project_id, filename, version, highlights_data, effect_type, overlay_version)
+                VALUES (?, 'test_working_v2.mp4', 5, NULL, 'original', 0)
+            """, (project_id,))
+            new_wv_id = cursor.lastrowid
+            cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (new_wv_id, project_id))
+            conn.commit()
+
+        data = client.get(f"/api/export/projects/{project_id}/overlay-data").json()
+        # Must be the mutation counter (0), never the export row-counter (5).
+        assert data["version"] == 0
+
+        # What GET returns must be exactly what the client can echo back as
+        # expected_version on the FIRST post-re-export edit without a false 409.
+        response = client.post(
+            f"/api/export/projects/{project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 0.0, "end_time": 2.0, "region_id": "post-reexport-edit"},
+                "expected_version": data["version"],
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
