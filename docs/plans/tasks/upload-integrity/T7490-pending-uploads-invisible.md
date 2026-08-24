@@ -70,6 +70,20 @@ the row and the leaked multipart sit there indefinitely.
 - T7360 (concurrent uploads): same store surface, sequence deliberately
 - UI style guide + ui-designer agent for the card state
 
+### Research-backed requirements (2026-08-24 best-practices review)
+- **Mobile MUST say "keep this tab open and your screen unlocked" during an active
+  upload.** iOS Safari has no functional Background Fetch/Sync: tab close or screen lock
+  can kill the transfer and nothing can recover it in the background. Silence here is
+  why mobile uploads look like random failures. This messaging is part of the upload
+  progress UI, not optional polish.
+- **Resume across page reload**: persist enough session state that a returning user is
+  prompted to re-select the same file (pre-matched to the pending session by
+  name/size/hash) and resume from the last completed part, rather than starting over.
+  Browser security requires the re-selection gesture; the win is not re-uploading
+  completed parts (tus-style offset resume property).
+- Progress must show real delivered bytes (completed parts), never buffered bytes; a bar
+  that races ahead then stalls destroys trust faster than no indicator.
+
 ### Technical Notes
 - Persistence: Retry/Resume/Discard are all explicit gestures; the reaping change removes a
   write from a GET path, which is aligned with the gesture rule, not in tension with it.

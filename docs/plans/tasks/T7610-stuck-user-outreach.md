@@ -81,6 +81,16 @@ stuck" (support framing rule); every email carries the booking link; short.
 - **1 mobile-wall:** "One quick tip in the meantime: uploading your game works best from
   a laptop or desktop computer right now. Mobile improvements are coming, but a computer
   will get your first reel done today."
+  **PROPOSED REVISION (2026-08-24 research, NEEDS USER SIGN-OFF - approved copy above
+  stands until then):** the research challenges the go-to-desktop hint: the game video
+  LIVES ON THE PHONE, so "use a computer" first requires a 1-4GB phone-to-computer file
+  transfer that is harder than the upload itself (Descript precedent: route EDITING to
+  desktop, never the upload). Since sends are already gated on the T7480 upload fix,
+  the truthful post-fix hint is mobile-affirming: "Uploading from your phone works now,
+  even on slower connections - just keep the tab open and your screen unlocked while it
+  uploads." IF this revision is adopted, T7590 (mobile Add Game entry point) must be
+  ADDED to the send gate for this segment (we would be inviting mobile users into the
+  entry-point bug otherwise); with the original desktop hint, T7590 stays non-blocking.
 - **2 desktop-never-started:** "It takes about 10 minutes to get from a game video to a
   shareable highlight reel: upload the game, tap the great plays, and the reel builds
   itself from your clips. If something didn't look worth those 10 minutes, that's exactly
@@ -127,6 +137,13 @@ then we've fixed several of the things that were in your way", instead of a cold
 
 - Send via the established fly ssh + send_admin_update_email path (2026-08 win-back
   precedent; no admin session needed). One send per user with their segment's hint.
+- **Cadence (research-backed, 2026-08-24 best-practices review):** plain text from the
+  founder's real address; ONE follow-up to non-responders 3-5 days after the first send
+  (follow-ups get read: 45% read rates vs 24% first-open in win-back studies), then STOP
+  at two touches. CTA order stays as approved: primary ask = "reply and tell me where you
+  got stuck" (earns a reply), booking link second ("Or better...") - booking-first raises
+  friction on a first touch. The credits-reward line stays a tail sentence, never the
+  lead: these users never reached value, so incentives are not the lever.
 - Log every send in this file: date, user, segment, template version.
 - Success measure: recipients who RETURN and pass their previous wall (durable outcome,
   not milestones), readable per user from profile DBs now and from T7510's

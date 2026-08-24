@@ -40,6 +40,12 @@ telemetry, no client error capture), so this needs live reproduction.
    - the GameDetailsModal (required fields at creation) rendering unusably at 320px with
      the keyboard open
    - an unhandled JS exception (silent on mobile; nothing reaches the server)
+   - the iOS 18 Safari cellular-upload bug (Apple dev forums thread 764420: uploads
+     >1MB over cellular time out while wifi works) - if the tap DID work and the
+     transfer died instantly on cellular, the entry point may be innocent and this
+     platform bug + the T7480 timeout math the whole story
+   - the iOS photo-picker "preparing" transcode delay (HEVC->H.264 export of a large
+     video before the file reaches Safari) reading as "nothing happened"
 2. Fix what reproduces; if NOTHING reproduces, instrument the entry point (tap, picker
    opened, file selected events via the T7510/T7480 beacon channel) and ship that, so
    the next mobile user answers the question for us.

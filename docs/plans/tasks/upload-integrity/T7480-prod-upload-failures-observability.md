@@ -106,8 +106,25 @@ The fix, in priority order (each grounded in the capture):
 6. **Honest progress**: drive % from completed parts, not buffered bytes.
 7. T7470 (do not delete the game) and T7490 (honest pending/reap) close the aftermath.
 
-Original investigation/observability workstreams below, kept for the remaining
-server-side lifecycle logging scope:
+**Implementation constraints from the 2026-08-24 best-practices research (sourced:
+AWS/Cloudflare/Mux/tus docs; details in the research report):**
+- **R2 requires all non-final parts of one upload to be the SAME size** - adaptive
+  per-part sizing mid-upload is off the table. Pick the part size ONCE per upload; 5MB
+  flat is the right default (it is the R2/S3 hard minimum and what vendors steer
+  weak-connection clients toward; a 4GB game = 800 parts, well under the 10k cap;
+  accept the Class A op cost). Optional later: measure throughput first, pick larger
+  parts for fast links, per upload not per part.
+- **Stall watchdog is a named industry pattern** (GCS TransferStallTimeoutOption:
+  abort only when no bytes flow for N seconds), replacing the flat per-request timeout.
+- **iOS realities**: no background upload exists on iOS Safari (Background Fetch
+  unsupported; screen lock suspends the page). Required: keep-tab-open + screen-unlock
+  messaging while uploading, request the Screen Wake Lock API (Safari 16.4+), and a
+  beforeunload guard while an upload is in flight. Also surface a distinct "Preparing
+  video..." state: the iOS photo picker can transcode (HEVC->H.264) large videos for a
+  long dead period before byte 1 flows, which reads as a hang (verify on device).
+- **Known iOS 18 Safari bug**: uploads >1MB over CELLULAR time out while wifi works
+  (Apple dev forums thread 764420) - check affected users' timing against this; it may
+  compound the slow-uplink math for the mobile cohort.
 
 ### 1. Root-cause the active failures
 - Live upload test against prod with a real browser + DevTools (drive-app-as-user skill /

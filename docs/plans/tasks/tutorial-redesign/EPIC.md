@@ -34,6 +34,26 @@ the real UI instead.
    open/closed on mobile, per the responsiveness skill. The shade/arrow must anchor
    correctly across breakpoints and after layout shifts.
 
+## Evidence constraints (2026-08-24 research review; binding on T7620's design)
+
+Validated: advance-on-real-action is exactly the pattern the evidence favors (contextual
+just-in-time guidance shows ~2.9x feature adoption vs front-loaded tours; passive
+tooltips are dismissed within ~3 seconds; CapCut's own onboarding is this same mechanic:
+hotspot tooltips, dimmed background, user must perform each action). Three shape
+constraints from the same evidence:
+
+1. **3-5 steps per contextual segment, never one mega-tour.** Tour completion collapses
+   from ~72-74% at 3-4 steps to ~16% at 7. The essential path must be SPLIT into
+   contextual mini-tours that fire when the user reaches each surface (upload tour on
+   the Games screen, clip tour on entering Annotate, reel tour when >=1 clip exists),
+   not one long guided chain.
+2. **Visibly skippable, even though default-on.** Skippable tours complete ~25% better;
+   ~70% of users skip tours that feel imposed. "Not now" must be one obvious tap; the
+   shade must never read as a lock.
+3. **Contextual triggering over front-loading**: each mini-tour fires at the moment of
+   first need, resumable independently. (This also degrades gracefully: skipping the
+   upload tour does not forfeit the clip tour later.)
+
 ## Design constraints
 
 - Motion is core product value (animation polish direction memory): the arrow bounce and
