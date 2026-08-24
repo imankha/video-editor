@@ -125,6 +125,15 @@ render the collection. Key decisions for the design doc:
 `activeUpload` + silent rejection in `startUpload` (~L47) — the UI limitation is
 downstream of the store shape.
 
+**2026-08-24**: Moved in PLAN.md from "Next Up" (no-epic-prerequisites bucket) into
+Milestone TOP, directly behind the Upload Failure Integrity epic (T7480/T7470/T7490/
+T7500). Reasoning: this task has a real prerequisite (shares `uploadManager.js` with
+that P1 active-outage epic, filed the same day, which must land first) and is itself
+a named prerequisite for the Game Pools epic's `T5495 Add Game Overhaul` — neither fact
+squares with "standalone, no prerequisites." Not moved into Milestone A (single-server
+data-loss bugs): this is a silent-drop UX bug, not data loss — Priority Policy tier 3,
+not tier 1.
+
 ## Acceptance Criteria
 
 - [ ] Starting a second (and third) game upload while one runs is ACCEPTED — visible
