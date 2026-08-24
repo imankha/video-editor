@@ -43,6 +43,15 @@ during impersonation. The session-touch/last-seen writer never got the same guar
 - `src/backend/app/services/auth_db.py` / `pg.py` - wherever last_seen_at is written
 - `src/backend/app/analytics.py` - reference implementation of the skip guard
 
+### Related Tasks
+- **NOT T6780** — T6780's "guard-asymmetry" is a different class entirely (migration-window
+  schema-version guards on reads vs writes, e.g. `detections_data`/`games.shared_by`
+  reachability against a below-head DB). This task's guard is the impersonation-footprint
+  class (T1515), unrelated despite the naming similarity — do not conflate fix shapes.
+- **T7520** (impersonation creates a cross-tenant profile DB) — same 2026-08-24
+  investigation, same impersonation start/stop transition, adjacent request-context code.
+  Different mechanism; see T7520's Related Tasks note for the shared staging test setup.
+
 ## Acceptance Criteria
 
 - [ ] Impersonated requests no longer touch last_seen_at (test: impersonate on staging,

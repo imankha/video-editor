@@ -56,6 +56,14 @@ Value → UX → architecture → task, one line each:
   backend) — neither currently covers "merge an existing standalone game's clip into
   another game," so this needs explicit design attention (likely a new task) when those
   are picked up, not an assumption that feed-propagation covers it for free.
+- **Upload Failure Integrity epic overlap (filed 2026-08-24, P1 active outage — see
+  tasks/upload-integrity/EPIC.md).** T7280's eventual successor (the explicit-affordance
+  single-clip-upload task above) lands on the SAME upload entry point and the same file
+  (`uploadManager.js`) that epic is fixing (failure handlers no longer cascade-delete user
+  content; server-side lifecycle logging; client failure beacon). When that successor task
+  is designed, confirm the upload-integrity epic has landed first and reuse its guard
+  pattern rather than re-introducing a new failure path that can destroy a single-clip
+  upload's just-created game the same way T7470 found for full-game uploads.
 
 ## Non-Goals (this epic)
 

@@ -85,6 +85,17 @@ render the collection. Key decisions for the design doc:
 - Related: T7280 (single-clip upload → Framing) reuses the upload entry point; the Game
   Pools / dual-camera epic's Add Game flow (folder upload, multi-file) will sit on top of
   this store — landing T7360 first simplifies that epic's assumptions.
+- **Upload Failure Integrity epic (T7470/T7480/T7490/T7500, filed 2026-08-24, P1 active
+  outage): same file, real contention.** T7480's task file already flags this reverse
+  reference ("T7360: same surface, sequence deliberately"). Both touch
+  `src/frontend/src/services/uploadManager.js` — T7470 patches its failure handlers
+  (~795-802, ~903-910) to stop cascade-deleting user content on a failed transfer, and
+  T7480 adds a client failure beacon + lifecycle logging on the same paths this task's
+  store rework (`activeUpload` → `uploads: []`) will touch from the other side (retry
+  context, per-upload failure state). Per the Priority Policy (infra bugs before feature
+  rework) and since the epic is an active prod outage, **the epic should land first**; at
+  minimum this task's Architect design doc should be written after reading the epic's
+  landed failure-state shape so the queue design doesn't have to be reworked around it.
 
 ### Technical Notes
 

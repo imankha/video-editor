@@ -22,6 +22,11 @@
 - The biggest single de-risk: T4390 already unified the WRITES. This task moves the surrounding orchestration; the finalize/publish behavior can no longer drift while you move it.
 - `modal_functions/` is NOT in scope (that's T4420/T4430's territory).
 - Suggested execution: one /dotask container per slice; slices 1-2 are safe openers, 4 is the semantic one — re-read T4160's task file + tests before touching auto_export.
+- **T7600** (filed 2026-08-24) is live prod evidence of exactly the "parallel universe" cost
+  named above: the sweep's own R2 upload (not through export_jobs/publish_final_video) isn't
+  idempotent, so a re-run re-exports and orphans the prior copy (lisagee: 24 objects for 8
+  clips, 3 waves). T7600 ships a smaller immediate idempotency fix without waiting for this
+  epic; read its outcome before starting slice 4 so this rework doesn't redo or regress it.
 
 ## Steps
 

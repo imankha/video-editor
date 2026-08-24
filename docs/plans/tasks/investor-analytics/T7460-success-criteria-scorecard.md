@@ -37,6 +37,14 @@ See [EPIC.md](EPIC.md) for directives and locked definitions.
 ### Related Tasks
 - Depends on: T7420 (activation), T7430 (retention/WAU queries), T7440 (growth buckets), T7400 (`rollup_engagement_monthly` — added to its schema for criterion 5)
 - This is the epic capstone — last in order.
+- **Watch T7510** (attempted-vs-successful activity taxonomy, filed 2026-08-24, standalone
+  P1, not part of this epic): it changes WHEN/WHETHER milestones like `annotation_completed`
+  and `game_created`-adjacent events fire (moving success semantics to durable completion
+  points). Criterion 3's activation metric already reads `user_actions.first_at` /
+  `export_completed` — if T7510 renames or re-times any event this scorecard reads, that
+  change must land as "T7460 scorecard inputs unaffected or migrated in the same change"
+  (T7510's own acceptance criteria already say this); re-verify the scorecard's numbers
+  don't silently shift when T7510 ships.
 
 ### Technical Notes
 - **In-season gating**: criteria 1 (WoW), 4 (WoW return), 5 use the epic's season-window constants; off-season they render a grey "off-season (paused)" state showing the last in-season value — never a red that just means winter.

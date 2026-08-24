@@ -125,6 +125,17 @@ as first-class frustration events.
   false success events; this task makes the attempt/success distinction structural
 - T7480 specifically: its client failure beacon is the transport for upload failure reasons
 - T7460 (RAG scorecard): downstream consumer, keep inputs stable
+- **T7400 (Investor-Grade Analytics epic — analytics.sqlite store + rollup):** this task is
+  NOT a child of that epic (different trigger — a P1 diagnostic-honesty bug, not a growth
+  report — and a much larger blast radius across live product code, not read-only reports)
+  but the two are bound by the same "extend existing systems, aggregates-only" constraint
+  and will physically touch the same store. **Before landing new counter dimensions
+  (`game_upload_attempted`/`_succeeded`/`_failed:{reason}` etc.), reuse T7400's
+  `analytics_store.py` module and its `PRAGMA user_version`/etag-assert R2 conventions
+  rather than inventing a second aggregate store or bolting new columns onto
+  `daily_counters` independently** — the design doc should confirm whether T7400 has
+  landed first (its store didn't exist as of this task's filing) and pick a schema that
+  doesn't collide with `rollup_action_weekly`/`rollup_engagement_monthly`.
 
 ### Technical Notes
 - Emission sites must respect the impersonation guard (`get_current_impersonator_id`):

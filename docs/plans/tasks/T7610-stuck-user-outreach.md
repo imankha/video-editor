@@ -61,6 +61,16 @@ and (once T7510 lands) watch whether recipients return past their wall.
   live (inviting him back to a still-broken upload burns the one apology)
 - T7460 scorecard: outreach outcomes feed activation metrics
 
+### Dedup risk against the 2026-08 win-back campaign (checked 2026-08-24)
+Five of this task's recipients were ALREADY emailed 2026-08-18/19 in the prior win-back
+campaign (memory: `project_winback_campaign_2026_08`), 5-6 days before this task was filed:
+**cschwartz78** (ghost-signup segment), **eticatch** and **4lgdesigns** (ghost signups),
+**lisagee1443** (13 clips, stuck at Framing — same framing as her hint here), and
+**chris.kunst23** (annotated, no finished clip). Copy for these 5 must read as a
+FOLLOW-UP, not a first contact (reference or at least not contradict the prior email's
+framing), and sends should be spaced out from that campaign rather than landing as a
+second cold email in under 2 weeks. The other 9 recipients are net-new to outreach.
+
 ## Acceptance Criteria
 
 - [ ] Email copy per segment approved by user

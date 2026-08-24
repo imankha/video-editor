@@ -65,6 +65,14 @@ in R2 + local (imankh has at least 2: profiles 0f8214c8 and b95eb93b under
 - Test: impersonate -> stop -> next admin request with stale X-Profile-ID must 4xx and
   create NOTHING (no local file, no R2 object).
 
+### Related Tasks
+- **T7530** (users.last_seen_at polluted by impersonation) — same 2026-08-24 investigation,
+  same impersonation start/stop transition, adjacent request-context code
+  (`session_init.py`/`db_sync.py` here vs `user_context.py`'s `get_current_impersonator_id`
+  there). Different mechanism (profile-header resolution vs a missing analytics guard), not
+  a shared root cause — but the manual staging verification for both ("impersonate -> stop
+  -> confirm the next request is clean") is the same test setup, worth doing in one pass.
+
 ## Acceptance Criteria
 
 - [ ] Verified mechanism documented (repro on staging)

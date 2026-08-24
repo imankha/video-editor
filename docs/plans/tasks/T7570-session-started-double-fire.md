@@ -42,6 +42,15 @@ sessionInit.js / session_init.py and trace both writes.
   `src/backend/app/services/user_db.py` - the two recording paths (PG user_actions
   aggregate + user.sqlite user_action_log)
 
+### Related Tasks
+- **Same defect class, different code corner:** T6250 (post-har-latency epic) found
+  `overlay-data`/`outdated-clips` firing 2-3x on the Framing->Overlay transition — "two
+  owners fetching the same thing" — and its investigation discipline applies directly here
+  (name the real call sites, don't hand-wave StrictMode, an ODD/production-confirmed count
+  proves genuine duplication). Not the same code (T6250 is a screen-transition GET fetch;
+  this is a session-boot POST) and not a candidate to fold into that epic (scoped to one HAR
+  capture on different screens) — reference only, reuse the method not the fix.
+
 ## Acceptance Criteria
 
 - [ ] Root cause of the double-fire named (both call sites / retry identified)

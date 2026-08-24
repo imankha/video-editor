@@ -39,6 +39,15 @@ idempotent, so re-runs re-export and re-upload with new names, orphaning prior c
 
 ### Related Tasks
 - T6770 (refcount derived set) shares the sweep corner; coordinate, do not entangle
+- **T4390/T4410** (export-write-path epic) name this exact class structurally: T4390 cites
+  "the sweep [writer] caused the raw-clips-in-ranking incident (T4160)", and T4410 slice 4
+  is explicitly "sweep onto shared rails" — putting `auto_export_game` through a real
+  `export_jobs` record + the one durable publish writer, which would make re-runs a
+  structural no-op rather than a re-upload. That epic is gated behind T4370's golden
+  harness and not close — **this task should proceed now as the smaller, immediate hygiene
+  fix**, not wait on the epic. When T4410 slice 4 is picked up, its author should read this
+  task's outcome first (idempotency fix + orphan audit) so the structural rework doesn't
+  redo or contradict it.
 
 ## Acceptance Criteria
 
