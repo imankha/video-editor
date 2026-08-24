@@ -191,3 +191,79 @@ AWS/Cloudflare/Mux/tus docs; details in the research report):**
       without any browser console access
 - [ ] Client failure beacon lands the browser-side failure reason in server logs
 - [ ] Double-UploadId anomaly explained or ruled out as a factor
+
+## Progress Log
+
+### 2026-08-24 — Design note (short Architect-by-exception pass, no separate design doc)
+
+The kickoff's 7-item fix list is the design; the shape is "translate the numbered list into
+code" with a few judgment calls resolved below. No item surfaced a real tradeoff that needed a
+BLOCKED gate — the one genuine correctness risk (5MB parts vs existing 25MB resume state) is
+resolved by a bounded, self-contained guard, not a design fork.
+
+**Fix 1 — `PART_SIZE` 25MB -> 5MB (`games_upload.py:50`).** 5 MiB is the R2/S3 hard minimum for
+non-final parts. 10GB max / 5MB = 2048 parts (< 10k cap). A 5MB part needs only 0.22Mbps to beat
+a 180s budget, and each completed part is durable via the existing parts-PATCH resume state.
+
+**Resume-safety judgment call (the "interacts with existing resume state" worry).** R2 requires
+all non-final parts of ONE upload to be the same size. A pending upload created pre-deploy used
+25MB parts; resuming it under the new 5MB chunking would splice 25MB completed parts with 5MB
+remaining parts and finalize a corrupt file — unacceptable on money-backed uploads. Guard: on the
+resume path, list the multipart's actual R2 parts and verify every already-completed part matches
+the CURRENT `PART_SIZE` (last part may be the file's short tail). On mismatch, abort the multipart
++ delete the stale pending row + fall through to a fresh create. Net effect at deploy: any old
+25MB in-flight upload restarts cleanly at 5MB (it had 0 completed parts anyway per the repro), new
+uploads resume normally. No schema change (part size is derived from live R2 state, not stored).
+
+**Fix 2 — stall watchdog replaces the flat per-part timeout (`uploadManager.js`).** Drop
+`xhr.timeout = PART_UPLOAD_TIMEOUT_MS`. Instead reset a JS timer on every `upload.onprogress`
+delta; abort + reject (retryable) only after `PART_STALL_TIMEOUT_MS` (30s) of ZERO progress. This
+is the GCS `TransferStallTimeoutOption` pattern: a healthy 66%-done transfer is never killed; a
+dead socket fails fast into the existing retry. Keep an absolute-cap fallback so a pathological
+"1 byte every 29s" can't hang forever.
+
+**Fix 3 — adaptive retry:** with 5MB parts the existing MAX_RETRIES=3 loop is sound as-is
+(timeouts/stalls already classified retryable). Not halving part size on retry — out of scope /
+over-build per the kickoff.
+
+**Fix 4 — UploadId hygiene (server).** Before `r2_create_multipart_upload` on the fresh-create
+path, list + abort any open multiparts already sitting on the key (orphans). This is only reached
+after resume was declined, so we never abort a live resumable session. Kills the leaked-multipart
+accumulation permanently.
+
+**Double-UploadId anomaly — EXPLAINED (refines the task file's leading hypothesis).** The task
+file guessed "boto3's internal retry." Evidence says NO: the R2 boto3 client is built with
+`Config(retries={"max_attempts": 0})` (`storage.py:250`), so boto3 does NOT retry internally. The
+real source is the APPLICATION-level wrapper: `r2_create_multipart_upload` calls
+`retry_r2_call(client.create_multipart_upload, **TIER_3)` (2 attempts) and `is_transient_error`
+classifies `ReadTimeoutError` as retryable (`read_timeout=30`). So a CreateMultipartUpload that R2
+actually executed but answered slower than 30s times out on read, `retry_r2_call` fires a second
+create, R2 opens a SECOND multipart, and only the second UploadId is returned + stored — leaving
+the first as the orphan ListMultipartUploads reported. Fix 4's abort-before-create reclaims these;
+the stored UploadId is always the live one used for finalize.
+
+**Fix 5 — failure beacon (`POST /api/games/upload-failure-beacon`).** Lightweight endpoint,
+logs-only, never a DB write (Technical Notes confirm the gesture-persistence rule doesn't apply —
+it writes to logs/analytics, not the profile/user DB). Accepts a permissive JSON body, never
+throws on bad input (returns 204 regardless). Client fires it fire-and-forget with `keepalive` at
+transfer-retry-exhaustion (and on prepare/finalize failure), wrapped so it can never block or
+break the failure path. This is the ONLY server-visible evidence channel: prod strips
+`console.log` at build (`vite.config.js:101`), so the client DIAG lines are dead in prod.
+
+**Fix 6 — honest progress.** Reported percent is driven by COMPLETED parts (bytes counted only
+when a part's PUT returns 2xx), not by `upload.onprogress` buffered bytes (which climbed while the
+socket was dead). `onprogress` still feeds the stall watchdog; it just no longer inflates the bar.
+
+**Fix 7 — server-side lifecycle observability.** (a) Structured `[UPLOAD_LIFECYCLE]` logs at
+prepare (session/hash/size/parts/upload_id/user) and finalize (success + every failure branch) so
+an abandoned session (prepare with no finalize) is grep-pairable without a browser; plus the Fix-5
+beacon carries the client-side reason. (b) A read-only admin endpoint
+`GET /api/admin/users/{user_id}/stuck-uploads?older_than_hours=N` iterates the user's profiles via
+`open_profile_db_readonly` (mode=ro — no writes, no sync), returns each `pending_uploads` row with
+age + live R2 multipart validity/part-count. Scoped to a named user (the incident accounts), not
+an all-users sweep — log-based remains the baseline per the task file; this makes it directly
+queryable for the affected accounts.
+
+**Files:** `src/backend/app/routers/games_upload.py`, `src/backend/app/storage.py`,
+`src/backend/app/routers/admin.py`, `src/frontend/src/services/uploadManager.js`. No schema
+change, no migration. T7470/T7490/T7500 scope explicitly untouched.

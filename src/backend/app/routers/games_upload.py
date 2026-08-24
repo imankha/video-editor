@@ -14,7 +14,7 @@ import re
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.constants import UploadStatus
@@ -27,10 +27,12 @@ from app.storage import (
     generate_multipart_urls,
     generate_presigned_url_global,
     r2_abort_multipart_upload,
+    r2_abort_orphan_multipart_uploads,
     r2_complete_multipart_upload,
     r2_create_multipart_upload,
     r2_head_object_global,
     r2_is_multipart_upload_valid,
+    r2_multipart_parts_match_size,
     r2_set_object_metadata_global,
 )
 from app.user_context import get_current_user_id
@@ -46,8 +48,15 @@ BLAKE3_PATTERN = re.compile(r'^[a-f0-9]{64}$')
 # Maximum file size: 10GB (R2 limit is 5TB, but practical limit for video)
 MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
 
-# Part size for multipart uploads
-PART_SIZE = 25 * 1024 * 1024  # 25MB
+# Part size for multipart uploads.
+# T7480: 25MB -> 5MB (R2/S3 hard minimum for non-final parts). At 25MB a single
+# 17.8MB phone video was ONE part needing >=0.79Mbps sustained to beat the client's
+# 180s per-part budget; residential/cell uplinks sit at 0.3-0.7Mbps, so every attempt
+# restarted from byte 0 and died the same way (prod outage since 2026-08-20). A 5MB
+# part needs only 0.22Mbps to clear the same budget, and each completed part is durable
+# resume progress. R2 requires all non-final parts of ONE upload to be the same size,
+# so this is flat per upload (10GB max / 5MB = 2048 parts, well under the 10k cap).
+PART_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 def validate_blake3_hash(hash_value: str) -> bool:
@@ -160,8 +169,14 @@ async def prepare_upload(request: PrepareUploadRequest):
             session_id = existing_pending['id']
             upload_id = existing_pending['r2_upload_id']
 
-            # Validate that the R2 multipart upload session is still valid
-            if r2_is_multipart_upload_valid(r2_key, upload_id):
+            # Validate that the R2 multipart upload session is still valid AND was
+            # chunked at the CURRENT PART_SIZE. T7480: after PART_SIZE changed
+            # 25MB -> 5MB, an old session's already-uploaded parts no longer tile
+            # the file at the new size; splicing them with new 5MB parts would
+            # finalize a corrupt object. On a size mismatch, abort + restart fresh.
+            if r2_is_multipart_upload_valid(r2_key, upload_id) and r2_multipart_parts_match_size(
+                r2_key, upload_id, request.file_size, PART_SIZE
+            ):
                 # Resume existing upload - return remaining parts
                 completed_parts = decode_data(existing_pending['parts_json']) or []
 
@@ -179,8 +194,9 @@ async def prepare_upload(request: PrepareUploadRequest):
                 remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
 
                 logger.info(
-                    f"Resuming upload: {blake3_hash}, session: {session_id}, "
-                    f"completed: {len(completed_parts)}, remaining: {len(remaining_parts)}"
+                    f"[UPLOAD_LIFECYCLE] resume user={user_id} session={session_id} "
+                    f"hash={blake3_hash} upload_id={upload_id} "
+                    f"completed={len(completed_parts)} remaining={len(remaining_parts)}"
                 )
 
                 return {
@@ -206,7 +222,15 @@ async def prepare_upload(request: PrepareUploadRequest):
                 conn.commit()
                 # Fall through to create new upload below
 
-    # Game doesn't exist and no pending upload - create new multipart upload
+    # Game doesn't exist and no valid resumable pending upload.
+    # T7480 UploadId hygiene: reclaim any open multipart(s) already sitting on this
+    # key before creating a new one. This is only reached after a valid resume was
+    # declined, so every open multipart here is a genuine orphan (e.g. the duplicate
+    # leaked when retry_r2_call fired a second CreateMultipartUpload on a slow-but-
+    # executed first attempt). Prevents the double-UploadId accumulation.
+    r2_abort_orphan_multipart_uploads(r2_key)
+
+    # Create new multipart upload
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
         raise HTTPException(
@@ -245,8 +269,9 @@ async def prepare_upload(request: PrepareUploadRequest):
     )
 
     logger.info(
-        f"Prepared multipart upload: {blake3_hash}, "
-        f"session: {session_id}, parts: {len(parts)}"
+        f"[UPLOAD_LIFECYCLE] prepare user={user_id} session={session_id} "
+        f"hash={blake3_hash} upload_id={upload_id} parts={len(parts)} "
+        f"file_size={request.file_size} part_size={PART_SIZE}"
     )
 
     return {
@@ -277,6 +302,7 @@ async def finalize_upload(
         )
 
     session_id = request.upload_session_id
+    user_id = get_current_user_id()
 
     # Get pending upload from database
     with get_db_connection() as conn:
@@ -288,6 +314,10 @@ async def finalize_upload(
         pending = cursor.fetchone()
 
         if not pending:
+            logger.warning(
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"reason=session_not_found"
+            )
             raise HTTPException(
                 status_code=404,
                 detail="Upload session not found"
@@ -307,6 +337,11 @@ async def finalize_upload(
         if not r2_complete_multipart_upload(r2_key, r2_upload_id, r2_parts):
             # Attempt to abort the upload to clean up
             r2_abort_multipart_upload(r2_key, r2_upload_id)
+            logger.error(
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"hash={blake3_hash} upload_id={r2_upload_id} parts={len(r2_parts)} "
+                f"reason=complete_multipart_failed"
+            )
             raise HTTPException(
                 status_code=500,
                 detail="Failed to complete multipart upload"
@@ -315,6 +350,10 @@ async def finalize_upload(
         # Verify file size matches
         head_result = r2_head_object_global(r2_key)
         if not head_result:
+            logger.error(
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"hash={blake3_hash} reason=object_not_found_after_complete"
+            )
             raise HTTPException(
                 status_code=500,
                 detail="Upload completed but object not found"
@@ -325,8 +364,8 @@ async def finalize_upload(
 
         if actual_size != expected_size:
             logger.error(
-                f"Size mismatch for {blake3_hash}: "
-                f"expected {expected_size}, got {actual_size}"
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"hash={blake3_hash} reason=size_mismatch expected={expected_size} got={actual_size}"
             )
             # Don't delete - let admin investigate
             raise HTTPException(
@@ -357,8 +396,8 @@ async def finalize_upload(
         conn.commit()
 
         logger.info(
-            f"Finalized upload: {blake3_hash}, "
-            f"size: {actual_size / (1024*1024):.1f}MB"
+            f"[UPLOAD_LIFECYCLE] finalize success user={user_id} session={session_id} "
+            f"hash={blake3_hash} size_mb={actual_size / (1024*1024):.1f}"
         )
 
         # Game creation is handled separately by POST /api/games
@@ -420,6 +459,49 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
             "status": "saved",
             "parts_count": len(merged_parts)
         }
+
+
+@router.post("/upload-failure-beacon", status_code=204)
+async def upload_failure_beacon(request: Request):
+    """
+    T7480: client failure beacon. The browser POSTs here when it exhausts retries
+    (or hits a terminal prepare/finalize failure) so the browser-side reason lands
+    in server logs — the ONLY server-visible evidence channel, because prod builds
+    strip console.log (vite.config.js marks it pure) and the whole failed transfer
+    otherwise produces ZERO server traffic.
+
+    Fire-and-forget contract: this MUST NEVER throw on bad input and MUST NOT block
+    or break the client's failure path. It writes to LOGS ONLY — no profile/user DB
+    write (so gesture-persistence rules don't apply, per the task's Technical Notes),
+    and no durable_sync. Always returns 204, even for a malformed body.
+    """
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            payload = {"raw": payload}
+    except Exception:
+        payload = {}
+
+    try:
+        user_id = get_current_user_id()
+    except Exception:
+        user_id = None
+
+    # Pull a few known fields for a readable log line; keep the rest as-is.
+    reason = payload.get("reason")
+    phase = payload.get("phase")
+    session_id = payload.get("session_id")
+    blake3_hash = payload.get("blake3_hash")
+    attempts = payload.get("attempts")
+    elapsed_ms = payload.get("elapsed_ms")
+
+    logger.error(
+        f"[UPLOAD_BEACON] client upload failure user={user_id} "
+        f"phase={phase} session={session_id} hash={blake3_hash} "
+        f"attempts={attempts} elapsed_ms={elapsed_ms} reason={reason!r} detail={payload!r}"
+    )
+    # 204 No Content — nothing to return.
+    return None
 
 
 @router.get("/pending-uploads")
