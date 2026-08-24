@@ -4,6 +4,7 @@ import { CollapsibleGroup } from '../shared/CollapsibleGroup';
 import { CardCarousel } from '../shared/CardCarousel';
 import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
+import { LOCKED_KINDS } from './LockedReasonModal';
 import { REEL } from '../../config/themeColors';
 import { RATIO_ORDER, splitByAspect } from '../../constants/aspectRatios';
 import { compareGameTime } from '../../utils/timeFormat';
@@ -150,6 +151,7 @@ export function GameCollectionGroup({
           )}
           <RatioUnlockGroup
             name={cardTitle}
+            kind={shareScope?.type === 'game' ? LOCKED_KINDS.GAME : LOCKED_KINDS.MIXES}
             ratio={ratio}
             currentSec={ratioDurations[ratio]}
             reels={members ? membersFor(ratio) : []}

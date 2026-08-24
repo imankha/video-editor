@@ -4,7 +4,7 @@ import { fetchRankConfidence } from '../../utils/rankConfidence';
 import { RATIO_ORDER, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { formatDurationHuman } from '../collections/format';
-import { LockedReasonModal } from '../collections/LockedReasonModal';
+import { LockedReasonModal, LOCKED_KINDS } from '../collections/LockedReasonModal';
 import { ConfidenceGauge } from './ConfidenceGauge';
 
 // The first sentence always explains the purpose; the second is tailored to the
@@ -114,7 +114,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
         </button>
         {showLockedWhy && (
           <LockedReasonModal
-            kind="ranking"
+            kind={LOCKED_KINDS.RANKING}
             name="Ranking Progress"
             currentSec={state.contentSec}
             onClose={() => setShowLockedWhy(false)}
