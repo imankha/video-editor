@@ -1,6 +1,6 @@
 # T4360: Explicit Orderings — BEGIN IMMEDIATE + Invariant Tests
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-03
@@ -65,4 +65,5 @@ in `set_rotation`'s exception handling for a future task, not blocking this one.
 pass + 1 xfail, 66 existing regression tests unchanged/green, ruff clean, import clean. Branch CI
 green on the first push (backend success, frontend correctly skipped — no frontend files touched).
 
-Backend-only, no UI surface — nothing to live-click-through. Awaiting merge approval.
+Backend-only, no UI surface — nothing to live-click-through. User approved merge on green CI +
+reviewer approval. **MERGED to master `51526cee`.**
