@@ -45,9 +45,69 @@ the browser -> R2 leg. The client logs rich diagnostics (`[DIAG upload-freeze] u
 they die in the user's console. An abandoned upload session is invisible server-side until
 someone happens to impersonate the account.
 
-## Solution
+## ROOT CAUSE CONFIRMED (2026-08-24 live reproduction on staging)
 
-Two workstreams, same task because the observability is how the investigation concludes:
+Reproduced end to end with a real browser driving the real Add Game UI (staging build
+9417289f, same master code, same physical R2 bucket for the env-free `games/` prefix):
+
+- **Unthrottled (~3MB/s): 17.17MB upload SUCCEEDS end to end** (prepare 645ms, single
+  PUT 5.2s, finalize 1.3s, activate 9.4s). The pipeline itself is healthy: CORS, presign,
+  finalize all fine. Prepare fired ONCE.
+- **CDP-throttled to 0.5Mbps (phone-grade uplink): guaranteed-fatal loop, matching the
+  real failures exactly.** PUT attempt 1 reached ~66% transferred, then the flat
+  `PART_UPLOAD_TIMEOUT_MS = 180_000` XHR timeout killed it (ERR_ABORTED at exactly
+  180.5s). The retry RESTARTS THE WHOLE FILE FROM BYTE 0 on the same slow link, so every
+  attempt dies the same way: 4 x 180s + backoffs = 12.1 minutes of "Uploading..." then
+  terminal failure. R2 completed zero parts. Aftermath identical to rooom1h: orphaned
+  pending_uploads row, multipart open with 0 parts, and the T7470 cleanup DELETEd the
+  game row. **Zero server-visible traffic from the entire failure.**
+
+**The math (measured, not estimated): a 17.8MB single part inside 180s requires >=
+0.79Mbps sustained uplink. Residential/cell uplinks commonly sit at 0.3-0.7Mbps. Retry
+count is irrelevant because each attempt restarts from zero with the same budget.** This
+fully explains bigajosue (4 attempts, mobile-shot video, failures in 11-18s were likely
+the faster pre-transfer failures of his first file; the pattern class holds), rooom1h
+(WhatsApp video, 0 parts), and why desktop-on-good-wifi users (cschwartz, jordark,
+eticatch, multi-GB files at 25MB parts) succeeded: per-25MB-part at >=1.1Mbps clears
+180s.
+
+Secondary findings from the repro:
+- **The double-UploadId is NOT client-side**: prepare fired once in both runs, prod has
+  no StrictMode, and the resume path returns the SAME UploadId while valid
+  (games_upload.py:159-195). Remaining suspect: boto3's internal retry on a timed-out
+  CreateMultipartUpload (R2 executed the first, the retry created a second, only the
+  second stored). Server-side hygiene fix below; not the transfer-failure cause.
+- **All client DIAG logging is DEAD in prod builds**: vite.config.js:101 marks
+  console.log as pure, so uploadManager's diagnostics are stripped at build time. Only
+  console.warn/error survive. The beacon is the ONLY possible evidence channel.
+- Progress % shows bytes BUFFERED, not delivered (kept advancing while offline): users
+  see healthy progress right up to the reset loop.
+- Prod dev-login is a hard 404 by design (auth.py:998-1006); staging requires the
+  X-Test-Mode header.
+
+## Solution (updated: cause known, fix + observability)
+
+The fix, in priority order (each grounded in the capture):
+
+1. **PART_SIZE 25MB -> ~5MB.** A 5MB part needs only 0.22Mbps to beat 180s; each
+   completed part is durable progress (the parts-PATCH resume state already exists and
+   works); a timeout loses one part, not the file.
+2. **Progress-aware timeout, not flat**: abort only after N seconds with ZERO
+   upload.onprogress delta (or scale timeout with part size). Today the timeout kills
+   healthy 66%-done transfers.
+3. **Adaptive retry**: with small parts the existing retry becomes sound; consider
+   halving part size on a timeout retry.
+4. **UploadId hygiene (server)**: before r2_create_multipart_upload, abort open orphan
+   multiparts for the key (or make create idempotent per hash); log the UploadId
+   returned. Kills the double-UploadId ambiguity permanently.
+5. **Failure beacon (mandatory, proven necessary)**: the terminal failure produced zero
+   server-visible traffic, and console diagnostics do not exist in prod builds. POST
+   failure reason + attempt/timing detail on retry exhaustion.
+6. **Honest progress**: drive % from completed parts, not buffered bytes.
+7. T7470 (do not delete the game) and T7490 (honest pending/reap) close the aftermath.
+
+Original investigation/observability workstreams below, kept for the remaining
+server-side lifecycle logging scope:
 
 ### 1. Root-cause the active failures
 - Live upload test against prod with a real browser + DevTools (drive-app-as-user skill /
