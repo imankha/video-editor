@@ -1,6 +1,8 @@
 # T7380: Global presigned-URL cache outlives its own signature expiry
 
-**Status:** WIP
+**Status:** DONE (deployed 2026-08-24 prod). File header was stale at WIP; commit `82fa176b`
+("T7380/T7390: add to PLAN.md, flip T7380 to STAGING") and PLAN.md both confirm it merged and
+shipped in this deploy.
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-20

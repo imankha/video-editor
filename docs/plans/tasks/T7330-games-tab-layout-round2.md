@@ -1,6 +1,6 @@
 # T7330: Games tab round 2 — density, match date, tournament grouping
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-08-19

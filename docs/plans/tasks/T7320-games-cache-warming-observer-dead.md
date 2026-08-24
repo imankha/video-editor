@@ -1,6 +1,6 @@
 # T7320: Games-tab cache warming has been dead since T5681
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 6
 **Complexity:** 1
 **Created:** 2026-08-19

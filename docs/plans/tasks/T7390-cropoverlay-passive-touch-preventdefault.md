@@ -1,6 +1,6 @@
 # T7390: CropOverlay drag/resize preventDefault silently no-ops on touch
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-20

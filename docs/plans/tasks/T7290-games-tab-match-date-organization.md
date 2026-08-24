@@ -1,6 +1,6 @@
 # T7290: Games Tab Organizes by Match Date, Not Upload Date
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-19

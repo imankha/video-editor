@@ -1,6 +1,6 @@
 # T4350: Re-Export Must Re-Transform Carried-Forward Highlights
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-03

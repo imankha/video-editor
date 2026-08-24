@@ -1,8 +1,8 @@
 # T4330: Unified Action Client — Serialization + Versioning + 409 Conflicts
 
-**Status:** STAGING (merged to master `b3354498` 2026-08-21, user-tested and
-approved the two-tab conflict flow in both Framing and Overlay. Migration v044
-needs `POST /api/admin/migrate` after deploy — migrations never auto-run.)
+**Status:** DONE (deployed 2026-08-24 prod). Merged to master `b3354498` 2026-08-21, user-tested
+and approved the two-tab conflict flow in both Framing and Overlay. Migration v044
+needs `POST /api/admin/migrate` after deploy — migrations never auto-run.
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03

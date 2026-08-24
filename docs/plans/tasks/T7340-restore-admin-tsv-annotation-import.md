@@ -1,6 +1,6 @@
 # T7340: Restore admin TSV annotation import/export in production
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-19

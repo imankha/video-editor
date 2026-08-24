@@ -1,6 +1,6 @@
 # T7370: Overlay stuck loading a working video rendered by the CPU mock encoder
 
-**Status:** STAGING (fixed same-session, ready to merge)
+**Status:** DONE (deployed 2026-08-24 prod). Fixed same-session, merged directly to master.
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-20

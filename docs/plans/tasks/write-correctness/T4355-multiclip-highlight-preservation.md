@@ -1,6 +1,6 @@
 # T4355: Multi-Clip Highlight Preservation on Re-Export
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-24 prod)
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-08-22
