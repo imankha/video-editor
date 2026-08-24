@@ -62,6 +62,38 @@ surfaces the attempt/success/failure distinction. Target shape:
    explicitly labeled as UI-engagement signals in the dashboard, distinct from content
    outcomes; the design decides per achievement.
 
+## Frustration-signal requirements (measurement review, 2026-08-24)
+
+Retrospective from the funnel investigation: attempt/outcome covers the funnel's ENDPOINTS,
+but frustration lives in the middle (refusals, errors, repetitions) and that middle layer
+has zero instrumentation today. The design must also cover, ranked by investigation cost:
+
+1. **Interaction-outcome pairs on critical CTAs** (Add Game, Add Clip, Save Clip,
+   Create Reel/Export, Share, Pay): clicked -> next stage reached (picker opened / form
+   saved / job started) or failed(reason). Without this, "tapped and nothing happened"
+   (bug #18) is indistinguishable from "never tapped" - the exact ambiguity that kept the
+   mobile cliff a hypothesis instead of a verdict.
+2. **Client error capture**: ring buffer of console.error / window.onerror / unhandled
+   rejections, flushed via the T7480 beacon channel + attached to bug reports (T7560).
+   A mobile Safari exception currently leaves zero server trace.
+3. **Blocking-dialog and error-toast impressions** (name + per-session count): the T7540
+   tag-trap would have been visible as "Tag not submitted shown 5x, clips saved 0". A
+   repeated refusal impression in one session is a near-direct frustration measurement.
+4. **Session exit breadcrumbs**: last screen + per-screen dwell, written to the user's
+   own user_action_log (per-event detail belongs in user.sqlite; PG stays aggregate).
+   Bug reports' `actions` array proves the value - it is the only place this trail exists
+   today, and only when someone complains.
+5. **Derived frustration flags in the admin journey view**: retry-burst (same action >=3x
+   within 60s), repeat-visit-no-progress (returned to a stage, no new durable outcome),
+   rapid-fire bursts. All three existed in raw timestamps (bigajosue 3 uploads/29s,
+   lisagee 13 events/31s, cschwartz 4 visits/0 clips) and required a human to find.
+
+Second tier: real device/UA/touch capture once per session (replace the viewport-width
+guess); pin viewed_duration semantics (accumulated vs furthest position); acquisition
+attribution (UTMs all NULL - frustration cannot be tied to the promise that recruited the
+user); help-seeking signals (tutorial rewatches, help opens, abandoned/empty bug reports)
+as first-class frustration events.
+
 ## Context
 
 ### Constraints (binding)
