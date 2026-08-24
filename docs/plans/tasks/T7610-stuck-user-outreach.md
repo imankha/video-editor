@@ -1,65 +1,150 @@
-# T7610: Stuck-user outreach: hint emails + bookable help sessions
+# T7610: Stuck-user re-activation: segmented hint emails + bookable help sessions
 
-**Status:** WAITING ON USER (email copy + calendar booking link approval)
+**Status:** WAITING ON USER (email copy + booking link + goodwill credit decision)
 **Priority:** P1 (only lever that can recover the existing 14 users)
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-08-24
-**Updated:** 2026-08-24
+**Updated:** 2026-08-24 (full spec: send gate, per-user segment map, complete copy)
 
 ## Problem
 
 The 2026-08-24 funnel analysis found 14 real users, nearly all stuck at identifiable
 walls, several visibly frustrated (bug reports, rage retries, four-visit struggles). Code
-fixes (upload-integrity epic, T7540/T7580/T7590) recover FUTURE users; the existing ones
-need direct outreach, and future stuck users need a standing "get unstuck" path.
+fixes recover FUTURE users; the existing ones need direct outreach that (a) names their
+specific wall, (b) accounts for their platform, (c) gives a concrete hint past it, and
+(d) offers a personal help session. Re-engaging before the walls are fixed would burn
+the one chance: **no email goes out until the blocking bugs are cleared** (user
+directive 2026-08-24).
 
-## Solution
+## SEND GATE (hard, user directive: clear all blocking bugs first)
 
-### 1. Segmented hint email (send mechanism exists: fly ssh + send_admin_update_email,
-used for the 2026-08 win-back). Segments and the hint each gets:
+No send to ANY segment until ALL of these are DEPLOYED TO PROD and verified live
+(deploy is the user's /deploy gesture; "merged to master/staging" does not clear the
+gate):
 
-| Segment | Users | Hint |
-|---|---|---|
-| Mobile users who never uploaded | phildebarra, hiro.mt629, avi468870, jsquared22 (+anaselidrysy, platform unknown) | Use a desktop/laptop for the first upload (mobile upload improvements are in progress); direct link to /home/games |
-| Uploaded but no clips | cschwartz78, jordark91330, eticatch | One concrete tip: open your game, press Add Clip at a highlight, give it a rating, hit Save (mention the tag field commits with Enter); their game is still there waiting |
-| Made clips, no reel | lisagee1443 | "You already did the hard part: your 13 clips become a reel with two more taps" + exact steps Framing -> Create Reel; acknowledge her feedback directly |
-| Paid and lost work | bigajosue | Personal apology, what happened (upload failures on our side), credits intact + goodwill top-up (user decision), personal offer to do it together |
-| Share recipients | 4lgdesigns, chris.kunst23 | Their shared game/clips are still available; here is what they can do with them |
+| Gate task | Why it blocks re-engagement |
+|---|---|
+| T7480 upload slow-uplink fix (5MB parts + progress-aware timeout + beacon) | Every hint funnels users back to uploading; below-0.8Mbps uplinks still hard-fail today |
+| T7470 no cascade-delete on upload failure | A failed retry must never again destroy the work we invited them to redo |
+| T7540 annotate save tag trap | The no-clips segment is told to Save a clip; Save must not dead-end |
+| T7490 pending uploads visible + retry | rooom1h's segment is told "try again"; his stuck-pending game must be visible/resolvable when he returns |
 
-Framing rule (memory): lead with "tell us where you got stuck", support framing, not a
-tutorial-link dump. ALL segments get the booking link. Email copy drafted for user
-approval BEFORE any send; sends are logged (who/when/segment) in this file.
+Nice-before but NOT blocking (hints route around them): T7590 (mobile Add Game; the
+mobile hint says use desktop), T7580 (Create Reel language; lisagee's email gives exact
+steps regardless).
 
-### 2. Bookable help sessions (Google Calendar)
-Standing "book time with Iman" link, Mon-Fri 09:00-14:00 (user's stated window):
+Gate check before sending: verify each fix's behavior on PROD (not staging), record the
+verification evidence here.
+
+## Segment map (every one of the 14, none skipped)
+
+Platform: D desktop, M mobile, ? unrecorded (viewport heuristic + bug-report UAs).
+
+| User | Platform | Fall-off point | Segment |
+|---|---|---|---|
+| phildebarra@gmail.com | M | opened app, 8s bounce | 1 mobile-wall |
+| hiro.mt629@gmail.com | M | tutorial done, never uploaded | 1 mobile-wall |
+| avi468870@gmail.com | M (iPhone) | tutorial done, filed empty bug report at upload step | 1 mobile-wall |
+| jsquared22@jeffreyjones.com | M | opened app, 7s bounce | 1 mobile-wall |
+| anaselidrysy09@gmail.com | ? | tutorial 19s after signup, nothing after | 1 mobile-wall (platform unknown, same hint is safe) |
+| steven.zigterman20@gmail.com | D | opened app, 112s, no tutorial, no upload | 2 desktop-never-started |
+| cschwartz78@gmail.com | D | uploaded 3.9GB, watched 28min, 4 return visits, 0 clips | 3 uploaded-no-clips |
+| jordark91330@gmail.com | D | uploaded 1.23GB, opened Add Clip, 0 clips, never pressed play | 3 uploaded-no-clips |
+| eticatch@gmail.com | ? | uploaded 3.2GB, never watched, gone in 16min | 3 uploaded-no-clips |
+| lisagee1443@gmail.com | D | 13 clips, 15 projects, never found reel creation, rage bug report | 4 clips-no-reel |
+| roooooooooom1h@gmail.com | D | upload failed (slow-uplink bug), game invisible | 5 upload-failed |
+| bigajosue@gmail.com | M→D | PAID $3.99, 4 uploads failed, work destroyed | 6 paid-and-lost (own copy, extra care) |
+| 4lgdesigns@gmail.com | D | share recipient; 2x "videos not loading" bug reports | 7 share-recipients |
+| chris.kunst23@gmail.com | D | share recipient; 72s return then gone | 7 share-recipients |
+
+## Email copy (drafts for user approval; ASCII, no em dashes)
+
+Common frame (all segments): from Iman personally; lead with "tell me where you got
+stuck" (support framing rule); every email carries the booking link; short.
+
+**Base template:**
+> Subject: Where did you get stuck? I'd like to help personally
+>
+> Hi, I'm Iman, the founder of ReelBallers. I noticed you signed up but didn't get all
+> the way to a finished highlight reel, and I'd genuinely like to know where things got
+> stuck. Reply to this email and tell me; even one sentence helps.
+>
+> Or better, grab 15 minutes with me and I'll walk you through it live: [BOOKING_LINK]
+>
+> [SEGMENT_HINT]
+>
+> Iman
+
+**Segment hints:**
+- **1 mobile-wall:** "One quick tip in the meantime: uploading your game works best from
+  a laptop or desktop computer right now. Mobile improvements are coming, but a computer
+  will get your first reel done today."
+- **2 desktop-never-started:** "It takes about 10 minutes to get from a game video to a
+  shareable highlight reel: upload the game, tap the great plays, and the reel builds
+  itself from your clips. If something didn't look worth those 10 minutes, that's exactly
+  the feedback I need."
+- **3 uploaded-no-clips:** "Your game is still in your account, ready to go. Open it,
+  press Add Clip when you see a great play, give it a rating, and hit Save. (If you tag a
+  teammate, press Enter after typing the name.) From there your clips become a reel in
+  two more steps."
+- **4 clips-no-reel (lisagee, personal):** "You already did the hard part: your 13 clips
+  are sitting there ready. They become a finished reel from the Framing screen in about
+  two more taps, and I'd love to show you personally. You were right that we didn't make
+  this clear, and your feedback led to real changes."
+- **5 upload-failed (rooom1h):** "Your upload didn't make it through, and that was a bug
+  on our side, now fixed: slower internet connections were timing out. Your game is
+  waiting in your account with a retry button, or upload fresh; either way it will work
+  now."
+- **6 paid-and-lost (bigajosue):** "First, I'm sorry. Your uploads failed because of a
+  bug on our side, and that's a terrible first experience, especially right after paying.
+  The bug is fixed, your credits are intact [PLUS_GOODWILL_TOPUP: user decision], and I'd
+  love to personally make sure your first reel gets made: [BOOKING_LINK]"
+- **7 share-recipients:** "The game and clips that were shared with you are still in your
+  account. You can watch them, make your own clips from the game, and build your own reel
+  from them. If that wasn't clear, that's on us; tell me what you were hoping to do."
+
+**Dedup adjustment (see section below):** for the 5 recipients already emailed in the
+2026-08 win-back campaign, open with continuity, e.g. "I wrote a little while back; since
+then we've fixed several of the things that were in your way", instead of a cold intro.
+
+## Booking (Google Calendar, Mon-Fri 09:00-14:00, user's stated window)
+
 - Mechanism: a Google Calendar APPOINTMENT SCHEDULE (native booking page) on the user's
-  calendar with those recurring windows; the share link goes in every email + potentially
-  the in-app help surface.
-- AI cannot create this without the claude.ai Google Calendar connector being authorized
-  (currently unauthorized in this environment). Two paths: (a) user authorizes the
-  connector in claude.ai settings and AI sets it up + verifies; (b) user creates the
-  appointment schedule in Google Calendar UI (Settings -> Appointment schedules, ~2 min)
-  and pastes the booking link here for the emails. Either way the LINK lands in this
-  file before emails go out.
-- Follow-up (separate decision): surface the same booking link in-app on the bug-report/
-  help surface, so future stuck users find it without an email.
+  calendar, recurring Mon-Fri 9:00-14:00; the share link is [BOOKING_LINK] in every email
+  and, as a follow-up decision, on the in-app help/bug-report surface.
+- AI cannot create it in this environment until the claude.ai Google Calendar connector
+  is authorized. Two paths: (a) user authorizes the connector, AI creates + verifies the
+  schedule; (b) user creates it in Google Calendar (Settings -> Appointment schedules,
+  ~2 min) and pastes the link here. Either way the link lands in this file before sends.
 
-### 3. Send + track
-After approval: send per segment via the established mechanism, record sends here,
-and (once T7510 lands) watch whether recipients return past their wall.
+## Send mechanism + tracking
+
+- Send via the established fly ssh + send_admin_update_email path (2026-08 win-back
+  precedent; no admin session needed). One send per user with their segment's hint.
+- Log every send in this file: date, user, segment, template version.
+- Success measure: recipients who RETURN and pass their previous wall (durable outcome,
+  not milestones), readable per user from profile DBs now and from T7510's
+  attempted-vs-succeeded views once landed. Review 7 and 21 days after send.
+
+## Sequencing summary
+
+1. NOW: user approves copy, decides bigajosue's goodwill credits, provides booking link.
+2. Ship + DEPLOY the gate tasks (T7480, T7470, T7540, T7490).
+3. Verify each gate fix live on prod; record evidence here.
+4. Send all segments (dedup-adjusted); log sends.
+5. Review return/pass-the-wall outcomes at day 7 and day 21.
 
 ## Context
 
 ### Relevant Files
-- Send mechanism: fly ssh + send_admin_update_email (see memory: win-back campaign
-  2026-08; no admin session needed)
-- Segment source: the 2026-08-24 drop-off report artifact + per-user table
+- Send mechanism: fly ssh + send_admin_update_email (memory: win-back campaign 2026-08)
+- Segment source: 2026-08-24 drop-off report artifact + this file's segment map
 
 ### Related Tasks
-- Upload-integrity epic: bigajosue's segment should ideally send AFTER T7480's fix is
-  live (inviting him back to a still-broken upload burns the one apology)
+- Gate tasks: T7480, T7470, T7540, T7490 (upload-integrity epic)
 - T7460 scorecard: outreach outcomes feed activation metrics
+- T7510: future sends get attempted-vs-succeeded tracking for free
 
 ### Dedup risk against the 2026-08 win-back campaign (checked 2026-08-24)
 Five of this task's recipients were ALREADY emailed 2026-08-18/19 in the prior win-back
@@ -73,7 +158,9 @@ second cold email in under 2 weeks. The other 9 recipients are net-new to outrea
 
 ## Acceptance Criteria
 
-- [ ] Email copy per segment approved by user
-- [ ] Booking link created (either path) and verified working
+- [ ] Email copy per segment approved by user (incl. dedup-adjusted variants)
+- [ ] Goodwill credit decision for bigajosue recorded
+- [ ] Booking link created (either path), verified working, recorded here
+- [ ] ALL gate tasks verified live on PROD with evidence logged here BEFORE any send
 - [ ] Sends executed + logged per user/segment
-- [ ] bigajosue send explicitly sequenced against the upload fix status
+- [ ] Day-7 and day-21 return review recorded
