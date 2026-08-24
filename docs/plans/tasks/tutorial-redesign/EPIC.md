@@ -1,6 +1,7 @@
 # Tutorial Redesign: guided essential path
 
-**Status:** TODO (SEQUENCED AFTER all P1 bug fixes: upload-integrity epic + T7540 + T7580 + T7590)
+**Status:** TODO (SEQUENCED AFTER ALL P1 bug fixes from the 2026-08-24 investigation:
+upload-integrity epic T7470/T7480/T7490/T7500 + T7540 + T7580 + T7590 + T7520)
 **Started:** filed 2026-08-24
 **Impact:** 9 | **Complexity:** 7 | **Priority:** 1.3
 
