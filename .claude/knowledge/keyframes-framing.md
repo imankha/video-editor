@@ -268,6 +268,18 @@ gesture lands — no save/export.
   shared `api/actionClient.js` (per-entity FIFO promise chain + version threading + 409 ->
   `src/frontend/src/utils/actionConflictPrompt.js`'s refresh toast, full `window.location.reload()`,
   no auto-rebase) — see persistence-sync.md invariant 8 for the transport-level contract.
+  **Bug, FIXED 2026-08-24 (found live-testing T4355, unrelated to that branch — the bug is in
+  T4330 itself):** Overlay's `GET /overlay-data` seeded the frontend's conflict-check baseline
+  from `working_videos.version` (the EXPORT row-counter — bumps once per re-export, INSERT-new-row
+  model) instead of `overlay_version` (the mutation counter `overlay_action`'s 409-check actually
+  compares `expected_version` against, `overlay.py:443`). Two different columns on the same table,
+  easy to conflate by name. After any re-export where the row-counter climbed past 0 (virtually
+  always, 2nd+ export), the FIRST overlay edit always failed the version check — a guaranteed
+  false "edited elsewhere" with no concurrent writer at all. Framing's `framing_version` counter
+  does not have this split (its GET and its 409-check read the same column), so this was
+  Overlay-only. Fixed: `get_overlay_data` now selects+returns `overlay_version` under the
+  `version` key. Regression: `test_overlay_actions.py::TestOverlayActionVersionConflict::
+  test_overlay_data_get_seeds_overlay_version_not_export_row_version`.
 
 ## Overlay render read path (T4900)
 
