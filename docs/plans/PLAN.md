@@ -32,11 +32,15 @@ rest. This is a sequenced campaign with design approvals, NOT a parallel fan-out
 
 Bugs reported by users on production. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate.
 
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T7650 | [Bug 45p: "Top Plays" locked meter reads as broken](tasks/T7650-top-plays-locked-ui-confusion.md) | 3 | 2 | 1.5 | TODO | [ ] | arshia (2026-08-21): locked Top Plays meter shows for the game but not the clip, sometimes resolving after a wait. Checked against the Cross-Profile Game Attribution epic - NOT related (ranking data is profile-local). Likely 3 visually-identical amber "locked" UIs being conflated, plus summary-vs-lazy-member fetch staleness. |
+
+*Bug 46p (NULL description report) is already tracked as [T7560](tasks/T7560-bug-report-null-description.md) - no separate row needed. Prior-complete rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
 ### Staging Reported Bugs
 
-Bugs reported or discovered on staging. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate.
+Bugs reported or discovered on staging. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate. **Staging admin-bug fetch returned 403 (Admin access required) on 2026-08-24** - the configured staging session isn't currently admin-privileged; re-authenticate `scripts/.task-manager-config.json`'s `staging_session` to check staging-reported bugs.
 
 *All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
