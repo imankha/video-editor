@@ -1,6 +1,6 @@
 # T4355: Multi-Clip Highlight Preservation on Re-Export
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-08-22
@@ -79,11 +79,47 @@ version framing capture) rather than building a second one. On top of that:
 
 ## Acceptance Criteria
 
-- [ ] A multi-clip re-export with a timing change on ONE clip preserves highlights on the
+- [x] A multi-clip re-export with a timing change on ONE clip preserves highlights on the
   OTHER (unchanged) clips correctly, not just via the loud-fallback reset
-- [ ] A highlight on the clip whose timing changed transforms old→raw→new the same way T4350's
+- [x] A highlight on the clip whose timing changed transforms old→raw→new the same way T4350's
   single-clip path does
-- [ ] A highlight on a clip that's been removed/reordered such that it no longer maps drops
+- [x] A highlight on a clip that's been removed/reordered such that it no longer maps drops
   LOUDLY (user-visible), never silently
-- [ ] Fixtures cover: offset-only shift (other clips unaffected), same-clip timing change,
+- [x] Fixtures cover: offset-only shift (other clips unaffected), same-clip timing change,
   clip removal
+
+## Progress Log
+
+**2026-08-23**: Design doc (`T4355-design.md`) approved by user via artifact gate — 5 decisions,
+all shipped as recommended: (1) attribution derived at transform time from OLD concat offsets +
+region `start_time`, not a persisted clip-ref field (only mechanism that covers pre-existing
+highlights); (2) additive `transition` key added to the existing `framing_snapshot` msgpack blob
+so OLD-side offsets are dissolve-aware — **no migration**; (3) reorder is positionally-identified
+only (no stable clip id) — an unmappable region drops+flags loudly rather than risking a silent
+wrong-clip landing; (4) multi-clip success-with-drops reuses `dropped:N` verbatim, no new note
+code, no frontend change; (5) confirmed no migration needed.
+
+Implementation: rewrote the `clip_count > 1` branch in `services/highlight_carry.py` into
+`_transform_multi_clip` (attribute → offset-subtract → per-clip transform → offset-add →
+id-merge), extracted a shared `concat_offsets` helper, added the `transition` snapshot key in
+`multi_clip.py`. **Reviewer caught + the worker fixed one real BLOCKING bug**: the dissolve-offset
+guard originally keyed off OLD-side snapshot key presence, which would have reset EVERY legacy
+multi-clip project (even plain `cut` re-exports) instead of only genuinely-dissolve ones —
+contradicted the approved design's "absent key ⇒ assume cut" rule. Fixed to key off the NEW-side
+transition; 2 new regression fixtures added (legacy+cut transforms correctly, legacy+dissolve
+still resets).
+
+32/32 relevant tests green (new multi-clip fixtures + extended T4350 regression suite), ruff
+clean, import check clean. Branch CI green (`32671719764`: `changes`/`backend` success,
+`frontend` correctly skipped — no frontend files touched). **QA deferred to staging, not
+faked**: the headless container has no Modal auth/GPU/real account, so live-driving a real
+multi-clip export → re-trim → re-export cycle isn't possible in-container (same gap T4350's
+worker hit) — pure-function fixture coverage exercises every acceptance criterion against the
+real production transform/canonicalize helpers as ground truth. Dev stack running at
+`http://localhost:5174` (backend :8001) for live testing. Knowledge docs
+(`export-pipeline.md`, `keyframes-framing.md`) updated with the attribution mechanism, dissolve
+handling, reorder limitation, and the reviewer-caught guard landmine.
+
+**Awaiting user's live test** (per T4350's precedent, do not merge on green CI alone — place
+highlights on 2+ clips in a multi-clip project, re-trim one, re-export, confirm each highlight
+lands on its correct visual moment or drops+flags if genuinely unmappable) before merge.
