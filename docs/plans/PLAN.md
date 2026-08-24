@@ -40,9 +40,9 @@ Bugs reported by users on production. Populated from Postgres `bug_reports` tabl
 
 ### Staging Reported Bugs
 
-Bugs reported or discovered on staging. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate. **Staging admin-bug fetch returned 403 (Admin access required) on 2026-08-24** - the configured staging session isn't currently admin-privileged; re-authenticate `scripts/.task-manager-config.json`'s `staging_session` to check staging-reported bugs.
+Bugs reported or discovered on staging. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate.
 
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
+*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).* (Note: the task board's staging admin-bug fetch returned 403 on 2026-08-24 - `scripts/.task-manager-config.json`'s `staging_session` isn't currently admin-privileged. User confirmed 2026-08-24 there are no staging bugs to worry about; re-authenticate that session before relying on the task board's staging panel again.)
 
 ### Milestone TOP: Durable Sync — stop active prod data loss
 
