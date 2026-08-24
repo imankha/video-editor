@@ -98,8 +98,12 @@ stuck" (support framing rule); every email carries the booking link; short.
   now."
 - **6 paid-and-lost (bigajosue):** "First, I'm sorry. Your uploads failed because of a
   bug on our side, and that's a terrible first experience, especially right after paying.
-  The bug is fixed, your credits are intact [PLUS_GOODWILL_TOPUP: user decision], and I'd
-  love to personally make sure your first reel gets made: [BOOKING_LINK]"
+  The bug is fixed, your credits are intact, and I've added 50 extra credits to your
+  account for the trouble. I'd love to personally make sure your first reel gets made:
+  [BOOKING_LINK]"
+  **DECIDED 2026-08-24: 50 goodwill credits. GRANT THEM IMMEDIATELY BEFORE THE SEND**
+  (admin grant-credits endpoint) so the email states a fact, not a promise - this is a
+  pre-send checklist step, remind the user at send time.
 - **7 share-recipients:** "The game and clips that were shared with you are still in your
   account. You can watch them, make your own clips from the game, and build your own reel
   from them. If that wasn't clear, that's on us; tell me what you were hoping to do."
@@ -129,11 +133,14 @@ then we've fixed several of the things that were in your way", instead of a cold
 
 ## Sequencing summary
 
-1. NOW: user approves copy, decides bigajosue's goodwill credits, provides booking link.
+1. NOW: user approves copy (goodwill credits DECIDED: 50); booking link deferred until
+   send prep (user 2026-08-24).
 2. Ship + DEPLOY the gate tasks (T7480, T7470, T7540, T7490).
 3. Verify each gate fix live on prod; record evidence here.
-4. Send all segments (dedup-adjusted); log sends.
-5. Review return/pass-the-wall outcomes at day 7 and day 21.
+4. PRE-SEND CHECKLIST: booking link in hand -> REMIND USER to grant bigajosue 50 credits
+   (verify balance shows the grant) -> then send.
+5. Send all segments (dedup-adjusted); log sends.
+6. Review return/pass-the-wall outcomes at day 7 and day 21.
 
 ## Context
 
@@ -159,7 +166,8 @@ second cold email in under 2 weeks. The other 9 recipients are net-new to outrea
 ## Acceptance Criteria
 
 - [ ] Email copy per segment approved by user (incl. dedup-adjusted variants)
-- [ ] Goodwill credit decision for bigajosue recorded
+- [x] Goodwill credit decision for bigajosue recorded (50 credits, 2026-08-24; granted at
+      pre-send checklist time, never earlier)
 - [ ] Booking link created (either path), verified working, recorded here
 - [ ] ALL gate tasks verified live on PROD with evidence logged here BEFORE any send
 - [ ] Sends executed + logged per user/segment
