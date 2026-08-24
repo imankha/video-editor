@@ -1,6 +1,6 @@
 # T4360: Explicit Orderings — BEGIN IMMEDIATE + Invariant Tests
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-03
