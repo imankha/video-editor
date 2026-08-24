@@ -31,6 +31,16 @@ stay reconciled outside of the sweep-time recount guard. A missing row presumabl
 tooling, `/api/admin/migration-status`-adjacent views) — worth confirming as part of this task's
 investigation, not assumed.
 
+**New evidence, 2026-08-24 (prod, drop-off investigation):** the sibling table
+`game_storage_refs` in PROD Postgres is effectively DEAD: 8 rows total, all belonging to one team
+account, newest 2026-05-15. Recent real uploaders (cschwartz78 2026-08-19, jordark91330 2026-08-20)
+have active `game_storage` rows in their profile SQLite but NO Postgres ref row at all. So the
+missing-row drift shape found on dev 2026-08-11 is the NORM on prod: the Postgres side has been
+blind to every upload since May. Anything reading `game_storage_refs` for storage accounting or
+expiry scheduling has been operating on 3-month-stale data. Scope this task's audit to establish
+which writers stopped populating it (and when), and whether `game_ref_counts` shares the same gap
+for post-May uploads.
+
 ## Why now, not before
 
 The prior fixes made the DELETE path safe (it recounts from source-of-truth `game_storage` rows
