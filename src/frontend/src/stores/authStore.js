@@ -3,7 +3,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
-import { useEditorStore } from './editorStore';
+import { useEditorStore, EDITOR_MODES, MODE_PATHS } from './editorStore';
 import { useGamesDataStore } from './gamesDataStore';
 import { useProjectsStore } from './projectsStore';
 import { track } from '../utils/analytics';
@@ -187,6 +187,8 @@ export const useAuthStore = create((set, get) => ({
 
   // T1510: Stop impersonating — server restores the admin's own session,
   // then we hard reload to wipe in-memory state from the impersonated user.
+  // Land back on the admin panel (cold-load mode is derived from the URL,
+  // see editorStore's modeFromPath) rather than dropping the admin at home.
   stopImpersonation: async () => {
     try {
       await apiFetch(`${API_BASE}/api/admin/impersonate/stop`, {
@@ -195,7 +197,7 @@ export const useAuthStore = create((set, get) => ({
     } catch {
       // Best-effort — reload regardless so the admin isn't stuck.
     }
-    window.location.href = '/';
+    window.location.href = MODE_PATHS[EDITOR_MODES.ADMIN];
   },
 
   // T430: Toggle account settings panel
