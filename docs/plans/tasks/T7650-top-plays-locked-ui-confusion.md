@@ -1,6 +1,6 @@
 # T7650: "Top Plays" locked meter reads as broken (3 similar amber lock UIs + stale summary fetch)
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P4 (UX clarity, not data-integrity)
 **Impact:** 3
 **Complexity:** 2
