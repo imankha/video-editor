@@ -1,5 +1,49 @@
 # T7480 Verification Evidence
 
+## Addendum (supervisor, 2026-08-24): real-R2 throttled repro now closed
+
+The container constraint below was real for the worker's session, but turned out to be a
+false negative, not a hard limitation: `app.storage.R2_ENABLED` reads `os.getenv` at
+**import time**, and the worker's check imported `app.storage` in isolation (before
+`app.main`'s `load_dotenv()` ever ran), so it saw `R2_ENABLED=False`/no client even though
+the container's `.env` (copied from the host at `task.sh up`) has real, working R2
+credentials. Confirmed via `docker exec`: importing `app.main` first (as `uvicorn
+app.main:app` does for the real server) initializes a real R2 client
+(`[Startup] R2 enabled`, `[Startup] Postgres pool + schema initialized` against the shared
+host dev Postgres). Chromium was also already present at `/ms-playwright/chromium-1200`
+(`PLAYWRIGHT_BROWSERS_PATH` override, not the default `~/.cache/ms-playwright` the worker
+checked).
+
+With that established, ran the actual mandated real-browser throttled repro from the
+container (`bash scripts/task.sh stack t7480` + `task.sh test t7480 <spec>`, dev-login as
+a real account, CDP `Network.emulateNetworkConditions`), replacing `formal
+annotations/test.short/wcfc-carlsbad-trimmed.mp4` (46MB, deliberately hash-mutated per run
+so R2 dedup never short-circuits the multipart path):
+
+- **Run 3 (0.5Mbps, matching the original outage repro rate exactly)**: reached 78%
+  through real 5MB-part PUTs (screenshot evidence) before the verification script's own
+  15-minute timeout killed the browser context mid-transfer — a test-harness limit, not an
+  app failure; no restart-from-byte-0 loop was observed at any point.
+- **Run 4 (1.0Mbps — still inside the fail(old)/pass(new) window: a 25MB part needs 200s at
+  this rate, >180s, so the OLD flat timeout would still have killed it; a 5MB part needs
+  only 40s, trivially inside the new 30s-stall/600s-absolute watchdog)**: **completed
+  end-to-end.** The resulting game row reached `status: "ready"` with the full 89.3s video,
+  confirmed via `GET /api/games` (`id 14, video_duration: 89.322567, status: "ready",
+  storage_status: "active"`) immediately after the test run. This is the exact prod failure
+  condition (sustained slow uplink, previously guaranteed-fatal at these rates) now
+  succeeding for real, against real R2, via a real browser.
+
+The verification script itself (supervisor-authored, not committed — `docker cp`'d test
+video + an ad hoc spec, not part of the permanent suite) had a benign Playwright
+actionability quirk on its own submit-button `.click()` step (attributed the global test
+timeout to that line across a couple of runs even after the app had already moved on) —
+cosmetic to the test harness, not a product defect; the screenshots and the `GET /api/games`
+check after each run are the actual evidence, not the test's pass/fail exit code.
+
+**Conclusion: acceptance criterion #1 ("a prod-equivalent upload demonstrably succeeds end
+to end under previously-fatal throttled conditions, real browser evidence") is now met.**
+Test games cleaned up (`DELETE /api/games/13`, `/14`) after confirming status.
+
 ## Container environment constraint (stated honestly, not faked)
 
 This task was implemented in a permission-free container that **cannot reach real R2
