@@ -1,6 +1,6 @@
 # T7540: Annotate save: unsubmitted teammate tag makes Save silently refuse, in a loop
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P1 (strongest candidate for the 75% clip-creation cliff)
 **Impact:** 7
 **Complexity:** 2
