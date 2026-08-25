@@ -44,12 +44,21 @@ import { createBLAKE3 } from 'hash-wasm';
 // Sample size for fast hashing - 1MB per sample position
 const SAMPLE_SIZE = 1 * 1024 * 1024;
 
-// bug26p: wall-clock ceilings so a stalled upload fails LOUDLY instead of hanging
-// forever (a hang reads as "still uploading" and the user assumes success).
-// These are "something is wrong" ceilings, not normal-path limits: a sampled hash
-// reads only 5x1MB, and even the slowest part finishes well under 180s.
+// bug26p: wall-clock ceiling so a stalled hash fails LOUDLY instead of hanging
+// forever. A sampled hash reads only 5x1MB, so this is a "something is wrong"
+// ceiling, not a normal-path limit.
 const HASH_TIMEOUT_MS = 120_000;        // hash + faststart analyze of one file
-const PART_UPLOAD_TIMEOUT_MS = 180_000; // single R2 part PUT
+
+// T7480: progress-aware ("stall watchdog") per-part timeout, replacing the old flat
+// PART_UPLOAD_TIMEOUT_MS = 180_000. The flat cap killed HEALTHY transfers on slow
+// uplinks: a 17.8MB file was a single 25MB part, and at 0.3-0.7Mbps it reached ~66%
+// then hit 180s and RESTARTED FROM BYTE 0 every retry (prod outage since 2026-08-20).
+// Now we abort a part ONLY after PART_STALL_TIMEOUT_MS with ZERO upload progress (the
+// GCS TransferStallTimeoutOption pattern — any progress event resets the timer), with
+// an absolute ceiling as a backstop against a pathological 1-byte-a-minute dribble.
+const PART_STALL_TIMEOUT_MS = 30_000;      // abort after this long with no progress
+const PART_ABSOLUTE_TIMEOUT_MS = 600_000;  // hard ceiling per part (10 min)
+const STALL_CHECK_INTERVAL_MS = 5_000;     // how often the watchdog checks
 
 /**
  * Reject `promise` if it doesn't settle within `ms`. Runs `onTimeout` (e.g. to
@@ -64,6 +73,29 @@ function withTimeout(promise, ms, message, onTimeout) {
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * T7480 failure beacon. Fire-and-forget POST of a terminal upload failure so the
+ * browser-side reason lands in SERVER logs — the only server-visible evidence
+ * channel, because prod builds strip console.log. Writes to logs only (no DB).
+ *
+ * Contract: MUST NEVER throw or block the failure path. Not awaited by callers;
+ * uses keepalive so it survives a navigation away. Any error is swallowed.
+ *
+ * @param {Object} payload - { phase, reason, session_id, blake3_hash, file_size, attempts, elapsed_ms, ... }
+ */
+export function sendUploadFailureBeacon(payload) {
+  try {
+    apiFetch(`${API_BASE}/api/games/upload-failure-beacon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+      keepalive: true,
+    }).catch(() => { /* never let the beacon break the failure path */ });
+  } catch {
+    /* never let the beacon break the failure path */
+  }
 }
 
 /**
@@ -132,7 +164,8 @@ export async function hashFile(file, onProgress, signal = null) {
  * @param {function} onProgress - Progress callback: (loaded, total) => void
  * @returns {Promise<Object>} - { part_number, etag }
  */
-async function uploadPart(file, part, onProgress, faststartInfo = null) {
+// Exported for unit tests (stall watchdog + honest progress).
+export async function uploadPart(file, part, onProgress, faststartInfo = null) {
   const { part_number, presigned_url, start_byte, end_byte } = part;
 
   // [DIAG upload-freeze] measure main-thread time to assemble the part blob.
@@ -150,32 +183,64 @@ async function uploadPart(file, part, onProgress, faststartInfo = null) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', presigned_url);
-    // bug26p: a stalled R2 socket must fail loudly, not hang the upload forever.
-    // ontimeout is treated as retryable below (same path as a network error).
-    xhr.timeout = PART_UPLOAD_TIMEOUT_MS;
+
+    // T7480: stall watchdog instead of a flat xhr.timeout. Reset lastProgressAt on
+    // every upload progress event; abort only if no progress flows for
+    // PART_STALL_TIMEOUT_MS (dead socket) or the part exceeds the absolute ceiling.
+    let settled = false;
+    let lastProgressAt = performance.now();
+    const startedAt = lastProgressAt;
+
+    const finish = (fn) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(watchdog);
+      fn();
+    };
+
+    const watchdog = setInterval(() => {
+      if (settled) return;
+      const now = performance.now();
+      if (now - lastProgressAt > PART_STALL_TIMEOUT_MS) {
+        finish(() => {
+          try { xhr.abort(); } catch { /* already dead */ }
+          const secs = Math.round(PART_STALL_TIMEOUT_MS / 1000);
+          reject(new Error(`Part ${part_number} stalled (no progress for ${secs}s)`));
+        });
+      } else if (now - startedAt > PART_ABSOLUTE_TIMEOUT_MS) {
+        finish(() => {
+          try { xhr.abort(); } catch { /* already dead */ }
+          reject(new Error(`Part ${part_number} timed out`));
+        });
+      }
+    }, STALL_CHECK_INTERVAL_MS);
 
     xhr.upload.onprogress = (e) => {
+      lastProgressAt = performance.now();
       if (e.lengthComputable && onProgress) {
         onProgress(e.loaded, e.total);
       }
     };
 
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        // R2 returns ETag in response headers
-        const etag = xhr.getResponseHeader('ETag');
-        resolve({ part_number, etag });
-      } else {
-        reject(new Error(`Part ${part_number} upload failed: ${xhr.status}`));
-      }
+      finish(() => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // R2 returns ETag in response headers
+          const etag = xhr.getResponseHeader('ETag');
+          resolve({ part_number, etag });
+        } else {
+          reject(new Error(`Part ${part_number} upload failed: ${xhr.status}`));
+        }
+      });
     };
 
     xhr.onerror = () => {
-      reject(new Error(`Part ${part_number} network error`));
+      finish(() => reject(new Error(`Part ${part_number} network error`)));
     };
 
-    xhr.ontimeout = () => {
-      reject(new Error(`Part ${part_number} timed out`));
+    xhr.onabort = () => {
+      // Only reached for an abort the watchdog didn't already handle.
+      finish(() => reject(new Error(`Part ${part_number} aborted`)));
     };
 
     xhr.send(blob);
@@ -191,8 +256,11 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
       return await uploadPart(file, part, onProgress, faststartInfo);
     } catch (error) {
       const msg = error.message || '';
-      // bug26p: part timeouts are transient stalls — retry them like network errors.
-      const isRetryable = msg.includes('network error') || msg.includes('timed out') || /upload failed: 5\d\d/.test(msg);
+      // bug26p/T7480: part timeouts and stalls are transient — retry them like
+      // network errors. With 5MB parts a retry re-sends only that one part, so a
+      // stalled/slow part costs at most 5MB of rework, not the whole file.
+      const isRetryable = msg.includes('network error') || msg.includes('timed out')
+        || msg.includes('stalled') || /upload failed: 5\d\d/.test(msg);
 
       if (!isRetryable || attempt === MAX_RETRIES) {
         if (sessionId && completedResults.length > 0) {
@@ -259,7 +327,7 @@ async function saveCompletedParts(sessionId, parts) {
  * @param {number} concurrency - Initial concurrent uploads (default 2, adapts based on throughput)
  * @returns {Promise<Array>} - Array of { part_number, etag } (all parts including completed)
  */
-async function uploadParts(
+export async function uploadParts(
   file,
   parts,
   onProgress,
@@ -270,24 +338,24 @@ async function uploadParts(
   faststartInfo = null
 ) {
   const results = [...completedParts]; // Start with already completed parts
-  const partProgress = new Map(); // Track progress per part
 
   // Calculate total bytes for progress (including already completed)
   const remainingBytes = parts.reduce(
     (sum, p) => sum + (p.end_byte - p.start_byte + 1),
     0
   );
-  const completedBytes = (totalBytes || remainingBytes) - remainingBytes;
-  const total = totalBytes || remainingBytes + completedBytes;
+  const completedBytesAtStart = (totalBytes || remainingBytes) - remainingBytes;
+  const total = totalBytes || remainingBytes + completedBytesAtStart;
 
-  // Initialize progress with completed parts
-  let baseProgress = completedBytes;
+  // T7480 honest progress: the bar is driven by COMPLETED parts — a part's bytes
+  // count only once its PUT returns 2xx — NOT by upload.onprogress buffered bytes.
+  // Buffered bytes kept climbing while the socket was effectively dead, so users
+  // saw healthy progress right up to the reset loop. onprogress still feeds the
+  // per-part stall watchdog inside uploadPart; it just no longer moves the bar.
+  let deliveredBytes = completedBytesAtStart;
 
   const updateTotalProgress = () => {
-    const uploadedBytes =
-      baseProgress +
-      Array.from(partProgress.values()).reduce((sum, p) => sum + p, 0);
-    const percent = Math.min(100, Math.round((uploadedBytes / total) * 100));
+    const percent = Math.min(100, Math.round((deliveredBytes / total) * 100));
     if (onProgress) onProgress(percent);
   };
 
@@ -337,16 +405,16 @@ async function uploadParts(
       const part = queue.shift();
       partStartTimes.set(part.part_number, performance.now());
 
-      const promise = uploadPartWithRetry(file, part, (loaded) => {
-        partProgress.set(part.part_number, loaded);
-        updateTotalProgress();
-      }, faststartInfo, sessionId, partsToSave)
+      // onProgress is intentionally null: the reported bar is completed-parts-based
+      // (honest progress). Per-part upload.onprogress still fires inside uploadPart
+      // to feed the stall watchdog; it just doesn't move the bar.
+      const promise = uploadPartWithRetry(file, part, null, faststartInfo, sessionId, partsToSave)
         .then((result) => {
           results.push(result);
           partsToSave.push(result);
 
           const partBytes = part.end_byte - part.start_byte + 1;
-          partProgress.set(part.part_number, partBytes);
+          deliveredBytes += partBytes;
           updateTotalProgress();
           executing.delete(promise);
 
@@ -514,6 +582,12 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   if (!prepareRes.ok) {
     const error = await prepareRes.json().catch(() => ({}));
     console.error(`[ensureVideoInR2] prepare-upload FAILED: ${prepareRes.status}`, error);
+    sendUploadFailureBeacon({
+      phase: 'preparing',
+      reason: error.detail || `prepare_failed_${prepareRes.status}`,
+      blake3_hash: hash,
+      file_size: uploadSize,
+    });
     throw new Error(error.detail || `Prepare failed: ${prepareRes.status}`);
   }
 
@@ -561,18 +635,34 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   const __diagUploadStart = performance.now();
   console.log(`[DIAG upload-freeze] uploadParts BEGIN warmer=${JSON.stringify(getWarmingDiag())}`);
-  const parts = await uploadParts(
-    file,
-    prepareData.parts,
-    (p) => {
-      notify(UPLOAD_PHASE.UPLOADING, p, 'Uploading...');
-    },
-    prepareData.upload_session_id,
-    completedParts,
-    uploadSize,
-    2,
-    faststartInfo
-  );
+  let parts;
+  try {
+    parts = await uploadParts(
+      file,
+      prepareData.parts,
+      (p) => {
+        notify(UPLOAD_PHASE.UPLOADING, p, 'Uploading...');
+      },
+      prepareData.upload_session_id,
+      completedParts,
+      uploadSize,
+      2,
+      faststartInfo
+    );
+  } catch (uploadErr) {
+    // T7480: the transfer exhausted its retries. Beacon the reason server-side —
+    // this is the exact failure the prod outage produced with zero server traffic.
+    sendUploadFailureBeacon({
+      phase: 'uploading',
+      reason: uploadErr?.message || 'upload_failed',
+      session_id: prepareData.upload_session_id,
+      blake3_hash: hash,
+      file_size: uploadSize,
+      total_parts: prepareData.parts.length,
+      elapsed_ms: Math.round(performance.now() - __diagUploadStart),
+    });
+    throw uploadErr;
+  }
   console.log(`[DIAG upload-freeze] uploadParts ${((performance.now() - __diagUploadStart) / 1000).toFixed(1)}s parts=${prepareData.parts.length}`);
   notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
 
@@ -606,6 +696,14 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     const message = error.detail
       || `Couldn't finish saving your video (finalize failed, status ${finalizeRes.status}). `
         + `The bytes uploaded but the final step didn't complete — please try uploading again.`;
+    sendUploadFailureBeacon({
+      phase: 'finalizing',
+      reason: error.detail || `finalize_failed_${finalizeRes.status}`,
+      session_id: prepareData.upload_session_id,
+      blake3_hash: hash,
+      file_size: uploadSize,
+      total_parts: parts.length,
+    });
     throw new Error(message);
   }
 

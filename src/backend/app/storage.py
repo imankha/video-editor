@@ -2395,6 +2395,155 @@ def r2_is_multipart_upload_valid(key: str, upload_id: str) -> bool:
         return False
 
 
+def r2_list_multipart_parts(key: str, upload_id: str) -> list | None:
+    """
+    List the parts already uploaded for a multipart upload.
+
+    Returns a list of {'PartNumber': int, 'Size': int, 'ETag': str} (paginated
+    through all parts), or None if the upload is gone/unreadable. Used to verify
+    resume compatibility (T7480: after PART_SIZE changed 25MB -> 5MB, an old
+    upload's completed parts must not be spliced with new-size parts).
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    try:
+        from .utils.retry import TIER_3, retry_r2_call
+        parts: list = []
+        marker = 0
+        while True:
+            response = retry_r2_call(
+                client.list_parts,
+                Bucket=R2_BUCKET, Key=key, UploadId=upload_id,
+                PartNumberMarker=marker,
+                operation=f"list_parts_full {key}", **TIER_3,
+            )
+            for p in response.get('Parts', []):
+                parts.append({
+                    'PartNumber': p['PartNumber'],
+                    'Size': p.get('Size', 0),
+                    'ETag': p.get('ETag'),
+                })
+            if response.get('IsTruncated'):
+                marker = response.get('NextPartNumberMarker', 0)
+            else:
+                break
+        return parts
+    except client.exceptions.NoSuchUpload:
+        logger.info(f"Multipart upload no longer exists (list_parts): {key}, upload_id: {upload_id}")
+        return None
+    except Exception as e:
+        logger.warning(f"Error listing multipart parts: {key} - {e}")
+        return None
+
+
+def r2_multipart_parts_match_size(
+    key: str, upload_id: str, file_size: int, part_size: int
+) -> bool:
+    """
+    Verify every already-uploaded part of a multipart upload was chunked at the
+    CURRENT part_size, so a resume can safely reuse the session.
+
+    R2 requires all non-final parts of one upload to be the same size. When
+    part_size changes between deploys (T7480: 25MB -> 5MB), an old session's
+    completed parts no longer tile the file at the new size; resuming it would
+    finalize a corrupt object. Every completed part except the file's true last
+    part (which is the short tail) must equal part_size; the last part must equal
+    its expected tail length. An empty/unreadable part list is treated as
+    incompatible (caller restarts fresh) — the safe default.
+    """
+    if file_size <= 0 or part_size <= 0:
+        return False
+
+    parts = r2_list_multipart_parts(key, upload_id)
+    if not parts:
+        return False
+
+    last_part_number = (file_size + part_size - 1) // part_size
+    tail_size = file_size - (last_part_number - 1) * part_size
+
+    for p in parts:
+        n = p['PartNumber']
+        size = p['Size']
+        if n < 1 or n > last_part_number:
+            return False
+        expected = tail_size if n == last_part_number else part_size
+        if size != expected:
+            logger.warning(
+                f"Resume part-size mismatch: {key} part {n} size={size} "
+                f"expected={expected} (part_size={part_size}); restarting fresh"
+            )
+            return False
+    return True
+
+
+def r2_list_multipart_uploads(key: str) -> list:
+    """
+    List all open multipart uploads whose object key exactly matches `key`.
+
+    Returns a list of {'Key': str, 'UploadId': str, 'Initiated': datetime}.
+    R2/S3 filters by Prefix, so an exact-key match is applied client-side.
+    """
+    client = get_r2_client()
+    if not client:
+        return []
+
+    try:
+        from .utils.retry import TIER_3, retry_r2_call
+        uploads: list = []
+        key_marker = None
+        id_marker = None
+        while True:
+            kwargs = {"Bucket": R2_BUCKET, "Prefix": key}
+            if key_marker is not None:
+                kwargs["KeyMarker"] = key_marker
+            if id_marker is not None:
+                kwargs["UploadIdMarker"] = id_marker
+            response = retry_r2_call(
+                client.list_multipart_uploads,
+                operation=f"list_multipart_uploads {key}", **TIER_3, **kwargs,
+            )
+            for u in response.get('Uploads', []):
+                if u.get('Key') == key:
+                    uploads.append({
+                        'Key': u['Key'],
+                        'UploadId': u['UploadId'],
+                        'Initiated': u.get('Initiated'),
+                    })
+            if response.get('IsTruncated'):
+                key_marker = response.get('NextKeyMarker')
+                id_marker = response.get('NextUploadIdMarker')
+            else:
+                break
+        return uploads
+    except Exception as e:
+        logger.warning(f"Error listing multipart uploads: {key} - {e}")
+        return []
+
+
+def r2_abort_orphan_multipart_uploads(key: str, keep_upload_id: str | None = None) -> int:
+    """
+    Abort every open multipart upload on `key`, optionally sparing one.
+
+    T7480 UploadId hygiene: `create_multipart_upload` can leak a duplicate
+    multipart when the app-level retry_r2_call fires a second CreateMultipartUpload
+    after R2 answered the first slower than read_timeout (boto3 itself does NOT
+    retry — Config(retries={"max_attempts": 0})). Called on the fresh-create path
+    (after any valid resume was already declined), so aborting open multiparts here
+    only reclaims genuine orphans. Returns the number aborted.
+    """
+    aborted = 0
+    for u in r2_list_multipart_uploads(key):
+        if keep_upload_id is not None and u['UploadId'] == keep_upload_id:
+            continue
+        if r2_abort_multipart_upload(key, u['UploadId']):
+            aborted += 1
+    if aborted:
+        logger.info(f"Aborted {aborted} orphan multipart upload(s) on {key}")
+    return aborted
+
+
 def generate_presigned_part_url(
     key: str,
     upload_id: str,

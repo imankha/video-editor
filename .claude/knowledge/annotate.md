@@ -1,5 +1,6 @@
 ---
 domain: annotate
+updated: 2026-08-24 (T7480 upload lifecycle: PART_SIZE 25MB->5MB, stall watchdog replaces flat per-part timeout, completed-parts honest progress, resume part-size guard, UploadId orphan-abort + double-UploadId root cause, failure beacon + [UPLOAD_LIFECYCLE] logs + admin stuck-uploads — see Landmines "Upload lifecycle invariants (T7480)")
 updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration v045 -- reader cleanup still a known gap, see Invariants; T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
@@ -339,6 +340,40 @@ The full checklist for an 11th→Nth sport:
   - Design doc with full architecture analysis preserved at `docs/plans/tasks/T7280-design.md`
     on master (task itself superseded — see PLAN.md / dual-camera/EPIC.md "Captured
     requirements" for where this direction actually landed).
+- **Upload lifecycle invariants (T7480 — read before touching `games_upload.py`/`uploadManager.js`).**
+  The R2 multipart upload path (prepare → parts → finalize → activate) caused the 2026-08-20 prod
+  outage. What now holds:
+  - **`PART_SIZE = 5MB` (`games_upload.py`), flat per upload.** 5MB is the R2/S3 hard MINIMUM for
+    non-final parts, and **R2 requires every non-final part of ONE upload to be the SAME size** — do
+    NOT build adaptive/per-part sizing. The old 25MB made a phone video a single part that couldn't
+    beat the client per-part budget on a cell uplink.
+  - **Per-part timeout is a STALL WATCHDOG, not a flat cap** (`uploadManager.js`, `PART_STALL_TIMEOUT_MS`
+    = 30s no-progress + `PART_ABSOLUTE_TIMEOUT_MS` = 10min ceiling). Reset on every `upload.onprogress`;
+    abort only on a genuine stall. The old flat `PART_UPLOAD_TIMEOUT_MS = 180_000` killed healthy slow
+    transfers and each retry restarted from byte 0. `stalled` is classified RETRYABLE alongside network
+    error / timeout / 5xx.
+  - **Progress is COMPLETED-parts-based, never buffered bytes.** `uploadParts` moves the bar only when a
+    part's PUT returns 2xx (`deliveredBytes`); `onprogress` feeds ONLY the stall watchdog. Buffered
+    bytes climbed while the socket was dead — do not re-wire the bar to them.
+  - **Resume is part-size-guarded.** `prepare_upload`'s resume branch verifies the multipart's existing
+    R2 parts match the CURRENT `PART_SIZE` (`r2_multipart_parts_match_size`) before reusing a session;
+    a mismatch (e.g. an old 25MB-chunked upload) restarts fresh instead of finalizing a corrupt object.
+    Part size is derived from LIVE R2 state, not stored — no schema column.
+  - **UploadId hygiene:** `r2_abort_orphan_multipart_uploads(key)` runs before `r2_create_multipart_upload`
+    on the fresh-create path (only reached after a valid resume was declined, so every open multipart there
+    is a genuine orphan). This kills the **double-UploadId anomaly**, whose real cause is the APP-level
+    `retry_r2_call(**TIER_3)` re-firing a read-timed-out `CreateMultipartUpload` — NOT boto3, which runs
+    `Config(retries={"max_attempts": 0})`.
+  - **Observability:** every prepare/resume/finalize logs `[UPLOAD_LIFECYCLE] ...` (grep-pair prepare↔finalize
+    by `session=` to find abandoned sessions); the client `POST /api/games/upload-failure-beacon`
+    (`sendUploadFailureBeacon`, fire-and-forget, keepalive) logs `[UPLOAD_BEACON] ...` on retry exhaustion —
+    the ONLY server-visible channel since prod strips `console.log`. The beacon is LOGS-ONLY (no DB write, so
+    gesture-persistence rules don't apply — keep it that way). Admin read-only sweep:
+    `GET /api/admin/users/{user_id}/stuck-uploads` (opens each profile `mode=ro`, returns pending_uploads +
+    age + R2 multipart state). `pending_uploads` is a PER-PROFILE table (`database.py` schema).
+  - **Sibling scope (do not fight):** T7470 owns the destructive upload-failure cleanup (cascade-delete),
+    T7490 owns pending-game UI + honest reaping (aborting the stale R2 multipart), T7500 owns the
+    zero-rowcount silent-success sweep. T7480 deliberately did NOT touch those lines.
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
   width-only, so a phone in LANDSCAPE ≥640px wide (iPhone 14 844x390, Pixel 7 915x412) renders the
   full desktop `ClipsSidePanel` (`hidden sm:flex`, `w-[352px]`) — NOT the mobile sidebar. Its

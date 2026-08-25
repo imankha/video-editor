@@ -696,6 +696,97 @@ async def impersonate(target_user_id: str, request: Request, response: Response)
 
 
 # ---------------------------------------------------------------------------
+# Upload lifecycle observability (T7480)
+# ---------------------------------------------------------------------------
+
+@router.get("/users/{user_id}/stuck-uploads")
+async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)):
+    """T7480: list a user's abandoned game-upload sessions (prepared, never
+    finalized) so an operator can see a stuck upload WITHOUT the browser console.
+
+    Read-only: iterates the user's profiles, opens each profile.sqlite `mode=ro`
+    (never writes, never syncs to R2), and returns each `pending_uploads` row with
+    its age and live R2 multipart state (valid + parts uploaded). `older_than_hours`
+    filters to sessions older than N hours (default 0 = all). Scoped to one named
+    user by design — this is the incident-response tool for a specific account, not
+    an all-users sweep (log tag `[UPLOAD_LIFECYCLE]` covers the fleet-wide view)."""
+    _require_admin()
+
+    from ..services.materialization import open_profile_db_readonly
+    from ..services.user_db import get_profiles
+    from ..storage import r2_is_multipart_upload_valid, r2_list_multipart_parts
+
+    if not get_user_by_id(user_id):
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    now = datetime.now(UTC)
+    cutoff_seconds = older_than_hours * 3600
+    results: list[dict] = []
+
+    for profile in get_profiles(user_id):
+        profile_id = profile["id"]
+        conn = await asyncio.to_thread(open_profile_db_readonly, user_id, profile_id)
+        if conn is None:
+            continue
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, blake3_hash, file_size, original_filename, "
+                "r2_upload_id, parts_json, label, created_at "
+                "FROM pending_uploads ORDER BY created_at DESC"
+            )
+            rows = cur.fetchall()
+        except Exception as e:
+            logger.warning(f"stuck-uploads: cannot read profile {profile_id}: {e}")
+            continue
+        finally:
+            conn.close()
+
+        for row in rows:
+            age_seconds = None
+            created_at = row["created_at"]
+            if created_at:
+                try:
+                    parsed = datetime.fromisoformat(str(created_at).replace(" ", "T"))
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=UTC)
+                    age_seconds = (now - parsed).total_seconds()
+                except ValueError:
+                    age_seconds = None
+
+            if age_seconds is not None and age_seconds < cutoff_seconds:
+                continue
+
+            r2_key = f"games/{row['blake3_hash']}.mp4"
+            upload_id = row["r2_upload_id"]
+            valid = await asyncio.to_thread(
+                r2_is_multipart_upload_valid, r2_key, upload_id
+            )
+            r2_parts = 0
+            if valid:
+                parts = await asyncio.to_thread(
+                    r2_list_multipart_parts, r2_key, upload_id
+                )
+                r2_parts = len(parts) if parts else 0
+
+            results.append({
+                "profile_id": profile_id,
+                "session_id": row["id"],
+                "blake3_hash": row["blake3_hash"],
+                "original_filename": row["original_filename"],
+                "label": row["label"],
+                "file_size": row["file_size"],
+                "created_at": created_at,
+                "age_hours": round(age_seconds / 3600, 2) if age_seconds is not None else None,
+                "r2_upload_id": upload_id,
+                "r2_multipart_valid": valid,
+                "r2_parts_uploaded": r2_parts,
+            })
+
+    return {"user_id": user_id, "older_than_hours": older_than_hours, "stuck_uploads": results}
+
+
+# ---------------------------------------------------------------------------
 # Share cleanup (T2847)
 # ---------------------------------------------------------------------------
 
