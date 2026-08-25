@@ -17,7 +17,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.constants import UploadStatus
+from app.constants import GameStatus, UploadStatus
 from app.database import get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.services.credit_ledger import get_credit_balance
@@ -522,15 +522,15 @@ async def list_pending_uploads():
         rows = cursor.fetchall()
 
         uploads = []
-        stale_ids = []
+        stale_rows = []  # T7490: rows whose R2 multipart is gone — reap honestly
 
         for row in rows:
             # Validate R2 session is still valid
             r2_key = f"games/{row['blake3_hash']}.mp4"
             if not r2_is_multipart_upload_valid(r2_key, row['r2_upload_id']):
-                # Mark for cleanup
-                stale_ids.append(row['id'])
-                logger.info(f"Stale pending upload detected: {row['id']}, cleaning up")
+                # Mark for the honest reap below (abort R2 + surface orphaned game)
+                stale_rows.append(row)
+                logger.info(f"Stale pending upload detected: {row['id']}, reaping")
                 continue
 
             completed_parts = decode_data(row['parts_json']) or []
@@ -550,14 +550,44 @@ async def list_pending_uploads():
                 'created_at': row['created_at']
             })
 
-        # Clean up stale records
-        if stale_ids:
-            cursor.executemany(
-                "DELETE FROM pending_uploads WHERE id = ?",
-                [(id,) for id in stale_ids]
-            )
+        # T7490: honest reap. A stale record means the R2 multipart session is gone
+        # and the resume really is dead. The old code silently DELETEd the record,
+        # which left any orphaned games row (still 'pending' after T1540's
+        # annotate-during-upload anchor) invisible on the Games tab forever. Now, for
+        # each stale row:
+        #   1. Abort the orphaned R2 multipart (best-effort — never blocks the response),
+        #   2. Flip a matching still-'pending' game to 'upload_failed' so it renders a
+        #      visible, user-actionable card (Retry / Discard),
+        #   3. Delete the dead pending_uploads row.
+        # Idempotent: a second call finds no stale row (already deleted) and the UPDATE
+        # is a no-op once the game has left 'pending'. Scoped to this profile's DB
+        # (per-profile SQLite), so the hash match can only touch this user's games.
+        if stale_rows:
+            for row in stale_rows:
+                r2_key = f"games/{row['blake3_hash']}.mp4"
+                # 1. r2_abort_multipart_upload swallows + logs its own errors and never
+                #    raises, so a failed abort cannot block the reap or the response.
+                #    Log loudly here too when it reports failure.
+                if not r2_abort_multipart_upload(r2_key, row['r2_upload_id']):
+                    logger.error(
+                        f"[T7490] Failed to abort stale R2 multipart for pending upload "
+                        f"{row['id']} (hash={row['blake3_hash']}); continuing reap anyway"
+                    )
+                # 2. Surface any orphaned pending game instead of leaving it invisible.
+                cursor.execute(
+                    "UPDATE games SET status = ? WHERE blake3_hash = ? AND status = ?",
+                    (GameStatus.UPLOAD_FAILED.value, row['blake3_hash'], GameStatus.PENDING.value),
+                )
+                if cursor.rowcount > 0:
+                    logger.warning(
+                        f"[T7490] Marked {cursor.rowcount} orphaned pending game(s) "
+                        f"upload_failed for hash={row['blake3_hash']} (dead resume "
+                        f"session {row['id']})"
+                    )
+                # 3. Drop the dead resume record.
+                cursor.execute("DELETE FROM pending_uploads WHERE id = ?", (row['id'],))
             conn.commit()
-            logger.info(f"Cleaned up {len(stale_ids)} stale pending uploads")
+            logger.info(f"[T7490] Reaped {len(stale_rows)} stale pending upload(s)")
 
         return {'pending_uploads': uploads}
 

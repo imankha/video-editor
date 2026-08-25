@@ -162,6 +162,51 @@ describe('GameTile — kebab menu (item 4)', () => {
   });
 });
 
+describe('GameTile — upload_failed state (T7490)', () => {
+  const failedHandlers = () => ({ ...handlers(), onRetryUpload: vi.fn(), onDiscardFailed: vi.fn() });
+  const failedGame = { ...baseGame, status: 'upload_failed', recap_video_url: null };
+
+  it('renders the "Upload incomplete" badge and a clip-preserving explainer', () => {
+    render(<GameTile game={failedGame} {...failedHandlers()} />);
+    expect(screen.getByText('Upload incomplete')).toBeTruthy();
+    // clip_count=3 -> reassurance the annotations survive on Retry.
+    expect(screen.getByText(/3 clips saved — Retry to keep them/)).toBeTruthy();
+  });
+
+  it('shows the no-clips explainer variant when clip_count is 0', () => {
+    render(<GameTile game={{ ...failedGame, clip_count: 0 }} {...failedHandlers()} />);
+    expect(screen.getByText(/Retry to resume, or discard/)).toBeTruthy();
+  });
+
+  it('Retry fires onRetryUpload', () => {
+    const hs = failedHandlers();
+    render(<GameTile game={failedGame} {...hs} />);
+    fireEvent.click(screen.getByRole('button', { name: /Retry upload of/ }));
+    expect(hs.onRetryUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('Discard requires a second confirm tap before the cascade delete', () => {
+    const hs = failedHandlers();
+    render(<GameTile game={failedGame} {...hs} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Discard/ }));
+    expect(hs.onDiscardFailed).not.toHaveBeenCalled();
+    // Escalated confirm affordance appears.
+    const confirm = screen.getByRole('button', { name: /Confirm discard of/ });
+    expect(confirm.textContent).toContain('Delete for good?');
+    fireEvent.click(confirm);
+    expect(hs.onDiscardFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it('is inert: tapping the tile body does NOT open annotate, and the kebab/pencil are gone', () => {
+    const hs = failedHandlers();
+    const { container } = render(<GameTile game={failedGame} {...hs} />);
+    fireEvent.click(container.firstChild);
+    expect(hs.onLoad).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('More actions')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit game' })).toBeNull();
+  });
+});
+
 describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
   it('shows the game name as the scrim primary line when a poster is showing', () => {
     render(<GameTile game={baseGame} {...handlers()} />);

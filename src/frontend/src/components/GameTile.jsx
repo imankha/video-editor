@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical } from 'lucide-react';
+import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useProfileStore } from '../stores';
 import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
@@ -35,8 +35,15 @@ export function GameTile({
   onPlayRecap,
   onShare,
   onEdit,
+  onRetryUpload,   // T7490: re-select the original file + resume the multipart upload
+  onDiscardFailed, // T7490: full cascade delete (the ONE case cascade is correct)
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // T7490: an upload that never finished (R2 multipart reaped). No video, no poster;
+  // the game row survives only because the user may have annotated clips against it
+  // during transfer (T1540). Distinct fail-state skin + a persistent Retry/Discard bar.
+  const isUploadFailed = game.status === 'upload_failed';
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [posterState, setPosterState] = useState('loading'); // 'loading' | 'loaded' | 'error'
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null); // {top, left} for the desktop portal
@@ -117,6 +124,9 @@ export function GameTile({
 
   // Primary tile action: load (annotate) a live game; Extend/Recap an expired one.
   const activatePrimary = () => {
+    // T7490: a failed upload has no video to open — its only actions live in the
+    // bottom Retry/Discard bar. The tile itself is inert.
+    if (isUploadFailed) return;
     if (isExpired) {
       if (canExtend) onExtend?.();
       else if (hasRecap) onPlayRecap?.();
@@ -188,12 +198,14 @@ export function GameTile({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      className={`relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 cursor-pointer outline-none
-        hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40
-        focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 ${
-        isExpired
-          ? 'border-yellow-800/40 hover:border-yellow-600'
-          : 'border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60'
+      aria-label={isUploadFailed ? `${game.name} — upload incomplete` : undefined}
+      className={`relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 ${
+        isUploadFailed
+          ? 'border-rose-800/60 ring-1 ring-inset ring-rose-900/40 cursor-default focus-visible:ring-rose-400'
+          : isExpired
+            ? 'cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-yellow-800/40 hover:border-yellow-600 focus-visible:ring-cyan-400'
+            : 'cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400'
       }`}
     >
       {/* Poster image or fallback (item 5 — shimmer while loading, fade in on load) */}
@@ -229,6 +241,13 @@ export function GameTile({
         </div>
       )}
 
+      {/* T7490: rose scrim dims the dead poster/fallback so the fail-state badge and
+          action bar dominate. Above the poster (z-[5]) but below the bottom name
+          scrim (z-10), chip (z-20) and action bar (z-30). */}
+      {isUploadFailed && (
+        <div className="absolute inset-0 z-[5] bg-gradient-to-b from-rose-950/50 via-black/45 to-black/80" aria-hidden />
+      )}
+
       {/* Bottom scrim: game name (primary line) + clip count (secondary line; T7290
           dropped the date that used to share it).
           One structure for BOTH the poster and the fallback -- this div is always
@@ -237,25 +256,29 @@ export function GameTile({
           as ~90px tall at the 2-up 390px breakpoint, so no 2-line clamp here). The
           gradient is opaque enough at the base to stay legible over a bright
           poster frame. */}
-      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5">
+      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-9' : 'pb-1.5'}`}>
         {/* T6890: the edit (rename) pencil sits beside the game name it edits,
             instead of only inside the top-right kebab. Same "icon touches the name"
             placement as DraftTile/ReelTile (ManageProfilesModal reference pattern:
-            a pencil button next to the name that opens the edit form). */}
+            a pencil button next to the name that opens the edit form).
+            T7490: hidden for a failed upload — you can't meaningfully rename a dead
+            upload, and its hit target would compete with the action bar. */}
         <div className="flex items-center gap-1">
           <h3 className="flex-1 min-w-0 text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
             {game.name}
           </h3>
-          <button
-            type="button"
-            data-game-edit
-            onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-            title="Edit game"
-            aria-label="Edit game"
-            className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px]"
-          >
-            <Pencil size={14} />
-          </button>
+          {!isUploadFailed && (
+            <button
+              type="button"
+              data-game-edit
+              onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+              title="Edit game"
+              aria-label="Edit game"
+              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px]"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
         </div>
         {/* T7330: the MATCH date, with its weekday ("Sat, Mar 21"). T7290 removed the date
             entirely on the reasoning that it was already the title suffix -- wrong in
@@ -265,25 +288,89 @@ export function GameTile({
             its place (youth sport is weekend-shaped) and keeps it from reading as an echo.
             Empty when there is no match date -- NEVER the upload date, which would
             contradict the match-date header this tile sits under. */}
-        <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
-          <span className="text-gray-300 truncate">{formatMatchDateLabel(game.game_date)}</span>
-          <span className="flex-shrink-0 text-gray-400">
-            {game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}
-          </span>
-        </div>
+        {isUploadFailed ? (
+          <p className="mt-0.5 text-[11px] text-rose-200/90 leading-snug">
+            {game.clip_count > 0
+              ? `Upload didn't finish. ${game.clip_count} clip${game.clip_count !== 1 ? 's' : ''} saved — Retry to keep them.`
+              : "Upload didn't finish. Retry to resume, or discard."}
+          </p>
+        ) : (
+          <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
+            <span className="text-gray-300 truncate">{formatMatchDateLabel(game.game_date)}</span>
+            <span className="flex-shrink-0 text-gray-400">
+              {game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Expiry chip (top-left, clear of the kebab) */}
-      {(isExpired || isNearExpiry) && (
+      {/* Top-left chip. T7490: a failed upload shows a rose "Upload incomplete" badge
+          (error) and suppresses the yellow expiry chip (an unfinished upload can't
+          meaningfully be "expiring") — a deliberately different hue family so the two
+          states are never confused at a glance. */}
+      {isUploadFailed ? (
+        <div className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-900/80 text-rose-200 ring-1 ring-rose-500/40">
+          <AlertTriangle size={10} />
+          Upload incomplete
+        </div>
+      ) : (isExpired || isNearExpiry) && (
         <div className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-900/70 text-yellow-300 z-20">
           <Clock size={10} />
           {isExpired ? 'Expired' : `${daysLeft}d`}
         </div>
       )}
 
+      {/* T7490: a failed upload replaces the kebab (its Recap/Share/Extend/Delete are
+          all nonsensical or replaced here) with the persistent Retry/Discard bar below. */}
+      {isUploadFailed && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-30 flex items-stretch gap-1 p-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Retry — primary. Cyan carries its app-wide "the action that saves your
+              work" meaning here; RefreshCw reads "resume", not "fresh upload". */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowDiscardConfirm(false); onRetryUpload?.(); }}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
+                       bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors"
+            aria-label={`Retry upload of ${game.name}`}
+          >
+            <RefreshCw size={14} className="flex-shrink-0" />
+            Retry
+          </button>
+
+          {/* Discard — destructive, two-tap confirm. Escalates (compact rose chip ->
+              solid red) before firing the full cascade delete. */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (showDiscardConfirm) { onDiscardFailed?.(); }
+              else { setShowDiscardConfirm(true); }
+            }}
+            className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md text-xs font-semibold
+                        focus-visible:outline-none focus-visible:ring-2 transition-colors ${
+              showDiscardConfirm
+                ? 'flex-[1.6] bg-red-600 hover:bg-red-500 text-white focus-visible:ring-red-300'
+                : 'flex-none bg-black/60 hover:bg-red-900/50 text-rose-300 ring-1 ring-rose-800/60 focus-visible:ring-red-400'
+            }`}
+            aria-label={showDiscardConfirm
+              ? `Confirm discard of ${game.name} — this permanently deletes it and its clips`
+              : `Discard ${game.name}`}
+          >
+            <Trash2 size={14} className="flex-shrink-0" />
+            {showDiscardConfirm ? 'Delete for good?' : 'Discard'}
+          </button>
+        </div>
+      )}
+
       {/* Single kebab button (top-right) -- opens the portal menu / bottom sheet.
           Always visible on coarse pointers (no hover); reveals on hover for
-          desktop. One button never overflows the tile. */}
+          desktop. One button never overflows the tile. Suppressed for a failed
+          upload (T7490). */}
+      {!isUploadFailed && (
       <button
         ref={kebabBtnRef}
         type="button"
@@ -297,9 +384,10 @@ export function GameTile({
       >
         <MoreVertical size={16} />
       </button>
+      )}
 
       {/* Mobile: bottom action sheet. Desktop: fixed-position flip-aware popover. */}
-      {menuOpen && isMobile ? (
+      {!isUploadFailed && menuOpen && isMobile ? (
         <div data-game-menu ref={menuRef} className="fixed inset-0 z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
           <div className="flex-1 bg-black/40" onClick={closeMenu} />
           <div className="bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto">
@@ -309,7 +397,7 @@ export function GameTile({
             <div className="py-2">{menuItems(20)}</div>
           </div>
         </div>
-      ) : menuOpen && menuPos ? (
+      ) : !isUploadFailed && menuOpen && menuPos ? (
         createPortal(
           <div
             data-game-menu

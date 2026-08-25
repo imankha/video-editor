@@ -147,10 +147,16 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       }
     });
 
-    return games.map(game => ({
-      ...game,
-      clipCount: countMap[game.id] || 0
-    })).filter(g => g.clipCount > 0);
+    // T7490: an upload_failed game is now visible in readyGames (status != 'pending')
+    // so its Games-tab card can offer Retry/Discard, but it has NO source video in R2 —
+    // its clips can't be framed into a reel. Exclude it from the reel builder's game
+    // list so unframable clips never get picked (they'd fail at export/resolve_clip_source).
+    return games
+      .filter(game => game.status !== 'upload_failed')
+      .map(game => ({
+        ...game,
+        clipCount: countMap[game.id] || 0
+      })).filter(g => g.clipCount > 0);
   }, [games, rawClips, myAthleteOnly, minRating]);
 
   // Format duration for display
