@@ -259,6 +259,21 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   hit `POST /api/admin/migrate` per env. Covered by `ClipDetailsEditor.teammates.test.jsx`,
   `AnnotateFullscreenOverlay.teammates.test.jsx`, `test_t5725_reclassify_teammate_clips.py`, and
   `e2e/T5725-teammates-team-only.qa.spec.js`.
+- **Save auto-commits a pending teammate tag; it must never dead-end (T7540).** The teammate
+  `<input>` commits on Enter/comma; `TeammateTagInput.jsx` tracks the typed-but-not-committed text
+  in a module-level `_uncommittedText` (set by an effect on `inputValue`, cleared on unmount).
+  `AnnotateFullscreenOverlay.handleSave` used to see uncommitted text (`hasUncommittedTeammateText()`)
+  and show an OK-only "Tag not submitted" `ConfirmationDialog` that returned WITHOUT saving — clicking
+  Save again re-triggered it: a genuine dead-end. Now `handleSave` calls
+  `commitPendingTeammateText(taggedTeammates)` (only on the Team layer — teammates are Team-only),
+  which applies `addTeammate`'s dedupe rules, RETURNS the resulting array (used synchronously as
+  `finalTeammates` for the save payload — a setState wouldn't apply within the same call), and clears
+  `_uncommittedText`. Invariant: **after Save, any typed teammate text is either committed as a tag or
+  dropped as empty; Save always proceeds.** `hasUncommittedTeammateText` is still exported and used by
+  `AnnotateContainer.jsx` (lines ~1056/1069/1106) but ONLY to warn on NAVIGATION gestures (timeline
+  seek / select-region / auto-select) — those are dismissible warnings, not save dead-ends. Covered by
+  `TeammateTagInput.test.jsx`, `AnnotateFullscreenOverlay.teammates.test.jsx`, and
+  `e2e/T7540-annotate-save-tag-trap.qa.spec.js`.
 - **Two clip lanes on desktop, one on phone (T5700 follow-up).** `AnnotateTimeline.jsx` splits the
   single tinted "Clips" track into two stacked, labeled `ClipRegionLayer` lanes — "My Athlete" (cyan)
   and "Team" (amber) — each fed a pre-filtered `regions` subset using the same legacy-NULL rule

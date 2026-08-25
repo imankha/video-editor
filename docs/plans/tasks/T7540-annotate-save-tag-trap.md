@@ -58,3 +58,35 @@ hold Save hostage the same way.
       no state change
 - [ ] Real-browser test of the exact loop (type name, no Enter, Save)
 - [ ] Sweep note listing other commit-on-Enter inputs checked in the overlay
+
+## Progress Log
+
+**2026-08-25 — implemented (auto-commit approach), tests + real-browser QA green.**
+
+Fix: added `commitPendingTeammateText(teammates)` to `TeammateTagInput.jsx` — a pure helper
+callable from outside the component that reads the module-level `_uncommittedText` (same
+source `hasUncommittedTeammateText` reads), applies `addTeammate`'s dedupe rules (trim,
+ignore empty, case-insensitive skip), RETURNS the resulting array (so the caller uses the
+committed value synchronously without a re-render race), and clears `_uncommittedText` so a
+second call can't re-add it. `AnnotateFullscreenOverlay.handleSave` now calls it (only on the
+Team layer — teammates are Team-only) and saves with the returned `finalTeammates`; the
+`showTagWarning` state + OK-only `ConfirmationDialog` dead-end are deleted. `ConfirmationDialog`
+import removed; `hasUncommittedTeammateText` stays exported (still used by `AnnotateContainer`).
+
+**Sweep result (acceptance criterion):** `AnnotateFullscreenOverlay.jsx` has exactly ONE
+commit-on-Enter input that could gate Save — the `TeammateTagInput`. The other `onKeyDown`
+in the file is the window-level shortcut handler (Enter=save, Esc=close, 1–5=rating), which
+TRIGGERS save rather than blocking it. The clip-name `<input>` and notes `<textarea>` have no
+Enter-to-commit gating. Note: `AnnotateContainer.jsx` also calls `hasUncommittedTeammateText`
+(lines ~1056/1069/1106) but those guard NAVIGATION gestures (timeline seek, select-region,
+auto-select) with a warning the user can act on — not a Save dead-end — so they are out of
+scope and intentionally unchanged.
+
+Tests: `TeammateTagInput.test.jsx` +4 cases for `commitPendingTeammateText` (commits trimmed,
+ignores empty/whitespace, dedupes case-insensitively, clears after commit);
+`AnnotateFullscreenOverlay.teammates.test.jsx` +2 (create + edit auto-commit-on-Save, no
+dialog). Relevant set: 65/65 green (incl. ClipDetailsEditor/ClipsSidePanel regressions).
+Real-browser: `e2e/T7540-annotate-save-tag-trap.qa.spec.js` via `dev-verify.sh` against the
+real account (imankh, game 6) — typed a teammate without Enter, clicked Save, asserted the
+save POST fired with the tag in the payload and no "Tag not submitted" dialog; test clip
+deleted in afterEach. PASS.

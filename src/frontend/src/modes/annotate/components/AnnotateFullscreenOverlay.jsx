@@ -4,12 +4,11 @@ import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
-import { TeammateTagInput, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
+import { TeammateTagInput, commitPendingTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
-import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 
 // Persists across mounts within the same page session
@@ -152,7 +151,6 @@ export function AnnotateFullscreenOverlay({
   const [myAthlete, setMyAthlete] = useState(true);
   const [createProject, setCreateProject] = useState(false);
   const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
-  const [showTagWarning, setShowTagWarning] = useState(false);
   const notesRef = useRef(null);
   const handleSaveRef = useRef(null);
   const handleRatingChangeRef = useRef(null);
@@ -256,9 +254,16 @@ export function AnnotateFullscreenOverlay({
   };
 
   const handleSave = () => {
-    if (hasUncommittedTeammateText()) {
-      setShowTagWarning(true);
-      return;
+    // T7540: auto-commit any teammate text typed but not Enter-committed (same
+    // effect as pressing Enter) so a pending tag never dead-ends Save. Teammates
+    // are Team-layer only, so only commit when the clip is on the Team layer.
+    // commitPendingTeammateText returns the resulting array synchronously — use
+    // it directly for the payload (setState wouldn't apply within this call).
+    const finalTeammates = myAthlete
+      ? taggedTeammates
+      : commitPendingTeammateText(taggedTeammates);
+    if (finalTeammates !== taggedTeammates) {
+      setTaggedTeammates(finalTeammates);
     }
     const clipDuration = scrubEndTime - scrubStartTime;
     if (isEditMode) {
@@ -269,7 +274,7 @@ export function AnnotateFullscreenOverlay({
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
-        tagged_teammates: taggedTeammates,
+        tagged_teammates: finalTeammates,
         my_athlete: myAthlete,
         createProject,
       });
@@ -281,7 +286,7 @@ export function AnnotateFullscreenOverlay({
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
-        tagged_teammates: taggedTeammates,
+        tagged_teammates: finalTeammates,
         my_athlete: myAthlete,
         createProject,
       };
@@ -479,14 +484,6 @@ export function AnnotateFullscreenOverlay({
             Cancel
           </button>
         </div>
-
-        <ConfirmationDialog
-          isOpen={showTagWarning}
-          title="Tag not submitted"
-          message="You typed a teammate name but didn't submit it. Press Enter in the teammate field to add the tag."
-          buttons={[{ label: 'OK', variant: 'primary', onClick: () => setShowTagWarning(false) }]}
-          onClose={() => setShowTagWarning(false)}
-        />
     </>
   );
 

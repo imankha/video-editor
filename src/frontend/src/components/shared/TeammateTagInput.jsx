@@ -7,6 +7,24 @@ export function hasUncommittedTeammateText() {
   return _uncommittedText.trim().length > 0;
 }
 
+/**
+ * Commit any teammate text typed into the input but not yet Enter-committed,
+ * from OUTSIDE the component (e.g. a Save handler) — same effect as pressing
+ * Enter. Mirrors `addTeammate`'s dedupe rules (trim, ignore empty, skip
+ * case-insensitive duplicates) but is a pure function of the caller's current
+ * teammates array: it RETURNS the resulting array (the same reference when
+ * nothing is added) rather than calling a component-local `onChange`, so the
+ * caller can use the committed value synchronously without waiting for a
+ * re-render. Clears `_uncommittedText` so a repeat call can't re-add the tag.
+ */
+export function commitPendingTeammateText(teammates) {
+  const trimmed = _uncommittedText.trim();
+  _uncommittedText = '';
+  if (!trimmed) return teammates;
+  if (teammates.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return teammates;
+  return [...teammates, trimmed];
+}
+
 export function TeammateTagInput({ teammates, onChange, suggestions, placeholder }) {
   const [inputValue, setInputValue] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { TeammateTagInput } from './TeammateTagInput';
+import { TeammateTagInput, commitPendingTeammateText } from './TeammateTagInput';
 
 describe('TeammateTagInput', () => {
   const defaultProps = {
@@ -92,5 +92,42 @@ describe('TeammateTagInput', () => {
   it('hides placeholder when teammates exist', () => {
     render(<TeammateTagInput {...defaultProps} teammates={['Jake']} />);
     expect(screen.queryByPlaceholderText('Tag a teammate...')).toBeNull();
+  });
+});
+
+// T7540: commitPendingTeammateText lets a Save handler commit typed-but-not-
+// Entered text from outside the component. The module-level _uncommittedText it
+// reads is only populated by the mounted input's effect, so each case types
+// into a rendered input first, then calls the helper — mirroring the real flow
+// (type in the overlay's teammate field, click Save without pressing Enter).
+describe('commitPendingTeammateText (T7540)', () => {
+  function typeInto(value) {
+    render(<TeammateTagInput teammates={[]} onChange={vi.fn()} suggestions={[]} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value } });
+  }
+
+  it('commits trimmed pending text onto the given teammates array', () => {
+    typeInto('  Alex  ');
+    expect(commitPendingTeammateText(['Jake'])).toEqual(['Jake', 'Alex']);
+  });
+
+  it('returns the same array (no-op) when pending text is empty or whitespace', () => {
+    typeInto('   ');
+    const teammates = ['Jake'];
+    const result = commitPendingTeammateText(teammates);
+    expect(result).toBe(teammates);
+  });
+
+  it('dedupes case-insensitively against existing teammates', () => {
+    typeInto('jake');
+    const teammates = ['Jake'];
+    expect(commitPendingTeammateText(teammates)).toBe(teammates);
+  });
+
+  it('clears pending text so a second commit does not re-add it', () => {
+    typeInto('Alex');
+    expect(commitPendingTeammateText([])).toEqual(['Alex']);
+    // Second call, nothing typed since — must be a no-op.
+    expect(commitPendingTeammateText(['Alex'])).toEqual(['Alex']);
   });
 });
