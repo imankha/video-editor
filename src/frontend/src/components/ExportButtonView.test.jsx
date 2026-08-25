@@ -73,19 +73,18 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
   it('does NOT render the estimate in Overlay mode (Framing-only)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} estimatedCredits={9} creditBalance={42} />);
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
-    // Overlay primary CTA is the reel-completion action (T7580).
-    expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+    // Overlay primary CTA applies the configured overlay (T7700 reverses T7580's "Create Reel").
+    expect(screen.getByRole('button', { name: 'Add Overlay' })).toBeTruthy();
   });
 });
 
 describe('ExportButtonView — T7580 reel vocabulary', () => {
-  it('Framing primary CTA previews the next (Spotlight) step, not "Export"', () => {
+  it('Focus primary CTA reads "Export Focused Video" (T7700)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);
-    expect(screen.getByRole('button', { name: 'Next: Spotlight' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Export' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Export Focused Video' })).toBeTruthy();
   });
 
-  it('Framing CTA keeps the framed-count suffix on the "Next: Spotlight" label', () => {
+  it('Focus CTA keeps the framed-count suffix on the "Export Focused Video" label', () => {
     render(
       <ExportButtonView
         {...baseProps}
@@ -96,13 +95,13 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
         unframedCount={1}
       />
     );
-    expect(screen.getByRole('button', { name: 'Next: Spotlight (2/3)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Export Focused Video (2/3)' })).toBeTruthy();
   });
 
-  it('Overlay primary CTA is "Create Reel" (the reel-completion action)', () => {
+  it('Overlay primary CTA is "Add Overlay" (applies the configured overlay) (T7700)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add Spotlight' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add Overlay' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
   });
 
   it('in-progress label reads "Creating reel..." for the user\'s own export', () => {
@@ -127,10 +126,10 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
     expect(screen.getByText('Reel ready! Find it in My Reels.')).toBeTruthy();
   });
 
-  it('Framing Settings names the follow-your-athlete crop feature', () => {
+  it('Focus Settings names the follow-your-athlete crop feature', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);
     expect(screen.getByText('Set crop keyframes so the focus follows your athlete.')).toBeTruthy();
-    // Export-info subtext frames the render as building the reel + follow-framing.
-    expect(screen.getByText(/Builds your reel: applies your follow-framing/)).toBeTruthy();
+    // Export-info subtext frames the render as building the reel + follow-focus crop.
+    expect(screen.getByText(/Builds your reel: applies your follow-focus/)).toBeTruthy();
   });
 });

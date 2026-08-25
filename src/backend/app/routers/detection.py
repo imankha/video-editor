@@ -341,7 +341,7 @@ async def detect_players(request: PlayerDetectionRequest):
         if not row or not row['filename']:
             raise HTTPException(
                 status_code=404,
-                detail="Working video not found for project. Export from framing mode first."
+                detail="Working video not found for project. Export from Focus mode first."
             )
 
         user_id = get_current_user_id()
@@ -388,7 +388,7 @@ async def detect_players(request: PlayerDetectionRequest):
             if not os.path.exists(video_path):
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Working video not found locally: {video_filename}. Export from framing mode first."
+                    detail=f"Working video not found locally: {video_filename}. Export from Focus mode first."
                 )
 
             logger.info(f"[Local] Player detection for project {request.project_id}: {video_path} frame {request.frame_number}")

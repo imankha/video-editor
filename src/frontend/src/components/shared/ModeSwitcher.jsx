@@ -1,6 +1,7 @@
 import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
 import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
+import { SCREENS } from '../../stores/editorStore';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -44,7 +45,7 @@ export function ModeSwitcher({
   const modes = [
     {
       id: 'annotate',
-      label: 'Annotate',
+      label: SCREENS.ANNOTATE.label,
       icon: Scissors,
       description: 'Clip extraction',
       available: hasAnnotateVideo || mode === 'annotate',
@@ -52,7 +53,7 @@ export function ModeSwitcher({
     },
     {
       id: 'framing',
-      label: 'Framing',
+      label: SCREENS.FRAMING.label,
       icon: Crop,
       description: 'Crop, trim & speed',
       available: hasProject,
@@ -60,7 +61,7 @@ export function ModeSwitcher({
     },
     {
       id: 'overlay',
-      label: 'Overlay',
+      label: SCREENS.OVERLAY.label,
       icon: Sparkles,
       description: 'Highlights & effects',
       available: hasProject && (hasWorkingVideo || hasOverlayVideo),
@@ -106,7 +107,7 @@ export function ModeSwitcher({
             : !isAvailable && modeOption.id === 'framing'
               ? 'Select a reel first'
               : !isAvailable && modeOption.id === 'overlay'
-                ? hasProject ? 'Export from Framing first to enable Overlay mode' : 'Select a reel first'
+                ? hasProject ? 'Export from Focus first to enable Overlay mode' : 'Select a reel first'
                 : modeOption.showWarning
                   ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
                   : modeOption.description

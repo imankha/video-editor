@@ -143,7 +143,7 @@ describe('DraftTile (T5672)', () => {
 
   it('shows a status chip reflecting framing-in-progress', () => {
     renderTile({ clips_in_progress: 1 });
-    expect(screen.getByText('Framing')).toBeTruthy();
+    expect(screen.getByText('Focus')).toBeTruthy();
   });
 
   it('shows a Done status chip for a completed reel', () => {
@@ -207,7 +207,7 @@ describe('DraftTile (T5672)', () => {
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     // Secondary actions are reachable inside it.
     expect(screen.getByRole('button', { name: /rename/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /open in framing/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /open in focus/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /open in overlay/i })).toBeTruthy();
     // First delete click ARMS the confirm without deleting or closing the menu.
     const del = screen.getByRole('button', { name: /delete reel/i });

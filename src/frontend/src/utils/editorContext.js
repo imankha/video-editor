@@ -99,7 +99,9 @@ export function getEditorContext() {
 
 function modeFromRoute(path) {
   if (path.startsWith('/annotate')) return 'annotate';
-  if (path.startsWith('/framing')) return 'framing';
+  // T7700: '/focus' is the current path; '/framing' kept for legacy URLs. The
+  // returned mode id stays 'framing' (unchanged internal/persisted value).
+  if (path.startsWith('/focus') || path.startsWith('/framing')) return 'framing';
   if (path.startsWith('/overlay')) return 'overlay';
   if (path.startsWith('/home')) return 'home';
   if (path.startsWith('/admin')) return 'admin';

@@ -133,8 +133,8 @@ FLOW_EVENTS = {
     "pwa_installed":        {"label": "PWA Installed",      "daily_col": None},
     # New flow events (T3040)
     "annotation_completed": {"label": "Annotation Done",    "daily_col": "annotations_completed"},
-    "framing_opened":       {"label": "Framing Opened",     "daily_col": None},
-    "framing_exported":     {"label": "Framing Exported",   "daily_col": "framing_exports"},
+    "framing_opened":       {"label": "Focus Opened",       "daily_col": None},
+    "framing_exported":     {"label": "Focus Exported",     "daily_col": "framing_exports"},
     "overlay_exported":     {"label": "Overlay Exported",   "daily_col": "overlay_exports"},
     "gallery_viewed":       {"label": "Gallery Viewed",     "daily_col": None},
     "video_downloaded":     {"label": "Downloaded",         "daily_col": "video_downloads"},

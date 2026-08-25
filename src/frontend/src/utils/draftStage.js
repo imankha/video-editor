@@ -22,7 +22,7 @@ export const DRAFT_STAGE_ORDER = [
 
 export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.NOT_STARTED]: 'Not Started',
-  [DRAFT_STAGE.IN_FRAMING]: 'In Framing',
+  [DRAFT_STAGE.IN_FRAMING]: 'In Focus',
   [DRAFT_STAGE.IN_OVERLAY]: 'In Overlay',
   [DRAFT_STAGE.READY]: 'Ready',
 };

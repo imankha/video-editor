@@ -82,7 +82,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {isFramingMode && (
         <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
           <div className="mb-3">
-            <div className="text-sm font-medium text-gray-300">Framing Settings</div>
+            <div className="text-sm font-medium text-gray-300">Focus Settings</div>
             <div className="text-xs text-gray-400">Set crop keyframes so the focus follows your athlete.</div>
           </div>
 
@@ -103,7 +103,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
           {/* Export Info */}
           <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-            {`Builds your reel: applies your follow-framing, trim, and speed, upscaled with AI at ${EXPORT_CONFIG?.targetFps || 30}fps.`}
+            {`Builds your reel: applies your follow-focus crop, trim, and speed, upscaled with AI at ${EXPORT_CONFIG?.targetFps || 30}fps.`}
           </div>
         </div>
       )}
@@ -142,9 +142,9 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           ? (isExternallyExporting && !isExporting ? 'Reel in progress...' : 'Creating reel...')
           : isFramingMode
             ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
-              ? `Next: Spotlight (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
-              : 'Next: Spotlight')
-            : 'Create Reel'
+              ? `Export Focused Video (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
+              : 'Export Focused Video')
+            : 'Add Overlay'
         }
       </Button>
 

@@ -297,7 +297,7 @@ export function ClipSelectorSidebar({
                 {/* Framing status indicator */}
                 <div
                   className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-gray-600'}`}
-                  title={isFramed ? 'Framed' : 'Needs framing — add crop keyframes'}
+                  title={isFramed ? 'Framed' : 'Needs focus — add crop keyframes'}
                 >
                   {isFramed ? (
                     <Check size={16} className="stroke-[3]" />

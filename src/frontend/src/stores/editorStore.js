@@ -23,7 +23,7 @@ export const EDITOR_MODES = {
 export const MODE_PATHS = {
   [EDITOR_MODES.PROJECT_MANAGER]: '/home',
   [EDITOR_MODES.ANNOTATE]: '/annotate',
-  [EDITOR_MODES.FRAMING]: '/framing',
+  [EDITOR_MODES.FRAMING]: '/focus',
   [EDITOR_MODES.OVERLAY]: '/overlay',
   [EDITOR_MODES.ADMIN]: '/admin',
 };
@@ -31,6 +31,15 @@ export const MODE_PATHS = {
 export const PATH_TO_MODE = Object.fromEntries(
   Object.entries(MODE_PATHS).map(([mode, path]) => [path, mode])
 );
+
+// Legacy URL aliases (T7700). The Framing step was renamed Focus and its route
+// moved '/framing' -> '/focus'; old bookmarks/history entries must still resolve
+// (not fall through to the null -> Project Manager fallback). Mapped to the new
+// path BEFORE the PATH_TO_MODE lookup, so both cold-load and popstate resolve the
+// mode; the cold-load canonicalization then rewrites the URL to the new path.
+export const LEGACY_PATH_REDIRECTS = {
+  '/framing': '/focus',
+};
 
 // Home tab deep-link sub-routes. The active tab is URL state (never persisted);
 // ProjectManager reads the path on mount to pick its tab. These must survive the
@@ -45,8 +54,9 @@ export const HOME_TAB_PATHS = ['/home/games', '/home/reels'];
  * and the popstate handler so the two can never drift.
  */
 export function modeFromPath(pathname = window.location.pathname) {
-  return PATH_TO_MODE[pathname]
-    || (pathname.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : null);
+  const resolved = LEGACY_PATH_REDIRECTS[pathname] || pathname;
+  return PATH_TO_MODE[resolved]
+    || (resolved.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : null);
 }
 
 // Public routes render OUTSIDE the editor (share links, legal pages). The store
@@ -83,7 +93,7 @@ function updatePath(mode) {
  */
 export const SCREENS = {
   PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: SECTION_NAMES.DRAFTS },
-  FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Framing' },
+  FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Focus' },
   OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Overlay' },
   ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },
 };
