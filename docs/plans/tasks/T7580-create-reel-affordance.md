@@ -139,3 +139,28 @@ Design rationale for the two contentious buttons:
 4. Anything to add/trim in the success (#3) and progress (#5) wording.
 
 **STATUS: BLOCKED on wording approval — no implementation code written yet.**
+
+### 2026-08-25 — Wording APPROVED by user; implemented + QA (PUSHREADY)
+
+User approved the recommended set: #1 `Next: Spotlight`, #2 `Create Reel`, #6 subtitle
+included, success/progress messages as proposed. Applied all 6 swaps + the subtitle in
+`src/frontend/src/components/ExportButtonView.jsx` (copy-only; no layout/behavior change).
+
+- Tests: added a `T7580 reel vocabulary` describe block to `ExportButtonView.test.jsx`
+  (8 cases: Framing `Next: Spotlight` + `(2/3)` suffix, Overlay `Create Reel`, both
+  in-progress variants, success `Reel ready!...`, the follow-your-athlete subtitle +
+  follow-framing subtext) and flipped the old Overlay-label assertion. Relevant set run:
+  34 unit tests pass (14 ExportButtonView incl. the 8 new + 20 ExportButtonContainer);
+  eslint 0 errors.
+- e2e: updated locators that drove the renamed buttons (T4880, T4110, T4900,
+  tutorial-capture framing/overlay, screenManifests) so Branch CI's full e2e sweep still
+  targets the live labels. (E2E not runnable in this container — no backend/browser CDN.)
+- QA: real Chromium screenshots of the actual `ExportButtonView` (real Tailwind) in all
+  four copy states at mobile 375px + desktop 1280px, saved to `qa/T7580/` (gitignored
+  evidence). Verified `Next: Spotlight (2/3)` fits the full-width mobile button; all new
+  strings render in context with no overflow.
+
+Note for reviewer: the two-step export button uses the `Download` icon in BOTH modes;
+after the rename neither reads as a "download" and the Framing one is really a "next
+step". Icon change edges into visual redesign, so it was intentionally left out of this
+copy-only task — flagged as an optional follow-up.
