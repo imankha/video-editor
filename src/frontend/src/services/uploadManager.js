@@ -889,10 +889,14 @@ export async function uploadGame(file, onProgress, options = {}) {
       deduplicated: !r2Result.uploaded,
     };
   } catch (error) {
-    // If game was created as pending but upload/activation failed, clean up.
+    // T7470: only-if-empty cleanup. Delete the pending game ONLY if it acquired no
+    // user content — a user may have annotated clips against it during upload (T1540).
+    // The backend refuses (no-op) when content exists, leaving the game pending; the
+    // failure toast (uploadStore.onUploadError) is the user-visible surface until T7490
+    // builds the pending/retry UI.
     if (gameResult?.game_id) {
       try {
-        await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
+        await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
         // Best-effort cleanup — log but don't mask the original error.
         console.warn('[uploadGame] Failed to clean up pending game:', cleanupErr);
@@ -997,10 +1001,12 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       deduplicated: false,
     };
   } catch (error) {
-    // If game was created as pending but upload/activation failed, clean up.
+    // T7470: only-if-empty cleanup (see uploadGame). Never cascade-delete a game the
+    // user annotated against during a multi-video upload; the backend refuses when
+    // content exists and leaves the game pending.
     if (gameResult?.game_id) {
       try {
-        await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
+        await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
         console.warn('[uploadMultiVideoGame] Failed to clean up pending game:', cleanupErr);
       }

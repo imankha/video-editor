@@ -297,6 +297,44 @@ describe('uploadManager', () => {
       // Should have error phase
       expect(progressUpdates.some((p) => p.phase === 'error')).toBe(true);
     });
+
+    // T7470: when a pending game was already created (onGameCreated fired) and the
+    // upload then fails, cleanup must use the only-if-empty guard so the backend
+    // refuses to cascade-delete a game the user annotated against during upload (T1540).
+    it('cleans up a failed pending game with only_if_empty=true', async () => {
+      // Mock 1: POST /api/games -> game created as pending (game_id now exists).
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'created',
+          game_id: 789,
+          name: 'Fails After Create',
+          video_url: 'https://example.com/video.mp4',
+        }),
+      });
+      // Mock 2: POST /api/games/prepare-upload -> fails (transfer error).
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: 'Upload failed' }),
+      });
+      // Mock 3: DELETE cleanup call.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, deleted: false, reason: 'has_content' }),
+      });
+
+      const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+
+      await expect(uploadGame(mockFile, () => {})).rejects.toThrow('Upload failed');
+
+      // The cleanup DELETE must carry only_if_empty=true — never a bare cascade delete.
+      const deleteCall = mockFetch.mock.calls.find(
+        ([url, opts]) => opts?.method === 'DELETE' && String(url).includes('/api/games/789')
+      );
+      expect(deleteCall).toBeTruthy();
+      expect(String(deleteCall[0])).toContain('only_if_empty=true');
+    });
   });
 });
 

@@ -1,5 +1,6 @@
 ---
 domain: annotate
+updated: 2026-08-25 (T7470 upload-failure cleanup is only-if-empty: DELETE /api/games/{id}?only_if_empty=true refuses to cascade-delete a game with raw_clips or viewed_duration>0; protects annotate-during-upload — see Landmines "Upload-failure cleanup is ONLY-IF-EMPTY (T7470)")
 updated: 2026-08-24 (T7480 upload lifecycle: PART_SIZE 25MB->5MB, stall watchdog replaces flat per-part timeout, completed-parts honest progress, resume part-size guard, UploadId orphan-abort + double-UploadId root cause, failure beacon + [UPLOAD_LIFECYCLE] logs + admin stuck-uploads — see Landmines "Upload lifecycle invariants (T7480)")
 updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration v045 -- reader cleanup still a known gap, see Invariants; T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
@@ -374,6 +375,25 @@ The full checklist for an 11th→Nth sport:
   - **Sibling scope (do not fight):** T7470 owns the destructive upload-failure cleanup (cascade-delete),
     T7490 owns pending-game UI + honest reaping (aborting the stale R2 multipart), T7500 owns the
     zero-rowcount silent-success sweep. T7480 deliberately did NOT touch those lines.
+- **Upload-failure cleanup is ONLY-IF-EMPTY (T7470 — the invariant that protects annotate-during-upload).**
+  A failed upload must NEVER cascade-delete a game the user annotated against while it was still
+  uploading (T1540: a real `game_id` exists from `onGameCreated`, well before finalize, precisely so
+  the user can annotate the local blob during transfer). Both `uploadManager.js` catch blocks
+  (`uploadGame`, `uploadMultiVideoGame`) issue `DELETE /api/games/{id}?only_if_empty=true`, NOT a bare
+  cascade delete. The backend guard (`games.py:delete_game`, helper `_game_has_user_content`) is the
+  INVARIANT, not the frontend — with `only_if_empty=true` it REFUSES (200 no-op, `{deleted: False,
+  reason: 'has_content'}`) when the game has any `raw_clips` row OR `viewed_duration > 0`, leaving it at
+  `status='pending'`. Refusal is a 200, not a 4xx: the "user annotated" case is expected, and the
+  cleanup handler is best-effort (it swallows errors), so a scary status would be wrong. The guard reads
+  on the same connection as the cascade, so a clip committed between the client's pre-check and the DELETE
+  is still caught (the race). A user-gestured `DELETE /api/games/{id}` with NO flag keeps FULL cascade
+  semantics, unchanged. The failure toast is the user-visible surface (`uploadStore.onUploadError` →
+  `toast.error('Upload failed')`); the fuller pending/retry UI is T7490. Do NOT add a frontend content
+  pre-check that gates the DELETE — the backend guard is sufficient and the frontend can't be trusted
+  (the whole point). Covered by `test_t7470_upload_failure_cascade_guard.py` +
+  `uploadManager.test.js` ("cleans up a failed pending game with only_if_empty=true").
+  Prod forensic that filed this: bigajosue (PAYING user) had 4 games insert+delete in one session
+  (`sqlite_sequence.games=4`, 0 rows), work saved only by luck of having zero clips.
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
   width-only, so a phone in LANDSCAPE ≥640px wide (iPhone 14 844x390, Pixel 7 915x412) renders the
   full desktop `ClipsSidePanel` (`hidden sm:flex`, `w-[352px]`) — NOT the mobile sidebar. Its
