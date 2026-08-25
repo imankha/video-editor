@@ -1,7 +1,7 @@
 # T7760: Redundancy/coverage-overlap survey across all e2e/*.spec.js files
 
 **Status:** WIP
-**Priority:** P1 (prerequisite for the user's 10-minute runtime target, no code risk)
+**Priority:** P1 (prerequisite for the user's runtime target, no code risk)
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-08-25
@@ -11,11 +11,12 @@
 
 The user ran the full local Playwright suite: 348 passed / 144 failed / 23 skipped / 34 did
 not run, **4.6 hours wall-clock**. Alongside fixing the real failures (T7730/T7740/T7750), the
-user wants the suite cut to a **10-minute max**, driven specifically by removing REDUNDANT
-coverage — "no code paths should be checked twice" (user's own words). This is explicitly NOT
-satisfied by deleting slow tests arbitrarily or adding more Playwright parallelism — it
-requires actually identifying which specs/test cases exercise the same application code as
-another spec/test case, then consolidating or removing the duplicate.
+user wants the suite cut to somewhere in the **5-20 minute range** (clarified 2026-08-25 — not
+a strict 10-minute ceiling), driven specifically by removing REDUNDANT coverage — "no code
+paths should be checked twice" (user's own words). This is explicitly NOT satisfied by
+deleting slow tests arbitrarily or adding more Playwright parallelism — it requires actually
+identifying which specs/test cases exercise the same application code as another spec/test
+case, then consolidating or removing the duplicate.
 
 `docs/testing/playwright-triage-2026-08-25.md` triaged all 144 failures and listed slow tests
 (its "Slow Tests" section, raw duration data), but explicitly did NOT do this survey — it
