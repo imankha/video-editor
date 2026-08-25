@@ -726,17 +726,17 @@ export function OverlayModeView({
 
   return (
     <>
-      {/* T740: Outdated framing banner */}
+      {/* T740: Outdated Focus banner */}
       {framingOutdated && !isFullscreen && (
         <div className="mb-3 flex items-center justify-between gap-3 bg-amber-900/40 border border-amber-500/30 rounded-lg px-4 py-2.5">
           <p className="text-amber-200 text-sm">
-            Clip boundaries changed since this video was framed. Overlay edits will apply to the old framing.
+            Clip boundaries changed since this video&apos;s Focus export. Overlay edits will apply to the old crop.
           </p>
           <button
             onClick={onSwitchToFraming}
             className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-sm font-medium transition-colors"
           >
-            Re-frame now
+            Re-run Focus
           </button>
         </div>
       )}
