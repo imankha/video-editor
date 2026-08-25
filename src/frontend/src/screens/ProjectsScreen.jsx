@@ -58,12 +58,12 @@ let navigationResumeAttempted = false;
 //
 // CRITICAL: these specifiers must resolve to the SAME modules as App.jsx's lazyWithReload
 // imports so Vite emits the SAME chunk and shares the module registry. App.jsx (in src/)
-// uses './screens/FramingScreen'; from here (src/screens/) the equivalent is
-// './FramingScreen' — both resolve to src/screens/FramingScreen.jsx. A different
+// uses './screens/FocusScreen'; from here (src/screens/) the equivalent is
+// './FocusScreen' — both resolve to src/screens/FocusScreen.jsx. A different
 // specifier would produce a different chunk and defeat the fix.
 const EDITOR_SCREEN_IMPORTERS = [
   () => import('./AnnotateScreen'),
-  () => import('./FramingScreen'),
+  () => import('./FocusScreen'),
   () => import('./OverlayScreen'),
 ];
 

@@ -11,7 +11,7 @@ import { useProjectsStore } from '../stores/projectsStore.js';
 import { useProjectDataStore } from '../stores/projectDataStore.js';
 import { useGamesDataStore } from '../stores/gamesDataStore.js';
 import { useVideoStore } from '../stores/videoStore.js';
-import { useFramingStore } from '../stores/framingStore.js';
+import { useFocusStore } from '../stores/focusStore.js';
 import { useOverlayStore } from '../stores/overlayStore.js';
 import { useProfileStore } from '../stores/profileStore.js';
 
@@ -35,7 +35,7 @@ export function getEditorContext() {
   const projectData = useProjectDataStore.getState();
   const games = useGamesDataStore.getState();
   const video = useVideoStore.getState();
-  const framing = useFramingStore.getState();
+  const framing = useFocusStore.getState();
   const overlay = useOverlayStore.getState();
   const profile = useProfileStore.getState();
 
@@ -99,7 +99,9 @@ export function getEditorContext() {
 
 function modeFromRoute(path) {
   if (path.startsWith('/annotate')) return 'annotate';
-  if (path.startsWith('/framing')) return 'framing';
+  // T7700: '/focus' is the current path; '/framing' kept for legacy URLs. The
+  // returned mode id stays 'framing' (unchanged internal/persisted value).
+  if (path.startsWith('/focus') || path.startsWith('/framing')) return 'framing';
   if (path.startsWith('/overlay')) return 'overlay';
   if (path.startsWith('/home')) return 'home';
   if (path.startsWith('/admin')) return 'admin';

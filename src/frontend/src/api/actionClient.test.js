@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 /**
  * T4330 -- Unified Action Client: Serialization + Versioning + 409 Conflicts.
  *
- * `createActionClient` is the new shared transport both framingActions and
+ * `createActionClient` is the new shared transport both focusActions and
  * overlayActions will route through (design doc docs/plans/tasks/T4330-design.md
  * section 2.3-2.5). It does not exist yet -- this file is written test-first
  * (Stage 3) and every test here is expected to FAIL until `api/actionClient.js`

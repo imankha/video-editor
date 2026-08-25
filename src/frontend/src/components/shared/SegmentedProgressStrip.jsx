@@ -47,13 +47,13 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
 
   if (framingComplete) {
     // Framing done - show single "Framing" segment as complete
-    clipSegments.push({ status: 'done', label: 'Framing', tags: [] });
+    clipSegments.push({ status: 'done', label: 'Focus', tags: [] });
   } else if (isExporting === 'framing') {
     // Currently exporting - show single "Framing" segment as exporting (or disconnected)
-    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'Framing', tags: [] });
+    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'Focus', tags: [] });
   } else if (failedExportType === 'framing') {
     // Framing export failed - show single "Framing" segment as failed
-    clipSegments.push({ status: 'export_failed', label: 'Framing', tags: [] });
+    clipSegments.push({ status: 'export_failed', label: 'Focus', tags: [] });
   } else {
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
@@ -129,12 +129,12 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               ) : isExporting === 'framing' ? (
                 <span className="text-amber-400 flex items-center gap-1">
                   <RefreshCw size={10} className="animate-spin" />
-                  Framing...
+                  Focus...
                 </span>
               ) : framingComplete ? (
-                <span className="text-green-400">Framing</span>
+                <span className="text-green-400">Focus</span>
               ) : (
-                <span>Framing</span>
+                <span>Focus</span>
               )}
             </span>
             {isExporting === 'overlay' && isOffline ? (
@@ -188,7 +188,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export framing to complete') :
+                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export Focus to complete') :
                 segment.status === 'ready' ? 'Ready' :
                 'Not Started'
               } (click to open)`}

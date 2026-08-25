@@ -334,7 +334,7 @@ async function _resetDataStores() {
   stores.useProjectsStore.getState().reset();
   stores.useGamesDataStore.getState().reset();
   stores.useProjectDataStore.getState().reset();
-  stores.useFramingStore.getState().reset();
+  stores.useFocusStore.getState().reset();
   stores.useOverlayStore.getState().reset();
   stores.useVideoStore.getState().reset();
   stores.useExportStore.getState().reset();

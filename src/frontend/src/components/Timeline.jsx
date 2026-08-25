@@ -2,7 +2,7 @@ import React from 'react';
 import { Film, Crop, Split, Circle, Eye, EyeOff } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from './timeline/TimelineBase';
 // Mode-specific layer imports
-import { CropLayer, SegmentLayer } from '../modes/framing';
+import { CropLayer, SegmentLayer } from '../modes/focus';
 import { HighlightLayer } from '../modes/overlay';
 
 /**
@@ -12,7 +12,7 @@ import { HighlightLayer } from '../modes/overlay';
  *
  * NOTE: This is currently a combined timeline showing all layers (Framing + Overlay).
  * After mode switcher implementation, this will be replaced by:
- * - modes/framing/FramingTimeline.jsx (Crop + Segment layers)
+ * - modes/focus/FocusTimeline.jsx (Crop + Segment layers)
  * - modes/overlay/OverlayTimeline.jsx (Highlight + future overlay layers)
  */
 export function Timeline({

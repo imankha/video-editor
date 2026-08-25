@@ -1,7 +1,7 @@
 # Video Editor - AI Guidelines
 
 ## Project Overview
-Browser-based video editor: **Annotate** (clip extraction) → **Framing** (crop/upscale) → **Overlay** (highlights) → **Gallery** (downloads).
+Browser-based video editor: **Annotate** (clip extraction) → **Focus** (crop/upscale) → **Overlay** (highlights) → **Gallery** (downloads).
 
 ## Stack
 | Layer | Technology |
@@ -173,7 +173,7 @@ Registered subagents live in `.claude/agents/` (frontmatter = name, description,
 |-----|--------|
 | [export-pipeline.md](.claude/knowledge/export-pipeline.md) | Export/publish flow, final videos, R2 refs |
 | [modal-gpu.md](.claude/knowledge/modal-gpu.md) | Modal functions, upscaling, local FFmpeg |
-| [keyframes-framing.md](.claude/knowledge/keyframes-framing.md) | Crop/highlight keyframes, splines, Framing |
+| [keyframes-framing.md](.claude/knowledge/keyframes-framing.md) | Crop/highlight keyframes, splines, Focus (formerly Framing) mode |
 | [annotate.md](.claude/knowledge/annotate.md) | Annotate screen, clips/segments, recap |
 | [persistence-sync.md](.claude/knowledge/persistence-sync.md) | Gesture persistence, R2 sync, versioning |
 | [backend-services.md](.claude/knowledge/backend-services.md) | FastAPI structure, Postgres, migrations |

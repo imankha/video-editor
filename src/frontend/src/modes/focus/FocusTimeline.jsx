@@ -6,7 +6,7 @@ import CropLayer from './layers/CropLayer';
 import SegmentLayer from './layers/SegmentLayer';
 
 /**
- * FramingTimeline - Mode-specific timeline for Framing mode.
+ * FocusTimeline - Mode-specific timeline for Framing mode.
  * Renders CropLayer and SegmentLayer within TimelineBase.
  *
  * This is a thin wrapper that composes TimelineBase with framing-specific layers.
@@ -15,7 +15,7 @@ import SegmentLayer from './layers/SegmentLayer';
  * - Dynamic height based on whether segments exist
  * - Passing props to CropLayer and SegmentLayer
  */
-export function FramingTimeline({
+export function FocusTimeline({
   // TimelineBase props
   currentTime,
   duration,
@@ -188,4 +188,4 @@ export function FramingTimeline({
   );
 }
 
-export default FramingTimeline;
+export default FocusTimeline;

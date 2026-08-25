@@ -1035,7 +1035,7 @@ export function ProjectManager({
                     {' · '}
                     {recentItems.recentProject.has_final_video ? 'Complete' :
                      recentItems.recentProject.has_working_video ? 'In Overlay' :
-                     recentItems.recentProject.clips_in_progress > 0 ? 'Framing started' : 'Not Started'}
+                     recentItems.recentProject.clips_in_progress > 0 ? 'Focus started' : 'Not Started'}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
@@ -1333,7 +1333,7 @@ export function ProjectManager({
                       { value: 'all', label: 'All' },
                       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
                       { value: 'overlay', label: 'In Overlay', color: 'blue' },
-                      { value: 'editing', label: 'Framing Started', color: 'blue' },
+                      { value: 'editing', label: 'Focus Started', color: 'blue' },
                       { value: 'exported', label: 'Exported', color: 'purple' },
                       { value: 'not_started', label: 'Not Started', color: 'gray' }
                     ].map(opt => {

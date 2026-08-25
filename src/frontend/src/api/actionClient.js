@@ -1,7 +1,7 @@
 /**
  * Unified Action Client (T4330)
  *
- * ONE transport shared by framingActions.js and overlayActions.js. Owns three
+ * ONE transport shared by focusActions.js and overlayActions.js. Owns three
  * concerns transparently so callers never see them:
  *   - per-entity FIFO serialization (same entity's actions hit the wire in
  *     emission order; different entities never block each other)

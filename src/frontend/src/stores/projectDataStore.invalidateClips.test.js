@@ -7,7 +7,7 @@ const mockApiFetch = vi.fn();
 vi.mock('../utils/apiFetch', () => ({ default: (...args) => mockApiFetch(...args) }));
 
 /**
- * T6190: invalidateClips is the gesture-driven refetch that replaces FramingScreen's
+ * T6190: invalidateClips is the gesture-driven refetch that replaces FocusScreen's
  * removed mount-time fetchClips. Leaving annotate for framing/overlay invalidates the
  * clip list so the editor picks up boundary/clip edits made in annotate.
  */

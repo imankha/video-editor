@@ -116,7 +116,7 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 export const STEP_TITLES = {
   // Quest tutorial steps — T4780
   watch_annotate_tutorial: 'Watch Annotate Tutorial',
-  watch_framing_tutorial: 'Watch Framing Tutorial',
+  watch_framing_tutorial: 'Watch Focus Tutorial',
   watch_overlay_tutorial: 'Watch Overlay Tutorial',
   watch_publish_tutorial: 'Watch Publish Tutorial',
   // Quest 1 — Get Started
@@ -166,7 +166,7 @@ export const STEP_DESCRIPTIONS = {
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll render your close-up in crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p -- this takes a minute. Sit tight; next you will add a spotlight to your player on this same reel.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,
+  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Focus complete (green) and Overlay not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',

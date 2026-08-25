@@ -24,6 +24,6 @@
  * @returns {boolean} Whether the export -> overlay transition should persist
  *   full framing state. Always `false`.
  */
-export function shouldPersistFramingForOverlayTransition() {
+export function shouldPersistFocusForOverlayTransition() {
   return false;
 }

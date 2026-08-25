@@ -34,7 +34,7 @@ Visual design patterns for consistent UI across the application.
 |-------|----------|-----|-------|
 | Purple | `purple-600` | #9333EA | Primary brand, main actions |
 | Green | `green-600` | #16A34A | Success, add, annotate mode |
-| Blue | `blue-600` | #2563EB | Framing mode, informational |
+| Blue | `blue-600` | #2563EB | Focus mode, informational |
 
 ### Semantic Colors
 | Purpose | Base | Hover | Usage |

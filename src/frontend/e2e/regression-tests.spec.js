@@ -708,14 +708,14 @@ async function navigateToProjectFromHome(page) {
  * @param {boolean} options.waitForVideo - If true, wait for a video element to be ready (default: true)
  * @param {number} options.videoTimeout - Max time to wait for video to load (default: 60000)
  */
-async function navigateToFramingAndWaitForVideo(page, { waitForVideo = true, videoTimeout = 60000 } = {}) {
+async function navigateToFocusAndWaitForVideo(page, { waitForVideo = true, videoTimeout = 60000 } = {}) {
   console.log('[Test] Navigating to framing mode...');
 
   // Navigate to the project
   await navigateToProjectFromHome(page);
 
   // Wait for Framing mode to load
-  await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId('mode-framing')).toBeVisible({ timeout: 30000 });
   console.log('[Test] Framing mode loaded');
 
   if (!waitForVideo) return;
@@ -879,7 +879,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       }
 
       // Wait for Framing mode to load
-      await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId('mode-framing')).toBeVisible({ timeout: 15000 });
       // Video check already handled by navigation — skip redundant waitForVideoFirstFrame
       console.log('[Test] Navigated to Framing mode for existing project');
     }
@@ -944,8 +944,8 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
   // Navigate to the project in Framing mode
-  await navigateToFramingAndWaitForVideo(page);
-  // Video check already handled by navigateToFramingAndWaitForVideo
+  await navigateToFocusAndWaitForVideo(page);
+  // Video check already handled by navigateToFocusAndWaitForVideo
   console.log('[Test] Project created from clips - now in Framing mode');
 
   // Return the created projects
@@ -960,7 +960,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
  * Ensure we're in framing mode for a project with clips.
  * Creates project if needed, navigates to framing mode.
  */
-async function ensureFramingMode(page) {
+async function ensureFocusMode(page) {
   // First ensure projects exist - this now leaves us in Framing mode
   await ensureProjectsExist(page);
 
@@ -1082,9 +1082,9 @@ async function ensureWorkingVideoExists(page) {
   }
 
   // No working video - need to export from framing
-  // ensureFramingMode uses TEST_VIDEO (1.5 min) for fast test runs
+  // ensureFocusMode uses TEST_VIDEO (1.5 min) for fast test runs
   console.log('[Test] No working video found, running framing export...');
-  await ensureFramingMode(page);
+  await ensureFocusMode(page);
 
   // Export using the short test video
   const exportButton = page.locator('button:has-text("Frame Video")').first();
@@ -1296,7 +1296,7 @@ test.describe('Smoke Tests @smoke', () => {
     await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video to load
-    await navigateToFramingAndWaitForVideo(page, { videoTimeout: 60000 });
+    await navigateToFocusAndWaitForVideo(page, { videoTimeout: 60000 });
 
     // Verify video element is visible and has content
     const video = page.locator('video');
@@ -1350,7 +1350,7 @@ test.describe('Smoke Tests @smoke', () => {
     await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video
-    await navigateToFramingAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
+    await navigateToFocusAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
 
     // Wait a bit to ensure any infinite loops would trigger
     await page.waitForTimeout(3000);
@@ -1394,7 +1394,7 @@ test.describe('Smoke Tests @smoke', () => {
     await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video
-    await navigateToFramingAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
+    await navigateToFocusAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
 
     const video = page.locator('video');
 
@@ -1542,16 +1542,16 @@ test.describe('Full Coverage Tests @full', () => {
     expect(projects.length).toBeGreaterThan(0);
 
     // Navigate to the project in Framing mode
-    await navigateToFramingAndWaitForVideo(page);
+    await navigateToFocusAndWaitForVideo(page);
 
     // Check for Framing tab button or Frame Video button
     const framingVisible = await Promise.race([
-      page.locator('button:has-text("Framing")').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
+      page.getByTestId('mode-framing').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
       page.locator('button:has-text("Frame Video")').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
     ]).catch(() => false);
 
     if (framingVisible) {
-      // navigateToFramingAndWaitForVideo already confirmed the video element is present
+      // navigateToFocusAndWaitForVideo already confirmed the video element is present
       // (with CORS fallback if needed), so skip the redundant waitForVideoFirstFrame call
       console.log('[Full] Project created from library clips - now in Framing mode');
     } else {
@@ -1566,7 +1566,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Ensure we're in framing mode (creates projects if needed)
     // Uses TEST_VIDEO (1.5 min) for fast test runs
-    await ensureFramingMode(page);
+    await ensureFocusMode(page);
 
     // Check initial state - Overlay button should be disabled (no working video yet)
     const overlayButton = page.locator('button:has-text("Overlay")');
@@ -1762,7 +1762,7 @@ test.describe('Full Coverage Tests @full', () => {
     test.slow();
 
     // Ensure we're in framing mode with a project
-    await ensureFramingMode(page);
+    await ensureFocusMode(page);
 
     // Wait for video and crop to be initialized
     await waitForVideoFirstFrame(page);
@@ -1857,7 +1857,7 @@ test.describe('Full Coverage Tests @full', () => {
     test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection (30s without progress = fail)
 
     // Ensure we're in framing mode
-    await ensureFramingMode(page);
+    await ensureFocusMode(page);
 
     // Check if export is already running (from previous test) or start a new one
     const exportingButton = page.locator('button:has-text("Exporting")');
@@ -1985,9 +1985,9 @@ test.describe('Full Coverage Tests @full', () => {
       console.log('[Full] Project opened in Overlay mode, switching to Framing mode...');
 
       // Click the "Framing" button in the mode switcher (in the header)
-      const framingModeButton = page.locator('button:has-text("Framing")').first();
-      await expect(framingModeButton).toBeVisible({ timeout: 5000 });
-      await framingModeButton.click();
+      const focusModeButton = page.getByTestId('mode-framing').first();
+      await expect(focusModeButton).toBeVisible({ timeout: 5000 });
+      await focusModeButton.click();
       await page.waitForTimeout(2000);
       console.log('[Full] Clicked Framing button in mode switcher');
     }
@@ -2106,9 +2106,9 @@ test.describe('Full Coverage Tests @full', () => {
     const addOverlayButtonReload = page.locator('button:has-text("Add Overlay")');
     if (await addOverlayButtonReload.isVisible({ timeout: 2000 }).catch(() => false)) {
       console.log('[Full] Project reopened in Overlay mode, switching to Framing mode...');
-      const framingModeButtonReload = page.locator('button:has-text("Framing")').first();
-      await expect(framingModeButtonReload).toBeVisible({ timeout: 5000 });
-      await framingModeButtonReload.click();
+      const focusModeButtonReload = page.getByTestId('mode-framing').first();
+      await expect(focusModeButtonReload).toBeVisible({ timeout: 5000 });
+      await focusModeButtonReload.click();
       await page.waitForTimeout(2000);
       console.log('[Full] Switched back to Framing mode after reload');
     }
@@ -2317,7 +2317,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Navigate to the project in Framing mode
     console.log('[Full Pipeline] Navigating to framing mode...');
-    await navigateToFramingAndWaitForVideo(page);
+    await navigateToFocusAndWaitForVideo(page);
 
     // Verify clips are loaded in sidebar
     const clipItems = page.locator('[data-testid="clip-item"]');
@@ -2351,7 +2351,7 @@ test.describe('Full Coverage Tests @full', () => {
     // Reload to pick up crop_data changes
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
-    await navigateToFramingAndWaitForVideo(page);
+    await navigateToFocusAndWaitForVideo(page);
 
     // Grant backend credits for the export (frontend check is intercepted via page.route)
     const creditGrant = await page.evaluate(async () => {

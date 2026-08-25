@@ -1,4 +1,4 @@
 // Mode View components - complete views for each editor mode
-export { FramingModeView } from './FramingModeView';
+export { FocusModeView } from './FocusModeView';
 export { AnnotateModeView } from './AnnotateModeView';
 export { OverlayModeView } from './OverlayModeView';

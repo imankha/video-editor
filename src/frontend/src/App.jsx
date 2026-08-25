@@ -42,7 +42,7 @@ function lazyWithReload(importFn) {
   }));
 }
 const AnnotateScreen = lazyWithReload(() => import('./screens/AnnotateScreen').then(m => ({ default: m.AnnotateScreen })));
-const FramingScreen = lazyWithReload(() => import('./screens/FramingScreen').then(m => ({ default: m.FramingScreen })));
+const FocusScreen = lazyWithReload(() => import('./screens/FocusScreen').then(m => ({ default: m.FocusScreen })));
 const OverlayScreen = lazyWithReload(() => import('./screens/OverlayScreen').then(m => ({ default: m.OverlayScreen })));
 const AdminScreen = lazyWithReload(() => import('./screens/AdminScreen').then(m => ({ default: m.AdminScreen })));
 import { AppStateProvider, ProjectProvider } from './contexts';
@@ -51,7 +51,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
 import { SignInScreen } from './components/SignInScreen';
 import ImpersonationBanner from './components/ImpersonationBanner';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, APP_SCREENS, resolveEditorScreen } from './stores';
+import { useEditorStore, useExportStore, useFocusStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, APP_SCREENS, resolveEditorScreen } from './stores';
 import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
@@ -71,7 +71,7 @@ import { setPendingGame } from './utils/pendingNavigation';
  * - Routing to appropriate screen components
  *
  * Screen-specific logic is now in:
- * - FramingScreen - all framing hooks, clip management, video playback
+ * - FocusScreen - all framing hooks, clip management, video playback
  * - OverlayScreen - all overlay hooks, highlight regions, video playback
  * - AnnotateScreen - all annotate hooks, game management
  * - ProjectsScreen - project listing, game listing
@@ -97,7 +97,7 @@ function App() {
   } = useExportStore();
 
   // Framing store - for detecting uncommitted changes in mode switch
-  const framingChangedSinceExport = useFramingStore(state => state.framingChangedSinceExport);
+  const framingChangedSinceExport = useFocusStore(state => state.framingChangedSinceExport);
 
   // Working video from project data store (canonical owner)
   const workingVideo = useProjectDataStore(state => state.workingVideo);
@@ -594,7 +594,7 @@ function App() {
 
     // T6190: Leaving annotate for framing/overlay is the gesture that can carry annotate
     // boundary/clip edits into the editor. Invalidate clips so the editor re-fetches the
-    // fresh list. This replaces the removed FramingScreen mount refetch — a gesture-driven
+    // fresh list. This replaces the removed FocusScreen mount refetch — a gesture-driven
     // fetch, not a reactive effect, and the single owner of "pick up annotate edits".
     // Read the project id from the store, NOT the `selectedProjectId` closure/prop:
     // AnnotateScreen.handleAnnotateModeChange calls selectProject() synchronously right
@@ -645,7 +645,7 @@ function App() {
     }
     // Clear the "changed" flag since we triggered an export - user shouldn't be prompted again
     if (sourceMode === EDITOR_MODES.FRAMING) {
-      useFramingStore.getState().setFramingChangedSinceExport(false);
+      useFocusStore.getState().setFramingChangedSinceExport(false);
     } else if (sourceMode === EDITOR_MODES.OVERLAY) {
       useOverlayStore.getState().setOverlayChangedSinceExport(false);
     }
@@ -864,7 +864,7 @@ function App() {
           {/* Mode-specific views */}
           {editorMode === EDITOR_MODES.FRAMING && (
             <Suspense fallback={null}>
-              <FramingScreen
+              <FocusScreen
                 onExportComplete={handleExportComplete}
                 exportButtonRef={exportButtonRef}
               />
@@ -899,7 +899,7 @@ function App() {
         onOpenProject={async (projectId) => {
           // Reset stores to clear stale data from previous project
           useProjectDataStore.getState().reset();
-          useFramingStore.getState().reset();
+          useFocusStore.getState().reset();
           useOverlayStore.getState().reset();
           useVideoStore.getState().reset();
           // Always re-fetch: name may have changed via gallery rename
@@ -907,7 +907,7 @@ function App() {
             fetchProjects({ force: true }),
             selectProject(projectId),
           ]);
-          // T6190: this re-edit path never runs loadProject and FramingScreen no longer
+          // T6190: this re-edit path never runs loadProject and FocusScreen no longer
           // fetches clips on mount, so load the restored project's clips here — the
           // "open reel" gesture owns its own fetch (reset() above cleared the old list).
           useProjectDataStore.getState().invalidateClips(projectId);
@@ -924,10 +924,10 @@ function App() {
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={modeSwitchDialog.isOpen}
-        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Overlay Changes' : 'Uncommitted Framing Changes'}
+        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Overlay Changes' : 'Uncommitted Focus Changes'}
         message={modeSwitchDialog.sourceMode === 'overlay'
           ? 'You have overlay edits that haven\'t been exported yet.\n\n• Export: Create a new final video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in overlay mode'
-          : 'You have framing edits that haven\'t been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any overlay work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in framing mode'
+          : 'You have Focus edits that haven\'t been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any overlay work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Focus mode'
         }
         onClose={handleModeSwitchCancel}
         buttons={[

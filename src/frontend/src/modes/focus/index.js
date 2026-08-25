@@ -1,11 +1,11 @@
 // Framing mode exports
 // Mode Container
-export { FramingMode } from './FramingMode';
-export { default as FramingModeDefault } from './FramingMode';
+export { FocusMode } from './FocusMode';
+export { default as FramingModeDefault } from './FocusMode';
 
 // Timeline
-export { FramingTimeline } from './FramingTimeline';
-export { default as FramingTimelineDefault } from './FramingTimeline';
+export { FocusTimeline } from './FocusTimeline';
+export { default as FocusTimelineDefault } from './FocusTimeline';
 
 // Hooks
 export { default as useCrop } from './hooks/useCrop';

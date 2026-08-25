@@ -22,7 +22,7 @@ import { surfaceConflictPrompt } from '../utils/actionConflictPrompt';
 const client = createActionClient({
   url: (ids) => `${API_BASE}/api/clips/projects/${ids.projectId}/clips/${ids.clipId}/actions`,
   entityKey: (ids) => `${ids.projectId}:${ids.clipId}`,
-  tag: 'framingActions',
+  tag: 'focusActions',
   mapResult: (raw, status, ok) => {
     if (!ok) return { success: false, error: raw.error };
     return raw;
@@ -43,7 +43,7 @@ async function sendAction(projectId, clipId, action, target = null, data = null)
   try {
     return await client.post({ projectId, clipId }, action, target, data);
   } catch (err) {
-    console.error('[framingActions] Network error:', err);
+    console.error('[focusActions] Network error:', err);
     return { success: false, error: err.message };
   }
 }

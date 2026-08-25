@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import CropOverlay from '../modes/framing/overlays/CropOverlay';
-import useCrop from '../modes/framing/hooks/useCrop';
+import CropOverlay from '../modes/focus/overlays/CropOverlay';
+import useCrop from '../modes/focus/hooks/useCrop';
 import { VideoPlayer } from '../components/VideoPlayer';
 import '../index.css'; // Tailwind — the box's `absolute`/`pointer-events-auto` classes need it
 
@@ -9,7 +9,7 @@ import '../index.css'; // Tailwind — the box's `absolute`/`pointer-events-auto
  * T5380b — DEV-ONLY real-browser harness for the CropOverlay first-drag bug.
  *
  * Renders the REAL VideoPlayer + CropOverlay + useCrop keyframe parent, the same way
- * FramingModeView does (overlays={[<CropOverlay key="crop"/>]} inside VideoPlayer's
+ * FocusModeView does (overlays={[<CropOverlay key="crop"/>]} inside VideoPlayer's
  * `.video-container`, currentCrop = dragCrop || interpolateCrop(t)). This is the
  * closest non-app reproduction of the staging Framing editor.
  *
@@ -28,7 +28,7 @@ const DIAG_PARAMS = new URLSearchParams(window.__CROPDIAG || '');
 const VIDEO_METADATA = { width: 1600, height: 900, duration: 10, framerate: 30 };
 const CONTAINER = { width: 800, height: 450 };
 
-// Stable zoom/pan like FramingScreen passes (module constants so useVideoDisplayRect's
+// Stable zoom/pan like FocusScreen passes (module constants so useVideoDisplayRect's
 // layout-effect deps don't churn).
 const ZOOM = 1;
 const PAN_OFFSET = { x: 0, y: 0 };
@@ -46,11 +46,11 @@ function FramingHarness() {
     VIDEO_METADATA, null, SAVED_KEYFRAMES
   );
 
-  // Exactly FramingScreen: currentCropState = dragCrop || interpolateCrop(currentTime).
+  // Exactly FocusScreen: currentCropState = dragCrop || interpolateCrop(currentTime).
   const currentCropState = dragCrop || interpolateCrop(CURRENT_TIME);
 
   const onCropChange = useCallback((c) => setDragCrop(c), []);
-  // FramingContainer.handleCropComplete (backend persistence stripped).
+  // FocusContainer.handleCropComplete (backend persistence stripped).
   const onCropComplete = useCallback((cropData) => {
     addOrUpdateKeyframe(CURRENT_TIME, cropData, VIDEO_METADATA.duration);
     setDragCrop(null);

@@ -27,7 +27,7 @@ vi.mock('../containers/ExportButtonContainer', () => ({
 }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
 vi.mock('../components/shared/clipConstants', () => ({ formatTimeSimple: () => '0:00' }));
-vi.mock('./framing', () => ({ FramingMode: () => <div />, CropOverlay: () => <div /> }));
+vi.mock('./focus', () => ({ FocusMode: () => <div />, CropOverlay: () => <div /> }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({
     isVisible: true,
@@ -42,7 +42,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 const isMobileMock = vi.fn(() => false);
 vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => isMobileMock() }));
 
-import { FramingModeView } from './FramingModeView';
+import { FocusModeView } from './FocusModeView';
 
 function renderView(overrides = {}) {
   const props = {
@@ -61,10 +61,10 @@ function renderView(overrides = {}) {
     getFilteredKeyframesForExport: () => [],
     ...overrides,
   };
-  return render(<FramingModeView {...props} />);
+  return render(<FocusModeView {...props} />);
 }
 
-describe('FramingModeView export reachability on mobile (T4880)', () => {
+describe('FocusModeView export reachability on mobile (T4880)', () => {
   it('renders the export / proceed-to-overlay button on a mobile viewport', () => {
     isMobileMock.mockReturnValue(true);
     renderView();

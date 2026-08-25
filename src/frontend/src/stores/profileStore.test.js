@@ -36,7 +36,7 @@ vi.mock('./index', () => ({
   useProjectsStore: _resettableStore(),
   useGamesDataStore: _resettableStore(),
   useProjectDataStore: _resettableStore(),
-  useFramingStore: _resettableStore(),
+  useFocusStore: _resettableStore(),
   useOverlayStore: _resettableStore(),
   useVideoStore: _resettableStore(),
   useExportStore: _resettableStore(),

@@ -399,7 +399,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   else if (isExporting) { statusLabel = 'Exporting'; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   else if (project.has_working_video) { statusLabel = 'In Overlay'; statusTint = 'text-blue-300'; }
-  else if (project.clips_in_progress > 0) { statusLabel = 'Framing'; statusTint = 'text-blue-300'; }
+  else if (project.clips_in_progress > 0) { statusLabel = 'Focus'; statusTint = 'text-blue-300'; }
   else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
 
   // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
@@ -437,7 +437,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isComplete && (
         <button onClick={(e) => { e.stopPropagation(); handleClipClick(0); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Crop size={18} className="text-gray-300 flex-shrink-0" />
-          <span className="text-gray-200">Open in Framing</span>
+          <span className="text-gray-200">Open in Focus</span>
         </button>
       )}
       {isComplete && (
@@ -647,7 +647,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
           {isComplete && (
-            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in Framing" className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in Focus" className={actionBtnClass} />
           )}
           {isComplete && (
             <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Overlay" className={actionBtnClass} />

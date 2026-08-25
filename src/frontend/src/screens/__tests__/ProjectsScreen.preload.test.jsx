@@ -11,9 +11,9 @@ vi.mock('../AnnotateScreen', () => {
   tracker.loaded.push('annotate');
   return { AnnotateScreen: () => null };
 });
-vi.mock('../FramingScreen', () => {
+vi.mock('../FocusScreen', () => {
   tracker.loaded.push('framing');
-  return { FramingScreen: () => null };
+  return { FocusScreen: () => null };
 });
 vi.mock('../OverlayScreen', () => {
   tracker.loaded.push('overlay');

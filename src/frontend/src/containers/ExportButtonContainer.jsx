@@ -1008,7 +1008,7 @@ export function ExportButtonContainer({
   // T5790: live credit-cost estimate for the Framing export button. Derived at render
   // (no new state — no-redundant-state rule) from the live total effective duration via
   // the shared estimator, so it ticks the instant a speed/trim/split/clip-count edit
-  // updates `clips` (clipsWithCurrentState from FramingContainer). Framing only —
+  // updates `clips` (clipsWithCurrentState from FocusContainer). Framing only —
   // Overlay export does not run the per-second credit check, so it stays null there.
   // Fail-closed: null when the output duration is unknown (missing metadata); we log
   // once per relevant change, mirroring the click-time fail-closed warning in handleExport.

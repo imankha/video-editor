@@ -2,13 +2,13 @@ import { useCallback } from 'react';
 import { API_BASE, resolveApiUrl } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore } from '../stores/projectDataStore';
-import { useFramingStore } from '../stores/framingStore';
+import { useFocusStore } from '../stores/focusStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
-import { seedClipVersion } from '../api/framingActions';
+import { seedClipVersion } from '../api/focusActions';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -82,7 +82,7 @@ export function useProjectLoader() {
     fetchClips,
     reset: resetProjectData,
   } = useProjectDataStore();
-  const resetFramingStore = useFramingStore(state => state.reset);
+  const resetFramingStore = useFocusStore(state => state.reset);
   const resetOverlayStore = useOverlayStore(state => state.reset);
   const resetVideoStore = useVideoStore(state => state.reset);
 
@@ -134,7 +134,7 @@ export function useProjectLoader() {
       onProgress({ stage: 'clips', message: 'Loading clips...' });
       setLoading(true, 'clips');
 
-      // Fetch project clips via store (deduped if FramingScreen also calls fetchClips)
+      // Fetch project clips via store (deduped if FocusScreen also calls fetchClips)
       const clipsData = await fetchClips(projectId);
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);

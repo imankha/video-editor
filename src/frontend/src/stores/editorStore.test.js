@@ -86,10 +86,16 @@ describe('editorStore', () => {
 
   describe('modeFromPath (T5677)', () => {
     it('maps known editor paths to their mode', () => {
-      expect(modeFromPath('/framing')).toBe(EDITOR_MODES.FRAMING);
+      expect(modeFromPath('/focus')).toBe(EDITOR_MODES.FRAMING);
       expect(modeFromPath('/overlay')).toBe(EDITOR_MODES.OVERLAY);
       expect(modeFromPath('/annotate')).toBe(EDITOR_MODES.ANNOTATE);
       expect(modeFromPath('/admin')).toBe(EDITOR_MODES.ADMIN);
+    });
+
+    it('redirects the legacy /framing path to the Focus mode (T7700)', () => {
+      // The Framing step was renamed Focus and its route moved to /focus; old
+      // bookmarks/history to /framing must still resolve, not fall through to null.
+      expect(modeFromPath('/framing')).toBe(EDITOR_MODES.FRAMING);
     });
 
     it('maps /home and its tab sub-routes to the project manager', () => {

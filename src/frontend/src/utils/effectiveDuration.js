@@ -27,7 +27,7 @@ export function calculateEffectiveDuration(clip) {
   }
 
   // `segments` is the live frontend-format edit state (present on the selected clip
-  // via FramingContainer's clipsWithCurrentState); `segments_data` is the saved
+  // via FocusContainer's clipsWithCurrentState); `segments_data` is the saved
   // backend blob raw clips carry for every OTHER clip. Reading both lets one calculator
   // cover the selected clip's live state AND the saved state of the rest (T5780).
   const segments = clip.segments || clip.segments_data || {};

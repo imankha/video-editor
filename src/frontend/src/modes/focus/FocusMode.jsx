@@ -1,12 +1,12 @@
 import React from 'react';
 import { CropProvider } from './contexts/CropContext';
-import FramingTimeline from './FramingTimeline';
+import FocusTimeline from './FocusTimeline';
 
 /**
- * FramingMode - Container component for Framing mode.
+ * FocusMode - Container component for Framing mode.
  *
  * This component encapsulates all framing-specific UI and logic:
- * - FramingTimeline for crop and segment keyframes
+ * - FocusTimeline for crop and segment keyframes
  *
  * NOTE: CropOverlay is rendered by App.jsx inside VideoPlayer for correct positioning.
  * The overlay needs to be inside the video-container for absolute positioning to work.
@@ -15,7 +15,7 @@ import FramingTimeline from './FramingTimeline';
  * access across modes. This component receives state via props and context.
  *
  * @example
- * <FramingMode
+ * <FocusMode
  *   videoRef={videoRef}
  *   videoUrl={videoUrl}
  *   metadata={metadata}
@@ -23,7 +23,7 @@ import FramingTimeline from './FramingTimeline';
  *   // ... other props
  * />
  */
-export function FramingMode({
+export function FocusMode({
   // Video props
   videoRef,
   videoUrl,
@@ -80,10 +80,10 @@ export function FramingMode({
     <CropProvider value={cropContextValue}>
       {/* NOTE: CropOverlay is rendered by App.jsx inside VideoPlayer */}
 
-      {/* FramingTimeline */}
+      {/* FocusTimeline */}
       {videoUrl && (
         <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-1 lg:mt-6'}`}>
-          <FramingTimeline
+          <FocusTimeline
             currentTime={currentTime}
             duration={duration}
             visualDuration={visualDuration || duration}
@@ -128,4 +128,4 @@ export function FramingMode({
   );
 }
 
-export default FramingMode;
+export default FocusMode;

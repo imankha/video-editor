@@ -1,14 +1,17 @@
 """
-Framing mode export endpoints.
+Focus mode export endpoints.
 
-This module handles exports related to the Framing editing mode:
+This module handles exports related to the Focus editing mode (renamed from
+"Framing" for the UI in T7700; the internal module name, wire routes, and the
+'framing' job/mode identifiers are intentionally left unchanged to avoid
+touching persisted values):
 - /crop - Basic crop export
 - /upscale - AI upscale export with de-zoom
-- /framing - Save framing output to project
+- /framing - Save Focus output to project (wire path kept for compatibility)
 - /projects/{id}/working-video - Stream working video
 
 These endpoints handle crop keyframes, segment speed changes, trimming,
-and AI upscaling for the Framing mode workflow.
+and AI upscaling for the Focus mode workflow.
 """
 
 import asyncio

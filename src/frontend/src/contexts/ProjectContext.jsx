@@ -8,7 +8,7 @@ const ProjectContext = createContext(null);
  * truth — `selectProject` fetches and populates `selectedProject` before the
  * editor (and thus this provider) mounts (gated at App.jsx by `!selectedProject`).
  * This context does NOT issue its own fetch; it mirrors store state to preserve
- * the `useProject()` contract for FramingScreen and OverlayScreen. (T3775)
+ * the `useProject()` contract for FocusScreen and OverlayScreen. (T3775)
  */
 export function ProjectProvider({ children }) {
   const projectId = useProjectsStore(state => state.selectedProjectId);

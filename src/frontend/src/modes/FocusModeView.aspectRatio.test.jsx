@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * T4050: the reel-level AspectRatioSelector must reflect the GLOBAL (reel) aspect
- * ratio, not the clip-level crop ratio. Previously FramingModeView passed the
+ * ratio, not the clip-level crop ratio. Previously FocusModeView passed the
  * clip-level `aspectRatio` to the selector; the value was only correct because a
  * sync effect happened to keep them aligned. This locks the selector to
  * `globalAspectRatio` so the displayed ratio is always the persisted reel ratio.
@@ -30,7 +30,7 @@ vi.mock('../containers/ExportButtonContainer', () => ({
 }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
 vi.mock('../components/shared/clipConstants', () => ({ formatTimeSimple: () => '0:00' }));
-vi.mock('./framing', () => ({ FramingMode: () => <div />, CropOverlay: () => <div /> }));
+vi.mock('./focus', () => ({ FocusMode: () => <div />, CropOverlay: () => <div /> }));
 vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({
@@ -43,7 +43,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 }));
 vi.mock('../stores/editorStore', () => ({ useEditorStore: () => () => {} }));
 
-import { FramingModeView } from './FramingModeView';
+import { FocusModeView } from './FocusModeView';
 
 function renderView(overrides = {}) {
   const props = {
@@ -62,10 +62,10 @@ function renderView(overrides = {}) {
     getFilteredKeyframesForExport: () => [],
     ...overrides,
   };
-  return render(<FramingModeView {...props} />);
+  return render(<FocusModeView {...props} />);
 }
 
-describe('FramingModeView aspect-ratio selector wiring (T4050)', () => {
+describe('FocusModeView aspect-ratio selector wiring (T4050)', () => {
   beforeEach(() => {
     selectorRatios.length = 0;
   });

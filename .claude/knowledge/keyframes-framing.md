@@ -1,11 +1,21 @@
 ---
 domain: keyframes-framing
-updated: 2026-08-23 (T4355: closes T4350's multi-clip gap -- the SAME single-clip raw<->working transform pair (`transform_all_regions_to_raw`/`_to_working`, both UNCHANGED, still single-clip/concat-offset-unaware) is now composed PER-CLIP by `highlight_carry._transform_multi_clip`: attribute each concatenated-timeline region to its OLD clip via a half-open offset bucket (`_attribute_clip_index`, boundary-exact -> the later clip) -> shift into that clip's local OLD timeline (straddling regions clamp to the clip's OLD span end, same clamp-not-guess spirit as the transform's own partial-trim clamp) -> run the transform pair against `clips[i]` -> re-offset into the clip's NEW position. Clip identity is POSITIONAL ONLY (no stable id in the snapshot) so a reorder safely drops+flags rather than risking a wrong-clip landing. New `concat_offsets` helper (`routers/export/multi_clip.py`) computes the per-clip cumulative offsets (dissolve-aware); a landmine caught in review before merge: the "can't derive OLD offsets" fallback must gate on the CURRENT export's own transition, not the old snapshot's key-presence alone, or every legacy multi-clip project resets on its next cut re-export. See export-pipeline.md § Highlight carry-forward for the full decision matrix); 2026-08-23 (T4350: the raw<->working highlight transforms (`highlight_transform.transform_all_regions_to_raw`/`_to_working`) gained a SECOND production consumer besides overlay.py's read path -- `services/highlight_carry.resolve_carried_highlights` composes them OLD-working->raw->NEW-working to CARRY a user's overlay-edited highlights across a framing re-export (was silently discarded). Feeds the transform FRAME-based crop (from the stored `crop_data`, NOT the render's time-based form -- `interpolate_crop_at_frame` keys on `kf['frame']`) + canonicalized segments (T4340 gotcha) + per-side `video_dims`, framerate=30.0. Split: framing unchanged -> verbatim fast-path; single-clip change -> transform+drop-out-of-range (`dropped:N`); multi-clip change -> loud `multiclip_reset` (no per-clip attribution yet, follow-up T4355); no old framing snapshot -> verbatim + `legacy_uncertain`. Unmappable-region signal surfaces as an export-complete toast + a persistent Overlay banner (`highlight_carry_note`). Full detail in export-pipeline.md § Highlight carry-forward); 2026-08-17 (T7180 / prod bug 44p: overlay region key-format mismatch — update_region wrote camelCase startTime/endTime and never removed a pre-existing snake_case pair, so a lever drag on an auto-generated region silently never reached the render path, which prefers snake_case when present; fix canonicalizes all region writers on snake_case; see Overlay render read path §); 2026-07-30 (T6190 Framing does NOT fetch games/clips on mount — bootstrap-hydrated games + one-clip-fetch-owner-per-entry-gesture invariant, invalidateClips on leave-annotate + downloads re-edit, dead clipsLoadedAt removed, ConnectionStatus hoisted above the home/editor split; see Invariants §; 2026-07-28 T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-08-23 (T4355: closes T4350's multi-clip gap -- the SAME single-clip raw<->working transform pair (`transform_all_regions_to_raw`/`_to_working`, both UNCHANGED, still single-clip/concat-offset-unaware) is now composed PER-CLIP by `highlight_carry._transform_multi_clip`: attribute each concatenated-timeline region to its OLD clip via a half-open offset bucket (`_attribute_clip_index`, boundary-exact -> the later clip) -> shift into that clip's local OLD timeline (straddling regions clamp to the clip's OLD span end, same clamp-not-guess spirit as the transform's own partial-trim clamp) -> run the transform pair against `clips[i]` -> re-offset into the clip's NEW position. Clip identity is POSITIONAL ONLY (no stable id in the snapshot) so a reorder safely drops+flags rather than risking a wrong-clip landing. New `concat_offsets` helper (`routers/export/multi_clip.py`) computes the per-clip cumulative offsets (dissolve-aware); a landmine caught in review before merge: the "can't derive OLD offsets" fallback must gate on the CURRENT export's own transition, not the old snapshot's key-presence alone, or every legacy multi-clip project resets on its next cut re-export. See export-pipeline.md § Highlight carry-forward for the full decision matrix); 2026-08-23 (T4350: the raw<->working highlight transforms (`highlight_transform.transform_all_regions_to_raw`/`_to_working`) gained a SECOND production consumer besides overlay.py's read path -- `services/highlight_carry.resolve_carried_highlights` composes them OLD-working->raw->NEW-working to CARRY a user's overlay-edited highlights across a framing re-export (was silently discarded). Feeds the transform FRAME-based crop (from the stored `crop_data`, NOT the render's time-based form -- `interpolate_crop_at_frame` keys on `kf['frame']`) + canonicalized segments (T4340 gotcha) + per-side `video_dims`, framerate=30.0. Split: framing unchanged -> verbatim fast-path; single-clip change -> transform+drop-out-of-range (`dropped:N`); multi-clip change -> loud `multiclip_reset` (no per-clip attribution yet, follow-up T4355); no old framing snapshot -> verbatim + `legacy_uncertain`. Unmappable-region signal surfaces as an export-complete toast + a persistent Overlay banner (`highlight_carry_note`). Full detail in export-pipeline.md § Highlight carry-forward); 2026-08-17 (T7180 / prod bug 44p: overlay region key-format mismatch — update_region wrote camelCase startTime/endTime and never removed a pre-existing snake_case pair, so a lever drag on an auto-generated region silently never reached the render path, which prefers snake_case when present; fix canonicalizes all region writers on snake_case; see Overlay render read path §); 2026-07-30 (T6190 Focus does NOT fetch games/clips on mount — bootstrap-hydrated games + one-clip-fetch-owner-per-entry-gesture invariant, invalidateClips on leave-annotate + downloads re-edit, dead clipsLoadedAt removed, ConnectionStatus hoisted above the home/editor split; see Invariants §; 2026-07-28 T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
-# Keyframes & Framing — Domain Knowledge
+# Keyframes & Focus — Domain Knowledge
+
+> **T7700 rename (2026-08-25):** the "Focus" mode/screen is now called **Focus** in all UI copy,
+> component/file names (`FocusScreen`, `FocusContainer`, `FocusModeView`, `modes/focus/`,
+> `stores/focusStore.js`, `api/focusActions.js`), and the route (`/framing` → `/focus`, with a legacy
+> redirect). **INTERNAL/PERSISTED `framing` identifiers were intentionally KEPT**: the `EDITOR_MODES.FRAMING`
+> key + its value `'framing'`, `projects.current_mode='framing'`, `export_jobs.export_type='framing'`,
+> `working_clips.framing_version`, the `framing_action`/`_get_clip_framing_data` backend names, the
+> `framingChangedSinceExport` store field, and the `framing_opened`/`framing_exported` analytics keys.
+> So "Focus" = UI name, "framing" = wire/DB identifier; both are correct in their layer. This doc's
+> filename stays `keyframes-framing.md` (its scope also covers Overlay highlight keyframes).
 
 ## Scope
-Crop keyframes, segments/trim, the Framing screen/mode, the shared keyframe controller, spline
+Crop keyframes, segments/trim, the Focus screen/mode, the shared keyframe controller, spline
 interpolation, and the surgical persistence path for crop + highlight keyframes. Overlay highlight
 keyframes are covered where they diverge from crop — they are the "one refactor behind" sibling
 (see Keyframe System Unification epic).
@@ -17,28 +27,28 @@ keyframes are covered where they diverge from crop — they are the "one refacto
   `getKeyframesForExport`).
 - **Identity SSOT**: `resolveTargetFrame` in `src/frontend/src/utils/keyframeUtils.js:87-90`
   (`FRAME_TOLERANCE = 10 = MIN_KEYFRAME_SPACING`, L67-68).
-- **Crop hook**: `src/frontend/src/modes/framing/hooks/useCrop.js` (defaults, virtual trim, interpolation).
-- **Screen/container**: `src/frontend/src/screens/FramingScreen.jsx`,
-  `src/frontend/src/containers/FramingContainer.jsx` (gesture handlers, e.g. `handleCropComplete` L315-373).
-- **Timeline layers**: `src/frontend/src/modes/framing/layers/CropLayer.jsx` (crop) vs
+- **Crop hook**: `src/frontend/src/modes/focus/hooks/useCrop.js` (defaults, virtual trim, interpolation).
+- **Screen/container**: `src/frontend/src/screens/FocusScreen.jsx`,
+  `src/frontend/src/containers/FocusContainer.jsx` (gesture handlers, e.g. `handleCropComplete` L315-373).
+- **Timeline layers**: `src/frontend/src/modes/focus/layers/CropLayer.jsx` (crop) vs
   `src/frontend/src/components/timeline/RegionLayer.jsx` (highlight — forked, stale rules).
 - **Persistence helper**: `src/frontend/src/utils/persistKeyframeEdit.js` (T3800 single path);
-  transport `src/frontend/src/api/framingActions.js`.
+  transport `src/frontend/src/api/focusActions.js`.
 - **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend mirror
   `src/backend/app/interpolation.py`.
 - **Backend actions**: `POST /api/clips/projects/{project_id}/clips/{clip_id}/actions` →
   `framing_action` in `src/backend/app/routers/clips.py:326`. Overlay:
   `POST .../projects/{project_id}/overlay/actions` → `overlay_action` in
   `src/backend/app/routers/export/overlay.py:347`.
-- **Store**: `src/frontend/src/stores/framingStore.js` — export dirty tracking is hash-based
+- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is hash-based
   (`markExported`/`hasChangedSinceExport` L38-50).
 
 ## Data flow
 ```
-gesture (drag/resize/delete) in FramingContainer
+gesture (drag/resize/delete) in FocusContainer
   → resolveTargetFrame(keyframes, rawFrame)          # snap identity FIRST
   → hook dispatch (optimistic) + store updateClipData
-  → persistKeyframeEdit → framingActions.* (surgical POST, ONLY changed keyframe)
+  → persistKeyframeEdit → focusActions.* (surgical POST, ONLY changed keyframe)
   → backend framing_action: read msgpack blob → mutate in memory → write back
 ```
 - Crop keyframes live in `working_clips.crop_data` (msgpack, `src/backend/app/utils/encoding.py`):
@@ -47,7 +57,7 @@ gesture (drag/resize/delete) in FramingContainer
 - Highlight keyframes live in `working_videos.highlights_data` (msgpack): region dicts, each with
   a `keyframes` list keyed by **time** (backend matches ±0.02s, overlay.py:339-344) — crop matches
   by **exact frame** (clips.py:318-323).
-- Action names (framingActions.js): `add_crop_keyframe` `{frame,x,y,width,height,origin}`,
+- Action names (focusActions.js): `add_crop_keyframe` `{frame,x,y,width,height,origin}`,
   `update_crop_keyframe`, `delete_crop_keyframe`, `move_crop_keyframe`, `split_segment`,
   `remove_segment_split`, `set_segment_speed`, `set_trim_range`, `clear_trim_range`.
   Responses may carry `refresh_required`/`new_clip_id`.
@@ -67,7 +77,7 @@ in commit d702efcd) is the SINGLE calculator for post-trim/post-speed output len
 `trimRange` (0.5x doubles that segment's output); `sumEffectiveDurations(clips)` sums it
 across clips and **fails closed** (returns `null` if ANY clip's duration is NaN, so the UI
 HIDES rather than showing a guess — same no-fabricated-numbers rule as the poster). Consumed
-by `ExportButtonContainer`, `useProjectLoader`, and the Framing indicator; T5790 will turn the
+by `ExportButtonContainer`, `useProjectLoader`, and the Focus indicator; T5790 will turn the
 project total into a credit estimate, and the backend charge must use the same model.
 
 - **Data-format tolerance:** reads `clip.segments` (frontend live `{boundaries, segmentSpeeds,
@@ -75,21 +85,21 @@ project total into a credit estimate, and the backend charge must use the same m
   DB `{segments:[{start,end,speed}], trim_start/trim_end}` array form. Give it whichever the clip
   carries; `duration` is only a fallback end-bound (unused when `boundaries`/`trimRange` present).
 - **Live-vs-saved segment source (THE subtlety):** the SELECTED clip's saved `segments` is STALE
-  while editing — its live speed/trim lives in the `useSegments` hook. `FramingContainer`'s
+  while editing — its live speed/trim lives in the `useSegments` hook. `FocusContainer`'s
   `clipsWithCurrentState` already injects the hook state as frontend-format `segments` onto the
   selected clip (line ~225) and leaves every OTHER clip with its saved `segments_data`. So feeding
   `clipsWithCurrentState` to the calculator gives a LIVE selected-clip number + SAVED others in one
   pass. The two derived memos (`selectedClipEffectiveDuration`, `projectEffectiveDuration`,
-  `FramingContainer.jsx` ~L272-296) are PURE render-time derivations — **no new state, no store
+  `FocusContainer.jsx` ~L272-296) are PURE render-time derivations — **no new state, no store
   field, no persistence** (T350 doctrine); the chip ticks the instant a speed/trim gesture updates
   the hook, with no save/export.
-- **`duration` in Framing is the CLIP length, not the source game.** `useVideo.duration` (threaded
+- **`duration` in Focus is the CLIP length, not the source game.** `useVideo.duration` (threaded
   as the container/view `duration` prop) is already the ~clip-length value the playback timer and
   the existing duration readout show — NOT the raw `<video>.duration`, which is the full
   concatenated source game (~88min). A 5.1s clip correctly reads `Output: 0:05`. (On first load
   there is a sub-second transient where the chip shows the source length before the clip's saved
   segment state restores; it self-corrects — do not "fix" it with a guard.)
-- **View (`FramingModeView.OutputLengthChip`):** presentational chip near the duration readout;
+- **View (`FocusModeView.OutputLengthChip`):** presentational chip near the duration readout;
   emphasized (blue) only when output differs from source length (slow-mo present), else subtle gray.
   A `Total` chip renders near the export area only for multi-clip projects (redundant for one clip).
   The playback timer is deliberately UNCHANGED — it shows source-timeline position; only the chip
@@ -102,7 +112,7 @@ project total into a credit estimate, and the backend charge must use the same m
 
 ### Export-button credit estimate (T5790)
 
-The Framing Export button shows a live credit-cost estimate under it (`~9 credits · balance 42`,
+The Focus Export button shows a live credit-cost estimate under it (`~9 credits · balance 42`,
 `ExportButtonView` `data-testid="export-credit-estimate"`). Derived at render — NO new state
 (no-redundant-state / T350). `estimateExportCredits(clips)` (exported from `ExportButtonContainer.jsx`)
 = `sumEffectiveDurations(clips)` → `creditStore.getRequiredCredits` (`Math.ceil` of output seconds,
@@ -111,7 +121,7 @@ uses, so the button number NEVER disagrees with the insufficient-credits modal o
 (EPIC.md "one cost calculator"). The container's `clips` prop is `clipsWithCurrentState` (live
 selected-clip segments + saved others), so the estimate ticks the instant a speed/trim/split/clip-count
 gesture lands — no save/export.
-- **Framing ONLY.** Gated on `isFramingMode` in both container (returns null otherwise) and view
+- **Focus ONLY.** Gated on `isFramingMode` in both container (returns null otherwise) and view
   (line hidden). Overlay export runs no per-second credit check → button byte-identical.
 - **Fail-closed (no fabricated number):** unknown/NaN/≤0 effective duration → `estimateExportCredits`
   returns null → line hidden (logs a warn, mirroring `handleExport`'s fail-closed path). Also hidden
@@ -130,8 +140,8 @@ gesture lands — no save/export.
 
 ## Invariants & rules
 - **Registering the mounted `saveCurrentClipState` MUST be stable, never keyed on the handler
-  identity (T6190, 2026-07-31 regression fix).** `FramingScreen` subscribes to the WHOLE
-  `framingStore` (selector-less `useFramingStore()`, FramingScreen.jsx:59-66). The effect that
+  identity (T6190, 2026-07-31 regression fix).** `FocusScreen` subscribes to the WHOLE
+  `focusStore` (selector-less `useFocusStore()`, FocusScreen.jsx:59-66). The effect that
   exposes `saveCurrentClipState` to `updateFlush.js` used to `set()` the store keyed on
   `[framingSaveCurrentClipState]` — but that handler's identity churns nearly every render (a
   `useCrop` keyframe dispatch regenerates `getKeyframesForExport` while clips/metadata settle on
@@ -139,24 +149,24 @@ gesture lands — no save/export.
   re-created the handler, which re-fired the effect: an unbounded setState loop ("Maximum update
   depth exceeded"), crash stack `clearSaveCurrentClipState`→`forceStoreRerender`→
   `checkForNestedUpdates`. `activeSaveCurrentClipState` is read ONLY imperatively
-  (`useFramingStore.getState()` in updateFlush.js), never subscribed, so registration has no
-  reason to be reactive. **Fix:** `framingStore.useRegisterActiveSaveHandler(fn)` holds the latest
+  (`useFocusStore.getState()` in updateFlush.js), never subscribed, so registration has no
+  reason to be reactive. **Fix:** `focusStore.useRegisterActiveSaveHandler(fn)` holds the latest
   handler in a ref and registers a STABLE wrapper once per mount (empty-deps effect). The
   loop-HAZARD (whole-store sub + reactive registration) predates T6190 and is byte-identical on
   master; T6190's `invalidateClips` firing during the transition (settling clips/metadata
   mid-mount) was the TRIGGER that first activated it. Pinned by
-  `stores/framingStore.registration.test.jsx` (the pre-fix reactive pattern throws Maximum-update-
+  `stores/focusStore.registration.test.jsx` (the pre-fix reactive pattern throws Maximum-update-
   depth; the stable hook does not) + the console-error guard in the T6190 QA spec criterion 4.
-  Do NOT re-key this registration on the handler identity, and prefer selector-scoped framingStore
+  Do NOT re-key this registration on the handler identity, and prefer selector-scoped focusStore
   reads on this screen.
-- **Framing does NOT fetch games or clips on mount (T6190, 2026-07-30) — do not re-add a
-  "just to be safe" mount refetch.** `FramingScreen` used to fire, on mount, an unconditional
+- **Focus does NOT fetch games or clips on mount (T6190, 2026-07-30) — do not re-add a
+  "just to be safe" mount refetch.** `FocusScreen` used to fire, on mount, an unconditional
   `fetchGames()` and a `fetchClips(projectId)` (with a WRONG comment claiming the latter deduped
   against `useProjectLoader`'s call — the two were SEQUENTIAL, so the in-flight latch was already
   null by mount → a real duplicate GET). Both were pure waste on the project-open critical path
   (they landed in the same window as `playback-url`, the request that gates video). **Now:**
   - **Games** come from the `/api/bootstrap`-hydrated `gamesDataStore` (`App.jsx setFromBootstrap`);
-    Framing reads `useReadyGames()` for the one thing it needs (the selected clip's game display
+    Focus reads `useReadyGames()` for the one thing it needs (the selected clip's game display
     name) and never fetches. The dedupe at `gamesDataStore.js` only covers an *in-flight* fetch, so
     a mount `fetchGames()` after bootstrap settled always went out — that's why it read as
     "reloading the drafts view".
@@ -216,7 +226,7 @@ gesture lands — no save/export.
   `removeBoundaryDuplicates` is a display-level runtime fixup that runs on RESTORE
   (keyframeController.js:218) and mutates the restored list stored in controller `state.keyframes`.
   That is exactly the list `getKeyframesForExport`/`saveCurrentClipState` read: on an export click,
-  `FramingContainer.saveCurrentClipState` (FramingContainer.jsx:318,324) sends `keyframes` (the
+  `FocusContainer.saveCurrentClipState` (FocusContainer.jsx:318,324) sends `keyframes` (the
   post-dedupe list) as `cropKeyframes` in the full-state PUT `/clips/{id}` → the collapsed keyframe
   is written back permanently. This VIOLATES CLAUDE.md § *Runtime fixups are memory-only*: a cosmetic
   correction reaches persistence. It is gesture-triggered (export click), not the reactive-useEffect
@@ -256,7 +266,7 @@ gesture lands — no save/export.
   (audit B8 → T4360). Overlay same shape with `overlay_version+1` (overlay.py:379-393).
   **T4330 (DONE):** both endpoints now bump a mutation counter and enforce `expected_version` ->
   409 (`{success:false, error:"version_conflict", current_version, message}`), checked once
-  immediately after the read, still with no `await` before the commit. Framing's counter is a
+  immediately after the read, still with no `await` before the commit. Focus's counter is a
   NEW column, `working_clips.framing_version` (profile_db migration v044) — the pre-existing
   `working_clips.version` is the EXPORT version-row counter (one row per exported version) and is
   NOT reusable as a CAS counter. `_get_clip_framing_data` returns `framing_version=None` when the
@@ -275,7 +285,7 @@ gesture lands — no save/export.
   compares `expected_version` against, `overlay.py:443`). Two different columns on the same table,
   easy to conflate by name. After any re-export where the row-counter climbed past 0 (virtually
   always, 2nd+ export), the FIRST overlay edit always failed the version check — a guaranteed
-  false "edited elsewhere" with no concurrent writer at all. Framing's `framing_version` counter
+  false "edited elsewhere" with no concurrent writer at all. Focus's `framing_version` counter
   does not have this split (its GET and its 409-check read the same column), so this was
   Overlay-only. Fixed: `get_overlay_data` now selects+returns `overlay_version` under the
   `version` key. Regression: `test_overlay_actions.py::TestOverlayActionVersionConflict::
@@ -565,7 +575,7 @@ keyframed** — camera tilt is constant for a recording.
   (goalpost). `utils/straighten.js`.
 - **Straighten controls HIDDEN by default (T5641, 2026-07-22):** the line-drag
   capture layer + fine dial in `CropOverlay` are gated on a `straightenVisible`
-  prop. Owner = `FramingModeView` `useState(false)` — EPHEMERAL view state, never
+  prop. Owner = `FocusModeView` `useState(false)` — EPHEMERAL view state, never
   persisted (no-persisted-view-state rule; precedent T5610 `circleEditActive`).
   Toggled by a "Straighten" button rendered INLINE with `<ZoomControls>` in the
   desktop controls bar (`ml-auto` header, `hidden lg:flex` → desktop-only, same as
@@ -581,9 +591,9 @@ keyframed** — camera tilt is constant for a recording.
   MAX_ROT range).
 
 ## Landmines & history
-- **Framing has NO working blob-playback path for a freshly-uploaded clip (T7280 finding,
+- **Focus has NO working blob-playback path for a freshly-uploaded clip (T7280 finding,
   2026-08-20 — task abandoned mid-implementation, capturing for whoever revisits this via
-  the Game Pools epic).** `getClipVideoConfig` (FramingScreen.jsx ~L416-456) resolves a game
+  the Game Pools epic).** `getClipVideoConfig` (FocusScreen.jsx ~L416-456) resolves a game
   clip's source via `GET .../clips/{id}/playback-url` → presigned R2, which does NOT resolve
   until upload bytes land AND `activateGame` completes (a few seconds after `onGameCreated`).
   The mount `useLayoutEffect` (~L515) and the streaming branch (~L578) both explicitly bail on
@@ -591,11 +601,11 @@ keyframed** — camera tilt is constant for a recording.
   only triggers when `getClipVideoConfig` RETURNS a blob URL — for a game clip it always returns
   the R2 playback-url, never a blob, so that branch is dead for this flow. Unlike Annotate
   (`useAnnotateState`'s early-src + upload-store restore effects give instant blob playback),
-  **Framing cannot preview a still-uploading source today.** Any future "land the user in
-  Framing right after upload" flow (T7280's fast path, or Game Pools' clip-contributor landing)
+  **Focus cannot preview a still-uploading source today.** Any future "land the user in
+  Focus right after upload" flow (T7280's fast path, or Game Pools' clip-contributor landing)
   hits this. Two resolution options analyzed (T7280-design.md §3, preserved at
   `docs/plans/tasks/T7280-design.md` even though the task itself was abandoned): (A) teach
-  Framing to play the upload blob and swap to R2 on activation — high complexity, touches the
+  Focus to play the upload blob and swap to R2 on activation — high complexity, touches the
   most timing-sensitive load effects in the app, risks the T6190 no-mount-fetch rule and borders
   the reactive-persistence ban if the swap is implemented as a state-watching effect instead of a
   gesture continuation; (B) a "Preparing your clip…" placeholder gated on "source not resolvable
@@ -658,7 +668,7 @@ keyframed** — camera tilt is constant for a recording.
   behind the dynamic toolbar and clips the bottom). On mobile (`useIsMobile()`, <1024px or
   touch+no-hover) the editor defaults to the **inline scrollable** layout, NOT a fullscreen
   video takeover. History: commit 10494193 made `mobileFs = isMobile` (always `fixed inset-0`
-  fullscreen); the below-timeline controls — Framing `ExportButtonSection` (Export/Proceed)
+  fullscreen); the below-timeline controls — Focus `ExportButtonSection` (Export/Proceed)
   and Overlay `OverlayExportButtonSection` (settings + the "Add Spotlight" primary button,
   which IS the overlay export button: `ExportButtonView` renders `isFramingMode ? 'Export' :
   'Add Spotlight'`) — are gated `!mobileFs`, so they rendered nowhere on a phone and the
@@ -674,7 +684,7 @@ keyframed** — camera tilt is constant for a recording.
   (CDP profiler, retained on branch `feature/T4774-editor-mainthread-gap`) shows **~0ms main-thread busy and 0 long
   tasks after `videoReady`**; the main thread is 81–84% idle across the leg and the screen
   (video element, crop reticule, highlight regions) is committed ~500ms *before* first frame.
-  Framing/overlay hydration is NOT a first-paint cost center. Don't defer/idle it or add a fake
+  Focus/overlay hydration is NOT a first-paint cost center. Don't defer/idle it or add a fake
   progress state — the pre-`videoReady` load wait is already covered by `VideoLoadingOverlay`.
   Evidence: `qa/T4774/REPORT.md`.
 - **T350 keyframe origin corruption**: reactive `useEffect` persistence wrote runtime fixups back
@@ -689,7 +699,7 @@ keyframed** — camera tilt is constant for a recording.
   persisted empty crop + default segments as a NEW working_clips version, shadowing the real one.
   Full-state saves only on explicit gesture.
 - **First crop drag dropped = VideoLoadingOverlay ate it, NOT a CropOverlay listener race
-  (T5380b, 2026-07-19).** The reported bug: the FIRST crop-adjust drag after opening a Framing
+  (T5380b, 2026-07-19).** The reported bug: the FIRST crop-adjust drag after opening a Focus
   draft moves nothing (movedX=0); every later drag works. T5380's first fix assumed a listener
   race (down→move before an isDragging-gated `useEffect` attached the window listeners) and
   refactored CropOverlay to refs + synchronous attach. That was a MISDIAGNOSIS — the events
@@ -869,7 +879,7 @@ keyframed** — camera tilt is constant for a recording.
   (`effectiveOverlayVideoUrl`). `spotlightSpan` is a `useMemo` over `highlightRegions`
   (single source, no duplicated state); null with zero regions → primary = plain
   Play/Pause, no secondary, no pill. **`useVideo` stays mode-agnostic** — no loop logic
-  there; it's shared by Annotate/Framing. The overlay hook is the only new playback
+  there; it's shared by Annotate/Focus. The overlay hook is the only new playback
   behavior. `Controls` got OPTIONAL props `isLooping` (loop accent+`Repeat` glyph on the
   primary) + `secondaryPlay` ({onClick,title,active} ghost button); **byte-identical when
   omitted** (HTML-equality pinned by `Controls.test.jsx`). "Back to spotlight" pill
@@ -954,7 +964,7 @@ keyframed** — camera tilt is constant for a recording.
       geometrically-most-centered box — assert the spotlight anchors INSIDE some detection box (the
       geometric frame center provably lies inside none), not "the box nearest frame center"; the exact
       ranking is Vitest-pinned (`useHighlightRegions.autoselect.test.js`).
-    - **Framing (T4550) is NOT dangling-prone** — it plays the raw clip and DOES load (T6100: crop
+    - **Focus (T4550) is NOT dangling-prone** — it plays the raw clip and DOES load (T6100: crop
       placeholder at ~6.4s, display rect settled at ~7.37s); its only fix is the ready-gate before the
       drag, plus dragging TOWARD the video center (a blind fixed direction hits `constrainCrop`'s clamp
       when the fixture crop sits near an edge → false "moved 0", per FIXTURE-CONTRACT T5320). The old
@@ -979,12 +989,12 @@ keyframed** — camera tilt is constant for a recording.
 - **Backend interpolation divergence**: `interpolation.interpolate_crop` is Catmull-Rom
   (interpolation.py:51-87) but `generate_crop_filter` builds a LINEAR FFmpeg expression (L188-195).
   Plus 4 Catmull-Rom copies across local/Modal paths → T4420.
-- **fps `|| 30` fallback landscape**: FramingScreen.jsx:219/541/623, useClipManager.js:46,
-  projectDataStore.js:402, FramingContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
+- **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
+  projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).
-- **getFilteredKeyframesForExport duplicated verbatim**: FramingContainer.jsx:862-896 (the wired
-  one) ≡ FramingScreen.jsx:750-784 (audit D7).
-- **FramingContainer hand-mirrors** hook→store per gesture at 8 sites (~L352-835) to dodge React
+- **getFilteredKeyframesForExport duplicated verbatim**: FocusContainer.jsx:862-896 (the wired
+  one) ≡ FocusScreen.jsx:750-784 (audit D7).
+- **FocusContainer hand-mirrors** hook→store per gesture at 8 sites (~L352-835) to dodge React
   batch ordering → T4470 (audit D1).
 
 ## Aspect-aware video stage (T5676)
@@ -1050,7 +1060,7 @@ before any fitToAspect logic), no changes to zoom/pan or mobileFs enter/exit.
 
 ## Video-stage hydration on staging — MEASURED, NOT a product defect (T6100, 2026-07-27)
 
-The staging E2E failures T4550 (Framing crop drag lands `0`) and T5676 (`overlay-video-stage`
+The staging E2E failures T4550 (Focus crop drag lands `0`) and T5676 (`overlay-video-stage`
 never gets its `aspect-ratio` style → 240s timeout) both blamed "the video stage never
 hydrates". **Root-caused by measurement against staging (real account imankh/9fa7378c) — it is
 NOT a product bug, NOT slow-infra-when-warm, and does NOT gate a prod deploy.** Do not re-derive;
@@ -1079,7 +1089,7 @@ the numbers below are the answer.
   waits 30s+ for an `aspect-ratio` that can never come for a 404'd asset → the 240s hang. Healthy
   drafts DO hydrate in-browser: `T5642-...qa.spec.js` passed on staging (project 54, presigned
   `<video>` 206 + plays).
-- **T4550 (Framing) — test drags before the display rect exists (TEST timing race).** Measured
+- **T4550 (Focus) — test drags before the display rect exists (TEST timing race).** Measured
   timeline, click→ready: clips 5.4s (behind the poster storm), clip `playback-url` 6.07s, R2 game
   reads 206 in 0.14–0.24s, `<video>` HAVE_METADATA 6.74s, **display rect established 7.37s**. The
   crop box renders off clip metadata as a PLACEHOLDER at ~6.4s (evidence `qa/T4550-crop-overlay-placed.png`
@@ -1087,14 +1097,14 @@ the numbers below are the answer.
   is visible — ~1s BEFORE the `<video>` display rect that `videoToScreen`/`useVideoDisplayRect`
   needs is established → the drag maps against a degenerate rect and lands exactly `0` (the same
   signature as, but NOT, the T5380 first-drag race — `attachDragListeners` is intact). The video
-  DOES load; it is a race, not a hang. Framing clips are the full **3GB non-faststart** game video
+  DOES load; it is a race, not a hang. Focus clips are the full **3GB non-faststart** game video
   (`games/{hash}.mp4`, moov ~700KB before EOF) so Chrome does a front+tail range read for metadata
   — still fast (~0.3s) but slower to paint than Overlay's small faststart working video, which is
-  why the placeholder window is wider in Framing.
+  why the placeholder window is wider in Focus.
 - **Fixes belong to T6110** (spec hardening: wait for the real video-ready signal, not the
   placeholder; skip/990 drafts whose working video 404s). **Do NOT raise timeouts.** See
   [export-pipeline.md] for the media-URL / R2-ref side.
-- **Prod-impact answer (the gating question):** No new prod defect. The Framing race is a test
+- **Prod-impact answer (the gating question):** No new prod defect. The Focus race is a test
   artifact real users never hit (nobody drags a crop box in the sub-second before first paint, and
   the box re-maps correctly once the video paints). The Overlay dangling ref is staging-only data;
   even the worst case on prod is the graceful T5440 "re-export" prompt (no hang, no data loss).
@@ -1111,7 +1121,7 @@ the numbers below are the answer.
   strokeOpacity/fillOpacity snapping; characterization tests pin crop behavior.
 - **Keyframe System Unification epic (STRICT order)**:
   - **T4440** dead-code sweep (dead OverlayTimeline/HighlightLayer/components-Timeline,
-    useHighlight, framingStore corpses).
+    useHighlight, focusStore corpses).
   - **T4450** shared KeyframeTrack — unify delete gating to the flat-list rule; the gating change
     is the single intended diff.
   - **T4460** overlay onto keyframe controller (**Stage 2 design gate**): region-scoped tracks;
