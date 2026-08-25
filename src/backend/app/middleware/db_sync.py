@@ -39,6 +39,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from .. import session_init as _session_init
 from ..database import (
     USER_DB_SCOPE,
     SyncResult,
@@ -72,6 +73,7 @@ from ..services.auth_db import validate_session
 from ..session_init import user_session_init
 from ..storage import APP_ENV, R2_ENABLED
 from ..user_context import (
+    get_current_impersonator_id,
     set_current_impersonator_id,
     set_current_method,
     set_current_path,
@@ -766,6 +768,39 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
             profile_id = request.headers.get('X-Profile-ID')
             if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
+                # T7520: X-Profile-ID is client-supplied and was only FORMAT-
+                # checked above. During an impersonation start/stop the OLD page
+                # keeps running while navigation is in flight, so a request can
+                # carry the NEW session cookie (user already flipped) together
+                # with the STALE impersonated profile header — which pre-guard
+                # created a cross-tenant profile.sqlite under the wrong user's
+                # directory (and, via graceful-shutdown/sweep, an R2 orphan).
+                # Reject a profile the authenticated user does not OWN before it
+                # reaches set_current_profile_id -> ensure_database. The check is
+                # keyed on get_current_user_id() (the resolved/impersonated
+                # user), NOT the auth source, so it applies equally to the
+                # X-User-ID admin path (no escape hatch — landmine 4).
+                owned_ids = _session_init.peek_registered_profile_ids(user_id)
+                if owned_ids is None:
+                    # Cache miss: opening user.sqlite is blocking (and a cold
+                    # first access downloads it from R2), so offload it off the
+                    # event loop exactly like user_session_init below. Warm
+                    # requests hit the peek above and never reach here.
+                    owned_ids = await run_in_context(
+                        _session_init.load_registered_profile_ids, user_id
+                    )
+                if profile_id not in owned_ids:
+                    logger.critical(
+                        f"[PROFILE_GUARD] Rejected foreign X-Profile-ID: "
+                        f"user={user_id} profile={profile_id} "
+                        f"impersonator={get_current_impersonator_id()} "
+                        f"req_id={req_id} method={request.method} "
+                        f"path={request.url.path} auth={auth_source}"
+                    )
+                    return JSONResponse(
+                        status_code=404,
+                        content={"detail": "Profile not found"},
+                    )
                 set_current_profile_id(profile_id)
             elif not skip_session_init:
                 if profile_id:

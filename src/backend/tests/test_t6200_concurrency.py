@@ -31,6 +31,13 @@ import app.services.pg as pg
 from app.main import app
 from app.middleware import RequestContextMiddleware
 from app.services.pg import get_pg
+from app.session_init import _init_cache
+
+# T7520: the pg-bound burst test drives /api/probe with a valid 8-hex
+# X-Profile-ID to skip session_init. The middleware now rejects an X-Profile-ID
+# the session user does not own, so register this profile for the stub user
+# (conftest's _register_test_profiles treats an _init_cache entry as owned).
+_init_cache["t6200-user"] = {"profile_id": "abcd1234", "is_new_user": False}
 
 # One controlled unit of blocking "I/O". Big enough that N*DELAY is unmistakably
 # separable from ~DELAY, small enough to keep the test fast.
