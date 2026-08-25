@@ -3,7 +3,7 @@
  * video-editor/src/frontend/e2e/ before running. Marks map to line numbers in
  * ReelBallersTutroials/overlay/talk_track.txt.
  *
- * Uses a draft in "In Overlay" status and REALLY clicks Add Spotlight at the end
+ * Uses a draft in "In Overlay" status and REALLY clicks Create Reel at the end
  * (render job runs on the dev backend after the recording stops).
  */
 import { test } from '@playwright/test';
@@ -150,7 +150,7 @@ test('capture overlay tutorial footage', async ({ browser }) => {
   await pauseVideos();
 
   // --- line 8: overlay settings -------------------------------------------------------------------
-  // second (and last) scroll: bottom of the video + the Add Spotlight button visible
+  // second (and last) scroll: bottom of the video + the Create Reel button visible
   step('settings');
   await mark(8);
   await page.mouse.move(960, 500);
@@ -185,9 +185,9 @@ test('capture overlay tutorial footage', async ({ browser }) => {
   } catch { step('shape buttons skipped'); }
   await dwell(2);
 
-  // --- line 12: click Add Spotlight -----------------------------------------------------------------------------
-  step('add spotlight');
-  const addSpot = page.getByRole('button', { name: 'Add Spotlight', exact: true }).first();
+  // --- line 12: click Create Reel (the overlay reel-completion action, T7580) -----------------------------------
+  step('create reel');
+  const addSpot = page.getByRole('button', { name: 'Create Reel', exact: true }).first();
   await ring(addSpot, 8);
   await dwell(1);
   await mark(12, 'click');

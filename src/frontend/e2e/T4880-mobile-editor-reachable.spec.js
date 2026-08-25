@@ -77,7 +77,7 @@ test.describe('T4880 mobile editor reachability', () => {
     await context.close();
   });
 
-  test('Overlay: Add Spotlight control reachable + clickable (portrait & landscape)', async ({ browser }) => {
+  test('Overlay: Create Reel control reachable + clickable (portrait & landscape)', async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ viewport: PORTRAIT, hasTouch: true, isMobile: true });
     await loginAsRealUser(context, EMAIL);
@@ -100,21 +100,21 @@ test.describe('T4880 mobile editor reachability', () => {
     test.skip(!overlayReachable, 'Overlay needs an exported reel in this env; covered by Vitest OverlayModeView.mobileReachable');
     await (await overlayTab.count() ? overlayTab : page.getByRole('button', { name: /Overlay/ }).first()).click();
 
-    // In overlay mode the primary export button is labelled "Add Spotlight".
-    const addSpotlight = page.getByRole('button', { name: /Add Spotlight/ });
+    // In overlay mode the primary export button is labelled "Create Reel" (T7580).
+    const createReel = page.getByRole('button', { name: /Create Reel/ });
 
     // --- Portrait ---
     await page.setViewportSize(PORTRAIT);
-    await addSpotlight.waitFor({ timeout: 90000 });
-    await assertReachableAndClickable(page, addSpotlight, 'Add Spotlight (portrait)');
+    await createReel.waitFor({ timeout: 90000 });
+    await assertReachableAndClickable(page, createReel, 'Create Reel (portrait)');
     await assertNoHorizontalOverflow(page);
-    await saveEvidence(page, 'T4880-overlay-addspotlight-portrait');
+    await saveEvidence(page, 'T4880-overlay-createreel-portrait');
 
     // --- Landscape ---
     await page.setViewportSize(LANDSCAPE);
-    await assertReachableAndClickable(page, addSpotlight, 'Add Spotlight (landscape)');
+    await assertReachableAndClickable(page, createReel, 'Create Reel (landscape)');
     await assertNoHorizontalOverflow(page);
-    await saveEvidence(page, 'T4880-overlay-addspotlight-landscape');
+    await saveEvidence(page, 'T4880-overlay-createreel-landscape');
 
     await responsiveSweep(page);
     await context.close();

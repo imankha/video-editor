@@ -184,9 +184,9 @@ test('capture framing tutorial footage', async ({ browser }) => {
   await mark(12);
   await dwell(4.5);
 
-  // --- line 13: click Export ----------------------------------------------------------------------
-  step('export');
-  const exportBtn = page.getByRole('button', { name: 'Export', exact: true }).first();
+  // --- line 13: click Next: Spotlight (advances framing -> overlay, T7580) --------------------------
+  step('next: spotlight');
+  const exportBtn = page.getByRole('button', { name: 'Next: Spotlight', exact: true }).first();
   try { await exportBtn.scrollIntoViewIfNeeded({ timeout: 3000 }); } catch {}
   await ring(exportBtn, 8);
   await dwell(1);

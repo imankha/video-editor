@@ -53,7 +53,7 @@ async function reachOverlay(page) {
   const reachable = (await overlayTab.count()) > 0 && (await overlayTab.isEnabled());
   if (!reachable) return { ready: false, reason: 'Overlay needs an exported reel; not available in this env' };
   await overlayTab.click();
-  await page.getByRole('button', { name: /Add Spotlight/ }).waitFor({ timeout: 90000 });
+  await page.getByRole('button', { name: /Create Reel/ }).waitFor({ timeout: 90000 });
   return { ready: true };
 }
 
@@ -138,8 +138,8 @@ export const SCREENS = [
     name: 'Overlay',
     setup: reachOverlay,
     actions: [
-      // Overlay's primary export button — the OTHER control T4880 made unreachable.
-      { label: 'Add Spotlight button', locator: (p) => p.getByRole('button', { name: /Add Spotlight/ }) },
+      // Overlay's primary export button — the reel-completion action (T7580).
+      { label: 'Create Reel button', locator: (p) => p.getByRole('button', { name: /Create Reel/ }) },
       { label: 'Framing mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
     ],
     // T5430 (invariant #4, coarse-pointer projects only): Overlay-specific icon
