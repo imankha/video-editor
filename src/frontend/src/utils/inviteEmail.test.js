@@ -106,13 +106,13 @@ describe('buildInviteMailtoUrl', () => {
       expect(url).toContain(encodeURIComponent('Hey!'));
     });
 
-    it('mentions Reel Ballers by name', () => {
+    it('mentions ReelBallers by name', () => {
       const url = buildInviteMailtoUrl({
         athleteName: 'Jake',
         userEmail: 'mike@example.com',
         inviteCode: 'a1b2c3d4',
       });
-      expect(url).toContain(encodeURIComponent('Reel Ballers'));
+      expect(url).toContain(encodeURIComponent('ReelBallers'));
     });
 
     it('mentions Instagram or TikTok', () => {

@@ -15,8 +15,8 @@ const UPSTREAM_TIMEOUT_MS = 8000;
 export function buildCollectionMetaTags(data, api) {
   const title = escapeHtml(data.title || "Highlights");
   const descRaw = data.context_line
-    ? `${data.title} - ${data.context_line} - shared from Reel Ballers.`
-    : `${data.title} - shared from Reel Ballers.`;
+    ? `${data.title} - ${data.context_line} - shared from ReelBallers.`
+    : `${data.title} - shared from ReelBallers.`;
   const desc = escapeHtml(descRaw);
 
   const posterAbs = data.poster_url && data.poster_url.startsWith("/")
@@ -38,7 +38,7 @@ ${w && h ? `<meta property="og:image:width" content="${w}">
   return `<meta property="og:type" content="website">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${desc}">
-${posterMeta}<meta property="og:site_name" content="Reel Ballers">
+${posterMeta}<meta property="og:site_name" content="ReelBallers">
 <meta name="twitter:card" content="${poster ? "summary_large_image" : "summary"}">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${desc}">

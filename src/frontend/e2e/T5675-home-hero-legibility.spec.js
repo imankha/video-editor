@@ -7,7 +7,7 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  *
  * Real-browser evidence for the acceptance criteria at the four target widths
  * (360, 390x844, 768, 1315x748):
- *   (a) logo lockup renders as ONE unit (single-line "Reel Ballers")
+ *   (a) logo lockup renders as ONE unit (single-line "ReelBallers")
  *   (b) draft/game list starts above the fold
  *   (c) GameCard metadata is labeled/tooltipped (no chess notation)
  *   (d) mobile continue strip is present
@@ -54,8 +54,8 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
     // No horizontal overflow at any width.
     await assertNoHorizontalOverflow(page);
 
-    // (a) Lockup is ONE intentional unit: a single-line "Reel Ballers" element.
-    const wordmark = page.getByText('Reel Ballers', { exact: true }).first();
+    // (a) Lockup is ONE intentional unit: a single-line "ReelBallers" element.
+    const wordmark = page.getByText('ReelBallers', { exact: true }).first();
     await expect(wordmark, `lockup renders one-line wordmark @ ${vp.name}`).toBeVisible();
     const box = await wordmark.boundingBox();
     expect(box, `wordmark has a box @ ${vp.name}`).toBeTruthy();

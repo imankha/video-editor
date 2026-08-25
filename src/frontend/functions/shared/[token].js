@@ -189,7 +189,7 @@ export function renderSharePage(share) {
     ? `<link rel="preconnect" href="${escapeHtml(preconnectOrigin)}" crossorigin>`
     : "";
   const appHome = "https://app.reelballers.com/";
-  const desc = `${name} -- shared from Reel Ballers.`;
+  const desc = `${name} -- shared from ReelBallers.`;
   const introCard = renderIntroCard(share.intro);
   // The video autoplays immediately UNLESS an intro pre-roll is showing --
   // playback then starts, from 0, once the intro's own setTimeout calls
@@ -222,7 +222,7 @@ ${posterDims}<meta name="twitter:image" content="${posterUrl}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>${name} | Reel Ballers</title>
+<title>${name} | ReelBallers</title>
 <meta name="description" content="${desc}">
 ${preconnect}
 <meta property="og:type" content="video.other">
@@ -230,7 +230,7 @@ ${preconnect}
 <meta property="og:description" content="${desc}">
 <meta property="og:video" content="${videoUrl}">
 <meta property="og:video:type" content="video/mp4">
-${posterMeta}<meta property="og:site_name" content="Reel Ballers">
+${posterMeta}<meta property="og:site_name" content="ReelBallers">
 <meta name="twitter:card" content="${rawPosterUrl ? "summary_large_image" : "summary"}">
 <meta name="twitter:title" content="${name}">
 <meta name="twitter:description" content="${desc}">
@@ -287,7 +287,7 @@ ${introCard.html}
 </main>
 <footer>
 <a class="dl" href="${videoUrl}" download>Download</a>
-<a class="cta" href="${escapeHtml(appHome)}">Open Reel Ballers</a>
+<a class="cta" href="${escapeHtml(appHome)}">Open ReelBallers</a>
 </footer>
 <script>
 (function(){

@@ -145,7 +145,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
             className="flex items-center gap-2 mt-4 px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
           >
             <Share2 size={16} />
-            Invite a Friend to Reel Ballers
+            Invite a Friend to ReelBallers
           </button>
         )}
       </Shell>
@@ -211,7 +211,7 @@ function Shell({ children }) {
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
       <div className="absolute top-4 left-4 flex items-center gap-2">
         <Logo size={32} />
-        <span className="text-white font-semibold">Reel Ballers</span>
+        <span className="text-white font-semibold">ReelBallers</span>
       </div>
       {children}
     </div>

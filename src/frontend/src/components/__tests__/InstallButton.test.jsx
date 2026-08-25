@@ -42,7 +42,7 @@ describe('InstallButton', () => {
     render(<InstallButton />);
     fireEvent.click(screen.getByText('Install App'));
     expect(promptInstall).toHaveBeenCalled();
-    expect(screen.queryByText('Install Reel Ballers')).toBeNull();
+    expect(screen.queryByText('Install ReelBallers')).toBeNull();
   });
 
   it('opens panel with Android instructions on Android without prompt', () => {

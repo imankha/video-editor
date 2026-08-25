@@ -14,7 +14,7 @@ export function buildInviteMailtoUrl({ athleteName, userEmail, inviteCode }) {
   const lines = [
     'Hey!',
     '',
-    `I've been using Reel Ballers to make highlight reels for ${name} and it's been amazing. You upload your game footage and within minutes you have professional-quality highlights ready for Instagram or TikTok.`,
+    `I've been using ReelBallers to make highlight reels for ${name} and it's been amazing. You upload your game footage and within minutes you have professional-quality highlights ready for Instagram or TikTok.`,
     '',
     'The video quality is incredible -- way better than what you get from Veo or Trace. And it takes minutes, not hours.',
     '',
@@ -37,7 +37,7 @@ export function buildInviteUrl(inviteCode) {
 
 export function buildInviteMessage(inviteCode) {
   const url = buildInviteUrl(inviteCode);
-  return `Hey,\nJust wanted to share a link to Reel Ballers -- really cool app that lets you annotate your player's clips and use AI to create great looking highlights.\n\n${url}`;
+  return `Hey,\nJust wanted to share a link to ReelBallers -- really cool app that lets you annotate your player's clips and use AI to create great looking highlights.\n\n${url}`;
 }
 
 export async function shareInvite() {
@@ -48,7 +48,7 @@ export async function shareInvite() {
 
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Reel Ballers', text: message });
+      await navigator.share({ title: 'ReelBallers', text: message });
       track('share_initiated', { method: 'native', source: 'invite' });
       return;
     } catch (err) {

@@ -6,8 +6,8 @@ import { LogoWithText } from './Logo';
 describe('LogoWithText lockup (T5675)', () => {
   it('renders the wordmark as one intentional single-line unit', () => {
     render(<LogoWithText />);
-    // Single "Reel Ballers" string, not split "Reel" / "Ballers" spans.
-    const wordmark = screen.getByText('Reel Ballers');
+    // Single "ReelBallers" string, not split "Reel" / "Ballers" spans.
+    const wordmark = screen.getByText('ReelBallers');
     expect(wordmark).toBeTruthy();
     expect(wordmark.className).toMatch(/whitespace-nowrap/);
     expect(screen.queryByText('Reel')).toBeNull();

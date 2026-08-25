@@ -1,5 +1,5 @@
 """
-Branded "Made with Reel Ballers" outro (T3950).
+Branded "Made with ReelBallers" outro (T3950).
 
 A short (~1.75s) end-card appended to the FINAL published video at render time.
 It is *chrome*, not content: it is NOT persisted into working_clips / keyframes /
@@ -55,9 +55,9 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_outro_cards"
 # lines of text (a fade-in on the brand would eat the read time). Timeline:
 #   0.00       white-flash frame (deterministic white frame 0)
 #   0.00-1.30  logo animates (ring spins in, play button lands) WITH the brand text already
-#              fully visible -- "Made with" + "Reel Ballers" never fade, they are present
+#              fully visible -- "Made with" + "ReelBallers" never fade, they are present
 #              from t=0 so there is nothing to wait to read
-#   1.30-2.60  HOLD: logo resolved, "Made With Reel Ballers" static -> ~1.3s to read it
+#   1.30-2.60  HOLD: logo resolved, "Made With ReelBallers" static -> ~1.3s to read it
 #   2.60-2.95  REVEAL: tagline + URL fade in TOGETHER (the only staged elements)
 #   2.95-4.50  HOLD: tagline + URL static -> ~1.55s to read them, then the card ends
 OUTRO_DURATION = 4.5
@@ -77,7 +77,7 @@ OUTRO_RING_FADE_D = 0.40
 OUTRO_PLAY_ST = 1.00         # play triangle lands just as the ring comes to rest
 OUTRO_PLAY_D = 0.32          # press/bounce (scale overshoot) duration
 OUTRO_PLAY_FADE_D = 0.12
-# Staged reveal: "Made with" + "Reel Ballers" are ALWAYS visible (present from t=0, no fade
+# Staged reveal: "Made with" + "ReelBallers" are ALWAYS visible (present from t=0, no fade
 # -- viewers must be able to read them). Only the tagline + URL are staged: after a ~1.3s
 # read-hold on the brand, they fade in TOGETHER over OUTRO_REVEAL_FADE_D, then hold to the end.
 OUTRO_REVEAL_ST = 2.60       # tagline + URL begin fading in (after the brand read-hold)
@@ -85,7 +85,7 @@ OUTRO_REVEAL_FADE_D = 0.35
 # Bump when the card LAYOUT or ANIMATION changes so stale cached cards (old build) rebuild.
 _CARD_VERSION = "v5-read-hold"
 MADE_WITH_TEXT = "Made with"
-BRAND_TEXT = "Reel Ballers"
+BRAND_TEXT = "ReelBallers"
 TAGLINE_TEXT = "Share Your Player's Brilliance"
 URL_TEXT = "reelballers.com"
 
@@ -109,7 +109,7 @@ _PLAY_PATH = Path(__file__).resolve().parent.parent / "assets" / "branding" / "r
 # Brand palette (dark background, muted caption text; the emblem carries the color).
 _BG_COLOR = "0x0B0F1A"
 _CAPTION_COLOR = "0x9CA3AF"
-_BRAND_COLOR = "0xF3F4F6"     # near-white for the "Reel Ballers" wordmark (stands out)
+_BRAND_COLOR = "0xF3F4F6"     # near-white for the "ReelBallers" wordmark (stands out)
 
 
 def outro_enabled() -> bool:
@@ -198,7 +198,7 @@ def _build_outro_card(card_path: str, info: dict) -> None:
     # Layout: a centered vertical stack, URL pinned near the bottom.
     #   "Made with"      (small caption, above the emblem)
     #   [emblem]         (spinning ring + landing play triangle -- the visual anchor)
-    #   "Reel Ballers"   (brand wordmark, below the emblem: reads "Made with .. Reel Ballers")
+    #   "ReelBallers"   (brand wordmark, below the emblem: reads "Made with .. ReelBallers")
     #   tagline          ("Share Your Player's Brilliance")
     #   reelballers.com  (URL, near the bottom edge)
     # The emblem is a square, sized off the SHORTER card side so it never overflows on any
@@ -213,7 +213,7 @@ def _build_outro_card(card_path: str, info: dict) -> None:
     play_canvas = round(emblem * 1.25)
 
     made_fs = max(16, round(h * 0.030))            # "Made with" -- deliberately small
-    brand_fs = max(20, round(h * 0.045))           # "Reel Ballers" -- the brand, larger
+    brand_fs = max(20, round(h * 0.045))           # "ReelBallers" -- the brand, larger
     tag_fs = max(15, round(h * 0.028))
     url_fs = max(13, round(h * 0.024))
     made_y = emblem_top - made_fs - round(h * 0.02)
@@ -264,7 +264,7 @@ def _build_outro_card(card_path: str, info: dict) -> None:
             # bounce scales about that center so ring + triangle stay registered).
             f"[0:v][ring]overlay=x=(W-w)/2:y={emblem_top}[base0];"
             f"[base0][play]overlay=x=(W-w)/2:y='{emblem_cy}-h/2'[base];"
-            # Brand unit ("Made with" + "Reel Ballers"): ALWAYS visible -- present from t=0
+            # Brand unit ("Made with" + "ReelBallers"): ALWAYS visible -- present from t=0
             # with no alpha ramp, so there is nothing to wait to read (the flash whites out
             # frame 0, then the brand is fully legible immediately behind it).
             f"[base]drawtext=fontfile='{font}':text='{MADE_WITH_TEXT}':"

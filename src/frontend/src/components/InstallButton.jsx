@@ -45,7 +45,7 @@ export function InstallButton() {
               <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
                 <Smartphone size={16} className="text-white" />
               </div>
-              <h3 className="text-white font-semibold text-sm">Install Reel Ballers</h3>
+              <h3 className="text-white font-semibold text-sm">Install ReelBallers</h3>
             </div>
             <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-gray-300">
               <X size={14} />

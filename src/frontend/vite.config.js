@@ -41,7 +41,7 @@ export default defineConfig({
       // reload (T5070), so activation is controlled, never silent/early.
       registerType: 'prompt',
       manifest: {
-        name: 'Reel Ballers',
+        name: 'ReelBallers',
         short_name: 'ReelBallers',
         description: 'AI-Powered Sports Video Editor',
         start_url: '/',

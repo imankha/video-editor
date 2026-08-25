@@ -77,7 +77,7 @@ export function LogoWithText({
     <div className={`inline-flex items-center gap-2 sm:gap-3 ${widthClassName} ${className}`}>
       {emblem}
       <span className={`${textClassName} font-bold text-white leading-none tracking-tight whitespace-nowrap`}>
-        Reel Ballers
+        ReelBallers
       </span>
     </div>
   );

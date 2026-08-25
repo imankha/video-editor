@@ -140,11 +140,11 @@ describe('renderSharePage', () => {
     expect(html).toContain('&quot;&gt;&lt;script&gt;');
   });
 
-  it('has the download link and the Open Reel Ballers CTA', () => {
+  it('has the download link and the Open ReelBallers CTA', () => {
     const html = renderSharePage(share);
     expect(html).toMatch(/<a[^>]*download/);
     expect(html).toContain('https://app.reelballers.com/');
-    expect(html).toContain('Open Reel Ballers');
+    expect(html).toContain('Open ReelBallers');
   });
 
   it('escapes a hostile video_name so XSS is impossible', () => {
@@ -176,7 +176,7 @@ describe('renderSharePage', () => {
 
   it('falls back to a default title when video_name is missing', () => {
     const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true });
-    expect(html).toContain('<title>Shared Video | Reel Ballers</title>');
+    expect(html).toContain('<title>Shared Video | ReelBallers</title>');
   });
 
   describe('intro pre-roll (T5220 Scope B, design §5.3)', () => {

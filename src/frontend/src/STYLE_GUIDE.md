@@ -1,6 +1,6 @@
-# Reel Ballers Style Guide
+# ReelBallers Style Guide
 
-This document defines the visual design system for the Reel Ballers video editor application.
+This document defines the visual design system for the ReelBallers video editor application.
 
 ## Color Palette
 
