@@ -241,3 +241,19 @@ describe('OverlaySettingsTabs — Thumbnail tab icon color matches the marker (T
     expect(textIcon.getAttribute('class') || '').not.toMatch(/text-cyan-400/);
   });
 });
+
+describe('OverlaySettingsTabs — tab labels (T7710)', () => {
+  it('the first tab reads "Spotlight", not "Overlay", while keeping its internal id/testid', () => {
+    render(
+      <OverlaySettingsTabs
+        activeTab="overlay"
+        overlayPanel={<div>overlay content</div>}
+        textPanel={<div>text content</div>}
+        thumbnailPanel={<div>thumbnail content</div>}
+      />
+    );
+    const overlayTab = screen.getByTestId('overlay-tab-overlay');
+    expect(overlayTab.textContent).toMatch(/Spotlight/);
+    expect(overlayTab.textContent).not.toMatch(/^Overlay$/);
+  });
+});
