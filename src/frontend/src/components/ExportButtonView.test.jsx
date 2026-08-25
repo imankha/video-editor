@@ -70,10 +70,67 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
   });
 
-  it('does NOT render the estimate in Overlay mode (Framing-only, byte-identical Overlay button)', () => {
+  it('does NOT render the estimate in Overlay mode (Framing-only)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} estimatedCredits={9} creditBalance={42} />);
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
-    // Overlay button label unchanged.
-    expect(screen.getByRole('button', { name: 'Add Spotlight' })).toBeTruthy();
+    // Overlay primary CTA is the reel-completion action (T7580).
+    expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+  });
+});
+
+describe('ExportButtonView — T7580 reel vocabulary', () => {
+  it('Framing primary CTA previews the next (Spotlight) step, not "Export"', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={true} />);
+    expect(screen.getByRole('button', { name: 'Next: Spotlight' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Export' })).toBeNull();
+  });
+
+  it('Framing CTA keeps the framed-count suffix on the "Next: Spotlight" label', () => {
+    render(
+      <ExportButtonView
+        {...baseProps}
+        isFramingMode={true}
+        hasUnframedClips={true}
+        isMultiClipMode={true}
+        totalExtractedClips={3}
+        unframedCount={1}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Next: Spotlight (2/3)' })).toBeTruthy();
+  });
+
+  it('Overlay primary CTA is "Create Reel" (the reel-completion action)', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} />);
+    expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add Spotlight' })).toBeNull();
+  });
+
+  it('in-progress label reads "Creating reel..." for the user\'s own export', () => {
+    render(<ExportButtonView {...baseProps} isCurrentlyExporting={true} isExporting={true} />);
+    expect(screen.getByRole('button', { name: 'Creating reel...' })).toBeTruthy();
+  });
+
+  it('in-progress label reads "Reel in progress..." for an externally-triggered export', () => {
+    render(
+      <ExportButtonView
+        {...baseProps}
+        isCurrentlyExporting={true}
+        isExporting={false}
+        isExternallyExporting={true}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Reel in progress...' })).toBeTruthy();
+  });
+
+  it('success state announces the reel is ready and points at My Reels', () => {
+    render(<ExportButtonView {...baseProps} displayProgress={100} isCurrentlyExporting={false} />);
+    expect(screen.getByText('Reel ready! Find it in My Reels.')).toBeTruthy();
+  });
+
+  it('Framing Settings names the follow-your-athlete crop feature', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={true} />);
+    expect(screen.getByText('Set crop keyframes so the focus follows your athlete.')).toBeTruthy();
+    // Export-info subtext frames the render as building the reel + follow-framing.
+    expect(screen.getByText(/Builds your reel: applies your follow-framing/)).toBeTruthy();
   });
 });

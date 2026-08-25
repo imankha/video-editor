@@ -158,23 +158,23 @@ test.describe('T4900 overlay action failure visibility', () => {
     // The export button tooltip/title should warn about unsaved edits.
     // ExportButtonContainer computes buttonTitle as "Some edits haven't saved..."
     // when hasUnsavedOverlayFailures is true.
-    const addSpotlightBtn = page.getByRole('button', { name: /add spotlight/i });
-    if (await addSpotlightBtn.isVisible({ timeout: 2000 })) {
-      const title = await addSpotlightBtn.getAttribute('title');
+    const createReelBtn = page.getByRole('button', { name: /create reel/i });
+    if (await createReelBtn.isVisible({ timeout: 2000 })) {
+      const title = await createReelBtn.getAttribute('title');
       expect(title).toMatch(/haven't saved|unsaved/i);
       await saveEvidence(page, 'T4900-D-export-gate-button-warned');
       console.log('[T4900] D PASS: export button title warns about unsaved edits');
 
-      // Clicking Add Spotlight should NOT fire a render POST when failures exist
+      // Clicking Create Reel should NOT fire a render POST when failures exist
       const renderCallsBefore = networkCalls.filter(n => n.url.includes('render-overlay')).length;
-      await addSpotlightBtn.click();
+      await createReelBtn.click();
       await page.waitForTimeout(500);
       const renderCallsAfter = networkCalls.filter(n => n.url.includes('render-overlay')).length;
       expect(renderCallsAfter).toBe(renderCallsBefore);
       await saveEvidence(page, 'T4900-D-export-gate-no-render-fired');
       console.log('[T4900] D PASS: export gate blocked render POST while edits unsaved');
     } else {
-      console.log('[T4900] D: Add Spotlight button not visible — skipping export gate click test');
+      console.log('[T4900] D: Create Reel button not visible — skipping export gate click test');
     }
 
     // ------------------------------------------------------------------ E: retry-success
