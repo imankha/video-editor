@@ -124,7 +124,7 @@ test('user can toggle player boxes via layer icon', async ({ page }) => {
 **Examples**: Any UI/layout change — a new screen, a repositioned control, a new modal,
 a header/sidebar/timeline restructure, a fullscreen mode, a `vh`/`dvh` change.
 
-**Why it exists**: T4880 (mobile Framing/Overlay controls unreachable below the timeline)
+**Why it exists**: T4880 (mobile Focus/Overlay controls unreachable below the timeline)
 shipped to production and was found by a user, not by us, because the E2E suite ran a
 single Desktop-Chrome project and asserted *functionality*, never *usability*. Nothing
 ran at a mobile viewport.
@@ -318,7 +318,7 @@ cd src/backend && pytest tests/test_{refactored_module}*.py -v --tb=short --capt
 | Segment extraction logic | Unit |
 | Clip save to backend | Unit, Integration |
 
-### Framing Mode
+### Focus Mode
 | Change | Tests Needed |
 |--------|-------------|
 | Crop overlay UI | E2E, Manual |

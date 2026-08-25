@@ -263,7 +263,7 @@ surface is a *video* product, so drafts scan by image, not text (T5672).
 - Text over the poster always sits on a bottom scrim (the "text over video needs a
   backdrop" rule). One tag chip max, `hidden sm:inline-flex` (dropped on narrow tiles).
 - A short status chip AND the slim progress strip both appear — the chip is the
-  coarse state, the strip stays the granular deep-link into Framing/Overlay.
+  coarse state, the strip stays the granular deep-link into Focus/Overlay.
 - Ready-to-publish tiles get a persistent corner badge (`aria-label="Move to My
   Reels"`) that publishes on tap; the same action also lives in the hover/long-press
   action set. Actions reveal on `group-hover/tile` (desktop) or long-press (mobile),
@@ -274,7 +274,7 @@ surface is a *video* product, so drafts scan by image, not text (T5672).
 The My Reels drawer's poster tile (T5673) — the celebration-surface counterpart to
 `DraftTile`. Same poster idiom (lazy `<img>` → skeleton → branded fallback, bottom
 name/meta scrim, hover/long-press action set) but **without draft-progress chrome**:
-published reels have no Framing/Overlay pipeline, so there is NO `SegmentedProgressStrip`,
+published reels have no Focus/Overlay pipeline, so there is NO `SegmentedProgressStrip`,
 status chip, or "Ready" publish badge.
 
 - **Poster source:** `GET /api/downloads/{id}/poster.jpg` (the owner-facing endpoint
@@ -383,7 +383,7 @@ One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentatio
 
 ## Layout Patterns
 
-### Mode Views (Annotate, Framing, Overlay)
+### Mode Views (Annotate, Focus, Overlay)
 
 ```
 ┌─────────────────────────────────────────────────┐

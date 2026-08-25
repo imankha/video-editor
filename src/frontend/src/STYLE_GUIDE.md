@@ -9,7 +9,7 @@ This document defines the visual design system for the ReelBallers video editor 
 |-------|---------------|-----|-------|
 | Purple | `purple-600` | #9333EA | Primary brand, main actions, overlay mode |
 | Green | `green-600` | #16A34A | Success, positive actions, games/annotate mode |
-| Blue | `blue-600` | #2563EB | Framing mode, informational |
+| Blue | `blue-600` | #2563EB | Focus mode, informational |
 
 ### Semantic Colors
 | Purpose | Base | Hover | Usage |
@@ -18,7 +18,7 @@ This document defines the visual design system for the ReelBallers video editor 
 | Success/Add | `green-600` | `green-700` | Add, play, load, export success |
 | Danger/Delete | `red-600` | `red-700` | Delete, destructive actions |
 | Secondary | `gray-700` | `gray-600` | Cancel, back, neutral |
-| Framing Mode | `blue-600` | `blue-700` | Framing-specific actions |
+| Focus Mode | `blue-600` | `blue-700` | Focus-specific actions |
 
 ### Background Colors
 | Element | Color | Usage |

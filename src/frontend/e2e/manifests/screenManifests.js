@@ -33,7 +33,7 @@ async function reachHome(page) {
 }
 
 /** Open the first Framing-ready reel draft; ready once the crop editor loaded. */
-async function reachFraming(page) {
+async function reachFocus(page) {
   await reachHome(page);
   const drafts = page.getByRole('button', { name: 'Reel Drafts' }).first();
   await drafts.waitFor({ state: 'visible', timeout: 15000 });
@@ -47,7 +47,7 @@ async function reachFraming(page) {
 
 /** From a loaded Framing draft, switch into Overlay (needs an exported working video). */
 async function reachOverlay(page) {
-  const framing = await reachFraming(page);
+  const framing = await reachFocus(page);
   if (!framing.ready) return framing;
   const overlayTab = page.getByTestId('mode-overlay');
   const reachable = (await overlayTab.count()) > 0 && (await overlayTab.isEnabled());
@@ -90,13 +90,13 @@ export const SCREENS = [
       { label: 'Annotate mode tab', locator: (p) => p.getByTestId('mode-annotate') },
       // Framing tab may be disabled until clips are extracted — reachOnly so we
       // assert it is not clipped/covered without requiring it be clickable.
-      { label: 'Framing mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
+      { label: 'Focus mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
     ],
   },
   {
     id: 'framing',
-    name: 'Framing',
-    setup: reachFraming,
+    name: 'Focus',
+    setup: reachFocus,
     actions: [
       // The exact control T4880 made unreachable on mobile: the Export/Proceed button.
       { label: 'Export button', locator: (p) => p.getByRole('button', { name: /^Export( \(\d+\/\d+\))?$/ }) },
@@ -140,7 +140,7 @@ export const SCREENS = [
     actions: [
       // Overlay's primary export button — the reel-completion action (T7580).
       { label: 'Create Reel button', locator: (p) => p.getByRole('button', { name: /Create Reel/ }) },
-      { label: 'Framing mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
+      { label: 'Focus mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
     ],
     // T5430 (invariant #4, coarse-pointer projects only): Overlay-specific icon
     // controls that T5360 never covered and still collapsed to ~24px on touch.
