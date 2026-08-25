@@ -134,7 +134,7 @@ def test_stamp_writes_every_tag_and_cover_art(tmp_path, reel, poster):
     assert tags.get("album") == "Vs Sharks Dec 6"
     assert tags.get("date", "").startswith("2025-12-06")
     assert tags.get("genre") == "Sports"
-    assert "Reel Ballers" in tags.get("copyright", "")
+    assert "ReelBallers" in tags.get("copyright", "")
 
     video_streams = [s for s in probe["streams"] if s["codec_type"] == "video"]
     real_video = [s for s in video_streams

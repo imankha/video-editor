@@ -18,8 +18,8 @@ export function buildTeammateMetaTags(data, origin, api) {
   const clips = Number.isInteger(data.clip_count) ? data.clip_count : null;
   const desc = escapeHtml(
     clips
-      ? `${clips} highlight clip${clips === 1 ? "" : "s"} from ${data.game_name || "a game"} - shared with you on Reel Ballers.`
-      : `Game highlights shared with you on Reel Ballers.`
+      ? `${clips} highlight clip${clips === 1 ? "" : "s"} from ${data.game_name || "a game"} - shared with you on ReelBallers.`
+      : `Game highlights shared with you on ReelBallers.`
   );
 
   // Real recap frame when the backend resolved one (relative proxy path ->
@@ -41,7 +41,7 @@ export function buildTeammateMetaTags(data, origin, api) {
 <meta property="og:description" content="${desc}">
 <meta property="og:image" content="${image}">
 <meta property="og:image:type" content="image/jpeg">
-${dims}<meta property="og:site_name" content="Reel Ballers">
+${dims}<meta property="og:site_name" content="ReelBallers">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${game} - shared highlights">
 <meta name="twitter:description" content="${desc}">

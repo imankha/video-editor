@@ -1,5 +1,5 @@
 """
-T3950 — "Made with Reel Ballers" branded outro.
+T3950 — "Made with ReelBallers" branded outro.
 
 Architecture (post-pivot): playback composited on shared/public surfaces (edge function
 + React viewers); burned into the file ONLY at download time via GET /api/downloads/{id}/file.

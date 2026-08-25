@@ -1,6 +1,6 @@
 """Serve-time metadata + cover-art stamping for downloaded reels (T6360).
 
-Every video leaving Reel Ballers is stamped with rich container metadata (title,
+Every video leaving ReelBallers is stamped with rich container metadata (title,
 author, album, game date, description, attribution, genre) and -- when a
 publish-time poster exists -- an embedded cover-art frame, so the file lands in
 Finder / QuickTime / VLC / Plex / the camera roll as a named, dated, illustrated
@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 # Machine-readable attribution to pair with the burned-in branded outro. ASCII
 # only (the hyphen is a plain '-', never an em-dash) -- some players/panels mangle
 # non-ASCII metadata, and it keeps the value greppable.
-BRAND_ATTRIBUTION = "Made with Reel Ballers - reelballers.com"
-BRAND_PUBLISHER = "Reel Ballers"
+BRAND_ATTRIBUTION = "Made with ReelBallers - reelballers.com"
+BRAND_PUBLISHER = "ReelBallers"
 DEFAULT_GENRE = "Sports"
 
 

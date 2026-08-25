@@ -132,7 +132,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
               className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
             >
               <Share2 size={16} />
-              Invite a Friend to Reel Ballers
+              Invite a Friend to ReelBallers
             </button>
           </div>
         )}

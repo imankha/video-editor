@@ -1,6 +1,6 @@
 ---
 name: ui-style-guide
-description: "Visual design system for the Reel Ballers video editor. Colors, buttons, spacing, components. Apply when creating UI components or styling elements."
+description: "Visual design system for the ReelBallers video editor. Colors, buttons, spacing, components. Apply when creating UI components or styling elements."
 license: MIT
 author: video-editor
 version: 1.0.0

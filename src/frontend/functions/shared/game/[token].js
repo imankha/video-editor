@@ -75,7 +75,7 @@ export function renderGamePage(share, token) {
   // yet). Until then this route falls through to the SPA signup with the token
   // preserved in the path -- nothing auto-materializes on auth.
   const claimUrl = escapeHtml(`/claim/game/${token}`);
-  const desc = `${attribution} -- watch the team recap on Reel Ballers.`;
+  const desc = `${attribution} -- watch the team recap on ReelBallers.`;
 
   const rawPosterUrl = share.poster_url || "";
   const posterUrl = escapeHtml(rawPosterUrl);
@@ -105,7 +105,7 @@ export function renderGamePage(share, token) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>${title} | Reel Ballers</title>
+<title>${title} | ReelBallers</title>
 <meta name="description" content="${escapeHtml(desc)}">
 ${preconnect}
 <meta property="og:type" content="video.other">
@@ -113,7 +113,7 @@ ${preconnect}
 <meta property="og:description" content="${escapeHtml(desc)}">
 <meta property="og:video" content="${recapUrl}">
 <meta property="og:video:type" content="video/mp4">
-${posterMeta}<meta property="og:site_name" content="Reel Ballers">
+${posterMeta}<meta property="og:site_name" content="ReelBallers">
 <meta name="twitter:card" content="${rawPosterUrl ? "summary_large_image" : "summary"}">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${escapeHtml(desc)}">

@@ -9,7 +9,7 @@ is legible:
     a DETERMINISTIC white frame 0 on every ffmpeg build,
   - the film-reel RING (outer ring + 4 sprocket holes) SPINS in, decelerating to a stop,
   - the white PLAY triangle LANDS with a button-press bounce (scale overshoot),
-  - "Made with" + "Reel Ballers" are present FROM t=0 and NEVER fade -- they sit fully
+  - "Made with" + "ReelBallers" are present FROM t=0 and NEVER fade -- they sit fully
     visible alongside the logo animation so there is nothing to wait to read,
   - a READ-HOLD (~1.3s) on the resolved logo + brand so it can actually be read,
   - THEN the tagline ("Share Your Player's Brilliance") + the URL fade in TOGETHER (the
@@ -181,7 +181,7 @@ def test_play_button_lands_with_press_bounce(card):
 
 
 def test_brand_text_visible_from_start_and_never_fades(card):
-    """"Made with" + "Reel Ballers" are present from the START and stay fully visible: lit the
+    """"Made with" + "ReelBallers" are present from the START and stay fully visible: lit the
     instant the flash clears, and FLAT across the whole pre-reveal window (no fade-in). A
     fade-in would show the brand band rising from the dark baseline over time; here it does
     not move. Baseline = the tagline band during the brand hold (dark bg, text not yet in)."""

@@ -16,16 +16,16 @@ from app.utils.retry import TIER_1, retry_async_call
 logger = logging.getLogger(__name__)
 
 RESEND_API_URL = "https://api.resend.com/emails"
-FROM_ADDRESS = "Reel Ballers <noreply@reelballers.com>"
+FROM_ADDRESS = "ReelBallers <noreply@reelballers.com>"
 # T4860: human/reply-able sender for admin update emails (announcements, credit
 # grants). Net-new address; keep noreply@ for all transactional mail. Resend
 # verifies at the domain level, so any @reelballers.com sender works.
-ADMIN_FROM_ADDRESS = "Reel Ballers <hello@reelballers.com>"
+ADMIN_FROM_ADDRESS = "ReelBallers <hello@reelballers.com>"
 
 # T1740: CAN-SPAM compliant footer for all emails (used by OTP + bug reports)
 _CAN_SPAM_FOOTER = """
 <p style="color: #6b7280; font-size: 11px; margin-top: 16px; text-align: center;">
-  Reel Ballers<br/>
+  ReelBallers<br/>
   <a href="https://app.reelballers.com/privacy" style="color: #6b7280;">Privacy Policy</a>
   &nbsp;|&nbsp;
   <a href="https://app.reelballers.com/terms" style="color: #6b7280;">Terms of Service</a>
@@ -73,7 +73,7 @@ def _build_share_email(
             '<p style="color:#4b5563;font-size:14px;line-height:22px;margin:24px 0 0 0;">'
             "No account needed to watch.</p>"
             '<p style="color:#4b5563;font-size:14px;line-height:22px;margin:8px 0 0 0;">'
-            "Reel Ballers helps soccer parents create and share game highlights.</p>"
+            "ReelBallers helps soccer parents create and share game highlights.</p>"
         )
 
     return f"""<!DOCTYPE html>
@@ -94,7 +94,7 @@ def _build_share_email(
     <a href="https://reelballers.com" style="text-decoration:none;">
       <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
         <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
-        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="Reel Ballers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
+        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
         <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
       </table>
     </a>
@@ -108,7 +108,7 @@ def _build_share_email(
   <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
   <tr><td style="padding:24px 32px;">
     <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 8px 0;">
-      Sent via <a href="https://reelballers.com" style="color:#6d28d9;text-decoration:none;">Reel Ballers</a>
+      Sent via <a href="https://reelballers.com" style="color:#6d28d9;text-decoration:none;">ReelBallers</a>
     </p>
     <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 16px 0;">{footer_reason}</p>
     <p style="color:#6b7280;font-size:12px;line-height:18px;margin:0;">
@@ -174,7 +174,7 @@ def _build_update_email(subject: str, body_html: str) -> str:
     <a href="https://reelballers.com" style="text-decoration:none;">
       <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
         <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
-        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="Reel Ballers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
+        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
         <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
       </table>
     </a>
@@ -186,7 +186,7 @@ def _build_update_email(subject: str, body_html: str) -> str:
   <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
   <tr><td style="padding:24px 32px;">
     <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 8px 0;">
-      Sent via <a href="https://reelballers.com" style="color:#6d28d9;text-decoration:none;">Reel Ballers</a>
+      Sent via <a href="https://reelballers.com" style="color:#6d28d9;text-decoration:none;">ReelBallers</a>
     </p>
     <p style="color:#6b7280;font-size:12px;line-height:18px;margin:0;">
       <a href="https://app.reelballers.com/privacy" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>
@@ -624,7 +624,7 @@ async def send_collection_share_email(
         heading = f"{display_name} shared {safe_title}"
         preheader = safe_title
 
-    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+    from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
     html_body = _build_share_email(
         heading=heading,
@@ -691,7 +691,7 @@ async def send_share_email(
         heading = f"{display_name} shared a highlight reel"
         preheader = safe_video
 
-    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+    from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
     html_body = _build_share_email(
         heading=heading,
@@ -762,7 +762,7 @@ async def send_teammate_share_email(
         heading = f"{display_name} tagged {tag_name} in {clip_text} from"
         preheader = f"{clip_text} from {safe_game}"
 
-    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+    from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
     html_body = _build_share_email(
         heading=heading,
@@ -829,7 +829,7 @@ async def send_game_share_email(
         heading = f"{display_name} shared a game with you"
         preheader = safe_game
 
-    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+    from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
     html_body = _build_share_email(
         heading=heading,
@@ -896,7 +896,7 @@ async def send_playback_share_email(
         heading = f"{display_name} shared annotations from"
         preheader = f"Annotated clips from {safe_game}"
 
-    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+    from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
     html_body = _build_share_email(
         heading=heading,

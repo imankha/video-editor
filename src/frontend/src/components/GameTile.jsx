@@ -235,7 +235,7 @@ export function GameTile({
                 <Logo size={28} />
               </div>
             )}
-            <p className="text-xs text-gray-400">Reel Ballers</p>
+            <p className="text-xs text-gray-400">ReelBallers</p>
             <p className="text-[10px] text-gray-500 mt-1">No poster</p>
           </div>
         </div>

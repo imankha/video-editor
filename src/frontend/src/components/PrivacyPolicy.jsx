@@ -38,7 +38,7 @@ export function PrivacyPolicy() {
         </nav>
 
         <p className="mb-6">
-          Reel Ballers (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) operates the Reel Ballers video editing application (the &ldquo;Service&rdquo;). This Privacy Policy describes how we collect, use, disclose, and protect your personal information when you use our Service.
+          ReelBallers (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) operates the ReelBallers video editing application (the &ldquo;Service&rdquo;). This Privacy Policy describes how we collect, use, disclose, and protect your personal information when you use our Service.
         </p>
 
         {/* Section 1 */}
@@ -161,7 +161,7 @@ export function PrivacyPolicy() {
 
         {/* Section 6 */}
         <Section id="childrens-privacy" title="6. Children's Privacy (COPPA)">
-          <p className="mb-3 font-medium text-white">Reel Ballers is designed for parents, guardians, and coaches of youth athletes.</p>
+          <p className="mb-3 font-medium text-white">ReelBallers is designed for parents, guardians, and coaches of youth athletes.</p>
           <ul className="list-disc pl-5 space-y-1">
             <li><strong className="text-white">Children are data subjects in videos, not account holders.</strong> Our users are adults who upload and edit video of youth sporting events.</li>
             <li>We do not knowingly collect personal information from children under 13 (or under 16 for CCPA purposes).</li>
@@ -221,7 +221,7 @@ export function PrivacyPolicy() {
 
         {/* Section 11 */}
         <Section id="contact" title="11. Contact Us">
-          <p className="mb-2"><strong className="text-white">Reel Ballers</strong></p>
+          <p className="mb-2"><strong className="text-white">ReelBallers</strong></p>
           <p>Privacy inquiries: <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a></p>
         </Section>
       </div>

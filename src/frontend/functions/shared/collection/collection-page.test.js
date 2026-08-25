@@ -16,7 +16,7 @@ describe('buildCollectionMetaTags', () => {
   it('emits title, description, and absolutized og:image with dims', () => {
     const tags = buildCollectionMetaTags(data, API);
     expect(tags).toContain('property="og:title" content="Top Plays"');
-    expect(tags).toContain('Top Plays - 5 reels - shared from Reel Ballers.');
+    expect(tags).toContain('Top Plays - 5 reels - shared from ReelBallers.');
     expect(tags).toContain(
       `property="og:image" content="${API}/api/shared/collection/tok123/poster.jpg"`
     );
@@ -52,12 +52,12 @@ describe('injectHeadTags', () => {
 
   it("strips the SPA's static og/twitter tags so injected ones win", () => {
     const spa =
-      '<head><meta property="og:title" content="Reel Ballers">\n' +
+      '<head><meta property="og:title" content="ReelBallers">\n' +
       '<meta name="twitter:card" content="summary_large_image">\n' +
       '<meta name="description" content="keep me"></head>';
     const out = injectHeadTags(spa, '<meta property="og:title" content="Specific">');
     expect(out).toContain('content="Specific"');
-    expect(out).not.toContain('content="Reel Ballers"');
+    expect(out).not.toContain('content="ReelBallers"');
     expect(out).toContain('keep me'); // non-og meta untouched
     expect(out.match(/og:title/g)).toHaveLength(1);
   });

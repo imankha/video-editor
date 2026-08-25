@@ -43,13 +43,13 @@ export function TermsOfService() {
 
         {/* Section 1 */}
         <Section id="acceptance" title="1. Acceptance of Terms">
-          <p className="mb-3">By accessing or using Reel Ballers (the &ldquo;Service&rdquo;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+          <p className="mb-3">By accessing or using ReelBallers (the &ldquo;Service&rdquo;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
           <p>You must be at least <strong className="text-white">18 years of age</strong> to create an account. By creating an account, you represent and warrant that you are 18 or older.</p>
         </Section>
 
         {/* Section 2 */}
         <Section id="description" title="2. Description of Service">
-          <p className="mb-3">Reel Ballers is a browser-based video editing application for youth sports highlights. The Service includes:</p>
+          <p className="mb-3">ReelBallers is a browser-based video editing application for youth sports highlights. The Service includes:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Video upload and storage</li>
             <li>Clip extraction and annotation</li>
@@ -70,17 +70,17 @@ export function TermsOfService() {
           </ul>
 
           <h4 className="text-white font-medium mb-2">Your Content Rights</h4>
-          <p className="mb-3">You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to Reel Ballers, including but not limited to:</p>
+          <p className="mb-3">You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to ReelBallers, including but not limited to:</p>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>The right to upload, edit, and redistribute video depicting any individuals shown</li>
             <li>The right to create derivative works (clips, highlights, cropped versions) from the content you upload</li>
             <li>Compliance with any terms of service, license agreements, or usage restrictions imposed by the original source of the content (including but not limited to club camera systems, league recording platforms, or any third-party video service)</li>
             <li>Any required consents from individuals depicted in the content, including parental or guardian consent for minors</li>
           </ul>
-          <p className="mb-4">If you upload video obtained from a third-party platform or recording service, <strong className="text-white">you are solely responsible for ensuring that your use of that content &mdash; including uploading it to Reel Ballers, editing it, and exporting or sharing the results &mdash; is permitted</strong> under that platform&apos;s terms of service and applicable law. Reel Ballers does not verify the source of content you upload and assumes no responsibility for your compliance with third-party terms.</p>
+          <p className="mb-4">If you upload video obtained from a third-party platform or recording service, <strong className="text-white">you are solely responsible for ensuring that your use of that content &mdash; including uploading it to ReelBallers, editing it, and exporting or sharing the results &mdash; is permitted</strong> under that platform&apos;s terms of service and applicable law. ReelBallers does not verify the source of content you upload and assumes no responsibility for your compliance with third-party terms.</p>
 
           <h4 className="text-white font-medium mb-2">No Monitoring Obligation</h4>
-          <p>Reel Ballers has no obligation to pre-screen, monitor, or verify the source, ownership, or legality of content uploaded by users. We are a video editing tool. You bring the content; you are responsible for it.</p>
+          <p>ReelBallers has no obligation to pre-screen, monitor, or verify the source, ownership, or legality of content uploaded by users. We are a video editing tool. You bring the content; you are responsible for it.</p>
         </Section>
 
         {/* Section 4 */}
@@ -89,7 +89,7 @@ export function TermsOfService() {
           <p className="mb-4">You may not upload content that is: (a) unlawful, harmful, threatening, abusive, or harassing; (b) depicts the exploitation or abuse of any person, especially minors; (c) infringes any third party&apos;s intellectual property rights; (d) contains malware or harmful code; or (e) violates any applicable law or regulation.</p>
 
           <h4 className="text-white font-medium mb-2">Intended Use</h4>
-          <p className="mb-4">Reel Ballers is designed for youth sports video editing. You agree to use the Service only for uploading and editing sports-related video content. We reserve the right to remove content that falls outside this intended use.</p>
+          <p className="mb-4">ReelBallers is designed for youth sports video editing. You agree to use the Service only for uploading and editing sports-related video content. We reserve the right to remove content that falls outside this intended use.</p>
 
           <h4 className="text-white font-medium mb-2">Prohibited Activities</h4>
           <ul className="list-disc pl-5 space-y-1">
@@ -105,11 +105,11 @@ export function TermsOfService() {
 
         {/* Section 5 */}
         <Section id="third-party" title="5. Third-Party Content and Services">
-          <h4 className="text-white font-medium mb-2">Reel Ballers as a Neutral Tool</h4>
-          <p className="mb-4">Reel Ballers is a video editing tool. We do not host, source, or provide video content. All content on the Service is uploaded by users from their own devices or cloud storage. We have no knowledge of, and assume no responsibility for, the original source of any content uploaded to the Service.</p>
+          <h4 className="text-white font-medium mb-2">ReelBallers as a Neutral Tool</h4>
+          <p className="mb-4">ReelBallers is a video editing tool. We do not host, source, or provide video content. All content on the Service is uploaded by users from their own devices or cloud storage. We have no knowledge of, and assume no responsibility for, the original source of any content uploaded to the Service.</p>
 
           <h4 className="text-white font-medium mb-2">Third-Party Platforms</h4>
-          <p className="mb-3">Some users may upload content originally recorded by third-party services (such as club camera systems, league recording platforms, or other video providers). Reel Ballers has no relationship with, endorsement of, or affiliation with any such third-party platform. We do not access, scrape, or pull content from any third-party service.</p>
+          <p className="mb-3">Some users may upload content originally recorded by third-party services (such as club camera systems, league recording platforms, or other video providers). ReelBallers has no relationship with, endorsement of, or affiliation with any such third-party platform. We do not access, scrape, or pull content from any third-party service.</p>
           <p className="mb-3">You are solely responsible for:</p>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>Complying with the terms of service of any platform from which you obtained your content</li>
@@ -127,7 +127,7 @@ export function TermsOfService() {
           <p className="mb-4">You retain full ownership of all content you upload. We do not claim ownership of your videos, clips, or highlights.</p>
 
           <h4 className="text-white font-medium mb-2">License Grant</h4>
-          <p className="mb-3">By uploading content, you grant Reel Ballers a limited, non-exclusive, royalty-free license to:</p>
+          <p className="mb-3">By uploading content, you grant ReelBallers a limited, non-exclusive, royalty-free license to:</p>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>Store your content on our servers and cloud storage</li>
             <li>Process your content (transcode, crop, upscale, overlay) as directed by you</li>
@@ -157,7 +157,7 @@ export function TermsOfService() {
             <li>The quality of any content processed through the Service will meet your expectations</li>
             <li>Any content you upload is lawfully obtained, properly licensed, or non-infringing</li>
           </ul>
-          <p className="mb-3">Reel Ballers is a video editing tool. We process content as directed by you. We make no representations regarding the legality, ownership, or licensing status of content you upload.</p>
+          <p className="mb-3">ReelBallers is a video editing tool. We process content as directed by you. We make no representations regarding the legality, ownership, or licensing status of content you upload.</p>
           <p>We may modify, suspend, or discontinue the Service at any time with reasonable notice.</p>
         </Section>
 
@@ -176,7 +176,7 @@ export function TermsOfService() {
 
         {/* Section 10 */}
         <Section id="indemnification" title="10. Indemnification">
-          <p className="mb-3">You agree to defend, indemnify, and hold harmless Reel Ballers, its officers, directors, employees, agents, and affiliates from and against any and all claims, damages, obligations, losses, liabilities, costs, and expenses (including attorney&apos;s fees) arising from:</p>
+          <p className="mb-3">You agree to defend, indemnify, and hold harmless ReelBallers, its officers, directors, employees, agents, and affiliates from and against any and all claims, damages, obligations, losses, liabilities, costs, and expenses (including attorney&apos;s fees) arising from:</p>
           <ul className="list-disc pl-5 space-y-1 mb-3">
             <li>Your use of the Service</li>
             <li>Content you upload, edit, export, or share using the Service</li>
@@ -191,7 +191,7 @@ export function TermsOfService() {
 
         {/* Section 11 */}
         <Section id="dmca" title="11. DMCA Takedown Procedure">
-          <p className="mb-3">If you believe content on Reel Ballers infringes your copyright, send a DMCA notice to <a href="mailto:copyright@reelballers.com" className="text-blue-400 hover:underline">copyright@reelballers.com</a> including:</p>
+          <p className="mb-3">If you believe content on ReelBallers infringes your copyright, send a DMCA notice to <a href="mailto:copyright@reelballers.com" className="text-blue-400 hover:underline">copyright@reelballers.com</a> including:</p>
           <ol className="list-decimal pl-5 space-y-1 mb-4">
             <li>Identification of the copyrighted work</li>
             <li>Identification of the infringing material with location</li>
@@ -229,7 +229,7 @@ export function TermsOfService() {
 
         {/* Section 15 */}
         <Section id="contact" title="15. Contact">
-          <p className="mb-2"><strong className="text-white">Reel Ballers</strong></p>
+          <p className="mb-2"><strong className="text-white">ReelBallers</strong></p>
           <p>Email: <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a></p>
         </Section>
       </div>
