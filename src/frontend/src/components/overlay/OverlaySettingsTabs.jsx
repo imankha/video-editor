@@ -36,7 +36,7 @@ import { Sparkles, Type, Image as ImageIcon } from 'lucide-react';
  * image (T6590). The data model still calls it poster_* (see ThumbnailPanel).
  */
 const TABS = [
-  { id: 'overlay', label: 'Overlay', icon: Sparkles },
+  { id: 'overlay', label: 'Spotlight', icon: Sparkles },
   { id: 'text', label: 'Text', icon: Type },
   { id: 'thumbnail', label: 'Thumbnail', icon: ImageIcon },
 ];
