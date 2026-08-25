@@ -68,6 +68,13 @@ export default function PosterMarkerLayer({
   visualDuration,
   isUploaded = false,  // a custom image is in use -- marker renders inactive/muted
   onDragEnd,           // (visualTime) => void -- fires ONCE per drag, on pointerup
+  // (visualTime) => void -- fires on a CLICK (pointerdown+up with no movement
+  // past DRAG_THRESHOLD_PX), NOT on a drag (T7720). Passes the marker's CURRENT
+  // committed visualTime, never the click position -- clicking the marker opens
+  // the Thumbnail settings tab + seeks the playhead to it; it never relocates
+  // the frame (relocation is drag-only, T6560). The two callbacks are mutually
+  // exclusive per pointer sequence: the pointerup below fires exactly one.
+  onClick,
   visualTimeToSourceTime = (t) => t,
   edgePadding = 20,
   disabled = false,
@@ -145,6 +152,16 @@ export default function PosterMarkerLayer({
     if (onDragEnd) onDragEnd(newVisualTime);
   }, [onDragEnd]);
 
+  // A click-in-place (no drag) opens the marker's settings + seeks to it (T7720).
+  // Passes the marker's CURRENT committed `visualTime` -- NOT the click position
+  // -- so this never moves the frame (that stays drag-only, T6560). Unlike
+  // commitDrag it does NOT set hasInteractedRef: a click doesn't move the marker,
+  // so the initial-load auto-follow (which only cares about the marker's POSITION)
+  // has no reason to stop.
+  const commitClick = useCallback(() => {
+    if (onClick) onClick(visualTime);
+  }, [onClick, visualTime]);
+
   // T6630 round 7 item 5 (corrected per user direction: "the marker should
   // move just like the playhead") -- reuse the playhead's OWN auto-scroll-
   // follow math (`computeFollowScrollTarget`, TimelineBase.jsx, already
@@ -210,7 +227,10 @@ export default function PosterMarkerLayer({
       pointerDownXRef.current = null;
       movedRef.current = false;
       // A click / release-in-place is NOT a move: leave the frame untouched.
+      // A real drag commits the new frame; a click opens the marker's settings
+      // (T7720) -- exactly one of the two fires per pointer sequence.
       if (moved) commitDrag(finalTime);
+      else commitClick();
     };
     const handlePointerCancel = () => {
       setIsDragging(false);
@@ -227,7 +247,7 @@ export default function PosterMarkerLayer({
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
     };
-  }, [isDragging, pixelToVisualTime, followScroll, commitDrag]);
+  }, [isDragging, pixelToVisualTime, followScroll, commitDrag, commitClick]);
 
   const nudge = useCallback((deltaSeconds) => {
     if (disabled) return;

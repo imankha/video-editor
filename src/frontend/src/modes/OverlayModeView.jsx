@@ -347,6 +347,17 @@ export function OverlayModeView({
     beginInlineEdit && beginInlineEdit(id);
   }, [onSelectElement, textOverlays, currentTime, seek, beginInlineEdit]);
 
+  // T7720: a click (not a drag) on the thumbnail marker opens the Thumbnail
+  // settings tab and seeks the playhead to the marker's frame -- the same
+  // "click a timeline element -> switch to its tab + seek" shape handleSelectRegion
+  // uses for text regions. `markerVisualTime` is already in visual/timeline space
+  // (what `seek` expects), so it's seeked as-is -- no conversion, no persistence
+  // (dragging remains the only way to MOVE the frame, T6560).
+  const handlePosterMarkerClick = useCallback((markerVisualTime) => {
+    setActiveTab('thumbnail');
+    seek && seek(markerVisualTime);
+  }, [seek]);
+
   // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
   // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
   // `object-contain` then becomes a no-op (box already == video aspect), and the
@@ -922,6 +933,7 @@ export function OverlayModeView({
             posterSlowmoSection={posterSlowmoSection}
             posterUploaded={posterUploaded}
             onPosterMarkerDragEnd={onPosterMarkerDragEnd}
+            onPosterMarkerClick={handlePosterMarkerClick}
             isExportInFlight={settingsDisabled}
             isThumbnailTabActive={activeTab === 'thumbnail'}
             textOverlays={textOverlays}
@@ -1015,6 +1027,7 @@ export function OverlayModeView({
                         posterSlowmoSection={posterSlowmoSection}
                         posterUploaded={posterUploaded}
                         onPosterMarkerDragEnd={onPosterMarkerDragEnd}
+                        onPosterMarkerClick={handlePosterMarkerClick}
                         isExportInFlight={settingsDisabled}
                         isThumbnailTabActive={activeTab === 'thumbnail'}
                         textOverlays={textOverlays}
