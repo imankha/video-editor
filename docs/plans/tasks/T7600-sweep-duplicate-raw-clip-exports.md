@@ -1,6 +1,6 @@
 # T7600: Expiry sweep auto-exported the same clips three times (triplicate R2 storage)
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P3 (cost/correctness hygiene)
 **Impact:** 4
 **Complexity:** 3
