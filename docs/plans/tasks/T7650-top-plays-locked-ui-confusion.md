@@ -71,6 +71,49 @@ working as intended - this task is about the confusing PRESENTATION, not a data 
 - Checked against **Season Highlights & Collections epic** (T3600-T3640, DONE/archived,
   which shipped Top Plays originally) - no open follow-up covers this presentation gap.
 
+## Progress Log
+
+### 2026-08-24 — Step 1: root mechanism confirmed live (UI conflation)
+
+Brought up the container stack (`.devcontainer/container-stack.sh`) and drove My
+Reels as a REAL browser session against a seeded low-footage profile:
+`POST /api/auth/init` for a fresh e2e profile, then 4× `POST
+/api/test/seed-final-video` (single-clip 9:16 reels, ~1s each => ~4s total <<
+`COLLECTION_MIN_DURATION_SEC` = 30s). Evidence: `qa/locked-surfaces-my-reels.png`.
+
+**Verdict: primarily UI CONFLATION, not a data/fetch-staleness correctness bug.**
+The seeded state renders THREE amber "locked" cards stacked in My Reels, all
+sharing the `LockedCollectionCard`/ConfidenceBanner amber+Lock chrome + a
+"Ns / 30s" progress bar, with no per-surface reason:
+
+1. **Ranking Progress** (`ConfidenceBanner`, profile-wide) — the ONLY one with a
+   real explanation ("Sort your clips head-to-head... Locked until you have 30s
+   of clips"). Fine as-is.
+2. **Top Plays** (`SmartLockedCard`) — title + progress bar and **NO subtitle at
+   all** (SmartLockedCard passes no `subtitle`). A user sees "Top Plays" locked
+   with zero explanation of what it is or why — this is the "reads as broken".
+3. **Mixes & compilations** (`RatioUnlockGroup`) — subtitle is the hardcoded
+   `GAME_UNLOCK_CAPTION = "Build more reels to unlock game highlights"`, which is
+   **factually wrong for Mixes** (not game highlights) and identical wording to
+   the per-game case. Copy leak.
+
+The reporter's "locked at game level, clip shows up after waiting" maps to a
+SECONDARY latency/ordering factor, NOT a correctness flip: aggregate cards render
+off the one-shot `/collections/summary` fetch, while per-clip `#N` season-rank
+badges come from the lazy per-group `/downloads` member fetch that resolves later
+(and a cold profile switch adds a real R2 restore before the first summary). I
+could NOT reproduce "locked-then-flips-to-unlocked" wrong data in-container — the
+summary path blocks on restore then returns correct aggregates (spinner, then
+right answer), and `#N` badges need `match_count > 0` (real ranking) which the
+seed seam can't set. So the fix is presentation (distinct per-surface locked
+copy), NOT a fake spinner — a real R2 restore already shows the CollectionsTab
+loader and must not be relabeled "locked".
+
+Fix (Step 2): give each locked surface a distinct `LockedReasonModal` `kind`
+(extending the existing `kind="ranking"` pattern) + a distinct card subtitle, so
+"Top Plays" / per-game highlights / Mixes / ranking each say WHY they're locked.
+Presentation only — no `rank.py` / cross-profile / `move_reels_to_profile` change.
+
 ## Acceptance Criteria
 
 - [ ] Root mechanism confirmed (UI conflation vs. fetch staleness vs. both) via real
