@@ -55,7 +55,7 @@ parallel-safe under the dotask file-disjoint rule.
 
 | ID | Task | Status |
 |----|------|--------|
-| T7480 | [Prod game uploads failing since Aug 20: investigate + lifecycle observability](T7480-prod-upload-failures-observability.md) | WAITING ON USER |
+| T7480 | [Prod game uploads failing since Aug 20: investigate + lifecycle observability](T7480-prod-upload-failures-observability.md) | STAGING |
 | T7470 | [Upload-failure cleanup cascade-deletes user annotation work](T7470-upload-failure-cascade-delete.md) | TODO |
 | T7490 | [Pending uploads invisible; stale resume records silently reaped](T7490-pending-uploads-invisible.md) | TODO |
 | T7500 | [Write handlers report success on zero-row UPDATE](T7500-zero-row-update-silent-success.md) | TODO |

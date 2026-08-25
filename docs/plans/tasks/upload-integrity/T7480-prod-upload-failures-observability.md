@@ -1,6 +1,6 @@
 # T7480: Prod game uploads failing since Aug 20: investigate + upload lifecycle observability
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Priority:** P1 (active prod outage)
 **Impact:** 9
 **Complexity:** 5
