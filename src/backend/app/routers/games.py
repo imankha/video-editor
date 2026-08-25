@@ -1646,6 +1646,26 @@ async def update_game(
 # GET still exposes them via load_annotations_from_db.
 
 
+def _game_has_user_content(cursor, game_id: int) -> bool:
+    """True if a game has acquired user annotation work or watch progress (T7470).
+
+    Content = any raw_clips row for the game, OR viewed_duration > 0. Used by the
+    only-if-empty cleanup delete to refuse destroying work a user committed against a
+    still-uploading game (T1540 annotate-during-upload). Runs on the caller's cursor so
+    the check and the cascade share one transaction/connection — a clip committed
+    between the client's pre-check and the DELETE is still seen here and refused.
+    """
+    row = cursor.execute("SELECT viewed_duration FROM games WHERE id = ?", (game_id,)).fetchone()
+    if row is None:
+        return False
+    if (row['viewed_duration'] or 0) > 0:
+        return True
+    clip = cursor.execute(
+        "SELECT 1 FROM raw_clips WHERE game_id = ? LIMIT 1", (game_id,)
+    ).fetchone()
+    return clip is not None
+
+
 def _delete_game_cascade(cursor, game_id: int) -> tuple[list[str], int]:
     """Delete a game and its now-orphaned projects within the caller's transaction.
 
@@ -1694,14 +1714,29 @@ def _delete_game_cascade(cursor, game_id: int) -> tuple[list[str], int]:
 
 
 @router.delete("/{game_id:int}")
-async def delete_game(game_id: int):
-    """Delete a game from user's database. Global video is NOT deleted (may be shared)."""
+async def delete_game(game_id: int, only_if_empty: bool = False):
+    """Delete a game from user's database. Global video is NOT deleted (may be shared).
+
+    only_if_empty=True is the failed-upload cleanup path (T7470): it REFUSES to delete a
+    game that has acquired user content (raw_clips, or viewed_duration > 0), leaving it at
+    status='pending' so annotate-during-upload work (T1540) survives a transfer failure.
+    The refusal is a 200 no-op (`deleted: False`) rather than an error — the cleanup handler
+    is best-effort and must not surface a scary failure for the expected "user annotated"
+    case. A user-gestured delete from the UI (no flag) keeps FULL cascade semantics, unchanged.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Game not found")
+
+        # T7470: the backend guard is the invariant, not the frontend pre-check. Re-checking
+        # here (same connection as the cascade) catches a clip committed after the client
+        # decided the game was empty — the race the task calls out.
+        if only_if_empty and _game_has_user_content(cursor, game_id):
+            logger.info(f"[T7470] Refused only-if-empty delete of game {game_id}: has user content; left pending")
+            return {'success': True, 'deleted': False, 'reason': 'has_content'}
 
         video_hashes, orphaned = _delete_game_cascade(cursor, game_id)
         conn.commit()
@@ -1712,7 +1747,7 @@ async def delete_game(game_id: int):
         delete_ref(user_id, profile_id, h)
 
     logger.info(f"Deleted game {game_id} ({orphaned} orphaned projects cleaned up, {len(video_hashes)} storage refs removed)")
-    return {'success': True}
+    return {'success': True, 'deleted': True}
 
 
 @router.get("/{game_id:int}/video")

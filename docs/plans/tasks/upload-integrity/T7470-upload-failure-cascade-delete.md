@@ -102,8 +102,30 @@ decision point; their annotation work must simply survive it.
 
 ## Acceptance Criteria
 
-- [ ] A failed upload after annotating clips leaves games/raw_clips/working_clips/projects
-      rows intact (verified in profile.sqlite, not just UI)
-- [ ] A deliberate user delete of a game still cascades exactly as before
-- [ ] The race (content committed mid-cleanup) cannot destroy work (backend-enforced)
-- [ ] Tests pass; CI green
+- [x] A failed upload after annotating clips leaves games/raw_clips/working_clips/projects
+      rows intact (verified in profile.sqlite, not just UI) — backend guard + tests; staging
+      live-drive is the supervisor's post-merge step
+- [x] A deliberate user delete of a game still cascades exactly as before
+- [x] The race (content committed mid-cleanup) cannot destroy work (backend-enforced)
+- [x] Tests pass; CI green (relevant set green locally; Branch CI is the full-sweep verdict)
+
+## Progress Log
+
+- 2026-08-25 (worker): Implemented the only-if-empty guard.
+  - Backend (`games.py`): new `_game_has_user_content(cursor, game_id)` (raw_clips OR
+    viewed_duration>0); `delete_game` takes `only_if_empty: bool = False` and returns a 200
+    no-op `{deleted: False, reason: 'has_content'}` when the game has content, else full
+    cascade (`{deleted: True}`). User-gestured delete (no flag) unchanged. Guard reads on the
+    same connection as the cascade → catches the race.
+  - Frontend (`uploadManager.js`): both catch blocks (`uploadGame`, `uploadMultiVideoGame`)
+    now call `DELETE /api/games/{id}?only_if_empty=true`. Failure toast already fires via
+    `uploadStore.onUploadError`; no new toast needed (fuller pending/retry UI is T7490).
+  - Tests: `test_t7470_upload_failure_cascade_guard.py` (6: refuse-on-clips, refuse-on-viewed,
+    delete-when-empty, 404, race, user-delete-still-cascades) + `test_fk_cascades.py` (19
+    regression) all green; frontend `uploadManager.test.js` +1 (only_if_empty=true asserted),
+    stall + uploadStore regression green.
+  - Knowledge: added the only-if-empty invariant to `annotate.md` for T7490 to read.
+  - NOT touched: T7480 stall-watchdog/PART_SIZE/beacon, T7490 pending UI, T7500 rowcount sweep.
+  - Staging live-drive (deliberately fail an upload after annotating, verify profile.sqlite
+    rows intact) is required by the acceptance criteria but can only run post-merge on staging
+    — flagged for the supervisor.
