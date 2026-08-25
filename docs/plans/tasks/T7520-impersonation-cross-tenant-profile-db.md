@@ -1,6 +1,6 @@
 # T7520: Impersonation creates an empty profile DB under the ADMIN's user_id and syncs it to R2
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1 (cross-tenant write path in DB-open logic)
 **Impact:** 7
 **Complexity:** 3
