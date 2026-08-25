@@ -1,6 +1,6 @@
 # T7720: Clicking the timeline thumbnail marker should open Thumbnail settings and seek to it
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (UX affordance gap, user-directed 2026-08-25)
 **Impact:** 4
 **Complexity:** 2

@@ -1,6 +1,6 @@
 # T7710: Overlay settings tab "Overlay" label should read "Spotlight"
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (small clarity fix, user-directed 2026-08-25)
 **Impact:** 3
 **Complexity:** 1

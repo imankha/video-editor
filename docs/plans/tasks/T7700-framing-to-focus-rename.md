@@ -1,6 +1,6 @@
 # T7700: Rename Framing mode to Focus; relabel both export buttons
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P1 (user-directed naming clarity pass, 2026-08-25)
 **Impact:** 6
 **Complexity:** 6
