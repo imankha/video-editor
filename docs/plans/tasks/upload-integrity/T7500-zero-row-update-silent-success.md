@@ -1,6 +1,6 @@
 # T7500: Write handlers report success on zero-row UPDATE (finish-annotation and siblings)
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1 (member of the P1 epic; smallest child)
 **Impact:** 5
 **Complexity:** 2

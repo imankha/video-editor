@@ -1,6 +1,6 @@
 # T7590: Mobile "Add your first game" dead-end (iPhone Safari)
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1 (the 50% signup->upload cliff is concentrated on mobile)
 **Impact:** 8
 **Complexity:** 3

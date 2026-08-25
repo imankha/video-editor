@@ -58,7 +58,7 @@ parallel-safe under the dotask file-disjoint rule.
 | T7480 | [Prod game uploads failing since Aug 20: investigate + lifecycle observability](T7480-prod-upload-failures-observability.md) | STAGING |
 | T7470 | [Upload-failure cleanup cascade-deletes user annotation work](T7470-upload-failure-cascade-delete.md) | STAGING |
 | T7490 | [Pending uploads invisible; stale resume records silently reaped](T7490-pending-uploads-invisible.md) | STAGING |
-| T7500 | [Write handlers report success on zero-row UPDATE](T7500-zero-row-update-silent-success.md) | TODO |
+| T7500 | [Write handlers report success on zero-row UPDATE](T7500-zero-row-update-silent-success.md) | WIP |
 
 Related but filed separately (different surface): T7510, attempted-vs-successful activity
 tracking, which fixes the dashboard side of the same incident.
