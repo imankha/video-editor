@@ -322,6 +322,24 @@ export function getUserId() {
 }
 
 /**
+ * T7520: Clear the X-Profile-ID header immediately.
+ *
+ * During an impersonation start/stop (or logout) the session cookie flips the
+ * moment the fetch resolves, but the OLD page keeps running until
+ * `window.location.href`/`reload()` navigates. Any request that fires in that
+ * window would otherwise carry the NEW session's user together with the STALE
+ * impersonated profile id still held here — which the backend guard now rejects
+ * (404), and which previously created a cross-tenant profile.sqlite. Dropping
+ * the module-scoped header AND the persisted sessionStorage copy closes that
+ * window so no such request is even emitted.
+ */
+export function clearProfileHeader() {
+  _currentProfileId = null;
+  _profileId = null;
+  sessionStorage.removeItem('rb_profile_id');
+}
+
+/**
  * Reset session state. Called after auth changes (login/logout)
  * to force re-initialization on next initSession() call.
  */

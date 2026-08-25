@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
+import { getUserId, setUserId, resetSession, clearProfileHeader } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
 import { useEditorStore, EDITOR_MODES, MODE_PATHS } from './editorStore';
 import { useGamesDataStore } from './gamesDataStore';
@@ -167,6 +167,7 @@ export const useAuthStore = create((set, get) => ({
       pendingAction: null,
       isCheckingSession: false,
     });
+    clearProfileHeader(); // T7520: drop the stale profile header before reload
     resetSession();
     window.location.reload();
   },
@@ -182,6 +183,11 @@ export const useAuthStore = create((set, get) => ({
       const body = await res.text();
       throw new Error(`Impersonation failed (${res.status}): ${body}`);
     }
+    // T7520: the session cookie has flipped to the impersonated user, but this
+    // (admin) page keeps running until the navigation below. Clear the admin's
+    // stale X-Profile-ID NOW so no in-flight request carries the impersonated
+    // session + admin profile (which would create a cross-tenant profile DB).
+    clearProfileHeader();
     window.location.href = '/';
   },
 
@@ -197,6 +203,11 @@ export const useAuthStore = create((set, get) => ({
     } catch {
       // Best-effort — reload regardless so the admin isn't stuck.
     }
+    // T7520: session cookie is back to the admin, but the impersonated page is
+    // still live until navigation. Clear the impersonated X-Profile-ID NOW so
+    // no in-flight request writes into the admin's dir under the victim's
+    // profile id (the confirmed prod artifact).
+    clearProfileHeader();
     window.location.href = MODE_PATHS[EDITOR_MODES.ADMIN];
   },
 

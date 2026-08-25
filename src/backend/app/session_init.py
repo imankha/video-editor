@@ -17,7 +17,6 @@ import asyncio
 import contextvars
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 from .profile_context import set_current_profile_id
@@ -46,6 +45,18 @@ def set_main_loop(loop: asyncio.AbstractEventLoop | None) -> None:
 # This makes user_session_init() cheap to call from middleware on every request.
 _init_cache: dict[str, dict] = {}
 
+# T7520: per-process cache of a user's REGISTERED profile ids (the `profiles`
+# table in user.sqlite), so the middleware's per-request X-Profile-ID ownership
+# guard is a dict lookup on the hot path instead of a sqlite read on the event
+# loop. Populated lazily by load_registered_profile_ids; invalidated alongside
+# _init_cache on every profile create/switch/delete via invalidate_user_cache.
+# Staleness characteristics mirror _init_cache: a machine serves its cached copy
+# for the process lifetime, so a profile created on ANOTHER machine is not seen
+# until this entry is invalidated — acceptable because a session is machine-
+# pinned (fly_machine_id cookie) and profile-mutating gestures for that session
+# run on this machine and invalidate here.
+_profile_registry_cache: dict[str, frozenset[str]] = {}
+
 _init_locks: dict[str, threading.Lock] = {}
 _init_locks_guard = threading.Lock()
 
@@ -61,9 +72,33 @@ def invalidate_user_cache(user_id: str) -> None:
     """Remove user from _init_cache so next request re-reads user.sqlite.
 
     Called after profile switch or delete to ensure the middleware
-    picks up the new selected profile on the next request.
+    picks up the new selected profile on the next request. T7520: also drops
+    the registered-profile-ids cache so a just-created/deleted profile is
+    reflected by the ownership guard on the next request.
     """
     _init_cache.pop(user_id, None)
+    _profile_registry_cache.pop(user_id, None)
+
+
+def peek_registered_profile_ids(user_id: str) -> frozenset[str] | None:
+    """The user's registered profile ids if already cached this process, else
+    None. Pure dict lookup — safe to call directly on the event loop (no I/O).
+    A None return means the caller must load_registered_profile_ids() off-loop."""
+    return _profile_registry_cache.get(user_id)
+
+
+def load_registered_profile_ids(user_id: str) -> frozenset[str]:
+    """Load and cache the user's registered profile ids from user.sqlite.
+
+    BLOCKING (opens user.sqlite; a cold first access downloads it from R2), so
+    call it via run_in_context off the event loop, never inline in the async
+    request path. The guard treats membership here as "the session user owns
+    this profile"; see db_sync.py's X-Profile-ID ownership check (T7520).
+    """
+    from .services.user_db import get_profiles
+    ids = frozenset(p["id"] for p in get_profiles(user_id))
+    _profile_registry_cache[user_id] = ids
+    return ids
 
 
 def _materialize_pending_shares_for_user(user_id: str, profile_id: str) -> None:
@@ -174,25 +209,40 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     is_new_user = False
 
     if hint_profile_id:
-        # T3350: Parallelize R2 downloads when profile_id is known upfront.
-        # Fire user.sqlite and profile.sqlite downloads concurrently.
+        # T7520: hint_profile_id is CLIENT-supplied (dev-login profile_id, or an
+        # X-Profile-ID that fell through to init on a cold cache). It must be
+        # validated against this user's registry BEFORE we create/download its
+        # profile.sqlite — otherwise an unregistered (foreign) hint materializes
+        # a cross-tenant profile DB under this user's directory (the same
+        # impersonation-window artifact the middleware header guard closes).
+        # This means user.sqlite has to be resolved FIRST, so the T3350 parallel
+        # profile download is now gated on the hint surviving the registry
+        # check. Correctness over the parallelization here: this cold-cache init
+        # path is rare (the common request carries a valid X-Profile-ID and
+        # skips session_init entirely).
         set_current_profile_id(hint_profile_id)
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f_user = executor.submit(ensure_user_database, user_id)
-            f_profile = executor.submit(_ensure_database_with_context, user_id, hint_profile_id)
-            f_user.result()
-            f_profile.result()
-
-        # Validate: does the hinted profile_id actually exist in user.sqlite?
-        actual_profile_id = get_selected_profile_id(user_id)
-        if actual_profile_id == hint_profile_id:
-            profile_id = hint_profile_id
-            logger.info(f"T3350: Parallel init OK, profile {profile_id} for user {user_id}")
+        ensure_user_database(user_id)
+        hint_is_registered = hint_profile_id in load_registered_profile_ids(user_id)
+        if hint_is_registered:
+            _ensure_database_with_context(user_id, hint_profile_id)
         else:
-            # Hint was stale -- fall back to the real selected profile
+            logger.warning(
+                f"T7520: ignoring unregistered hint_profile_id={hint_profile_id} "
+                f"for user={user_id}; not creating its profile DB"
+            )
+
+        # Prefer the hint only when it is BOTH registered AND the selected
+        # profile (preserves the pre-T7520 outcome); otherwise fall back to the
+        # real selected profile. An unregistered hint never selects.
+        actual_profile_id = get_selected_profile_id(user_id)
+        if hint_is_registered and actual_profile_id == hint_profile_id:
+            profile_id = hint_profile_id
+            logger.info(f"Init OK, profile {profile_id} for user {user_id}")
+        else:
+            # Hint was stale/unregistered -- fall back to the real selected profile
             profile_id = actual_profile_id
             if profile_id:
-                logger.info(f"T3350: Hint stale, using actual profile {profile_id} for user {user_id}")
+                logger.info(f"Hint not selected, using actual profile {profile_id} for user {user_id}")
                 set_current_profile_id(profile_id)
                 ensure_database()
     else:
@@ -214,6 +264,13 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
         sport = inherited_sport or "soccer"
         create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True, sport=sport)
         set_selected_profile_id(user_id, profile_id)
+        # T7520: this create mutates the profiles registry. If the hint branch
+        # above already cached load_registered_profile_ids (a snapshot taken
+        # BEFORE this row existed), the middleware ownership guard would 404 the
+        # user's own just-created profile on the next request until an unrelated
+        # invalidate. Drop the stale registry-cache entry so the next guard load
+        # re-reads user.sqlite and sees this profile.
+        _profile_registry_cache.pop(user_id, None)
         logger.info(f"Created new profile {profile_id} for user {user_id}"
                     + (f" (inherited sport={sport})" if inherited_sport else ""))
 

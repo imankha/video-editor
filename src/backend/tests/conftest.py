@@ -5,12 +5,12 @@ Pytest configuration and shared fixtures for backend tests.
 import os
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import psycopg2
 import pytest
-import numpy as np
 from psycopg2.extras import RealDictCursor
-from unittest.mock import Mock, MagicMock, patch
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -36,6 +36,56 @@ def _set_default_profile_context():
     from app.profile_context import reset_profile_id
     reset_profile_id()
     _init_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _register_test_profiles():
+    """T7520: the middleware now 404s an X-Profile-ID the session user does not
+    own (ownership guard against the impersonation cross-tenant write). Most
+    backend tests drive requests with an 8-hex X-Profile-ID that they seed into
+    session_init._init_cache but never register in a real user.sqlite `profiles`
+    row, so under the raw guard every such request would 404.
+
+    Rather than patch each test, teach the guard's registry loader to also treat
+    each user's _init_cache selected profile as owned. Evaluated LAZILY (at guard
+    time, inside the request), so it picks up profiles seeded by a test's own
+    fixtures regardless of fixture ordering. A genuinely FOREIGN profile (one not
+    seeded into _init_cache and not created via the real API) is still absent
+    here and still 404s — the exact property the new T7520 security tests assert.
+    The per-process registry cache is cleared around every test so one test's
+    ownership set never leaks into the next.
+    """
+    import app.database as _db_module
+    from app import session_init
+
+    real_loader = session_init.load_registered_profile_ids
+
+    def _loader(user_id):
+        ids = set(real_loader(user_id))  # real user.sqlite registry (profiles created via API)
+        cached = session_init._init_cache.get(user_id)
+        if cached and cached.get("profile_id"):
+            ids.add(cached["profile_id"])
+        # Many legacy tests set up a profile.sqlite ON DISK directly (no API
+        # create, no _init_cache seed). Treat a profile dir that already exists
+        # under THIS user's own directory as owned. This is per-user scoped, so
+        # a FOREIGN profile (one that lives under a DIFFERENT user's dir, as the
+        # T7520 security tests construct) is not seen here and still 404s.
+        # Read USER_DATA_BASE at call time: durable-sync tests patch
+        # app.database.USER_DATA_BASE to a tmp dir for the duration of the test.
+        profiles_dir = _db_module.USER_DATA_BASE / user_id / "profiles"
+        if profiles_dir.is_dir():
+            ids.update(p.name for p in profiles_dir.iterdir() if p.is_dir())
+        frozen = frozenset(ids)
+        session_init._profile_registry_cache[user_id] = frozen
+        return frozen
+
+    session_init._profile_registry_cache.clear()
+    session_init.load_registered_profile_ids = _loader
+    try:
+        yield
+    finally:
+        session_init.load_registered_profile_ids = real_loader
+        session_init._profile_registry_cache.clear()
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -98,8 +148,8 @@ def pg_conn(monkeypatch):
     dsn = os.environ["DATABASE_URL"]
     if "staging" in dsn or "prod" in dsn or "production" in dsn:
         raise RuntimeError(
-            f"REFUSING to run tests: DATABASE_URL points to a non-dev database. "
-            f"DSN contains staging/prod keyword."
+            "REFUSING to run tests: DATABASE_URL points to a non-dev database. "
+            "DSN contains staging/prod keyword."
         )
 
     setup = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
