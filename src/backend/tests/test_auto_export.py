@@ -644,6 +644,158 @@ class TestExportBrilliantClip:
 
 
 # ---------------------------------------------------------------------------
+# T7600: _export_brilliant_clip idempotency (a sweep re-run must be a no-op)
+# ---------------------------------------------------------------------------
+
+class TestExportBrilliantClipIdempotency:
+    """T7600: the game is retried in full (up to MAX_AUTO_EXPORT_ATTEMPTS) when a
+    LATER stage fails (recap crash after the brilliant-clip loop), re-invoking
+    _export_brilliant_clip for every clip. Each re-run used to mint a fresh random
+    filename, upload a new R2 object, and overwrite raw_clips.filename — orphaning
+    the prior uploads (prod: 3 waves => 3x storage). The exists-check makes a
+    re-run a NO-OP when the clip's CURRENT extract still exists in R2."""
+
+    def _seed_draft(self, db, game_id, project_id=100):
+        _insert_project(db, project_id)
+        clip_id = _insert_clip(db, game_id, rating=5, name="Goal",
+                               auto_project_id=project_id)
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version) "
+            "VALUES (?, ?, 0, 1)",
+            (project_id, clip_id),
+        )
+        conn.commit()
+        conn.close()
+        return clip_id
+
+    def _clip_dict(self, clip_id, filename=None, auto_project_id=100):
+        return {
+            "id": clip_id,
+            "name": "Goal",
+            "rating": 5,
+            "video_hash": "abc123",
+            "start_time": 10.0,
+            "end_time": 15.0,
+            "auto_project_id": auto_project_id,
+            "video_sequence": 1,
+            "tags": None,
+            "notes": None,
+            "filename": filename,
+        }
+
+    def _current_filename(self, db, clip_id):
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT filename FROM raw_clips WHERE id = ?", (clip_id,)
+        ).fetchone()
+        conn.close()
+        return row["filename"]
+
+    @patch(f"{M}.r2_head_object")
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_first_export_runs_then_reexport_is_noop(
+        self, mock_ffmpeg, mock_presign, mock_upload, mock_head, isolated_profile_db
+    ):
+        """Called twice in a row for the same clip: the first call exports
+        normally; the second (retry) — now seeing the wired filename + a live R2
+        object — is a NO-OP (no ffmpeg, no upload, no DB overwrite)."""
+        from app.services.auto_export import _export_brilliant_clip
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        # First call: no prior extract exists in R2. Second call: it does.
+        mock_head.side_effect = [None, {"ContentLength": 123}]
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        clip_id = self._seed_draft(db, game_id)
+
+        # Wave 1 — the clip dict carries the seed filename ('clip.mp4'); R2 HEAD
+        # returns None (no auto_ extract yet) so it exports and wires a real name.
+        _export_brilliant_clip(
+            USER_ID, PROFILE_ID, self._clip_dict(clip_id, filename="clip.mp4"), game_id
+        )
+        wired = self._current_filename(db, clip_id)
+        assert wired.startswith("auto_"), wired
+        assert mock_ffmpeg.input.call_count == 1
+        assert mock_upload.call_count == 1
+
+        # Wave 2 — the retry re-reads the clip (now filename=wired); the extract
+        # exists in R2, so nothing runs and the DB pointer is unchanged.
+        _export_brilliant_clip(
+            USER_ID, PROFILE_ID, self._clip_dict(clip_id, filename=wired), game_id
+        )
+        assert mock_ffmpeg.input.call_count == 1, "retry must NOT re-run ffmpeg"
+        assert mock_upload.call_count == 1, "retry must NOT re-upload"
+        assert self._current_filename(db, clip_id) == wired, "DB pointer unchanged"
+        # The exists-check ran against the clip's CURRENT extract on the retry.
+        mock_head.assert_called_with(USER_ID, f"raw_clips/{wired}")
+
+    @patch(f"{M}.r2_head_object")
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_reexport_runs_when_prior_object_missing(
+        self, mock_ffmpeg, mock_presign, mock_upload, mock_head, isolated_profile_db
+    ):
+        """Guard keys on the R2 OBJECT, not just the DB pointer: filename is set
+        but the object is gone from R2 → re-export (regenerate the lost extract)."""
+        from app.services.auto_export import _export_brilliant_clip
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        mock_head.return_value = None  # pointer set but object absent
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        clip_id = self._seed_draft(db, game_id)
+
+        _export_brilliant_clip(
+            USER_ID, PROFILE_ID,
+            self._clip_dict(clip_id, filename="auto_stale.mp4"), game_id
+        )
+        mock_head.assert_called_once_with(USER_ID, "raw_clips/auto_stale.mp4")
+        assert mock_ffmpeg.input.call_count == 1, "missing object must re-export"
+        assert mock_upload.call_count == 1
+        assert self._current_filename(db, clip_id).startswith("auto_")
+
+    @patch(f"{M}.r2_head_object")
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_no_filename_skips_head_and_exports(
+        self, mock_ffmpeg, mock_presign, mock_upload, mock_head, isolated_profile_db
+    ):
+        """A clip with no wired extract (filename None) short-circuits before the
+        R2 HEAD and exports normally — no wasted round-trip on the first wave."""
+        from app.services.auto_export import _export_brilliant_clip
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        clip_id = self._seed_draft(db, game_id)
+
+        _export_brilliant_clip(
+            USER_ID, PROFILE_ID, self._clip_dict(clip_id, filename=None), game_id
+        )
+        mock_head.assert_not_called()
+        assert mock_ffmpeg.input.call_count == 1
+        assert mock_upload.call_count == 1
+
+
+# ---------------------------------------------------------------------------
 # _generate_recap tests
 # ---------------------------------------------------------------------------
 

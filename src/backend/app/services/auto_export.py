@@ -25,6 +25,7 @@ from ..storage import (
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
+    r2_head_object,
     r2_head_object_global,
     upload_bytes_to_r2,
     upload_to_r2,
@@ -182,7 +183,7 @@ def _get_annotated_clips(game_id: int, layer: str | None = None) -> list[dict]:
         rows = cursor.execute(
             f"""SELECT rc.id, rc.name, rc.rating, rc.tags, rc.notes,
                       rc.start_time, rc.end_time, rc.auto_project_id,
-                      rc.video_sequence, rc.my_athlete,
+                      rc.video_sequence, rc.my_athlete, rc.filename,
                       COALESCE(gv.blake3_hash, g.blake3_hash) as video_hash
                FROM raw_clips rc
                LEFT JOIN games g ON rc.game_id = g.id
@@ -304,6 +305,26 @@ def _export_brilliant_clip(
         logger.info(
             f"[AutoExport] Clip {clip['id']} already has a published reel — "
             f"skipping auto stream-copy export (framed content preserved)"
+        )
+        return
+
+    # T7600: idempotency — a re-run of the sweep for the same clip must be a
+    # NO-OP. The game is retried in full (up to MAX_AUTO_EXPORT_ATTEMPTS) whenever
+    # a LATER stage fails (e.g. recap generation crashes after this loop), which
+    # re-invokes this function for every brilliant clip. Before T7600 each re-run
+    # minted a FRESH random filename, uploaded a new R2 object, and overwrote
+    # raw_clips.filename — silently orphaning every prior upload (never deleted,
+    # un-referenced after the pointer moved; prod saw 3 waves => 3x storage for
+    # 8 clips). If the clip already has a preserved extract wired
+    # (raw_clips.filename set) AND that object still exists in R2, the highlight
+    # is already preserved: skip the ffmpeg extract, upload, and DB write. The
+    # retry reuses the same annotated start/end from _get_annotated_clips (bounds
+    # are not re-trimmed between waves), so an existing valid extract is current.
+    existing_filename = clip.get('filename')
+    if existing_filename and r2_head_object(user_id, f"raw_clips/{existing_filename}"):
+        logger.info(
+            f"[AutoExport] Clip {clip['id']} already preserved as "
+            f"raw_clips/{existing_filename} — skipping duplicate auto-export"
         )
         return
 
