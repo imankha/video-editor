@@ -9,7 +9,7 @@ import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
-import { FramingMode, CropOverlay } from './framing';
+import { FocusMode, CropOverlay } from './focus';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 
 /**
@@ -123,14 +123,14 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
 });
 
 /**
- * FramingModeView - Complete view for Framing mode
+ * FocusModeView - Complete view for Framing mode
  *
  * This component contains all framing-specific JSX that was previously in App.jsx.
  * It receives state and handlers as props from App.jsx.
  *
  * @see DECOMPOSITION_ANALYSIS.md for refactoring context
  */
-export function FramingModeView({
+export function FocusModeView({
   // Video state
   videoRef,
   videoUrl,
@@ -538,7 +538,7 @@ export function FramingModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && videoUrl && (
-          <FramingMode
+          <FocusMode
             videoRef={videoRef}
             videoUrl={videoUrl}
             metadata={metadata}
@@ -611,7 +611,7 @@ export function FramingModeView({
                   )}
                   {videoUrl && (
                     <div className="bg-gray-900/90 px-2 py-0.5">
-                      <FramingMode
+                      <FocusMode
                         videoRef={videoRef}
                         videoUrl={videoUrl}
                         metadata={metadata}

@@ -38,7 +38,7 @@ vi.mock('../containers/ExportButtonContainer', () => ({
 }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
 vi.mock('../components/shared/clipConstants', () => ({ formatTimeSimple: () => '0:00' }));
-vi.mock('./framing', () => ({ FramingMode: () => <div />, CropOverlay: () => <div /> }));
+vi.mock('./focus', () => ({ FocusMode: () => <div />, CropOverlay: () => <div /> }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({
     isVisible: true,
@@ -54,7 +54,7 @@ vi.mock('../stores/editorStore', () => ({ useEditorStore: () => () => {} }));
 const isMobileMock = vi.fn(() => false);
 vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => isMobileMock() }));
 
-import { FramingModeView } from './FramingModeView';
+import { FocusModeView } from './FocusModeView';
 
 function renderView(overrides = {}) {
   const props = {
@@ -74,7 +74,7 @@ function renderView(overrides = {}) {
     getFilteredKeyframesForExport: () => [],
     ...overrides,
   };
-  return render(<FramingModeView {...props} />);
+  return render(<FocusModeView {...props} />);
 }
 
 /** Bare `hidden` (not `lg:hidden`) on any ancestor means the node is gone below 1024px. */
@@ -85,7 +85,7 @@ function hiddenAncestorOf(node) {
   return null;
 }
 
-describe('FramingModeView aspect-ratio reachability on mobile (T7130)', () => {
+describe('FocusModeView aspect-ratio reachability on mobile (T7130)', () => {
   beforeEach(() => {
     selectorProps.length = 0;
   });

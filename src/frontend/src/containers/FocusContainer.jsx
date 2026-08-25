@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { FramingMode, CropOverlay } from '../modes/framing';
+import { FocusMode, CropOverlay } from '../modes/focus';
 import { API_BASE } from '../config';
-import * as framingActions from '../api/framingActions';
+import * as focusActions from '../api/focusActions';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { resolveTargetFrame } from '../utils/keyframeUtils';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
@@ -17,13 +17,13 @@ import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effe
  */
 function cropPersistActions(projectId, clipId) {
   return {
-    add: (frame, data) => framingActions.addCropKeyframe(projectId, clipId, { frame, ...data }),
-    del: (frame) => framingActions.deleteCropKeyframe(projectId, clipId, frame),
+    add: (frame, data) => focusActions.addCropKeyframe(projectId, clipId, { frame, ...data }),
+    del: (frame) => focusActions.deleteCropKeyframe(projectId, clipId, frame),
   };
 }
 
 /**
- * FramingContainer - Encapsulates Framing mode logic and computed state
+ * FocusContainer - Encapsulates Framing mode logic and computed state
  *
  * This container receives state from App.jsx's hooks (useCrop, useSegments, useClipManager)
  * and returns derived state and handlers specific to Framing mode.
@@ -33,7 +33,7 @@ function cropPersistActions(projectId, clipId) {
  * @param {Object} props - Dependencies from App.jsx
  * @see APP_REFACTOR_PLAN.md Task 3.3 for refactoring context
  */
-export function FramingContainer({
+export function FocusContainer({
   // Video element ref and state
   videoRef,
   videoUrl,
@@ -333,7 +333,7 @@ export function FramingContainer({
       }
 
     } catch (e) {
-      console.error('[FramingContainer] Failed to save framing state:', e);
+      console.error('[FocusContainer] Failed to save framing state:', e);
     }
   }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport]);
 
@@ -457,7 +457,7 @@ export function FramingContainer({
     if (!selectedProjectId || !clipId) return;
 
     // 3: single surgical set_rotation, with rollback on failure.
-    const result = await framingActions.setRotation(selectedProjectId, clipId, theta);
+    const result = await focusActions.setRotation(selectedProjectId, clipId, theta);
     if (!result.success) {
       // Store rollback is keyed by clip id — always safe.
       if (callerClipId) {
@@ -476,11 +476,11 @@ export function FramingContainer({
 
     // 4: persist each clamp-corrected keyframe surgically (design decision #5).
     for (const kf of movedKeyframes) {
-      const res = await framingActions.updateCropKeyframe(selectedProjectId, clipId, kf.frame, {
+      const res = await focusActions.updateCropKeyframe(selectedProjectId, clipId, kf.frame, {
         x: kf.x, y: kf.y, width: kf.width, height: kf.height, origin: kf.origin,
       });
       if (!res.success) {
-        console.error('[FramingContainer] Failed to persist clamped keyframe after rotation:', res.error, { frame: kf.frame });
+        console.error('[FocusContainer] Failed to persist clamped keyframe after rotation:', res.error, { frame: kf.frame });
       }
     }
   }, [rotation, setRotation, selectedClip, selectedClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
@@ -535,10 +535,10 @@ export function FramingContainer({
       }
 
       if (newTrimStart !== null || newTrimEnd !== null) {
-        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration);
+        const result = await focusActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration);
         if (!result.success) {
           hasError = true;
-          console.error('[FramingContainer] setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newTrimStart, newTrimEnd, duration });
+          console.error('[FocusContainer] setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newTrimStart, newTrimEnd, duration });
         }
       }
 
@@ -594,17 +594,17 @@ export function FramingContainer({
       const hasStartTrim = newStartTime > 0.01;
       const hasEndTrim = currentEndTime < duration - 0.01;
       if (hasStartTrim || hasEndTrim) {
-        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newStartTime, currentEndTime);
+        const result = await focusActions.setTrimRange(selectedProjectId, clipId, newStartTime, currentEndTime);
         if (!result.success) {
           hasError = true;
-          console.error('[FramingContainer] detrimStart setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newStartTime, currentEndTime });
+          console.error('[FocusContainer] detrimStart setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newStartTime, currentEndTime });
         }
       } else {
         // No more trim, clear it
-        const result = await framingActions.clearTrimRange(selectedProjectId, clipId);
+        const result = await focusActions.clearTrimRange(selectedProjectId, clipId);
         if (!result.success) {
           hasError = true;
-          console.error('[FramingContainer] detrimStart clearTrimRange failed:', result.error, { projectId: selectedProjectId, clipId });
+          console.error('[FocusContainer] detrimStart clearTrimRange failed:', result.error, { projectId: selectedProjectId, clipId });
         }
       }
 
@@ -660,17 +660,17 @@ export function FramingContainer({
       const hasStartTrim = newTrimStart && newTrimStart > 0;
       const hasEndTrim = newEndTime < duration - 0.01;
       if (hasStartTrim || hasEndTrim) {
-        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newEndTime);
+        const result = await focusActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newEndTime);
         if (!result.success) {
           hasError = true;
-          console.error('[FramingContainer] detrimEnd setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newTrimStart, newEndTime });
+          console.error('[FocusContainer] detrimEnd setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newTrimStart, newEndTime });
         }
       } else {
         // No more trim, clear it
-        const result = await framingActions.clearTrimRange(selectedProjectId, clipId);
+        const result = await focusActions.clearTrimRange(selectedProjectId, clipId);
         if (!result.success) {
           hasError = true;
-          console.error('[FramingContainer] detrimEnd clearTrimRange failed:', result.error, { projectId: selectedProjectId, clipId });
+          console.error('[FocusContainer] detrimEnd clearTrimRange failed:', result.error, { projectId: selectedProjectId, clipId });
         }
       }
 
@@ -734,7 +734,7 @@ export function FramingContainer({
     // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      const result = await framingActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
+      const result = await focusActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
       if (!result.success) {
         // Store rollback is keyed by clip id — always safe
         if (callerClipId) {
@@ -842,7 +842,7 @@ export function FramingContainer({
     // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      const result = await framingActions.splitSegment(selectedProjectId, clipId, time);
+      const result = await focusActions.splitSegment(selectedProjectId, clipId, time);
       if (!result.success && selectedClipId === callerClipId) {
         removeSegmentBoundary(time);
         if (callerClipId) {
@@ -886,7 +886,7 @@ export function FramingContainer({
     // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      const result = await framingActions.removeSegmentSplit(selectedProjectId, clipId, time);
+      const result = await focusActions.removeSegmentSplit(selectedProjectId, clipId, time);
       if (!result.success && selectedClipId === callerClipId) {
         addSegmentBoundary(time);
         if (callerClipId) {
@@ -950,7 +950,7 @@ export function FramingContainer({
     // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      const result = await framingActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed);
+      const result = await focusActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed);
       if (!result.success && selectedClipId === callerClipId) {
         setSegmentSpeed(segmentIndex, previousSpeed);
         if (callerClipId) {
@@ -1078,9 +1078,9 @@ export function FramingContainer({
 }
 
 /**
- * FramingVideoOverlay - Crop overlay component for Framing mode
+ * FocusVideoOverlay - Crop overlay component for Framing mode
  */
-export function FramingVideoOverlay({
+export function FocusVideoOverlay({
   videoRef,
   metadata,
   currentCropState,
@@ -1108,9 +1108,9 @@ export function FramingVideoOverlay({
 }
 
 /**
- * FramingTimeline - Timeline component for Framing mode
+ * FocusTimeline - Timeline component for Framing mode
  */
-export function FramingTimeline({
+export function FocusTimeline({
   videoRef,
   videoUrl,
   metadata,
@@ -1145,7 +1145,7 @@ export function FramingTimeline({
   isPlaying,
 }) {
   return (
-    <FramingMode
+    <FocusMode
       videoRef={videoRef}
       videoUrl={videoUrl}
       metadata={metadata}
@@ -1182,4 +1182,4 @@ export function FramingTimeline({
   );
 }
 
-export default FramingContainer;
+export default FocusContainer;

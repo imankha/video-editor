@@ -11,7 +11,7 @@ import {
  * T5640 — rotation safe-area geometry (the "no black corners" clamp).
  *
  * These pin the shared spine that both the set-rotation clamp (useCrop) and the
- * crop-drag clamp (FramingContainer) depend on, plus the FE/BE sign convention.
+ * crop-drag clamp (FocusContainer) depend on, plus the FE/BE sign convention.
  */
 describe('maxAxisAlignedInRotated', () => {
   it('returns the full frame at theta = 0 (identity)', () => {

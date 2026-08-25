@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { shouldPersistFramingForOverlayTransition } from './framingOverlayTransition';
+import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
 
 /**
  * T4020: Export creates an empty "shadow" working-clip version that loses framing.
@@ -9,7 +9,7 @@ import { shouldPersistFramingForOverlayTransition } from './framingOverlayTransi
  *  - v2: crop NULL, default segments, exported_at NULL -- shadows v1 -> editor blank.
  *
  * v2 was written by the redundant full-state save on the export -> overlay
- * transition (FramingScreen `handleProceedToOverlayInternal`), which is NOT a
+ * transition (FocusScreen `handleProceedToOverlayInternal`), which is NOT a
  * user gesture. By then `useCrop`/`useSegments` have reset to defaults, so the
  * save persists empty crop + default segments as a new MAX(version).
  *
@@ -20,14 +20,14 @@ describe('T4020 - export->overlay transition must not persist a framing shadow',
   it('does not persist full framing state on the export-driven overlay transition', () => {
     // No post-export user gesture occurred: the only writes that should exist are
     // the pre-render full-state save and the surgical per-gesture saves.
-    expect(shouldPersistFramingForOverlayTransition()).toBe(false);
+    expect(shouldPersistFocusForOverlayTransition()).toBe(false);
   });
 
   it('keeps the gate closed regardless of the call frequency (no transient open state)', () => {
     // Models the auto-transition firing from both the WS-completion and HTTP-200
     // paths: every evaluation must decline to persist.
     const persistDecisions = Array.from({ length: 5 }, () =>
-      shouldPersistFramingForOverlayTransition()
+      shouldPersistFocusForOverlayTransition()
     );
     expect(persistDecisions.every((shouldPersist) => shouldPersist === false)).toBe(true);
   });
@@ -39,7 +39,7 @@ describe('T4020 - export->overlay transition must not persist a framing shadow',
     const saveCurrentClipState = vi.fn(async () => resetHookState);
 
     // The transition only persists when the gate is open; the fix keeps it closed.
-    if (shouldPersistFramingForOverlayTransition()) {
+    if (shouldPersistFocusForOverlayTransition()) {
       await saveCurrentClipState();
     }
 

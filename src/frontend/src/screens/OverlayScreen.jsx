@@ -20,7 +20,7 @@ import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useFramingStore } from '../stores/framingStore';
+import { useFocusStore } from '../stores/focusStore';
 import { useExportStore } from '../stores/exportStore';
 import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
@@ -41,9 +41,9 @@ import { clipGameClock } from '../utils/timeFormat';
  *
  * Data Sources:
  * - Project context (projectId, project)
- * - overlayStore (working video set by FramingScreen export)
+ * - overlayStore (working video set by FocusScreen export)
  * - projectDataStore (clips for pass-through mode)
- * - framingStore (for detecting uncommitted framing changes)
+ * - focusStore (for detecting uncommitted framing changes)
  *
  * @see AppJSX_REDUCTION/TASK-04-self-contained-overlay-screen.md
  */
@@ -151,7 +151,7 @@ export function OverlayScreen({
   }, [projectId, projectListItem, gameName, gameClock]);
 
   // Framing store - for detecting uncommitted changes
-  const hasChangedSinceExport = useFramingStore(state => state.hasChangedSinceExport);
+  const hasChangedSinceExport = useFocusStore(state => state.hasChangedSinceExport);
 
   // Export store - for dismissing "export complete" toast on changes
   const dismissExportCompleteToast = useExportStore(state => state.dismissExportCompleteToast);
@@ -513,7 +513,7 @@ export function OverlayScreen({
       };
       attemptLoad();
     } else if (!workingVideo && !project?.working_video_url && isLoadingWorkingVideo) {
-      // Stuck state: isLoadingWorkingVideo was set externally (by FramingScreen) but
+      // Stuck state: isLoadingWorkingVideo was set externally (by FocusScreen) but
       // project data doesn't include working_video_url. This happens when React renders
       // OverlayScreen before the refreshed project data has propagated.
       // Recovery: refresh project once to get the URL. If still missing, clear the flag.

@@ -11,7 +11,7 @@ import { useProjectsStore } from '../stores/projectsStore.js';
 import { useProjectDataStore } from '../stores/projectDataStore.js';
 import { useGamesDataStore } from '../stores/gamesDataStore.js';
 import { useVideoStore } from '../stores/videoStore.js';
-import { useFramingStore } from '../stores/framingStore.js';
+import { useFocusStore } from '../stores/focusStore.js';
 import { useOverlayStore } from '../stores/overlayStore.js';
 import { useProfileStore } from '../stores/profileStore.js';
 
@@ -35,7 +35,7 @@ export function getEditorContext() {
   const projectData = useProjectDataStore.getState();
   const games = useGamesDataStore.getState();
   const video = useVideoStore.getState();
-  const framing = useFramingStore.getState();
+  const framing = useFocusStore.getState();
   const overlay = useOverlayStore.getState();
   const profile = useProfileStore.getState();
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { SECTION_NAMES } from '../config/displayNames';
-import { useFramingStore } from './framingStore';
+import { useFocusStore } from './focusStore';
 import { useProjectDataStore } from './projectDataStore';
 import { useOverlayStore } from './overlayStore';
 import { useProjectsStore } from './projectsStore';
@@ -331,7 +331,7 @@ function handlePopState() {
   if (!targetMode || targetMode === currentMode) return;
 
   if (currentMode === EDITOR_MODES.FRAMING
-      && useFramingStore.getState().framingChangedSinceExport
+      && useFocusStore.getState().framingChangedSinceExport
       && useProjectDataStore.getState().workingVideo?.url) {
     window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
     useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);

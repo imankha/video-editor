@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { addCropKeyframe, setRotation } from './framingActions';
+import { addCropKeyframe, setRotation } from './focusActions';
 
 /**
- * T4330 -- characterization coverage for framingActions' CURRENT return shape.
+ * T4330 -- characterization coverage for focusActions' CURRENT return shape.
  *
  * There was no dedicated test file for this module before T4330. Once
- * framingActions.js migrates to route through the new `actionClient`
+ * focusActions.js migrates to route through the new `actionClient`
  * (design doc docs/plans/tasks/T4330-design.md section 3.2), its exported
  * functions must keep returning exactly this shape --
  * `{success, refresh_required?, new_clip_id?, error?}` -- so no caller changes.
  *
  * These tests pass against TODAY's code (no migration has happened yet) and
  * must KEEP passing after the actionClient migration lands -- they pin the
- * contract framingActions promises its callers (FramingContainer.jsx).
+ * contract focusActions promises its callers (FocusContainer.jsx).
  */
 vi.mock('../config', () => ({ API_BASE: 'http://test.local' }));
 
@@ -22,7 +22,7 @@ vi.mock('../utils/apiFetch', () => ({ default: (...args) => apiFetch(...args) })
 
 const bodyOf = (call) => JSON.parse(call[1].body);
 
-describe('framingActions -- return shape parity (T4330 characterization)', () => {
+describe('focusActions -- return shape parity (T4330 characterization)', () => {
   beforeEach(() => {
     apiFetch.mockReset();
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -57,7 +57,7 @@ describe('framingActions -- return shape parity (T4330 characterization)', () =>
     const result = await addCropKeyframe(7, 42, { frame: 5, x: 0, y: 0, width: 100, height: 100 });
 
     expect(result).toEqual({ success: false, error: 'Keyframe too close to an existing one' });
-    // Pin today's gap explicitly: framingActions does NOT surface response.status
+    // Pin today's gap explicitly: focusActions does NOT surface response.status
     // yet (unlike overlayActions). If this flips to `true` it means the
     // actionClient migration changed the wrapper's error shape -- the design
     // doc says that must stay backward compatible.

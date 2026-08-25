@@ -29,7 +29,7 @@
 
 import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
-import { useFramingStore } from '../stores/framingStore';
+import { useFocusStore } from '../stores/focusStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 
 const DEFAULT_FLUSH_FAILURE_MESSAGE =
@@ -63,7 +63,7 @@ async function drainOverlayQueue() {
 export async function flushDurableState() {
   await drainOverlayQueue();
 
-  const { activeSaveCurrentClipState, framingChangedSinceExport } = useFramingStore.getState();
+  const { activeSaveCurrentClipState, framingChangedSinceExport } = useFocusStore.getState();
   if (activeSaveCurrentClipState && framingChangedSinceExport) {
     await activeSaveCurrentClipState();
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { flushDurableState } from './updateFlush';
-import { useFramingStore } from '../stores/framingStore';
+import { useFocusStore } from '../stores/focusStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 
 vi.mock('./apiFetch', () => ({ default: vi.fn() }));
@@ -20,7 +20,7 @@ import apiFetch from './apiFetch';
 describe('flushDurableState', () => {
   beforeEach(() => {
     apiFetch.mockReset();
-    useFramingStore.setState({ activeSaveCurrentClipState: null, framingChangedSinceExport: false });
+    useFocusStore.setState({ activeSaveCurrentClipState: null, framingChangedSinceExport: false });
     useOverlayActionStore.setState({
       failedActions: [],
       isRetrying: false,
@@ -80,7 +80,7 @@ describe('flushDurableState', () => {
   it('G2: calls the registered framing save when the store flags real uncommitted changes', async () => {
     useOverlayActionStore.setState({ retryFailedOverlayActions: vi.fn().mockResolvedValue(true) });
     const framingSave = vi.fn().mockResolvedValue(undefined);
-    useFramingStore.setState({ activeSaveCurrentClipState: framingSave, framingChangedSinceExport: true });
+    useFocusStore.setState({ activeSaveCurrentClipState: framingSave, framingChangedSinceExport: true });
     apiFetch.mockResolvedValue({ ok: true, status: 200 });
 
     await flushDurableState();
@@ -91,7 +91,7 @@ describe('flushDurableState', () => {
   it('G2: does NOT call the framing save when an editor is mounted but nothing changed (clean/mid-restore)', async () => {
     useOverlayActionStore.setState({ retryFailedOverlayActions: vi.fn().mockResolvedValue(true) });
     const framingSave = vi.fn().mockResolvedValue(undefined);
-    useFramingStore.setState({ activeSaveCurrentClipState: framingSave, framingChangedSinceExport: false });
+    useFocusStore.setState({ activeSaveCurrentClipState: framingSave, framingChangedSinceExport: false });
     apiFetch.mockResolvedValue({ ok: true, status: 200 });
 
     await flushDurableState();

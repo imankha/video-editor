@@ -152,7 +152,7 @@ export function OverlayMode({
     }
   };
 
-  // Layer labels for the fixed left column (matching FramingTimeline structure).
+  // Layer labels for the fixed left column (matching FocusTimeline structure).
   // T6630 round 2: lane order now reflects the TRUE paint order in the video
   // preview -- Text paints ON TOP of tracking (detection) and the spotlight
   // (highlight), so the Text lane sits directly under the Video ruler, above

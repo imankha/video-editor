@@ -12,7 +12,7 @@
  * @see tasks/PHASE2-ARCHITECTURE-PLAN.md for architecture context
  */
 
-export { FramingScreen } from './FramingScreen';
+export { FocusScreen } from './FocusScreen';
 export { OverlayScreen } from './OverlayScreen';
 export { AnnotateScreen } from './AnnotateScreen';
 export { ProjectsScreen } from './ProjectsScreen';

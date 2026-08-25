@@ -304,7 +304,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * Clamp a single crop to the inscribed safe area for the CURRENT rotation.
    * theta === 0 is a pure passthrough (clampCropToSafeArea short-circuits), so the
    * crop-drag path is byte-identical to today when the clip isn't rotated.
-   * Used by the drag path (FramingContainer.handleCropComplete) when theta != 0.
+   * Used by the drag path (FocusContainer.handleCropComplete) when theta != 0.
    */
   const clampCropForCurrentRotation = useCallback((crop) => {
     const { width: W, height: H } = videoDimsRef.current;

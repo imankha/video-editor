@@ -684,7 +684,7 @@ export function pushClipRanges(clipRanges) {
   }
 }
 
-// Legacy export — used by FramingScreen for direct warming outside the queue.
+// Legacy export — used by FocusScreen for direct warming outside the queue.
 export async function warmVideoCache(url, { force = false } = {}) {
   if (force || !warmedUrls.has(url)) {
     return warmUrl(url);

@@ -4,7 +4,7 @@
  * A stale `expected_version` means another tab/session committed since this
  * one last read -- the ONLY sanctioned resolution is a user-initiated
  * refresh (no auto-merge, no silent rebase; design doc section 5). Both
- * framingActions and overlayActions route their `actionClient`'s
+ * focusActions and overlayActions route their `actionClient`'s
  * `onConflict` hook through this ONE helper so the two editors show the
  * SAME prompt instead of each re-implementing it. Framing has no failure
  * store (dedicated queue is overkill for a non-retryable prompt) -- this

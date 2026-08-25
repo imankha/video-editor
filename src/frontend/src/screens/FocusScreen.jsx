@@ -1,8 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { List, X } from 'lucide-react';
-import { FramingModeView } from '../modes';
-import { FramingContainer } from '../containers';
-import { useCrop, useSegments } from '../modes/framing';
+import { FocusModeView } from '../modes';
+import { FocusContainer } from '../containers';
+import { useCrop, useSegments } from '../modes/focus';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
@@ -20,18 +20,18 @@ import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
-import { shouldPersistFramingForOverlayTransition } from './framingOverlayTransition';
+import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
 
 /**
- * FramingScreen - Self-contained screen for Framing mode
+ * FocusScreen - Self-contained screen for Framing mode
  *
  * T250: Uses raw backend clip data from projectDataStore.
  * No sync effect needed — store is the single source of truth.
  * Backend integer IDs used everywhere. Derived values via selectors.
  */
-export function FramingScreen({
+export function FocusScreen({
   onExportComplete,
   onProceedToOverlay,
   exportButtonRef: externalExportButtonRef,
@@ -63,7 +63,7 @@ export function FramingScreen({
     setVideoFile: setStoredVideoFile,
     framingChangedSinceExport,
     setFramingChangedSinceExport,
-  } = useFramingStore();
+  } = useFocusStore();
 
   // Overlay store
   const resetOverlayStore = useOverlayStore(state => state.reset);
@@ -287,8 +287,8 @@ export function FramingScreen({
     return Promise.resolve({ success: false });
   }, [projectId, saveFramingEdits]);
 
-  // FramingContainer
-  const framing = FramingContainer({
+  // FocusContainer
+  const framing = FocusContainer({
     videoRef,
     videoUrl,
     metadata,
@@ -394,7 +394,7 @@ export function FramingScreen({
   // Registration only -- no persistence happens here; the flush calls the
   // function itself, gesture-triggered by the "Update now" click.
   // T6190: registered via a STABLE ref-wrapper (not keyed on the handler identity) --
-  // a reactive registration fed an unbounded setState loop here. See framingStore.js.
+  // a reactive registration fed an unbounded setState loop here. See focusStore.js.
   useRegisterActiveSaveHandler(framingSaveCurrentClipState);
 
   // Track the last loaded URL to detect when clip changes
@@ -609,7 +609,7 @@ export function FramingScreen({
 
     const newClip = clips.find(c => c.id === selectedClipId);
     if (!newClip) {
-      console.warn('[FramingScreen] Selected clip not found:', selectedClipId);
+      console.warn('[FocusScreen] Selected clip not found:', selectedClipId);
       return;
     }
 
@@ -670,7 +670,7 @@ export function FramingScreen({
   }, [selectedClipId, clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop, getClipWithMeta]);
 
   // T350: Reactive sync effect REMOVED. See docs/plans/tasks/T350-design.md.
-  // Persistence is now gesture-based: each user action in FramingContainer fires
+  // Persistence is now gesture-based: each user action in FocusContainer fires
   // a surgical POST /actions call. No reactive useEffect writes to store/backend.
 
   // Track keyframe index from direct clicks (needed when seek is clamped by trim range).
@@ -841,7 +841,7 @@ export function FramingScreen({
   const handleRetryVideo = useCallback(async () => {
     if (!selectedClipWithMeta) return;
 
-    console.log('[FramingScreen] Retrying video load for clip:', selectedClipWithMeta.id);
+    console.log('[FocusScreen] Retrying video load for clip:', selectedClipWithMeta.id);
     clearError();
 
     const filename = selectedClipWithMeta.filename || `${selectedClipWithMeta.id}.mp4`;
@@ -849,7 +849,7 @@ export function FramingScreen({
 
     try {
       const freshUrl = await forceRefreshUrl('raw_clips', filename, localFallbackUrl);
-      console.log('[FramingScreen] Got fresh URL:', freshUrl?.substring(0, 60));
+      console.log('[FocusScreen] Got fresh URL:', freshUrl?.substring(0, 60));
 
       if (freshUrl && !freshUrl.startsWith('blob:')) {
         warmVideoCache(freshUrl);
@@ -858,7 +858,7 @@ export function FramingScreen({
         await loadVideoFromUrl(freshUrl || localFallbackUrl, filename);
       }
     } catch (err) {
-      console.error('[FramingScreen] Failed to retry video load:', err);
+      console.error('[FocusScreen] Failed to retry video load:', err);
     }
   }, [selectedClipWithMeta, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
 
@@ -886,7 +886,7 @@ export function FramingScreen({
         await uploadClipWithMetadataAction(projectId, { file, name: file.name });
       }
     } catch (err) {
-      console.error('[FramingScreen] Failed to add clip:', err);
+      console.error('[FocusScreen] Failed to add clip:', err);
     }
   };
 
@@ -894,14 +894,14 @@ export function FramingScreen({
   const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
     const currentlyViewingProjectId = useProjectsStore.getState().selectedProjectId;
 
-    console.log('[FramingScreen] Starting overlay transition...', {
+    console.log('[FocusScreen] Starting overlay transition...', {
       exportedProjectId,
       currentProjectId: currentlyViewingProjectId,
       closureProjectId: projectId
     });
 
     if (exportedProjectId && exportedProjectId !== currentlyViewingProjectId) {
-      console.log('[FramingScreen] Export completed for different project, ignoring navigation', {
+      console.log('[FocusScreen] Export completed for different project, ignoring navigation', {
         exportedProjectId,
         currentProjectId: currentlyViewingProjectId
       });
@@ -918,12 +918,12 @@ export function FramingScreen({
     // a new MAX(version), shadowing the real exported version. The user's edits
     // were already persisted by the pre-render full-state save in
     // ExportButtonContainer (and surgically per gesture). The gate is centralized
-    // and unit-tested to stay closed; see framingOverlayTransition.js.
-    if (shouldPersistFramingForOverlayTransition()) {
+    // and unit-tested to stay closed; see focusOverlayTransition.js.
+    if (shouldPersistFocusForOverlayTransition()) {
       try {
         await framingSaveCurrentClipState();
       } catch (err) {
-        console.warn('[FramingScreen] Failed to save clip state (continuing):', err);
+        console.warn('[FocusScreen] Failed to save clip state (continuing):', err);
       }
     }
 
@@ -933,14 +933,14 @@ export function FramingScreen({
       const url = URL.createObjectURL(renderedVideoBlob);
 
       try {
-        console.log('[FramingScreen] Creating blob URL and extracting metadata...');
+        console.log('[FocusScreen] Creating blob URL and extracting metadata...');
         const meta = await extractVideoMetadata(renderedVideoBlob);
-        console.log('[FramingScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
+        console.log('[FocusScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
 
         setWorkingVideo({ file: renderedVideoBlob, url, metadata: meta });
         workingVideoSet = true;
       } catch (err) {
-        console.warn('[FramingScreen] Metadata extraction failed, using fallback:', err.message);
+        console.warn('[FocusScreen] Metadata extraction failed, using fallback:', err.message);
 
         const totalDuration = clipMetadata?.source_clips?.length > 0
           ? clipMetadata.source_clips[clipMetadata.source_clips.length - 1].end_time
@@ -964,16 +964,16 @@ export function FramingScreen({
           format: 'mp4',
         };
 
-        console.log('[FramingScreen] Using fallback metadata:', fallbackMeta);
+        console.log('[FocusScreen] Using fallback metadata:', fallbackMeta);
         setWorkingVideo({ file: renderedVideoBlob, url, metadata: fallbackMeta });
         workingVideoSet = true;
       }
     } else {
       setIsLoadingWorkingVideo(true);
-      console.log('[FramingScreen] MVC flow: working video on server, signaling OverlayScreen to wait');
+      console.log('[FocusScreen] MVC flow: working video on server, signaling OverlayScreen to wait');
       setWorkingVideo(null);
 
-      console.log('[FramingScreen] Refreshing project to get new working_video_id');
+      console.log('[FocusScreen] Refreshing project to get new working_video_id');
       await refreshProject();
 
       workingVideoSet = true;
@@ -981,7 +981,7 @@ export function FramingScreen({
 
     if (clipMetadata) {
       setOverlayClipMetadata(clipMetadata);
-      console.log('[FramingScreen] Clip metadata set:', clipMetadata?.source_clips?.length, 'clips');
+      console.log('[FocusScreen] Clip metadata set:', clipMetadata?.source_clips?.length, 'clips');
     }
 
     setFramingChangedSinceExport(false);
@@ -990,15 +990,15 @@ export function FramingScreen({
       try {
         await onProceedToOverlay(renderedVideoBlob, clipMetadata);
       } catch (err) {
-        console.warn('[FramingScreen] Parent onProceedToOverlay failed (continuing):', err);
+        console.warn('[FocusScreen] Parent onProceedToOverlay failed (continuing):', err);
       }
     }
 
     if (workingVideoSet) {
-      console.log('[FramingScreen] Navigating to overlay mode');
+      console.log('[FocusScreen] Navigating to overlay mode');
       setEditorMode('overlay');
     } else {
-      console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
+      console.error('[FocusScreen] Cannot navigate to overlay - working video not set');
     }
   }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo]);
 
@@ -1035,7 +1035,7 @@ export function FramingScreen({
         await uploadClipWithMetadataAction(projectId, uploadData);
       }
     } catch (err) {
-      console.error('[FramingScreen] Failed to upload clip with metadata:', err);
+      console.error('[FocusScreen] Failed to upload clip with metadata:', err);
     }
   }, [projectId, uploadClipWithMetadataAction]);
 
@@ -1046,7 +1046,7 @@ export function FramingScreen({
         await addClipFromLibraryAction(projectId, rawClipId);
       }
     } catch (err) {
-      console.error('[FramingScreen] Failed to add clip from library:', err);
+      console.error('[FocusScreen] Failed to add clip from library:', err);
     }
   }, [projectId, addClipFromLibraryAction]);
 
@@ -1130,7 +1130,7 @@ export function FramingScreen({
             </button>
           </div>
         )}
-        <FramingModeView
+        <FocusModeView
       videoRef={videoRef}
       videoUrl={videoUrl}
       metadata={metadata}
@@ -1231,4 +1231,4 @@ export function FramingScreen({
   );
 }
 
-export default FramingScreen;
+export default FocusScreen;
