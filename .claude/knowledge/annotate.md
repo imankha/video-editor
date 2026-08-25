@@ -1,5 +1,6 @@
 ---
 domain: annotate
+updated: 2026-08-25 (T7590 mobile "Add your first game" dead-end ROOT-CAUSED + fixed: GameDetailsModal panel was fixed-centered with NO max-height/scroll, so on short iPhone viewports (reports 320x498, 352x541) the submit + close controls clipped off-screen unreachable — added max-h-[90vh] overflow-y-auto; see Landmines "GameDetailsModal short-viewport dead-end (T7590)")
 updated: 2026-08-25 (T7470 upload-failure cleanup is only-if-empty: DELETE /api/games/{id}?only_if_empty=true refuses to cascade-delete a game with raw_clips or viewed_duration>0; protects annotate-during-upload — see Landmines "Upload-failure cleanup is ONLY-IF-EMPTY (T7470)")
 updated: 2026-08-24 (T7480 upload lifecycle: PART_SIZE 25MB->5MB, stall watchdog replaces flat per-part timeout, completed-parts honest progress, resume part-size guard, UploadId orphan-abort + double-UploadId root cause, failure beacon + [UPLOAD_LIFECYCLE] logs + admin stuck-uploads — see Landmines "Upload lifecycle invariants (T7480)")
 updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration v045 -- reader cleanup still a known gap, see Invariants; T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
@@ -323,6 +324,39 @@ The full checklist for an 11th→Nth sport:
   Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
+- **GameDetailsModal short-viewport dead-end (T7590, 2026-08-25).** The "Add your first game"
+  flow's `GameDetailsModal.jsx` (the required-fields-at-creation modal opened by ProjectManager's
+  "Add Game" CTA → `handleAddGameClick`) centered its panel with `fixed inset-0 flex items-center
+  justify-center` and the panel itself had **no `max-height` and no internal scroll**. The full form
+  (opponent, date, game type, video format, dropzone, cost, submit) is ~630px tall; on the exact
+  viewports two iPhone-Safari users reported (bug #46 320x498, bug #18 352x541) the panel exceeds the
+  screen, so with center alignment the submit "Add Game" button clipped BELOW the fold and the close
+  "X" clipped ABOVE it — and because the panel is `position: fixed` **nothing scrolls to reveal
+  them**: a genuine dead-end (fill the visible fields, can neither submit nor dismiss). The opponent
+  input's `autoFocus` opens the iOS keyboard immediately, shrinking the visual viewport further (the
+  320x300 keyboard-open case clips even the dropzone). **Fix:** panel gets `max-h-[90vh]
+  overflow-y-auto` — the SAME pattern every sibling modal already uses (BuyCreditsModal,
+  ProjectCreationSettings, ClipLibraryModal); GameDetailsModal was the lone outlier missing it. The
+  `check-viewport-units.mjs` gate bans `h-screen`/`100vh` only — `max-h-[90vh]` is explicitly allowed
+  (a max doesn't clip an unscrollable fold). Regression:
+  `e2e/T7590-mobile-add-game-modal-reachable.qa.spec.js` drives the REAL modal via the empty-session
+  test-login bypass (the actual new-user zero-games surface, so it runs anywhere with chromium, no
+  R2/account) at both report viewports; asserts the form genuinely overflows (`scrollH > vp.height`,
+  anti-vacuous), the panel is capped (`clientH <= vp.height`, `overflow-y:auto`), and submit + close
+  both scroll into the viewport with the never-disabled X hit-testable. Negative-control verified:
+  fails on the pre-fix code at `clientH(629) <= 498/541`, passes post-fix.
+  **Candidate failure modes accounting (this container = chromium engine + iPhone viewport, NOT real
+  WebKit — see playwright.config.js):** CHECKED & RULED OUT via emulation — CTA tap handler fires
+  and opens the modal (no z-index/overlay intercept; QuestPanel NUF is a `z-50` ~340px corner panel,
+  not a full-screen cover; its only `inset-0 z-[100]` layer is an unrelated quest-confirm dialog);
+  file input reachable/clickable through the dropzone `role=button` (synchronous `.click()` inside
+  the onClick, i.e. within the gesture stack); `accept="video/mp4,video/quicktime,video/webm"`, NO
+  `capture` attr (documented, not the bug); no JS exceptions during the flow (the only console errors
+  are the empty test-session's backend session-init fetch failures, unrelated to layout).
+  REPRODUCED & FIXED — the modal-overflow dead-end above. DEFERRED to real-device/Safari (structurally
+  unverifiable on chromium, do NOT claim ruled in/out): the iOS Safari `.click()`-outside-gesture-stack
+  file-input restriction, the iOS 18 cellular-upload timeout (Apple dev forums 764420), the
+  HEVC->H.264 photo-picker "preparing" delay.
 - **T7280 findings (2026-08-20, task abandoned mid-implementation in favor of the Game Pools
   epic — capturing before the branch is deleted).** T7280 attempted a duration-based fast path
   (single short clip → skip Annotate, land in Framing) via `handleAnnotateWithFile`

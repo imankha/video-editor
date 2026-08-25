@@ -226,8 +226,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       {/* Backdrop — no dismiss on click; use X button instead */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
-      {/* Modal */}
-      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700">
+      {/* Modal — max-h + internal scroll so the tall form's header (close X) and
+          submit button stay reachable on short mobile viewports. Without this the
+          panel is fixed-centered and taller than a ~500px iPhone screen, clipping
+          both ends off-screen with nothing to scroll (T7590). */}
+      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
