@@ -1,6 +1,6 @@
 # T7580: Users do not recognize that Framing -> Export IS reel creation
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Priority:** P1 (the 100% export cliff; cheapest high-leverage fix outside the bugs)
 **Impact:** 8
 **Complexity:** 3
