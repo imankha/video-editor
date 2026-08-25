@@ -1,6 +1,6 @@
 # T7470: Upload-failure cleanup cascade-deletes user annotation work
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Priority:** P1
 **Impact:** 9
 **Complexity:** 4
