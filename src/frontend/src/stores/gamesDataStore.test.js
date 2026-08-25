@@ -102,3 +102,41 @@ describe('gamesDataStore — getGame() in-flight dedup', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('gamesDataStore — finishAnnotation 404 tolerance (T7500)', () => {
+  beforeEach(async () => {
+    await loadModule();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('swallows a 404 quietly (debug log, no error) — game already deleted', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Game not found' }) })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+
+    const result = await useGamesDataStore.getState().finishAnnotation(4, 120);
+
+    expect(result).toBeUndefined();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(debugSpy).toHaveBeenCalled();
+  });
+
+  it('still logs an error for a genuine non-404 failure', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ detail: 'boom' }) })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await useGamesDataStore.getState().finishAnnotation(4, 120);
+
+    expect(errorSpy).toHaveBeenCalled();
+  });
+});

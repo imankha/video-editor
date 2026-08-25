@@ -70,8 +70,57 @@ annotation on a nonexistent game) was absorbed silently instead of failing visib
 
 ## Acceptance Criteria
 
-- [ ] finish-annotation on a missing game returns 404, records no milestone, logs a warning
-- [ ] Audit sweep completed; every fixed site has the rowcount guard; findings list in the
+- [x] finish-annotation on a missing game returns 404, records no milestone, logs a warning
+- [x] Audit sweep completed; every fixed site has the rowcount guard; findings list in the
       progress log names each site checked
-- [ ] No user-facing error from the legitimate teardown-after-delete sequence
-- [ ] Tests pass; CI green
+- [x] No user-facing error from the legitimate teardown-after-delete sequence
+- [x] Tests pass; CI green
+
+## Progress Log
+
+### 2026-08-25 — Implementation (M tier)
+
+**Primary fix** (`games.py` `finish_annotation`): added `if cursor.rowcount == 0` guard in
+the `viewed_duration > 0` branch — logs a WARNING naming the game id, raises 404, and does
+NOT call `record_milestone`. The `else` (no-progress) branch is untouched (nothing written).
+
+**Audit sweep** — searched `app/routers/*.py` + `app/services/*.py` for every
+`record_milestone(` / `record_achievement(` call site and traced each back to its preceding
+write. `finish_annotation` was the ONLY unguarded write-then-side-effect-by-id case. Every
+site checked:
+
+| Site | Milestone | Preceding write | Verdict |
+|------|-----------|-----------------|---------|
+| games.py:1909 `finish_annotation` | annotation_completed | UPDATE games WHERE id (was unchecked) | **FIXED** — rowcount guard |
+| games.py:455 | game_created | INSERT games (lastrowid) | OK — INSERT always creates |
+| clips.py:1289 | clip_created | INSERT raw_clips (new-clip branch only; existing-clip UPDATE branch returns earlier with NO milestone) | OK — INSERT always creates |
+| collections.py:1061 | collection_downloaded | SELECT members, 404 if none | OK — read, 404-guarded |
+| collections.py:1595 | share_completed | create_collection_share (INSERT) | OK — INSERT |
+| collections.py:1628 | invite_sent | after emails sent | OK — no by-id write |
+| downloads.py:727 | video_downloaded | SELECT final_videos, 404 if not found | OK — read, 404-guarded |
+| exports.py:453 | export_started | SELECT project 404 + create_export_job INSERT | OK — 404-guarded + INSERT |
+| exports.py:247 | export_completed (recovered) | gated on `result['finalized']` | OK — gated on real finalize |
+| quests.py:397 | quest_completed | `credit_ledger.grant` (atomic PG), gated on `result['applied']` | OK — gated |
+| quests.py:446 | (via achievement) | INSERT OR IGNORE achievements | OK — INSERT |
+| overlay.py:279/280 | export_completed/overlay_exported | internal finalize; final_videos row just INSERTed; UPDATE export_jobs by real processing job | OK — not a request silent-success path |
+| export_worker.py:185/186/199 | export_completed/framing_exported/export_failed | background worker on a genuinely-processing job | OK — not a request path |
+| credit_ledger.py:481 | credits_consumed | SELECT reservation, `return False` if absent, then DELETE+INSERT | OK — already SELECT-guarded (honest) |
+| auth.py:507 | pwa_installed | none | OK — no preceding write |
+| payments.py:281/282/350/386/529 | payment/credit milestones | Stripe-webhook-driven atomic ledger grants | OK — atomic PG grant, not by-id UPDATE |
+
+**Sibling checked (not a milestone site):** `games.py:1913 save_playhead` — UPDATE games
+WHERE id with NO side effect (pure beacon persist via `navigator.sendBeacon`, response not
+consumed). Does not match the "+ side effect on a no-op write" pattern; returning success on
+a deleted-game beacon is harmless and unreactable. Left unchanged (not a candidate).
+
+No ambiguous/design-question sites found; nothing filed as a follow-up.
+
+**Frontend tolerance** (`gamesDataStore.finishAnnotation`): a 404 is now swallowed quietly
+(`console.debug`, early return); genuine (non-404) failures still `console.error`. `apiFetch`
+is a bare `fetch` wrapper with NO generic error-toast, so no toast exception was needed.
+
+**Tests:** `tests/test_t7500_finish_annotation_zero_row.py` (4: missing-game 404 + no
+milestone via `record_milestone` spy; missing-game zero-duration still 200; happy path
+milestone+persist; existing-game zero-duration no milestone) — all pass; `test_playhead_resume.py`
+(7) re-run green as the corner regression. Frontend `gamesDataStore.test.js` +2 (404 swallowed
+quietly; non-404 still errors) — 8/8 pass.

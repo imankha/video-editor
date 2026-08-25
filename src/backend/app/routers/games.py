@@ -1895,6 +1895,13 @@ async def finish_annotation(game_id: int, body: FinishAnnotationRequest = Finish
                 "UPDATE games SET viewed_duration = MAX(COALESCE(viewed_duration, 0), ?) WHERE id = ?",
                 (body.viewed_duration, game_id)
             )
+            if cursor.rowcount == 0:
+                # Zero-row write = the game no longer exists (e.g. cascade-deleted after a
+                # failed upload, or deleted mid-annotate). Fail visibly and record nothing:
+                # a milestone tied to a write that did not happen manufactures a false
+                # activity trail (T7500).
+                logger.warning(f"[FinishAnnotation] game {game_id} not found (zero-row update); no milestone recorded")
+                raise HTTPException(status_code=404, detail="Game not found")
             conn.commit()
             logger.info(f"[FinishAnnotation] Updated viewed_duration={body.viewed_duration:.1f}s for game {game_id}")
 

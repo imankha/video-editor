@@ -372,6 +372,13 @@ export const useGamesDataStore = create((set, get) => ({
       });
 
       if (!response.ok) {
+        // T7500: a 404 here is EXPECTED and correct — the teardown fires after
+        // the game was already deleted (failed-upload cascade or a user delete
+        // mid-annotate). Swallow it quietly; only genuine failures are errors.
+        if (response.status === 404) {
+          console.debug('[gamesDataStore] finish-annotation: game already gone (404), ignoring');
+          return;
+        }
         const errorData = await response.json().catch(() => ({}));
         console.error('[gamesDataStore] finish-annotation failed:', errorData);
         return;
