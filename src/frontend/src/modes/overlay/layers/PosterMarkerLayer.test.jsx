@@ -190,6 +190,90 @@ describe('PosterMarkerLayer (T5410)', () => {
   });
 });
 
+describe('PosterMarkerLayer -- a CLICK (no drag) opens the marker settings, a DRAG still only moves it (T7720)', () => {
+  /* T7720: clicking the thumbnail marker (pointerdown+up with no movement past
+   * DRAG_THRESHOLD_PX) fires onClick with the marker's CURRENT committed
+   * visualTime -- the parent uses it to open the Thumbnail tab + seek. This must
+   * stay strictly separate from the drag path (T6560): a real drag fires onDragEnd
+   * and NOT onClick; a click fires onClick and NOT onDragEnd. Exactly one per
+   * pointer sequence. onClick passes the marker's committed position, never the
+   * click X -- clicking never relocates the frame. */
+  function renderClickMarker(overrides = {}) {
+    const onDragEnd = vi.fn();
+    const onClick = vi.fn();
+    const utils = render(
+      <div className="timeline-scroll-container">
+        <PosterMarkerLayer
+          visualTime={4.85}
+          duration={DURATION}
+          visualDuration={DURATION}
+          onDragEnd={onDragEnd}
+          onClick={onClick}
+          {...overrides}
+        />
+      </div>
+    );
+    const container = utils.container.querySelector('.timeline-scroll-container');
+    container.getBoundingClientRect = () => ({
+      left: 0, top: 0, right: 1000, bottom: 48, width: 1000, height: 48, x: 0, y: 0,
+    });
+    return { onDragEnd, onClick, ...utils };
+  }
+
+  it('a pure click (pointerdown+up, no movement) fires onClick with the marker\'s current visualTime -- NOT the click position -- and never onDragEnd', () => {
+    const { onDragEnd, onClick } = renderClickMarker();
+    const marker = screen.getByTestId('poster-marker');
+
+    // Down and up at clientX=800 (far from the marker's committed 4.85s): the
+    // seek target must be the marker's OWN time (4.85), never timeAtX(800).
+    fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 800, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 800, clientY: 10 });
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledWith(4.85);
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it('sub-threshold jitter and back still counts as a click: fires onClick, never onDragEnd', () => {
+    const { onDragEnd, onClick } = renderClickMarker();
+    const marker = screen.getByTestId('poster-marker');
+
+    fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    // Jitter within DRAG_THRESHOLD_PX (4px) and back -- not a deliberate move.
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 502, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledWith(4.85);
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it('a genuine drag (past the threshold) fires onDragEnd and does NOT also fire onClick', () => {
+    const { onDragEnd, onClick } = renderClickMarker();
+    const marker = screen.getByTestId('poster-marker');
+
+    fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'mouse', clientX: 560, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 620, clientY: 10 });
+
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+    expect(onDragEnd).toHaveBeenCalledWith(expect.closeTo(timeAtX(620), 5));
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('disabled during export: a click fires neither onClick nor onDragEnd (pointer capture never starts)', () => {
+    const { onDragEnd, onClick } = renderClickMarker({ disabled: true });
+    const marker = screen.getByTestId('poster-marker');
+
+    fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'mouse', clientX: 500, clientY: 10 });
+
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+});
+
 describe('PosterMarkerLayer — reveal scrolls the timeline HORIZONTALLY, only when off-screen (T6870)', () => {
   /* ROOT CAUSE of "Overlay always opens scrolled" (T6870): the reveal used
    * `trackRef.current.scrollIntoView({ block: 'nearest', inline: 'center' })`.

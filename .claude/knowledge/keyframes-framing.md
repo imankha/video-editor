@@ -886,6 +886,27 @@ keyframed** — camera tilt is constant for a recording.
   while looping never paused. Zero regions -> plain play/pause (unchanged). Real-browser proof
   in `e2e/T5450-overlay-circle-and-loop.qa.spec.js` (loop wraps at span end; press-while-playing
   pauses).
+- **Timeline click-to-seek convention — now TWO elements (T7720, 2026-08-25).** The
+  overlay timeline has an established "click a timeline element -> switch to its settings
+  tab + seek the playhead to it" shape, owned by `OverlayModeView` (which holds `activeTab`
+  as local `useState('overlay')` plus `seek`). Two handlers follow it: `handleSelectRegion`
+  (text region -> `setActiveTab('text')` + seek into the region, guarded by
+  `isRegionUnderPlayhead` since a region is a RANGE) and, new, `handlePosterMarkerClick`
+  (thumbnail marker -> `setActiveTab('thumbnail')` + unconditional `seek` since a marker is
+  a single FRAME, not a range). Any new clickable timeline element should reuse this shape,
+  not invent a new seek/tab mechanism. **Marker click vs drag is strictly separated in
+  `PosterMarkerLayer` (the T6560 fix stays intact):** the pointerup handler fires EXACTLY
+  ONE of `onDragEnd` (moved past `DRAG_THRESHOLD_PX` -> commits the new frame, SOURCE time,
+  persisted) or `onClick` (release-in-place -> opens settings, passes the marker's CURRENT
+  committed `visualTime`, never the click X, so a click never relocates the frame).
+  **Coordinate asymmetry to keep straight:** `onPosterMarkerDragEnd` receives SOURCE time
+  (OverlayMode converts via `visualTimeToSourceTime` because it persists the poster frame);
+  `onPosterMarkerClick` receives VISUAL time straight through (its only job is `seek`, which
+  is visual space — no conversion, no persistence). `onClick` does NOT set the marker's
+  `hasInteractedRef` (a click doesn't move the marker, so the initial-load auto-follow, which
+  only cares about position, has no reason to stop). Coverage: `PosterMarkerLayer.test.jsx`
+  (T7720 click/drag mutual-exclusion + passes committed time, not click X) +
+  `OverlayModeView.thumbnailMarkerClick.test.jsx` (handler opens the Thumbnail tab + seeks).
 - **Driving real `<video>` playback in the overlay dev-harness specs — the READINESS
   CONTRACT (T6060, 2026-07-27).** The three `overlaydiag*` specs (T5450 loop, T5610 tap-nav,
   T5643) point a real `<video>` at a relative `/overlaydiag-sample.mp4` that ffmpeg writes in

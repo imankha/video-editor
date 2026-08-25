@@ -96,6 +96,12 @@ export function OverlayMode({
   posterSlowmoSection = null,  // [start, end] (source/final time -- identity map) or null
   posterUploaded = false,      // a custom image is in use -- marker renders inactive
   onPosterMarkerDragEnd,       // (sourceTime) => void
+  // (visualTime) => void -- a CLICK (no drag) on the thumbnail marker (T7720).
+  // NOTE the coordinate asymmetry with onPosterMarkerDragEnd: dragEnd converts
+  // to SOURCE time because it PERSISTS the poster frame; click stays in VISUAL
+  // time because its only job is to SEEK the playhead (visual space) + open the
+  // Thumbnail tab -- no persistence, so no conversion.
+  onPosterMarkerClick,
   isExportInFlight = false,
   // T6630 round 6 item 4: true while the Thumbnail tab is active -- scrolls
   // the marker into view (see PosterMarkerLayer's revealOnActive doc).
@@ -355,6 +361,7 @@ export function OverlayMode({
               visualDuration={visualDuration || duration}
               isUploaded={posterUploaded}
               onDragEnd={handlePosterMarkerDragEnd}
+              onClick={onPosterMarkerClick}
               visualTimeToSourceTime={visualTimeToSourceTime}
               edgePadding={EDGE_PADDING}
               disabled={isExportInFlight}
