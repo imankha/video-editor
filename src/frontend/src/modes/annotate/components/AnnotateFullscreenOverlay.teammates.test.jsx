@@ -112,3 +112,44 @@ describe('AnnotateFullscreenOverlay — clear-on-switch to My Athlete (T5725)', 
     expect(onCreateClip.mock.calls[0][0]).toMatchObject({ my_athlete: true, tagged_teammates: [] });
   });
 });
+
+// T7540: typing a teammate name and clicking Save WITHOUT pressing Enter first
+// used to dead-end on an OK-only "Tag not submitted" dialog that never saved.
+// Save now auto-commits the pending text (same as Enter) and proceeds — no dialog.
+describe('AnnotateFullscreenOverlay — auto-commit pending teammate tag on Save (T7540)', () => {
+  it('create mode: typed-but-not-Entered tag is included in the saved clip, no dialog', () => {
+    const onCreateClip = vi.fn();
+    const { container } = render(
+      <AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} onCreateClip={onCreateClip} />
+    );
+    // Type a teammate name but do NOT press Enter.
+    fireEvent.change(screen.getByPlaceholderText('Tag a teammate...'), { target: { value: 'Alex' } });
+    fireEvent.click(container.querySelector('button.bg-green-600'));
+
+    expect(onCreateClip).toHaveBeenCalledTimes(1);
+    expect(onCreateClip.mock.calls[0][0]).toMatchObject({ tagged_teammates: ['Alex'] });
+    // The old dead-end dialog must never appear.
+    expect(screen.queryByText('Tag not submitted')).toBeNull();
+  });
+
+  it('edit mode: pending tag is committed alongside existing tags on Update', () => {
+    const onUpdateClip = vi.fn();
+    const { container } = render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, tagged_teammates: ['Jake'] }}
+        onUpdateClip={onUpdateClip}
+      />
+    );
+    // Existing chip present; type a new name without pressing Enter. The teammate
+    // input has an empty placeholder once chips exist, so target its unique class
+    // (bg-transparent — the clip-name input is bg-gray-800).
+    expect(screen.getByText('Jake')).toBeTruthy();
+    fireEvent.change(container.querySelector('input.bg-transparent'), { target: { value: 'Alex' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+
+    expect(onUpdateClip).toHaveBeenCalledTimes(1);
+    expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ tagged_teammates: ['Jake', 'Alex'] });
+    expect(screen.queryByText('Tag not submitted')).toBeNull();
+  });
+});
