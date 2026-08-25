@@ -28,7 +28,11 @@ const _getGameInflight = new Map();
 
 export const useGamesDataStore = create((set, get) => ({
   games: [],
-  readyGames: [],  // Derived: games with status != 'pending' (cached to avoid infinite re-renders)
+  // Derived: games with status != 'pending' (cached to avoid infinite re-renders).
+  // T7490: this deliberately INCLUDES status='upload_failed' games so their Games-tab
+  // card (Retry/Discard) renders — they are not framable, so the reel builder
+  // (GameClipSelectorModal) filters them back out at its own boundary.
+  readyGames: [],
   pendingGameIds: new Set(),
   selectedGame: null,
   // T4771: default true so the Games tab shows a skeleton (not bare "Loading

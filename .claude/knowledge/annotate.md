@@ -390,6 +390,35 @@ The full checklist for an 11th→Nth sport:
   - **Sibling scope (do not fight):** T7470 owns the destructive upload-failure cleanup (cascade-delete),
     T7490 owns pending-game UI + honest reaping (aborting the stale R2 multipart), T7500 owns the
     zero-rowcount silent-success sweep. T7480 deliberately did NOT touch those lines.
+- **Orphaned pending upload is reaped HONESTLY into a visible card (T7490).** `games.status` gained
+  a third value `'upload_failed'` (`constants.GameStatus.UPLOAD_FAILED`, free-text column, NO
+  migration — the column already had no CHECK). `list_pending_uploads` (GET
+  `/api/games/pending-uploads`, `games_upload.py`) used to SILENTLY `DELETE` a stale resume record
+  (R2 multipart gone), leaving any orphaned `games` row that survived T7470's only-if-empty guard
+  invisible forever (status stuck at `'pending'`, excluded from `readyGames`). Now, per stale row it:
+  (1) aborts the orphaned R2 multipart via `r2_abort_multipart_upload` (best-effort — that helper
+  swallows+logs and never raises, so a failed abort can't block the response; we also log
+  `[T7490]` on a False return), (2) `UPDATE games SET status='upload_failed' WHERE blake3_hash=? AND
+  status='pending'` (per-profile DB, so the hash match only touches this user's games; multi-video
+  games have NULL hash and are not matched — accepted), (3) deletes the `pending_uploads` row.
+  Idempotent (second call finds no stale row; the UPDATE no-ops once status left `'pending'`). This
+  is a WRITE in a GET handler — a known smell the task deliberately did NOT restructure into a POST
+  (scope); kept minimal/logged/idempotent instead. **Frontend:** `readyGames` (gamesDataStore) is
+  `status != 'pending'`, so `upload_failed` renders in the Games tab as a distinct `GameTile` state
+  (rose "Upload incomplete" badge, dead-poster scrim, persistent **Retry**/**Discard** bar; tile-tap
+  /kebab/pencil suppressed — no video to open). **Retry** re-selects the original file through the
+  SAME resume file-picker flow (`ProjectManager.handleResumeClick` → `handleResumeUpload`); there is
+  no stored original filename on the game, so the name-mismatch warning is skipped. **Discard** is a
+  two-tap confirm firing the FULL cascade delete (`onDeleteGame`) — the ONE case full cascade is
+  correct (user explicitly abandoning). **Retry must not spawn a duplicate:** `create_game('pending')`
+  (games.py) reuse query now matches `status IN ('pending','upload_failed')` and flips a reused
+  upload_failed row back to `'pending'` so the re-upload resumes INTO the same game id (clips survive).
+  **Reel builder leak guarded:** `GameClipSelectorModal` filters `status==='upload_failed'` out of its
+  selectable game list (no source video → clips can't be framed). Tests:
+  `tests/test_t7490_honest_reap.py` (reap + abort-does-not-block + idempotency + no-dup-on-retry +
+  valid-upload-untouched), `GameTile.test.jsx` (upload_failed state). **Follow-up (not done):** the
+  ACTIVE-upload UX (mobile "keep tab open", resume-across-reload with file re-matching) was
+  out-of-scope here — it belongs to the active-upload flow (T7480/general), not this dead-orphan card.
 - **Upload-failure cleanup is ONLY-IF-EMPTY (T7470 — the invariant that protects annotate-during-upload).**
   A failed upload must NEVER cascade-delete a game the user annotated against while it was still
   uploading (T1540: a real `game_id` exists from `onGameCreated`, well before finalize, precisely so

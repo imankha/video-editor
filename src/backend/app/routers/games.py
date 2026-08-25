@@ -307,13 +307,30 @@ async def create_game(request: CreateGameRequest):
         blake3_hash = request.videos[0].blake3_hash.lower()
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            # T7490: reuse a 'pending' OR 'upload_failed' game for this hash. An
+            # upload_failed row is the SAME resumable anchor the honest reap left
+            # visible (its game id was preserved so annotate-during-upload clips
+            # survive), so a Retry that re-selects the file must resume INTO it, never
+            # spawn a duplicate. Flip it back to 'pending' so its state matches the
+            # now-active re-upload (and so the reap can re-mark it if this attempt
+            # also dies).
             cursor.execute(
-                "SELECT id, name FROM games WHERE blake3_hash = ? AND status = 'pending'",
+                "SELECT id, name, status FROM games "
+                "WHERE blake3_hash = ? AND status IN ('pending', 'upload_failed')",
                 (blake3_hash,)
             )
             existing_pending = cursor.fetchone()
             if existing_pending:
-                logger.info(f"Reusing pending game {existing_pending['id']} for hash {blake3_hash}")
+                if existing_pending['status'] == GameStatus.UPLOAD_FAILED:
+                    cursor.execute(
+                        "UPDATE games SET status = 'pending' WHERE id = ?",
+                        (existing_pending['id'],)
+                    )
+                    conn.commit()
+                logger.info(
+                    f"Reusing {existing_pending['status']} game "
+                    f"{existing_pending['id']} for hash {blake3_hash}"
+                )
                 return {
                     "status": GameCreateStatus.CREATED,
                     "game_id": existing_pending['id'],

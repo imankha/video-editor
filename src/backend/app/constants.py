@@ -266,12 +266,19 @@ class UploadStatus(str, Enum):
 class GameStatus(str, Enum):
     """Lifecycle status for a game record.
 
-    pending — created before video upload completes. Provides game_id as FK
-              anchor for clip persistence. Not visible to downstream consumers.
-    ready   — video confirmed in R2. Downstream consumers only see ready games.
+    pending       — created before video upload completes. Provides game_id as FK
+                    anchor for clip persistence. Not visible to downstream consumers.
+    ready         — video confirmed in R2. Downstream consumers only see ready games.
+    upload_failed — the upload never finished and its R2 multipart session is gone
+                    (T7490). Set by the honest reap in list_pending_uploads when a
+                    stale resume record is found alongside a still-pending game, so
+                    the game becomes a VISIBLE, user-actionable card (Retry / Discard)
+                    instead of an invisible orphan. Distinct from 'pending' so the
+                    Games tab can render it (readyGames = status != 'pending').
     """
     PENDING = "pending"
     READY = "ready"
+    UPLOAD_FAILED = "upload_failed"
 
 
 class GameCreateStatus(str, Enum):

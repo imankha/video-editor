@@ -1276,6 +1276,12 @@ export function ProjectManager({
                                   onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
                                   onShare={() => setShareGame(game)}
                                   onEdit={() => setEditGame(game)}
+                                  // T7490: a failed upload re-selects the file through the
+                                  // same resume file-picker flow (no stored original filename,
+                                  // so no name-match warning); Discard is the explicit full
+                                  // cascade delete of an abandoned upload.
+                                  onRetryUpload={() => handleResumeClick(null)}
+                                  onDiscardFailed={() => onDeleteGame(game.id)}
                                 />
                               )}
                             </div>
