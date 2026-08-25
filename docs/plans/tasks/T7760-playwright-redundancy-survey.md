@@ -1,6 +1,6 @@
 # T7760: Redundancy/coverage-overlap survey across all e2e/*.spec.js files
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1 (prerequisite for the user's 10-minute runtime target, no code risk)
 **Impact:** 7
 **Complexity:** 6
