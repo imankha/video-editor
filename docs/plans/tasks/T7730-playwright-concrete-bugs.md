@@ -1,6 +1,6 @@
 # T7730: Fix the 8 concrete real bugs found by the Playwright triage
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1 (real product bugs, confirmed root causes, low individual risk)
 **Impact:** 7
 **Complexity:** 4
