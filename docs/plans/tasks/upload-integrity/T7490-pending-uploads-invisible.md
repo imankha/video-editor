@@ -1,6 +1,6 @@
 # T7490: Pending uploads invisible in UI; stale resume records silently reaped
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1
 **Impact:** 7
 **Complexity:** 4
