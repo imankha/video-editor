@@ -54,8 +54,31 @@ during impersonation. The session-touch/last-seen writer never got the same guar
 
 ## Acceptance Criteria
 
-- [ ] Impersonated requests no longer touch last_seen_at (test: impersonate on staging,
-      confirm value unchanged)
-- [ ] Audit note in this file listing every per-user activity field checked and its guard
-      status
-- [ ] Dashboards/queries guidance: last_active_at is the metric source
+- [x] Impersonated requests no longer touch last_seen_at. Guard added inside the single
+      writer `auth_db.update_last_seen` (services/auth_db.py) — skips the `UPDATE users SET
+      last_seen_at = now()` when `get_current_impersonator_id()` is set, mirroring the T1515
+      guard shape in `analytics.update_session` exactly. Verified against real dev Postgres:
+      with an impersonator set the value is UNCHANGED; a normal (non-impersonated) call still
+      UPDATES it. Regression test: `tests/test_t7530_last_seen_impersonation.py`.
+- [x] Audit note — every per-user activity field updated on the request path:
+
+      | Field | Writer | Guard status |
+      |-------|--------|--------------|
+      | `users.last_seen_at` | `auth_db.update_last_seen` (auth.py:320 login, auth.py:469 `/me`) | **FIXED (T7530)** — was unguarded, now skips on impersonation |
+      | `user_segments.last_active_at` | `analytics.update_session` (auth.py:473 `/me`, auth.py:755 heartbeat) | **CLEAN (already guarded, T1515)** — analytics.py:403 skip-guard |
+      | `user_segments.current_session_start` / `total_usage_seconds` | `analytics.update_session` / `close_session` | CLEAN — same T1515 guard (analytics.py:403 / :535) |
+      | `user_milestones` / `user_actions` (`record_milestone`) | `analytics.record_milestone` | CLEAN — T1515 guard (analytics.py:272) |
+
+      **Why `last_active_at` stayed clean is now proven, not assumed:** its only per-request
+      writer (`update_session`) runs via the exact same `asyncio.create_task` →
+      `asyncio.to_thread` path as `update_last_seen` (auth.py:473 sits one line below
+      auth.py:469). If the impersonator contextvar did NOT propagate through that path, the
+      `update_session` guard would silently no-op and `last_active_at` would be polluted too —
+      it isn't, which confirms the contextvar reaches the writer and the writer-internal guard
+      is the correct, established shape. `update_last_seen` was the ONLY sibling missing it.
+- [x] Dashboards/queries guidance: `user_segments.last_active_at` is the trustworthy
+      per-user activity/recency metric (never contaminated by admin impersonation, T1515).
+      Historically-polluted `users.last_seen_at` values (pre-2026-08-26) cannot be rewound —
+      there is no history to reconstruct the true last-seen from — so NO destructive data
+      repair was attempted (per kickoff Step 4). Prefer `last_active_at` for retention/WAU/MAU
+      going forward; `users.last_seen_at` is correct only from this fix onward.
