@@ -324,6 +324,33 @@ The full checklist for an 11th→Nth sport:
   Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
+- **TSV clip import must WAIT for the in-flight upload's game id, never one-shot-drop (T7790, 2026-08-26).**
+  `importAnnotationsWithRawClips` (AnnotateContainer.jsx) imports annotations to the UI immediately,
+  then saves each as a `raw_clips` row via `saveClip(gameId, ...)`. The game id comes from
+  `onGameCreated` (fired mid-upload, well before finalize — see the T7280 note below). On a slow/cold
+  upload a user (or the e2e helper) can import the TSV BEFORE `onGameCreated` has created the game
+  record, so `annotateGameIdRef.current` is still null. The old code read the ref ONCE and, finding it
+  null, silently dropped every save with a `console.warn` — the id then arrived seconds later but
+  NOTHING re-fired the saves, so the clips were on screen yet never reached the library (intermittent
+  "0 of 3 / 1 of 3 saved"; proven deterministically by delaying `POST /api/games` 8s and importing
+  immediately: at import `{annotateGameIdRef:null, uploadGameId:null, isUploading:true}` -> 0 clips,
+  `onGameCreated` fires 11s later, nothing retries). Fix: module-scope `resolveImportGameId(ref)` polls
+  `annotateGameIdRef.current` + `uploadStore.uploadGameId` (its authoritative copy, set in the SAME
+  callback) every 200ms while an upload is genuinely in flight (bounded 120s), returns the id once it
+  lands, and returns null ONLY when no upload can produce one (never started, or ended without a
+  record). The import kicks the saves off in a background `void (async()=>{})()` (UI stays responsive,
+  count returns immediately) and, on a null id, fails LOUDLY (`toast.error('Clips not saved', …)` +
+  `console.error`) — never the old silent drop. This is still gesture-driven (the TSV-import handler
+  owns its surgical saves), NOT a reactive effect. **Invariant: a TSV import during an upload never
+  loses clips — it waits for the game id or tells the user it failed.** Note `uploadStore.uploadGameId`
+  is CLEARED in `onUploadComplete` (uploadStore.js) once the upload finishes, so a fallback that reads
+  it only AFTER completion is null — the wait must capture the id DURING the upload (which
+  `resolveImportGameId` does by also polling `annotateGameIdRef`, which `onGameCreated` sets and is not
+  cleared). Regression: `e2e/T7790-clip-save-race.qa.spec.js` (delays `POST /api/games`, imports the
+  TSV immediately, asserts all 3 land; 0 clips on pre-fix code, 3 on the fix; 5/5 stable). The shared
+  e2e helper `ensureAnnotateModeWithClips` now THROWS on a 0-clip result instead of warning-and-hanging
+  to the 5-minute cap. (The sibling smoke test's residual `mode-framing` timeout is T7780's
+  `isVisible({timeout})` silent-skip bug, a SEPARATE cause — do not conflate.)
 - **GameDetailsModal short-viewport dead-end (T7590, 2026-08-25).** The "Add your first game"
   flow's `GameDetailsModal.jsx` (the required-fields-at-creation modal opened by ProjectManager's
   "Add Game" CTA → `handleAddGameClick`) centered its panel with `fixed inset-0 flex items-center

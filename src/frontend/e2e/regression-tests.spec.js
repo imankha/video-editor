@@ -642,7 +642,13 @@ async function ensureAnnotateModeWithClips(page) {
   }
 
   if (!clipsSaved) {
-    console.log('[Test] WARNING: No clips saved to library after 30s - upload may have failed');
+    // T7790: fail FAST and accurately here instead of continuing. Previously this
+    // only warned, so a downstream step (e.g. clicking a "New Reel" button that
+    // reelDraftsDisabled correctly disables when 0 clips exist) hung until the hard
+    // 5-minute cap. The clip-save race this guarded is now fixed at the source
+    // (importAnnotationsWithRawClips waits for the in-flight upload's game id), so a
+    // 0-clip result here is a real regression, not flakiness — surface it immediately.
+    throw new Error('[Test] No clips reached the library within 30s of TSV import — clip-save regression (T7790)');
   }
 
   console.log('[Test] Loaded video and TSV in annotate mode');
