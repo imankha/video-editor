@@ -610,7 +610,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // (enabled only after framing export completes and working_video exists)
     let overlayExportDone = false;
     const overlayModeBtn = page.locator('button:has-text("Overlay"):not([disabled])');
-    const overlayVisible = await overlayModeBtn.first().isVisible({ timeout: 15000 }).catch(() => false);
+    const overlayVisible = await overlayModeBtn.first().isVisible().catch(() => false);
     console.log(`[Q2.4] Overlay button visible: ${overlayVisible}`);
 
     if (overlayVisible) {
@@ -619,7 +619,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
       // Click Add Overlay to start overlay export
       const addOverlayBtn = page.locator('button:has-text("Add Overlay")');
-      const addOverlayVisible = await addOverlayBtn.first().isVisible({ timeout: 10000 }).catch(() => false);
+      const addOverlayVisible = await addOverlayBtn.first().isVisible().catch(() => false);
       console.log(`[Q2.4] Add Overlay button visible: ${addOverlayVisible}`);
 
       if (addOverlayVisible) {
@@ -716,7 +716,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Frame Video export
     const fvBtn2 = page.locator('button:has-text("Frame Video"):not([disabled])');
-    if (await fvBtn2.first().isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (await fvBtn2.first().isVisible().catch(() => false)) {
       await fvBtn2.first().click();
       await page.waitForTimeout(2000);
     }
@@ -732,7 +732,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Second overlay export
     let overlayExport2Done = false;
     const overlayBtn2 = page.locator('button:has-text("Overlay"):not([disabled])');
-    if (await overlayBtn2.first().isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (await overlayBtn2.first().isVisible().catch(() => false)) {
       await overlayBtn2.first().click();
       await page.waitForTimeout(3000);
 
@@ -858,7 +858,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Create the project
     const createProjectBtn = page.locator('button:has-text("Create Reel"), button:has-text("Create")').last();
-    if (await createProjectBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (await createProjectBtn.isVisible().catch(() => false)) {
       await createProjectBtn.click();
       await page.waitForTimeout(3000);
     }
@@ -893,7 +893,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     }
 
     const fvBtn3 = page.locator('button:has-text("Frame Video"):not([disabled])');
-    if (await fvBtn3.first().isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (await fvBtn3.first().isVisible().catch(() => false)) {
       await fvBtn3.first().click();
       await page.waitForTimeout(2000);
     }
@@ -912,7 +912,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       console.log('[Q4.6] Overlay on reel');
 
       const overlayBtn3 = page.locator('button:has-text("Overlay"):not([disabled])');
-      if (await overlayBtn3.first().isVisible({ timeout: 10000 }).catch(() => false)) {
+      if (await overlayBtn3.first().isVisible().catch(() => false)) {
         await overlayBtn3.first().click();
         await page.waitForTimeout(3000);
 

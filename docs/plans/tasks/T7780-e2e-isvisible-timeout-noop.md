@@ -87,3 +87,43 @@ expected branch), so each needs a quick read to confirm intent before converting
 - [ ] Same audit done for the pattern elsewhere in `src/frontend/e2e/` if found
 - [ ] The 3 originally-failing tests (or their consolidated survivors post-T7770) pass
 - [ ] Tests pass; CI green
+
+## Progress Log
+
+### 2026-08-26 — implementation (branch `feature/T7780-e2e-isvisible-timeout-noop`)
+
+**Converted to `waitFor({ state: 'visible', timeout }) + action` (3 sites, all in
+`navigateToProjectFromHome`, `regression-tests.spec.js`):**
+- `projectsTab` (`button:has-text("Reel Drafts")`)
+- `projectCard` (`[data-testid="project-card"]`)
+- `clipRow` (`[title*="click to open"]`)
+
+Rationale: these three are the trace-confirmed root causes. Uniquely among all sites in the
+suite, this helper has **no trailing assertion** — a silently-skipped click deferred the failure
+to the caller's `expect(mode-framing)` 30s later with a misleading message. `waitFor` actually
+waits and throws at the real missing-element step. Absence here is never a valid branch.
+
+**Left as state-checks — dead `{ timeout }` arg stripped (66 sites total: 36 in
+`regression-tests.spec.js` + 30 across 7 other files):** every remaining occurrence is a genuine
+"check current state, branch either way" read, NOT a wait-then-act guard. Converting any of them
+to `waitFor` would be wrong (would throw on a legitimately-absent element). Since the `timeout`
+option is a proven no-op on `isVisible()`, keeping it is actively misleading, so it was removed
+(`isVisible({ timeout: N })` -> `isVisible()`), leaving runtime behavior unchanged. Categories:
+- **Poll loops** that branch on current state and re-check on the next iteration (export-start /
+  export-progress / stall detection in `waitForExportComplete`, `Framing: export progress`).
+- **Optional/conditional UI branches** with an explicit `else` or warning-log fallback, or a
+  trailing real assertion that owns correctness (`navigateToProjectManager`,
+  `ensureAnnotateModeWithClips`, "load video if prompted", overlay-vs-framing mode detection,
+  "Continue Where You Left Off" fallback chain, `test.skip(!visible, ...)`).
+- **Verification reads** captured into a var then `expect()`ed or logged
+  (`clip-selection-state-machine.spec.js` REQ checks).
+- **Target-selection ternary** (`T4900:85`), **guard-and-return** helpers
+  (`archive/sidebar-scrub-debug.spec.js`), and a **candidate-retry loop**
+  (`helpers/annotateClips.js` — must try the next seek time when the add button isn't visible).
+
+Files touched: `regression-tests.spec.js`, `clip-selection-state-machine.spec.js`,
+`new-user-flow.spec.js`, `T4780-tutorial-quest-steps.spec.js`,
+`T4900-overlay-action-failure-visibility.spec.js`, `T6320-my-reels-playhead.qa.spec.js`,
+`archive/sidebar-scrub-debug.spec.js`, `helpers/annotateClips.js`. Scope deliberately limited to
+the `isVisible({ timeout })` pattern (no file restructuring) to keep T7790's rebase clean.
+eslint: 0 errors across all 8 files (pre-existing unused-var warnings only).

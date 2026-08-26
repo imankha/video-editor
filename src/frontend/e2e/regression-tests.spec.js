@@ -305,12 +305,12 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     const exportingButton = page.locator('button:has-text("Exporting")');
     const loaderVisible = page.locator('.animate-spin').first();
 
-    if (await exportingButton.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await exportingButton.isVisible().catch(() => false)) {
       exportStarted = true;
       console.log('[Full] Export started (Exporting button visible)');
       break;
     }
-    if (await loaderVisible.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await loaderVisible.isVisible().catch(() => false)) {
       exportStarted = true;
       console.log('[Full] Export started (loader visible)');
       break;
@@ -337,8 +337,8 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     // 2. No "Exporting" button visible
     // 3. No loader visible
     // 4. Export button is back and enabled ("Frame Video" or "Add Overlay")
-    const isExporting = await exportingButton.isVisible({ timeout: 500 }).catch(() => false);
-    const hasLoader = await loaderVisible.isVisible({ timeout: 500 }).catch(() => false);
+    const isExporting = await exportingButton.isVisible().catch(() => false);
+    const hasLoader = await loaderVisible.isVisible().catch(() => false);
     const frameButtonEnabled = await frameVideoButton.isEnabled({ timeout: 500 }).catch(() => false);
     const overlayButtonEnabled = await addOverlayButton.isEnabled({ timeout: 500 }).catch(() => false);
     const exportButtonEnabled = frameButtonEnabled || overlayButtonEnabled;
@@ -369,7 +369,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     // Check for "Video exported!" toast — overlay export in test mode completes fast
     // and navigates to HOME before the button check can detect completion
     const exportToast = page.locator('text=/Video exported/i').first();
-    const hasExportToast = await exportToast.isVisible({ timeout: 500 }).catch(() => false);
+    const hasExportToast = await exportToast.isVisible().catch(() => false);
     if (exportStarted && hasExportToast && !isExporting && !hasLoader) {
       console.log('[Full] Export complete - "Video exported" toast detected');
       await page.waitForTimeout(1000);
@@ -386,7 +386,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     try {
       // Look for text containing both "Upscaling" or "Export" AND a percentage
       const exportProgressText = page.locator('text=/(?:Upscaling|Export).*\\d+%/i').first();
-      if (await exportProgressText.isVisible({ timeout: 300 })) {
+      if (await exportProgressText.isVisible()) {
         hasExportActivity = true;
         statusText = await exportProgressText.textContent({ timeout: 300 }).catch(() => null);
         if (statusText) {
@@ -404,7 +404,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     if (currentProgress < 0) {
       try {
         const progressBar = page.locator('[data-testid="export-progress-bar"]').first();
-        if (await progressBar.isVisible({ timeout: 300 })) {
+        if (await progressBar.isVisible()) {
           hasExportActivity = true;
           // Use data-progress attribute (more reliable than parsing style)
           const dataProgress = await progressBar.getAttribute('data-progress');
@@ -430,7 +430,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     if (!hasExportActivity) {
       try {
         const progressBar = page.locator('.rounded-full .bg-green-600').first();
-        if (await progressBar.isVisible({ timeout: 300 })) {
+        if (await progressBar.isVisible()) {
           hasExportActivity = true;
           const style = await progressBar.getAttribute('style');
           if (style) {
@@ -455,7 +455,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
       ];
       for (const indicator of statusIndicators) {
         try {
-          if (await indicator.isVisible({ timeout: 200 })) {
+          if (await indicator.isVisible()) {
             hasExportActivity = true;
             statusText = await indicator.textContent({ timeout: 200 }).catch(() => null);
             break;
@@ -482,7 +482,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
 
     // Check for server connection error
     const serverError = page.locator('text=/Cannot connect to server/i');
-    const hasServerError = await serverError.isVisible({ timeout: 300 }).catch(() => false);
+    const hasServerError = await serverError.isVisible().catch(() => false);
     if (hasServerError) {
       throw new Error('Backend server connection lost during export. The server may have crashed or become unresponsive.');
     }
@@ -518,20 +518,20 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
 async function navigateToProjectManager(page) {
   // Check if we're already on the project manager (Projects tab)
   const newProjectButton = page.locator('button:has-text("New Reel")');
-  if (await newProjectButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+  if (await newProjectButton.isVisible().catch(() => false)) {
     return; // Already on project manager Projects tab
   }
 
   // Look for Home button (exists in both annotate and framing/overlay modes)
   const backButton = page.locator('button[title="Home"]');
-  if (await backButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await backButton.isVisible().catch(() => false)) {
     await backButton.click();
     await page.waitForTimeout(500);
   }
 
   // Switch to Projects tab (default might be Games tab)
   const projectsTab = page.locator('button:has-text("Reel Drafts")').first();
-  if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await projectsTab.isVisible().catch(() => false)) {
     await projectsTab.click();
     await page.waitForTimeout(500);
   }
@@ -553,7 +553,7 @@ async function navigateToProjectManager(page) {
  */
 async function ensureAnnotateModeWithClips(page) {
   // Check if we're already in annotate mode with clips
-  const clipsVisible = await page.locator('text=Good Pass').first().isVisible({ timeout: 1000 }).catch(() => false);
+  const clipsVisible = await page.locator('text=Good Pass').first().isVisible().catch(() => false);
   if (clipsVisible) {
     console.log('[Test] Already in annotate mode with clips');
     return;
@@ -659,32 +659,31 @@ async function navigateToProjectFromHome(page) {
     page.waitForTimeout(10000),
   ]);
 
-  // Click Projects tab to show "Your Projects" section
+  // Click Projects tab to show "Your Projects" section.
+  // isVisible({ timeout }) does NOT wait (the timeout option is ignored) — use waitFor,
+  // which actually waits, and let it throw loudly if the tab never renders (T7780).
   const projectsTab = page.locator('button:has-text("Reel Drafts")');
-  if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await projectsTab.click();
-    await page.waitForTimeout(500);
-  }
+  await projectsTab.waitFor({ state: 'visible', timeout: 2000 });
+  await projectsTab.click();
+  await page.waitForTimeout(500);
 
   // Click the first draft tile. The old "Your Reels" heading (removed by T6830 —
   // the tab is now "Reel Drafts") and the 16:9-assuming fallback regex (the default
   // is 9:16 portrait) both matched nothing, so no project was ever selected. Use the
   // stable [data-testid="project-card"] tile selector shared across the suite.
   const projectCard = page.locator('[data-testid="project-card"]').first();
-  if (await projectCard.isVisible({ timeout: 3000 }).catch(() => false)) {
-    console.log('[Test] Clicking first draft tile (project-card)...');
-    await projectCard.click();
-    await page.waitForTimeout(1000);
-  }
+  await projectCard.waitFor({ state: 'visible', timeout: 3000 });
+  console.log('[Test] Clicking first draft tile (project-card)...');
+  await projectCard.click();
+  await page.waitForTimeout(1000);
 
   // After clicking the project card, the card expands showing clip segments.
   // Click a clip segment ("click to open") to actually enter framing mode.
   const clipRow = page.locator('[title*="click to open"]').first();
-  if (await clipRow.isVisible({ timeout: 5000 }).catch(() => false)) {
-    console.log('[Test] Clicking clip row to enter Framing mode...');
-    await clipRow.click();
-    await page.waitForTimeout(1000);
-  }
+  await clipRow.waitFor({ state: 'visible', timeout: 5000 });
+  console.log('[Test] Clicking clip row to enter Framing mode...');
+  await clipRow.click();
+  await page.waitForTimeout(1000);
 }
 
 /**
@@ -800,7 +799,7 @@ async function waitForUploadComplete(page, maxTimeout = 600000) {
     }
 
     // Check if upload errored (look for error indicators in UI)
-    const hasError = await page.locator('text=network error').isVisible({ timeout: 300 }).catch(() => false);
+    const hasError = await page.locator('text=network error').isVisible().catch(() => false);
     if (hasError) {
       console.log('[Test] Upload failed with network error');
       return false;
@@ -850,14 +849,14 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       // Click the first clip link that says "click to open" in its title/aria-label
       // These appear in the expanded project details as "Clip 1: Not Started (click to open)"
       const clipLink = page.locator('[title*="click to open"], [aria-label*="click to open"]').first();
-      if (await clipLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (await clipLink.isVisible().catch(() => false)) {
         console.log('[Test] Clicking clip link to enter Framing mode');
         await clipLink.click();
       } else {
         // Clips might not be visible - look for "Continue Where You Left Off" section
         // which shows the most recent project as a clickable card
         const continueCard = page.locator('button:has-text("clips · Not Started")').first();
-        if (await continueCard.isVisible({ timeout: 2000 }).catch(() => false)) {
+        if (await continueCard.isVisible().catch(() => false)) {
           console.log('[Test] Clicking "Continue Where You Left Off" card');
           await continueCard.click();
         } else {
@@ -974,7 +973,7 @@ async function ensureFocusMode(page) {
   // Load video if needed (framing mode may prompt for video)
   // Use short video for faster AI upscaling in tests
   const videoInput = page.locator('input[type="file"][accept*="video"]').first();
-  if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await videoInput.isVisible().catch(() => false)) {
     await videoInput.setInputFiles(TEST_VIDEO);
     await waitForVideoFirstFrame(page);
     // Wait for video to be processed and timeline to initialize
@@ -1536,12 +1535,12 @@ test.describe('Full Coverage Tests @full', () => {
     // Wait up to 10 seconds for export to start
     let exportStarted = false;
     for (let i = 0; i < 20; i++) {
-      if (await exportingButton.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (await exportingButton.isVisible().catch(() => false)) {
         console.log('[Full] Export started - "Exporting" button visible');
         exportStarted = true;
         break;
       }
-      if (await loaderSpinner.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (await loaderSpinner.isVisible().catch(() => false)) {
         console.log('[Full] Export started - loader visible');
         exportStarted = true;
         break;
@@ -1642,7 +1641,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Load video if prompted
     const videoInput = page.locator('input[type="file"][accept*="video"]').first();
-    if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await videoInput.isVisible().catch(() => false)) {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
 
@@ -1697,7 +1696,7 @@ test.describe('Full Coverage Tests @full', () => {
     const exportingButton = page.locator('button:has-text("Exporting")');
     const frameButton = page.locator('button:has-text("Frame Video")').first();
 
-    const isAlreadyExporting = await exportingButton.isVisible({ timeout: 1000 }).catch(() => false);
+    const isAlreadyExporting = await exportingButton.isVisible().catch(() => false);
 
     if (isAlreadyExporting) {
       console.log('[Full] Export already in progress, monitoring existing export');
@@ -1718,7 +1717,7 @@ test.describe('Full Coverage Tests @full', () => {
       await page.waitForTimeout(5000); // Check every 5 seconds
 
       // Check if export completed
-      const stillExporting = await exportingButton.isVisible({ timeout: 500 }).catch(() => false);
+      const stillExporting = await exportingButton.isVisible().catch(() => false);
       if (!stillExporting) {
         console.log('[Full] Export completed');
         break;
@@ -1815,7 +1814,7 @@ test.describe('Full Coverage Tests @full', () => {
     // If so, we need to switch to Framing mode for this test
     const addOverlayButton = page.locator('button:has-text("Add Overlay")');
 
-    if (await addOverlayButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await addOverlayButton.isVisible().catch(() => false)) {
       console.log('[Full] Project opened in Overlay mode, switching to Framing mode...');
 
       // Click the "Framing" button in the mode switcher (in the header)
@@ -1828,7 +1827,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Load video if file picker is shown
     const videoInput = page.locator('input[type="file"][accept*="video"]').first();
-    if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await videoInput.isVisible().catch(() => false)) {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
 
@@ -1847,7 +1846,7 @@ test.describe('Full Coverage Tests @full', () => {
       .or(page.locator('button').filter({ hasText: /1x|Speed/i }).first());
 
     let clip1SpeedChanged = false;
-    if (await speedControl.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (await speedControl.isVisible().catch(() => false)) {
       // Try to change speed to 0.5x
       if (await speedControl.evaluate(el => el.tagName === 'SELECT')) {
         await speedControl.selectOption({ label: '0.5x' });
@@ -1856,7 +1855,7 @@ test.describe('Full Coverage Tests @full', () => {
       } else {
         await speedControl.click();
         const speedOption = page.locator('text=0.5x').first();
-        if (await speedOption.isVisible({ timeout: 1000 }).catch(() => false)) {
+        if (await speedOption.isVisible().catch(() => false)) {
           await speedOption.click();
           clip1SpeedChanged = true;
           console.log('[Full] Changed clip 1 speed to 0.5x');
@@ -1904,7 +1903,7 @@ test.describe('Full Coverage Tests @full', () => {
       await page.waitForTimeout(500);
 
       // Try to change speed to 2x (different from clip 1)
-      if (await speedControl.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await speedControl.isVisible().catch(() => false)) {
         if (await speedControl.evaluate(el => el.tagName === 'SELECT')) {
           await speedControl.selectOption({ label: '2x' });
           console.log('[Full] Changed clip 2 speed to 2x');
@@ -1938,7 +1937,7 @@ test.describe('Full Coverage Tests @full', () => {
     // Project may reopen in Overlay mode (if it has a working video from export).
     // Switch back to Framing mode if needed.
     const addOverlayButtonReload = page.locator('button:has-text("Add Overlay")');
-    if (await addOverlayButtonReload.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await addOverlayButtonReload.isVisible().catch(() => false)) {
       console.log('[Full] Project reopened in Overlay mode, switching to Framing mode...');
       const focusModeButtonReload = page.getByTestId('mode-framing').first();
       await expect(focusModeButtonReload).toBeVisible({ timeout: 5000 });
@@ -1948,7 +1947,7 @@ test.describe('Full Coverage Tests @full', () => {
     }
 
     // Load video if file picker is shown
-    if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await videoInput.isVisible().catch(() => false)) {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
 
@@ -1961,7 +1960,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Check if speed shows 0.5x for first clip
     let clip1SpeedVerified = false;
-    if (await speedControl.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await speedControl.isVisible().catch(() => false)) {
       const speedValue = await speedControl.evaluate(el => {
         if (el.tagName === 'SELECT') return el.value;
         return el.textContent;
@@ -1988,7 +1987,7 @@ test.describe('Full Coverage Tests @full', () => {
       await waitForVideoFirstFrame(page, 30000);
 
       // Check if speed shows 2x for second clip
-      if (await speedControl.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await speedControl.isVisible().catch(() => false)) {
         const speedValue = await speedControl.evaluate(el => {
           if (el.tagName === 'SELECT') return el.value;
           return el.textContent;
@@ -2004,7 +2003,7 @@ test.describe('Full Coverage Tests @full', () => {
       await page.waitForTimeout(2000);
       await waitForVideoFirstFrame(page, 30000);
 
-      if (await speedControl.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await speedControl.isVisible().catch(() => false)) {
         const speedValue = await speedControl.evaluate(el => {
           if (el.tagName === 'SELECT') return el.value;
           return el.textContent;
@@ -2214,7 +2213,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Check if already in overlay mode (app auto-switches after framing export)
     const highlightUI = page.locator('text="Highlight Effect"');
-    const alreadyInOverlay = await highlightUI.isVisible({ timeout: 3000 }).catch(() => false);
+    const alreadyInOverlay = await highlightUI.isVisible().catch(() => false);
 
     if (alreadyInOverlay) {
       console.log('[Full Pipeline] Already in overlay mode (auto-switched after export)');
@@ -2273,7 +2272,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(500);
 
     const galleryButton = page.locator('button:has-text("Gallery")');
-    if (await galleryButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await galleryButton.isVisible().catch(() => false)) {
       await galleryButton.click({ timeout: 5000 }).catch(() => {
         console.log('[Full Pipeline] Gallery button click intercepted, skipping UI verification');
       });
@@ -2281,7 +2280,7 @@ test.describe('Full Coverage Tests @full', () => {
 
       // Verify video card is visible
       const videoCard = page.locator('.bg-gray-800').filter({ has: page.locator('video') }).first();
-      const hasVideoCard = await videoCard.isVisible({ timeout: 5000 }).catch(() => false);
+      const hasVideoCard = await videoCard.isVisible().catch(() => false);
       console.log(`[Full Pipeline] Gallery has video card: ${hasVideoCard}`);
     }
 

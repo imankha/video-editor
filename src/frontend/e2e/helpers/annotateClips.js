@@ -70,7 +70,7 @@ export async function openAddClipForm(page, { candidates = DEFAULT_GAP_CANDIDATE
     // If the seek was clamped back to ~0 (range not buffered yet), skip this time.
     if (Math.abs(landed - t) > 2) { await page.waitForTimeout(400); continue; }
     await page.waitForTimeout(700); // let auto-select re-evaluate (deselects in a gap)
-    if (await addBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    if (await addBtn.isVisible().catch(() => false)) {
       await addBtn.click();
       // The desktop ClipsSidePanel stays mounted (`hidden sm:flex`) even on a
       // mobile viewport, so its own inline add-clip form also renders — scope to

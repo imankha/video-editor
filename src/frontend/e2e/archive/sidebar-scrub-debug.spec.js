@@ -93,7 +93,7 @@ async function createClip(page, seekTime) {
   await addClipBtn.click();
   await page.waitForTimeout(1000);
   const saveBtn = page.locator('button:has-text("Save & Continue")').first();
-  if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  if (await saveBtn.isVisible().catch(() => false)) {
     await saveBtn.click();
     await page.waitForTimeout(800);
     return true;
