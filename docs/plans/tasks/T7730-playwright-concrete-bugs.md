@@ -97,24 +97,35 @@ section first, it has the full evidence per bug; this task file summarizes it fo
 ## Implementation
 
 ### Steps
-1. [ ] Fix bug 1 (My Reels accessible name) + verify `t5672-drawer-aspect-split.spec.js`'s 3
+1. [x] Fix bug 1 (My Reels accessible name) + verify `t5672-drawer-aspect-split.spec.js`'s 3
        affected tests
-2. [ ] Fix bug 2 (`questStore.js` rbNonDataWrite) + verify the 5 affected tests across
+2. [x] Fix bug 2 (`questStore.js` rbNonDataWrite) + verify the 5 affected tests across
        `T5960`/`T6010-T6020`/`T6040`
-3. [ ] Fix bug 3 (`ReelTile.jsx` menuHeight) + verify the `T6300` failure
-4. [ ] Fix bug 4 (SLOT_META Athlete Name render) + verify `T6620-defects.qa.spec.js`
-5. [ ] Fix bug 5 (delete stray clips 178/179 + harden `ensureAddClipVisible`) + verify the 7
+3. [x] Fix bug 3 (`ReelTile.jsx` menuHeight) + verify the `T6300` failure
+4. [x] Fix bug 4 (SLOT_META Athlete Name render) + verify `T6620-defects.qa.spec.js`
+5. [x] Fix bug 5 (delete stray clips 178/179 + harden `ensureAddClipVisible`) + verify the 7
        affected `T5700`/`T5725` tests
-6. [ ] Fix bug 6 (rescope `page.locator('video')`) + verify the 6 affected
+6. [x] Fix bug 6 (rescope `page.locator('video')`) + verify the 6 affected
        `T6700`/`T6710` tests
-7. [ ] Fix bug 7 (`textdiag/main.jsx` API update) + verify the 16+ affected
+7. [x] Fix bug 7 (`textdiag/main.jsx` API update) + verify the 16+ affected
        `T5225`/`T6610`/`T6630` tests
-8. [ ] Fix bug 8 (CollectionPlayer close button aria-label)
+8. [x] Fix bug 8 (CollectionPlayer close button aria-label)
 9. [ ] Re-run the full set of previously-failing tests these 8 bugs touch to confirm green
+
+### Progress Log
+
+**2026-08-26**: Worker container fixed bugs 1-4, 6-8 in code (`ensureAddClipVisible`
+hardening for bug 5 also done, across all 4 spec files that duplicate it). Bug 5's actual
+DELETE could not run in-container (no DB creds by design) — the supervisor ran it directly
+after the code side merged: verified `raw_clips` ids 178/179 on `dev`/profile `9fa7378c` still
+matched the triage's description exactly (`name=''`, `game_id=6`, `t=0-3s` and `t=21-33s`),
+then applied `DELETE FROM raw_clips WHERE id IN (178,179) AND name = '' AND game_id = 6` via
+`scripts/edit-user-db.py --env dev --db profile --apply` (db_version bumped automatically).
+Confirmed both rows gone via a follow-up SELECT. All 8 bugs now fully resolved.
 
 ## Acceptance Criteria
 
-- [ ] All 8 bugs fixed per the description above
+- [x] All 8 bugs fixed per the description above
 - [ ] The specific previously-failing tests named per bug now pass
 - [ ] No new failures introduced in adjacent tests
 - [ ] Tests pass; CI green
