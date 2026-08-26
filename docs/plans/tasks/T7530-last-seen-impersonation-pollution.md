@@ -1,6 +1,6 @@
 # T7530: users.last_seen_at is polluted by admin impersonation
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (metrics integrity; silently corrupts retention analysis)
 **Impact:** 5
 **Complexity:** 2
