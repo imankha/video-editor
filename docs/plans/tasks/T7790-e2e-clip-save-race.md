@@ -1,6 +1,6 @@
 # T7790: Clip-save race — clips intermittently don't reach the library within 30s of TSV import
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P2 (real timing bug, root cause not yet found — investigation, not just a test fix)
 **Impact:** 6
 **Complexity:** 5
