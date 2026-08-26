@@ -27,33 +27,16 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence } from './helpers/qa.js';
-import { probeOverlayDrafts } from './helpers/overlayDraft.js';
-import { waitForRealVideoReady } from './helpers/videoRoute.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
-async function openOverlayDraft(page, { minReadyState = 3 } = {}) {
-  const { loadable, dangling } = await probeOverlayDrafts(page);
-  if (loadable.length === 0) return { ok: false, reason: dangling.join('; ') || '(none)' };
-  const targetId = loadable[0];
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
-  const overlayFilter = page.getByText(/^In Overlay \(\d+\)$/);
-  if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
-  const card = page.locator('[data-testid="project-card"]')
-    .filter({ has: page.locator(`img[src*="/projects/${targetId}/poster"]`) }).first();
-  await card.waitFor({ timeout: 30000 });
-  await card.scrollIntoViewIfNeeded();
-  await card.hover();
-  const hoverBtn = card.getByRole('button', { name: 'Open in Overlay' });
-  if (await hoverBtn.count() > 0) await hoverBtn.first().click();
-  else { await card.getByRole('button', { name: 'More actions' }).click(); await page.getByRole('button', { name: 'Open in Overlay' }).first().click(); }
-  await page.getByTestId('overlay-video-stage').first().waitFor({ timeout: 60000 });
-  const verdict = await waitForRealVideoReady(page, { requireAspectRatio: true, minReadyState });
-  return verdict.ready ? { ok: true, projectId: targetId } : { ok: false, reason: verdict.reason };
-}
+// T7750: delegate to the shared `openLoadableOverlayDraft`, which walks the loadable
+// candidates, handles the ready-to-publish kebab menu, and verifies an "Open in Overlay"
+// affordance actually exists before committing (the resolved loadable[0] used to be in a
+// third UI state exposing neither action button, hanging the open).
+const openOverlayDraft = openLoadableOverlayDraft;
 
 /** The poster marker (the layout renders a desktop + a mobile-drawer copy; the
  *  drag helper below uses this exact target, so the whole spec is consistent). */

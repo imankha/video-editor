@@ -88,7 +88,6 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
         `Details:\n  ${dangling.join('\n  ') || '(no In-Overlay drafts at all)'}`,
     };
   }
-  const targetId = loadable[0];
 
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
@@ -103,26 +102,64 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
   }
   await overlayFilter.first().click();
 
-  // Open the LOADABLE draft deterministically: its DraftTile poster src carries the project
-  // id. Click that card's own "Open in Overlay" button (Playwright hovers it first, which
-  // flips the hover-gated tile actions to pointer-events:auto) — no `.first()` gamble.
-  const card = page
-    .locator('[data-testid="project-card"]')
-    .filter({ has: page.locator(`img[src*="/projects/${targetId}/poster"]`) })
-    .first();
-  await card.waitFor({ timeout: 30000 });
-  await card.scrollIntoViewIfNeeded();
-  await card.hover();
-  await card.getByRole('button', { name: 'Open in Overlay' }).click();
+  // T7750: a streamable working video is NECESSARY but not SUFFICIENT. The resolved tile can be
+  // in a UI state (e.g. mid-publish) exposing NEITHER the hover-rail "Open in Overlay" button NOR
+  // the kebab entry, so a fixed loadable[0] used to hang on a card that could never be opened.
+  // Walk the loadable candidates and open the FIRST whose "Open in Overlay" affordance actually
+  // exists; if opening or hydration fails, record why and fall through to the next candidate.
+  const skipped = [];
+  for (const targetId of loadable) {
+    // Open the LOADABLE draft deterministically: its DraftTile poster src carries the project
+    // id, so we target the card directly (no `.first()` gamble on list order).
+    const card = page
+      .locator('[data-testid="project-card"]')
+      .filter({ has: page.locator(`img[src*="/projects/${targetId}/poster"]`) })
+      .first();
+    if ((await card.count()) === 0) {
+      skipped.push(`project ${targetId}: no card in the In-Overlay list`);
+      continue;
+    }
+    await card.scrollIntoViewIfNeeded();
+    await card.hover(); // flips the hover-gated tile actions to pointer-events:auto
 
-  const stage = page.getByTestId('overlay-video-stage').first();
-  await stage.waitFor({ timeout: 60000 });
-  const verdict = await waitForRealVideoReady(page, { requireAspectRatio: true, minReadyState });
-  if (verdict.ready) return { ok: true, projectId: targetId };
+    // Prefer the hover-rail icon button; fall back to the T6180 ready-to-publish kebab menu.
+    // If NEITHER action exists on this tile, it's an unopenable state — skip to the next.
+    const hoverBtn = card.getByRole('button', { name: 'Open in Overlay' });
+    if ((await hoverBtn.count()) > 0) {
+      await hoverBtn.first().click();
+    } else {
+      const kebab = card.getByRole('button', { name: 'More actions' });
+      if ((await kebab.count()) === 0) {
+        skipped.push(`project ${targetId}: no hover-rail "Open in Overlay" and no kebab (unopenable tile state)`);
+        continue;
+      }
+      await kebab.click();
+      const menuItem = page.getByRole('button', { name: 'Open in Overlay' });
+      if ((await menuItem.count()) === 0) {
+        await page.keyboard.press('Escape'); // dismiss the menu before the next candidate
+        skipped.push(`project ${targetId}: kebab has no "Open in Overlay" entry`);
+        continue;
+      }
+      await menuItem.first().click();
+    }
+
+    const stage = page.getByTestId('overlay-video-stage').first();
+    await stage.waitFor({ timeout: 60000 });
+    const verdict = await waitForRealVideoReady(page, { requireAspectRatio: true, minReadyState });
+    if (verdict.ready) return { ok: true, projectId: targetId };
+
+    // Streamable yet the stage never hydrated in-app — reset and try the next candidate.
+    skipped.push(`project ${targetId}: probed streamable (R2 206) yet overlay never hydrated: ${verdict.reason}`);
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: 'Reel Drafts' }).click();
+    if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
+  }
+
   return {
     ok: false,
     reason:
-      `In-Overlay draft ${targetId} probed streamable (R2 206) yet its overlay stage never hydrated ` +
-      `in-app: ${verdict.reason}`,
+      `No streamable In-Overlay draft [${loadable.join(', ')}] could be opened in Overlay ` +
+      `(none exposed an "Open in Overlay" affordance / hydrated):\n  ${skipped.join('\n  ')}`,
   };
 }

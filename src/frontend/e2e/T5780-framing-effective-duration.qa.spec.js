@@ -77,7 +77,18 @@ async function splitTrack(page, fractions) {
 }
 
 async function openFirstFramingDraft(page) {
-  await page.locator('[data-testid="project-card"]', { hasText: 'Not started' }).first().click();
+  // T7750: these criteria need an UN-STARTED (un-edited) draft for a clean de-emphasized
+  // baseline (Criterion 3: chip == source length, NOT emphasized). FIXTURE-CONTRACT only
+  // promises ">=1 framed project", not specifically an un-started one, and the shared dev
+  // account's drafts drift past "Not started" through ongoing QA use. Skip LOUDLY (never a
+  // vacuous pass, never a 30s hang on a locator that never resolves) when none is present.
+  const notStarted = page.locator('[data-testid="project-card"]', { hasText: 'Not started' });
+  await notStarted.first().waitFor({ timeout: 8000 }).catch(() => {});
+  test.skip(
+    (await notStarted.count()) === 0,
+    '[T7750] no "Not started" framing draft on this account (FIXTURE-CONTRACT gap: needs an un-started draft)',
+  );
+  await notStarted.first().click();
   await page.waitForSelector(CHIP, { timeout: 30000 });
   // Wait for the clip's saved segment state to restore (segment track populated) so
   // the chip reflects the CLIP length, not the transient full-source length on load.

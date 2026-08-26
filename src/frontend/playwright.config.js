@@ -57,8 +57,29 @@ const PER_TEST_TIMEOUT = process.env.E2E_TIMEOUT_MS
   ? Number(process.env.E2E_TIMEOUT_MS)
   : (process.env.E2E_BASE_URL ? 60000 : 300000);
 
+// T7750: specs excluded from the DEFAULT unattended `npx playwright test` run because they
+// are not correctness assertions meant to run without a precondition step:
+//   - @staging-gate — the curated pre-deploy subset (STAGING-GATE.md). It targets a DEPLOYED
+//     build + a hand-seeded fixture account; run locally in a bulk sweep it either duplicates
+//     coverage or fails on a precondition it can't satisfy. Run it via `test:e2e:staging-gate`.
+//   - @tutorial-capture — the tutorial-capture-{framing,overlay,publish} developer screen-
+//     RECORDING scripts (record footage to a host QUEST_DIR against hand-staged account state,
+//     NOT assertions). tutorial-capture-annotate is intentionally NOT tagged and still runs.
+//     Run the trio via `test:e2e:tutorial-capture`.
+// NOTE on the mechanism: Playwright does NOT let a CLI `--grep-invert` override a config-level
+// `grepInvert` (they COMBINE), so a static `grepInvert` here would also zero out the explicit
+// gate/capture commands that `--grep` FOR these tags. Instead the exclusion lifts itself when
+// the invocation is explicitly selecting one of these tags — i.e. `--grep @staging-gate` /
+// `--grep @tutorial-capture` (however launched: npm script or raw `npx playwright test ...`).
+// A plain `npx playwright test` names neither tag, so the exclusion applies.
+const GATED_TAGS = /@staging-gate|@tutorial-capture/;
+const TARGETING_GATED = GATED_TAGS.test(process.argv.join(' '));
+const DEFAULT_GREP_INVERT = TARGETING_GATED ? undefined : GATED_TAGS;
+
 export default defineConfig({
   testDir: './e2e',
+  // Exclude the gated specs above from the default run (lifts when a run greps for them).
+  grepInvert: DEFAULT_GREP_INVERT,
   // T6760: e2e/archive/ holds superseded round-N QA/evidence specs and one-off debug
   // specs (parked, not deleted, so their history stays greppable). They are pinned to
   // UI states later tasks intentionally changed; the CURRENT regression coverage lives

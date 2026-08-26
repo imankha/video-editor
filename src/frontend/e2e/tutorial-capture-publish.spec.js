@@ -16,7 +16,7 @@ const QUEST_DIR = 'C:/Users/imank/Videos/Captures/ReelBallersTutroials/publish';
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const W = 1920, H = 1080;
 
-test('capture publish tutorial footage', async ({ browser }) => {
+test('capture publish tutorial footage @tutorial-capture', async ({ browser }) => {
   // T5420: developer screen-RECORDING script (records to a host-local Windows QUEST_DIR)
   // for producing tutorial footage — not a functional test. It cannot run on a deployed
   // target (or any machine without the capture assets).

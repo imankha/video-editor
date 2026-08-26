@@ -158,9 +158,15 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     await page.evaluate(async () => {
       const { useProjectsStore } = await import('/src/stores/projectsStore.js');
       const current = useProjectsStore.getState().projects;
-      const seed = current.find((p) => p.aspect_ratio === '9:16' && p.group_key);
+      // T7750: base the synthetics off ANY grouped real draft for its game/group fields,
+      // but set aspect_ratio EXPLICITLY on every synthetic below (never derive it). The old
+      // seed `find(p => p.aspect_ratio === '9:16' && p.group_key)` could return undefined on
+      // the live account, so `...seed` left aspect_ratio undefined and a persisted (non-'all')
+      // aspect filter silently excluded the synthetic from ever rendering.
+      const seed = current.find((p) => p.group_key) || current[0] || {};
       const inFramingBase = {
         ...seed,
+        aspect_ratio: '9:16', // explicit; framingLandscape/freshDraft override or reaffirm below
         clips_in_progress: 1,
         clips_exported: 0,
         has_working_video: false,
@@ -168,13 +174,14 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
         has_overlay_edits: false,
         is_published: false,
       };
-      const framingPortrait = { ...inFramingBase, id: 888887, name: 'Synthetic Framing Portrait' };
+      const framingPortrait = { ...inFramingBase, id: 888887, name: 'Synthetic Framing Portrait', aspect_ratio: '9:16' };
       const framingLandscape = { ...inFramingBase, id: 888888, name: 'Synthetic Landscape Draft', aspect_ratio: '16:9' };
       const freshDraft = {
         ...inFramingBase,
         id: 888889,
         name: 'Synthetic Fresh Draft',
         clips_in_progress: 0,
+        aspect_ratio: '9:16',
       };
       useProjectsStore.setState({ projects: [framingPortrait, framingLandscape, freshDraft, ...current] });
     });
