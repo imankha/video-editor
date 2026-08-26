@@ -1,6 +1,6 @@
 # T7770: Execute the Playwright suite trim to a healthy runtime
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P1 (delivers the user's explicit runtime target)
 **Impact:** 8
 **Complexity:** 5
@@ -80,8 +80,13 @@ this task executes that trim and verifies the result.
 - [x] Every deletion/consolidation traces to a specific T7760 recommendation (no
       unjustified brute-force deletion)
 - [ ] Full `npx playwright test` run completes somewhere in the 5-20 minute range
-      ← **NOT VERIFIED IN-CONTAINER** — no backend/dev servers/live account; wall-clock is a
-      supervisor/host follow-up. Only `npx playwright test --list` (static parse) was run here.
+      ← **STILL NOT VERIFIED.** A supervisor host run got to test 74+ (well past the 3 pre-
+      existing failures investigated and confirmed unrelated to this task — see Related Tasks)
+      before the container it ran in was torn down mid-run during post-merge cleanup, killing
+      it before completion (exit 137). Merged without this number in hand, on the strength of
+      static verification + the Reviewer pass + zero application-source-file changes. Re-run
+      directly against master (no container needed now) whenever convenient to get the real
+      wall-clock.
 - [~] No loss of real coverage — every deletion traced to a survey strict-subset; merges kept
       the union of distinct assertions. Two small honest caveats flagged in the log (T5643
       tracking-off assertion; T6630 folded tests rewired to current UI mechanisms — Branch CI
