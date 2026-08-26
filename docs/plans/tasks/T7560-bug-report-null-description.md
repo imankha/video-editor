@@ -1,6 +1,6 @@
 # T7560: Bug reports accept NULL descriptions; a cry for help stored nothing
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P2
 **Impact:** 5
 **Complexity:** 2
