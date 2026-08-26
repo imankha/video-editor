@@ -90,10 +90,14 @@ test.describe('T5644 region levers — coarse (touch)', () => {
   test('a REAL touch drag moves the START boundary right (region shrinks from left)', async ({ page }) => {
     await page.goto(HARNESS);
     await waitForRegion(page);
+    // Evidence: begin/end levers present & draggable on a coarse (touch) device
+    // (folded in from the former standalone "evidence artifacts" test, T7770).
+    await saveEvidence(page, 'T5644-c1-levers-visible-coarse');
     const before = await readRegion(page);
 
     await touchDrag(page, page.locator(START_LEVER), 120, 0); // drag right
 
+    await saveEvidence(page, 'T5644-c1-after-touch-drag-start');
     const after = await readRegion(page);
     expect(after.start, 'touch drag moved the start boundary right').toBeGreaterThan(before.start + 0.5);
     expect(after.end, 'end boundary untouched').toBeCloseTo(before.end, 1);
@@ -106,6 +110,7 @@ test.describe('T5644 region levers — coarse (touch)', () => {
 
     await touchDrag(page, page.locator(END_LEVER), -120, 0); // drag left
 
+    await saveEvidence(page, 'T5644-c1-after-touch-drag-end');
     const after = await readRegion(page);
     expect(after.end, 'touch drag moved the end boundary left').toBeLessThan(before.end - 0.5);
     expect(after.start, 'start boundary untouched').toBeCloseTo(before.start, 1);
@@ -118,36 +123,6 @@ test.describe('T5644 region levers — coarse (touch)', () => {
     const end = await page.locator(END_LEVER).boundingBox();
     expect(start.width, 'start lever width').toBeGreaterThanOrEqual(44);
     expect(end.width, 'end lever width').toBeGreaterThanOrEqual(44);
-  });
-});
-
-test.describe('T5644 region levers — evidence artifacts (coarse mobile)', () => {
-  test.use({ hasTouch: true, isMobile: true, viewport: { width: 412, height: 915 } });
-
-  // /regiondiag.html is a Vite-dev-only harness page (see note above) — it does not exist
-  // in a production BUILD, so this group cannot run against a deployed target.
-  skipOnDeployedTarget(test, 'drives the dev-only /regiondiag.html harness page, which does not exist in a production BUILD');
-
-  test('capture before/after touch-drag screenshots for each acceptance criterion', async ({ page }) => {
-    await page.goto(HARNESS);
-    await waitForRegion(page);
-    // Criterion: begin/end levers present & draggable on a coarse (touch) device.
-    await saveEvidence(page, 'T5644-c1-levers-visible-coarse');
-
-    // START lever: drag right on a fresh [3,5] region.
-    const before = await readRegion(page);
-    await touchDrag(page, page.locator(START_LEVER), 120, 0);
-    await saveEvidence(page, 'T5644-c1-after-touch-drag-start');
-    expect((await readRegion(page)).start).toBeGreaterThan(before.start + 0.5);
-
-    // Reset to a fresh region so the END drag isn't limited by the min-duration
-    // clamp against the already-moved start.
-    await page.goto(HARNESS);
-    await waitForRegion(page);
-    const mid = await readRegion(page);
-    await touchDrag(page, page.locator(END_LEVER), -120, 0);
-    await saveEvidence(page, 'T5644-c1-after-touch-drag-end');
-    expect((await readRegion(page)).end).toBeLessThan(mid.end - 0.5);
   });
 });
 

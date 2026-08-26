@@ -2,9 +2,10 @@ import { test, expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { loginAsRealUser } from './helpers/realAuth.js';
 import { assertGameStorageActive } from './helpers/fixtureGuard.js';
-import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { gotoGame, openAddClipForm, saveClipForm, createClipViaUI, deleteClip } from './helpers/annotateClips.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // e2e -> frontend -> src -> repo root -> user_data
@@ -34,99 +35,26 @@ const apiBase = process.env.E2E_API_BASE || '/api';
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
-async function gotoGame(page) {
-  await openGameInAnnotate(page, GAME_ID);
-  await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
-}
+// Second-clip gap candidates: far enough from the first clip's gap (~10s) that
+// the two created markers are distinct, non-overlapping timeline positions.
+const SECOND_CLIP_GAPS = { candidates: [45, 90, 120, 60] };
 
 /**
- * Seek to `seekTime` (a spot far from any real clip's [100s, 5200s] range AND
- * from any clip this test itself just created) and make sure "Add Clip" is
- * actually showing — the app may land the resume position (or the playhead
- * leaving a just-created clip) inside a clip's range and auto-select it
- * instead, which hides "Add Clip" behind "Edit Clip"/the details editor.
+ * T6400 (merged in T7770): flip the currently-selected clip's layer via its
+ * per-clip control. Idempotent — if it's already on `layerName` (the inherited
+ * default may already match) we do nothing rather than wait for a PUT that never
+ * fires. Used only by the inherit-from-previous tests below.
  */
-// T7730: resolve a clip-FREE seek time before opening the add-clip affordance.
-// The "Add clip" button is intentionally hidden while the playhead sits inside
-// an existing clip, so a hardcoded seekTime that happens to land on a clip (e.g.
-// a leaked/stray clip left by an earlier run) makes this helper hang on the full
-// actionability timeout. Query the game's REAL clip ranges and nudge past any
-// that cover the requested time, rather than trusting the fixed offset.
-async function resolveClipFreeSeekTime(page, desiredTime) {
-  let clips = [];
-  try {
-    const res = await page.request.get(`${apiBase}/clips/raw?game_id=${GAME_ID}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-    if (res.ok()) clips = await res.json();
-  } catch { /* query failed -- fall back to the requested time */ }
-  const ranges = clips
-    .filter((c) => c.start_time != null && c.end_time != null)
-    .map((c) => [Number(c.start_time), Number(c.end_time)])
-    .sort((a, b) => a[0] - b[0]);
-  const PAD = 1; // stay clear of clip edges so the playhead is unambiguously free
-  const covered = (t) => ranges.some(([s, e]) => t >= s - PAD && t <= e + PAD);
-  if (!covered(desiredTime)) return desiredTime;
-  for (let t = desiredTime; t < desiredTime + 120; t += 0.5) {
-    const r = Math.round(t * 10) / 10;
-    if (!covered(r)) return r;
-  }
-  return desiredTime; // give up gracefully; the Escape fallback below still applies
-}
-
-async function ensureAddClipVisible(page, seekTime) {
-  const freeTime = await resolveClipFreeSeekTime(page, seekTime);
-  await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; if (!v.paused) v.pause(); }, freeTime);
-  await page.waitForTimeout(500);
-  // Desktop renders a labeled "Add Clip" button (hidden sm:flex); below the
-  // `sm` breakpoint AnnotateControls swaps in an icon-only twin with the same
-  // title (flex sm:hidden) — match on title + :visible so either width works.
-  const addBtn = page.locator('button[title="Add clip ending at current time (A)"]:visible').first();
-  if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) return addBtn;
-  await page.keyboard.press('Escape').catch(() => {});
-  await page.waitForTimeout(500);
-  await expect(addBtn).toBeVisible({ timeout: 10000 });
-  return addBtn;
-}
-
-/**
- * Click Add Clip, optionally set the clip's layer in the add-clip form, Save.
- * Returns the created raw_clip_id.
- *
- * T6400: the "New clips go to" mode toggle is gone — a clip's layer is chosen on
- * the clip itself. Pass `layerName` ('My Athlete layer' | 'Team layer') to set
- * it in the add-clip form's Layer control before saving (idempotent: skip the
- * click if the inherited default already matches). Omit it to accept whatever
- * the game seeded / the previous clip set.
- */
-async function createClipViaUI(page, seekTime, layerName) {
-  const addBtn = await ensureAddClipVisible(page, seekTime);
-  await addBtn.click();
-  // The desktop ClipsSidePanel stays mounted (`hidden sm:flex`) even on a
-  // mobile viewport, so its own inline add-clip form also renders — scope to
-  // the VISIBLE [data-add-clip-form] only (mobile's inline form, or desktop's).
-  const form = page.locator('[data-add-clip-form]:visible');
-  await expect(form).toBeVisible({ timeout: 5000 });
-
-  if (layerName) {
-    const radio = form.getByRole('radio', { name: layerName });
-    if ((await radio.getAttribute('aria-checked')) !== 'true') await radio.click();
-    await expect(radio).toHaveAttribute('aria-checked', 'true');
-  }
-
-  const [saveResp] = await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/api/clips/raw/save') && res.request().method() === 'POST'),
-    form.locator('button.bg-green-600:has-text("Save")').click(),
+async function setSelectedClipLayer(page, layerName) {
+  const editor = page.locator('[data-clip-details]:visible');
+  await expect(editor).toBeVisible({ timeout: 5000 });
+  const radio = editor.getByRole('radio', { name: layerName });
+  if ((await radio.getAttribute('aria-checked')) === 'true') return;
+  await Promise.all([
+    page.waitForRequest((req) => /\/api\/clips\/raw\/\d+/.test(req.url()) && req.method() === 'PUT'),
+    radio.click(),
   ]);
-  const body = await saveResp.json();
-  return body.raw_clip_id;
-}
-
-/** Uses context.request — the SAME cookie jar as loginAsRealUser — never the bare `request` fixture. */
-async function deleteClip(context, rawClipId) {
-  if (!rawClipId) return;
-  const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-  if (!res.ok()) {
-    throw new Error(`[T5700 cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
-  }
+  await expect(radio).toHaveAttribute('aria-checked', 'true');
 }
 
 // T6760: fail fast + loud if game GAME_ID's source storage has drifted/expired,
@@ -151,7 +79,7 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
 
   test('Team layer chosen -> new clip gets my_athlete=false, TEAM chip, amber marker foot', async ({ page }) => {
     // T6400: layer is set in the add-clip form's own Layer control (no sidebar toggle).
-    const id = await createClipViaUI(page, 1, 'Team layer');
+    const id = await createClipViaUI(page, 'Team layer');
     createdIds.push(id);
 
     await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').first()).toBeVisible({ timeout: 5000 });
@@ -161,7 +89,7 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
   test('My Athlete layer chosen -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
     const teamMarkersBefore = await page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count();
 
-    const id = await createClipViaUI(page, 1, 'My Athlete layer');
+    const id = await createClipViaUI(page, 'My Athlete layer');
     createdIds.push(id);
 
     // Only Team rows are marked now, so the layer is proven via the per-clip
@@ -172,6 +100,46 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
     ).toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
     expect(await page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count()).toBe(teamMarkersBefore);
     await saveEvidence(page, 'criterion-new-clip-my-athlete-layer');
+  });
+
+  // T6400 (merged in T7770): the inherit-from-previous behaviour — a NEW clip's
+  // add-clip form defaults to the LAST layer the user assigned. The two tests
+  // above cover the explicit-set path (choose the layer in the form); these two
+  // cover the inherit path. Both are the SAME add-clip-form Layer control +
+  // landing-lane assertion, differing only in how the layer is decided.
+  test('assign a clip to Team, then a NEW clip inherits Team (inherit-from-previous)', async ({ page }) => {
+    // Clip A — save with whatever the game seeds; then assign it to Team.
+    const formA = await openAddClipForm(page);
+    createdIds.push(await saveClipForm(page, formA));
+    await setSelectedClipLayer(page, 'Team layer');
+
+    // Clip B — the add-clip form must already show Team as the inherited default.
+    const formB = await openAddClipForm(page, SECOND_CLIP_GAPS);
+    await expect(formB.getByRole('radio', { name: 'Team layer' })).toHaveAttribute('aria-checked', 'true');
+    createdIds.push(await saveClipForm(page, formB));
+
+    // And B actually lands on Team: its per-clip editor + an amber Team marker.
+    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'Team layer' }))
+      .toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
+    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').first()).toBeVisible({ timeout: 5000 });
+    await saveEvidence(page, 'criterion-inherit-team');
+  });
+
+  test('assign a clip to My Athlete, then a NEW clip inherits My Athlete (inherit-from-previous)', async ({ page }) => {
+    const formA = await openAddClipForm(page);
+    createdIds.push(await saveClipForm(page, formA));
+    // Prove inheritance both ways: first push it to Team, then to My Athlete, so
+    // the final default is unambiguously the LAST assignment, not a stale seed.
+    await setSelectedClipLayer(page, 'Team layer');
+    await setSelectedClipLayer(page, 'My Athlete layer');
+
+    const formB = await openAddClipForm(page, SECOND_CLIP_GAPS);
+    await expect(formB.getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+    createdIds.push(await saveClipForm(page, formB));
+
+    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'My Athlete layer' }))
+      .toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
+    await saveEvidence(page, 'criterion-inherit-my-athlete');
   });
 });
 
@@ -216,7 +184,7 @@ test.describe('T5700 — per-clip switch: gesture-based surgical save + survives
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page, 1); // defaults to My Athlete (toggle default on fresh game open)
+    clipId = await createClipViaUI(page); // defaults to My Athlete (toggle default on fresh game open)
   });
 
   test.afterEach(async ({ context }) => {
@@ -249,8 +217,8 @@ test.describe('T5700 — filter pills', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    mineId = await createClipViaUI(page, 1, 'My Athlete layer');
-    teamId = await createClipViaUI(page, 60, 'Team layer'); // spaced 60s apart so it lands outside the first clip's [~-9,+3]s span
+    mineId = await createClipViaUI(page, 'My Athlete layer');
+    teamId = await createClipViaUI(page, 'Team layer', SECOND_CLIP_GAPS); // distinct gap so it lands outside the first clip's span
   });
 
   test.afterEach(async ({ context }) => {
@@ -298,7 +266,7 @@ test.describe('T5700 — imported clip: layer control locked, no request sent', 
     const loginData = await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     userId = loginData.user_id;
     await gotoGame(page);
-    clipId = await createClipViaUI(page, 1);
+    clipId = await createClipViaUI(page);
 
     // No live UI path exists yet to create a genuinely materialized imported
     // clip — `shared_by` is written exclusively by materialization.py's claim
@@ -368,7 +336,7 @@ test.describe('T5700 — mobile (390px): create on both layers', () => {
     // T6400: no sidebar mode toggle. On mobile the add-clip form (the fullscreen
     // overlay) carries its own Layer control, so the layer is chosen right there —
     // createClipViaUI sets it in the visible [data-add-clip-form] before saving.
-    const id = await createClipViaUI(page, 1, 'Team layer');
+    const id = await createClipViaUI(page, 'Team layer');
     createdIds.push(id);
 
     // The clip-list chip lives in the mobile sidebar drawer, which is closed
@@ -407,7 +375,7 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
     const loginData = await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     userId = loginData.user_id;
     await gotoGame(page);
-    clipId = await createClipViaUI(page, 1);
+    clipId = await createClipViaUI(page);
 
     const dbPath = path.join(USER_DATA_BASE, userId, 'profiles', PROFILE_ID, 'profile.sqlite');
     execFileSync('python3', ['-c', SEED_LONG_NAME_SHARED_SCRIPT, dbPath, String(clipId), LONG_CLIP_NAME, 'Dana Smith']);
@@ -465,13 +433,6 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
   });
 });
 
-test.describe('T5700 — responsive sweep', () => {
-  test.beforeEach(async ({ context }) => {
-    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
-  });
-
-  test('Annotate screen: no horizontal overflow at 375px or desktop', async ({ page }) => {
-    await gotoGame(page);
-    await responsiveSweep(page);
-  });
-});
+// T7770: the plain responsive-sweep test that lived here was deleted — it was a
+// strict subset of T5700-two-lanes' responsive-sweep (which runs the same sweep
+// PLUS the two-lane / single-track lane assertions at each breakpoint).

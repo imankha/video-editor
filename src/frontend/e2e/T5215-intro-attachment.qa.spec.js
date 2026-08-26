@@ -12,8 +12,8 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  * (src/backend/tests/test_t5215_intro_attachment.py) — NOT re-derived here.
  *
  *   a. Reel kebab -> "Intro" opens the carousel: cards as real visuals,
- *      newest-first, "No intro" tile, default marked "Your default".
- *   b. Selecting a card persists -> reload shows the resolved name.
+ *      newest-first, "No intro" tile. (The default/inherit feature and its
+ *      "Your default" badge were removed by T6680; see T6680-criterion-3.)
  *   c. Selecting "No intro" persists as no intro.
  *   d. Without consent: amber notice + "Go to consent settings" link shown;
  *      "No intro" still clickable.
@@ -119,7 +119,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     await saveEvidence(page, 'T5215-setup-consent-and-card-created');
   });
 
-  test('a: reel kebab -> Intro opens carousel (visual cards, newest-first, No intro, Your default)', async ({ page }) => {
+  test('a: reel kebab -> Intro opens carousel (visual cards, newest-first, No intro)', async ({ page }) => {
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
     test.skip(!hasReels, 'no published reels on this account/profile (drawer empty)');
@@ -157,79 +157,24 @@ test.describe('T5215 intro attachment (real account)', () => {
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .map((c) => c.name);
       const domNames = await cardOptions.evaluateAll((els) =>
-        els.map((el) => el.getAttribute('aria-label').replace(' (your default)', '')));
+        els.map((el) => el.getAttribute('aria-label')));
       expect(domNames).toEqual(expectedOrder);
-
-      // Default marker, if a default is set.
-      const defaultCard = cards.find((c) => c.is_default);
-      if (defaultCard) {
-        await expect(listbox.getByRole('option', { name: `${defaultCard.name} (your default)` }))
-          .toBeVisible();
-      }
+      // The default/inherit feature (and its "(your default)" badge) was removed
+      // by T6680; the picker now shows only [cards | "No intro"]. The stale
+      // default-badge assertion block was removed here to match current UI --
+      // T6680-criterion-3 pins that "your default" never appears (T7770 reconcile).
     }
 
     await saveEvidence(page, 'T5215-AC-a-carousel-visual-newest-first');
   });
 
-  test('b: selecting a card persists across reload (resolved name)', async ({ page }) => {
-    await openDrawer(page);
-    const hasReels = await expandFirstGroup(page);
-    test.skip(!hasReels, 'no published reels on this account/profile');
-
-    const cardsResp = await page.request.get('/api/intro-cards');
-    const { cards } = await cardsResp.json();
-    test.skip(cards.length === 0, 'no intro cards exist (setup test did not run / was skipped)');
-    const targetCard = cards[0];
-
-    const tile = page.getByTestId('reel-card').first();
-    await tile.hover();
-    await tile.getByRole('button', { name: /More actions/i }).click();
-    const introItem = page.getByRole('button', { name: 'Intro' });
-    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
-    await introItem.click();
-
-    const listbox = page.getByRole('listbox', { name: 'Intro card' });
-    await expect(listbox).toBeVisible({ timeout: 10000 });
-
-    const optionLocator = listbox.getByRole('option', {
-      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
-    });
-    await optionLocator.click();
-    // ROUND 3: SELECT -> PREVIEW -> CONFIRM. A card click only selects (and
-    // plays the motion preview) -- it must NOT commit or close the popup.
-    await expect(listbox, 'a card click must not close the popup (no commit-on-click)').toBeVisible();
-
-    const patchResp = page.waitForResponse(
-      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
-      { timeout: 10000 },
-    );
-    await page.getByRole('button', { name: 'OK' }).click();
-    const resp = await patchResp;
-    expect(resp.status(), 'the intro PATCH must succeed').toBeLessThan(300);
-    const body = await resp.json().catch(() => null);
-    if (body) expect(body.intro_card_id).toBe(targetCard.id);
-
-    // Picker closes on OK.
-    await expect(listbox).toHaveCount(0);
-
-    // Reload the page (fresh app boot, same authenticated session cookie) then
-    // hit GET /api/downloads directly -- the same endpoint the gallery reads --
-    // to confirm the write is a REAL round-trip through the backend, not a
-    // client-only echo. (The unscoped list fetch is only triggered by certain
-    // smart-collection card expansions in this UI, so sniffing the frontend's
-    // own incidental network call would be a flaky proxy for the same fact.)
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
-    const dl = await page.request.get('/api/downloads');
-    expect(dl.ok(), 'GET /api/downloads must succeed after reload').toBe(true);
-    const dlBody = await dl.json();
-    const reel = dlBody.downloads.find((d) => d.intro_card_id === targetCard.id);
-    expect(reel, 'a reel now carries the attached card id after reload').toBeTruthy();
-    expect(reel.intro_card_name).toBe(targetCard.name);
-
-    await saveEvidence(page, 'T5215-AC-b-selection-persists-after-reload');
-  });
+  // Removed test 'b' (selecting a card persists across reload): folded into
+  // ROUND3-ok (proves select->no-write, OK->exactly-one-write, immediate badge --
+  // strictly stronger than b's no-close + OK-PATCH-succeeds). The distinct
+  // reload round-trip fact b added (a card attachment survives a fresh page boot
+  // via GET /api/downloads) is retained by the BUG-REPRO (round 2) test below,
+  // which reloads, re-fetches GET /api/downloads for the card, and reopens the
+  // picker (T7770, survey item 12).
 
   test('BUG REPRO (round 2): reopening the picker after RELOAD must visibly mark the stored selection', async ({ page }) => {
     // User report, verbatim: "i selected an intro card for a reel, left, and
@@ -397,36 +342,10 @@ test.describe('T5215 intro attachment (real account)', () => {
     await page.evaluate(() => {}); // no-op settle
   });
 
-  test('e: collection share dialog embeds the same carousel + frozen-at-share note', async ({ page }) => {
-    // Re-grant consent (test d revoked it) so the carousel is interactive here too.
-    await page.goto('/');
-    await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
-    await page.goto('/');
-    await openManageProfileEdit(page);
-    await ensureConsent(page);
-    await page.keyboard.press('Escape');
-
-    await openDrawer(page);
-    const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
-    await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-    const n = await headers.count();
-    test.skip(n === 0, 'no game/mix collection groups available to share');
-    await headers.first().click();
-
-    const shareKebab = page.locator('.animate-slide-in-right').getByRole('button', { name: /More actions/i }).first();
-    await expect(shareKebab).toBeVisible({ timeout: 10000 });
-    await shareKebab.click();
-    const shareItem = page.getByRole('button', { name: '^Share$' }).or(page.getByRole('button', { name: 'Share' }));
-    await shareItem.first().click();
-
-    await expect(page.getByText(/^Share "/).or(page.getByText('Share highlights'))).toBeVisible({ timeout: 10000 });
-    const listbox = page.getByRole('listbox', { name: 'Intro card' });
-    await expect(listbox, 'the SAME carousel control renders inside the share dialog').toBeVisible({ timeout: 10000 });
-    await expect(listbox.getByRole('option', { name: 'No intro' })).toBeVisible();
-    await expect(page.getByText(/Frozen when you share/i)).toBeVisible();
-
-    await saveEvidence(page, 'T5215-AC-e-collection-share-carousel-frozen-note');
-  });
+  // Removed test 'e' (collection share dialog embeds the same carousel + frozen
+  // note): strict subset of T7150-collection-share-intro-sequencing's first two
+  // tests, which assert the same share modal + embedded intro carousel + "No
+  // intro" option AND the freeze semantics + far more (T7770, survey item 11).
 
   test('responsive sweep: My Reels carousel view + collection share dialog', async ({ page }) => {
     await openDrawer(page);
@@ -481,57 +400,11 @@ test.describe('T5215 intro attachment (real account)', () => {
     await locator.click();
   }
 
-  test('ROUND 2: thumbnail shows the shared intro badge when an intro is attached (after reload)', async ({ page }) => {
-    await openDrawer(page);
-    const hasReels = await expandFirstGroup(page);
-    test.skip(!hasReels, 'no published reels on this account/profile');
-
-    const cardsResp = await page.request.get('/api/intro-cards');
-    const { cards } = await cardsResp.json();
-    test.skip(cards.length === 0, 'no intro cards exist');
-    const targetCard = cards[0];
-
-    const tile = page.getByTestId('reel-card').first();
-    await clickChecked(page, tile.getByRole('button', { name: /More actions/i }), 'reel kebab');
-    const introItem = page.getByRole('button', { name: 'Intro' });
-    test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
-    await clickChecked(page, introItem, '"Intro" menu item');
-
-    const listbox = page.getByRole('listbox', { name: 'Intro card' });
-    await expect(listbox).toBeVisible({ timeout: 10000 });
-    const optionLocator = listbox.getByRole('option', {
-      name: targetCard.is_default ? `${targetCard.name} (your default)` : targetCard.name,
-    });
-    await clickChecked(page, optionLocator, 'card option in picker');
-    await expect(listbox, 'card click must not close the popup (no commit-on-click)').toBeVisible();
-    const patchResp = page.waitForResponse(
-      (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
-      { timeout: 10000 },
-    );
-    await clickChecked(page, page.getByRole('button', { name: 'OK' }), 'picker OK button');
-    await patchResp;
-    await expect(listbox).toHaveCount(0);
-
-    // RELOAD -- the badge must be visible on a FRESH render of the tile, not
-    // an optimistic client-only echo of the gesture that just fired.
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
-    await page.getByRole('button', { name: /My Reels/i }).first().click();
-    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
-      .toBeVisible({ timeout: 15000 });
-    await expandFirstGroup(page);
-
-    const tileAfterReload = page.getByTestId('reel-card').first();
-    await tileAfterReload.scrollIntoViewIfNeeded();
-    // The badge (round 5: moved to the top-left corner, next to rank when
-    // present) carries a stable testid so this assertion survives future
-    // repositioning -- assert on presence, not DOM location.
-    const badge = tileAfterReload.getByTestId('intro-badge');
-    await expect(badge, 'the reel tile must show the intro badge after reload').toBeVisible({ timeout: 10000 });
-
-    await saveEvidence(page, 'T5215-round2-thumbnail-badge');
-  });
+  // Removed test 'ROUND 2: thumbnail shows the shared intro badge after reload':
+  // folded into ROUND3-ok, which proves the badge appears IMMEDIATELY after OK
+  // with no reload (strictly stronger than this after-reload badge check). The
+  // reload-persistence fact is independently covered by the kept BUG-REPRO
+  // (round 2) test's GET /api/downloads round-trip (T7770, survey item 12).
 
   test('ROUND 2: collection intro attaches via the SAME carousel and persists across reload', async ({ page }) => {
     await page.goto('/');

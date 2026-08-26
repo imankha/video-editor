@@ -1,11 +1,8 @@
 import { test, expect } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { loginAsRealUser } from './helpers/realAuth.js';
 import { assertGameStorageActive } from './helpers/fixtureGuard.js';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { gotoGame, createClipViaUI, deleteClip } from './helpers/annotateClips.js';
 
 /**
  * T5725 — Teammate tagging is Team-layer only: interactive REAL-BROWSER QA.
@@ -33,70 +30,6 @@ const apiBase = process.env.E2E_API_BASE || '/api';
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
-async function gotoGame(page) {
-  await openGameInAnnotate(page, GAME_ID);
-  await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
-}
-
-// T7730: resolve a clip-FREE seek time before opening the add-clip affordance.
-// The "Add clip" button is intentionally hidden while the playhead sits inside
-// an existing clip, so a hardcoded seekTime that happens to land on a clip (e.g.
-// a leaked/stray clip left by an earlier run) makes this helper hang on the full
-// actionability timeout. Query the game's REAL clip ranges and nudge past any
-// that cover the requested time, rather than trusting the fixed offset.
-async function resolveClipFreeSeekTime(page, desiredTime) {
-  let clips = [];
-  try {
-    const res = await page.request.get(`${apiBase}/clips/raw?game_id=${GAME_ID}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-    if (res.ok()) clips = await res.json();
-  } catch { /* query failed -- fall back to the requested time */ }
-  const ranges = clips
-    .filter((c) => c.start_time != null && c.end_time != null)
-    .map((c) => [Number(c.start_time), Number(c.end_time)])
-    .sort((a, b) => a[0] - b[0]);
-  const PAD = 1; // stay clear of clip edges so the playhead is unambiguously free
-  const covered = (t) => ranges.some(([s, e]) => t >= s - PAD && t <= e + PAD);
-  if (!covered(desiredTime)) return desiredTime;
-  for (let t = desiredTime; t < desiredTime + 120; t += 0.5) {
-    const r = Math.round(t * 10) / 10;
-    if (!covered(r)) return r;
-  }
-  return desiredTime; // give up gracefully; the Escape fallback below still applies
-}
-
-async function ensureAddClipVisible(page, seekTime) {
-  const freeTime = await resolveClipFreeSeekTime(page, seekTime);
-  await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; if (!v.paused) v.pause(); }, freeTime);
-  await page.waitForTimeout(500);
-  const addBtn = page.locator('button[title="Add clip ending at current time (A)"]:visible').first();
-  if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) return addBtn;
-  await page.keyboard.press('Escape').catch(() => {});
-  await page.waitForTimeout(500);
-  await expect(addBtn).toBeVisible({ timeout: 10000 });
-  return addBtn;
-}
-
-/** Click Add Clip, Save immediately (My Athlete default on fresh open). Returns raw_clip_id. */
-async function createClipViaUI(page, seekTime) {
-  const addBtn = await ensureAddClipVisible(page, seekTime);
-  await addBtn.click();
-  const form = page.locator('[data-add-clip-form]:visible');
-  await expect(form).toBeVisible({ timeout: 5000 });
-  const [saveResp] = await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/api/clips/raw/save') && res.request().method() === 'POST'),
-    form.locator('button.bg-green-600:has-text("Save")').click(),
-  ]);
-  return (await saveResp.json()).raw_clip_id;
-}
-
-async function deleteClip(context, rawClipId) {
-  if (!rawClipId) return;
-  const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-  if (!res.ok()) {
-    throw new Error(`[T5725 cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — delete it manually: DELETE /api/clips/raw/${rawClipId}`);
-  }
-}
-
 const teammatesLabel = (scope) => scope.getByText('Teammates', { exact: true });
 
 // T6760: fail fast + loud if game GAME_ID's source storage has drifted/expired,
@@ -112,7 +45,7 @@ test.describe('T5725 — desktop: Teammates control gating + clear-on-switch', (
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page, 1); // My Athlete default
+    clipId = await createClipViaUI(page); // My Athlete default
   });
 
   test.afterEach(async ({ context }) => {
@@ -166,7 +99,7 @@ test.describe('T5725 — mobile (390px): Teammates control gating', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page, 1); // My Athlete default
+    clipId = await createClipViaUI(page); // My Athlete default
   });
 
   test.afterEach(async ({ context }) => {

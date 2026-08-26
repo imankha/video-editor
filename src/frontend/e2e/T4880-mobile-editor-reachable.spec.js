@@ -20,22 +20,11 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { openFramingDraft } from './helpers/framingDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PORTRAIT = { width: 390, height: 844 };   // iPhone 14 portrait
 const LANDSCAPE = { width: 844, height: 390 };   // iPhone 14 landscape
-
-/** Open the first Framing-ready reel draft; returns once the crop editor loaded. */
-async function openFramingDraft(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
-  const framingChip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
-  await framingChip.waitFor({ timeout: 30000 });
-  await framingChip.click();
-  // Framing editor is loaded when the crop handle appears.
-  await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
-}
 
 /** Assert a control can be scrolled into view AND is clickable (enabled + hit-able). */
 async function assertReachableAndClickable(page, locator, label) {

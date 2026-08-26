@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { loginAsRealUser } from './helpers/realAuth.js';
 import { assertGameStorageActive } from './helpers/fixtureGuard.js';
 import { saveEvidence } from './helpers/qa.js';
+import { gotoGame, openAddClipForm, deleteClip } from './helpers/annotateClips.js';
 
 /**
  * T7540 — Add Clip Save no longer dead-ends on an uncommitted teammate tag:
@@ -33,58 +34,6 @@ const PENDING_TAG = 'QA T7540 NoEnter';
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
-async function gotoGame(page) {
-  await openGameInAnnotate(page, GAME_ID);
-  await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
-}
-
-// Game 6's source is a 2.8 GB / ~90 min MP4 that buffers slowly in-container;
-// video.currentTime assignments are ignored until the element is seekable, which
-// leaves the playhead pinned at 0 (inside Clip 1) so the Add button never shows.
-// Wait until the <video> can actually seek before driving it.
-async function waitForVideoSeekable(page) {
-  await page.waitForFunction(() => {
-    const v = document.querySelector('video');
-    return !!v && v.readyState >= 2 && v.seekable.length > 0 && v.duration > 0;
-  }, undefined, { timeout: 120000 });
-}
-
-// The non-fullscreen "Add Clip" control renders ONLY when no clip is selected
-// (NONE state); when the playhead sits inside a clip the sidebar edits it and the
-// Add button is hidden (AnnotateControls.jsx). Game 6 is densely clipped, so scan
-// candidate seek times until the playhead lands in a gap and the Add button shows.
-async function openAddClipForm(page) {
-  await waitForVideoSeekable(page);
-  const addBtn = page.locator('button[title="Add clip ending at current time (A)"]:visible').first();
-  // Prefer early gap times (already buffered near the start); Clip 1 is 0:00-0:03.
-  const candidates = [10, 15, 8, 12, 20, 25, 45, 90];
-  for (const t of candidates) {
-    const landed = await page.locator('video').first().evaluate((v, tt) => {
-      v.currentTime = tt;
-      if (!v.paused) v.pause();
-      return v.currentTime;
-    }, t);
-    // If the seek was clamped back to ~0 (range not buffered yet), skip this time.
-    if (Math.abs(landed - t) > 2) { await page.waitForTimeout(400); continue; }
-    await page.waitForTimeout(700); // let auto-select re-evaluate (deselects in a gap)
-    if (await addBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-      await addBtn.click();
-      const form = page.locator('[data-add-clip-form]:visible');
-      await expect(form).toBeVisible({ timeout: 5000 });
-      return form;
-    }
-  }
-  throw new Error('[T7540] could not find a clip-free gap to open the Add Clip form');
-}
-
-async function deleteClip(context, rawClipId) {
-  if (!rawClipId) return;
-  const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-  if (!res.ok()) {
-    throw new Error(`[T7540 cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — delete it manually: DELETE /api/clips/raw/${rawClipId}`);
-  }
-}
-
 // Fail fast + loud if game GAME_ID's source storage has drifted/expired, instead
 // of hanging the full per-test timeout on an Annotate screen that never mounts a
 // <video>. Same guard the T5725 spec uses.
@@ -98,7 +47,7 @@ test.describe('T7540 — Save auto-commits an uncommitted teammate tag (no dead-
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    await waitForVideoSeekable(page);
+    // openAddClipForm (shared helper) waits for the <video> to be seekable itself.
   });
 
   test.afterEach(async ({ context }) => {

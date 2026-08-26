@@ -18,10 +18,12 @@
  * Verified independently by the Opus expert agent (no snap-back, no stale-rAF
  * advance, no dedup drop, endedFiredRef correctly re-armed on seekIntro(<dur)).
  *
- * These three tests are the live regression guard for the auto-continue ->
+ * These two tests are the live regression guard for the auto-continue ->
  * backward-seek path (the live coverage gap T6710's QA left; T6710 only drove
  * the backward seek after a MANUAL reel-segment click). They also DOCUMENT the
  * artifact so a future reader understands why the report looked like a bug.
+ * (A third "synthetic .click() probe" test was removed by T7770 -- it was
+ * investigation scaffolding, not a regression guard.)
  *
  * Setup/attach: card is attached to every reel via the supported PATCH
  * /api/downloads/{id}/intro (dodges the flaky kebab UI); player video is scoped
@@ -162,69 +164,14 @@ test.describe('T6730 seek back into intro after forward auto-continue (real acco
     await page.keyboard.press('Escape').catch(() => {});
   });
 
-  test('EXACT kickoff repro: synthetic .click() immediately after auto-continue, synchronous + multi-frame state', async ({ page }) => {
-    await openDrawer(page);
-    const hasReels = await expandFirstGroup(page);
-    test.skip(!hasReels, 'no published reels');
-
-    const cardsResp = await page.request.get('/api/intro-cards');
-    const cards = (await cardsResp.json()).cards || [];
-    test.skip(cards.length === 0, 'no intro cards');
-    const attachedCount = await attachCardToAllReels(page, cards[0].id);
-    test.skip(attachedCount === 0, 'no downloads to attach to');
-
-    const playerVideo = page.getByRole('dialog').locator('video');
-    const introPlaybackResp = page.waitForResponse(
-      (r) => /\/api\/downloads\/\d+\/intro-playback$/.test(r.url()), { timeout: 10000 },
-    );
-    await page.getByTestId('reel-card').first().click();
-    const payload = await (await introPlaybackResp).json();
-    test.skip(!payload.intro, 'null intro');
-    const introDurSec = payload.intro.card?.duration || 4.0;
-
-    // Forward auto-continue (no click).
-    await expect(playerVideo).toHaveCount(1, { timeout: (introDurSec * 1000) + 15000 });
-    console.log('[T6730-exact] auto-continue landed in reels');
-
-    // IMMEDIATELY (no settle): fire the EXACT synthetic click the kickoff uses,
-    // then read state SYNCHRONOUSLY in the same tick, and again after 1 and 5
-    // rAF frames to detect a region snap-back (intro -> reels within a frame).
-    const probe = await page.evaluate(async () => {
-      const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
-      const snap = (tag) => ({
-        tag,
-        dialogVideo: document.querySelectorAll('[role="dialog"] video').length,
-        anyVideo: document.querySelectorAll('video').length,
-        motionPreview: document.querySelectorAll('[data-testid="motion-preview"]').length,
-        introFill: (() => {
-          const b = document.querySelector('button[aria-label="Intro"]');
-          const fill = b?.querySelector('[style*="width"]');
-          return fill?.style?.width || null;
-        })(),
-        bodyHasName: /Mehdi|Khabazian/.test(document.body.textContent || ''),
-      });
-      const btn = document.querySelector('button[aria-label="Intro"]');
-      if (!btn) return { error: 'no intro button' };
-      const before = snap('before-click');
-      btn.click();
-      const sync = snap('sync-same-tick');
-      await nextFrame();
-      const f1 = snap('after-1-frame');
-      await nextFrame(); await nextFrame(); await nextFrame(); await nextFrame();
-      const f5 = snap('after-5-frames');
-      return { before, sync, f1, f5 };
-    });
-    console.log('[T6730-exact] probe: ' + JSON.stringify(probe, null, 2));
-    await saveEvidence(page, 'T6730-exact-after-synthetic-click');
-
-    // The bug (per kickoff): after the synthetic click the player video stays
-    // and the intro never re-appears. If this reproduces, dialogVideo stays >0
-    // and motionPreview stays 0 across frames.
-    expect(probe.f5, 'must have captured a 5-frame snapshot').toBeTruthy();
-    console.log(`[T6730-exact] VERDICT dialogVideo(before/sync/f1/f5)=${probe.before.dialogVideo}/${probe.sync.dialogVideo}/${probe.f1.dialogVideo}/${probe.f5.dialogVideo} motionPreview=${probe.before.motionPreview}/${probe.sync.motionPreview}/${probe.f1.motionPreview}/${probe.f5.motionPreview}`);
-
-    await page.keyboard.press('Escape').catch(() => {});
-  });
+  // Removed the "EXACT kickoff repro: synthetic .click()" test: it was
+  // investigation scaffolding whose only assertion was `probe.f5 toBeTruthy`
+  // (i.e. a snapshot was captured), documenting the resolved measurement
+  // artifact (a synthetic element.click() reports clientX=0, so the scrubber
+  // clamps to fraction 0) via console.log. The real regression guards -- the
+  // real-positional-click seek (test above) and the real-mouse repeated seek
+  // (test below) -- fully cover the auto-continue -> backward-seek path with
+  // genuine positional assertions (T7770, survey item 16).
 
   test('REAL mouse gesture, no settle, repeated: region switches reliably AND intro name becomes visible', async ({ page }) => {
     await openDrawer(page);

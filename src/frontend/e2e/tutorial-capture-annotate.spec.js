@@ -45,7 +45,7 @@ const SPORTS = [
   { id: 'baseball', name: 'Baseball', emoji: '⚾' },
 ];
 
-test('capture annotate tutorial footage', async ({ browser }) => {
+test('capture annotate tutorial footage @tutorial-capture', async ({ browser }) => {
   // T5420: developer screen-RECORDING script (records to a host-local Windows QUEST_DIR
   // and reads host fixtures) for producing tutorial footage — not a functional test.
   // It cannot run on a deployed target (or any machine without the capture assets).

@@ -42,6 +42,30 @@
 //   here (this test draft's exact slowmo/window parameters aren't known
 //   ahead of time, so a live pixel-exact time assertion would be fragile;
 //   the algorithm itself is the unit tests' job).
+//
+// T7770 consolidation: this spec is the surviving base for the T6630 text
+// family. Folded in from the retired T6630-text-add-remove-drag spec (whose
+// C1/C3/beforeAll waited on the REMOVED global "Add Text" button and the
+// REMOVED "Edit Text" rail — round 6 moved add/remove onto the timeline and
+// collapsed the rail into the persistent settings tabs, so those tests could
+// no longer run) are the two still-valid, current-model REAL-screen facts that
+// this round-7 base did not already cover:
+//   - R7-7: clicking LOW in the text lane (below the h-10 track strip, the
+//     ~72px band that was inert before T6630) adds a region — the dead-zone
+//     fix — at default zoom AND at 500% zoom (where the lane is ~5x wider than
+//     the viewport, so the click x is clamped into the visible range).
+//   - R7-8: dragging a region BODY moves it, preserves its duration, and fires
+//     EXACTLY ONE move_text_edge persist per completed drag — default AND 500%
+//     zoom.
+//   - R7-9: keyboard Delete/Backspace on the focused region removes it (was C4c;
+//     no other spec covers keyboard region-delete).
+//   - R7-10: at 500% zoom the per-region delete control stays hit-testable (not
+//     occluded by the horizontal scrollbar) AND within the reserved lane height
+//     (was C7 — a live geometric invariant on a different axis than round4 G3b's
+//     OUTER vertical-scrollbar check).
+//   Region creation/cleanup for all of these go through the CURRENT timeline
+//   model (clickTextTrackAt + text-delete-region-*), never the dead Add-Text/rail
+//   path the old spec used.
 
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
@@ -49,6 +73,8 @@ import { probeOverlayDrafts } from './helpers/overlayDraft';
 import { saveEvidence } from './helpers/qa.js';
 
 test.describe.configure({ mode: 'serial' });
+
+const OVERLAY_ACTIONS_RE = /\/overlay\/actions$/;
 
 let page;
 let draftProjectId;
@@ -167,6 +193,174 @@ async function cleanupAllTimelineRegions() {
   const leftover = await page.locator('[data-testid^="text-block-body-"]').count();
   console.log('R7-EVIDENCE timeline regions after cleanup:', leftover);
   expect(leftover, 'cleanup left no leftover regions').toBe(0);
+}
+
+// ---- current-model region create/drag helpers (folded from the retired
+// ---- T6630-text-add-remove-drag spec; all on the REAL /overlay screen) -----
+
+// Create exactly one fresh region via a timeline click at `fraction` and return
+// its region index (from the new text-block-body-* testid). The CURRENT add
+// path -- the old spec's global "Add Text" button is gone.
+async function addRegionAt(fraction) {
+  const before = new Set(await page.locator('[data-testid^="text-block-body-"]').evaluateAll(
+    (els) => els.map((el) => el.getAttribute('data-testid'))
+  ));
+  await clickTextTrackAt(fraction);
+  await page.waitForTimeout(500);
+  const after = await page.locator('[data-testid^="text-block-body-"]').evaluateAll(
+    (els) => els.map((el) => el.getAttribute('data-testid'))
+  );
+  const created = after.filter((id) => !before.has(id));
+  expect(created, 'exactly one new region was created by this click').toHaveLength(1);
+  return created[0].replace('text-block-body-', '');
+}
+
+// Live viewport-space geometry of the text lane, its h-10 track strip, and the
+// timeline's horizontally-scrolling container -- in client coords so they line
+// up with document.elementFromPoint + page.mouse.
+async function laneMetrics() {
+  return page.evaluate(() => {
+    const track = document.querySelector('.text-track');
+    if (!track) return null;
+    const lane = track.parentElement;
+    const t = track.getBoundingClientRect();
+    const l = lane.getBoundingClientRect();
+    let sc = lane.parentElement;
+    while (sc && sc.scrollWidth <= sc.clientWidth) sc = sc.parentElement;
+    const s = sc ? sc.getBoundingClientRect() : { left: 0, right: window.innerWidth };
+    return {
+      track: { left: t.left, right: t.right, top: t.top, bottom: t.bottom, width: t.width },
+      lane: { left: l.left, right: l.right, top: l.top, bottom: l.bottom, width: l.width },
+      scroll: { left: s.left, right: s.right },
+      visLeft: Math.max(l.left, s.left, 0),
+      visRight: Math.min(l.right, s.right, window.innerWidth),
+    };
+  });
+}
+
+async function elementInfoAt(x, y) {
+  return page.evaluate(([px, py]) => {
+    const el = document.elementFromPoint(px, py);
+    if (!el) return null;
+    const body = el.closest('[data-testid^="text-block-body-"]');
+    const lever = el.closest('.lever-handle');
+    const button = el.closest('button');
+    return { inBlockBody: !!body, inLever: !!lever, inButton: !!button };
+  }, [x, y]);
+}
+
+// Find an x in the lane's VISIBLE lower band (below the h-10 track) where the
+// topmost element is the empty lane itself -- not a block, lever, or control.
+async function findEmptyLowerBandPoint() {
+  const m = await laneMetrics();
+  if (!m) return null;
+  const y = Math.round(m.track.bottom + (m.lane.bottom - m.track.bottom) * 0.4);
+  const from = Math.ceil(m.visLeft + 24);
+  const to = Math.floor(m.visRight - 24);
+  for (let x = from; x <= to; x += 12) {
+    const info = await elementInfoAt(x, y);
+    if (info && !info.inBlockBody && !info.inLever && !info.inButton) return { x, y, metrics: m };
+  }
+  return null;
+}
+
+// Timeline wheel-zoom only fires when the PLAYHEAD layer is selected. In the
+// current model that layer is selected by clicking the video-timeline ruler
+// (TimelineBase onLayerSelect('playhead')), NOT by a layer icon -- so reuse
+// this suite's own clickVideoTrackAt, which lands on that ruler.
+async function selectPlayheadLayer() {
+  await clickVideoTrackAt(0.05);
+}
+
+async function currentZoomPercent() {
+  const el = page.locator('.timeline-container span.text-blue-400').filter({ hasText: /Zoom:/ }).first();
+  if ((await el.count()) === 0) return 100;
+  const txt = await el.textContent();
+  const m = txt && txt.match(/(\d+)%/);
+  return m ? parseInt(m[1], 10) : 100;
+}
+
+// Timeline zoom is a non-passive wheel listener on the scroll container, only
+// active when the playhead layer is selected; dispatch a real WheelEvent on the
+// element (page.mouse.wheel doesn't reliably reach it).
+async function wheelZoomStep(deltaY) {
+  await page.evaluate((dy) => {
+    const sc = document.querySelector('.timeline-scroll-container');
+    if (sc) sc.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, bubbles: true, cancelable: true }));
+  }, deltaY);
+}
+
+async function zoomTo500() {
+  await selectPlayheadLayer();
+  for (let i = 0; i < 12 && (await currentZoomPercent()) < 500; i++) {
+    await wheelZoomStep(-1500);
+    await page.waitForTimeout(80);
+  }
+  expect(await currentZoomPercent(), 'timeline should reach 500% zoom').toBe(500);
+  await pauseVideo();
+}
+
+async function resetZoom() {
+  await selectPlayheadLayer();
+  for (let i = 0; i < 30 && (await currentZoomPercent()) > 100; i++) {
+    await wheelZoomStep(1500);
+    await page.waitForTimeout(50);
+  }
+  expect(await currentZoomPercent()).toBe(100);
+}
+
+// Drag a region body and return GROUND-TRUTH state, not pixel-x (a lie at 500%
+// zoom: a block wider than the viewport is clipped). The block body's
+// aria-valuenow IS its startTime, and its rendered width IS its duration at
+// fixed zoom -- both read straight from the model. Returns
+// { posts, startBefore, startAfter, widthBefore, widthAfter }.
+async function dragRegionBody(regionIndex, magnitude) {
+  const el = page.getByTestId(`text-block-body-${regionIndex}`);
+  await el.scrollIntoViewIfNeeded().catch(() => {});
+  const box = await el.boundingBox();
+  expect(box, `region ${regionIndex} must be visible to drag`).toBeTruthy();
+  const m = await laneMetrics();
+  const bx0 = Math.max(box.x, m.visLeft + 4);
+  const bx1 = Math.min(box.x + box.width, m.visRight - 4);
+  expect(bx1 - bx0, 'region must have a visible span to grab').toBeGreaterThan(8);
+  const gx = Math.round((bx0 + bx1) / 2);
+  const gy = Math.round(box.y + box.height / 2);
+
+  const at = await elementInfoAt(gx, gy);
+  expect(at?.inBlockBody, `grab point must be over the region body (got ${JSON.stringify(at)})`).toBe(true);
+
+  const roomRight = (m.visRight - 6) - gx;
+  const roomLeft = gx - (m.visLeft + 6);
+  const dx = roomRight >= magnitude ? magnitude : -Math.min(magnitude, roomLeft);
+  expect(Math.abs(dx), 'must have room to drag well past the 4px click threshold').toBeGreaterThan(20);
+
+  const startBefore = Number(await el.getAttribute('aria-valuenow'));
+  const widthBefore = await el.evaluate((n) => n.getBoundingClientRect().width);
+
+  let posts = 0;
+  const onReq = (req) => {
+    if (req.method() === 'POST' && OVERLAY_ACTIONS_RE.test(req.url())) {
+      try {
+        if (JSON.parse(req.postData() || '{}').action === 'move_text_edge') posts += 1;
+      } catch { /* ignore */ }
+    }
+  };
+  page.on('request', onReq);
+
+  await page.mouse.move(gx, gy);
+  await page.mouse.down();
+  const steps = 6;
+  for (let i = 1; i <= steps; i++) {
+    await page.mouse.move(gx + (dx * i) / steps, gy);
+    await page.waitForTimeout(20);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(400); // let the single commit POST settle
+  page.off('request', onReq);
+
+  const startAfter = Number(await el.getAttribute('aria-valuenow'));
+  const widthAfter = await el.evaluate((n) => n.getBoundingClientRect().width);
+  return { posts, startBefore, startAfter, widthBefore, widthAfter };
 }
 
 test.beforeAll(async ({ browser }) => {
@@ -358,6 +552,122 @@ test('R7-3/4: a freshly created region/element gets an individually-identifying 
   // Cleanup THIS test's own region.
   await page.getByTestId(`text-delete-region-${regionIndex}`).click();
   await page.waitForTimeout(300);
+});
+
+// -------------------------------------------- folded: dead-zone (was C2)
+test('R7-7 (default zoom): clicking LOW in the text lane adds a region (dead-zone fixed)', async () => {
+  await tab('text');
+  await resetZoom().catch(() => {});
+  const before = await page.locator('[data-testid^="text-block-body-"]').count();
+  const pt = await findEmptyLowerBandPoint();
+  expect(pt, 'must find an empty spot in the lower band (the previously-inert region)').toBeTruthy();
+  // Prove we are BELOW the h-10 track strip -- the region that was inert.
+  expect(pt.y, 'click y must be below the track strip').toBeGreaterThan(pt.metrics.track.bottom);
+  await page.mouse.click(pt.x, pt.y);
+  await page.waitForTimeout(400);
+  expect(await page.locator('[data-testid^="text-block-body-"]').count(), 'a low-lane click adds a region').toBe(before + 1);
+  await saveEvidence(page, 'R7-7-deadzone-default-zoom');
+  await cleanupAllTimelineRegions();
+});
+
+test('R7-7 (500% zoom): clicking LOW in the text lane adds a region', async () => {
+  await tab('text');
+  await zoomTo500();
+  const before = await page.locator('[data-testid^="text-block-body-"]').count();
+  const pt = await findEmptyLowerBandPoint();
+  expect(pt, 'must find an empty lower-band spot within the visible range at 500%').toBeTruthy();
+  expect(pt.y).toBeGreaterThan(pt.metrics.track.bottom);
+  // The x must be inside the scroll container's visible range (off-screen clicks hit nothing).
+  expect(pt.x).toBeGreaterThanOrEqual(pt.metrics.visLeft);
+  expect(pt.x).toBeLessThanOrEqual(pt.metrics.visRight);
+  await page.mouse.click(pt.x, pt.y);
+  await page.waitForTimeout(400);
+  expect(await page.locator('[data-testid^="text-block-body-"]').count(), 'a low-lane click adds a region at 500% zoom').toBe(before + 1);
+  await saveEvidence(page, 'R7-7-deadzone-500-zoom');
+  await resetZoom();
+  await cleanupAllTimelineRegions();
+});
+
+// -------------------------------------------- folded: body drag (was C5)
+test('R7-8 (default zoom): region body drag moves it, duration preserved, ONE persist', async () => {
+  await tab('text');
+  await resetZoom().catch(() => {});
+  const regionIndex = await addRegionAt(0.15);
+  const r = await dragRegionBody(regionIndex, 150);
+  expect(r.startAfter, `region start moved (${r.startBefore} -> ${r.startAfter})`).not.toBeCloseTo(r.startBefore, 3);
+  expect(Math.abs(r.widthAfter - r.widthBefore), 'duration (pixel width) preserved at fixed zoom').toBeLessThan(3);
+  expect(r.posts, 'exactly ONE move_text_edge persist per completed drag').toBe(1);
+  await saveEvidence(page, 'R7-8-body-drag-default-zoom');
+  await cleanupAllTimelineRegions();
+});
+
+test('R7-8 (500% zoom): region body drag moves it, duration preserved, ONE persist', async () => {
+  await tab('text');
+  await resetZoom().catch(() => {});
+  const regionIndex = await addRegionAt(0.15);
+  await zoomTo500();
+  const r = await dragRegionBody(regionIndex, 150);
+  expect(r.startAfter, `region start moved at 500% (${r.startBefore} -> ${r.startAfter})`).not.toBeCloseTo(r.startBefore, 3);
+  expect(Math.abs(r.widthAfter - r.widthBefore), 'duration (pixel width) preserved at 500% zoom').toBeLessThan(4);
+  expect(r.posts, 'exactly ONE move_text_edge persist per completed drag at 500%').toBe(1);
+  await saveEvidence(page, 'R7-8-body-drag-500-zoom');
+  await resetZoom();
+  await cleanupAllTimelineRegions();
+});
+
+// -------------------------------------------- folded: keyboard delete (was C4c)
+test('R7-9: Delete/Backspace on the focused region removes it (keyboard a11y)', async () => {
+  await tab('text');
+  // Delete path.
+  let regionIndex = await addRegionAt(0.2);
+  let before = await page.locator('[data-testid^="text-block-body-"]').count();
+  await page.getByTestId(`text-block-body-${regionIndex}`).focus();
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(400);
+  expect(await page.locator('[data-testid^="text-block-body-"]').count(), 'Delete removes the focused region').toBe(before - 1);
+
+  // Backspace path.
+  regionIndex = await addRegionAt(0.25);
+  before = await page.locator('[data-testid^="text-block-body-"]').count();
+  await page.getByTestId(`text-block-body-${regionIndex}`).focus();
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(400);
+  expect(await page.locator('[data-testid^="text-block-body-"]').count(), 'Backspace removes the focused region').toBe(before - 1);
+
+  await saveEvidence(page, 'R7-9-keyboard-delete-region');
+  await cleanupAllTimelineRegions();
+});
+
+// -------------------------------------------- folded: control clearance (was C7)
+test('R7-10 (500% zoom): the per-region delete control stays hit-testable and within the lane', async () => {
+  await tab('text');
+  await resetZoom().catch(() => {});
+  const regionIndex = await addRegionAt(0.2);
+  await zoomTo500();
+
+  // The CURRENT per-region delete control is the timeline trash button
+  // (text-delete-region-*, title "Delete region") -- the old spec's per-block
+  // "Delete text block" control no longer exists on the timeline.
+  const trash = page.getByTestId(`text-delete-region-${regionIndex}`);
+  await trash.scrollIntoViewIfNeeded().catch(() => {});
+  const tb = await trash.boundingBox();
+  expect(tb, 'the per-region delete control is present').toBeTruthy();
+  const cx = Math.round(tb.x + tb.width / 2);
+  const cy = Math.round(tb.y + tb.height / 2);
+
+  // (a) OCCLUSION: the control must be the topmost element at its centre --
+  // not clipped/occluded by the horizontal scrollbar or an overflow edge.
+  const info = await elementInfoAt(cx, cy);
+  expect(info?.inButton, `control must be hit-testable, not occluded (got ${JSON.stringify(info)})`).toBe(true);
+
+  // (b) LANE CLEARANCE: it must sit within the reserved lane height (never
+  // pushed below the lane by the scrollbar).
+  const m = await laneMetrics();
+  expect(tb.y + tb.height, 'control bottom stays within the reserved lane height').toBeLessThanOrEqual(m.lane.bottom + 1);
+
+  await saveEvidence(page, 'R7-10-control-clear-of-scrollbar-500');
+  await resetZoom();
+  await cleanupAllTimelineRegions();
 });
 
 // -------------------------------------------------------------- item 5

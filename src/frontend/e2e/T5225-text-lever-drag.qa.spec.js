@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { saveEvidence } from './helpers/qa.js';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
@@ -184,59 +183,16 @@ test.describe('T5225 text levers — fine (mouse) — clip-boundary SNAPPING', (
   });
 });
 
-test.describe('T5225 text blocks — add / toggle / delete', () => {
-  skipOnDeployedTarget(test, 'drives the dev-only /textdiag.html harness page, which does not exist in a production BUILD');
-
-  test('clicking empty track adds a second text block', async ({ page }) => {
-    await page.goto(HARNESS);
-    await waitForBlock(page);
-
-    // Click a point on the track well away from the seeded [2,4] block and its levers.
-    const track = page.locator('.text-track');
-    const box = await track.boundingBox();
-    await track.click({ position: { x: box.width * 0.7, y: box.height / 2 } });
-
-    await expect.poll(async () => (await readStatus(page)).count).toBe(2);
-  });
-
-  test('toggling a block flips enabled without deleting it', async ({ page }) => {
-    await page.goto(HARNESS);
-    await waitForBlock(page);
-    const before = await readStatus(page);
-    expect(before.enabled).toBe(true);
-
-    await page.getByTitle('Hide text (keep block)').click();
-
-    const after = await readStatus(page);
-    expect(after.enabled).toBe(false);
-    expect(after.count).toBe(1); // still present, just muted
-  });
-
-  test('deleting a block removes it', async ({ page }) => {
-    await page.goto(HARNESS);
-    await waitForBlock(page);
-
-    await page.getByTitle('Delete text block').click();
-
-    await expect.poll(async () => (await readStatus(page)).count).toBe(0);
-  });
-});
-
-test.describe('T5225 text levers — evidence artifacts', () => {
-  test.use({ hasTouch: true, isMobile: true, viewport: { width: 412, height: 915 } });
-  skipOnDeployedTarget(test, 'drives the dev-only /textdiag.html harness page, which does not exist in a production BUILD');
-
-  test('capture before/after drag + snap screenshots for each acceptance criterion', async ({ page }) => {
-    await page.goto(HARNESS);
-    await waitForBlock(page);
-    await saveEvidence(page, 'T5225-c1-text-block-and-levers-visible');
-
-    await touchDrag(page, page.locator(START_LEVER), 90, 0);
-    await saveEvidence(page, 'T5225-c1-after-touch-drag-start');
-
-    await page.goto(HARNESS);
-    await waitForBlock(page);
-    await page.getByTitle('Hide text (keep block)').click();
-    await saveEvidence(page, 'T5225-c1-block-muted-not-deleted');
-  });
-});
+// T7770 (item 19): the "T5225 text blocks — add / toggle / delete" describe and
+// the screenshot-only "evidence artifacts" describe were DELETED here.
+//   - add / delete a text region is now covered on the REAL /overlay screen by
+//     T6630-round7-evidence (R7-1/2/3 create a region via a real timeline click;
+//     R7-9 keyboard-deletes it; cleanupAllTimelineRegions deletes via the real
+//     control) — the harness copies added nothing.
+//   - "toggling a block flips enabled" was a WEAKER harness echo of
+//     T6620-defects' real-screen eye-toggle ("the eye HIDES it even while
+//     selected, and enabled=false PERSISTS to the DB the export honours").
+//   - the evidence describe only captured screenshots (no assertions) and
+//     re-drove the deleted toggle + an already-covered lever drag.
+// KEPT: the two lever describes above — clip-boundary SNAP vs free-park and the
+// coarse-pointer touch/44px lever facet — which no real-screen spec covers.

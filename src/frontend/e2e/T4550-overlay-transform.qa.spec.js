@@ -1,15 +1,17 @@
 /**
  * T4550 QA — unified video->screen transform (useVideoDisplayRect).
  *
- * Drives the REAL app as a real user (dev-login) and confirms the three overlays
- * that now share useVideoDisplayRect place accurately and leak no rAF callbacks:
+ * Drives the REAL app as a real user (dev-login) and confirms the Framing CropOverlay
+ * (which shares useVideoDisplayRect) places accurately and leaks no rAF callbacks:
  *   1. Framing CropOverlay — the crop box is placed (finite, in-bounds) and a
  *      known-delta drag lands within tolerance (exercises videoToScreen AND the
  *      screen->video inverse round-trip in the live DOM).
- *   2. Overlay HighlightOverlay + PlayerDetectionOverlay — the spotlight ellipse
- *      is placed with finite geometry; the detection layer (badge/boxes) renders.
- *      Skipped honestly if this account's first draft isn't exported (overlay mode
- *      is gated on an exported reel; the layout is also covered by Vitest).
+ *
+ * The Overlay HighlightOverlay + PlayerDetectionOverlay finite-geometry check that
+ * used to live here (test 2) was a strict subset of T5676-aspect-stage-alignment's
+ * Criterion-3 (same openLoadableOverlayDraft + `svg defs mask ellipse` finite-geometry
+ * read, plus ellipse-inside-video-rect, a drag round-trip, and detection boxes), so it
+ * was removed in T7770 — T5676 (also @staging-gate) is the surviving owner.
  *
  * Throughout, console is captured and asserted free of the rAF-leak / unmounted-
  * update warning class the old copies could emit.
@@ -21,7 +23,7 @@ import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence } from './helpers/qa.js';
 import { waitForRealVideoReady } from './helpers/videoRoute.js';
-import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
+import { openFramingDraft } from './helpers/framingDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -41,17 +43,6 @@ function captureConsole(page) {
 function assertNoRafWarnings(lines) {
   const offenders = lines.filter((l) => RAF_WARNING.test(l));
   expect(offenders, `rAF/stale-update/NaN warnings:\n${offenders.join('\n')}`).toEqual([]);
-}
-
-/** Open the first Framing-ready reel draft; resolves once the crop editor loaded. */
-async function openFramingDraft(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
-  const framingChip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
-  await framingChip.waitFor({ timeout: 30000 });
-  await framingChip.click();
-  await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 }
 
 test.describe('T4550 unified overlay transform @staging-gate', () => {
@@ -137,63 +128,6 @@ test.describe('T4550 unified overlay transform @staging-gate', () => {
     expect(Math.abs(movedX - dx), `crop moved dx (got ${movedX}, want ${dx})`).toBeLessThanOrEqual(6);
     expect(Math.abs(movedY - dy), `crop moved dy (got ${movedY}, want ${dy})`).toBeLessThanOrEqual(6);
     await saveEvidence(page, 'T4550-crop-overlay-dragged');
-
-    assertNoRafWarnings(console_);
-    await context.close();
-  });
-
-  test('Overlay: highlight + player-detection placed, no rAF warnings', async ({ browser }) => {
-    test.setTimeout(180_000);
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-    await loginAsRealUser(context, EMAIL, PROFILE);
-    const page = await context.newPage();
-    const console_ = captureConsole(page);
-
-    // Open a draft that has reached Overlay AND whose working video actually STREAMS,
-    // then gate on the real overlay ready-signal (T6110). The old path (open the framing
-    // draft, switch to the overlay tab, click "Add Spotlight") had two defects on staging:
-    // it could land on a draft whose working_video ref is dangling (playback-url 200 but the
-    // R2 GET 404s, per T6100), so the stage never hydrated; and "Add Spotlight" is the overlay
-    // EXPORT button (fires a real, costly render on the real account) — never click it. The
-    // helper probes for a streamable draft and opens it deterministically, or hands back a
-    // loud hydration reason so we skip (never assert geometry on a placeholder).
-    const opened = await openLoadableOverlayDraft(page, { minReadyState: 3 });
-    test.skip(!opened.ok, opened.reason);
-
-    // HighlightOverlay geometry. On a real tracking-ON draft `editable` is false, so the
-    // draggable body ellipse carries NO `.cursor-move` class — selecting on it hangs (the
-    // T5676 lesson). The spotlight MASK ellipse (`svg defs mask ellipse`) is always rendered
-    // from restored highlight-region data, so use it for the alignment/finite-geometry check.
-    const ellipse = page.locator('svg defs mask ellipse').first();
-    await ellipse.waitFor({ state: 'attached', timeout: 30000 });
-    const geom = await ellipse.evaluate((el) => ({
-      cx: +el.getAttribute('cx'),
-      cy: +el.getAttribute('cy'),
-      rx: +el.getAttribute('rx'),
-      ry: +el.getAttribute('ry'),
-    }));
-    for (const [k, v] of Object.entries(geom)) {
-      expect(Number.isFinite(v), `ellipse ${k} finite`).toBe(true);
-    }
-    expect(geom.rx).toBeGreaterThan(0);
-    expect(geom.ry).toBeGreaterThan(0);
-    await saveEvidence(page, 'T4550-highlight-overlay-placed');
-
-    // PlayerDetectionOverlay: best-effort. Detection needs a GPU/Modal pass that
-    // may be off in this env; assert only that when boxes render, their geometry
-    // is finite (the shared transform), and capture evidence either way.
-    const detBoxes = page.locator('svg rect[stroke-dasharray]');
-    if (await detBoxes.count()) {
-      const first = detBoxes.first();
-      const rect = await first.evaluate((el) => ({
-        x: +el.getAttribute('x'), y: +el.getAttribute('y'),
-        w: +el.getAttribute('width'), h: +el.getAttribute('height'),
-      }));
-      for (const [k, v] of Object.entries(rect)) {
-        expect(Number.isFinite(v), `detection box ${k} finite`).toBe(true);
-      }
-    }
-    await saveEvidence(page, 'T4550-player-detection-overlay');
 
     assertNoRafWarnings(console_);
     await context.close();

@@ -30,7 +30,9 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *   AC1 hint renders immediately below "N players detected"        -> test 1
  *   AC2 visible when tracking ON + region + not overridden + no frame selected -> test 2
  *   AC3 selecting a frame hides it; deselecting shows it again      -> test 2
- *   AC4 no regression to T5610 gating (tracking off / overrideUsed) -> test 3
+ *   AC4 no regression to T5610 gating (tracking off / overrideUsed) -> covered by
+ *       T5610-manual-override's override-hint test (overrideUsed) + toggle-OFF test;
+ *       the redundant T5643 copy of this gate was removed in T7770.
  *
  * Run: cd src/frontend && npx playwright test e2e/T5643-move-spotlight-hint.qa.spec.js
  */
@@ -42,9 +44,7 @@ const HARNESS = '/overlaydiag-t5643.html';
 
 const HINT = '[data-testid="override-hint"]';
 const BADGE_TEXT = 'players detected';
-const TRACKING_TOGGLE = '[data-testid="toggle-player-boxes"]';
 const FRAME_TOGGLE = '[data-testid="toggle-frame-selected"]';
-const MARK_USED = '[data-testid="mark-override-used"]';
 const CONTAINER = '[data-testid="video-container"]';
 
 test.beforeAll(() => {
@@ -100,25 +100,6 @@ test('2) hint hides when a tracking frame is selected, reappears on deselect', a
   await expect(page.locator(FRAME_TOGGLE)).toHaveText('Frame: not selected');
   await expect(page.locator(HINT)).toBeVisible();
   await saveEvidence(page, 'criterion-3-hint-reappears-on-deselect');
-});
-
-// AC4 — no regression to T5610 gating (tracking off, or already-used override).
-test('3) no regression to T5610 gating (tracking off / override already used)', async ({ page }) => {
-  skipOnDeployedTarget(test, 'drives the dev-only /overlaydiag-t5643.html harness page, which does not exist in a production BUILD');
-  await page.goto(HARNESS);
-  await expect(page.locator(HINT)).toBeVisible();
-
-  await page.locator(TRACKING_TOGGLE).click(); // tracking OFF
-  await expect(page.locator(TRACKING_TOGGLE)).toHaveText('Tracking: OFF');
-  await expect(page.locator(HINT)).toHaveCount(0, { timeout: 2000 });
-  await saveEvidence(page, 'criterion-4-hint-hidden-tracking-off');
-
-  await page.locator(TRACKING_TOGGLE).click(); // tracking back ON
-  await expect(page.locator(HINT)).toBeVisible();
-
-  await page.locator(MARK_USED).click(); // override already used this session
-  await expect(page.locator(HINT)).toHaveCount(0, { timeout: 2000 });
-  await saveEvidence(page, 'criterion-4-hint-hidden-override-used');
 });
 
 // Responsive check on the changed surface.

@@ -23,7 +23,7 @@
  *   cd src/frontend && E2E_BASE_URL=http://localhost:5176 npx playwright test \
  *     e2e/T-egress-livedrive-2026-08-11.qa.spec.js --reporter=line
  */
-import { test, expect, devices } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -93,28 +93,6 @@ function pickIntroReel(list, excludeIds = []) {
     if (d && d.intro_card_name && !excludeIds.includes(d.id)) return d;
   }
   return list.downloads.find((d) => d.intro_card_name && !excludeIds.includes(d.id));
-}
-
-async function openMyReelsAndExpand(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
-    .toBeVisible({ timeout: 15000 });
-  const panel = page.locator('.animate-slide-in-right');
-  const alreadyShown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
-  if (!alreadyShown) {
-    const headers = panel.getByTestId('collapsible-group-header');
-    await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-    const n = await headers.count();
-    for (let i = 0; i < n; i++) {
-      await headers.nth(i).click({ timeout: 3000 }).catch(() => {});
-      const appeared = await panel.getByTestId('reel-card').first()
-        .waitFor({ state: 'visible', timeout: 4000 }).then(() => true).catch(() => false);
-      if (appeared) break;
-    }
-  }
-  return panel;
 }
 
 test.describe('Part A - Egress live-drive QA (2026-08-11)', () => {
@@ -245,6 +223,21 @@ test.describe('Part A - Egress live-drive QA (2026-08-11)', () => {
     // download button, which any visitor with the link can click).
     const anonCtx = await browser.newContext();
     try {
+      // Ported from T5220 (folded here on removal): the public GET
+      // /api/shared/{token} metadata endpoint carries the optional `intro`
+      // field without erroring, and an unknown token on the composed-download
+      // endpoint must 404 (not 500). Both are token-authenticated public paths,
+      // so they run on the same logged-out anon context as the download below.
+      const getSharedResp = await anonCtx.request.get(`/api/shared/${shareToken}`);
+      expect(getSharedResp.ok(), `GET /api/shared/${shareToken} must succeed logged-out`).toBeTruthy();
+      const shared = await getSharedResp.json();
+      expect(shared, 'GET /api/shared/{token} must carry the optional intro field').toHaveProperty('intro');
+      console.log(`[Part A][item3] GET /api/shared/${shareToken} -> intro field present, value=${JSON.stringify(shared.intro)}`);
+
+      const bogusResp = await anonCtx.request.get('/api/shared/definitely-not-a-real-token/download');
+      console.log(`[Part A][item3] probe: GET /api/shared/<bogus>/download -> ${bogusResp.status()}`);
+      expect(bogusResp.status(), 'unknown share token must 404, not 500').toBe(404);
+
       const dlResp = await anonCtx.request.get(`/api/shared/${shareToken}/download`, { timeout: 60_000 });
       expect(dlResp.ok(), `GET /api/shared/${shareToken}/download must succeed logged-out`).toBeTruthy();
       expect(dlResp.headers()['content-type']).toContain('video/mp4');
@@ -296,88 +289,11 @@ test.describe('Part A - Egress live-drive QA (2026-08-11)', () => {
   });
 
   // -------------------------------------------------------------------
-  // Item 5: desktop Share button opens the app's ShareModal and NEVER
-  // touches navigator.share; mobile emulation still attempts the native
-  // share path.
+  // Item 5 (share routing 5a/5b) REMOVED (T7770): the desktop-ShareModal /
+  // mobile-native-share routing is now owned by T7350-mobile-share-routing,
+  // which keys on the corrected `(pointer: coarse)` capability mechanism
+  // (verifying the matchMedia flip) rather than viewport/UA emulation.
   // -------------------------------------------------------------------
-  test('item 5a: desktop Share button opens ShareModal, never calls navigator.share', async ({ browser }) => {
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    try {
-      await ctx.addInitScript(() => {
-        window.__navShareCalls = [];
-        Object.defineProperty(window.navigator, 'share', {
-          configurable: true,
-          value: (...args) => { window.__navShareCalls.push(args); return Promise.resolve(); },
-        });
-      });
-      await loginAsRealUser(ctx, EMAIL, PROFILE);
-      const page = await ctx.newPage();
-      const panel = await openMyReelsAndExpand(page);
-      const hasReels = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
-      test.skip(!hasReels, 'no published reels on this account/profile');
-
-      const tile = panel.getByTestId('reel-card').first();
-      await tile.hover(); // fine-pointer kebab is hover-revealed (T6300)
-      await tile.getByRole('button', { name: 'More actions' }).click();
-      await page.getByRole('button', { name: 'Share', exact: true }).click();
-
-      await expect(page.getByRole('heading', { name: /^Share "/ }), 'desktop Share must open the app ShareModal')
-        .toBeVisible({ timeout: 10_000 });
-
-      const calls = await page.evaluate(() => window.__navShareCalls);
-      console.log(`[Part A][item5a] navigator.share call count on desktop = ${calls.length} (must be 0)`);
-      expect(calls.length, 'desktop must NEVER touch navigator.share (webShareReel skips straight to setSharingDownload when !isMobile)').toBe(0);
-
-      await saveEvidence(page, 'part-a-item-5a-desktop-share-opens-modal');
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  test('item 5b: mobile emulation still attempts the native share path (navigator.share)', async ({ browser }) => {
-    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
-    try {
-      await ctx.addInitScript(() => {
-        window.__navShareCalls = [];
-        Object.defineProperty(window.navigator, 'share', {
-          configurable: true,
-          value: (...args) => { window.__navShareCalls.push(args); return Promise.resolve(); },
-        });
-        // canShare intentionally left unstubbed -> useWebShare resolves
-        // capability to LINK_ONLY (not FULL); still exercises the real
-        // navigator.share({title,text,url}) call -- the assertion under test
-        // is WHICH code path is reached (native vs ShareModal), not which
-        // navigator.share overload fires (a real native sheet can't be
-        // visually confirmed headless anyway, per the kickoff's own note).
-      });
-      await loginAsRealUser(ctx, EMAIL, PROFILE);
-      const page = await ctx.newPage();
-      const panel = await openMyReelsAndExpand(page);
-      const hasReels = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
-      test.skip(!hasReels, 'no published reels on this account/profile');
-
-      const tile = panel.getByTestId('reel-card').first();
-      // Coarse pointer (iPhone emulation) -> kebab is persistently visible,
-      // no hover needed (T6300); tap it to open the bottom sheet.
-      await tile.getByRole('button', { name: 'More actions' }).click();
-      const sheet = page.locator('div.fixed.inset-0.z-50');
-      await expect(sheet, 'coarse pointer opens the bottom-sheet menu').toBeVisible({ timeout: 5000 });
-      await sheet.getByText('Share', { exact: true }).click();
-
-      await page.waitForFunction(() => window.__navShareCalls.length > 0, undefined, { timeout: 10_000 });
-      const calls = await page.evaluate(() => window.__navShareCalls);
-      console.log(`[Part A][item5b] navigator.share called with: ${JSON.stringify(calls[0])}`);
-      expect(calls.length, 'mobile must reach the native share path').toBeGreaterThan(0);
-
-      const modalVisible = await page.getByRole('heading', { name: /^Share "/ }).isVisible().catch(() => false);
-      console.log(`[Part A][item5b] ShareModal visible after mobile share attempt = ${modalVisible} (expected false -- native path taken instead)`);
-      expect(modalVisible, 'mobile should NOT fall through to ShareModal when navigator.share succeeds').toBe(false);
-
-      await saveEvidence(page, 'part-a-item-5b-mobile-attempts-native-share');
-    } finally {
-      await ctx.close();
-    }
-  });
 
   // -------------------------------------------------------------------
   // Item 6: collection share freeze -- changing the collection's attached
@@ -385,9 +301,9 @@ test.describe('Part A - Egress live-drive QA (2026-08-11)', () => {
   // -------------------------------------------------------------------
   test('item 6: collection share freezes its intro at creation time; a later badge change does not retroactively move it', async () => {
     // Sessions appear to be single-active-per-account (memory: "sessions
-    // pinned to one machine") -- items 5a/5b's own loginAsRealUser calls (on
-    // their OWN throwaway contexts) invalidate ownerCtx's original session.
-    // Re-auth ownerCtx immediately before using it again here.
+    // pinned to one machine") -- any prior loginAsRealUser call on a separate
+    // throwaway context can invalidate ownerCtx's original session. Re-auth
+    // ownerCtx immediately before using it again here.
     await loginAsRealUser(ownerCtx, EMAIL, PROFILE);
 
     // Explicit attachment (a real id, not 0/null) is consent-gated
@@ -479,9 +395,9 @@ test.describe('Part A - Egress live-drive QA (2026-08-11)', () => {
   // regression risk).
   // -------------------------------------------------------------------
   test('item 7: re-export carries the intro forward onto the new final_videos row', async () => {
-    // See item 6's note: re-auth ownerCtx in case a later test's own login
-    // (item 6's is a no-op re-auth of ownerCtx itself; item 5a/5b's are on
-    // separate throwaway contexts) invalidated the session again.
+    // See item 6's note: re-auth ownerCtx in case an earlier test's own login
+    // (item 6's own re-auth of ownerCtx, or any throwaway-context login)
+    // invalidated the session again.
     await loginAsRealUser(ownerCtx, EMAIL, PROFILE);
     const listResp = await ownerCtx.request.get('/api/downloads');
     expect(listResp.ok()).toBeTruthy();
