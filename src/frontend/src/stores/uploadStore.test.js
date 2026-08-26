@@ -13,7 +13,7 @@
  * adapted to the per-entry shape.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the upload orchestration so we control success/failure, but keep the real
 // UPLOAD_PHASE constants.
