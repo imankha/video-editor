@@ -20,7 +20,7 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
 import { useProfileStore } from '../../stores';
-import { FACT_SLOTS, SLOT_META, TREATMENTS } from './introCardEditorConstants';
+import { FACT_SLOTS, SLOT_META, TITLE_SLOT, TREATMENTS } from './introCardEditorConstants';
 import { treatmentAccent, treatmentBackgroundCss, treatmentBand } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
 
@@ -49,6 +49,36 @@ export function IntroCardRail({
           The layout adapts to the facts you show.
         </p>
         <div className="space-y-0.5">
+          {/* T7730: the title slot ("Athlete Name") was defined in SLOT_META but
+              never rendered — IntroCardRail only mapped FACT_SLOTS. The title is
+              the athlete's Full Name from the profile (T6570 removed the per-card
+              text box), so it is ALWAYS on the card — a labeled read-only row, not
+              a hideable checkbox like the facts. */}
+          {(() => {
+            const meta = SLOT_META[TITLE_SLOT];
+            const value = slotDisplayText(TITLE_SLOT, card, profile);
+            return (
+              <div>
+                <div className="flex items-center gap-2.5 py-1 px-1 -mx-1">
+                  <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
+                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
+                </div>
+                {!value && (
+                  <p className="ml-1 mb-1 text-xs text-amber-400/90">
+                    No {meta.label.toLowerCase()} on this profile yet.{' '}
+                    <button
+                      type="button"
+                      onClick={onEditProfile}
+                      className="underline hover:text-amber-300"
+                    >
+                      Add it
+                    </button>
+                    .
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           {FACT_SLOTS.map((slot) => {
             const meta = SLOT_META[slot];
             const isShown = shown.includes(slot);

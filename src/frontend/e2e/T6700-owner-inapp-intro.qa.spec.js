@@ -214,7 +214,10 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
 
     // The pre-roll (IntroPreRoll -> MotionPreview) must render BEFORE the
     // player. CollectionPlayer's video element must NOT be present yet.
-    const video = page.locator('video');
+    // T7730: scope to the CollectionPlayer's own video. A bare page.locator('video')
+    // also matches the ~30 per-tile hover-preview <video> elements (T6420/T6820),
+    // so toHaveCount(0)/(1) asserted against the wrong set.
+    const video = page.locator('[data-testid="collection-player-video"]');
     await expect(video, 'CollectionPlayer video must not be mounted while the pre-roll shows').toHaveCount(0);
     await saveEvidence(page, 'criterion-1-preroll-before-player');
 
@@ -280,7 +283,10 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
       test.skip(true, 'resolver returned null for this collection; unit coverage handles the visual assertion');
     }
 
-    const video = page.locator('video');
+    // T7730: scope to the CollectionPlayer's own video. A bare page.locator('video')
+    // also matches the ~30 per-tile hover-preview <video> elements (T6420/T6820),
+    // so toHaveCount(0)/(1) asserted against the wrong set.
+    const video = page.locator('[data-testid="collection-player-video"]');
     await expect(video, 'CollectionPlayer video must not be mounted while the pre-roll shows').toHaveCount(0);
     await saveEvidence(page, 'criterion-2-preroll-before-first-member');
 
@@ -332,7 +338,10 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
     expect(payload.intro, 'a never-attached reel must resolve null').toBeNull();
 
     // Player mounts immediately -- no pre-roll gap, video present right away.
-    const video = page.locator('video');
+    // T7730: scope to the CollectionPlayer's own video. A bare page.locator('video')
+    // also matches the ~30 per-tile hover-preview <video> elements (T6420/T6820),
+    // so toHaveCount(0)/(1) asserted against the wrong set.
+    const video = page.locator('[data-testid="collection-player-video"]');
     await expect(video, 'CollectionPlayer must mount immediately with no pre-roll for a never-attached reel').toHaveCount(1, { timeout: 10000 });
     await saveEvidence(page, 'criterion-4-no-preroll-regression');
 

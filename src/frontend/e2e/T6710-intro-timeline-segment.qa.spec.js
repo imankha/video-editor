@@ -233,7 +233,10 @@ test.describe('T6710 owner in-app composite intro timeline (real account)', () =
     await saveEvidence(page, 'AC-distinct-intro-region-tint-label-divider');
 
     // ---- AC1: intro renderer showing, player video not yet mounted ----
-    const video = page.locator('video');
+    // T7730: scope to the CollectionPlayer's own video. A bare page.locator('video')
+    // also matches the ~30 per-tile hover-preview <video> elements (T6420/T6820),
+    // so toHaveCount(0)/(1) asserted against the wrong set.
+    const video = page.locator('[data-testid="collection-player-video"]');
     await expect(video, 'CollectionPlayer video must not be mounted while the intro region is active').toHaveCount(0);
 
     // ---- B1 clickability: click INTO a reel segment partway through and
@@ -335,7 +338,10 @@ test.describe('T6710 owner in-app composite intro timeline (real account)', () =
     const introDurSec = payload.intro.card?.duration || 4.0;
     console.log(`[T6710] intro duration ~${introDurSec}s -- waiting for auto-continue`);
 
-    const video = page.locator('video');
+    // T7730: scope to the CollectionPlayer's own video. A bare page.locator('video')
+    // also matches the ~30 per-tile hover-preview <video> elements (T6420/T6820),
+    // so toHaveCount(0)/(1) asserted against the wrong set.
+    const video = page.locator('[data-testid="collection-player-video"]');
     await expect(video, 'video must not be mounted while intro plays').toHaveCount(0);
 
     // Auto-continue: no manual click. Wait up to intro duration + generous margin.
@@ -377,7 +383,10 @@ test.describe('T6710 owner in-app composite intro timeline (real account)', () =
     expect(payload.intro, 'a never-attached reel must resolve null').toBeNull();
 
     // No intro region: player mounts immediately.
-    const video = page.locator('video');
+    // T7730: scope to the CollectionPlayer's own video. A bare page.locator('video')
+    // also matches the ~30 per-tile hover-preview <video> elements (T6420/T6820),
+    // so toHaveCount(0)/(1) asserted against the wrong set.
+    const video = page.locator('[data-testid="collection-player-video"]');
     await expect(video, 'CollectionPlayer must mount immediately with no intro region for a never-attached reel').toHaveCount(1, { timeout: 10000 });
 
     // Composite bar still renders sanely: no "Intro" segment/divider present.

@@ -139,6 +139,12 @@ export const useQuestStore = create((set, get) => ({
     apiFetch(`${API_BASE}/api/quests/achievements/${key}`, {
       method: 'POST',
       keepalive: true,
+      // T7730: achievements fire from lifecycle triggers (e.g. `returned_home`
+      // on Home-screen mount for any account whose quest_1 is already complete),
+      // not always a user gesture — this must not arm the "could not save to the
+      // cloud" alarm on a passive load. Matches the sibling lifecycle-write
+      // marker every other reconciliation/lifecycle call site carries (T6020).
+      rbNonDataWrite: true,
     })
       .then((res) => {
         if (!res.ok) {

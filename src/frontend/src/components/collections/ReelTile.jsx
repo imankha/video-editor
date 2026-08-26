@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Play, Share2, Link2, MoreVertical, Download, Loader, Columns,
@@ -142,11 +142,15 @@ export function ReelTile({
     const updatePosition = () => {
       const rect = kebabBtnRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
-      const menuHeight = 300; // approximate; actual is measured
+      // T7730: first-pass ESTIMATE only. The old code hardcoded 300px and claimed
+      // "actual is measured" -- it never was, and the menu has since grown taller,
+      // so a flipped menu overflowed the viewport top. The real height is measured
+      // and the position corrected in the useLayoutEffect below (before paint).
+      const menuHeight = menuRef.current?.offsetHeight || 360;
       const flipped = rect.bottom + menuHeight > viewportHeight;
 
       setMenuPos({
-        top: flipped ? rect.top - menuHeight : rect.bottom + 4,
+        top: flipped ? Math.max(8, rect.top - menuHeight) : rect.bottom + 4,
         left: rect.right - 192, // w-48 = 192px, right-aligned
         flipped,
       });
@@ -170,6 +174,22 @@ export function ReelTile({
       document.removeEventListener('touchstart', onOutside);
     };
   }, [menuOpen]);
+
+  // T7730: once the portal menu is mounted, measure its REAL height and correct
+  // the flip decision + top offset (the effect above positions from an estimate
+  // before the menu exists to be measured). Runs before paint, so there is no
+  // visible jump. The guard makes it converge in a single correction: once
+  // top/flipped match the measured layout it stops re-setting state.
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuPos || !menuRef.current || !kebabBtnRef.current) return;
+    const measured = menuRef.current.offsetHeight;
+    const rect = kebabBtnRef.current.getBoundingClientRect();
+    const flipped = rect.bottom + measured > window.innerHeight;
+    const top = flipped ? Math.max(8, rect.top - measured) : rect.bottom + 4;
+    if (flipped !== menuPos.flipped || top !== menuPos.top) {
+      setMenuPos((prev) => (prev ? { ...prev, top, flipped } : prev));
+    }
+  }, [menuOpen, menuPos]);
 
   const startRename = () => {
     setRenameValue(download.project_name || '');
