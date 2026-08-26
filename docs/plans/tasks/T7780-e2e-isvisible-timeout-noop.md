@@ -1,6 +1,6 @@
 # T7780: `isVisible({ timeout })` guards don't actually wait, silently defeating e2e navigation helpers
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P2 (pre-existing e2e-infra bug, causes silent test failures, not a product bug)
 **Impact:** 6
 **Complexity:** 3

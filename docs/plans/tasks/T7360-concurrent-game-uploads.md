@@ -1,6 +1,6 @@
 # T7360: Multiple game uploads — store and UI handle only one at a time
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-08-19

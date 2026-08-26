@@ -1,6 +1,6 @@
 # T7510: Activity tracking: attempted vs successful, everywhere
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P1 (observability: the dashboard actively misled a prod incident diagnosis)
 **Impact:** 7
 **Complexity:** 5
