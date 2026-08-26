@@ -37,14 +37,47 @@ When seeded, the account is guaranteed to have, on profile `9fa7378c`:
    NOT the old `.text-green-400` badge (that selector is stale).
 2. **>= 1 framed project (reel draft)** — a draft that opens into Framing mode with a
    crop overlay + at least one crop keyframe. Reached via the **Reel Drafts** tab ->
-   the first framing chip (`getByTitle(/\[.+\]: .*\(click to open\)/)`).
+   the first framing chip.
    Consumed by `T4550-overlay-transform.qa.spec.js` (crop overlay placement + drag).
+   **Chip-title gotcha (T7750):** the framing chip title format is NOT uniformly
+   `[tags]: label (click to open)` — only a per-clip segment carries a `[tags]` bracket. A
+   framing-complete or multi-clip aggregate draft's Focus segment is untagged
+   (`Focus: ... (click to open)`), and a deep-link segment reads `Overlay: ...`. A selector
+   that REQUIRES the bracket (`getByTitle(/\[.+\]: .*\(click to open\)/)`) silently matches
+   nothing on such an account and hangs. Match any `(click to open)` segment that is NOT the
+   trailing `Overlay:` one instead (see `T6190-project-open-fetches.qa.spec.js openFramingChip`).
+   **Un-started-draft gap (T7750, NOT guaranteed):** the seed promises a framed project but
+   does NOT promise one still in **"Not started"** status. The shared dev account's drafts
+   drift past that through ongoing QA use. Specs that need a clean un-edited baseline
+   (`T5780-framing-effective-duration`, `T5790-export-credit-cost-estimate` — a de-emphasized
+   output-length chip where output == source) therefore **skip loudly** when no "Not started"
+   card exists rather than hang. To make them RUN GREEN, re-seed an un-started draft (or leave
+   one un-edited); do not write a spec that hard-requires "Not started" until the seed
+   guarantees it.
 3. **(best-effort, NOT asserted by the seed) >= 1 published reel** — an exported reel
    (final video). Overlay mode is gated on an exported reel. The seed does **not**
    guarantee an exported draft, so specs that need it detect reachability and skip
    **honestly** (logged, never a silent pass) when the draft isn't exported — the layout
    is also covered by Vitest. See `T4550` test 2 (`mode-overlay` gate). Do not write a
    spec that hard-requires a published reel until the seed is extended to produce one.
+
+### Out-of-band DB-fixture specs (T7750 — skip loudly when un-staged)
+
+A handful of local-only specs need a precondition staged OUTSIDE the standard seed — a QA
+harness DB flip, a dedicated test user's profile SQLite, or an admin seed script. A bulk
+unattended `npx playwright test` sweep does not stage these, and a **shared** dev container
+must NOT create them (mutating game state / Postgres that concurrent specs read). Each now
+**skips loudly** (a `test.skip` naming the missing fixture) instead of hard-failing or hanging
+to a timeout, and still runs its assertions when the fixture IS staged via its documented harness:
+
+- **`bug27p-expired-annotations.spec.js`** — needs a game whose `game_storage.storage_expires_at`
+  is flipped into the past (QA harness). Skips when no expired game is present. Expired-render
+  path is unit-covered (`src/modes/AnnotateModeView.expired.test.jsx`).
+- **`t4800-orphan-drafts.qa.spec.js`** — needs the `t4800_livedrive` test user's profile SQLite
+  seeded with the "Exported Draft A" / "Published Reel C" rows. Skips when they're absent.
+- **`T5770-admin-weekly-usage.spec.js`** — needs `scripts/_t5770_qa_seed.py`'s deterministic QA
+  user. Now paginates the whole admin list (no email-search param; the user need not be on
+  page 1) and skips when the seed row is absent.
 
 ### Published-reel + shareable-collection guarantees (T5420 — the `@staging-gate` derisk specs)
 

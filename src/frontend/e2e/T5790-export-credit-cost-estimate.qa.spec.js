@@ -74,7 +74,17 @@ async function splitTrack(page, fractions) {
 }
 
 async function openFirstFramingDraft(page) {
-  await page.locator('[data-testid="project-card"]', { hasText: 'Not started' }).first().click();
+  // T7750: needs an UN-STARTED (un-edited) draft (see T5780). FIXTURE-CONTRACT only promises
+  // ">=1 framed project", not an un-started one, and the shared dev account's drafts drift
+  // past "Not started" through ongoing QA use. Skip LOUDLY rather than hang on a locator that
+  // never resolves when none is present.
+  const notStarted = page.locator('[data-testid="project-card"]', { hasText: 'Not started' });
+  await notStarted.first().waitFor({ timeout: 8000 }).catch(() => {});
+  test.skip(
+    (await notStarted.count()) === 0,
+    '[T7750] no "Not started" framing draft on this account (FIXTURE-CONTRACT gap: needs an un-started draft)',
+  );
+  await notStarted.first().click();
   await page.waitForSelector(CHIP, { timeout: 30000 });
   await page.waitForFunction(
     () => [...document.querySelectorAll('[title]')].filter((e) => /^Segment \d+:/.test(e.getAttribute('title'))).length >= 1,

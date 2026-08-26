@@ -30,55 +30,18 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
-import { probeOverlayDrafts } from './helpers/overlayDraft.js';
-import { waitForRealVideoReady } from './helpers/videoRoute.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
 /**
  * Open a streamable In-Overlay draft and gate on the real overlay ready-signal.
- * Local variant of the shared `openLoadableOverlayDraft` that ALSO handles the
- * T6180 ready-to-publish tile, whose "Open in Overlay" lives in a kebab menu
- * (the shared helper only knows the hover-rail button, so it hangs on a
- * ready-to-publish loadable draft — an env-data drift, not a code bug here).
+ * Delegates to the shared `openLoadableOverlayDraft`, which (T7750) now walks the
+ * loadable candidates, handles the T6180 ready-to-publish kebab menu, and verifies
+ * an "Open in Overlay" affordance actually exists before committing to a tile.
  */
-async function openOverlayDraft(page, { minReadyState = 3 } = {}) {
-  const { loadable, dangling } = await probeOverlayDrafts(page);
-  if (loadable.length === 0) {
-    return { ok: false, reason: `no streamable In-Overlay draft: ${dangling.join('; ') || '(none)'}` };
-  }
-  const targetId = loadable[0];
-
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
-  const overlayFilter = page.getByText(/^In Overlay \(\d+\)$/);
-  if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
-
-  const card = page
-    .locator('[data-testid="project-card"]')
-    .filter({ has: page.locator(`img[src*="/projects/${targetId}/poster"]`) })
-    .first();
-  await card.waitFor({ timeout: 30000 });
-  await card.scrollIntoViewIfNeeded();
-  await card.hover();
-
-  // Prefer the hover-rail icon button; fall back to the ready-state kebab menu.
-  const hoverBtn = card.getByRole('button', { name: 'Open in Overlay' });
-  if (await hoverBtn.count() > 0) {
-    await hoverBtn.first().click();
-  } else {
-    await card.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('button', { name: 'Open in Overlay' }).first().click();
-  }
-
-  const stage = page.getByTestId('overlay-video-stage').first();
-  await stage.waitFor({ timeout: 60000 });
-  const verdict = await waitForRealVideoReady(page, { requireAspectRatio: true, minReadyState });
-  if (verdict.ready) return { ok: true, projectId: targetId };
-  return { ok: false, reason: `overlay draft ${targetId} never hydrated: ${verdict.reason}` };
-}
+const openOverlayDraft = openLoadableOverlayDraft;
 
 /** Wait until a poster-frame canvas has grabbed a still (state 'ready' -> opacity-1). */
 async function waitCanvasReady(page) {

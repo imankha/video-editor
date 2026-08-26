@@ -68,7 +68,13 @@ async function gotoDrafts(page) {
 
 /** Open the first Framing-ready reel draft; resolves once the crop editor is present. */
 async function openFramingChip(page) {
-  const chip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
+  // T7750: the old regex REQUIRED a `[tags]` bracket, which only per-clip segments carry —
+  // so a framing-complete or multi-clip aggregate draft (its Focus segment is untagged,
+  // title `Focus: Complete (click to open)`) never matched and the open hung. Match any
+  // framing-openable segment (tags optional) but EXCLUDE the trailing untagged `Overlay:`
+  // segment (which deep-links into Overlay, not Framing). `.first()` then lands on the
+  // first draft's first clip/Focus segment, which opens Framing.
+  const chip = page.getByTitle(/^(?!Overlay:).*\(click to open\)/).first();
   await chip.waitFor({ timeout: 30000 });
   await chip.click();
   // Crop editor is the proof Framing mounted with clips.

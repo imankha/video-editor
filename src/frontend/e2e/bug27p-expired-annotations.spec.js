@@ -48,14 +48,19 @@ test.describe('bug 27p expired-source Annotate + bug 28p games-menu order', () =
 
     const expired = byId[EXPIRED_GAME];
     const healthy = byId[HEALTHY_GAME];
-    expect(expired, `expired fixture game ${EXPIRED_GAME} must exist`).toBeTruthy();
-    expect(healthy, `healthy game ${HEALTHY_GAME} must exist`).toBeTruthy();
-    // The whole point of the fixture: game N's source is reported expired.
-    expect(
-      expired.storage_status,
-      `game ${EXPIRED_GAME} must be flipped expired by the QA harness (run it first)`,
-    ).toBe('expired');
-    expect(healthy.storage_status, `game ${HEALTHY_GAME} must stay active`).toBe('active');
+    // T7750: the expired-game DB fixture (QA harness flips game_storage.storage_expires_at
+    // into the past) is an OUT-OF-BAND precondition a bulk unattended sweep does not stage,
+    // and a shared dev container must NOT flip it itself (it would corrupt game state other
+    // concurrent specs read). When the fixture is absent, SKIP the whole group LOUDLY instead
+    // of hard-failing beforeAll — the expired-render path is unit-covered
+    // (src/modes/AnnotateModeView.expired.test.jsx). Run via the QA harness to exercise it live.
+    const fixtureReady =
+      !!expired && !!healthy && expired.storage_status === 'expired' && healthy.storage_status === 'active';
+    test.skip(
+      !fixtureReady,
+      `[T7750] expired-game fixture not staged (game ${EXPIRED_GAME}=${expired?.storage_status ?? 'missing'}, ` +
+        `game ${HEALTHY_GAME}=${healthy?.storage_status ?? 'missing'}); run the QA harness to flip it first`,
+    );
   });
 
   test('expired game: renders the expired panel, no <video>, playback disabled, clips still readable', async ({ context, page }) => {
