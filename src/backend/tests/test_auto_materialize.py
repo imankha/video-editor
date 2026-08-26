@@ -194,7 +194,7 @@ def _seed_postgres_share(pg_conn_str, game_id, tag_name, clip_data_list):
     clip_data_bytes = encode_data(clip_data_list)
     cur.execute(
         """INSERT INTO pending_teammate_shares
-           (share_id, sharer_user_id, sharer_profile_id, recipient_email,
+           (share_id, sharer_user_id, sharer_profile_id, invited_email,
             game_id, tag_name, clip_data)
            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (share_id, SHARER_ID, SHARER_PROFILE, RECIPIENT_EMAIL,

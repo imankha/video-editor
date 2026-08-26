@@ -215,6 +215,18 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
             </div>
           ) : (
             <>
+              {/* Honest link semantics (T7550): the email is just where we send
+                  the link -- the link itself can be forwarded and claimed by
+                  anyone who opens it, so it is not locked to one address. */}
+              <div className="flex items-start gap-2 rounded-md border border-gray-700 bg-gray-750/60 px-3 py-2 text-xs text-gray-400">
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-gray-500" />
+                <span>
+                  Each teammate gets a link to claim these clips. The link can be
+                  forwarded &mdash; anyone who opens it can claim the clips, so it is not
+                  locked to the email address you enter.
+                </span>
+              </div>
+
               {/* Unsent tags -- actionable */}
               {unsentTags.length > 0 && (
                 <div className="space-y-3">
