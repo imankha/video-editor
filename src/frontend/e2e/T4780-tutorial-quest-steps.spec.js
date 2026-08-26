@@ -173,7 +173,7 @@ test.describe('T4780 — Tutorial quest steps', () => {
     // Chapter menu button (List icon) should appear — may take a moment after cuechange
     const chapterBtn = page.locator('button[title="Chapters"]');
     // If chapters loaded, button is visible; may need to wait for cue load
-    const hasChapters = await chapterBtn.isVisible({ timeout: 3000 }).catch(() => false);
+    const hasChapters = await chapterBtn.isVisible().catch(() => false);
 
     if (hasChapters) {
       await saveEvidence(page, 'AC5-chapters-present-menu-visible');

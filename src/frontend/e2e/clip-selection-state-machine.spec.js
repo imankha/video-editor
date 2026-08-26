@@ -139,7 +139,7 @@ async function createClip(page, seekTime) {
   // Click the save button explicitly. Opening via "Add Clip" puts the overlay
   // in CREATING state, so the green action button reads "Save".
   const saveBtn = page.locator('button.bg-green-600:has-text("Save")').first();
-  const saveVisible = await saveBtn.isVisible({ timeout: 3000 }).catch(() => false);
+  const saveVisible = await saveBtn.isVisible().catch(() => false);
   if (saveVisible) {
     await saveBtn.click();
     await page.waitForTimeout(800);
@@ -211,7 +211,7 @@ test.describe('T690: Clip Selection State Machine', () => {
 
     // Verify selection via DOM: sidebar highlight should appear (border-l-3 for selected clips)
     const selectedHighlightReq1 = page.locator('.border-l-3');
-    const highlightVisReq1 = await selectedHighlightReq1.isVisible({ timeout: 2000 }).catch(() => false);
+    const highlightVisReq1 = await selectedHighlightReq1.isVisible().catch(() => false);
     console.log(`[Test] REQ 1: Sidebar highlight visible: ${highlightVisReq1}`);
     expect(highlightVisReq1).toBe(true);
 
@@ -231,10 +231,10 @@ test.describe('T690: Clip Selection State Machine', () => {
 
     // Verify clip detail panel is still visible (not flashing)
     const clipDetail = page.locator('input[placeholder*="name" i], input[placeholder*="clip" i], [class*="ClipDetailsEditor"]').first();
-    const detailVisible = await clipDetail.isVisible({ timeout: 2000 }).catch(() => false);
+    const detailVisible = await clipDetail.isVisible().catch(() => false);
     // Also check: sidebar should show the selected clip with a highlighted border
     const selectedHighlight = page.locator('.border-l-3');
-    const highlightVisible = await selectedHighlight.isVisible({ timeout: 1000 }).catch(() => false);
+    const highlightVisible = await selectedHighlight.isVisible().catch(() => false);
     console.log(`[Test] STABILITY: Detail panel: ${detailVisible}, highlight: ${highlightVisible}`);
 
     // Also verify Add Clip button is hidden (clip is selected in non-FS)
@@ -274,7 +274,7 @@ test.describe('T690: Clip Selection State Machine', () => {
     await page.waitForTimeout(300);
 
     const addBtn = page.locator('button:has-text("Add Clip")').first();
-    const addVisNone = await addBtn.isVisible({ timeout: 2000 }).catch(() => false);
+    const addVisNone = await addBtn.isVisible().catch(() => false);
     console.log(`[Test] REQ 4: "Add Clip" when NONE: ${addVisNone} (expect true)`);
 
     await firstClip.click();
@@ -298,7 +298,7 @@ test.describe('T690: Clip Selection State Machine', () => {
     await page.waitForTimeout(500);
 
     const fsButton = page.locator('button[title="Fullscreen"]');
-    const hasFsBtn = await fsButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const hasFsBtn = await fsButton.isVisible().catch(() => false);
 
     if (!hasFsBtn) {
       console.log('[Test] SKIP fullscreen: button not visible (screen too wide)');
@@ -312,7 +312,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       // overlay's action button reads "Update" (it's "Save" only when CREATING).
       // Scope to the green action button so we don't match the "Save" tag chip.
       const saveOrUpdate = page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first();
-      const overlayVis = await saveOrUpdate.isVisible({ timeout: 3000 }).catch(() => false);
+      const overlayVis = await saveOrUpdate.isVisible().catch(() => false);
       console.log(`  REQ 8: Overlay visible: ${overlayVis}`);
       expect(overlayVis).toBe(true);
 
@@ -325,7 +325,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       // --- REQ 12: Close overlay keeps selection ---
       console.log('\n  --- REQ 12: Close overlay → SELECTED ---');
       const cancelBtn = page.locator('button:has-text("Cancel")').first();
-      if (await cancelBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await cancelBtn.isVisible().catch(() => false)) {
         await cancelBtn.click();
       } else {
         const resumeBtn = page.locator('button:has-text("Resume")').first();
@@ -342,7 +342,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       // --- REQ 5: Edit Clip visible in FS + SELECTED ---
       console.log('\n  --- REQ 5: Edit Clip in FS + SELECTED ---');
       const editBtnFS = page.locator('button:has-text("Edit Clip")').first();
-      const editVisFS = await editBtnFS.isVisible({ timeout: 2000 }).catch(() => false);
+      const editVisFS = await editBtnFS.isVisible().catch(() => false);
       const addBtnFSHidden = !(await page.locator('button:has-text("Add Clip")').isVisible().catch(() => false));
       console.log(`  REQ 5: "Edit Clip" visible: ${editVisFS}, "Add Clip" hidden: ${addBtnFSHidden}`);
       expect(editVisFS).toBe(true);
@@ -378,7 +378,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       expect(overlayGoneReq9).toBe(true);
 
       // --- REQ 3: Selection survived FS round-trip ---
-      const highlightAfterFS = await page.locator('.border-l-3').isVisible({ timeout: 2000 }).catch(() => false);
+      const highlightAfterFS = await page.locator('.border-l-3').isVisible().catch(() => false);
       console.log(`  REQ 3: Selection survived FS: ${highlightAfterFS}`);
     }
 
@@ -393,25 +393,25 @@ test.describe('T690: Clip Selection State Machine', () => {
 
     // Re-enter fullscreen with a selected clip
     const clipForTimeline = getClipItem(page, 0);
-    if (await clipForTimeline.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (await clipForTimeline.isVisible().catch(() => false)) {
       await clipForTimeline.click({ timeout: 5000 });
       await page.waitForTimeout(500);
     }
     const fsBtn2 = page.locator('button[title="Fullscreen"]');
-    if (await fsBtn2.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await fsBtn2.isVisible().catch(() => false)) {
       await fsBtn2.click();
       await page.waitForTimeout(1500);
 
       // We should now be in EDITING state with overlay open (green action button
       // reads "Update" when editing, "Save" when creating).
       const overlayOpen = await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
-        .isVisible({ timeout: 3000 }).catch(() => false);
+        .isVisible().catch(() => false);
       console.log(`[Test] TIMELINE: Overlay open after entering FS: ${overlayOpen}`);
 
       if (overlayOpen) {
         // Click timeline far from clips → overlay should close, Add Clip appears
         const timelineTrack = page.locator('.bg-gray-700.cursor-pointer.touch-none').last();
-        if (await timelineTrack.isVisible({ timeout: 2000 }).catch(() => false)) {
+        if (await timelineTrack.isVisible().catch(() => false)) {
           const box = await timelineTrack.boundingBox();
           if (box) {
             await page.mouse.click(box.x + box.width * 0.95, box.y + box.height / 2);
@@ -420,7 +420,7 @@ test.describe('T690: Clip Selection State Machine', () => {
             const overlayGone = !(await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
               .isVisible().catch(() => false));
             const addAppears = await page.locator('button:has-text("Add Clip")').first()
-              .isVisible({ timeout: 2000 }).catch(() => false);
+              .isVisible().catch(() => false);
             console.log(`[Test] TIMELINE: Overlay closed: ${overlayGone}, Add Clip: ${addAppears}`);
           }
         }

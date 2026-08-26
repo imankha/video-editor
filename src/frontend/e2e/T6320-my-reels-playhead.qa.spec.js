@@ -121,7 +121,7 @@ test.describe('T6320 — My Reels playhead handle (real account)', () => {
     await playBtn.click();
 
     const dialog = page.locator('[role="dialog"]');
-    const opened = await dialog.isVisible({ timeout: 8000 }).catch(() => false);
+    const opened = await dialog.isVisible().catch(() => false);
     test.skip(!opened, 'tile action did not open the story player (may have opened a menu instead)');
 
     if (glyph) {

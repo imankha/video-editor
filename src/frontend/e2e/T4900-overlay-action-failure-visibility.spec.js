@@ -82,7 +82,7 @@ test.describe('T4900 overlay action failure visibility', () => {
       // Look for an "In Overlay" draft or any project with a working video
       const overlayChip = page.getByTitle(/^Overlay:/).first();
       const openBtn = page.getByTitle('Open in Overlay').first();
-      const target = await overlayChip.isVisible({ timeout: 3000 }) ? overlayChip : openBtn;
+      const target = await overlayChip.isVisible() ? overlayChip : openBtn;
       await target.click({ timeout: 5000 });
       // Wait for the overlay editor to be ready (detection markers or timeline)
       await page.waitForSelector(
@@ -159,7 +159,7 @@ test.describe('T4900 overlay action failure visibility', () => {
     // ExportButtonContainer computes buttonTitle as "Some edits haven't saved..."
     // when hasUnsavedOverlayFailures is true.
     const createReelBtn = page.getByRole('button', { name: /create reel/i });
-    if (await createReelBtn.isVisible({ timeout: 2000 })) {
+    if (await createReelBtn.isVisible()) {
       const title = await createReelBtn.getAttribute('title');
       expect(title).toMatch(/haven't saved|unsaved/i);
       await saveEvidence(page, 'T4900-D-export-gate-button-warned');
@@ -194,7 +194,7 @@ test.describe('T4900 overlay action failure visibility', () => {
     });
 
     // Click the Retry button in the toast
-    if (await retryBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await retryBtn.isVisible().catch(() => false)) {
       await retryBtn.click();
       // Wait for the retry to complete and the toast to clear
       await page.waitForTimeout(3000);
@@ -206,7 +206,7 @@ test.describe('T4900 overlay action failure visibility', () => {
 
       // Assert: success confirmation toast ("Your highlight edits are saved")
       const successToast = page.getByText(/highlight edits are saved/i);
-      if (await successToast.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (await successToast.isVisible().catch(() => false)) {
         await saveEvidence(page, 'T4900-E-retry-success-confirmation');
         console.log('[T4900] E PASS: success confirmation toast visible');
       }
