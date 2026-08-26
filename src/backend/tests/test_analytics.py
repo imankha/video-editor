@@ -226,6 +226,97 @@ class TestRecordMilestone:
         record_milestone("user-a", "unknown_event")
 
 
+class TestAttemptOutcomeTaxonomy:
+    """T7510: attempt/outcome/failure-reason taxonomy on record_milestone."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+
+    def test_new_outcome_events_registered(self, pg_conn):
+        # The durable-completion events must exist so record_milestone accepts
+        # them instead of logging "Unknown event".
+        for event in (
+            "game_upload_succeeded",
+            "game_upload_failed",
+            "clip_save_attempted",
+            "clip_save_failed",
+            "share_attempted",
+            "move_attempted",
+            "move_succeeded",
+            "payment_failed",
+        ):
+            assert event in FLOW_EVENTS, f"{event} missing from FLOW_EVENTS"
+
+    def test_previously_dropped_engagement_events_registered(self, pg_conn):
+        # These bridged from frontend achievements to milestone names that were
+        # NOT in FLOW_EVENTS, so record_milestone silently dropped them.
+        for event in (
+            "add_clip_opened",
+            "watched_annotate_tutorial",
+            "watched_framing_tutorial",
+            "watched_overlay_tutorial",
+            "watched_publish_tutorial",
+        ):
+            assert event in FLOW_EVENTS, f"{event} missing from FLOW_EVENTS"
+
+    def test_game_created_relabeled_as_attempt(self, pg_conn):
+        # The reported lie: game_created was labeled "Uploaded". It fires on the
+        # pending insert BEFORE bytes upload, so it is an ATTEMPT.
+        assert FLOW_EVENTS["game_created"]["label"] == "Upload Attempted"
+        assert FLOW_EVENTS["game_upload_succeeded"]["label"] == "Uploaded"
+
+    def test_failure_reason_encoded_in_action(self, pg_conn):
+        record_milestone("user-a", "game_upload_failed", reason="timeout")
+        assert _get_action("user-a", "game_upload_failed:timeout")["count"] == 1
+        # A different reason is a distinct, queryable dimension.
+        record_milestone("user-a", "game_upload_failed", reason="network")
+        assert _get_action("user-a", "game_upload_failed:network")["count"] == 1
+        assert _get_action("user-a", "game_upload_failed:timeout")["count"] == 1
+
+    def test_failure_reason_folds_into_daily_counter(self, pg_conn):
+        from app.analytics import _counter_buffer
+        record_milestone("user-a", "game_upload_failed", reason="timeout")
+        record_milestone("user-a", "game_upload_failed", reason="network")
+        _counter_buffer.flush()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT game_uploads_failed FROM daily_counters "
+                "WHERE counter_date = CURRENT_DATE AND origin_type = 'all'"
+            )
+            # both reasons aggregate into the one daily fail column
+            assert cur.fetchone()["game_uploads_failed"] >= 2
+
+    def test_success_increments_daily_counter(self, pg_conn):
+        from app.analytics import _counter_buffer
+        record_milestone("user-a", "game_upload_succeeded")
+        _counter_buffer.flush()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT game_uploads_succeeded FROM daily_counters "
+                "WHERE counter_date = CURRENT_DATE AND origin_type = 'all'"
+            )
+            assert cur.fetchone()["game_uploads_succeeded"] >= 1
+
+    def test_reason_recorded_in_user_action_log_context(self, pg_conn):
+        # The per-user journey trail carries the machine-readable reason.
+        record_milestone("user-a", "game_upload_failed", reason="refused")
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection("user-a") as conn:
+            rows = conn.execute(
+                "SELECT action, context FROM user_action_log "
+                "WHERE action = 'game_upload_failed:refused'"
+            ).fetchall()
+        assert rows, "failure event not written to user_action_log"
+        import json as _json
+        assert _json.loads(rows[0][1])["reason"] == "refused"
+
+
 class TestUpdateSession:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):

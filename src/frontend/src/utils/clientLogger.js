@@ -8,9 +8,19 @@
  * T1650: Report a Problem Button
  */
 
+import { API_BASE } from '../config';
+import apiFetch from './apiFetch';
+
 const MAX_ENTRIES = 200;
 const _buffer = [];
 let _installed = false;
+
+// T7510 frustration-signal tier 2: cap beacon sends so a crash loop can't flood
+// the server with one POST per exception. The ring buffer above already keeps
+// every entry for the "Report a problem" flow; this cap is only for the
+// separate fire-and-forget server beacon.
+const MAX_BEACONS_PER_SESSION = 20;
+let _beaconCount = 0;
 
 /**
  * Install console interceptors. Safe to call multiple times
@@ -51,7 +61,9 @@ export function installClientLogger() {
         ? ` (${event.filename}:${event.lineno ?? '?'}:${event.colno ?? '?'})`
         : '';
       const detail = event.error?.stack || event.message || 'unknown error';
-      _push('error', [`[uncaught] ${detail}${where}`]);
+      const message = `[uncaught] ${detail}${where}`;
+      _push('error', [message]);
+      _sendClientErrorBeacon(message);
     });
 
     window.addEventListener('unhandledrejection', (event) => {
@@ -59,8 +71,32 @@ export function installClientLogger() {
       const detail = reason instanceof Error
         ? (reason.stack || `${reason.name}: ${reason.message}`)
         : String(reason);
-      _push('error', [`[unhandledrejection] ${detail}`]);
+      const message = `[unhandledrejection] ${detail}`;
+      _push('error', [message]);
+      _sendClientErrorBeacon(message);
     });
+  }
+}
+
+// T7510 frustration-signal tier 2: fire-and-forget POST so an uncaught client
+// error lands in SERVER logs even if the user never opens "Report a problem".
+// Mirrors uploadManager.js's sendUploadFailureBeacon contract: MUST NEVER throw
+// or block, writes to logs only (no DB), keepalive so it survives navigation.
+function _sendClientErrorBeacon(message) {
+  if (_beaconCount >= MAX_BEACONS_PER_SESSION) return;
+  _beaconCount++;
+  try {
+    apiFetch(`${API_BASE}/api/client-errors/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: message.slice(0, 1000),
+        route: typeof location !== 'undefined' ? location.pathname : null,
+      }),
+      keepalive: true,
+    }).catch(() => { /* never let the beacon break anything */ });
+  } catch {
+    /* never let the beacon break anything */
   }
 }
 

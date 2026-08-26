@@ -28,6 +28,8 @@ const CARD_LABELS = {
   active_users: 'Active Users',
   revenue: 'Revenue',
   viral_conversion: 'Viral Conv.',
+  // T7510: durable-upload success rate (game_upload_succeeded / attempts).
+  upload_success_rate: 'Upload Success',
 };
 
 export function PulseCards({ data }) {
@@ -42,13 +44,23 @@ export function PulseCards({ data }) {
         let displayVal = card.today;
         if (key === 'revenue') displayVal = `$${((card.today || 0) / 100).toFixed(2)}`;
         if (key === 'viral_conversion') displayVal = `${card.today || 0}%`;
+        // T7510: upload success rate is null when there were no attempts -> "--".
+        if (key === 'upload_success_rate') {
+          displayVal = card.today == null ? '--' : `${card.today}%`;
+        }
         return (
           <div key={key} className="bg-white/5 rounded-lg p-4 border border-white/10">
             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">{label}</div>
             <div className="text-white text-2xl font-bold">{displayVal}</div>
-            <div className={`text-xs mt-0.5 ${up ? 'text-green-400' : 'text-red-400'}`}>
-              {up ? '+' : ''}{card.change_pct}% vs last week
-            </div>
+            {key === 'upload_success_rate' ? (
+              <div className="text-xs mt-0.5 text-gray-400">
+                {card.succeeded ?? 0}/{card.attempts ?? 0} succeeded
+              </div>
+            ) : (
+              <div className={`text-xs mt-0.5 ${up ? 'text-green-400' : 'text-red-400'}`}>
+                {up ? '+' : ''}{card.change_pct}% vs last week
+              </div>
+            )}
             <Sparkline data={card.sparkline} />
           </div>
         );

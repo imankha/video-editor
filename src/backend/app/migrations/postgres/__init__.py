@@ -24,6 +24,7 @@ from .v022_user_usage_daily import V022UserUsageDaily
 from .v023_rename_pending_share_recipient_email import (
     V023RenamePendingShareRecipientEmail,
 )
+from .v024_attempt_outcome_counters import V024AttemptOutcomeCounters
 
 MIGRATIONS = [
     V001Baseline(),
@@ -49,6 +50,7 @@ MIGRATIONS = [
     V021ShareClaims(),
     V022UserUsageDaily(),
     V023RenamePendingShareRecipientEmail(),
+    V024AttemptOutcomeCounters(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

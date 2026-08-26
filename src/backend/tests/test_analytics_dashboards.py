@@ -28,7 +28,11 @@ def analytics_setup(pg_conn):
     create_user_segment("user-a", "organic", None, "otp")
     create_user_segment("user-b", "organic", "user-a", "google")
 
+    # T7510: game_created is now the upload ATTEMPT; a clip_created for user-a
+    # means their upload durably succeeded, so the fixture emits the outcome
+    # event too (real usage: you can't clip a game that never finished uploading).
     record_milestone("user-a", "game_created")
+    record_milestone("user-a", "game_upload_succeeded")
     record_milestone("user-a", "clip_created")
     record_milestone("user-a", "export_completed")
     record_milestone("user-b", "game_created")
@@ -198,6 +202,75 @@ class TestJourneyEndpoint:
     def test_journey_403_non_admin(self, client):
         resp = client.get("/api/admin/analytics/journey/user-a", headers=_auth("user-a"))
         assert resp.status_code == 403
+
+    def test_journey_includes_failed_upload_gap_and_reasons(self, client_journey):
+        # user-a already has game_created (attempt) from the fixture but no
+        # game_upload_succeeded/failed — record a failure so the journey shows
+        # the honest attempted-vs-succeeded gap plus the reason breakdown.
+        record_milestone("user-a", "game_upload_failed", reason="timeout")
+        resp = client_journey.get("/api/admin/analytics/journey/user-a", headers=_auth())
+        assert resp.status_code == 200
+        milestones = {m["event"]: m for m in resp.json()["milestones"]}
+        # game_created (the ATTEMPT) fired bare -- a normal completed milestone,
+        # no failure info attached (failures live on the OUTCOME base, below).
+        assert milestones["game_created"]["at"] is not None
+        assert "failures" not in milestones["game_created"]
+        # "game_upload_failed:timeout" never fires bare, only reason-suffixed, so
+        # its rollup becomes the game_upload_failed entry itself (0 succeeded,
+        # failed_count from the reason breakdown) rather than a pending placeholder.
+        failed = milestones["game_upload_failed"]
+        assert failed["failures"] == {"timeout": 1}
+        assert failed["failed_count"] == 1
+        assert failed["count"] == 0
+
+    def test_journey_retry_burst_signal(self, client_journey):
+        # >=3 of the SAME attempt action within 60s -> a retry-burst flag,
+        # derived at read time (no new storage) per T7510 tier-5 (partial).
+        for _ in range(3):
+            record_milestone("user-a", "game_created")
+        resp = client_journey.get("/api/admin/analytics/journey/user-a", headers=_auth())
+        assert resp.status_code == 200
+        bursts = resp.json()["frustration_signals"]["retry_bursts"]
+        assert "game_created" in bursts
+        assert bursts["game_created"][0]["count"] >= 3
+
+
+class TestRetryBurstDetection:
+    """Pure-function coverage for _detect_retry_bursts (T7510 tier-5, partial).
+
+    No DB involved -- deterministic timestamps in, deterministic bursts out.
+    Kept independent of the journey integration tests above, which share
+    user-a's real (unpatched-per-request) SQLite user_action_log across the
+    suite and so can't assert a precise ABSENCE of historical bursts."""
+
+    def test_three_within_window_is_a_burst(self):
+        from app.routers.admin import _detect_retry_bursts
+        ts = [
+            "2026-08-20T10:00:00.000000Z",
+            "2026-08-20T10:00:20.000000Z",
+            "2026-08-20T10:00:45.000000Z",
+        ]
+        bursts = _detect_retry_bursts(ts)
+        assert len(bursts) == 1
+        assert bursts[0]["count"] == 3
+
+    def test_two_within_window_is_not_a_burst(self):
+        from app.routers.admin import _detect_retry_bursts
+        ts = ["2026-08-20T10:00:00.000000Z", "2026-08-20T10:00:20.000000Z"]
+        assert _detect_retry_bursts(ts) == []
+
+    def test_three_spread_beyond_window_is_not_a_burst(self):
+        from app.routers.admin import _detect_retry_bursts
+        ts = [
+            "2026-08-20T10:00:00.000000Z",
+            "2026-08-20T10:05:00.000000Z",
+            "2026-08-20T10:10:00.000000Z",
+        ]
+        assert _detect_retry_bursts(ts) == []
+
+    def test_empty_timestamps_returns_no_bursts(self):
+        from app.routers.admin import _detect_retry_bursts
+        assert _detect_retry_bursts([]) == []
 
 
 class TestPulseEndpoint:

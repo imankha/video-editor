@@ -202,6 +202,34 @@ async def test_clip_save_forced_sync_failure_returns_503_not_durable(dur_env):
         "503 path must NOT be durable — a 200 here would have silently reverted the clip"
 
 
+@pytest.mark.asyncio
+async def test_clip_save_forced_sync_failure_emits_clip_save_failed(dur_env, monkeypatch):
+    """T7510: the middleware's generic durable-sync 503 branch is the taxonomy's
+    failure outcome for /clips/raw/save (DURABLE_SYNC_FAILURE_ACTIONS in
+    db_sync.py). clips.py's `clip_save_attempted` call is stubbed to a no-op by
+    dur_env (no Postgres here), but the middleware re-imports record_milestone
+    from app.analytics at call time, so patching app.analytics.record_milestone
+    itself intercepts the failure-branch call."""
+    app, fake, base, game_id = dur_env
+    fake.fail_profile_upload = True
+
+    calls = []
+    monkeypatch.setattr(
+        "app.analytics.record_milestone",
+        lambda user_id, event, context=None, reason=None: calls.append((event, reason)),
+    )
+
+    async with _client(app) as c:
+        resp = await c.post("/api/clips/raw/save", json={
+            "game_id": game_id, "start_time": 3.0, "end_time": 7.0,
+            "name": "WillFailAnalytics", "rating": 5, "video_sequence": 1,
+        })
+
+    assert resp.status_code == 503, resp.text
+    assert ("clip_save_failed", "sync_failed") in calls, \
+        f"expected a clip_save_failed(reason=sync_failed) emission on the durable-sync 503, got {calls}"
+
+
 # ===========================================================================
 # 3. user.sqlite is covered by the SIGTERM graceful-shutdown sync
 # ===========================================================================

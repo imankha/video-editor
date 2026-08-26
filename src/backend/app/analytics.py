@@ -123,7 +123,11 @@ INVITE_CODE_RE = re.compile(r'^[0-9a-f]{8}$')
 
 FLOW_EVENTS = {
     # Original events (T3010)
-    "game_created":         {"label": "Uploaded",           "daily_col": "games_created"},
+    # T7510: game_created fires on the PENDING game insert (games.py create_game)
+    # BEFORE any bytes reach R2 — it is an ATTEMPT, not a durable upload. The
+    # durable success is game_upload_succeeded (finalize_upload). Relabeled so the
+    # funnel/journey stop counting attempts as uploads (the reported prod lie).
+    "game_created":         {"label": "Upload Attempted",   "daily_col": "games_created"},
     "clip_created":         {"label": "Clipped",            "daily_col": "clips_created"},
     "export_completed":     {"label": "Exported",           "daily_col": "exports_completed"},
     "export_failed":        {"label": None,                 "daily_col": "exports_failed"},
@@ -158,11 +162,46 @@ FLOW_EVENTS = {
     "overlay_players_assigned":     {"label": "Players Spotlighted",        "daily_col": None},
     "overlay_color_set":            {"label": "Highlight Color Set",        "daily_col": None},
     "overlay_shape_set":            {"label": "Highlight Shape Set",        "daily_col": None},
+    # T7510: attempt/outcome/failure taxonomy. Every funnel action gets an
+    # ATTEMPT (gesture-time) and, at its durable completion point, EITHER a
+    # _succeeded OR a _failed carrying a machine-readable reason (see MILESTONE_REASONS).
+    # Failure reason is encoded into the stored action name as "{event}:{reason}"
+    # (record_milestone `reason=`), so per-reason breakdowns are queryable in the
+    # user_actions aggregate while the daily_col below rolls all reasons into one.
+    "game_upload_succeeded":        {"label": "Uploaded",                   "daily_col": "game_uploads_succeeded"},
+    "game_upload_failed":           {"label": "Upload Failed",              "daily_col": "game_uploads_failed"},
+    "clip_save_attempted":          {"label": "Clip Attempted",             "daily_col": "clips_attempted"},
+    "clip_save_failed":             {"label": "Clip Failed",                "daily_col": "clips_failed"},
+    "share_attempted":              {"label": "Share Attempted",            "daily_col": None},
+    "move_attempted":               {"label": "Move Attempted",             "daily_col": None},
+    "move_succeeded":               {"label": "Moved to Reels",             "daily_col": None},
+    "payment_failed":               {"label": "Payment Failed",             "daily_col": None},
+    # T7510: previously-dropped engagement milestones (frontend achievements
+    # bridged to these names, which were absent from FLOW_EVENTS -> "Unknown
+    # event" drops). Registered as engagement dimensions (no daily rollup).
+    "add_clip_opened":              {"label": "Add Clip Opened",            "daily_col": None},
+    "watched_annotate_tutorial":    {"label": "Watched Annotate Tutorial",  "daily_col": None},
+    "watched_framing_tutorial":     {"label": "Watched Framing Tutorial",   "daily_col": None},
+    "watched_overlay_tutorial":     {"label": "Watched Overlay Tutorial",   "daily_col": None},
+    "watched_publish_tutorial":     {"label": "Watched Publish Tutorial",   "daily_col": None},
 }
+
+# T7510: closed vocabulary of coarse, machine-readable failure reasons. Encoded
+# into the stored action name for a failed attempt (e.g. game_upload_failed:timeout)
+# so "what did users try that didn't work" is queryable per reason.
+MILESTONE_REASONS = frozenset({
+    "timeout",         # client gave up / server slow
+    "network",         # transport dropped
+    "refused",         # server/validation rejection (quota, format, 4xx)
+    "sync_failed",     # R2 CAS / durable-sync refusal
+    "user_abandoned",  # reaped pending / navigated away
+    "unknown",         # uncaught
+})
 
 FUNNEL_STEPS = [
     "session_started",
-    "game_created",
+    "game_created",           # T7510: upload ATTEMPT (pending insert)
+    "game_upload_succeeded",  # T7510: durable upload OUTCOME (finalize)
     "clip_created",
     "annotation_completed",
     "framing_opened",
@@ -267,7 +306,19 @@ def create_user_segment(
         logger.exception("[Analytics] Failed to create segment for %s", user_id)
 
 
-def record_milestone(user_id: str, event: str, context: dict | None = None):
+def record_milestone(
+    user_id: str, event: str, context: dict | None = None, reason: str | None = None
+):
+    """Record a milestone / funnel event.
+
+    T7510: `reason` marks a FAILED attempt with a coarse, machine-readable cause
+    (must be in ``MILESTONE_REASONS``). The stored action name becomes
+    ``"{event}:{reason}"`` so per-reason breakdowns are queryable in the
+    ``user_actions`` aggregate (e.g. ``LIKE 'game_upload_failed:%'``), while the
+    daily counter for the base event rolls all reasons together. ``event`` itself
+    must be a base key in ``FLOW_EVENTS``; the reason is validated but never
+    invents a new base dimension.
+    """
     # T1515: don't attribute admin impersonation actions to the user's analytics.
     impersonator = get_current_impersonator_id()
     if impersonator:
@@ -278,6 +329,13 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
         if not cfg:
             logger.warning("[Analytics] Unknown event: %s", event)
             return
+
+        if reason is not None and reason not in MILESTONE_REASONS:
+            # A bad reason is an internal bug, not external data — fail loudly
+            # rather than silently coining a new dimension (coding-standards §5).
+            logger.warning("[Analytics] Unknown failure reason %r for event %s", reason, event)
+            reason = "unknown"
+        action = f"{event}:{reason}" if reason else event
 
         try:
             platform = get_current_platform()
@@ -292,7 +350,7 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
                 VALUES (%s, %s, %s)
                 ON CONFLICT (user_id, action, platform)
                 DO UPDATE SET count = user_actions.count + 1
-            """, (user_id, event, platform))
+            """, (user_id, action, platform))
 
             cur.execute(
                 "UPDATE user_segments SET last_active_at = now() WHERE user_id = %s",
@@ -310,22 +368,28 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
                     _counter_buffer.increment(row["origin"], daily_col)
                     _counter_buffer.increment("all", daily_col)
 
-        logger.info("[Analytics] Recorded: event=%s user=%s", event, user_id)
+        logger.info("[Analytics] Recorded: action=%s user=%s", action, user_id)
     except Exception:
-        logger.exception("[Analytics] Failed to record %s for %s", event, user_id)
+        logger.exception("[Analytics] Failed to record %s for %s", action, user_id)
         return
 
     try:
         from app.services.user_db import get_user_db_connection
+        # T7510: the per-user journey trail carries the reason-encoded action AND
+        # the reason in context, so the admin journey view can show the failure
+        # cause without re-parsing the action string.
+        log_context = dict(context) if context else {}
+        if reason:
+            log_context["reason"] = reason
         with get_user_db_connection(user_id) as conn:
             now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             conn.execute(
                 "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
-                (event, json.dumps(context) if context else None, now),
+                (action, json.dumps(log_context) if log_context else None, now),
             )
             conn.commit()
     except Exception:
-        logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s event=%s", user_id, event)
+        logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s action=%s", user_id, action)
 
 
 def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] | None:

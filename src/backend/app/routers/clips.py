@@ -1155,6 +1155,9 @@ async def save_raw_clip(
     Idempotent: If a clip with the same game_id + end_time + video_sequence already exists,
     updates that clip instead of creating a duplicate.
     """
+    # T7510: the Save Clip gesture IS the attempt; `clip_created` (new-clip commit
+    # branch below) is the durable success. record_milestone is impersonation-guarded.
+    record_milestone(get_current_user_id(), "clip_save_attempted")
     # T7010: the backend stores whatever game_id the client sends (RawClipCreate.game_id
     # is authoritative). Log the frontend's ACTIVE game alongside it so a "clip landed
     # under the wrong game" report is one grep, not req_id archaeology. They come from

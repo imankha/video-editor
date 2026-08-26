@@ -1272,6 +1272,68 @@ async def analytics_cohorts(
     return {"cohorts": cohorts, "granularity": granularity}
 
 
+# T7510 frustration-signal tier 5 (partial — retry-burst only; repeat-visit and
+# rapid-fire are DEFERRED to T7515). These are the funnel's ATTEMPT-side actions
+# a user can plausibly hammer against a broken CTA.
+RETRY_BURST_ACTIONS = ("game_created", "clip_save_attempted", "share_attempted", "move_attempted")
+
+
+def _detect_retry_bursts(timestamps: list[str], window_sec: int = 60, threshold: int = 3) -> list[dict]:
+    """Read-time-only derivation, no new storage (per §7 tier 5 scope). A
+    retry-burst is >= `threshold` attempts of the SAME action within any
+    `window_sec` sliding window — the signature of a user hammering a broken
+    CTA (bigajosue's repeated failed-upload attempts in one sitting)."""
+    from datetime import datetime as _dt
+
+    parsed = sorted(
+        _dt.fromisoformat(t.replace("Z", "+00:00")) for t in timestamps if t
+    )
+    bursts = []
+    i = 0
+    n = len(parsed)
+    while i < n:
+        j = i
+        while j < n and (parsed[j] - parsed[i]).total_seconds() <= window_sec:
+            j += 1
+        count = j - i
+        if count >= threshold:
+            bursts.append({
+                "count": count,
+                "window_start": parsed[i].isoformat(),
+                "window_end": parsed[j - 1].isoformat(),
+            })
+            i = j  # advance past this cluster instead of re-counting it
+        else:
+            i += 1
+    return bursts
+
+
+def _rollup_failures(action_rows: list[dict]) -> dict[str, dict]:
+    """T7510: roll up ``{base_event}:{reason}`` failure rows under their base event.
+
+    Failed attempts are stored in the ``user_actions`` aggregate as
+    ``"<base_event>:<reason>"`` rows (e.g. ``game_upload_failed:timeout``). This
+    collapses them into ``{base_event: {"count": <sum>, "failures": {reason: count}}}``
+    so the journey view can render an attempted-vs-succeeded gap plus the
+    per-reason breakdown, without exploding the funnel base keys.
+
+    ``count`` is the total across all reasons for that base event; ``failures``
+    is the per-reason breakdown. Only rows whose action name contains ``':'`` are
+    treated as failure rows — base events (no colon) are left to the caller.
+    """
+    rollup: dict[str, dict] = {}
+    for ar in action_rows:
+        action = ar["action"]
+        if ":" not in action:
+            continue
+        base, reason = action.split(":", 1)
+        cnt = ar["count"] or 0
+        agg = rollup.setdefault(base, {"count": 0, "failures": {}})
+        agg["count"] += cnt
+        agg["failures"][reason] = agg["failures"].get(reason, 0) + cnt
+    return rollup
+
+
 @router.get("/analytics/journey/{user_id}")
 async def analytics_journey(user_id: str):
     _require_admin()
@@ -1310,15 +1372,48 @@ async def analytics_journey(user_id: str):
     })
 
     from ..analytics import FLOW_EVENTS
+
+    # T7510: roll up "<base>:<reason>" failure rows under their base event so the
+    # journey renders an attempted-vs-succeeded gap plus per-reason breakdown.
+    failure_rollup = _rollup_failures(action_rows)
+
     seen_actions = set()
+    failure_first_at: dict[str, str] = {}
     for ar in action_rows:
-        seen_actions.add(ar["action"])
-        entry: dict = {"event": ar["action"], "at": ar["first_at"].isoformat() if ar["first_at"] else None}
+        action = ar["action"]
+        if ":" in action:
+            # Failure row — folded into its base event's milestone below, not a
+            # standalone milestone. Track the earliest attempt time per base.
+            base = action.split(":", 1)[0]
+            at = ar["first_at"].isoformat() if ar["first_at"] else None
+            if at and (base not in failure_first_at or at < failure_first_at[base]):
+                failure_first_at[base] = at
+            continue
+        seen_actions.add(action)
+        entry: dict = {"event": action, "at": ar["first_at"].isoformat() if ar["first_at"] else None}
         if ar["count"] is not None:
             entry["count"] = ar["count"]
         if ar["platform_counts"]:
             entry["platforms"] = ar["platform_counts"]
+        if action in failure_rollup:
+            # Base event that ALSO has failures (e.g. some succeeded, some failed).
+            entry["failures"] = failure_rollup[action]["failures"]
+            entry["failed_count"] = failure_rollup[action]["count"]
         completed.append(entry)
+
+    # T7510: base events that appear ONLY as failures (never succeeded) still need a
+    # milestone so the dashboard shows "attempted N, 0 succeeded, reasons: ...".
+    for base, agg in failure_rollup.items():
+        if base in seen_actions:
+            continue
+        seen_actions.add(base)
+        completed.append({
+            "event": base,
+            "at": failure_first_at.get(base),
+            "count": 0,
+            "failed_count": agg["count"],
+            "failures": agg["failures"],
+        })
 
     pending = [{"event": ev, "at": None} for ev in FLOW_EVENTS if ev not in seen_actions]
 
@@ -1326,6 +1421,24 @@ async def analytics_journey(user_id: str):
     milestones = completed + pending
 
     session_count = next((ar["count"] for ar in action_rows if ar["action"] == "session_started"), 0)
+
+    # T7510 tier 5 (partial): retry-burst, derived at read time from the
+    # per-user SQLite action log — no new storage.
+    from ..services.user_db import get_user_db_connection
+    placeholders = ",".join("?" for _ in RETRY_BURST_ACTIONS)
+    with get_user_db_connection(user_id) as user_conn:
+        burst_rows = user_conn.execute(
+            f"SELECT action, created_at FROM user_action_log WHERE action IN ({placeholders})",
+            RETRY_BURST_ACTIONS,
+        ).fetchall()
+    timestamps_by_action: dict[str, list[str]] = {}
+    for r in burst_rows:
+        timestamps_by_action.setdefault(r["action"], []).append(r["created_at"])
+    retry_bursts = {
+        action: bursts
+        for action, ts in timestamps_by_action.items()
+        if (bursts := _detect_retry_bursts(ts))
+    }
 
     return {
         "user_id": user_id,
@@ -1335,6 +1448,7 @@ async def analytics_journey(user_id: str):
         "milestones": milestones,
         "session_count": session_count,
         "last_active_at": seg["last_active_at"].isoformat() if seg["last_active_at"] else None,
+        "frustration_signals": {"retry_bursts": retry_bursts},
     }
 
 
@@ -1451,6 +1565,20 @@ async def analytics_pulse(
             """, [*filter_params, start, today])
             export_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
+            # T7510: upload success rate over the same segment filter. Sourced from
+            # user_actions (segment-scoped) since daily_counters can't honor an
+            # arbitrary segment filter. Failed rows carry a ":<reason>" suffix.
+            cur.execute(f"""
+                SELECT
+                    COALESCE(SUM(CASE WHEN a.action = 'game_upload_succeeded' THEN a.count END), 0) AS succeeded,
+                    COALESCE(SUM(CASE WHEN a.action LIKE 'game_upload_failed:%%' THEN a.count END), 0) AS failed
+                FROM user_actions a
+                JOIN user_segments s ON a.user_id = s.user_id
+                {seg_where} AND (a.action = 'game_upload_succeeded' OR a.action LIKE 'game_upload_failed:%%')
+            """, filter_params)
+            ur = cur.fetchone()
+            upload_succeeded_total, upload_failed_total = ur["succeeded"], ur["failed"]
+
             if origin and not acquired_from and not acquired_to and not filter:
                 cur.execute("""
                     SELECT counter_date AS d, sessions_started AS cnt
@@ -1518,7 +1646,9 @@ async def analytics_pulse(
                 SELECT counter_date, signups, exports_completed, credit_purchases,
                        COALESCE(shares_completed, 0) AS shares_completed,
                        COALESCE(shares_viewed, 0) AS shares_viewed,
-                       COALESCE(sessions_started, 0) AS sessions_started
+                       COALESCE(sessions_started, 0) AS sessions_started,
+                       COALESCE(game_uploads_succeeded, 0) AS game_uploads_succeeded,
+                       COALESCE(game_uploads_failed, 0) AS game_uploads_failed
                 FROM daily_counters
                 WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s
                 ORDER BY counter_date
@@ -1546,6 +1676,10 @@ async def analytics_pulse(
             shares_by_date = {d: _cv(d, "shares_completed") for d in date_range_tmp if _cv(d, "shares_completed")}
             views_by_date = {d: _cv(d, "shares_viewed") for d in date_range_tmp if _cv(d, "shares_viewed")}
 
+            # T7510: upload success rate from the new daily_counters columns.
+            upload_succeeded_total = sum(_cv(d, "game_uploads_succeeded") for d in date_range_tmp)
+            upload_failed_total = sum(_cv(d, "game_uploads_failed") for d in date_range_tmp)
+
     date_range = [(start + timedelta(days=i)) for i in range(days)]
 
     signups_spark = [signup_by_date.get(d, 0) for d in date_range]
@@ -1571,6 +1705,24 @@ async def analytics_pulse(
     viral_card = make_card(viral_spark)
     viral_card["today"] = viral_pct
 
+    # T7510: upload success rate = succeeded / (succeeded + failed). Guard
+    # divide-by-zero -> null so the card renders "--" when there were no attempts
+    # (an honest "no data", not a misleading 0% or 100%).
+    upload_attempts_total = upload_succeeded_total + upload_failed_total
+    upload_success_rate = (
+        round(upload_succeeded_total / upload_attempts_total * 100, 1)
+        if upload_attempts_total else None
+    )
+    upload_success_card = {
+        "today": upload_success_rate,
+        "last_week_same_day": None,
+        "change_pct": 0.0,
+        "sparkline": [],
+        "succeeded": upload_succeeded_total,
+        "failed": upload_failed_total,
+        "attempts": upload_attempts_total,
+    }
+
     return {
         "cards": {
             "signups": make_card(signups_spark),
@@ -1578,6 +1730,7 @@ async def analytics_pulse(
             "active_users": make_card(active_spark),
             "revenue": revenue_card,
             "viral_conversion": viral_card,
+            "upload_success_rate": upload_success_card,
         },
         "days": days,
     }
