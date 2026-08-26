@@ -1,6 +1,6 @@
 # T6770: Replace `game_ref_counts.ref_count` with a derived ref-set
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-08-11
