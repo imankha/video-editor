@@ -808,6 +808,14 @@ async def report_problem(body: ProblemReportRequest, request: Request):
     if not _ENABLE_PROBLEM_REPORT:
         raise HTTPException(status_code=404, detail="Not found")
 
+    # T7560: never persist an empty report. Prod row #46 landed with a NULL
+    # description and captured nothing diagnosable. The client already gates on
+    # this, but we never trust client-only validation — reject NULL/blank here
+    # too. A non-empty description (including any explicit placeholder the client
+    # might choose to send) is accepted.
+    if not body.description or not body.description.strip():
+        raise HTTPException(status_code=400, detail="A description is required.")
+
     req_id = request.headers.get("x-request-id", "?")
 
     # 1. Insert bug into Postgres

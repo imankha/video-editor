@@ -115,7 +115,14 @@ export function ReportProblemButton({ className = '', compact = false }) {
     setState('idle');
   };
 
+  // T7560: a report with no words captures nothing diagnosable (prod row #46
+  // landed NULL). Require at least one non-whitespace character before we let
+  // the report go out. The screenshot/logs/actions still ride along once there
+  // is a sentence to anchor them.
+  const canSend = description.trim().length > 0 && state !== 'sending';
+
   const handleSend = async () => {
+    if (!description.trim()) return; // gate (belt-and-braces with the disabled button)
     setState('sending');
     try {
       const logs = getClientLogs();
@@ -127,7 +134,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
         user_agent: navigator.userAgent,
         page_url: window.location.href,
         email: email || null,
-        description: description.trim() || null,
+        description: description.trim(),
         screenshot: screenshotRef.current ? '(base64 image)' : null,
         build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
         actions,
@@ -228,14 +235,18 @@ export function ReportProblemButton({ className = '', compact = false }) {
                 className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50"
               />
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-[11px] text-gray-500">
-                  A screenshot and logs are included automatically
+                  {canSend || state === 'sending'
+                    ? 'A screenshot and logs are included automatically'
+                    : 'One sentence helps us fix it — a screenshot and logs are included automatically'}
                 </span>
                 <button
                   onClick={handleSend}
-                  disabled={state === 'sending'}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors"
+                  disabled={!canSend}
+                  aria-disabled={!canSend}
+                  title={!canSend && state !== 'sending' ? 'Add a short description first' : undefined}
+                  className="shrink-0 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   {state === 'sending' ? 'Sending...' : 'Send report'}
                 </button>
