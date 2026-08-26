@@ -365,6 +365,70 @@ class TestUpdateSession:
         seg2 = _get_segment("user-a")
         assert seg2["total_usage_seconds"] == 900
 
+    def test_concurrent_calls_count_one_session(self, pg_conn):
+        """T7570: overlapping update_session calls for the same user must count
+        exactly ONE new session, not one per call.
+
+        Prod evidence showed session_started firing ~200ms apart (a fire-and-forget
+        /me background task retried on a Fly cold-start, and/or an overlapping
+        heartbeat), inflating counts ~2x. The mechanism is a lost-update race: two
+        calls both SELECT the stale last_active_at, both see is_new_session=True,
+        both increment. The FOR UPDATE row lock serializes the decide-and-roll so
+        only the first observes a new session. This test fires many overlapping
+        calls and asserts both stores record exactly one.
+
+        Counterfactual: removing FOR UPDATE lets several calls race past the gate,
+        pushing the PG count and the SQLite log row-count above 1.
+        """
+        import concurrent.futures
+
+        from app.services.pg import get_pg
+        from app.services.user_db import get_user_db_connection
+
+        # Seed a genuine new-session boundary (idle > 30 min) and a clean slate.
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE user_segments SET
+                       last_active_at = now() - INTERVAL '31 minutes',
+                       current_session_start = now() - INTERVAL '31 minutes',
+                       total_usage_seconds = 0
+                   WHERE user_id = %s""",
+                ("user-a",),
+            )
+            cur.execute(
+                "DELETE FROM user_actions WHERE user_id = %s AND action = 'session_started'",
+                ("user-a",),
+            )
+        try:
+            with get_user_db_connection("user-a") as uconn:
+                uconn.execute("DELETE FROM user_action_log WHERE action = 'session_started'")
+                uconn.commit()
+        except Exception:
+            pass
+
+        N = 8
+        with concurrent.futures.ThreadPoolExecutor(max_workers=N) as pool:
+            futures = [pool.submit(update_session, "user-a") for _ in range(N)]
+            for f in futures:
+                f.result()
+
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COALESCE(SUM(count), 0) AS total FROM user_actions "
+                "WHERE user_id = %s AND action = 'session_started'",
+                ("user-a",),
+            )
+            pg_count = cur.fetchone()["total"]
+        assert pg_count == 1, f"expected exactly 1 session counted, got {pg_count}"
+
+        with get_user_db_connection("user-a") as uconn:
+            log_rows = uconn.execute(
+                "SELECT COUNT(*) FROM user_action_log WHERE action = 'session_started'"
+            ).fetchone()[0]
+        assert log_rows == 1, f"expected exactly 1 SQLite log row, got {log_rows}"
+
 
 class TestSessionEngagedSeconds:
     """T5660: pure-function accounting shared by the write side (banking) and the
