@@ -47,6 +47,11 @@ async function captureScreenshot() {
       logging: false,
       backgroundColor: '#111827',
       onclone: (_doc, clonedBody) => {
+        // The report modal itself may already be open in the live DOM by the
+        // time this clone runs (capture is fired in parallel with opening the
+        // modal, not before it) -- strip it from the clone so it never shows
+        // up in its own screenshot.
+        clonedBody.querySelectorAll('[data-report-modal]').forEach((el) => el.remove());
         const clonedVideos = clonedBody.querySelectorAll('video');
         clonedVideos.forEach((clonedVideo, i) => {
           const dataUrl = videoFrames.get(originalVideos[i]);
@@ -86,10 +91,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [state, setState] = useState('idle'); // idle | sending | sent | error
-  // undefined = not yet captured for this trigger cycle; null = captured and
-  // failed; string = captured. Distinct from null so a prefetch that's still
-  // in flight (or hasn't started) is never mistaken for a completed capture.
-  const screenshotRef = useRef(undefined);
+  const screenshotRef = useRef(null);
   const textareaRef = useRef(null);
 
   // Focus textarea when modal opens. Declared here (before the early return
@@ -103,33 +105,27 @@ export function ReportProblemButton({ className = '', compact = false }) {
 
   if (!ENABLE_PROBLEM_REPORT) return null;
 
-  // Kick off the screenshot capture on hover/focus, well before a click is
-  // likely -- so by the time handleOpen runs, the capture is usually already
-  // done and the modal appears instantly instead of waiting on html2canvas.
-  // Still correct if the user clicks immediately: handleOpen falls back to
-  // awaiting the same capture (or starts a fresh one) before showing the
-  // modal, preserving the "modal never appears in its own screenshot"
-  // guarantee either way.
-  const prefetchScreenshot = () => {
-    if (open || screenshotRef.current !== undefined) return;
-    captureScreenshot().then((shot) => {
-      if (screenshotRef.current === undefined) screenshotRef.current = shot;
-    });
-  };
-
-  const handleOpen = async () => {
-    if (screenshotRef.current === undefined) {
-      screenshotRef.current = await captureScreenshot();
-    }
+  // T7560 follow-up: html2canvas is slow enough (full-page render) that
+  // awaiting it before opening the modal made every click feel laggy. Open
+  // the modal immediately and capture in parallel instead -- the modal is
+  // excluded from the actual screenshot via the onclone hook above (it
+  // strips any `[data-report-modal]` element from the clone), so there's no
+  // ordering requirement between "modal visible" and "capture started"
+  // anymore. If Send is clicked before the capture resolves, the report
+  // just goes out without a screenshot -- same graceful degradation as a
+  // capture failure, already handled below.
+  const handleOpen = () => {
     setDescription('');
     setState('idle');
     setOpen(true);
+    screenshotRef.current = null;
+    captureScreenshot().then((shot) => { screenshotRef.current = shot; });
   };
 
   const handleClose = () => {
     setOpen(false);
     setDescription('');
-    screenshotRef.current = undefined;
+    screenshotRef.current = null;
     setState('idle');
   };
 
@@ -194,9 +190,6 @@ export function ReportProblemButton({ className = '', compact = false }) {
       <button
         type="button"
         onClick={handleOpen}
-        onMouseEnter={prefetchScreenshot}
-        onFocus={prefetchScreenshot}
-        onTouchStart={prefetchScreenshot}
         aria-label="Report a problem"
         title={compact ? 'Report a problem' : undefined}
         className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
@@ -208,7 +201,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
+    <div data-report-modal className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div
         className="bg-gray-800 border border-gray-600 rounded-xl w-full max-w-md mx-4 shadow-2xl"
       >
