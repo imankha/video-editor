@@ -41,11 +41,15 @@ navigation, not the source of truth):**
   browser context for public-share semantics)
 - `T5190-intro-upload-consent.spec.js` + `T5215-intro-attachment.qa.spec.js` — T6660's
   "Athlete Intro Card" rename, one 2-line fix clears 11 tests
-- `t5672-arrows-screenshot.spec.js`, `t5672-carousel-chevrons-auto-badge.spec.js`,
-  `T5672-drafts-tiles-carousel.spec.js`, `t5672-screenshot-verify.spec.js`,
-  `T5673-drawer-polish.qa.spec.js`, `T5673-my-reels-tiles.qa.spec.js`,
-  `T5681-games-poster-grid.spec.js` — a cluster of T6810/T6800/T6890-era drift (carousel
-  restructuring, pencil-icon rename replacing kebab-menu rename)
+- `t5672-arrows-screenshot.spec.js`, `T5672-drafts-tiles-carousel.spec.js`,
+  `t5672-screenshot-verify.spec.js`, `T5673-drawer-polish.qa.spec.js`,
+  `T5673-my-reels-tiles.qa.spec.js`, `T5681-games-poster-grid.spec.js` — a cluster of
+  T6810/T6800/T6890-era drift (carousel restructuring, pencil-icon rename replacing
+  kebab-menu rename). **`t5672-carousel-chevrons-auto-badge.spec.js` was REMOVED from this
+  list 2026-08-26** — its one listed issue (fragile `aspect_ratio` derivation via a live-
+  account `find()`) was a duplicate classification; T7750 already fixed it (see T7750's
+  Progress Log / merged PR #273). Do not re-touch this file unless a genuinely NEW issue
+  turns up while working this cluster.
 - `T5700-two-lanes.qa.spec.js:191` — stale `title` attribute assumption (T6400 invariant: My
   Athlete rows are unmarked by design)
 - `T5930-update-gate-single-through-login.qa.spec.js:41` — dead API surface, same family as
