@@ -185,11 +185,13 @@ test.describe('T5700 follow-up — landscape phone (T4933 case) stays usable', (
 
     // Select a clip so the tall ClipDetailsEditor mounts (T4933 repro needs this —
     // an empty-clip game hides the bug per annotate.md). Select via the clip-list
-    // row (its layer chip), not the timeline `.clip-marker` — the marker's
-    // `hover:scale-110` transition never settles for Playwright's actionability
-    // check against this densely-packed 32-clip landscape timeline (unrelated to
-    // this diff; the list row is a plain, stable click target).
-    await page.getByTitle('My Athlete layer').first().click();
+    // row, not the timeline `.clip-marker` — the marker's `hover:scale-110`
+    // transition never settles for Playwright's actionability check against this
+    // densely-packed 32-clip landscape timeline (unrelated to this diff; the list
+    // row is a plain, stable click target). T6400: My Athlete rows carry no `title`
+    // marker by design (only the Team layer does), so `getByTitle('My Athlete
+    // layer')` never resolved — use the stable clip-item row testid.
+    await page.getByTestId('clip-item').first().click();
     const editor = page.locator('[data-clip-details]');
     await expect(editor).toBeVisible({ timeout: 5000 });
 

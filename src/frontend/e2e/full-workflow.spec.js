@@ -212,9 +212,12 @@ test.describe('Full Workflow Tests', () => {
     // Games tab is the default for fresh users - verify it loads first
     await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
 
-    // Switch to Projects tab and verify
-    await page.locator('button:has-text("Reel Drafts")').click();
-    await expect(page.locator('button:has-text("New Reel")')).toBeVisible();
+    // T6830: for a fresh zero-clip account the Reel Drafts tab is a deliberate
+    // dead end (clicking in can only show an empty list with a disabled New Reel),
+    // so it renders DISABLED until a clip is extracted. The enabled-tab default is
+    // pinned by ProjectManager.homeTabDefaults.test.jsx; here we just assert the
+    // fresh-user state matches the shipped product change.
+    await expect(page.locator('button:has-text("Reel Drafts")')).toBeDisabled();
   });
 
   // Test 2 removed: "Annotate Mode - Upload video and import TSV" is fully covered

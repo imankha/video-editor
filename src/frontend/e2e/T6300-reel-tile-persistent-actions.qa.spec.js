@@ -155,6 +155,9 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     expect(play.pointerEvents).not.toBe('none');
     expect(kebab.opacity, 'kebab reachable at rest on a coarse pointer — the dead end is gone').toBeCloseTo(1, 1);
     expect(kebab.pointerEvents).not.toBe('none');
+    // T6890 moved Rename OUT of the kebab/bottom-sheet to a standalone always-present
+    // pencil beside the name — assert it on the tile (not inside the sheet below).
+    await expect(tile.getByRole('button', { name: 'Rename reel' })).toBeVisible();
 
     // Every kebab item reachable — no hover, no long-press. A native DOM click()
     // (not Playwright's .click()/.tap(), and definitely no screenshot beforehand)
@@ -166,7 +169,7 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     await expect(sheet.getByText('Download', { exact: true })).toBeVisible();
     await expect(sheet.getByText('Share', { exact: true })).toBeVisible();
     await expect(sheet.getByText('Copy Link', { exact: true })).toBeVisible();
-    await expect(sheet.getByText('Rename', { exact: true })).toBeVisible();
+    // Rename left the sheet for the tile's pencil (T6890, asserted above).
     await expect(sheet.getByText('Delete', { exact: true })).toBeVisible();
     // Evidence captured LAST, now that every coarse-pointer-dependent assertion
     // has already passed — the screenshot's own side effect can't taint them.

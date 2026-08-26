@@ -12,9 +12,11 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *   A. Gate blocks interaction/login: once required, the gate paints above
  *      everything (z-[60] > AuthGateModal's z-50) and has no dismiss affordance
  *      (no X, no backdrop-close, Escape does nothing).
- *   B. Version-mismatch opens the gate: a later /api/version response
- *      advertising a different value than what the client booted with raises
- *      the gate with reason 'version-mismatch' — the backend-only-deploy gap.
+ *   (Former test B — "backend version mismatch raises the gate" — was removed by
+ *      T7740: Tbug41s replaced the old x-app-version header + `reason` field with
+ *      an X-App-Build comparison that ALSO requires a confirmed waiting bundle
+ *      (bundleProbe), deliberately absent on a dev/container server, so this path
+ *      is out-of-container by design and is covered by appVersion/updateGate Vitest.)
  *   C. Flush awaits confirmation and blocks-on-failure: a 503 from
  *      /api/sync/flush-verify keeps the gate up with a visible error and
  *      NEVER reloads (no data loss) — the update-click's barrier ordering.
@@ -48,13 +50,14 @@ test.describe('T5070 blocking update gate', () => {
     // Sanity: nothing gates the app before requireUpdate fires.
     await expect(page.locator(GATE_SELECTOR)).toHaveCount(0);
 
-    // Raise the gate directly (SW 'reason: sw' path) — this is the gate's own
-    // blocking behavior under test, independent of a real waiting SW (that
+    // Raise the gate directly (requireUpdate() takes an options object now; the
+    // old positional 'sw' reason arg was removed by Tbug41s) — this is the gate's
+    // own blocking behavior under test, independent of a real waiting SW (that
     // lifecycle is unit-tested in pwaUpdate.test.js and needs a real new
     // build to exercise for real — see the spec header + final report).
     await page.evaluate(async () => {
       const { useUpdateGateStore } = await import('/src/stores/updateGateStore.js');
-      useUpdateGateStore.getState().requireUpdate('sw');
+      useUpdateGateStore.getState().requireUpdate();
     });
 
     const gate = page.locator(GATE_SELECTOR);
@@ -82,50 +85,6 @@ test.describe('T5070 blocking update gate', () => {
     console.log('[T5070] A PASS: gate blocks interaction, no dismiss affordance');
   });
 
-  test('B — backend version mismatch raises the gate', async ({ context, page }) => {
-    await loginAsRealUser(context, REAL_EMAIL);
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-
-    // The real first /api responses latch the client's boot version
-    // (whatever this container's backend advertises) before we mock.
-    await expect(page.locator(GATE_SELECTOR)).toHaveCount(0);
-
-    // Simulate a FULLY-CONVERGED backend deploy: every /api response now
-    // advertises the new X-App-Version. This is exactly what the passive
-    // interceptor (sessionInit.js) observes in prod once the fleet finishes
-    // rolling. We override only the header, preserving each real body/status,
-    // so the app keeps working. The M2 debounce deliberately requires the SAME
-    // new version on two consecutive checks — a single mixed-fleet blip must
-    // NOT gate — so a converged deploy (not a one-off) is the faithful trigger.
-    await context.route('**/api/**', async (route) => {
-      const resp = await route.fetch();
-      await route.fulfill({
-        response: resp,
-        headers: { ...resp.headers(), 'x-app-version': 'e2e-fake-mismatch' },
-      });
-    });
-
-    // Two API round-trips through the patched global fetch — the passive
-    // version probe fires twice with the new version, crossing the debounce.
-    await page.evaluate(async () => {
-      await fetch('/api/version').catch(() => {});
-      await fetch('/api/version').catch(() => {});
-    });
-
-    const gate = page.locator(GATE_SELECTOR);
-    await expect(gate).toBeVisible({ timeout: 5000 });
-    await saveEvidence(page, 'T5070-B-version-mismatch-gate');
-
-    const reason = await page.evaluate(async () => {
-      const { useUpdateGateStore } = await import('/src/stores/updateGateStore.js');
-      return useUpdateGateStore.getState().reason;
-    });
-    expect(reason).toBe('version-mismatch');
-
-    console.log('[T5070] B PASS: converged backend version mismatch raised the gate');
-  });
-
   test('C — flush failure keeps the gate up, shows an error, and never reloads', async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL);
     await page.goto('/');
@@ -148,7 +107,7 @@ test.describe('T5070 blocking update gate', () => {
     await page.evaluate(async () => {
       window.__t5070NoReloadMarker = true;
       const { useUpdateGateStore } = await import('/src/stores/updateGateStore.js');
-      useUpdateGateStore.getState().requireUpdate('sw');
+      useUpdateGateStore.getState().requireUpdate();
     });
 
     const gate = page.locator(GATE_SELECTOR);
@@ -180,7 +139,7 @@ test.describe('T5070 blocking update gate', () => {
     // design doc §5.2.
     await page.evaluate(async () => {
       const { useUpdateGateStore } = await import('/src/stores/updateGateStore.js');
-      useUpdateGateStore.getState().requireUpdate('sw');
+      useUpdateGateStore.getState().requireUpdate();
     });
 
     const gate = page.locator(GATE_SELECTOR);

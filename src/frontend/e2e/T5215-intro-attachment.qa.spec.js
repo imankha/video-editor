@@ -62,7 +62,10 @@ async function openManageProfileEdit(page) {
   await page.getByRole('button', { name: /Switch sport or profile/i }).click();
   await expect(page.getByRole('heading', { name: 'Manage Profiles' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Edit name, color & sport' }).first().click();
-  await expect(page.getByText('Player intro card')).toBeVisible({ timeout: 10000 });
+  // T6660 renamed "Player intro card" -> "Athlete Intro Card". Exact so the
+  // singular section heading isn't confused with the plural "Athlete Intro Cards"
+  // library button rendered just below it in the same edit view.
+  await expect(page.getByText('Athlete Intro Card', { exact: true })).toBeVisible({ timeout: 10000 });
 }
 
 // Tick the parental-consent checkbox if not already checked; waits for the
@@ -80,25 +83,27 @@ async function ensureConsent(page) {
   await expect(checkbox).toBeChecked({ timeout: 10000 });
 }
 
-// Create one simple (imageless) intro card via the real "Intro cards" ->
+// Create one simple (imageless) intro card via the real "Athlete Intro Cards" ->
 // "New card" flow, and return to the grid. Assumes Manage Profile edit mode
 // for the current profile is already open (ProfileIntroSection visible).
+// T6660 renamed the entry button ("Intro cards" -> "Athlete Intro Cards") and the
+// empty-state copy ("No intro cards yet." -> "No Athlete Intro Cards yet.").
 async function ensureAtLeastOneCard(page) {
-  const introCardsBtn = page.getByRole('button', { name: 'Intro cards' });
+  const introCardsBtn = page.getByRole('button', { name: 'Athlete Intro Cards', exact: true });
   await introCardsBtn.click();
   await expect(page.getByTestId('intro-cards-modal')).toBeVisible({ timeout: 10000 });
 
   const alreadyHasCard = await page.getByRole('button', { name: 'New card' }).count() === 0
     && (await page.locator('[data-testid="intro-cards-modal"] [role="button"], [data-testid="intro-cards-modal"] button').count()) > 0;
 
-  const noCardsYet = await page.getByText('No intro cards yet.').isVisible().catch(() => false);
+  const noCardsYet = await page.getByText('No Athlete Intro Cards yet.').isVisible().catch(() => false);
   if (noCardsYet) {
     await page.getByRole('button', { name: 'New card' }).click();
     // Creating a card opens its editor directly (imageless card is allowed).
     await expect(page.getByLabel('Card name')).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Cards' }).click(); // back to grid
   }
-  await expect(page.getByText('No intro cards yet.')).toHaveCount(0);
+  await expect(page.getByText('No Athlete Intro Cards yet.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Close' }).click();
   return true;
 }

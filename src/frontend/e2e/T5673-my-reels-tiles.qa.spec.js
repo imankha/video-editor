@@ -118,13 +118,15 @@ test.describe('T5673 + T5678 — My Reels visual tiles (real account)', () => {
     // T6300: Play is the persistent primary (no hover needed to discover it);
     // Copy Link / Share moved into the kebab (previously a direct hover chip).
     await expect(tile.getByRole('button', { name: /Play video/i })).toBeVisible();
-    // Kebab opens the overflow set (hover-revealed on a fine pointer, T6300).
+    // T6890: Rename left the kebab for a standalone pencil beside the name, so it
+    // is asserted on the tile itself (not inside the overflow menu).
+    await expect(tile.getByRole('button', { name: 'Rename reel' })).toBeVisible();
+    // Kebab opens the remaining overflow set (hover-revealed on a fine pointer, T6300).
     await tile.hover();
     await tile.getByRole('button', { name: /More actions/i }).click();
     await expect(page.getByRole('button', { name: /^Download$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Share$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Copy Link$/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Rename$/ })).toBeVisible();
     await saveEvidence(page, 'T5673-criterion-2-tile-kebab');
 
     // T5678: "Move to profile…" -> picker -> CONFIRM (multi-profile account only).
