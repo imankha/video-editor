@@ -25,8 +25,35 @@ async function gotoGame(page) {
   await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
 }
 
+// T7730: resolve a clip-FREE seek time before opening the add-clip affordance.
+// The "Add clip" button is intentionally hidden while the playhead sits inside
+// an existing clip, so a hardcoded seekTime that happens to land on a clip (e.g.
+// a leaked/stray clip left by an earlier run) makes this helper hang on the full
+// actionability timeout. Query the game's REAL clip ranges and nudge past any
+// that cover the requested time, rather than trusting the fixed offset.
+async function resolveClipFreeSeekTime(page, desiredTime) {
+  let clips = [];
+  try {
+    const res = await page.request.get(`${apiBase}/clips/raw?game_id=${GAME_ID}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
+    if (res.ok()) clips = await res.json();
+  } catch { /* query failed -- fall back to the requested time */ }
+  const ranges = clips
+    .filter((c) => c.start_time != null && c.end_time != null)
+    .map((c) => [Number(c.start_time), Number(c.end_time)])
+    .sort((a, b) => a[0] - b[0]);
+  const PAD = 1; // stay clear of clip edges so the playhead is unambiguously free
+  const covered = (t) => ranges.some(([s, e]) => t >= s - PAD && t <= e + PAD);
+  if (!covered(desiredTime)) return desiredTime;
+  for (let t = desiredTime; t < desiredTime + 120; t += 0.5) {
+    const r = Math.round(t * 10) / 10;
+    if (!covered(r)) return r;
+  }
+  return desiredTime; // give up gracefully; the Escape fallback below still applies
+}
+
 async function ensureAddClipVisible(page, seekTime) {
-  await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; if (!v.paused) v.pause(); }, seekTime);
+  const freeTime = await resolveClipFreeSeekTime(page, seekTime);
+  await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; if (!v.paused) v.pause(); }, freeTime);
   await page.waitForTimeout(500);
   const addBtn = page.locator('button[title="Add clip ending at current time (A)"]:visible').first();
   if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) return addBtn;

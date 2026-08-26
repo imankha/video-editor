@@ -14,9 +14,16 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
  * Mounts the REAL TextLayer wired to the REAL useTextOverlays hook, so a
  * lever drag runs genuine code end-to-end: TextLayer's pointer handler ->
  * snapToBoundary -> onMoveTextStart/onMoveTextEnd -> the hook's clamp logic ->
- * re-rendered layout. The `status` readout exposes the block count and the
- * first block's start/end/enabled so the spec can assert a drag actually
+ * re-rendered layout. The `status` readout exposes the region count and the
+ * first region's start/end/enabled so the spec can assert a drag actually
  * moved a boundary (and whether it snapped).
+ *
+ * T7730: the hook + TextLayer moved to the T6630 REGION/element model
+ * (addText/moveTextStart/... -> addRegion/moveRegionStart/..., `blocks` ->
+ * `regions`, per-region `enabled` -> per-element `enabled`). This harness was
+ * still calling the pre-T6630 API, so it threw on mount and NO text block ever
+ * rendered -- the root cause of the T5225/T6610 lever/body-drag failures. It
+ * now mirrors OverlayMode.jsx's real wiring 1:1.
  *
  * NOT shipped: textdiag.html is not a vite build input. jsdom is insufficient
  * for a pointer/touch fix (memory: real_browser_for_pointer_fixes) -- the
@@ -26,7 +33,7 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
 
 const DURATION = 10;
 const CLIP_BOUNDARIES = [5.0]; // one interior cut-point at 5s, mirrors a 2-clip reel
-const BLOCK_START = 2; // addText(2, spec) -> a 2s block [2, 4]
+const BLOCK_START = 2; // addRegion(2, spec) -> a 2s block [2, 4]
 
 const DEFAULT_SPEC = {
   text: 'GOAL',
@@ -43,17 +50,17 @@ const DEFAULT_SPEC = {
 
 function TextDiagHarness() {
   const {
+    textOverlays,
     textOverlaysWithLayout,
     duration,
-    selectedTextId,
-    setSelectedTextId,
+    selectedRegionId,
+    selectRegion,
     initializeWithDuration,
-    addText,
-    moveTextStart,
-    moveTextEnd,
-    moveTextBlock,
-    toggleText,
-    deleteText,
+    addRegion,
+    moveRegionStart,
+    moveRegionEnd,
+    moveRegionBlock,
+    deleteRegion,
   } = useTextOverlays();
 
   // T6610: count the SINGLE surgical persist that a completed body drag / keyboard
@@ -63,7 +70,7 @@ function TextDiagHarness() {
   // same way it would count network requests.
   const [commits, setCommits] = useState(0);
   const handleMoveTextBody = (id, newStart, commit) => {
-    moveTextBlock(id, newStart);
+    moveRegionBlock(id, newStart);
     if (commit) setCommits((c) => c + 1);
   };
 
@@ -72,12 +79,17 @@ function TextDiagHarness() {
   }, [initializeWithDuration]);
 
   useEffect(() => {
-    if (duration && textOverlaysWithLayout.length === 0) {
-      addText(BLOCK_START, DEFAULT_SPEC);
+    if (duration && textOverlays.length === 0) {
+      addRegion(BLOCK_START, DEFAULT_SPEC);
     }
-  }, [duration, textOverlaysWithLayout.length, addText]);
+  }, [duration, textOverlays.length, addRegion]);
 
   const block = textOverlaysWithLayout[0];
+  // A region has no scalar `enabled` since T6630 -- enablement is per-element.
+  // The harness seeds one region with one element, so the region reads as
+  // enabled when any of its elements is enabled (matches TextLayer's own
+  // `allDisabled` derivation, inverted).
+  const blockEnabled = block ? block.elements.some((el) => el.enabled !== false) : null;
 
   return (
     <div style={{ margin: 40, width: 1000 }}>
@@ -86,7 +98,7 @@ function TextDiagHarness() {
         style={{ color: '#d1d5db', fontSize: 13, marginBottom: 16, fontFamily: 'monospace' }}
       >
         {block
-          ? `count=${textOverlaysWithLayout.length} start=${block.startTime.toFixed(3)} end=${block.endTime.toFixed(3)} enabled=${block.enabled} selected=${selectedTextId === block.id ? 'yes' : 'no'} commits=${commits}`
+          ? `count=${textOverlaysWithLayout.length} start=${block.startTime.toFixed(3)} end=${block.endTime.toFixed(3)} enabled=${blockEnabled} selected=${selectedRegionId === block.id ? 'yes' : 'no'} commits=${commits}`
           : `count=${textOverlaysWithLayout.length} no-block commits=${commits}`}
       </div>
 
@@ -94,18 +106,17 @@ function TextDiagHarness() {
           and snap-pixel math) is deterministic across viewports. */}
       <div style={{ width: 1000 }}>
         <TextLayer
-          blocks={textOverlaysWithLayout}
+          regions={textOverlaysWithLayout}
           duration={duration}
           visualDuration={duration}
           clipBoundaries={CLIP_BOUNDARIES}
-          selectedTextId={selectedTextId}
-          onAddText={(t) => addText(t, DEFAULT_SPEC)}
-          onMoveTextStart={moveTextStart}
-          onMoveTextEnd={moveTextEnd}
+          selectedRegionId={selectedRegionId}
+          onAddRegion={(t) => addRegion(t, DEFAULT_SPEC)}
+          onMoveTextStart={moveRegionStart}
+          onMoveTextEnd={moveRegionEnd}
           onMoveTextBody={handleMoveTextBody}
-          onSelectText={setSelectedTextId}
-          onDeleteText={deleteText}
-          onToggleText={toggleText}
+          onSelectRegion={selectRegion}
+          onDeleteTextRegion={deleteRegion}
         />
       </div>
     </div>

@@ -356,7 +356,10 @@ export function CollectionPlayer({
               {downloadLoading ? 'Downloading...' : 'Download'}
             </Button>
           )}
-          <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} />
+          {/* T7730: icon-only close button had no text/aria-label, so it had no
+              accessible name at all (screen readers + role-based selectors could
+              not find it). */}
+          <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} aria-label="Close" />
         </div>
       </div>
 
@@ -381,6 +384,7 @@ export function CollectionPlayer({
 
         <video
           ref={videoRef}
+          data-testid="collection-player-video"
           src={activeReel.streamUrl}
           playsInline
           autoPlay

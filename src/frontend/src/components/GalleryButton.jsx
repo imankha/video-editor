@@ -20,10 +20,19 @@ export function GalleryButton() {
       icon={Image}
       onClick={open}
       title={SECTION_NAMES.LIBRARY}
+      // T7730: static accessible name. The label text is hidden below `sm` and
+      // the live unread-count badge folds into the computed name, so the button's
+      // accessible name was unstable (`getByRole('button', {name:'My Reels'})`
+      // and real screen readers couldn't reliably find it). Pin it here and mark
+      // the badge aria-hidden so the count never mangles the name.
+      aria-label={SECTION_NAMES.LIBRARY}
     >
       <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
       {unwatchedCount > 0 && (
-        <span className="px-1.5 py-0.5 bg-cyan-500 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+        <span
+          aria-hidden="true"
+          className="px-1.5 py-0.5 bg-cyan-500 text-white text-xs font-bold rounded-full min-w-[20px] text-center"
+        >
           {unwatchedCount}
         </span>
       )}
