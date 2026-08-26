@@ -5,7 +5,12 @@ import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
 import { useVideoStore } from '../stores/videoStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
-import { useUploadStore } from '../stores/uploadStore';
+import {
+  useUploadStore,
+  useIsUploading,
+  useActiveUploadBlobUrl,
+  selectActiveUpload,
+} from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useQuestStore } from '../stores/questStore';
 import { API_BASE } from '../config';
@@ -274,12 +279,11 @@ export function AnnotateContainer({
   const [sharedTagData, setSharedTagData] = useState({});
   const [showTagWarning, setShowTagWarning] = useState(false);
 
-  // Upload state from Zustand store (persists across page navigation)
-  const uploadStore = useUploadStore();
-  const activeUpload = uploadStore.activeUpload;
-
-  // Derive isUploading from store
-  const isUploadingFromStore = uploadStore.isUploading();
+  // Upload state from Zustand store (persists across page navigation).
+  // T7360/T7280: subscribe to PRIMITIVES only — never the whole store/entry — so a
+  // background progress tick can't re-run this effect-heavy container's restore effects.
+  const isUploadingFromStore = useIsUploading();
+  const activeUploadBlobUrl = useActiveUploadBlobUrl();
 
   // Track whether we initiated the upload from this component (vs navigating back)
   const uploadInitiatedHereRef = useRef(false);
@@ -288,12 +292,16 @@ export function AnnotateContainer({
   // When user navigates away and back, React state resets but the upload store persists.
   // Also fetch and import any clips saved in a previous session.
   useEffect(() => {
-    if (!annotateGameId && uploadStore.uploadGameId && isUploadingFromStore) {
-      const gameId = uploadStore.uploadGameId;
+    // Read imperatively (mount-only effect): the ACTIVE upload is the one being
+    // annotated (queued uploads have no mounted blob), so its gameId is "the" game id.
+    const store = useUploadStore.getState();
+    const active = selectActiveUpload(store);
+    if (!annotateGameId && active?.gameId && store.isUploading()) {
+      const gameId = active.gameId;
       console.log('[AnnotateContainer] Restoring game ID from upload store:', gameId);
       setAnnotateGameId(gameId);
-      if (uploadStore.uploadGameName) {
-        setAnnotateGameName(uploadStore.uploadGameName);
+      if (active.createdGameName) {
+        setAnnotateGameName(active.createdGameName);
       }
       // Fetch existing clips for this game (may have been added before navigation)
       getGame(gameId).then(gameData => {
@@ -326,16 +334,20 @@ export function AnnotateContainer({
   // This allows users to click on the uploading game card and return to annotation
   // Skip if we just started the upload from this same mount (not a navigation back)
   useEffect(() => {
-    if (activeUpload?.blobUrl && !annotateVideoUrl && !uploadInitiatedHereRef.current) {
-      setAnnotateVideoUrl(activeUpload.blobUrl);
+    // Gated on the primitive blob url (changes only on transitions, not every tick);
+    // the rest of the active entry is read imperatively when it fires.
+    if (activeUploadBlobUrl && !annotateVideoUrl && !uploadInitiatedHereRef.current) {
+      const active = selectActiveUpload(useUploadStore.getState());
+      if (!active) return;
+      setAnnotateVideoUrl(active.blobUrl);
       // For multi-video, videoMetadata is an array - don't override with it
-      if (activeUpload.videoMetadata && !Array.isArray(activeUpload.videoMetadata)) {
-        setAnnotateVideoMetadata(activeUpload.videoMetadata);
+      if (active.videoMetadata && !Array.isArray(active.videoMetadata)) {
+        setAnnotateVideoMetadata(active.videoMetadata);
       }
-      setAnnotateGameName(activeUpload.gameName);
+      setAnnotateGameName(active.gameName);
       setAnnotateGameId(null); // Will be set when upload completes
     }
-  }, [activeUpload, annotateVideoUrl, setAnnotateVideoUrl, setAnnotateVideoMetadata, setAnnotateGameName, setAnnotateGameId]);
+  }, [activeUploadBlobUrl, annotateVideoUrl, setAnnotateVideoUrl, setAnnotateVideoMetadata, setAnnotateGameName, setAnnotateGameId]);
 
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
@@ -430,9 +442,10 @@ export function AnnotateContainer({
         }
       };
 
-      // Start upload
+      // Start upload (gesture → read the action imperatively; never subscribe the
+      // whole store here). T7360: accepted even if another upload is already running.
       if (isMultiVideo) {
-        uploadStore.startUpload(
+        useUploadStore.getState().startUpload(
           files,
           gameDetails,
           metadataList,
@@ -449,7 +462,7 @@ export function AnnotateContainer({
           onGameCreated
         );
       } else {
-        uploadStore.startUpload(
+        useUploadStore.getState().startUpload(
           files[0],
           gameDetails,
           metadataList[0],

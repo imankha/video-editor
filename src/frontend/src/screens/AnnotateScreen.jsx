@@ -11,7 +11,7 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useAuthStore } from '../stores/authStore';
-import { useUploadStore } from '../stores/uploadStore';
+import { useUploadStore, useActiveUploadBlobUrl, selectActiveUpload } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
@@ -74,14 +74,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     return attr;
   });
 
-  // Get active upload from store (for restoring annotation after navigating back from Games)
-  const activeUpload = useUploadStore(state => state.activeUpload);
+  // Active upload's blob url (for restoring annotation after navigating back from Games).
+  // T7360/T7280: subscribe to the PRIMITIVE blob url, not the whole entry, so a progress
+  // tick can't re-run the redirect effect below.
+  const activeUploadBlobUrl = useActiveUploadBlobUrl();
 
   // Check on mount if we're loading a game or file or have an active upload, set loading flag to prevent redirect
   useState(() => {
     const pendingDetails = getPendingGameDetails();
     const hasMultiVideo = pendingDetails?.files?.length > 0;
-    if (hasPendingGame() || getPendingGameFile() || hasMultiVideo || useUploadStore.getState().activeUpload?.blobUrl) {
+    if (hasPendingGame() || getPendingGameFile() || hasMultiVideo || selectActiveUpload(useUploadStore.getState())?.blobUrl) {
       isLoadingRef.current = true;
     }
   });
@@ -583,11 +585,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Redirect to home if no video and not loading and no active upload to restore.
   // Uses redirectToMode (replaceState) to avoid back-button loops.
   useEffect(() => {
-    const hasActiveUploadToRestore = activeUpload?.blobUrl;
+    const hasActiveUploadToRestore = activeUploadBlobUrl;
     if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo && !hasActiveUploadToRestore) {
       redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
     }
-  }, [annotateVideoUrl, isUploadingGameVideo, redirectToMode, activeUpload]);
+  }, [annotateVideoUrl, isUploadingGameVideo, redirectToMode, activeUploadBlobUrl]);
 
   // If no video loaded but we're loading, render nothing (loading is fast)
   if (!annotateVideoUrl) {

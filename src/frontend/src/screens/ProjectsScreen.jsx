@@ -128,8 +128,8 @@ export function ProjectsScreen({
     fetchPendingUploads,
   } = useGameUpload();
 
-  // Active upload from uploadStore (in-progress upload that persists across navigation)
-  const activeUpload = useUploadStore(state => state.activeUpload);
+  // Upload queue from uploadStore (in-progress + queued uploads, persist across navigation, T7360)
+  const uploads = useUploadStore(state => state.uploads);
   const cancelUpload = useUploadStore(state => state.cancelUpload);
   const insufficientCredits = useUploadStore(state => state.insufficientCredits);
   const clearInsufficientCredits = useUploadStore(state => state.clearInsufficientCredits);
@@ -455,8 +455,8 @@ export function ProjectsScreen({
           pendingUploads={pendingUploads}
           onResumeUpload={handleResumeUpload}
           onCancelPendingUpload={handleCancelPendingUpload}
-          // Active upload props (in-progress upload)
-          activeUpload={activeUpload}
+          // Upload queue props (in-progress + queued uploads, T7360)
+          uploads={uploads}
           onClickActiveUpload={handleClickActiveUpload}
           onCancelActiveUpload={cancelUpload}
           // Pending game IDs for blocking project cards

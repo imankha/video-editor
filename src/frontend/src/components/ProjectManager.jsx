@@ -27,6 +27,7 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProfileStore } from '../stores/profileStore';
+import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
 import {
   consumePendingRecap,
   setPendingGameReference,
@@ -338,10 +339,10 @@ export function ProjectManager({
   pendingUploads = [],
   onResumeUpload,
   onCancelPendingUpload,
-  // Active upload props (in-progress upload from uploadStore)
-  activeUpload = null, // { fileName, progress, phase, message }
+  // Upload queue props (in-progress + queued uploads from uploadStore, T7360)
+  uploads = [], // [{ id, status, fileName, progress, phase, message }]
   onClickActiveUpload, // Navigate back to annotate mode
-  onCancelActiveUpload, // Cancel active upload
+  onCancelActiveUpload, // Cancel one upload by id
   // Pending game IDs - projects referencing these are blocked
   pendingGameIds = new Set(),
 }) {
@@ -1161,42 +1162,76 @@ export function ProjectManager({
               Retry
             </Button>
           </div>
-        ) : games.length === 0 && pendingUploads.length === 0 && !activeUpload ? (
+        ) : games.length === 0 && pendingUploads.length === 0 && uploads.length === 0 ? (
           <div className="text-gray-500 text-center">
             <p className="mb-2">No games yet</p>
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
           <div className={GAMES_GRID_CONTAINER_CLASS}>
-            {/* Active Upload Section - Currently uploading */}
-            {activeUpload && (
-              <div className="mb-6">
-                <h2 className={`text-sm font-semibold ${GAME.accent} uppercase tracking-wide mb-3 flex items-center gap-2`}>
-                  <Loader2 size={14} className="animate-spin" />
-                  Uploading
-                </h2>
-                <ActiveUploadCard
-                  upload={activeUpload}
-                  onClick={onClickActiveUpload}
-                  onCancel={onCancelActiveUpload}
-                />
-              </div>
-            )}
-
-            {/* Pending Uploads Section - Paused/interrupted uploads (exclude active upload) */}
+            {/* Active/failed uploads (T7360) - the one uploading + any failed, each
+                rendered as a card. A single upload renders exactly as it did pre-queue. */}
             {(() => {
-              // Filter out files being actively uploaded from pending list to avoid duplication
-              // For multi-video uploads, check against all individual file names
-              const filteredPending = activeUpload
-                ? pendingUploads.filter(p => {
-                    if (p.original_filename === activeUpload.fileName) return false;
-                    // Multi-video: filter out any file that's part of the active upload
-                    if (activeUpload.files) {
-                      return !activeUpload.files.some(f => f.name === p.original_filename);
-                    }
-                    return true;
-                  })
-                : pendingUploads;
+              const activeOrErrored = uploads.filter(
+                u => u.status === UPLOAD_STATUS.UPLOADING || u.status === UPLOAD_STATUS.ERROR,
+              );
+              return activeOrErrored.length > 0 && (
+                <div className="mb-6">
+                  <h2 className={`text-sm font-semibold ${GAME.accent} uppercase tracking-wide mb-3 flex items-center gap-2`}>
+                    <Loader2 size={14} className="animate-spin" />
+                    Uploading
+                  </h2>
+                  <div className="space-y-2">
+                    {activeOrErrored.map(upload => (
+                      <ActiveUploadCard
+                        key={upload.id}
+                        upload={upload}
+                        onClick={onClickActiveUpload}
+                        onCancel={() => onCancelActiveUpload(upload.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Queued uploads (T7360) - waiting behind the active one, each cancellable. */}
+            {(() => {
+              const queued = uploads.filter(u => u.status === UPLOAD_STATUS.QUEUED);
+              return queued.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <Upload size={14} />
+                    Queued
+                  </h2>
+                  <div className="space-y-2">
+                    {queued.map(upload => (
+                      <ActiveUploadCard
+                        key={upload.id}
+                        upload={upload}
+                        onClick={onClickActiveUpload}
+                        onCancel={() => onCancelActiveUpload(upload.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Pending Uploads Section - Paused/interrupted server-side uploads
+                (exclude any file already in the active/queued client queue). */}
+            {(() => {
+              // Filter out files being actively uploaded/queued to avoid duplication.
+              // For multi-video uploads, check against all individual file names.
+              const queuedFileNames = new Set();
+              uploads.forEach(u => {
+                if (u.files) u.files.forEach(f => queuedFileNames.add(f.name));
+                else if (u.file) queuedFileNames.add(u.file.name);
+                else queuedFileNames.add(u.fileName);
+              });
+              const filteredPending = pendingUploads.filter(
+                p => !queuedFileNames.has(p.original_filename),
+              );
               return filteredPending.length > 0 && (
                 <div className="mb-6">
                   <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -1666,6 +1701,10 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
  * Clicking navigates back to annotate mode
  */
 function ActiveUploadCard({ upload, onClick, onCancel }) {
+  const retryUpload = useUploadStore(state => state.retryUpload);
+  const clearFailedUpload = useUploadStore(state => state.clearFailedUpload);
+  const isError = upload.status === UPLOAD_STATUS.ERROR;
+
   // Format file size
   const formatSize = (bytes) => {
     if (!bytes) return '';
@@ -1698,19 +1737,40 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             {upload.fileSize && <span>{formatSize(upload.fileSize)}</span>}
             {upload.fileSize && upload.message && <span>•</span>}
-            <span>{upload.message || 'Uploading...'}</span>
+            <span className={isError ? 'text-red-400' : undefined}>
+              {upload.message || (isError ? 'Upload failed' : 'Uploading...')}
+            </span>
           </div>
 
-          {/* Progress bar */}
-          <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full ${GAME.progressBar} transition-all duration-300`}
-              style={{ width: `${upload.progress || 0}%` }}
-            />
-          </div>
-          <div className="mt-1 text-xs text-gray-500 text-right">
-            {upload.progress || 0}%
-          </div>
+          {isError ? (
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={(e) => { e.stopPropagation(); retryUpload(upload.id); }}
+                className="text-xs font-medium text-blue-400 hover:text-blue-300 underline"
+              >
+                Retry
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); clearFailedUpload(upload.id); }}
+                className="text-xs text-gray-400 hover:text-white underline"
+              >
+                Discard
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Progress bar */}
+              <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${GAME.progressBar} transition-all duration-300`}
+                  style={{ width: `${upload.progress || 0}%` }}
+                />
+              </div>
+              <div className="mt-1 text-xs text-gray-500 text-right">
+                {upload.progress || 0}%
+              </div>
+            </>
+          )}
         </div>
 
       </div>
