@@ -1,6 +1,6 @@
 # T7570: session_started double-fires ~200ms apart; session counts ~2x inflated
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P3 (metrics integrity)
 **Impact:** 4
 **Complexity:** 2
