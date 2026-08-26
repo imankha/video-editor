@@ -1,6 +1,6 @@
 # T7550: Email-addressed teammate share claimed by a different account
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (potential access-control gap; needs verification first)
 **Impact:** 6
 **Complexity:** 3
