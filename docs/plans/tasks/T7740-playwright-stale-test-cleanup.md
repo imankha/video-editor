@@ -1,6 +1,6 @@
 # T7740: Update or delete the stale/broken Playwright test bucket (~55 failures)
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P2 (mechanical volume, no product-code risk, blocks a clean baseline)
 **Impact:** 5
 **Complexity:** 6
