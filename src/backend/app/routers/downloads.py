@@ -33,6 +33,7 @@ from app.services.intro_cards import (
 )
 from app.services.materialization import (
     ProfileDBRefreshFailed,
+    RecipientProfileBelowHead,
     _open_profile_db,
     ensure_game_reference,
     ensure_profile_db_local,
@@ -1844,6 +1845,19 @@ async def move_reels_to_profile(
                 raise HTTPException(status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE)
         except HTTPException:
             raise
+        except RecipientProfileBelowHead:
+            # T6780: the TARGET profile DB is below head (v030 source-ref columns
+            # absent) — _build_reference_map's ensure_game_reference can't write a
+            # valid reference row. Refuse with 503 (retryable, pending migration), the
+            # same shape as the durable-sync-failure branch above; the move re-lands
+            # once the admin migrates. Rollback so no partial reference persists.
+            target_conn.rollback()
+            _cleanup_target_objects(user_id, target_profile_id, copied_paths)
+            logger.warning(
+                f"[MoveReels] target profile below head (pending migration) "
+                f"ids={video_ids} req_id={req_id} -> 503"
+            )
+            raise HTTPException(status_code=503, detail="Target profile pending migration; retry shortly") from None
         except Exception:
             target_conn.rollback()
             _cleanup_target_objects(user_id, target_profile_id, copied_paths)

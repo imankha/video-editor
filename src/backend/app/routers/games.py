@@ -2073,6 +2073,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
     from app.services.db_refresh import RefreshFailed
     from app.services.email import _is_existing_user, _resolve_sender_name, send_game_share_email
     from app.services.materialization import (
+        RecipientProfileBelowHead,
         materialize_game_share,
         resolve_scoped_clips,
         serialize_clip_data,
@@ -2255,7 +2256,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
                             clip_data_bytes=serialize_clip_data(scoped_clips),
                         )
                         logger.info(f"[share-game] Created pending share for multi-profile user {email}")
-                except RefreshFailed:
+                except (RefreshFailed, RecipientProfileBelowHead):
                     # T4315 round 4 (MINOR) + round 5 (BLOCKING-2): a
                     # refused freshness confirmation (get_profiles' foreign-
                     # user HEAD, or materialize_game_share's require_fresh /
@@ -2263,6 +2264,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
                     # the share -- fall back to a pending-share row so login
                     # auto-materialize (T3230) or a manual resolve-pending-
                     # shares retries it.
+                    # T6780: a below-head recipient profile DB (v026 shared_by
+                    # absent, deploy->migrate window) is the same "can't
+                    # materialize now, defer + retry after migration" case, so
+                    # it rides the SAME pending-share fallback (NOT a 503 that
+                    # would fail the whole multi-recipient share for one
+                    # below-head recipient).
                     create_pending_share(
                         share_id=share_record["id"],
                         sharer_user_id=user_id,
@@ -2510,6 +2517,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     from app.services.db_refresh import RefreshFailed
     from app.services.email import _is_existing_user, _resolve_sender_name, send_playback_share_email
     from app.services.materialization import (
+        RecipientProfileBelowHead,
         materialize_game_share,
         serialize_clip_data,
     )
@@ -2706,11 +2714,13 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                             clip_data_bytes=clip_data_bytes,
                         )
                         logger.info(f"[share-playback] Created pending share for multi-profile user {email}")
-                except RefreshFailed:
+                except (RefreshFailed, RecipientProfileBelowHead):
                     # T4315 round 4 (MINOR) + round 5 (BLOCKING-2): see
                     # share_game above -- a refused freshness confirmation
                     # (get_profiles or materialize_game_share) must not
                     # silently drop the share.
+                    # T6780: a below-head recipient (v026 shared_by absent)
+                    # rides the SAME defer-to-pending fallback (see share_game).
                     create_pending_share(
                         share_id=share_record["id"],
                         sharer_user_id=user_id,

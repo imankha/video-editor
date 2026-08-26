@@ -35,7 +35,7 @@ import asyncio
 import logging
 
 from app.constants import ExportStage
-from app.database import get_db_connection
+from app.database import column_exists, get_db_connection
 from app.queries import latest_working_clips_subquery
 from app.utils.encoding import decode_data
 
@@ -143,6 +143,17 @@ def upsert_working_video(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # T6780: detections_data (v027) may be absent on a below-head profile DB in
+        # the deploy->migrate window — this render/finalize path is reachable there
+        # (the sibling v029/v046 columns are already guarded above/below, and the
+        # matching READ in overlay.py is column_exists-guarded). Mirror the sanctioned
+        # column-omit guard (T6030's slowmo INSERT): omit detections_data from the
+        # write when the column is absent rather than 500 the export. A bare 503 would
+        # abort the whole render — the wrong shape for a finalize path — and the value
+        # is an OPTIONAL video-level detection cache that v027's migration backfills
+        # later anyway (NULL now is correct). One PRAGMA per finalize, not per row.
+        _has_detections = column_exists(cursor, "working_videos", "detections_data")
+
         wv_id = None
         if existing_wv_id:
             cursor.execute("SELECT id FROM working_videos WHERE id = ?", (existing_wv_id,))
@@ -155,14 +166,20 @@ def upsert_working_video(
                 # recomputing carry would read the new row as its own "prior" and
                 # re-seed detected regions over the carried ones (the original bug,
                 # on the recovery path). Only filename/duration/detections refresh.
-                cursor.execute(
-                    """
-                    UPDATE working_videos
-                    SET filename = ?, duration = ?, detections_data = ?
-                    WHERE id = ?
-                    """,
-                    (filename, duration, detections_data, existing_wv_id),
-                )
+                if _has_detections:
+                    cursor.execute(
+                        """
+                        UPDATE working_videos
+                        SET filename = ?, duration = ?, detections_data = ?
+                        WHERE id = ?
+                        """,
+                        (filename, duration, detections_data, existing_wv_id),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE working_videos SET filename = ?, duration = ? WHERE id = ?",
+                        (filename, duration, existing_wv_id),
+                    )
                 wv_id = existing_wv_id
 
         if wv_id is None:
@@ -225,7 +242,7 @@ def upsert_working_video(
                     (project_id, filename, next_version, duration, insert_highlights, detections_data,
                      snapshot_blob, carry_note),
                 )
-            else:
+            elif _has_detections:
                 # deploy->migrate window (pre-v046): carry columns absent, INSERT the
                 # historical shape. Carry is skipped this once; the next re-export
                 # after migration takes the legacy_uncertain path.
@@ -236,6 +253,18 @@ def upsert_working_video(
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (project_id, filename, next_version, duration, insert_highlights, detections_data),
+                )
+            else:
+                # T6780: even older window (pre-v027) — detections_data column also
+                # absent. Omit it too (v027's migration backfills it later); the carry
+                # columns are guaranteed absent here as well (v046 > v027).
+                cursor.execute(
+                    """
+                    INSERT INTO working_videos
+                        (project_id, filename, version, duration, highlights_data)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (project_id, filename, next_version, duration, insert_highlights),
                 )
             wv_id = cursor.lastrowid
 

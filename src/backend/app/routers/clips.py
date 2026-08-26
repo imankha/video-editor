@@ -2889,6 +2889,7 @@ async def _materialize_or_pend(
 
     from app.services.auth_db import get_user_by_email
     from app.services.materialization import (
+        RecipientProfileBelowHead,
         _filter_clips_for_tag,
         materialize_game_share,
         serialize_clip_data,
@@ -2927,21 +2928,42 @@ async def _materialize_or_pend(
     if len(profiles) == 1:
         share_record = get_share_by_token(share["share_token"])
         if share_record:
-            await asyncio.to_thread(
-                materialize_game_share,
-                sharer_user_id=sharer_user_id,
-                sharer_profile_id=sharer_profile_id,
-                recipient_user_id=recipient_user_id,
-                recipient_profile_id=profiles[0]["id"],
-                game_id=game_id,
-                tag_name=tag_name,
-                share_id=share_record["id"],
-                sharer_email=sharer_email,
-            )
-            logger.info(
-                f"[share-with-teammates] Materialized for {email} "
-                f"(profile {profiles[0]['id']})"
-            )
+            try:
+                await asyncio.to_thread(
+                    materialize_game_share,
+                    sharer_user_id=sharer_user_id,
+                    sharer_profile_id=sharer_profile_id,
+                    recipient_user_id=recipient_user_id,
+                    recipient_profile_id=profiles[0]["id"],
+                    game_id=game_id,
+                    tag_name=tag_name,
+                    share_id=share_record["id"],
+                    sharer_email=sharer_email,
+                )
+                logger.info(
+                    f"[share-with-teammates] Materialized for {email} "
+                    f"(profile {profiles[0]['id']})"
+                )
+            except RecipientProfileBelowHead:
+                # T6780: recipient profile DB below head (v026 shared_by absent,
+                # deploy->migrate window). Defer to a pending share — the same
+                # graceful "can't materialize now, retry after migration" path
+                # the non-user / multi-profile branches use — instead of letting
+                # the OperationalError surface as a failed tag.
+                clip_data = _filter_clips_for_tag(conn, game_id, tag_name)
+                create_pending_share(
+                    share_id=share_record["id"],
+                    sharer_user_id=sharer_user_id,
+                    sharer_profile_id=sharer_profile_id,
+                    invited_email=email,
+                    game_id=game_id,
+                    tag_name=tag_name,
+                    clip_data_bytes=serialize_clip_data(clip_data),
+                )
+                logger.info(
+                    f"[share-with-teammates] Recipient {email} profile below head; "
+                    f"deferred to pending share (pending migration)"
+                )
     else:
         # Multi-profile: create pending share
         clip_data = _filter_clips_for_tag(conn, game_id, tag_name)
