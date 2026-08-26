@@ -39,6 +39,29 @@ export function installClientLogger() {
     _push('info', args);
     originalInfo.apply(console, args);
   };
+
+  // T7560: capture UNCAUGHT errors too. console.error only fires when our own
+  // code logs; a raw runtime exception (mobile Safari JS error, a failed dynamic
+  // import) throws to window.onerror / unhandledrejection and otherwise leaves
+  // zero trace in a bug report. Push those into the same ring buffer so a
+  // "nothing happened" report still carries the exception that caused it.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('error', (event) => {
+      const where = event.filename
+        ? ` (${event.filename}:${event.lineno ?? '?'}:${event.colno ?? '?'})`
+        : '';
+      const detail = event.error?.stack || event.message || 'unknown error';
+      _push('error', [`[uncaught] ${detail}${where}`]);
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = event.reason;
+      const detail = reason instanceof Error
+        ? (reason.stack || `${reason.name}: ${reason.message}`)
+        : String(reason);
+      _push('error', [`[unhandledrejection] ${detail}`]);
+    });
+  }
 }
 
 function _push(level, args) {

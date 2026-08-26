@@ -47,6 +47,11 @@ async function captureScreenshot() {
       logging: false,
       backgroundColor: '#111827',
       onclone: (_doc, clonedBody) => {
+        // The report modal itself may already be open in the live DOM by the
+        // time this clone runs (capture is fired in parallel with opening the
+        // modal, not before it) -- strip it from the clone so it never shows
+        // up in its own screenshot.
+        clonedBody.querySelectorAll('[data-report-modal]').forEach((el) => el.remove());
         const clonedVideos = clonedBody.querySelectorAll('video');
         clonedVideos.forEach((clonedVideo, i) => {
           const dataUrl = videoFrames.get(originalVideos[i]);
@@ -100,12 +105,21 @@ export function ReportProblemButton({ className = '', compact = false }) {
 
   if (!ENABLE_PROBLEM_REPORT) return null;
 
-  const handleOpen = async () => {
-    // Capture screenshot before modal opens (so modal isn't in the shot)
-    screenshotRef.current = await captureScreenshot();
+  // T7560 follow-up: html2canvas is slow enough (full-page render) that
+  // awaiting it before opening the modal made every click feel laggy. Open
+  // the modal immediately and capture in parallel instead -- the modal is
+  // excluded from the actual screenshot via the onclone hook above (it
+  // strips any `[data-report-modal]` element from the clone), so there's no
+  // ordering requirement between "modal visible" and "capture started"
+  // anymore. If Send is clicked before the capture resolves, the report
+  // just goes out without a screenshot -- same graceful degradation as a
+  // capture failure, already handled below.
+  const handleOpen = () => {
     setDescription('');
     setState('idle');
     setOpen(true);
+    screenshotRef.current = null;
+    captureScreenshot().then((shot) => { screenshotRef.current = shot; });
   };
 
   const handleClose = () => {
@@ -115,7 +129,14 @@ export function ReportProblemButton({ className = '', compact = false }) {
     setState('idle');
   };
 
+  // T7560: a report with no words captures nothing diagnosable (prod row #46
+  // landed NULL). Require at least one non-whitespace character before we let
+  // the report go out. The screenshot/logs/actions still ride along once there
+  // is a sentence to anchor them.
+  const canSend = description.trim().length > 0 && state !== 'sending';
+
   const handleSend = async () => {
+    if (!description.trim()) return; // gate (belt-and-braces with the disabled button)
     setState('sending');
     try {
       const logs = getClientLogs();
@@ -127,7 +148,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
         user_agent: navigator.userAgent,
         page_url: window.location.href,
         email: email || null,
-        description: description.trim() || null,
+        description: description.trim(),
         screenshot: screenshotRef.current ? '(base64 image)' : null,
         build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
         actions,
@@ -180,7 +201,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
+    <div data-report-modal className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div
         className="bg-gray-800 border border-gray-600 rounded-xl w-full max-w-md mx-4 shadow-2xl"
       >
@@ -228,14 +249,18 @@ export function ReportProblemButton({ className = '', compact = false }) {
                 className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50"
               />
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-[11px] text-gray-500">
-                  A screenshot and logs are included automatically
+                  {canSend || state === 'sending'
+                    ? 'A screenshot and logs are included automatically'
+                    : 'One sentence helps us fix it — a screenshot and logs are included automatically'}
                 </span>
                 <button
                   onClick={handleSend}
-                  disabled={state === 'sending'}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors"
+                  disabled={!canSend}
+                  aria-disabled={!canSend}
+                  title={!canSend && state !== 'sending' ? 'Add a short description first' : undefined}
+                  className="shrink-0 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   {state === 'sending' ? 'Sending...' : 'Send report'}
                 </button>
