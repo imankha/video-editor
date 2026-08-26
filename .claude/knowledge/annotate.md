@@ -472,6 +472,39 @@ The full checklist for an 11th→Nth sport:
   `uploadManager.test.js` ("cleans up a failed pending game with only_if_empty=true").
   Prod forensic that filed this: bigajosue (PAYING user) had 4 games insert+delete in one session
   (`sqlite_sequence.games=4`, 0 rows), work saved only by luck of having zero clips.
+- **`uploadStore` holds a QUEUE, not a singular upload (T7360).** `uploads: []` replaced the old
+  singular `activeUpload` + top-level globals (`uploadGameId`/`uploadGameName`/`retryContext`/
+  `onCompleteCallbacks`) — those moved INTO each entry so N uploads coexist without cross-talk.
+  Serial-queue-of-one engine: exactly one entry is ever `status:'uploading'`; the rest wait as
+  `'queued'` and auto-advance on completion/failure/cancel (`advanceQueue()`, one internal
+  `runEntry(entry)` every start/retry/promotion funnels through — no second "retry re-implements
+  start" path). A failed entry stays `status:'error'` in the array with its own retry context and
+  does NOT block the queue behind it. `startUpload` NEVER returns null for "busy" anymore (only
+  for no-file) — the old `:47` silent-drop rejection is gone; a genuine duplicate (same
+  `name:size` fileKey) is rejected VISIBLY (`toast.info('Already queued', ...)`) and returns the
+  EXISTING entry's id. Ids are `upl_${++_uploadSeq}` (module counter, not `Date.now()` — two
+  drops in the same ms used to collide). **Selectors are the T7280 fix, not decoration:**
+  `useActiveUpload()`/`useActiveUploadGameId()`/`useActiveUploadBlobUrl()`/`useIsUploading()`/
+  `useUploadCount()` are narrowed/primitive on purpose — AnnotateScreen/AnnotateContainer
+  subscribe ONLY to these, never to the whole `uploads` array or a whole entry object, so a
+  background progress tick can't re-run their redirect/restore effects (the exact T7280
+  landmine). T1540 (annotate-during-upload) binds to the ONE active entry
+  (`useActiveUploadGameId`/`useActiveUploadBlobUrl`) — queued uploads have no mounted blob and
+  aren't annotatable, so this is correct, not a compromise; do not thread a game-id list into
+  AnnotateContainer. The completion-callback-before-retire race is preserved per-entry
+  (`onEntryComplete` fires `entry.onComplete` BEFORE `retireEntry`). Consumers render `uploads`
+  as a LIST everywhere (`UploadProgressIndicator` stacks active/failed/queued rows;
+  `ProjectManager`'s `ActiveUploadCard` renders active+error entries in an "Uploading" group and
+  queued entries in a "Queued" group, each error card with its own Retry/Discard) — single-upload
+  parity is structural (a 1-item list), never a `length===1` branch. `App.jsx`'s
+  `isUploading()` action call is unchanged (now means "any entry uploading or queued").
+  E2E-testing gotcha: driving this store via a direct `useAuthStore.setState({isAuthenticated:
+  true})` (bypassing real login) skips `/api/bootstrap` entirely — the app instead fires
+  individual per-store fetches (`/api/profiles`, `/api/projects`, `/api/quests/progress`, ...) on
+  the auth-transition subscription, three of which have NO fallback for a malformed/empty stub
+  response and crash the render with no error boundary (kills the whole tree, not just the
+  screen under test): `/api/profiles` needs `{profiles:[]}`, `/api/projects` needs a bare `[]`,
+  `/api/quests/progress` needs `{quests:[]}`. See `e2e/T7360-concurrent-uploads.qa.spec.js`.
 - **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
   width-only, so a phone in LANDSCAPE ≥640px wide (iPhone 14 844x390, Pixel 7 915x412) renders the
   full desktop `ClipsSidePanel` (`hidden sm:flex`, `w-[352px]`) — NOT the mobile sidebar. Its
