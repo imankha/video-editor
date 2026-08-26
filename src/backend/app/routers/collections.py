@@ -1539,6 +1539,10 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
     profile_id = get_current_profile_id()
     d = body.definition
 
+    # T7510: the Share gesture IS the attempt; `share_completed` below is the
+    # outcome. record_milestone is impersonation-guarded.
+    record_milestone(user_id, "share_attempted")
+
     if d.scope.type == "game" and d.scope.game_id is None:
         raise HTTPException(400, "game scope requires game_id")
 

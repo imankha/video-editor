@@ -3,6 +3,10 @@ import React from 'react';
 const STAGES = [
   { key: 'signed_up', label: 'Signed Up' },
   { key: 'session', label: 'Session' },
+  // T7510: attempt vs durable-outcome are now distinct stages. "Upload Attempted"
+  // (game_created, pending insert) precedes "Uploaded" (game_upload_succeeded,
+  // R2-verified) so the attempt->durable drop-off gap is visible.
+  { key: 'upload_attempted', label: 'Upload Attempted' },
   { key: 'uploaded', label: 'Uploaded' },
   { key: 'clipped', label: 'Clipped' },
   { key: 'annotation_done', label: 'Annotation Done' },

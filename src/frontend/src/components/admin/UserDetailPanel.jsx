@@ -1,15 +1,31 @@
 import React, { useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 
+// T7510: content-outcome pipeline. The upload step is special-cased to render
+// BOTH the attempt (game_created, pending insert) and the durable success
+// (game_upload_succeeded, R2-verified) so the attempt->durable gap is visible;
+// its failure reasons are surfaced from the game_upload_failed rollup on the
+// journey payload. annotation_completed is NOT here — it tracks watched-video,
+// not clips, so it lives in the Engagement band below.
 const PIPELINE_STEPS = [
-  { action: 'game_created', label: 'Upload' },
   { action: 'clip_created', label: 'Clip' },
-  { action: 'annotation_completed', label: 'Annotate' },
   { action: 'framing_opened', label: 'Frame' },
   { action: 'framing_exported', label: 'Export' },
   { action: 'overlay_exported', label: 'Overlay' },
   { action: 'share_completed', label: 'Share' },
   { action: 'credit_purchased', label: 'Purchase' },
+];
+
+// T7510: upload attempt vs durable outcome, rendered as a distinct pair.
+const UPLOAD_ATTEMPT = 'game_created';
+const UPLOAD_SUCCESS = 'game_upload_succeeded';
+const UPLOAD_FAILED = 'game_upload_failed';
+
+// T7510: engagement signals — activity that is NOT a content outcome (watched
+// video, opened editors). Rendered in a visually distinct band so the dashboard
+// never reads engagement as production.
+const ENGAGEMENT_STEPS = [
+  { action: 'annotation_completed', label: 'Annotate' },
 ];
 
 function formatDelta(ms) {
@@ -57,6 +73,14 @@ function formatShortDate(str) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+// T7510: "timeout x2, network x1" from a {reason: count} failures map.
+function formatFailures(failures) {
+  if (!failures) return '';
+  return Object.entries(failures)
+    .map(([reason, count]) => `${reason} x${count}`)
+    .join(', ');
+}
+
 export function UserDetailPanel({ data, onClose }) {
   const [actionFilter, setActionFilter] = useState('all');
   const [searchText, setSearchText] = useState('');
@@ -66,6 +90,18 @@ export function UserDetailPanel({ data, onClose }) {
     const m = {};
     for (const ms of data.milestones) {
       if (ms.at) m[ms.event] = ms.at;
+    }
+    return m;
+  }, [data?.milestones]);
+
+  // T7510: full milestone entry keyed by event (carries count, failed_count,
+  // failures) so the pipeline can render attempted-vs-succeeded and failure
+  // reasons, not just a timestamp dot.
+  const milestoneByEvent = useMemo(() => {
+    if (!data?.milestones) return {};
+    const m = {};
+    for (const ms of data.milestones) {
+      m[ms.event] = ms;
     }
     return m;
   }, [data?.milestones]);
@@ -112,21 +148,85 @@ export function UserDetailPanel({ data, onClose }) {
             </button>
           </div>
 
-          {/* Pipeline summary */}
-          <div className="flex items-center gap-1 text-xs overflow-x-auto pb-1">
-            <span className="text-green-400 font-mono">Signup</span>
-            <span className="text-gray-600 font-mono">{formatShortDate(milestoneMap.signup_completed || data.acquired_at)}</span>
-            {PIPELINE_STEPS.map(step => {
+          {/* Pipeline summary (content outcomes) */}
+          {(() => {
+            const attemptMs = milestoneByEvent[UPLOAD_ATTEMPT];
+            const successMs = milestoneByEvent[UPLOAD_SUCCESS];
+            const failedMs = milestoneByEvent[UPLOAD_FAILED];
+            const attemptCount = attemptMs?.count ?? 0;
+            const successCount = successMs?.count ?? 0;
+            // Failure reasons ride either the game_upload_failed rollup entry or
+            // the game_upload_succeeded entry (when some succeeded, some failed).
+            const failures = failedMs?.failures || successMs?.failures || null;
+            const failedTotal = failedMs?.failed_count ?? failedMs?.count
+              ?? successMs?.failed_count ?? 0;
+            const gap = attemptCount - successCount;
+            return (
+              <div className="flex items-center gap-1 text-xs overflow-x-auto pb-1">
+                <span className="text-green-400 font-mono">Signup</span>
+                <span className="text-gray-600 font-mono">{formatShortDate(milestoneMap.signup_completed || data.acquired_at)}</span>
+
+                {/* Upload: attempt -> durable success, with the gap surfaced */}
+                <span className="text-gray-600 mx-0.5">-&gt;</span>
+                <span className={attemptMs?.at ? 'text-purple-400 font-mono' : 'text-gray-600 font-mono'}>Upload</span>
+                <span
+                  className="font-mono"
+                  title={failures ? `Failures: ${formatFailures(failures)}` : undefined}
+                >
+                  <span className={successCount > 0 ? 'text-green-400' : 'text-gray-500'}>{successCount}</span>
+                  <span className="text-gray-600">/</span>
+                  <span className="text-gray-400">{attemptCount}</span>
+                  {gap > 0 && (
+                    <span className="text-red-400 ml-0.5">(-{gap})</span>
+                  )}
+                </span>
+                {failedTotal > 0 && failures && (
+                  <span className="text-red-400/80 font-mono" title={formatFailures(failures)}>
+                    [{formatFailures(failures)}]
+                  </span>
+                )}
+
+                {PIPELINE_STEPS.map(step => {
+                  const at = milestoneMap[step.action];
+                  return (
+                    <React.Fragment key={step.action}>
+                      <span className="text-gray-600 mx-0.5">-&gt;</span>
+                      <span className={at ? 'text-purple-400 font-mono' : 'text-gray-600 font-mono'}>{step.label}</span>
+                      <span className="text-gray-600 font-mono">{at ? formatShortDate(at) : '--'}</span>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* T7510: Engagement band — activity, not content outcomes. Visually
+              distinct (amber) so it never reads as production. */}
+          <div className="flex items-center gap-1 text-[11px] overflow-x-auto pt-1.5 mt-1.5 border-t border-white/5">
+            <span className="text-amber-400/70 font-mono uppercase tracking-wide mr-1">Engagement</span>
+            {ENGAGEMENT_STEPS.map(step => {
               const at = milestoneMap[step.action];
               return (
                 <React.Fragment key={step.action}>
-                  <span className="text-gray-600 mx-0.5">-&gt;</span>
-                  <span className={at ? 'text-purple-400 font-mono' : 'text-gray-600 font-mono'}>{step.label}</span>
+                  <span className={at ? 'text-amber-300/90 font-mono' : 'text-gray-600 font-mono'}>{step.label}</span>
                   <span className="text-gray-600 font-mono">{at ? formatShortDate(at) : '--'}</span>
                 </React.Fragment>
               );
             })}
           </div>
+
+          {/* T7510 tier 5 (partial): retry-burst frustration signal — >=3 of the
+              same attempt within 60s, read-time derived, no new storage. */}
+          {data.frustration_signals?.retry_bursts && Object.keys(data.frustration_signals.retry_bursts).length > 0 && (
+            <div className="flex items-center gap-2 text-[11px] pt-1.5 mt-1.5 border-t border-white/5 flex-wrap">
+              <span className="text-red-400/80 font-mono uppercase tracking-wide">Retry Burst</span>
+              {Object.entries(data.frustration_signals.retry_bursts).map(([action, bursts]) => (
+                <span key={action} className="text-red-300/90 font-mono">
+                  {action} x{bursts.reduce((sum, b) => sum + b.count, 0)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Filters */}

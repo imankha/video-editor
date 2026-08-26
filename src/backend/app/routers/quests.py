@@ -75,7 +75,10 @@ ACHIEVEMENT_TO_MILESTONE = {
     "overlay_color_set": "overlay_color_set",
     "overlay_shape_set": "overlay_shape_set",
     "previewed_draft_reel_1s": "previewed_draft_reel_1s",  # T6840
-    "moved_to_my_reels": "moved_to_my_reels",
+    # T7510: `moved_to_my_reels` no longer bridges to a milestone — it emits
+    # server-side as `move_succeeded` from downloads.py:move_reels_to_profile at
+    # the durable point. Bridging here too would double-count the content outcome.
+    # (Kept in KNOWN_ACHIEVEMENT_KEYS + _STEP_ACHIEVEMENT_KEYS for quest steps.)
     # T4780: tutorial-watch milestones (bridge to analytics for funnel tracking)
     "watched_annotate_tutorial": "watched_annotate_tutorial",
     "watched_framing_tutorial": "watched_framing_tutorial",

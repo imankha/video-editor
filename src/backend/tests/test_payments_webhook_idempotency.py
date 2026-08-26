@@ -43,6 +43,17 @@ def _pi_event(pi_id="pi_dup_1", credits=40, pack="starter"):
     }
 
 
+def _pi_failed_event(pi_id="pi_failed_1", error_type="card_error", error_code="card_declined"):
+    return {
+        "type": "payment_intent.payment_failed",
+        "data": {"object": {
+            "id": pi_id,
+            "metadata": {"user_id": USER_ID},
+            "last_payment_error": {"type": error_type, "code": error_code},
+        }},
+    }
+
+
 @pytest.fixture(autouse=True)
 def _webhook_env(pg_conn, monkeypatch):
     from app.routers import payments as payments_mod
@@ -162,3 +173,52 @@ class TestConfirmIntentWebhookRace:
 
         assert result["status"] == "already_processed"
         assert get_credit_balance(USER_ID)["balance"] == 40
+
+
+class TestPaymentFailedWebhook:
+    """T7510: payment_intent.payment_failed emits the taxonomy's failure outcome
+    for the payment funnel action (payment_started already fires at intent
+    creation)."""
+
+    def test_card_decline_emits_refused_reason(self, monkeypatch):
+        from app.routers import payments as payments_mod
+
+        calls = []
+        monkeypatch.setattr(
+            payments_mod, "record_milestone",
+            lambda user_id, event, context=None, reason=None: calls.append((user_id, event, reason)),
+        )
+        event = _pi_failed_event(error_type="card_error", error_code="card_declined")
+        monkeypatch.setattr(payments_mod.stripe.Webhook, "construct_event", lambda *a, **k: event)
+
+        result = asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
+
+        assert result["status"] == "payment_failed"
+        assert result["reason"] == "refused"
+        assert (USER_ID, "payment_failed", "refused") in calls
+
+    def test_non_card_error_emits_unknown_reason(self, monkeypatch):
+        from app.routers import payments as payments_mod
+
+        calls = []
+        monkeypatch.setattr(
+            payments_mod, "record_milestone",
+            lambda user_id, event, context=None, reason=None: calls.append((user_id, event, reason)),
+        )
+        event = _pi_failed_event(error_type="api_error", error_code="processing_error")
+        monkeypatch.setattr(payments_mod.stripe.Webhook, "construct_event", lambda *a, **k: event)
+
+        result = asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
+
+        assert result["reason"] == "unknown"
+        assert (USER_ID, "payment_failed", "unknown") in calls
+
+    def test_missing_user_id_metadata_does_not_crash(self, monkeypatch):
+        from app.routers import payments as payments_mod
+
+        event = _pi_failed_event()
+        event["data"]["object"]["metadata"] = {}
+        monkeypatch.setattr(payments_mod.stripe.Webhook, "construct_event", lambda *a, **k: event)
+
+        result = asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
+        assert result["status"] == "error"

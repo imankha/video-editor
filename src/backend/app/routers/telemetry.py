@@ -20,7 +20,7 @@ import logging
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
-from ..user_context import get_current_user_id
+from ..user_context import get_current_impersonator_id, get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -85,5 +85,42 @@ async def report_video_error(payload: VideoErrorReport) -> Response:
         payload.probeIsHtml,
         payload.srcKey,
         (payload.userAgent or "")[:150],
+    )
+    return Response(status_code=204)
+
+
+class ClientErrorReport(BaseModel):
+    """T7510 frustration-signal tier 2: an uncaught client error/rejection,
+    already captured into clientLogger's ring buffer (T7560). This beacon mirrors
+    the T7480 upload-failure-beacon contract exactly: logs only, no DB write, no
+    milestone counter, never blocks or throws."""
+
+    message: str | None = None   # capped, no PII expected beyond the error text itself
+    route: str | None = None     # which screen/route the error occurred on
+
+
+@router.post("/api/client-errors/report", status_code=204)
+async def report_client_error(payload: ClientErrorReport) -> Response:
+    """Fire-and-forget beacon for an uncaught client error or unhandled rejection.
+
+    T7510 explicit impersonation guard: this is a new sink that does NOT route
+    through record_milestone (it writes to logs only, like the T7480 beacon), so
+    it must check impersonation itself — an admin impersonating a user must leave
+    ZERO footprint, including in server logs attributed to that user. When
+    impersonating, return 204 without logging anything.
+    """
+    if get_current_impersonator_id():
+        return Response(status_code=204)
+
+    try:
+        user_id = get_current_user_id() or "anon"
+    except RuntimeError:
+        user_id = "anon"
+
+    logger.warning(
+        "[CLIENT_ERROR] user=%s route=%s msg=%r",
+        user_id,
+        payload.route,
+        (payload.message or "")[:300],
     )
     return Response(status_code=204)

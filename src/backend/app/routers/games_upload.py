@@ -400,12 +400,21 @@ async def finalize_upload(
             f"hash={blake3_hash} size_mb={actual_size / (1024*1024):.1f}"
         )
 
-        # Game creation is handled separately by POST /api/games
-        return {
-            "status": UploadStatus.SUCCESS,
-            "blake3_hash": blake3_hash,
-            "file_size": actual_size,
-        }
+    # T7510: the DURABLE upload-success point. R2 has confirmed the object (HEAD +
+    # size match above) and the pending row is committed-deleted, so this is the
+    # first place a game upload provably persisted — the honest counterpart to the
+    # intent-side game_created. Emitted synchronously so the impersonation guard
+    # (record_milestone) resolves against this request's context. Never fires from
+    # create_game (which only inserts the pending row).
+    from app.analytics import record_milestone
+    record_milestone(user_id, "game_upload_succeeded", context={"blake3_hash": blake3_hash})
+
+    # Game creation is handled separately by POST /api/games
+    return {
+        "status": UploadStatus.SUCCESS,
+        "blake3_hash": blake3_hash,
+        "file_size": actual_size,
+    }
 
 
 @router.patch("/upload/{session_id}/parts")
@@ -512,6 +521,8 @@ async def list_pending_uploads():
     Used by frontend to detect and resume interrupted uploads.
     Validates each R2 session and auto-cleans stale ones.
     """
+    user_id = get_current_user_id()
+    reaped_failures = 0  # T7510: count of orphaned uploads reaped as failures
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -584,12 +595,24 @@ async def list_pending_uploads():
                         f"upload_failed for hash={row['blake3_hash']} (dead resume "
                         f"session {row['id']})"
                     )
+                    # T7510: a reaped pending upload is a durable FAILURE — the
+                    # user started an upload that never finalized. Record it with a
+                    # coarse reason so the dashboard shows the attempt AND its cause
+                    # (user_abandoned = navigated away / dead resume session).
+                    reaped_failures += 1
                 # 3. Drop the dead resume record.
                 cursor.execute("DELETE FROM pending_uploads WHERE id = ?", (row['id'],))
             conn.commit()
             logger.info(f"[T7490] Reaped {len(stale_rows)} stale pending upload(s)")
 
-        return {'pending_uploads': uploads}
+    # Emit failure milestones AFTER the SQLite txn commits (outside the connection
+    # block), so the analytics PG write never rides the profile-DB transaction.
+    if reaped_failures:
+        from app.analytics import record_milestone
+        for _ in range(reaped_failures):
+            record_milestone(user_id, "game_upload_failed", reason="user_abandoned")
+
+    return {'pending_uploads': uploads}
 
 
 @router.delete("/upload/{session_id}")

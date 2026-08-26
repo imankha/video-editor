@@ -65,3 +65,46 @@ def test_beacon_rejects_wrong_type_gracefully():
     client = _client()
     resp = client.post("/api/client-errors/video", json={"errorCode": "not-an-int"})
     assert resp.status_code == 422
+
+
+class TestClientErrorReportBeacon:
+    """T7510 frustration-signal tier 2: POST /api/client-errors/report.
+
+    Mirrors the T7480 upload-failure-beacon contract (log-only, no DB write) --
+    these tests pin: 204 + greppable [CLIENT_ERROR] log line, graceful handling
+    of an empty body, and the explicit impersonation guard (zero footprint,
+    including in logs, when the request context is impersonating)."""
+
+    def test_reports_and_logs_message_and_route(self, caplog):
+        client = _client()
+        with caplog.at_level(logging.WARNING, logger=TELEMETRY_LOGGER):
+            resp = client.post("/api/client-errors/report", json={
+                "message": "TypeError: cannot read properties of undefined",
+                "route": "/annotate/42",
+            })
+        assert resp.status_code == 204
+        rec = next((r for r in caplog.records if "[CLIENT_ERROR]" in r.getMessage()), None)
+        assert rec is not None, "beacon did not emit a [CLIENT_ERROR] log line"
+        msg = rec.getMessage()
+        assert "route=/annotate/42" in msg
+        assert "cannot read properties of undefined" in msg
+
+    def test_accepts_empty_payload(self):
+        client = _client()
+        resp = client.post("/api/client-errors/report", json={})
+        assert resp.status_code == 204
+
+    def test_impersonation_leaves_zero_footprint(self, caplog, monkeypatch):
+        monkeypatch.setattr(
+            "app.routers.telemetry.get_current_impersonator_id",
+            lambda: "admin-123",
+        )
+        client = _client()
+        with caplog.at_level(logging.WARNING, logger=TELEMETRY_LOGGER):
+            resp = client.post("/api/client-errors/report", json={
+                "message": "should never be logged",
+                "route": "/framing/1",
+            })
+        assert resp.status_code == 204
+        assert not any("[CLIENT_ERROR]" in r.getMessage() for r in caplog.records), \
+            "impersonated request must leave zero footprint, including in server logs"

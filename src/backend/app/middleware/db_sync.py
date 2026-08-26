@@ -96,6 +96,17 @@ DURABLE_SYNC_FAILED_RESPONSE = {
 }
 
 
+# T7510: routes whose durable-sync 503 (below) is itself a funnel-action
+# FAILURE. Keyed by (method, request.url.path) — exact static routes only, no
+# path params in the mapped set. Maps to the FLOW_EVENTS base event that
+# record_milestone should log with reason="sync_failed". move_reels_to_profile
+# is NOT here — it does its own inline sync + move_succeeded emission
+# (downloads.py) rather than going through this generic durable_sync path.
+DURABLE_SYNC_FAILURE_ACTIONS = {
+    ("POST", "/api/clips/raw/save"): "clip_save_failed",
+}
+
+
 def set_durable_sync_failure_response(request: Request, payload: dict) -> None:
     """Route-specific 503 body for a durable-sync failure. The generic
     DURABLE_SYNC_FAILED_RESPONSE lies for routes that already committed part of
@@ -976,6 +987,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                             f"returning 503 user={user_id}"
                             f"{(' req_id=' + req_id) if req_id else ''}"
                         )
+                        # T7510: this durable-sync failure IS the taxonomy's
+                        # failure outcome for the mapped funnel action (the
+                        # gesture's _attempted milestone already fired inside the
+                        # handler before call_next). record_milestone guards
+                        # impersonation internally.
+                        failure_action = DURABLE_SYNC_FAILURE_ACTIONS.get((method, path))
+                        if failure_action:
+                            from ..analytics import record_milestone
+                            record_milestone(user_id, failure_action, reason="sync_failed")
                         # T6350: a multi-phase handler that already durably
                         # committed part of its work can register a truthful
                         # per-route body via set_durable_sync_failure_response;

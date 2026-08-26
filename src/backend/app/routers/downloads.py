@@ -1598,6 +1598,12 @@ async def move_reels_to_profile(
     req_id = get_current_req_id()
     target_profile_id = body.target_profile_id
 
+    # T7510: the move gesture IS the attempt; `move_succeeded` fires below only
+    # after the TARGET profile's durable sync provably returns OK (before source
+    # cleanup). record_milestone is impersonation-guarded.
+    from app.analytics import record_milestone
+    record_milestone(user_id, "move_attempted")
+
     # --- Validate the target profile belongs to this user and is a sibling ---
     from app.services.user_db import get_profiles
     profile_ids = {p["id"] for p in get_profiles(user_id)}
@@ -1847,6 +1853,11 @@ async def move_reels_to_profile(
             raise HTTPException(status_code=500, detail="Failed to write target profile") from None
         finally:
             target_conn.close()
+
+        # T7510: the TARGET profile's explicit durable sync returned OK (a failed
+        # or conflicting sync raised a 503 above), so the move provably persists.
+        # Emit success here — after the durable point, before the source cleanup.
+        record_milestone(user_id, "move_succeeded")
 
         # --- Phase 2: target is fully durable -> remove reels from the SOURCE --
         _delete_moved_source_rows(cursor, video_ids)

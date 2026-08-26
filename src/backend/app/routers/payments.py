@@ -392,6 +392,28 @@ async def stripe_webhook(request: Request):
         )
         return {"status": "credits_granted", "credits": credits, "balance": new_balance}
 
+    # Handle PaymentIntent failure (T7510 — attempt-vs-outcome funnel honesty).
+    # `payment_started` fired at intent-creation (the attempt); this is its
+    # failure outcome. A card decline is a `refused` (validation/bank rejection);
+    # anything else is `unknown`. record_milestone is impersonation-guarded, but a
+    # server-to-server webhook has no impersonation context anyway.
+    if event["type"] == "payment_intent.payment_failed":
+        intent = event["data"]["object"]
+        metadata = intent.get("metadata", {})
+        user_id = metadata.get("user_id")
+        pi_id = intent["id"]
+        if not user_id:
+            logger.error(f"[Payments] Webhook PI failure missing user_id: pi={pi_id}")
+            return {"status": "error", "message": "Missing metadata"}
+        last_error = intent.get("last_payment_error") or {}
+        reason = "refused" if last_error.get("type") == "card_error" else "unknown"
+        record_milestone(user_id, "payment_failed", reason=reason)
+        logger.info(
+            f"[Payments] PaymentIntent failed for {user_id} (pi={pi_id}, "
+            f"reason={reason}, code={last_error.get('code')})"
+        )
+        return {"status": "payment_failed", "reason": reason}
+
     # Handle refunds (T5760 — keep total_spent_cents net of refunds in steady state)
     #
     # total_spent_cents means NET of refunds, so a refund lowers it at refund time,

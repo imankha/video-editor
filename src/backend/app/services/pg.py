@@ -291,6 +291,12 @@ CREATE TABLE IF NOT EXISTS daily_counters (
     invites_sent INTEGER NOT NULL DEFAULT 0,
     shares_viewed INTEGER NOT NULL DEFAULT 0,
     exports_started INTEGER NOT NULL DEFAULT 0,
+    -- T7510: attempt/outcome/failure daily rollups. games_created above now
+    -- means upload ATTEMPTS; these are the durable outcomes + coarse failures.
+    game_uploads_succeeded INTEGER NOT NULL DEFAULT 0,
+    game_uploads_failed INTEGER NOT NULL DEFAULT 0,
+    clips_attempted INTEGER NOT NULL DEFAULT 0,
+    clips_failed INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (counter_date, origin_type)
 );
 
