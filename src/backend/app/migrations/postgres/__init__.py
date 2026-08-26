@@ -21,6 +21,9 @@ from .v019_credits import V019Credits
 from .v020_game_link_share_type import V020GameLinkShareType
 from .v021_share_claims import V021ShareClaims
 from .v022_user_usage_daily import V022UserUsageDaily
+from .v023_rename_pending_share_recipient_email import (
+    V023RenamePendingShareRecipientEmail,
+)
 
 MIGRATIONS = [
     V001Baseline(),
@@ -45,6 +48,7 @@ MIGRATIONS = [
     V020GameLinkShareType(),
     V021ShareClaims(),
     V022UserUsageDaily(),
+    V023RenamePendingShareRecipientEmail(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

@@ -473,22 +473,25 @@ def create_pending_share(
     share_id: int,
     sharer_user_id: str,
     sharer_profile_id: str,
-    recipient_email: str,
+    invited_email: str,
     game_id: int,
     tag_name: str,
     clip_data_bytes: bytes,
 ) -> int | None:
+    # invited_email is ADVISORY (T7550): the address this share was emailed to,
+    # stored for discovery filtering + attribution. It does NOT gate the claim --
+    # any link/id-holder can resolve this pending share (open-by-token).
     with get_sharing_db() as conn:
         cur = conn.cursor()
         try:
             cur.execute(
                 """INSERT INTO pending_teammate_shares
-                   (share_id, sharer_user_id, sharer_profile_id, recipient_email,
+                   (share_id, sharer_user_id, sharer_profile_id, invited_email,
                     game_id, tag_name, clip_data)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING id""",
                 (share_id, sharer_user_id, sharer_profile_id,
-                 recipient_email.lower().strip(), game_id, tag_name,
+                 invited_email.lower().strip(), game_id, tag_name,
                  psycopg2.Binary(clip_data_bytes)),
             )
             return cur.fetchone()["id"]
@@ -505,9 +508,9 @@ def get_pending_shares_for_email(email: str) -> list[dict]:
         cur = conn.cursor()
         cur.execute(
             """SELECT id, share_id, sharer_user_id, sharer_profile_id,
-                      recipient_email, game_id, tag_name, clip_data, created_at
+                      invited_email, game_id, tag_name, clip_data, created_at
                FROM pending_teammate_shares
-               WHERE recipient_email = %s AND resolved_at IS NULL
+               WHERE invited_email = %s AND resolved_at IS NULL
                ORDER BY created_at""",
             (email.lower().strip(),),
         )

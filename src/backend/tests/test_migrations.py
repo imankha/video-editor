@@ -129,11 +129,12 @@ class TestTrackImports:
 
     def test_postgres_track(self):
         from app.migrations.postgres import MIGRATIONS, RUNNER
-        # v020/v021 (Share the Game epic) merged alongside T5770's v022, so the
-        # track is contiguous again: 22 registered migrations, head at v022.
-        assert len(MIGRATIONS) == 22
+        # v020/v021 (Share the Game epic) merged alongside T5770's v022, then
+        # T7550's v023 (pending-share recipient_email -> invited_email rename)
+        # landed on top: 23 registered migrations, contiguous, head at v023.
+        assert len(MIGRATIONS) == 23
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 22
+        assert RUNNER.latest_version == 23
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status

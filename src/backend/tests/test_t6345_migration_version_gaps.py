@@ -12,9 +12,11 @@ The real incident state on dev + staging (2026-08-02):
 Two layers of coverage:
   * Pure-logic tests with a synthetic cursor — no DB required, prove the set
     membership semantics and that the sqlite branch is unchanged.
-  * Real dev-Postgres tests (pg_conn) — seed the exact [1..19, 22] gap and prove
-    v020/v021 report pending AND get applied by RUNNER.run(), and that a
-    contiguous [1..22] history reports nothing pending (no common-case change).
+  * Real dev-Postgres tests (pg_conn) — seed a [20, 21] gap (every registered
+    version EXCEPT 20/21) and prove v020/v021 report pending AND get applied by
+    RUNNER.run(), and that a fully-seeded history reports nothing pending (no
+    common-case change). The seed is derived from RUNNER.migrations so new
+    migrations landing above the gap (v023+) don't re-break these assertions.
 """
 
 import psycopg2
@@ -146,18 +148,27 @@ def _applied_versions(conn):
 
 class TestRealPostgresGapHeals:
     def test_gap_below_max_reported_pending_and_applied(self, pg_conn, preserve_schema_migrations):
-        """[1..19, 22] -> v020/v021 pending AND applied by RUNNER.run(); ledger becomes 1..22.
+        """Gap at [20, 21] below the applied max -> pending AND applied by RUNNER.run().
+
+        Seed every registered version EXCEPT the [20, 21] gap, so the ONLY pending
+        migrations are the below-max gaps regardless of how many migrations exist
+        above them (v022, v023, ...). This keeps the test pinned to gap-healing
+        rather than re-breaking each time a new migration lands.
 
         T6750: `_seed_versions` wipes the whole ledger; `preserve_schema_migrations`
         restores it in teardown so a mid-test failure can't poison later tests.
         """
         from app.migrations.postgres import RUNNER
 
+        all_versions = sorted(m.version for m in RUNNER.migrations)
+        seeded = [v for v in all_versions if v not in (20, 21)]
+
         conn = psycopg2.connect(pg_conn, cursor_factory=RealDictCursor)
         try:
-            _seed_versions(conn, list(range(1, 20)) + [22])
+            _seed_versions(conn, seeded)
 
-            # Direct proof of the ledger BEFORE (the reproduced incident state).
+            # Direct proof of the ledger BEFORE (the reproduced incident state:
+            # the [20, 21] gap sits below an applied higher version).
             before = _applied_versions(conn)
             assert 20 not in before and 21 not in before and 22 in before
 
@@ -169,21 +180,25 @@ class TestRealPostgresGapHeals:
             assert [m.version for m in applied] == [20, 21]
 
             after = _applied_versions(conn)
-            assert after == list(range(1, 23)), f"ledger not contiguous 1..22: {after}"
+            assert after == all_versions, f"ledger not fully applied: {after}"
         finally:
             conn.close()
 
     def test_contiguous_history_reports_nothing_pending(self, pg_conn, preserve_schema_migrations):
-        """A fully-migrated [1..22] env still reports nothing pending (AC #4).
+        """A fully-migrated env (every registered version applied) reports nothing
+        pending (AC #4). Seeds all of RUNNER.migrations so a new migration landing
+        doesn't turn this common-case assertion red.
 
         T6750: `_seed_versions` wipes the whole ledger; `preserve_schema_migrations`
         restores it in teardown so a mid-test failure can't poison later tests.
         """
         from app.migrations.postgres import RUNNER
 
+        all_versions = sorted(m.version for m in RUNNER.migrations)
+
         conn = psycopg2.connect(pg_conn, cursor_factory=RealDictCursor)
         try:
-            _seed_versions(conn, list(range(1, 23)))
+            _seed_versions(conn, all_versions)
             pending = RUNNER.get_pending(conn, "postgres")
             assert pending == [], f"contiguous history should be pending-free, got {[m.version for m in pending]}"
 

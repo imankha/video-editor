@@ -187,7 +187,12 @@ CREATE TABLE IF NOT EXISTS pending_teammate_shares (
     share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
     sharer_user_id TEXT NOT NULL,
     sharer_profile_id TEXT NOT NULL,
-    recipient_email TEXT NOT NULL,
+    -- ADVISORY ONLY (T7550): the address this share was emailed to. It is NOT a
+    -- security gate -- the share link/id can be forwarded and claimed by ANY
+    -- logged-in account that holds it (open-by-token, matching game_link, T5730).
+    -- Used for discovery filtering and referral attribution, never to authorize
+    -- a claim. Renamed from recipient_email so readers are not misled.
+    invited_email TEXT NOT NULL,
     game_id INTEGER NOT NULL,
     tag_name TEXT,
     clip_data BYTEA NOT NULL,
@@ -195,7 +200,7 @@ CREATE TABLE IF NOT EXISTS pending_teammate_shares (
     resolved_at TIMESTAMPTZ,
     resolved_profile_id TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_pending_shares_email ON pending_teammate_shares(recipient_email);
+CREATE INDEX IF NOT EXISTS idx_pending_shares_email ON pending_teammate_shares(invited_email);
 CREATE INDEX IF NOT EXISTS idx_pending_shares_share ON pending_teammate_shares(share_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_shares_unique
@@ -203,7 +208,7 @@ ON pending_teammate_shares(share_id, game_id, tag_name)
 WHERE resolved_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_pending_shares_email_unresolved
-ON pending_teammate_shares(recipient_email) WHERE resolved_at IS NULL;
+ON pending_teammate_shares(invited_email) WHERE resolved_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_shares_sharer_active
 ON shares(sharer_user_id) WHERE revoked_at IS NULL;
