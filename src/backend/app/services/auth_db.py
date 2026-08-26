@@ -15,6 +15,8 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from app.user_context import get_current_impersonator_id
+
 from .pg import get_pg
 
 logger = logging.getLogger(__name__)
@@ -106,6 +108,13 @@ def update_picture_url(user_id: str, picture_url: str) -> None:
 
 
 def update_last_seen(user_id: str) -> None:
+    # T7530: don't attribute admin impersonation to the target user's activity.
+    # Mirrors the T1515 guard in analytics.update_session (which keeps
+    # user_segments.last_active_at clean on this same request path).
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[AuthDB] Skipped last_seen update for %s during impersonation by %s", user_id, impersonator)
+        return
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
