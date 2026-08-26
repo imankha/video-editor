@@ -1,6 +1,6 @@
 # T7750: Resolve the Playwright environment/scope-mismatch bucket (~45 failures)
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (mix of data hygiene, suite-glob scoping, and fragile-seed hardening)
 **Impact:** 5
 **Complexity:** 5
