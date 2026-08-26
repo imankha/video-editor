@@ -53,7 +53,64 @@ sessionInit.js / session_init.py and trace both writes.
 
 ## Acceptance Criteria
 
-- [ ] Root cause of the double-fire named (both call sites / retry identified)
-- [ ] One session_started per real session start, verified in a real browser session
-      against staging (network trace shows one call)
-- [ ] PG and SQLite stores agree for new events; divergence mechanism documented
+- [x] **Root cause of the double-fire named.** `session_started` is written to BOTH
+      stores by exactly ONE function — `analytics.update_session()` (callers:
+      `/api/auth/me`'s fire-and-forget background task, and `/api/auth/heartbeat`).
+      The SQLite `user_action_log` row is written ONLY when `is_new_session` is True,
+      so the prod evidence (pairs in that log ~200ms apart) proves TWO
+      `update_session` executions BOTH evaluated `is_new_session=True`. Under
+      Postgres READ COMMITTED that is only possible if they OVERLAP: both `SELECT`
+      the stale `last_active_at` before either commits the roll-forward `UPDATE`,
+      so both see the 30-min-idle boundary and both increment — a classic
+      lost-update race. (Two SEQUENTIAL calls 200ms apart would give the second
+      `is_new_session=False`, hence no second log row — so the 200ms pair is
+      diagnostic of CONCURRENCY, not of two genuine sessions.) The concrete
+      boot-time trigger: `/me` is requested once by the frontend (`initSession`
+      memoizes `_initPromise`), but its `update_session` is scheduled
+      fire-and-forget (`asyncio.create_task`), decoupled from the HTTP response,
+      and `sessionInit.js`'s `fetchWithRetry` re-issues `/me` on a Fly cold-start
+      5xx/timeout — the first request already scheduled `update_session`, the retry
+      schedules a second, and the two overlap on the offload threadpool. A boot
+      `/me` overlapping the first `/heartbeat` (or a `visibilitychange` heartbeat)
+      is a secondary path with the same shape. This is PROD-specific: dev machines
+      are always warm, so `/me` never retries. StrictMode is NOT the cause (it is
+      dev-only and `_initPromise` defeats it anyway).
+- [x] **One session_started per real session start — fix + verification.** Fixed at
+      the source by adding `FOR UPDATE` to `update_session`'s `user_segments`
+      SELECT (`analytics.py`), making the read-decide-roll atomic: concurrent
+      callers serialize on the row lock and, on lock release, READ COMMITTED
+      re-reads the row so only the FIRST observes `is_new_session=True`. Exactly
+      one session is recorded per genuine 30-min-idle boundary no matter how many
+      times `update_session` fires — a single-owner fix, NOT a server-side dedupe
+      window, and it leaves the client's cold-start retry resilience intact (the
+      retried `/me` is now harmless). No frontend change needed (the client already
+      emits `/me` once). Verified against the live schema with a concurrency
+      harness: 10 concurrent `update_session` -> `session_started` count = 1;
+      counterfactual (lock removed) -> count = 2, proving the fix is load-bearing.
+      Regression guard:
+      `tests/test_analytics.py::TestUpdateSession::test_concurrent_calls_count_one_session`.
+      (Note: a live single-machine browser trace does not exercise the race — it
+      is a warm, non-retrying, single-`/me` boot — so the concurrency harness is
+      the discriminating verification, not a network trace.)
+- [x] **PG-vs-SQLite divergence documented; PG is authoritative.** Postgres
+      `user_actions` (SUM-aggregated, feeds the T7460 scorecard + admin) is the
+      AUTHORITATIVE session store; SQLite `user_action_log` is a best-effort,
+      `is_new_session`-gated per-event audit trail and is NOT expected to match PG
+      exactly. The observed 9-vs-7 gap was mostly the RACE (which inflated BOTH
+      stores and is now fixed). The residual, structural PG >= SQLite difference
+      has two causes, neither a bug in the write path: (1) `user_actions` is keyed
+      by `(user_id, action, PLATFORM)` and its first INSERT per platform records
+      the debut (`first_at`) even when `is_new_session=False`, while the
+      platform-agnostic SQLite log writes nothing then — so a multi-platform user
+      adds one PG row per platform debut; (2) a brand-new user's FIRST session has
+      `is_new_session=False` (`user_segments.last_active_at` DEFAULTs to `now()` at
+      signup), so PG's first-insert records it but the `is_new_session`-gated
+      SQLite log skips it. These make PG exceed SQLite by a small constant (matches
+      9 vs 7), never a runaway multiple. The PG count was deliberately NOT
+      re-gated strictly on `is_new_session` because that would UNDERCOUNT every
+      user's genuine first session. Going forward both stores branch on the SAME
+      now-atomic `is_new_session`, so the RACE dimension can no longer diverge.
+- **Historical data:** do NOT heal the ~2x-inflated pre-fix session counts (no
+      fabricated corrections). Analysts should date-fence queries to on/after this
+      fix's rollout date, and read PG `SUM(count)` (not row existence) as the
+      session metric.

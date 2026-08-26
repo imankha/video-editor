@@ -414,13 +414,29 @@ def update_session(user_id: str, is_pwa: bool = False):
         with get_pg() as conn:
             cur = conn.cursor()
 
+            # T7570: FOR UPDATE closes a lost-update race that double-counted
+            # sessions. update_session is reachable concurrently for the same
+            # user (the /api/auth/me background task is fire-and-forget and its
+            # scheduling is retried by the client's fetchWithRetry on a Fly
+            # cold-start; /api/auth/heartbeat can also overlap it). Without the
+            # row lock, two overlapping calls both SELECT the stale
+            # last_active_at, both evaluate is_new_session=True, and both
+            # increment the session_started count + write a user_action_log row
+            # (~200ms apart in prod) -- inflating session counts ~2x. The lock
+            # serializes the decide-and-roll: the second caller blocks, then
+            # under READ COMMITTED re-reads the row after the first commits, so
+            # is_new_session is now False for it. Exactly one caller records a
+            # new session per genuine 30-min-idle boundary, no matter how many
+            # times update_session fires. This is the single-owner fix at the
+            # source, NOT a dedupe window.
             cur.execute(
                 """SELECT
                        last_active_at < now() - INTERVAL '30 minutes' AS is_new_session,
                        current_session_start,
                        last_active_at,
                        total_usage_seconds
-                   FROM user_segments WHERE user_id = %s""",
+                   FROM user_segments WHERE user_id = %s
+                   FOR UPDATE""",
                 (user_id,),
             )
             seg_row = cur.fetchone()
