@@ -9,9 +9,11 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  * 1280+ (desktop) and evidences the acceptance criteria of BOTH bundled tasks:
  *
  *   T5678-c1  no Select button / selection mode anywhere in My Reels
- *   T5678-c2  each reel exposes "Move to profile…" -> a CONFIRM step
+ *   T5678-c2  each reel EXPOSES "Move to profile…" (the picker->confirm->commit WALK
+ *             is owned by T4850-move-reels; T7770 dropped the duplicated uncommitted walk)
  *   T5673-c1  collection/game groups show poster imagery (tiles, not text rows)
  *   T5673-c2  play / copy-link / kebab actions present and working per tile
+ *             (reel-rename is owned by T6890-rename-icon-placement; T7770 de-dup)
  *   T5673-c3  poster-less entries show the branded fallback, never a broken image
  *   T5673-c4  mobile 390px: tiles are >=44px touch targets, no horizontal overflow
  *
@@ -108,7 +110,7 @@ test.describe('T5673 + T5678 — My Reels visual tiles (real account)', () => {
     await saveEvidence(page, 'T5673-criterion-1-poster-tiles-desktop');
   });
 
-  test('T5673-c2 + T5678-c2: tile actions incl. Move-to-profile CONFIRM flow', async ({ page }) => {
+  test('T5673-c2 + T5678-c2: tile actions present incl. Move-to-profile affordance', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
@@ -118,33 +120,29 @@ test.describe('T5673 + T5678 — My Reels visual tiles (real account)', () => {
     // T6300: Play is the persistent primary (no hover needed to discover it);
     // Copy Link / Share moved into the kebab (previously a direct hover chip).
     await expect(tile.getByRole('button', { name: /Play video/i })).toBeVisible();
-    // T6890: Rename left the kebab for a standalone pencil beside the name, so it
-    // is asserted on the tile itself (not inside the overflow menu).
-    await expect(tile.getByRole('button', { name: 'Rename reel' })).toBeVisible();
+    // T6890 owns reel-rename now (pencil beside the name + inline rename start): its
+    // canonical spec is T6890-rename-icon-placement's "ReelTile" test. The kebab no
+    // longer carries a Rename item, so this tile-action check asserts only the
+    // remaining overflow set; reel-rename is deferred to T6890 (T7770 de-dup).
     // Kebab opens the remaining overflow set (hover-revealed on a fine pointer, T6300).
     await tile.hover();
     await tile.getByRole('button', { name: /More actions/i }).click();
     await expect(page.getByRole('button', { name: /^Download$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Share$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Copy Link$/ })).toBeVisible();
-    await saveEvidence(page, 'T5673-criterion-2-tile-kebab');
-
-    // T5678: "Move to profile…" -> picker -> CONFIRM (multi-profile account only).
+    // T5678: the per-reel "Move to profile…" affordance is present (multi-profile
+    // account only). The full picker->confirm->commit WALK is owned by
+    // T4850-move-reels (which seeds two profiles and asserts the reel actually
+    // moves); here we assert only that the tile EXPOSES the action, then close the
+    // menu without committing (T7770 de-dup: the uncommitted picker walk was a
+    // strict subset of T4850's committed flow).
     const moveItem = page.getByRole('button', { name: /Move to profile/ });
     if (await moveItem.count()) {
-      await moveItem.click();
-      const modal = page.locator('div.z-\\[80\\]');
-      await expect(modal.getByRole('heading', { name: /Move .* to/i })).toBeVisible();
-      // Pick a target profile (a button carrying a color avatar) -> confirm step appears.
-      const options = modal.getByRole('button').filter({ has: page.locator('span.rounded-full') });
-      await options.first().click();
-      await expect(page.getByRole('button', { name: /^Move reel/ })).toBeVisible();
-      await saveEvidence(page, 'T5678-criterion-2-move-confirm-step');
-      await page.keyboard.press('Escape'); // step back from confirm
-      await page.keyboard.press('Escape'); // close picker (no move committed)
+      await expect(moveItem).toBeVisible();
     } else {
       console.log('[T5678] single-profile account: no Move-to-profile item (expected)');
     }
+    await saveEvidence(page, 'T5673-criterion-2-tile-kebab');
   });
 
   test('T5673-c4: mobile 390px tiles are >=44px touch targets, no overflow; responsive sweep', async ({ page }) => {

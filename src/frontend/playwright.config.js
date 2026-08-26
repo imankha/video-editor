@@ -62,10 +62,11 @@ const PER_TEST_TIMEOUT = process.env.E2E_TIMEOUT_MS
 //   - @staging-gate — the curated pre-deploy subset (STAGING-GATE.md). It targets a DEPLOYED
 //     build + a hand-seeded fixture account; run locally in a bulk sweep it either duplicates
 //     coverage or fails on a precondition it can't satisfy. Run it via `test:e2e:staging-gate`.
-//   - @tutorial-capture — the tutorial-capture-{framing,overlay,publish} developer screen-
-//     RECORDING scripts (record footage to a host QUEST_DIR against hand-staged account state,
-//     NOT assertions). tutorial-capture-annotate is intentionally NOT tagged and still runs.
-//     Run the trio via `test:e2e:tutorial-capture`.
+//   - @tutorial-capture — the tutorial-capture-{annotate,framing,overlay,publish} developer
+//     screen-RECORDING scripts (record footage to a host QUEST_DIR against hand-staged account
+//     state, NOT assertions — zero expect()). T7770 tagged annotate too (previously it ran in
+//     the default suite as a data-mutating no-assert script). Run them via
+//     `test:e2e:tutorial-capture`.
 // NOTE on the mechanism: Playwright does NOT let a CLI `--grep-invert` override a config-level
 // `grepInvert` (they COMBINE), so a static `grepInvert` here would also zero out the explicit
 // gate/capture commands that `--grep` FOR these tags. Instead the exclusion lifts itself when

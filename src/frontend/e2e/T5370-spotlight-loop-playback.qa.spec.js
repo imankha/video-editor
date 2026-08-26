@@ -23,6 +23,7 @@
 import { test, expect, devices } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { FRAMING_CHIP_TITLE_RE } from './helpers/framingDraft.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -40,7 +41,7 @@ async function tryReachOverlay(page) {
   const draftsBtn = page.getByRole('button', { name: 'Reel Drafts' });
   if (await draftsBtn.count()) {
     await draftsBtn.click().catch(() => {});
-    const chip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
+    const chip = page.getByTitle(FRAMING_CHIP_TITLE_RE).first();
     if (await chip.count()) await chip.click().catch(() => {});
   }
   const overlayTab = page.locator('[data-testid="mode-overlay"]');

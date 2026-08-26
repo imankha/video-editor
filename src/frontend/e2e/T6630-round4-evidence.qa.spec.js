@@ -170,82 +170,17 @@ test.beforeAll(async ({ browser }) => {
 
 test.afterAll(async () => { await page?.context()?.close(); });
 
-// -------------------------------------------------------------- 1. multi-element render
-test('G1: two elements in ONE region render SIMULTANEOUSLY on the real stage', async () => {
-  await tab('text');
-  const panel = visiblePanel();
-
-  // T6630 round 6: region creation is timeline-click-only now (the
-  // Settings-tab button this used is removed, item 1).
-  await clickTextTrackAt(0.2);
-  await page.waitForTimeout(400);
-  expect(await regionCount()).toBe(1);
-
-  // Append a SECOND element into the SAME region (not a new region).
-  const addElementBtn = panel.locator('[data-testid^="text-tab-add-element-"]').first();
-  await addElementBtn.click();
-  await page.waitForTimeout(400);
-  expect(await regionCount(), 'still ONE region on the timeline').toBe(1);
-
-  const elementRows = panel.locator('[data-testid^="text-tab-element-"]');
-  await expect(elementRows).toHaveCount(2);
-
-  // BOTH elements must be visible on the stage AT ONCE. The
-  // `text-preview-element-*` div is a full-bleed positioning wrapper (same
-  // size as the video stage for every element) -- RichText's own root is
-  // ALSO full-bleed (`stageStyle`, T5180 design §7 overflow-clip box); the
-  // actual per-element placement lives on the innermost
-  // `span[data-baseline-y]`, which is `display:inline` and tightly bounds
-  // the rendered glyphs. Measure THAT to prove distinct positions, not just
-  // presence.
-  const previewElements = page.locator('[data-testid^="text-preview-element-"]');
-  await expect(previewElements).toHaveCount(2);
-  const glyphSpans = page.locator('[data-testid^="text-preview-element-"] span[data-baseline-y]');
-  await expect(glyphSpans).toHaveCount(2);
-
-  const box1 = await glyphSpans.nth(0).boundingBox();
-  const box2 = await glyphSpans.nth(1).boundingBox();
-  console.log('G1 element glyph boxes:', JSON.stringify(box1), JSON.stringify(box2));
-  expect(box1, 'first element has a real box').toBeTruthy();
-  expect(box2, 'second element has a real box').toBeTruthy();
-  expect(
-    box1.y !== box2.y || box1.x !== box2.x,
-    'the two elements render at DISTINCT positions, not stacked on top of each other'
-  ).toBe(true);
-
-  await saveEvidence(page, 'R4-G1-multi-element-render');
-});
-
-// -------------------------------------------------------------- 2. default preset
-test('G2: a newly added element shows a DEFAULT position preset immediately (never Custom)', async () => {
-  const panel = visiblePanel();
-  const firstElementRow = panel.locator('[data-testid^="text-tab-element-"]').first();
-  await firstElementRow.click();
-  await page.waitForTimeout(200);
-
-  await expect(panel.getByTestId('text-position-grid')).toBeVisible();
-  const activePreset = panel.locator('[data-testid^="text-position-"][aria-pressed="true"]');
-  console.log('G2 active preset count:', await activePreset.count());
-  expect(await activePreset.count(), 'a preset is highlighted immediately -- never "Custom position"').toBe(1);
-  await expect(panel.getByText(/custom position/i)).toHaveCount(0);
-
-  await saveEvidence(page, 'R4-G2-default-preset');
-});
-
-test('G2b: the SECOND element in the region picked a DIFFERENT default preset than the first', async () => {
-  const panel = visiblePanel();
-  const rows = panel.locator('[data-testid^="text-tab-element-"]');
-  await rows.nth(0).click();
-  await page.waitForTimeout(150);
-  const firstActive = await panel.locator('[data-testid^="text-position-"][aria-pressed="true"]').getAttribute('data-testid');
-
-  await rows.nth(1).click();
-  await page.waitForTimeout(150);
-  const secondActive = await panel.locator('[data-testid^="text-position-"][aria-pressed="true"]').getAttribute('data-testid');
-
-  console.log('G2b presets:', firstActive, secondActive);
-  expect(secondActive).not.toBe(firstActive);
-});
+// T7770 consolidation: G1 (two elements render simultaneously), G2 (fresh
+// element has a default preset, never Custom), and G2b (second element picks a
+// different default preset) were DELETED here. They are superseded on the same
+// REAL /overlay screen by T6630-round7-evidence's R7-2 (the region tree's
+// scoped "+ Add text" appends an element) and R7-3/4 (a fresh element gets an
+// individually-identifying label + a top-right default preset, never "Custom
+// position"). Round 7 corrected round 4's preset/region expectations, so those
+// three round-4 assertions were the stale copy. Round 4 retains only its still-
+// UNIQUE facets below: the no-reflow settings panel (G3/G3b), the
+// error-banner-clears-on-recovery proof (B1), the SW-eviction hygiene mechanism
+// (SW1/SW2), and the 375px responsive check (R1).
 
 // -------------------------------------------------------------- 3. no-reflow settings panel
 test('G3: adding a region/element does NOT move the settings panel (measured bbox)', async () => {

@@ -22,6 +22,20 @@
  *      state and offers a one-way "Use a frame instead" switch (upload READ path
  *      retained).                                         [AC: grandfathering]
  *
+ * T7770 also folds in the distinct T6560 assertions (deleted T6560.qa.spec.js —
+ * both specs opened the SAME draft via the shared openLoadableOverlayDraft +
+ * waitCanvasReady + dragMarkerTo). The "deliberate drag + reload persists" test was
+ * a strict subset of criterion 5 above and was dropped; the UNIQUE T6560 coverage
+ * kept here:
+ *   7. NONE of the marker interactions the staging report named can CLEAR the
+ *      preview frame: click once, click again, keyboard Enter/Space, and a
+ *      drag-release-in-place all leave posterMarkerTime unchanged and write no
+ *      /poster-time — while a DELIBERATE drag still MOVES it. Plus the persistence-
+ *      layer enforcement: POST /poster-time rejects a null / missing / non-finite
+ *      time (422), so a "none" state is structurally unreachable at the write
+ *      boundary.                                     [T6560: never-cleared, both layers]
+ *   8. The H.264 export-info line is gone from the preview panel.   [T6560 item 2]
+ *
  * saveEvidence() is written per criterion; responsiveSweep() covers the panel.
  * Skips HONESTLY (never a vacuous pass) when Overlay isn't reachable in this env.
  *
@@ -59,6 +73,14 @@ async function sourceTime(page) {
   return page.evaluate(() => {
     const v = document.querySelector('[data-testid="poster-frame-source"]');
     return v ? v.currentTime : null;
+  });
+}
+
+/** The store's current picked poster marker time (T6560: the value a "clear" would null out). */
+async function posterMarkerTime(page) {
+  return page.evaluate(async () => {
+    const { useOverlayStore } = await import('/src/stores/overlayStore.js');
+    return useOverlayStore.getState().posterMarkerTime;
   });
 }
 
@@ -224,5 +246,116 @@ test.describe('T6510 preview image is a frame choice', () => {
     expect(await page.locator('input[type="file"]').count()).toBe(0);
 
     await saveEvidence(page, 'T6510-AC-grandfathered-upload');
+  });
+
+  // --- T7770: folded from T6560 (preview image is never cleared) ----------------------
+
+  test('no marker interaction clears the preview frame; a deliberate drag still moves it', async ({ context, page }) => {
+    const clears = [];
+    await loginAsRealUser(context, EMAIL, PROFILE);
+    // Bring this profile's SQLite to HEAD (the v032 poster_marker_time column),
+    // reproducing what an admin migrate does in prod before any gesture runs.
+    const mig = await page.request.post('/api/test/migrate-current-profile', { headers: { 'X-Test-Mode': 'true' } });
+    expect(mig.ok(), `profile migrate seam failed: ${mig.status()}`).toBe(true);
+
+    const verdict = await openOverlayDraft(page, { minReadyState: 3 });
+    test.skip(!verdict.ok, `overlay not reachable: ${verdict.reason}`);
+    const projectId = verdict.projectId;
+
+    // The reel opens with SOME resolved preview frame (auto default or a picked one).
+    await waitCanvasReady(page);
+
+    // Ensure a concrete picked frame so "cleared" would be an OBSERVABLE regression
+    // (auto default midpoint could coincidentally equal a clicked position). Await the
+    // surgical write so the pick is a confirmed round-trip, not a local echo.
+    const pickWrite = page.waitForResponse(
+      (r) => r.url().includes('/poster-time') && r.request().method() === 'POST',
+      { timeout: 15000 },
+    );
+    await dragMarkerTo(page, 0.4);
+    const pickResp = await pickWrite;
+    expect(pickResp.status(), 'a deliberate drag must persist (2xx)').toBeLessThan(300);
+    await expect(page.getByText(/Frame you picked/).first()).toBeVisible({ timeout: 10000 });
+    await waitCanvasReady(page);
+    const pickedTime = await posterMarkerTime(page);
+    expect(pickedTime, 'a concrete frame is picked before the no-op interactions').not.toBeNull();
+
+    // From here, ANY write that changes the marker away from `pickedTime` is a clear/move
+    // we did not intend. Record them.
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && req.url().includes('/poster-time')) clears.push(req.postData());
+    });
+
+    const assertUnchanged = async (label) => {
+      await waitCanvasReady(page);
+      const now = await posterMarkerTime(page);
+      expect(now, `${label}: preview frame must not change (was ${pickedTime}, got ${now})`).toBeCloseTo(pickedTime, 5);
+    };
+
+    const markerCenter = async () => {
+      const b = await page.getByTestId('poster-marker').first().boundingBox();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2, box: b };
+    };
+
+    // 1. Click once, no movement.
+    let c = await markerCenter();
+    await page.mouse.move(c.x, c.y); await page.mouse.down(); await page.mouse.up();
+    await page.waitForTimeout(400);
+    await assertUnchanged('click once');
+
+    // 2. Click again at the same position.
+    c = await markerCenter();
+    await page.mouse.move(c.x, c.y); await page.mouse.down(); await page.mouse.up();
+    await page.waitForTimeout(400);
+    await assertUnchanged('click again (same position)');
+
+    // 3. Keyboard-activate (Enter / Space are activations, not moves).
+    await page.getByTestId('poster-marker').first().focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(400);
+    await assertUnchanged('keyboard Enter/Space');
+
+    // 4. Drag and release IN PLACE (jitter under the drag threshold).
+    c = await markerCenter();
+    await page.mouse.move(c.x, c.y); await page.mouse.down();
+    await page.mouse.move(c.x + 3, c.y, { steps: 2 });
+    await page.mouse.move(c.x, c.y, { steps: 2 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    await assertUnchanged('drag release-in-place');
+
+    expect(clears, `no no-op interaction may write poster-time, but saw: ${clears.join(', ')}`).toEqual([]);
+
+    // 5. A DELIBERATE drag STILL moves the marker (moved-not-frozen) -- the fix
+    // suppresses clicks, not real drags.
+    await dragMarkerTo(page, 0.75);
+    await expect(async () => {
+      const moved = await posterMarkerTime(page);
+      expect(Math.abs(moved - pickedTime)).toBeGreaterThan(0.1);
+    }).toPass({ timeout: 10000 });
+    await waitCanvasReady(page);
+    const movedTime = await posterMarkerTime(page);
+
+    await saveEvidence(page, 'T6560-marker-move-not-clear');
+
+    // Persistence-layer enforcement: the backend refuses a null/missing/non-finite
+    // clear, so "none" is unreachable no matter what any UI path sends.
+    const nullResp = await page.request.post(`/api/export/projects/${projectId}/poster-time`, { data: { time: null } });
+    expect(nullResp.status(), 'POST /poster-time {time:null} must be rejected (422)').toBe(422);
+    const missingResp = await page.request.post(`/api/export/projects/${projectId}/poster-time`, { data: {} });
+    expect(missingResp.status(), 'POST /poster-time {} must be rejected (422)').toBe(422);
+    const okResp = await page.request.post(`/api/export/projects/${projectId}/poster-time`, { data: { time: movedTime } });
+    expect(okResp.status(), 'a concrete time is still accepted').toBeLessThan(300);
+  });
+
+  test('the H.264 export-info line is gone (T6560 item 2)', async ({ context, page }) => {
+    await loginAsRealUser(context, EMAIL, PROFILE);
+    await page.request.post('/api/test/migrate-current-profile', { headers: { 'X-Test-Mode': 'true' } });
+    const verdict = await openOverlayDraft(page, { minReadyState: 2 });
+    test.skip(!verdict.ok, `overlay not reachable: ${verdict.reason}`);
+    await expect(page.getByText('Preview image').first()).toBeVisible();
+    await expect(page.getByText(/Applies highlight overlay/)).toHaveCount(0);
+    await expect(page.getByText(/H\.264/)).toHaveCount(0);
   });
 });

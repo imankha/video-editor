@@ -26,9 +26,13 @@ removed it). They are pinned to superseded states.
 `T6630-T6590-round2-evidence`, `T6630-round3/5/6-evidence.qa.spec.js` were one-off
 QA-evidence rounds (their own headers say "one-off QA artifact by established
 convention"), pinned to intermediate overlay-text UI states.
-- **Live coverage:** `T6630-text-add-remove-drag.qa.spec.js` (the maintained regression
-  spec) plus the still-collected later rounds `T6630-round4/round7-evidence.qa.spec.js`
-  and the T67xx text specs (e.g. `T6720-text-spatial-drag.qa.spec.js`).
+- **Live coverage:** `T6630-round7-evidence.qa.spec.js` (the maintained regression base —
+  T7770 folded `T6630-text-add-remove-drag.qa.spec.js`'s still-valid real-screen facets
+  (dead-zone add, body-drag one-persist, keyboard delete, 500% control clearance) into it
+  as R7-7/8/9/10 and deleted
+  that spec, whose C1/beforeAll waited on the removed global "Add Text" button + "Edit
+  Text" rail) plus `T6630-round4-evidence.qa.spec.js` (unique no-reflow / error-banner /
+  SW-hygiene facets) and the T67xx text specs (e.g. `T6720-text-spatial-drag.qa.spec.js`).
 
 ### One-off debug spec
 `sidebar-scrub-debug.spec.js` was a diagnostic scratch spec (auth-bypass + in-page

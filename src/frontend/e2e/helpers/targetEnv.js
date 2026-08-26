@@ -166,14 +166,6 @@ export const LOCAL_ONLY_SPECS = [
       'deployed BUILD) — none exist on staging/prod.',
   },
   {
-    file: 'T5180-qa-evidence.spec.js',
-    category: 'seam',
-    depends: ['/debug/rich-text (dev-only route, main.jsx)'],
-    reason:
-      'QA evidence capture for T5180 mounts RichText.jsx via the same dev-only ' +
-      '/debug/rich-text route as the parity spec — not present in a deployed build.',
-  },
-  {
     file: 'T4120-self-verify-durability.spec.js',
     category: 'seam',
     depends: ['/api/test/sync-fault', '/api/test/simulate-machine-cycle', '/api/test/migrate-current-profile'],
@@ -221,12 +213,6 @@ export const LOCAL_ONLY_SPECS = [
     category: 'vite-module',
     depends: ['/src/stores/overlayActionStore.js'],
     reason: 'injects overlay-action failures via dispatchOverlayAction/useOverlayActionStore import()ed in-page; the /src path 404s on a deployed BUILD.',
-  },
-  {
-    file: 'T5930-update-gate-single-through-login.qa.spec.js',
-    category: 'vite-module',
-    depends: ['/src/stores/updateGateStore.js'],
-    reason: 'drives the raced version-mismatch + waiting-SW update path by import()ing the updateGateStore in-page; the /src path 404s on a deployed BUILD (skipWaiting wiring also Vitest-covered).',
   },
   {
     file: 'T4100-dedup-honest-message.spec.js',
@@ -337,12 +323,6 @@ export const LOCAL_ONLY_SPECS = [
     category: 'vite-module',
     depends: ['/src/stores/authStore.js', 'local draft fixtures'],
     reason: 'authenticates via an in-page authStore import and SEEDS local draft fixtures; the /src path 404s on a deployed BUILD and the seeding is a local-dev construct.',
-  },
-  {
-    file: 't5672-screenshot-verify.spec.js',
-    category: 'vite-module',
-    depends: ['/src/stores/projectsStore.js'],
-    reason: 'the real account has no multi-clip draft, so it INJECTS a synthetic one by import()ing the projectsStore in-page to render both badge states; the /src path 404s on a deployed BUILD.',
   },
   {
     file: 't5672-carousel-chevrons-auto-badge.spec.js',

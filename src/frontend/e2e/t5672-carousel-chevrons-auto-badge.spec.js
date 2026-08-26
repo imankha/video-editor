@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
-import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+import { skipOnDeployedTarget, IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
 
 // T5420 convention: API calls go to the TARGET's API, never a hardcoded localhost.
 // These two tests used to GET a hardcoded localhost:8000 /api/projects. On a staging
@@ -56,6 +56,12 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
       expect(title).toMatch(/Contains \d+ clips/);
     }
 
+    // Migrated from t5672-screenshot-verify (T7770): the multi-clip marker must be a
+    // clip-count chip, NEVER a legacy "Auto-created" badge — that chip design is gone.
+    const autoChips = await page.locator('[aria-label*="Auto-created"]').count();
+    console.log(`Auto-created chips found (should be 0): ${autoChips}`);
+    expect(autoChips).toBe(0);
+
     // Look for carousel row with multiple tiles
     const carouselRows = await page.locator('[role="group"]').all();
     console.log(`\n✓ Found ${carouselRows.length} carousel rows`);
@@ -92,6 +98,56 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
           console.log(`  ✓ Arrow click triggered scroll`);
         }
       }
+    }
+
+    // T7770: absorbed from the deleted t5672-arrows-screenshot spec. Post-T6810 the
+    // real account's rows rarely overflow, so the live-data arrow assertions above are
+    // best-effort. Splice a deep same-stage/same-aspect synthetic row into projectsStore
+    // so ONE carousel overflows DETERMINISTICALLY, then assert the solid-circle arrow's
+    // full visual signature (background not transparent, drop shadow present, >=34px) —
+    // the guarantee arrows-screenshot used to own. Client-side only, no backend/DB
+    // writes. Dev/local only: it import()s the /src projectsStore path, which 404s on a
+    // deployed BUILD (see targetEnv.js), so skip on a deployed target.
+    if (!IS_DEPLOYED_TARGET) {
+      await page.evaluate(async () => {
+        const { useProjectsStore } = await import('/src/stores/projectsStore.js');
+        const current = useProjectsStore.getState().projects;
+        const seed = current.find((p) => p.group_key) || current[0] || {};
+        // 15 portrait In-Framing drafts under the SAME group -> one overflowing stage
+        // row (~2520px at ~168px/tile, wider than the 1315px viewport).
+        const overflowRow = Array.from({ length: 15 }, (_, i) => ({
+          ...seed,
+          id: 900000 + i,
+          name: `Synthetic Overflow Draft ${i + 1}`,
+          aspect_ratio: '9:16', // explicit — never derive it (see T7750)
+          clips_in_progress: 1,
+          clips_exported: 0,
+          has_working_video: false,
+          has_final_video: false,
+          has_overlay_edits: false,
+          is_published: false,
+        }));
+        useProjectsStore.setState({ projects: [...overflowRow, ...current] });
+      });
+      await page.waitForSelector('text=Synthetic Overflow Draft 1', { timeout: 3000 });
+
+      const seededRightArrow = page.locator('button[aria-label="Scroll right"]').first();
+      await expect(seededRightArrow).toBeVisible({ timeout: 5000 });
+      const arrowStyle = await seededRightArrow.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return {
+          width: r.width,
+          height: r.height,
+          backgroundColor: style.backgroundColor,
+          boxShadow: style.boxShadow,
+        };
+      });
+      console.log(`Seeded-overflow right arrow:`, JSON.stringify(arrowStyle));
+      expect(arrowStyle.width).toBeGreaterThanOrEqual(34);
+      expect(arrowStyle.height).toBeGreaterThanOrEqual(34);
+      expect(arrowStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+      expect(arrowStyle.boxShadow).not.toBe('none');
     }
   });
 
@@ -239,54 +295,5 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
 
     await page.screenshot({ path: '/tmp/t6810-stage-rows.png' });
     console.log('Screenshot saved: /tmp/t6810-stage-rows.png');
-  });
-
-  test('Verify all 13 drafts belong to one game (Legends Mar 28)', async ({
-    context,
-    page,
-  }) => {
-    // Get projects from API
-    const response = await context.request.get(`${API_BASE}/projects`, {
-      headers: { 'X-Test-Mode': 'true' },
-    });
-    const projects = await response.json();
-
-    console.log(`\n=== Draft Summary ===`);
-    console.log(`Total drafts: ${projects.length}`);
-
-    // Map game_ids to draft names
-    const gameMap = new Map();
-    projects.forEach((project) => {
-      if (project.game_ids && project.game_ids.length > 0) {
-        project.game_ids.forEach((gameId) => {
-          if (!gameMap.has(gameId)) {
-            gameMap.set(gameId, []);
-          }
-          gameMap.get(gameId).push(project.name);
-        });
-      }
-    });
-
-    console.log(`Games with drafts: ${gameMap.size}`);
-    gameMap.forEach((drafts, gameId) => {
-      console.log(`  Game ${gameId}: ${drafts.length} drafts`);
-      drafts.slice(0, 3).forEach((name) => console.log(`    - ${name}`));
-      if (drafts.length > 3) console.log(`    ... and ${drafts.length - 3} more`);
-    });
-
-    // Report findings
-    if (gameMap.size === 1) {
-      const [gameId, drafts] = Array.from(gameMap.entries())[0];
-      console.log(`\n✓ VERIFIED: All ${drafts.length} drafts belong to Game ${gameId}`);
-      expect(drafts.length).toBe(13);
-    } else {
-      console.log(
-        `⚠ Drafts span multiple games: ${Array.from(gameMap.keys()).join(', ')}`
-      );
-      // List distribution
-      gameMap.forEach((drafts, gameId) => {
-        console.log(`  Game ${gameId}: ${drafts.length} drafts`);
-      });
-    }
   });
 });

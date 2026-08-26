@@ -102,29 +102,4 @@ test.describe('Game Loading', () => {
 
     await expectInAnnotateMode(page);
   });
-
-  test('editorMode state changes on game load', async ({ context, page }) => {
-    await loginAsRealUser(context, EMAIL, PROFILE);
-
-    const modeChanges = [];
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (text.includes('[EditorStore] setEditorMode')) {
-        modeChanges.push(text);
-        console.log(`MODE CHANGE: ${text}`);
-      }
-    });
-
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-
-    const game = await firstActiveGame(page);
-    await openGamesTab(page);
-    await expect(page.locator(`[data-game-id="${game.id}"]`)).toBeVisible({ timeout: 15000 });
-
-    await page.locator(`[data-game-id="${game.id}"]`).click();
-    await expectInAnnotateMode(page);
-
-    await page.screenshot({ path: 'test-results/game-load-debug.png', fullPage: true });
-  });
 });
