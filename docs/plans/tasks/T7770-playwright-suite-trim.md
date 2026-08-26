@@ -1,6 +1,6 @@
 # T7770: Execute the Playwright suite trim to a healthy runtime
 
-**Status:** TODO (BLOCKED on T7760)
+**Status:** WIP
 **Priority:** P1 (delivers the user's explicit runtime target)
 **Impact:** 8
 **Complexity:** 5
