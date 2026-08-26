@@ -351,6 +351,26 @@ The full checklist for an 11th→Nth sport:
   e2e helper `ensureAnnotateModeWithClips` now THROWS on a 0-clip result instead of warning-and-hanging
   to the 5-minute cap. (The sibling smoke test's residual `mode-framing` timeout is T7780's
   `isVisible({timeout})` silent-skip bug, a SEPARATE cause — do not conflate.)
+- **A draft tile opens Focus on BODY click; its clip-segment strip is ALWAYS visible, not
+  expand-on-click (T7790b, 2026-08-26).** Reel Drafts renders each draft as a `DraftTile`
+  (`data-testid="project-card"`) whose `SegmentedProgressStrip` (one segment per clip + a trailing
+  overlay segment, each `title` ending "(click to open)") is ALWAYS painted on the tile — there is NO
+  "click the card to expand and reveal clips" interaction. `handleCardClick` (DraftTile.jsx) navigates
+  immediately by the draft's furthest stage: `has_working_video` -> Overlay; else clips started/exported
+  -> Focus; else `onSelect()` (default Focus, clip 0) — and does NOTHING when `!canOpen`
+  (`canOpen = !isWaitingForUpload`). A clip SEGMENT's own click (`onClipClick`) is the deterministic
+  "open THIS clip in Focus" gesture (`{mode:'framing'}`), independent of stage. Landmine for e2e: the
+  old `navigateToProjectFromHome` helper clicked the tile BODY then waited for the strip to "expand"
+  and show a clip row — but the body click had ALREADY navigated to `/focus` (unmounting the strip), so
+  the follow-up `[title*="click to open"]` wait timed out (proven with a screenshot repro: BEFORE the
+  body click url=/home/reels, 4 clip segments visible, modeFraming=false; AFTER, url=/focus,
+  modeFraming=true, 0 segments). This was invisible pre-T7780 because the `isVisible({timeout})` guard
+  never actually waited; T7780's `waitFor` conversion made it a real, failing wait. Fix: the helper
+  waits for `[data-testid="project-card"]` then clicks its first clip SEGMENT (already visible) to enter
+  Focus — no body click, no expand step. Separately, that helper's `Reel Drafts` nav-tab `waitFor` was
+  a too-tight 2000ms (~1/3 flake: the `Promise.race([domcontentloaded, 10000])` can resolve before React
+  hydrates the nav bar); bumped to 5000ms to match the helper's sibling waits. Both are TEST-INFRA
+  fixes — the fresh reel's data (clip_count, segments) was always correct.
 - **GameDetailsModal short-viewport dead-end (T7590, 2026-08-25).** The "Add your first game"
   flow's `GameDetailsModal.jsx` (the required-fields-at-creation modal opened by ProjectManager's
   "Add Game" CTA → `handleAddGameClick`) centered its panel with `fixed inset-0 flex items-center

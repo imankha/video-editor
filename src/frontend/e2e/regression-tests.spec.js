@@ -668,27 +668,40 @@ async function navigateToProjectFromHome(page) {
   // Click Projects tab to show "Your Projects" section.
   // isVisible({ timeout }) does NOT wait (the timeout option is ignored) — use waitFor,
   // which actually waits, and let it throw loudly if the tab never renders (T7780).
+  // T7790b: 2000ms was FLAKY (~1/3 failures here). The `Promise.race` above can
+  // resolve on `domcontentloaded` BEFORE React has hydrated and painted the nav bar,
+  // and this stack's session-init + first /api/games can take 1-3s (see [REQ_TIMING]
+  // logs), so the "Reel Drafts" tab legitimately appears a beat later. T7780's
+  // conversion turned the old no-op `isVisible({timeout:2000})` (which never actually
+  // waited) into a HARD 2s requirement it never had to meet before. Bounded at 5000ms
+  // to match this helper's own sibling waits (projectCard 3000 / clipSegment 5000) and
+  // to comfortably cover post-navigation hydration — still fails fast if the tab
+  // genuinely never renders.
   const projectsTab = page.locator('button:has-text("Reel Drafts")');
-  await projectsTab.waitFor({ state: 'visible', timeout: 2000 });
+  await projectsTab.waitFor({ state: 'visible', timeout: 5000 });
   await projectsTab.click();
   await page.waitForTimeout(500);
 
-  // Click the first draft tile. The old "Your Reels" heading (removed by T6830 —
-  // the tab is now "Reel Drafts") and the 16:9-assuming fallback regex (the default
-  // is 9:16 portrait) both matched nothing, so no project was ever selected. Use the
-  // stable [data-testid="project-card"] tile selector shared across the suite.
+  // Open the first draft in Focus by clicking one of its CLIP SEGMENTS.
+  // T7790b: the draft tile does NOT "expand" on a body click — its segment strip
+  // (SegmentedProgressStrip) is ALWAYS rendered on the tile, and clicking the tile
+  // BODY (`[data-testid="project-card"]`) navigates immediately by project state
+  // (a draft with a working video opens in Overlay, NOT Focus). The old two-step
+  // "click the card body, then wait for the strip to expand and show a clip row"
+  // was wrong on both counts: the strip is not revealed by a click, and the body
+  // click had already navigated AWAY, so the follow-up clip-row wait timed out at
+  // the hard 5s (this only surfaced as a failure once T7780 made `waitFor` actually
+  // wait — the pre-T7780 `isVisible({timeout})` guard silently skipped it). Instead,
+  // click a clip segment directly: its `title` contains "click to open" and its
+  // handler (`onClipClick`) deterministically opens that clip in Focus
+  // (`{ mode: 'framing' }`), independent of the draft's stage. The segment is
+  // already visible on the drafts screen, so no card click / expand step is needed.
   const projectCard = page.locator('[data-testid="project-card"]').first();
   await projectCard.waitFor({ state: 'visible', timeout: 3000 });
-  console.log('[Test] Clicking first draft tile (project-card)...');
-  await projectCard.click();
-  await page.waitForTimeout(1000);
-
-  // After clicking the project card, the card expands showing clip segments.
-  // Click a clip segment ("click to open") to actually enter framing mode.
-  const clipRow = page.locator('[title*="click to open"]').first();
-  await clipRow.waitFor({ state: 'visible', timeout: 5000 });
-  console.log('[Test] Clicking clip row to enter Framing mode...');
-  await clipRow.click();
+  const clipSegment = page.locator('[data-testid="project-card"] [title*="click to open"]').first();
+  await clipSegment.waitFor({ state: 'visible', timeout: 5000 });
+  console.log('[Test] Clicking clip segment to enter Framing mode...');
+  await clipSegment.click();
   await page.waitForTimeout(1000);
 }
 
