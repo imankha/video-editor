@@ -194,7 +194,10 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   await page.getByTitle(/Edit name, color/i).first().click();
 
   // The intro section renders in edit mode.
-  await expect(page.getByText('Player intro card')).toBeVisible();
+  // T6660 renamed "Player intro card" -> "Athlete Intro Card". Exact match so
+  // the singular section heading isn't confused with the plural "Athlete Intro
+  // Cards" library button in the same edit view.
+  await expect(page.getByText('Athlete Intro Card', { exact: true })).toBeVisible();
   await saveEvidence(page, 'criterion-5-profile-intro-surface');
 
   // --- criterion 1: upload a photo, preview renders ---
@@ -251,7 +254,10 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   await page.reload();
   await page.getByRole('button', { name: /switch sport or profile/i }).click();
   await page.getByTitle(/Edit name, color/i).first().click();
-  await expect(page.getByText('Player intro card')).toBeVisible();
+  // T6660 renamed "Player intro card" -> "Athlete Intro Card". Exact match so
+  // the singular section heading isn't confused with the plural "Athlete Intro
+  // Cards" library button in the same edit view.
+  await expect(page.getByText('Athlete Intro Card', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox'), 'consent PERSISTED across reload').toBeChecked();
   const previewAfterReload = page.getByAltText('Intro card');
   await expect(previewAfterReload, 'photo preview PERSISTED across reload').toBeVisible({ timeout: 30000 });

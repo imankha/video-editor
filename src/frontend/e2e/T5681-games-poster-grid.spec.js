@@ -158,18 +158,18 @@ test.describe('T5681 games tab poster grid', () => {
 
     // aeb803ae ("kebab portal menu replaces the overflowing icon stack") changed what
     // hover reveals: ONE kebab, not a per-action icon stack. So hover reveals the
-    // kebab, and the actions live in the menu it opens. The menu is rendered in a
-    // PORTAL (fixed-position, outside the tile), so it must be located from `page`,
-    // never scoped to `firstTile`.
+    // kebab. T6890 then moved Edit OUT of the kebab menu to a standalone pencil
+    // beside the name in the scrim (data-game-edit / aria-label="Edit game"), present
+    // on EVERY tile — so an unscoped `getByRole('button', {name:'Edit game'})` matched
+    // all 9 tiles (strict-mode violation). Scope Edit to the tile under test.
     const firstTile = page.locator('[data-game-id]').first();
     await firstTile.hover();
     const kebab = firstTile.locator('[data-game-kebab]');
     await expect(kebab, 'hover reveals the actions kebab').toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-7-desktop-hover-actions');
 
-    await kebab.click();
-    const editBtn = page.getByRole('button', { name: 'Edit game', exact: true });
-    await expect(editBtn, 'edit action reachable from the kebab menu').toBeVisible({ timeout: 5000 });
+    const editBtn = firstTile.getByRole('button', { name: 'Edit game', exact: true });
+    await expect(editBtn, 'edit pencil reachable on the tile').toBeVisible({ timeout: 5000 });
 
     // Edit opens the EXISTING details modal -- rich metadata lives there, not
     // in a new hover meta card (approved-design constraint). EditGameModal has
@@ -204,10 +204,16 @@ test.describe('T5681 games tab poster grid', () => {
     await expect(kebab, 'kebab is visible on a coarse pointer with NO hover').toBeVisible({ timeout: 10000 });
     await kebab.click();
 
-    // Tapping it opens the bottom action SHEET, rendered in a portal -> locate its
-    // items from `page`, not from within the tile.
-    const sheetEdit = page.getByRole('button', { name: 'Edit game', exact: true });
-    await expect(sheetEdit, 'mobile sheet exposes the edit action').toBeVisible({ timeout: 5000 });
+    // Tapping it opens the bottom action SHEET, rendered in a portal.
+    await expect(page.locator('[data-game-menu]'), 'mobile action sheet opens').toBeVisible({ timeout: 5000 });
+
+    // T6890 moved Edit OUT of the sheet to a standalone always-visible pencil in
+    // each tile's scrim (data-game-edit / aria-label="Edit game"). Since it renders
+    // on EVERY tile, scope to the tile under test — an unscoped role query would
+    // match all game tiles (strict-mode violation). The always-visible pencil is a
+    // stronger form of this criterion's "reachable without a hover" guarantee.
+    const tileEdit = firstTile.getByRole('button', { name: 'Edit game', exact: true });
+    await expect(tileEdit, 'edit pencil is reachable on the tile without hover').toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-9-mobile-longpress-actions');
 
     await context.close();

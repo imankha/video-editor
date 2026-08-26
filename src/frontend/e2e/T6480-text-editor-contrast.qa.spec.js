@@ -85,23 +85,11 @@ test.describe('T6480 — TextSpecEditor label contrast in both hosts', () => {
     expect(card, `card host label contrast is ${card}:1`).toBeGreaterThanOrEqual(CONTRAST_FLOOR);
   });
 
-  test('the amber footer note also clears the floor on the fixed overlay panel', async ({ page }) => {
-    await page.goto(HARNESS);
-    // The footer note is the overlay-only "burned into the export" paragraph.
-    const contrast = await page.evaluate((base) => {
-      const parseRGBA = (s) => { const m = (s.match(/[\d.]+/g) || []).map(Number); return [m[0] || 0, m[1] || 0, m[2] || 0, m.length > 3 ? m[3] : 1]; };
-      const composite = (fg, bg) => [0, 1, 2].map((i) => fg[i] * fg[3] + bg[i] * (1 - fg[3]));
-      const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-      const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-      const ratio = (a, b) => { const L1 = lum(a), L2 = lum(b); const hi = Math.max(L1, L2), lo = Math.min(L1, L2); return (hi + 0.05) / (lo + 0.05); };
-      const panel = document.querySelector('[data-testid="overlay-after"]');
-      const note = [...panel.querySelectorAll('p')].find((p) => /burned into the exported/i.test(p.textContent));
-      if (!note) throw new Error('footer note not found');
-      const eff = composite(parseRGBA(getComputedStyle(panel).backgroundColor), base);
-      return Math.round(ratio(parseRGBA(getComputedStyle(note).color), eff) * 100) / 100;
-    }, APP_BG);
-    expect(contrast, `footer note contrast ${contrast}:1`).toBeGreaterThanOrEqual(CONTRAST_FLOOR);
-  });
+  // T7740: removed the "amber footer note clears the floor" test — the overlay-only
+  // "burned into the exported video" footer note was deliberately removed by user
+  // request and is pinned gone by TextSpecEditor.presets.test.jsx, so this case
+  // asserted contrast on a paragraph that no longer renders (it threw "footer note
+  // not found").
 });
 
 test.describe('T6480 — before/after evidence at desktop and 375px', () => {

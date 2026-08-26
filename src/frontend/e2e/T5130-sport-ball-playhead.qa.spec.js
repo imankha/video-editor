@@ -27,7 +27,7 @@ const REEL_ID = 34; // an existing published reel on the imankh fixture
 let shareToken = null;
 
 test.describe('T5130 sport-ball playhead handle (public share)', () => {
-  test('the frozen-sport ball rides the timeline and drag-to-seek still works', async ({ context, page }) => {
+  test('the frozen-sport ball rides the timeline and drag-to-seek still works', async ({ browser, context, page }) => {
     test.setTimeout(90_000);
     await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
 
@@ -45,22 +45,28 @@ test.describe('T5130 sport-ball playhead handle (public share)', () => {
     const expectedGlyph = SPORT_EMOJI[expectedSport];
     expect(expectedGlyph, `known sport emoji for ${expectedSport}`).toBeTruthy();
 
-    // Open the PUBLIC viewer.
-    await page.goto(`/shared/${shareToken}`);
-    const video = page.locator('video');
+    // Open the PUBLIC viewer in a FRESH, UNAUTHENTICATED context — App.jsx only
+    // renders the public-share-only path when !isAuthenticated. Reusing the
+    // logged-in page keeps the full dashboard (with its own ~7 background <video>
+    // tags) mounted underneath, which breaks the unscoped `video` locator below.
+    // A new context matches real public-viewer semantics.
+    const publicContext = await browser.newContext();
+    const page2 = await publicContext.newPage();
+    await page2.goto(`/shared/${shareToken}`);
+    const video = page2.locator('video');
     await video.waitFor({ timeout: 30000 });
-    await page.waitForFunction(() => {
+    await page2.waitForFunction(() => {
       const v = document.querySelector('video');
       return v && v.readyState >= 1 && v.duration > 0;
     }, { timeout: 30000 });
 
     // 1) The handle is the frozen profile's sport ball, not the plain purple dot.
-    const glyph = page.getByTestId('scrub-handle-glyph');
+    const glyph = page2.getByTestId('scrub-handle-glyph');
     await expect(glyph).toBeVisible();
     expect((await glyph.textContent()).trim()).toBe(expectedGlyph);
     // Plain dot is gone (rounded-full + purple; progress fill is purple but not rounded).
-    expect(await page.locator('.rounded-full.bg-purple-500').count()).toBe(0);
-    await saveEvidence(page, 'T5130-criterion1-2-sport-ball-handle');
+    expect(await page2.locator('.rounded-full.bg-purple-500').count()).toBe(0);
+    await saveEvidence(page2, 'T5130-criterion1-2-sport-ball-handle');
 
     // 2) Rides the progress: the handle's left position tracks currentTime.
     // Pause so playback drift doesn't race the assertions; the handle position is
@@ -82,33 +88,39 @@ test.describe('T5130 sport-ball playhead handle (public share)', () => {
     // miss surfaces as a clear failure instead of silently toggling play).
     await video.evaluate((v) => { v.pause(); v.currentTime = 0; });
     await expect.poll(leftPctAt).toBeLessThan(5);
-    const timeline = page.getByTestId('scrub-timeline');
+    const timeline = page2.getByTestId('scrub-timeline');
     const box = await timeline.boundingBox();
     const tx = box.x + box.width * 0.4;
     const ty = box.y + box.height / 2;
     // Move first so MediaPlayer reveals its auto-hidden controls (flips the
     // container from pointer-events-none to auto) BEFORE the press lands.
-    await page.mouse.move(tx, ty);
-    await page.waitForTimeout(300);
-    await page.mouse.down();
-    await page.mouse.up();
+    await page2.mouse.move(tx, ty);
+    await page2.waitForTimeout(300);
+    await page2.mouse.down();
+    await page2.mouse.up();
     await video.evaluate((v) => v.pause());       // pressing may also start playback
     const seekedRatio = await video.evaluate((v) => (v.duration ? v.currentTime / v.duration : 0));
     expect(seekedRatio, 'click at 40% seeked playback to ~40%').toBeGreaterThan(0.3);
     await expect.poll(leftPctAt, { message: 'handle followed the seek' }).toBeGreaterThan(30);
-    await saveEvidence(page, 'T5130-criterion3-drag-to-seek');
+    await saveEvidence(page2, 'T5130-criterion3-drag-to-seek');
+    await publicContext.close();
   });
 
-  test('responsive sweep: shared viewer has no horizontal overflow', async ({ context, page }) => {
+  test('responsive sweep: shared viewer has no horizontal overflow', async ({ browser, context, page }) => {
     test.setTimeout(60_000);
     await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
     const createResp = await page.request.post(`/api/gallery/${REEL_ID}/share`, {
       data: { recipient_emails: [], is_public: true },
     });
     shareToken = (await createResp.json()).shares[0].share_token;
-    await page.goto(`/shared/${shareToken}`);
-    await page.locator('video').waitFor({ timeout: 30000 });
-    await responsiveSweep(page);
+    // Public viewer in a fresh unauthenticated context (see the criterion test's
+    // note) so the real !isAuthenticated share layout is what gets swept.
+    const publicContext = await browser.newContext();
+    const page2 = await publicContext.newPage();
+    await page2.goto(`/shared/${shareToken}`);
+    await page2.locator('video').waitFor({ timeout: 30000 });
+    await responsiveSweep(page2);
+    await publicContext.close();
   });
 
   test.afterEach(async ({ context }) => {

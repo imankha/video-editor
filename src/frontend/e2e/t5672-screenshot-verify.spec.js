@@ -36,8 +36,16 @@ test('T5672 clip-count badge visual verification (both states)', async ({ contex
     useProjectsStore.setState({ projects: [multiClip, ...current] });
   });
 
-  await page.waitForSelector('text=Multi-Clip Test Draft', { timeout: 3000 });
-  await page.locator('text=Multi-Clip Test Draft').scrollIntoViewIfNeeded();
+  // Scope to the project-card container: since T6810 split drafts into multiple
+  // per-stage row groupings, a bare `text=` locator can resolve to more than one
+  // element (the synthetic tile plus any real draft whose name shares the
+  // substring), tripping strict mode. Filter the stable tile testid by name.
+  const syntheticTile = page
+    .locator('[data-testid="project-card"]')
+    .filter({ hasText: 'Multi-Clip Test Draft' })
+    .first();
+  await syntheticTile.waitFor({ timeout: 3000 });
+  await syntheticTile.scrollIntoViewIfNeeded();
 
   const clipCountChips = await page.locator('[aria-label*="Contains"][aria-label*="clips"]').all();
   const autoChips = await page.locator('[aria-label*="Auto-created"]').count();

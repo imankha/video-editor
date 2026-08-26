@@ -68,12 +68,14 @@ test.describe('T4780 — Tutorial quest steps', () => {
     await loginAsTestUser(page, safeId);
   });
 
-  test('AC1 — Quest 1 shows "Watch the tutorial" as first step and modal opens', async ({ page }) => {
+  test('AC1 — Quest 1 shows the tutorial step first and modal opens', async ({ page }) => {
     await openQuestPanel(page);
 
-    // First step title should be "Watch the tutorial"
+    // First step title is now quest-specific (e.g. "Watch Annotate Tutorial" for
+    // quest 1) per questDefinitions.jsx STEP_TITLES, not the old generic
+    // "Watch the tutorial". Match the shared pattern.
     const firstStepTitle = page.locator('.quest-step-active, [class*="step-active"]').first();
-    await expect(firstStepTitle).toContainText(/watch the tutorial/i);
+    await expect(firstStepTitle).toContainText(/watch .+ tutorial/i);
 
     await saveEvidence(page, 'AC1-quest1-tutorial-step-first');
 
@@ -108,22 +110,23 @@ test.describe('T4780 — Tutorial quest steps', () => {
     await saveEvidence(page, 'AC2-custom-controls-bar');
   });
 
-  test('AC3 — Speed menu defaults to 0.75x and shows all rates', async ({ page }) => {
+  test('AC3 — Speed menu defaults to 1x and shows all rates', async ({ page }) => {
     await openQuestPanel(page);
     await openTutorialModal(page);
 
-    // Speed button showing 0.75x
-    const speedBtn = page.getByRole('button', { name: /0\.75x/i });
+    // Speed button showing the default rate — TutorialVideoModal now defaults to
+    // 1x (DEFAULT_RATE) and offers 0.85x instead of the old 0.75x (PLAYBACK_RATES).
+    const speedBtn = page.getByRole('button', { name: /1x/i }).first();
     await expect(speedBtn).toBeVisible({ timeout: 5000 });
 
-    await saveEvidence(page, 'AC3-speed-menu-default-075x');
+    await saveEvidence(page, 'AC3-speed-menu-default-1x');
 
     // Click to open speed menu
     await speedBtn.click();
     await page.waitForTimeout(200);
 
     // All 6 rate options should be present
-    for (const rate of ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x']) {
+    for (const rate of ['0.5x', '0.85x', '1x', '1.25x', '1.5x', '2x']) {
       await expect(page.getByRole('button', { name: rate }).first()).toBeVisible();
     }
 
@@ -215,9 +218,11 @@ test.describe('T4780 — Tutorial quest steps', () => {
     await saveEvidence(page, 'AC6-step-completed-after-achievement');
   });
 
-  test('AC7 — All 4 quests show "Watch the tutorial" as first step', async ({ page }) => {
+  test('AC7 — All 4 quests show a tutorial step first', async ({ page }) => {
     // Verify by checking that STEP_TITLES and STEP_DESCRIPTIONS map all 4 tutorial steps,
     // and that the quest definitions from the backend include them as first steps.
+    // Titles are now quest-specific ("Watch Annotate Tutorial", etc.) per STEP_TITLES,
+    // not the old generic "Watch the tutorial" — match the shared pattern.
     const result = await page.evaluate(async () => {
       const { STEP_TITLES, STEP_DESCRIPTIONS } = await import('/src/config/questDefinitions.jsx');
       const tutorialStepIds = [
@@ -228,13 +233,13 @@ test.describe('T4780 — Tutorial quest steps', () => {
       ];
       return tutorialStepIds.map((id) => ({
         stepId: id,
-        hasTitle: STEP_TITLES[id] === 'Watch the tutorial',
+        title: STEP_TITLES[id],
         hasDescription: !!STEP_DESCRIPTIONS[id],
       }));
     });
 
-    for (const { stepId, hasTitle, hasDescription } of result) {
-      expect(hasTitle, `${stepId} should have title "Watch the tutorial"`).toBe(true);
+    for (const { stepId, title, hasDescription } of result) {
+      expect(title, `${stepId} should have a "Watch ... Tutorial" title`).toMatch(/^Watch .+ Tutorial$/);
       expect(hasDescription, `${stepId} should have a description`).toBe(true);
     }
 

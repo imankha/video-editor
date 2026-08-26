@@ -314,15 +314,12 @@ test('C2 (500% zoom): clicking LOW in the lane adds a block', async () => {
   await resetZoom();
 });
 
-test('C3: the clickable-lane affordance stays visible when blocks exist', async () => {
-  if ((await blockCount()) === 0) {
-    await page.getByRole('button', { name: /add text/i }).click();
-    await page.waitForTimeout(300);
-  }
-  expect(await blockCount(), 'at least one block present').toBeGreaterThan(0);
-  await expect(page.getByText('Click empty lane to add text')).toBeVisible();
-  await saveEvidence(page, 'C3-persistent-hint');
-});
+// T7740: removed test 'C3: the clickable-lane affordance stays visible when blocks
+// exist'. Its premise was invalidated by T6630 round 6 — the persistent
+// "Click empty lane to add text" hint it asserted no longer exists in TextLayer
+// (element add/remove moved to the Text tab's per-region "+ Add text"; the lane is
+// TIMING + whole-region creation only). No current-behavior assertion replaces it
+// here; per-region add-element coverage lives with the Text-tab specs.
 
 test('C4a: delete from the Edit Text rail', async () => {
   await resetZoom().catch(() => {});

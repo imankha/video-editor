@@ -30,14 +30,18 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
-// Panel scope: DownloadsPanel has no data-testid, but its `fixed right-0 top-0`
-// positioning is unique on the page. CRITICAL: the home screen BEHIND the drawer
-// renders its OWN CollapsibleGroup rows / reel tiles with the SAME data-testids
-// (drafts list), so an UNSCOPED locator matches both — verified live: an unscoped
-// click landed on the home screen's row (behind the panel's backdrop), which made
-// every subsequent click "intercepted by the backdrop" and the test hang until
-// timeout. All panel-content locators below are scoped through `panel`.
-const PANEL_SELECTOR = '.fixed.right-0.top-0';
+// Panel scope: DownloadsPanel has no data-testid. Its bare `fixed right-0 top-0`
+// classes ALSO matched ConnectionStatus's "Connecting to server..." banner
+// (`fixed top-0 left-0 right-0`), which stays mounted longer under heavy backend
+// load and stole the locator (T7740). Scope to `animate-slide-in-right` — a class
+// unique to this slide-in drawer on the whole page — so only the drawer matches.
+// CRITICAL: the home screen BEHIND the drawer renders its OWN CollapsibleGroup
+// rows / reel tiles with the SAME data-testids (drafts list), so an UNSCOPED
+// content locator matches both — verified live: an unscoped click landed on the
+// home screen's row (behind the panel's backdrop), which made every subsequent
+// click "intercepted by the backdrop" and the test hang until timeout. All
+// panel-content locators below are scoped through `panel`.
+const PANEL_SELECTOR = '.fixed.right-0.top-0.animate-slide-in-right';
 
 async function openMyReels(page) {
   await page.goto('/');

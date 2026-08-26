@@ -666,25 +666,15 @@ async function navigateToProjectFromHome(page) {
     await page.waitForTimeout(500);
   }
 
-  // Click the first project card under "Your Projects" heading
-  // The project card button contains the project name and clip counts
-  const yourProjects = page.locator('h2:has-text("Your Reels")');
-  if (await yourProjects.isVisible({ timeout: 3000 }).catch(() => false)) {
-    // Click the first button after "Your Projects" heading (the project card)
-    const projectCard = yourProjects.locator('..').locator('button').first();
-    if (await projectCard.isVisible({ timeout: 2000 }).catch(() => false)) {
-      console.log('[Test] Clicking project card under Your Projects...');
-      await projectCard.click();
-      await page.waitForTimeout(1000);
-    }
-  } else {
-    // Fallback: try clicking any project-like button on the page
-    const projectRow = page.getByText(/16:9.*\d+ clips/i).first();
-    if (await projectRow.isVisible({ timeout: 2000 }).catch(() => false)) {
-      console.log('[Test] Clicking project row (16:9 pattern)...');
-      await projectRow.click();
-      await page.waitForTimeout(1000);
-    }
+  // Click the first draft tile. The old "Your Reels" heading (removed by T6830 —
+  // the tab is now "Reel Drafts") and the 16:9-assuming fallback regex (the default
+  // is 9:16 portrait) both matched nothing, so no project was ever selected. Use the
+  // stable [data-testid="project-card"] tile selector shared across the suite.
+  const projectCard = page.locator('[data-testid="project-card"]').first();
+  if (await projectCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+    console.log('[Test] Clicking first draft tile (project-card)...');
+    await projectCard.click();
+    await page.waitForTimeout(1000);
   }
 
   // After clicking the project card, the card expands showing clip segments.
