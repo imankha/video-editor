@@ -86,7 +86,10 @@ export function ReportProblemButton({ className = '', compact = false }) {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [state, setState] = useState('idle'); // idle | sending | sent | error
-  const screenshotRef = useRef(null);
+  // undefined = not yet captured for this trigger cycle; null = captured and
+  // failed; string = captured. Distinct from null so a prefetch that's still
+  // in flight (or hasn't started) is never mistaken for a completed capture.
+  const screenshotRef = useRef(undefined);
   const textareaRef = useRef(null);
 
   // Focus textarea when modal opens. Declared here (before the early return
@@ -100,9 +103,24 @@ export function ReportProblemButton({ className = '', compact = false }) {
 
   if (!ENABLE_PROBLEM_REPORT) return null;
 
+  // Kick off the screenshot capture on hover/focus, well before a click is
+  // likely -- so by the time handleOpen runs, the capture is usually already
+  // done and the modal appears instantly instead of waiting on html2canvas.
+  // Still correct if the user clicks immediately: handleOpen falls back to
+  // awaiting the same capture (or starts a fresh one) before showing the
+  // modal, preserving the "modal never appears in its own screenshot"
+  // guarantee either way.
+  const prefetchScreenshot = () => {
+    if (open || screenshotRef.current !== undefined) return;
+    captureScreenshot().then((shot) => {
+      if (screenshotRef.current === undefined) screenshotRef.current = shot;
+    });
+  };
+
   const handleOpen = async () => {
-    // Capture screenshot before modal opens (so modal isn't in the shot)
-    screenshotRef.current = await captureScreenshot();
+    if (screenshotRef.current === undefined) {
+      screenshotRef.current = await captureScreenshot();
+    }
     setDescription('');
     setState('idle');
     setOpen(true);
@@ -111,7 +129,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
   const handleClose = () => {
     setOpen(false);
     setDescription('');
-    screenshotRef.current = null;
+    screenshotRef.current = undefined;
     setState('idle');
   };
 
@@ -176,6 +194,9 @@ export function ReportProblemButton({ className = '', compact = false }) {
       <button
         type="button"
         onClick={handleOpen}
+        onMouseEnter={prefetchScreenshot}
+        onFocus={prefetchScreenshot}
+        onTouchStart={prefetchScreenshot}
         aria-label="Report a problem"
         title={compact ? 'Report a problem' : undefined}
         className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
