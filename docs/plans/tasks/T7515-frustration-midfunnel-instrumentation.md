@@ -1,6 +1,6 @@
 # T7515: Frustration mid-funnel instrumentation (blocking-dialog/toast impressions + session-exit breadcrumbs)
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (observability follow-up to T7510)
 **Impact:** 6
 **Complexity:** 4
