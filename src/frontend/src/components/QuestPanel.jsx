@@ -53,6 +53,9 @@ export function QuestPanel({ inline = false }) {
   const activeQuestId = useQuestStore((s) => s.activeQuestId);
   const fetchProgress = useQuestStore((s) => s.fetchProgress);
   const detectionAssignProgress = useQuestStore((s) => s.detectionAssignProgress);
+  // T7840: opener for the `upload_game` step, registered by the mounted
+  // ProjectManager. When present, that current step renders as a real button.
+  const addGameOpener = useQuestStore((s) => s.addGameOpener);
 
   const claimReward = useQuestStore((s) => s.claimReward);
 
@@ -289,12 +292,25 @@ export function QuestPanel({ inline = false }) {
               {questDef.step_ids.map((stepId, index) => {
                 const done = steps[stepId] || false;
                 const isCurrent = stepId === currentStepId;
+                // T7840: a current step is actionable only when its owning surface
+                // registered a gesture opener for it — today just `upload_game`
+                // (ProjectManager wires handleAddGameClick). Actionable rows render
+                // as a real button and show the chevron; every other current step
+                // (tutorial steps carry their own embedded CTA, and the floating
+                // editor panel never registers the opener) keeps the plain,
+                // chevron-less div so there is no false "tap me" affordance.
+                const stepOpener = isCurrent && !done && stepId === 'upload_game' ? addGameOpener : null;
+                const actionable = Boolean(stepOpener);
+                const RowTag = actionable ? 'button' : 'div';
 
                 return (
-                  <div
+                  <RowTag
                     key={stepId}
+                    type={actionable ? 'button' : undefined}
+                    onClick={actionable ? stepOpener : undefined}
                     className={`
                       ${isCurrent ? 'flex' : 'hidden sm:flex'} items-start gap-3.5 py-3
+                      ${actionable ? 'w-full text-left cursor-pointer hover:bg-white/[0.02] transition-colors' : ''}
                       ${index < questDef.step_ids.length - 1 ? 'sm:border-b border-white/5' : ''}
                       ${isCurrent ? 'quest-step-current' : ''}
                     `}
@@ -357,10 +373,10 @@ export function QuestPanel({ inline = false }) {
                       )}
                     </div>
 
-                    {isCurrent && (
+                    {actionable && (
                       <ChevronRight size={16} className="quest-chevron flex-shrink-0 mt-0.5" />
                     )}
-                  </div>
+                  </RowTag>
                 );
               })}
             </div>
