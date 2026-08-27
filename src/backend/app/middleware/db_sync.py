@@ -26,6 +26,7 @@ header so the frontend can show a warning indicator.
 import asyncio
 import contextlib
 import cProfile
+import hashlib
 import logging
 import os
 import re
@@ -484,6 +485,75 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> SyncResul
     if SyncResult.FAILED in (profile_result, user_result):
         return SyncResult.FAILED
     return SyncResult.OK
+
+
+# T6260: boot-set read endpoints that emit a content-hash ETag so an unchanged
+# repeat request revalidates to 304 (empty body) instead of resending the body.
+# EXACT-path match — only the list/scalar GETs, never their `/{id}/...` siblings
+# (`/api/games/{id}/poster` already does its own R2-ETag 304, T5682). Boot set
+# first (the highest-traffic reads issued behind app load); the epic widens this
+# later. These stay `private, no-cache` (mutable per-user data): the ETag gives a
+# validator to 304 against — it is NOT a stale-serving `max-age`/SWR window, so a
+# user never sees their own just-saved edit revert.
+ETAG_304_READ_PATHS = frozenset({
+    "/api/profiles",
+    "/api/projects",
+    "/api/games",
+    "/api/settings",
+    "/api/downloads",
+    "/api/downloads/count",
+})
+
+# Cache-Control for the ETag'd reads: force revalidation every time (no stale
+# window), letting the ETag short-circuit unchanged responses to 304.
+_ETAG_READ_CACHE_CONTROL = "private, no-cache"
+
+
+async def _apply_read_etag(request: Request, response: Response) -> Response:
+    """Attach a content-hash ETag to a boot-set read and answer 304 when it matches.
+
+    T6260. The body is a small JSON payload already fully rendered by the handler
+    (JSONResponse) — buffering it to hash costs a few-KB SHA-256 on already-in-
+    memory bytes, never blocking I/O and never a real streaming/media response
+    (gated to the exact `ETAG_304_READ_PATHS`). Computing the hash means the
+    handler still did its work; the win is the saved response body on the wire,
+    not saved server work (T6240 already took the handler off the event loop).
+
+    On an `If-None-Match` hit we return a bodiless 304 that preserves the sync
+    headers (`X-Sync-Status`/`X-Sync-Diag`) the flow already stamped; otherwise we
+    re-emit the buffered 200 with the ETag added.
+    """
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    etag = '"' + hashlib.sha256(body).hexdigest() + '"'
+
+    # A conditional request echoes the ETag(s) it holds; honor a direct match or
+    # the wildcard. Browsers send exactly what we emitted (a single strong tag).
+    inm = request.headers.get("if-none-match", "")
+    candidates = {tok.strip() for tok in inm.split(",") if tok.strip()}
+    if etag in candidates or "*" in candidates:
+        # 304 carries validators + the sync headers, but no body-shaped headers
+        # (content-length/type belong to the omitted body).
+        headers = {
+            k: v for k, v in response.headers.items()
+            if k.lower() not in ("content-length", "content-type", "cache-control", "etag")
+        }
+        headers["ETag"] = etag
+        headers["Cache-Control"] = _ETAG_READ_CACHE_CONTROL
+        return Response(status_code=304, headers=headers, background=response.background)
+
+    # Re-emit the full 200 with the validator attached. dict(response.headers)
+    # carries a content-length equal to len(body) (JSONResponse set it), so the
+    # reconstructed response stays consistent.
+    headers = dict(response.headers)
+    headers["ETag"] = etag
+    headers["Cache-Control"] = _ETAG_READ_CACHE_CONTROL
+    return Response(
+        content=body,
+        status_code=response.status_code,
+        headers=headers,
+        media_type=response.media_type,
+        background=response.background,
+    )
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -1051,8 +1121,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     if diag_header:
                         response.headers["X-Sync-Diag"] = diag_header
 
-            # Default Cache-Control for GET JSON responses that don't set their own.
+            # T6260: boot-set reads emit a content-hash ETag and 304-on-revalidate;
+            # this OWNS their Cache-Control (private, no-cache — validator, not a
+            # stale window), so it runs before the generic default below.
             if (
+                method == "GET"
+                and path in ETAG_304_READ_PATHS
+                and response.status_code == 200
+            ):
+                response = await _apply_read_etag(request, response)
+            # Default Cache-Control for other GET JSON responses that don't set their own.
+            elif (
                 method == "GET"
                 and "cache-control" not in response.headers
                 and response.headers.get("content-type", "").startswith("application/json")
