@@ -170,6 +170,26 @@ function App() {
     }
   }, []);
 
+  // T7670: Upload-complete email deep link (?game=<id>&profile=<profileId>).
+  // Stash to sessionStorage and strip from the URL immediately so the target
+  // survives an auth-triggered reload / OAuth round-trip (same-tab, so
+  // sessionStorage persists). The authenticated bootstrap block below consumes
+  // it: switches to the game's profile if needed, then opens it in annotate.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const deeplinkGameId = params.get('game');
+    if (!deeplinkGameId) return;
+
+    sessionStorage.setItem('deeplinkGameId', deeplinkGameId);
+    const deeplinkProfileId = params.get('profile');
+    if (deeplinkProfileId) sessionStorage.setItem('deeplinkProfileId', deeplinkProfileId);
+
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('game');
+    cleanUrl.searchParams.delete('profile');
+    window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+  }, []);
+
   // T85a: Initialize session (profile ID header) then warm video cache.
   // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.
@@ -269,6 +289,36 @@ function App() {
         } else {
           useEditorStore.getState().setEditorMode(authReturnMode);
         }
+      }
+
+      // T7670: Open a game from the upload-complete email deep link. Switch to
+      // the game's profile first (idempotent no-op if already current) so the
+      // per-profile game id resolves against the right profile, then open it in
+      // annotate mode once games load (AnnotateScreen reads pendingGameId).
+      const deeplinkGameId = sessionStorage.getItem('deeplinkGameId');
+      if (deeplinkGameId) {
+        const deeplinkProfileId = sessionStorage.getItem('deeplinkProfileId');
+        sessionStorage.removeItem('deeplinkGameId');
+        sessionStorage.removeItem('deeplinkProfileId');
+
+        if (deeplinkProfileId) {
+          await useProfileStore.getState().switchProfile(deeplinkProfileId);
+        }
+        const targetId = Number(deeplinkGameId);
+        const waitForGame = setInterval(() => {
+          const games = useGamesDataStore.getState().games;
+          if (games.length === 0) return;
+          // Keep polling until the target game appears: switchProfile's Phase-3
+          // refetch isn't awaited, so a non-empty list can briefly precede the
+          // target profile's full list. Clear only once the game is found (or
+          // the 5s timeout fires), never on the first non-empty tick.
+          const game = games.find(g => g.id === targetId);
+          if (!game) return;
+          clearInterval(waitForGame);
+          setPendingGame(game.id);
+          useEditorStore.getState().setEditorMode('annotate');
+        }, 100);
+        setTimeout(() => clearInterval(waitForGame), 5000);
       }
 
       // Payment return: restore editor state and auto-export if redirected from Stripe.
