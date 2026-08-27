@@ -1,6 +1,6 @@
 # T7790: Clip-save race — clips intermittently don't reach the library within 30s of TSV import
 
-**Status:** WIP
+**Status:** STAGING
 **Priority:** P2 (real timing bug, root cause not yet found — investigation, not just a test fix)
 **Impact:** 6
 **Complexity:** 5
@@ -100,4 +100,4 @@ hydration). Both TEST-INFRA fixes — the reel's data was always correct. See an
       with evidence (live repro + deterministic negative control), not a guess
 - [x] Fix addresses the real condition (wait for the id + fail loudly), not just a widened poll window
 - [x] The affected e2e test passes reliably (spacebar 3/3; regression 5/5) after the fix
-- [ ] Tests pass; CI green (Branch CI is the full-sweep verdict)
+- [x] Tests pass; CI green (Branch CI is the full-sweep verdict) — confirmed green, merged PR #283
