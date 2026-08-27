@@ -129,13 +129,14 @@ class TestTrackImports:
 
     def test_postgres_track(self):
         from app.migrations.postgres import MIGRATIONS, RUNNER
-        # v020/v021 (Share the Game epic) merged alongside T5770's v022, then
-        # T7550's v023 (pending-share recipient_email -> invited_email rename)
-        # and T7510's v024 (attempt/outcome/failure counters) both landed:
-        # 24 registered migrations, contiguous, head at v024.
-        assert len(MIGRATIONS) == 24
+        # Dynamic invariants, not a hardcoded count/head (T6770's v025 broke
+        # the old `== 24` literal; this track's head moves whenever a schema
+        # change lands, same lesson as the profile_db track above).
+        versions = [m.version for m in MIGRATIONS]
+        assert versions == sorted(versions), "migrations must be registered in version order"
+        assert len(versions) == len(set(versions)), "no duplicate migration versions"
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 24
+        assert RUNNER.latest_version == max(versions)
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status

@@ -116,6 +116,14 @@ def _purge_user_data(user_id: str) -> dict:
         cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM credits WHERE user_id = %s", (user_id,))
+        # T6770: game_storage_refs.user_id REFERENCES users(user_id) with NO
+        # cascade. Now that the table is the LIVE derived ref-set (not the
+        # dead pre-T2930 table it used to be), a caller's later
+        # `DELETE FROM users` will raise for any user who still owns a game
+        # ref unless this runs first. Must run before that DELETE FROM users
+        # (privacy.py / DELETE /api/auth/user), which it does since both
+        # callers invoke _purge_user_data first.
+        cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s", (user_id,))
 
     # Invalidate in-process caches so a same-process relogin cannot resurrect old data
     # from a stale "already initialized" flag / cached version.

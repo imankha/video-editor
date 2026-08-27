@@ -244,13 +244,15 @@ async def delete_account(request: Request):
 
     # 2. Best-effort Postgres identity-row cleanup. The storage purge above already
     #    guarantees a fresh reregister (bugs 33/34/35) even if these rows survive, so it
-    #    runs AFTER the purge. NOTE: `users` still has plain (no ON DELETE CASCADE) FK
-    #    references from `game_storage_refs` and `shares.sharer_user_id`, so DELETE FROM
-    #    users can still raise for a user who owns a game or a share -> 500 with storage
-    #    already gone. That FK gap is PRE-EXISTING and tracked separately (needs owned-row
-    #    cleanup or ON DELETE CASCADE via a Postgres migration — blast radius on recipients
-    #    of the user's shares makes it a deliberate design call); it does NOT reintroduce
-    #    the zombie, because R2 is purged regardless of the users row.
+    #    runs AFTER the purge. NOTE: `users` still has a plain (no ON DELETE CASCADE) FK
+    #    from `shares.sharer_user_id`, so DELETE FROM users can still raise for a user who
+    #    owns a share -> 500 with storage already gone. That FK gap is PRE-EXISTING and
+    #    tracked separately (needs owned-row cleanup or ON DELETE CASCADE via a Postgres
+    #    migration — blast radius on recipients of the user's shares makes it a deliberate
+    #    design call); it does NOT reintroduce the zombie, because R2 is purged regardless
+    #    of the users row. (T6770: the matching `game_storage_refs` FK is now covered --
+    #    _purge_user_data deletes the user's game_storage_refs rows before this runs, since
+    #    that table is now the LIVE derived ref-set, not the dead pre-T2930 table it was.)
     try:
         from app.services.pg import get_pg
         with get_pg() as conn:

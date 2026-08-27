@@ -503,9 +503,10 @@ class TestDoSweep:
 # ---------------------------------------------------------------------------
 
 class TestGraceDeletionLiveRefGuard:
-    """The bug that lost imankh games 2/3/5: the grace deletion fires off a
-    drift-prone counter (game_ref_counts.ref_count <= 0) and permanently deletes
-    a video that a profile still holds a live, non-expired ref to.
+    """The bug that lost imankh games 2/3/5: the grace deletion fires off
+    Postgres ref state (T6770: the derived game_storage_refs ref-set, formerly
+    the drift-prone game_ref_counts.ref_count <= 0 counter) and permanently
+    deletes a video that a profile still holds a live, non-expired ref to.
 
     Phase 2 deletion is production-only (non-prod skips it — see
     sweep_scheduler._game_deletion_allowed), so these tests of the live-ref gate
@@ -515,7 +516,6 @@ class TestGraceDeletionLiveRefGuard:
     def _production_env(self, monkeypatch):
         monkeypatch.setattr("app.storage.APP_ENV", "production")
 
-    @patch(f"{M}.heal_ref_count")
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_live"])
@@ -524,7 +524,7 @@ class TestGraceDeletionLiveRefGuard:
     @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_grace_delete_aborted_when_live_ref_exists(
         self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
-        mock_r2_delete, mock_del_grace, mock_heal, isolated_profile_db
+        mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -535,9 +535,9 @@ class TestGraceDeletionLiveRefGuard:
 
         mock_r2_delete.assert_not_called()               # video NOT destroyed
         mock_del_grace.assert_called_once_with("hash_live")  # grace canceled
-        mock_heal.assert_called_once_with("hash_live", 1)    # counter healed to truth
+        # T6770: no counter to heal -- ref_count is derived (COUNT(*)), so
+        # there is nothing to write back after the recount confirms a live ref.
 
-    @patch(f"{M}.heal_ref_count")
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old"])
@@ -546,7 +546,7 @@ class TestGraceDeletionLiveRefGuard:
     @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_grace_delete_proceeds_when_only_expired_refs(
         self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
-        mock_r2_delete, mock_del_grace, mock_heal, isolated_profile_db
+        mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -557,10 +557,8 @@ class TestGraceDeletionLiveRefGuard:
 
         mock_r2_delete.assert_called_once_with("games/hash_old.mp4")
         mock_del_grace.assert_called_once_with("hash_old")
-        mock_heal.assert_not_called()
 
     @patch("app.database.has_recent_sync_error", return_value=True)
-    @patch(f"{M}.heal_ref_count")
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_unsynced"])
@@ -569,14 +567,14 @@ class TestGraceDeletionLiveRefGuard:
     @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_grace_delete_deferred_when_profile_not_authoritatively_synced(
         self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
-        mock_r2_delete, mock_del_grace, mock_heal, mock_sync_error, isolated_profile_db
+        mock_r2_delete, mock_del_grace, mock_sync_error, isolated_profile_db
     ):
         """Transient-sync hole (review MAJOR): a profile whose R2 restore failed
         this sweep fell through to an EMPTY local DB, so a naive recount returns
         0 live refs and would let the irreversible delete proceed while a live
         ref sits in the un-downloaded DB. With the cooldown active, the sweep
-        must treat the profile as indeterminate: skip the delete, and neither
-        cancel the grace row nor heal the counter (so it retries next sweep)."""
+        must treat the profile as indeterminate: skip the delete and leave the
+        grace row queued (so it retries next sweep)."""
         from app.services.sweep_scheduler import do_sweep
 
         # Local DB shows NO ref for this hash (it wasn't downloaded) — a naive
@@ -585,22 +583,33 @@ class TestGraceDeletionLiveRefGuard:
 
         mock_r2_delete.assert_not_called()   # video NOT destroyed on incomplete info
         mock_del_grace.assert_not_called()   # grace row kept -> retried next sweep
-        mock_heal.assert_not_called()        # counter not healed to a wrong value
 
 
-class TestDeleteRefCounterDrift:
-    """delete_ref must not drive game_ref_counts.ref_count below the true number
-    of live refs — that is what makes the sweep delete a still-wanted video."""
+class TestDeleteRefIdempotency:
+    """T6770: delete_ref is a keyed DELETE against the derived ref-set
+    (game_storage_refs), not a decrement of a hand-maintained counter -- a
+    double-delete or a hash whose row was already gone is a zero-row no-op,
+    never able to drive the count below the true number of live refs (the
+    class of bug that lost imankh games 2/3/5)."""
 
-    def test_skips_pg_decrement_when_no_row_existed(self, isolated_profile_db):
+    def test_issues_keyed_pg_delete_even_when_no_sqlite_row_existed(self, isolated_profile_db):
         from app.services import auth_db
 
-        # No game_storage row for this hash: a decrement here would under-count.
-        with patch("app.services.auth_db.get_pg") as mock_pg:
+        # No game_storage row for this hash. Unlike the old counter-decrement
+        # (which had to skip when nothing existed, or it would under-count), a
+        # keyed DELETE is safe to issue unconditionally: zero rows match, zero
+        # rows are affected.
+        mock_cur = MagicMock()
+        mock_pg = MagicMock()
+        mock_pg.return_value.__enter__.return_value.cursor.return_value = mock_cur
+        with patch("app.services.auth_db.get_pg", mock_pg):
             auth_db.delete_ref(USER_ID, PROFILE_ID, "never_existed")
-            mock_pg.assert_not_called()
 
-    def test_decrements_with_floor_when_row_existed(self, isolated_profile_db):
+        sql = mock_cur.execute.call_args[0][0]
+        assert "DELETE FROM game_storage_refs" in sql
+        assert "GREATEST" not in sql  # no floor hack -- nothing to floor
+
+    def test_deletes_keyed_row_when_it_existed(self, isolated_profile_db):
         from app.services import auth_db
 
         db = isolated_profile_db["db_path"]
@@ -612,8 +621,9 @@ class TestDeleteRefCounterDrift:
         with patch("app.services.auth_db.get_pg", mock_pg):
             auth_db.delete_ref(USER_ID, PROFILE_ID, "hash_x")
 
-        sql = mock_cur.execute.call_args[0][0]
-        assert "GREATEST(ref_count - 1, 0)" in sql  # floored, never negative
+        sql, params = mock_cur.execute.call_args[0]
+        assert "DELETE FROM game_storage_refs" in sql
+        assert params == (USER_ID, PROFILE_ID, "hash_x")
         # SQLite row actually removed
         conn = sqlite3.connect(str(db))
         remaining = conn.execute(

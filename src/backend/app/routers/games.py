@@ -557,7 +557,7 @@ def _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str)
     """Insert any missing game_storage refs for a game's videos. Idempotent.
 
     bug26p: insert_game_storage_ref opens its OWN connection (profile SQLite +
-    Postgres game_ref_counts), so the caller's connection MUST NOT hold an open
+    Postgres game_storage_refs), so the caller's connection MUST NOT hold an open
     write transaction when this runs (else SQLite writer lock). Call only after a
     commit / on a read-only connection. Returns the count of refs newly inserted.
     """

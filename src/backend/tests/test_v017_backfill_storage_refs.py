@@ -2,7 +2,8 @@
 
 Repairs rows already in the bad state (status='ready' with no game_storage row,
 e.g. games 8/9/10), via the production insert_game_storage_ref path so Postgres
-game_ref_counts is incremented too. Idempotent + safe to re-run.
+game_storage_refs (T6770: the derived ref-set) is populated too. Idempotent and
+safe to re-run.
 """
 
 import sqlite3

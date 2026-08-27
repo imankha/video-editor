@@ -57,6 +57,9 @@ POST_V023_COLUMNS = {
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
+    # v047 (T6770 backfill game_storage_refs from game_storage) adds NO column -> nothing to
+    #   guard. It only writes to Postgres game_storage_refs via insert_game_storage_ref; no
+    #   profile_db read names a new column.
     # v031 (T5725 reclassify teammate-tagged clips to Team) adds NO column -> nothing to guard.
     # (v030 belongs to the sibling T5800 branch, not present here; audit it on that merge.)
     # v033 (T5830 heal pre-T5810 moved-reel attribution) adds NO column -> nothing to guard.
@@ -136,7 +139,7 @@ POST_V023_COLUMNS = {
     #   cross-profile copy, which REFUSES (RecipientProfileBelowHead) rather than
     #   column-omit -- test_game_copy_below_head_refuses below.
 }
-HEAD_VERSION_AUDITED = 46
+HEAD_VERSION_AUDITED = 47
 
 
 def _cleanup(user_id: str) -> None:
