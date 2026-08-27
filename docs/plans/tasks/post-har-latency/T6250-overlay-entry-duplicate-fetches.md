@@ -1,6 +1,6 @@
 # T6250: Entering Overlay fires `overlay-data` 3x and `outdated-clips` 2x
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-31

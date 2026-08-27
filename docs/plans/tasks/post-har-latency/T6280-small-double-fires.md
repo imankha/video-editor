@@ -1,6 +1,6 @@
 # T6280: Small double-fires — `rank/confidence` x2 and `games/{id}/video` 302 x2
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-07-31
