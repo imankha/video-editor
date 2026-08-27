@@ -1,6 +1,6 @@
 # T7840: Quest "Add Your First Game" step is inert + zero-games triple prompt (bug 46p)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-27
