@@ -24,6 +24,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
@@ -82,6 +83,8 @@ async function openFramingChip(page) {
 }
 
 test.describe('T6190 project-open redundant fetches @qa', () => {
+  // T7800: in-page import()s of /src stores 404 on a deployed BUILD.
+  skipOnDeployedTarget(test, 'in-page import() of /src/stores/{gamesDataStore,projectDataStore}.js (vite-module)');
   test.setTimeout(180_000);
 
   // ---- Criteria 1, 2, 3, 7 ---------------------------------------------------

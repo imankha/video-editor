@@ -108,9 +108,15 @@ async function openDraftCard(page, name) {
   await card.click();
 }
 
-const EXPORT_BTN = /^Export( \(\d+\/\d+\))?$/;
+// T7800 (gate run 2026-08-26): the export button was RENAMED in ExportButtonView.jsx —
+// Framing mode reads "Export Focused Video( (n/m))?", Overlay mode reads "Add Overlay"
+// (same onExport handler, different label). The old /^Export( \(\d+\/\d+\))?$/ matched
+// neither, which presented as a phantom "overlay panel never mounted" mount-logic FAIL
+// on a perfectly healthy screen.
+const FRAMING_EXPORT_BTN = /^Export Focused Video( \(\d+\/\d+\))?$/;
+const OVERLAY_EXPORT_BTN = /^Add Overlay$/;
 
-test('staging export pipeline + publish (smoke + durability) @staging-gate', async ({ context, page }) => {
+test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(900_000);
 
   // Retry baked into loginAsRealUser (staging PG stale-pool 5xx blip) — T5400.
@@ -177,7 +183,7 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate', asy
     await openDraftCard(page, target.name);
     await page.locator('.crop-handle').first().waitFor({ timeout: 120000 }).catch(() => {});
     await page.screenshot({ path: `${EVID}/02-framing-loaded.png` });
-    const exportBtn = page.getByRole('button', { name: EXPORT_BTN }).first();
+    const exportBtn = page.getByRole('button', { name: FRAMING_EXPORT_BTN }).first();
     await exportBtn.waitFor({ timeout: 30000 });
     await exportBtn.click();
     console.log('[derisk] framing Export clicked');
@@ -209,7 +215,7 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate', asy
     // draft; if none was loadable we still reach here. Wait a bounded time for the button;
     // if it never mounts, probe the ACTUAL cause and SKIP LOUDLY (never a silent green
     // pass) rather than hard-timeout. See e2e/FIXTURE-CONTRACT.md.
-    const overlayExport = page.getByRole('button', { name: EXPORT_BTN }).first();
+    const overlayExport = page.getByRole('button', { name: OVERLAY_EXPORT_BTN }).first();
     const reachedOverlayExport = await overlayExport
       .waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
     if (!reachedOverlayExport) {

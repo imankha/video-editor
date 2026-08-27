@@ -123,6 +123,25 @@ drag can land on `constrainCrop`'s clamp when the fixture crop is near an edge a
 as a false `moved 0` failure. This is a **spec-robustness** requirement, not a fixture
 guarantee: the contract does not promise a centered crop.
 
+## The gate alias accounts (T7800 — lanes B and C)
+
+The parallel staging gate (see `STAGING-GATE.md` § Lanes) gives EVERY lane its own
+account so no two concurrent sessions share one (concurrent write sessions on one
+account cause `stale_baseline` R2 CAS freezes, and even a light-write/read pairing is
+only safe on a single-machine staging, which is not guaranteed). Lanes B and C are
+**alias clones** of imankh (`--to-email`, below): same profile GUID `9fa7378c`, same
+data guarantees as this contract, distinct email + derived user_id, globally-unique
+identity columns (`google_id`, `invite_code`) neutralized/re-derived.
+
+| Lane | Email | Profile |
+|------|-------|---------|
+| B | `e2e-gate@test.local` (runner override: `GATE2_EMAIL`) | `9fa7378c` (`GATE2_PROFILE`) |
+| C | `e2e-gate2@test.local` (runner override: `GATE3_EMAIL`) | `9fa7378c` (`GATE3_PROFILE`) |
+
+Because the clones mirror imankh at seed time, every guarantee in this contract holds
+for them exactly as of the last seed. Re-seed ALL THREE accounts together (runbook step
+0) so they do not drift apart.
+
 ## Seeding (SUPERVISOR-run — not in a dev container)
 
 The staging seed copies imankh's dev account (incl. profile `9fa7378c` + its framed
@@ -131,13 +150,30 @@ container cannot open, so the **supervisor** runs it, not the worker:
 
 ```bash
 # From the host, with Fly proxies up for both source + destination Postgres and
-# .env / .env.staging present at the project root:
+# .env / .env.staging present at the project root (stop the staging machines first,
+# then restart them after — see the --dest-machines-stopped guard):
 cd src/backend && .venv/Scripts/python.exe ../../scripts/copy_user_between_envs.py \
-    --email imankh@gmail.com --from dev --to staging
+    --email imankh@gmail.com --from dev --to staging --dest-machines-stopped
+
+# T7800: the gate alias accounts are the SAME copy with --to-email (alias clone:
+# distinct deterministic user_id, google_id nulled, invite_code re-derived, R2
+# mirrored under the alias id) — run once per lane account:
+cd src/backend && .venv/Scripts/python.exe ../../scripts/copy_user_between_envs.py \
+    --email imankh@gmail.com --from dev --to staging --dest-machines-stopped \
+    --to-email e2e-gate@test.local
+cd src/backend && .venv/Scripts/python.exe ../../scripts/copy_user_between_envs.py \
+    --email imankh@gmail.com --from dev --to staging --dest-machines-stopped \
+    --to-email e2e-gate2@test.local
 ```
 
 Copies Postgres rows (`users` + `game_storage_refs`) and R2 objects (profile.sqlite,
-user.sqlite, media) for that user.
+user.sqlite, media) for that user. Alias-clone caveats (e2e-only, never for a real
+user): the copied SQLite DBs still carry source-internal data — display email, plus
+`user.sqlite` rows keyed by the SOURCE user_id (`credits`, `credit_transactions`,
+`stripe_customers`, `user_activity`), which the alias simply reads as empty
+(`WHERE user_id = ?` misses them; harmless — credits live in Postgres since v019, and
+not inheriting a Stripe customer is desirable). Backend routing keys on Postgres
+email -> user_id, so the fixture works.
 
 > **Admin visibility:** `copy_user_between_envs.py` does not copy `user_segments`, so a
 > freshly-copied account can be invisible in the admin UI until a segment row exists.

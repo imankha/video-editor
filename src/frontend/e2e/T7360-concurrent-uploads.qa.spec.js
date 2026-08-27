@@ -15,6 +15,10 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+
+// T7800: in-page import()s of /src stores 404 on a deployed BUILD.
+skipOnDeployedTarget(test, 'in-page import() of /src/stores/{uploadStore,authStore}.js (vite-module)');
 
 // Setting authStore.isAuthenticated directly (below) does NOT go through App.jsx's
 // bootstrap fetch (that only fires inside the real initSession().then() chain, which

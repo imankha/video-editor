@@ -63,7 +63,7 @@ async function clickDownload(tile) {
   await tile.page().getByText('Download', { exact: true }).click();
 }
 
-test.describe('T7100 My Reel download feedback (real account)', () => {
+test.describe('T7100 My Reel download feedback (real account) @staging-gate @gate-c', () => {
   test('criteria 1+2: scrim shows Preparing -> byte readout, kebab spins + forced-visible, both SURVIVE menu close, both revert on success', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });

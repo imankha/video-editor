@@ -17,10 +17,14 @@
  */
 
 /**
- * Canonical drafts-chip title matcher: a per-clip segment chip whose title is
- * `[tags]: <label> (click to open)`. Brackets escaped (they are literal in the title).
+ * Canonical drafts-chip title matcher. T7800 (first staging gate run): the bracket-
+ * REQUIRING form `/\[.+\]: .*\(click to open\)/` is the documented FIXTURE-CONTRACT
+ * chip-title gotcha — only a per-clip segment carries a `[tags]` bracket, so on an
+ * account whose drafts are framing-complete/aggregate (title `Focus: ... (click to
+ * open)`) it silently matches nothing and the open hangs to timeout. Canonical form is
+ * T6190's: any `(click to open)` segment that is NOT the trailing `Overlay:` one.
  */
-export const FRAMING_CHIP_TITLE_RE = /\[.+\]: .*\(click to open\)/;
+export const FRAMING_CHIP_TITLE_RE = /^(?!Overlay:).*\(click to open\)/;
 
 /** Default post-click ready signal: the Framing crop editor mounted. */
 const DEFAULT_CROP_READY = '.crop-handle';

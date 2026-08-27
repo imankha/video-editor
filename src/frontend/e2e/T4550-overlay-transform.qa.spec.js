@@ -45,7 +45,7 @@ function assertNoRafWarnings(lines) {
   expect(offenders, `rAF/stale-update/NaN warnings:\n${offenders.join('\n')}`).toEqual([]);
 }
 
-test.describe('T4550 unified overlay transform @staging-gate', () => {
+test.describe('T4550 unified overlay transform @staging-gate @gate-b', () => {
   test('Framing: crop overlay placed + drag lands accurately, no rAF warnings', async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });

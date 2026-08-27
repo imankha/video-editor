@@ -18,7 +18,7 @@ const URL = `/shared/collection/${TOKEN}`;
 
 test.use({ viewport: { width: 390, height: 844 } }); // mobile-primary
 
-test.describe('Public collection viewer', () => {
+test.describe('Public collection viewer @staging-gate @gate-c', () => {
   test('renders the story player with the frozen title and current members', async ({ page }) => {
     await page.route(`**/api/shared/collection/${TOKEN}`, (route) =>
       route.fulfill({

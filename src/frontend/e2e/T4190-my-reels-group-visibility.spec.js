@@ -27,16 +27,16 @@ import { loginAsRealUser } from './helpers/realAuth';
  *   bash scripts/dev-verify.sh e2e/T4190-my-reels-group-visibility.spec.js --reporter=line
  */
 
-const REAL_EMAIL = 'imankh@gmail.com';
-const PROFILE_ID = '9fa7378c';
+const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
+const PROFILE_ID = process.env.E2E_REAL_PROFILE || '9fa7378c';
 // T5420: on a deployed target the frontend host (CF Pages) does NOT proxy /api, so a
 // relative `/api/...` returns the SPA HTML fallback and res.json() throws. Point API
 // calls at E2E_API_BASE (staging Fly API); locally it stays relative (Vite proxy).
 const API_BASE = process.env.E2E_API_BASE || '/api';
 
-test('T4190: My Reels group headers show real game names + collapsed-group new chip', async ({ context, page }) => {
+test('T4190: My Reels group headers show real game names + collapsed-group new chip @staging-gate @gate-b', async ({ context, page }) => {
   // --- auth + read the live summary the UI will render from ------------------
-  await loginAsRealUser(context, REAL_EMAIL);
+  await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 
   const res = await context.request.get(`${API_BASE}/collections/summary`, {
     headers: { 'X-Profile-ID': PROFILE_ID },

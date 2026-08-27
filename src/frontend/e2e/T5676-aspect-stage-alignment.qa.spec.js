@@ -99,7 +99,7 @@ function aspectLabel(m) {
   return h > w ? 'portrait-9x16' : 'landscape-16x9';
 }
 
-test.describe('T5676 aspect-aware video stage @staging-gate', () => {
+test.describe('T5676 aspect-aware video stage @staging-gate @gate-b', () => {
   test('no pillarbox + overlays stay aligned across widths & fullscreen', async ({ browser }) => {
     test.setTimeout(240_000);
     const context = await browser.newContext({ viewport: { width: 1315, height: 748 } });
@@ -333,7 +333,7 @@ test.describe('T5676 aspect-aware video stage @staging-gate', () => {
  * proves in a real browser: (a) the <video> fills its `.video-container` (no
  * pillarbox), (b) the spotlight ellipse sits inside the video rect after resize.
  */
-test.describe('T5676 aspect stage — dev harness (both aspects) @staging-gate', () => {
+test.describe('T5676 aspect stage — dev harness (both aspects) @staging-gate @gate-c', () => {
   // /aspectdiag.html is a Vite-dev-only harness page: not an input to the production
   // build, so on a deployed target this RELATIVE path resolves against the Pages origin
   // and the SPA catch-all serves index.html instead — the harness never mounts. Only

@@ -65,7 +65,7 @@ async function openMyReelsAndFirstReel(page) {
   return panel;
 }
 
-test('A: FINE pointer (desktop) — Share opens ShareModal, never navigator.share (T5220 stays fixed)', async ({ browser }) => {
+test('A: FINE pointer (desktop) — Share opens ShareModal, never navigator.share (T5220 stays fixed) @staging-gate @gate-b', async ({ browser }) => {
   test.setTimeout(120_000);
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await stubNavigatorShare(context);
@@ -96,7 +96,7 @@ test('A: FINE pointer (desktop) — Share opens ShareModal, never navigator.shar
   await context.close();
 });
 
-test('B: COARSE pointer (touch) — Share attempts navigator.share (native sheet), no ShareModal', async ({ browser }) => {
+test('B: COARSE pointer (touch) — Share attempts navigator.share (native sheet), no ShareModal @staging-gate @gate-b', async ({ browser }) => {
   test.setTimeout(120_000);
   const context = await browser.newContext({ ...devices['iPhone 13'] });
   await stubNavigatorShare(context);

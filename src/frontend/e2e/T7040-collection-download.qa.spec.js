@@ -23,6 +23,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { loginAsRealUser } from './helpers/realAuth.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const execFileP = promisify(execFile);
 
@@ -41,6 +42,8 @@ async function probeVideo(filePath) {
 }
 
 test.describe('T7040 collection download', () => {
+  // T7800: local ffprobe + relative /api request-context fetch + local-ffmpeg premise.
+  skipOnDeployedTarget(test, 'local ffprobe binary + relative /api fetch (SPA fallback on split-host staging)');
   let ownerCtx;
 
   test.beforeAll(async ({ browser }) => {

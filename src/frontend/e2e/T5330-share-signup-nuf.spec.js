@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5330 — Email game-share recipient must NOT skip the new-user flow (NUF).
@@ -135,6 +136,8 @@ async function cleanup(request) {
 }
 
 test.describe('T5330 — share-email recipient sees the new-user flow', () => {
+  // T7800: seeds users via the dev-only /api/test/ensure-pg-user seam.
+  skipOnDeployedTarget(test, 'seeds sharer/recipient via the dev-only /api/test/ensure-pg-user seam');
   test.afterAll(async ({ request }) => {
     await cleanup(request);
   });

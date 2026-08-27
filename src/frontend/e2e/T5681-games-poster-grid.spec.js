@@ -51,7 +51,7 @@ async function openGamesTab(page) {
   await page.locator('#preloader').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
 }
 
-test.describe('T5681 games tab poster grid', () => {
+test.describe('T5681 games tab poster grid @staging-gate @gate-c', () => {
   test('renders chronological landscape grid with month captions + counts (desktop)', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: DESKTOP });

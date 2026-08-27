@@ -127,30 +127,167 @@ export function assertSeamAvailable(res, seamName) {
  * lacks the required data, so a real regression and a missing fixture never look
  * alike. See e2e/STAGING-GATE.md.
  */
+/**
+ * T7800 (Staging Gate v2): the gate is split into three parallel LANES, each run as
+ * its own Playwright process with its own account env (specs read E2E_REAL_EMAIL /
+ * E2E_REAL_PROFILE at import time, so per-process env is the account seam):
+ *
+ *   @gate-a  imankh@gmail.com — ALL heavy writes (real exports, publish, share links).
+ *   @gate-b  second seeded account — browsing + light writes (crop drag, share link).
+ *   @gate-c  mocked/no-account specs + slow reads on the second account.
+ *
+ * Lanes A vs B/C use DIFFERENT accounts because concurrent write sessions on one
+ * account cause stale_baseline R2 CAS freezes. Launcher: scripts/staging-gate.sh.
+ * Lane members that are local-only (seam/dev-harness) skip loudly on a deployed
+ * target but keep running in LOCAL gate runs — marked localOnly below.
+ */
 export const STAGING_GATE_SPECS = [
+  // ---- lane A: pipeline (imankh, heavy writes) --------------------------------
   {
     file: 'staging-smoke.spec.js',
+    lane: 'a',
     covers: 'API /health 200 + dev-login session + app shell renders (fastest signal)',
   },
   {
-    file: 'T5290-recap-mobile-redesign.spec.js',
-    covers: 'recap player responsive layout (portrait/landscape/narrow/desktop), no overflow',
-  },
-  {
-    file: 'T4550-overlay-transform.qa.spec.js',
-    covers: 'framing crop-overlay placement + drag round-trip; overlay/detection layer (rAF-leak free)',
-  },
-  {
     file: 'derisk-staging-export.qa.spec.js',
+    lane: 'a',
     covers: 'export pipeline (framing -> overlay -> final) + publish, on a DISCOVERED draft',
   },
   {
     file: 'derisk-staging-endcard-copylink.qa.spec.js',
+    lane: 'a',
     covers: 'branded end card on shared reel + collection; copy-link POST/toast dedup',
+  },
+  // ---- lane B: browse + edit (second account, reads + light writes) -----------
+  {
+    file: 'game-loading.spec.js',
+    lane: 'b',
+    covers: 'saved-game card click loads the game into Annotate (video + clip markers)',
+  },
+  {
+    file: 'annotate-game-clock.spec.js',
+    lane: 'b',
+    covers: 'annotation playback banner shows the in-match soccer clock',
+  },
+  {
+    file: 'T4550-overlay-transform.qa.spec.js',
+    lane: 'b',
+    covers: 'framing crop-overlay placement + drag round-trip; overlay/detection layer (rAF-leak free)',
+  },
+  {
+    file: 'T4190-my-reels-group-visibility.spec.js',
+    lane: 'b',
+    covers: 'My Reels group headers show real game names + collapsed-group "N new" chip',
+  },
+  {
+    file: 'T5677-home-deeplinks-route-fallback.spec.js',
+    lane: 'b',
+    covers: 'deep links land on the right tab; refresh/back/forward preserve it; bad routes fall back home',
+  },
+  {
+    file: 'T7350-mobile-share-routing.qa.spec.js',
+    lane: 'b',
+    covers: 'share routing by pointer capability: desktop ShareModal vs mobile native sheet (twice-regressed)',
+  },
+  {
+    file: 'T5642-overlay-working-video-presigned.qa.spec.js',
+    lane: 'b',
+    covers: 'overlay working-video loads via presigned URL',
+  },
+  {
+    file: 'T5676-aspect-stage-alignment.qa.spec.js',
+    lane: ['b', 'c'],
+    covers: 'aspect-aware video stage: real-account describe in lane B; dev-harness describe in lane C (local-only, skips on a deployed target)',
+  },
+  {
+    file: 'bug38-autoselect-and-frame-step.qa.spec.js',
+    lane: 'b',
+    covers: 'auto-spotlight landing + frame-step on a real account',
+  },
+  // ---- lane C: public viewers (mocked, no account) + slow reads ---------------
+  {
+    file: 'collection-share.spec.js',
+    lane: 'c',
+    covers: 'public collection viewer: story player, frozen title, empty/revoked/restricted states (route-mocked)',
+  },
+  {
+    file: 'shared-viewer-affordance-gating.spec.js',
+    lane: 'c',
+    covers: 'public shared viewer exposes no editor affordances (route-mocked)',
+  },
+  {
+    file: 'T5290-recap-mobile-redesign.spec.js',
+    lane: 'c',
+    covers: 'recap player responsive layout (portrait/landscape/narrow/desktop), no overflow',
+  },
+  {
+    file: 'T5681-games-poster-grid.spec.js',
+    lane: 'c',
+    covers: 'games tab poster grid incl. the poster-load branch only a deployed target (real R2) exercises',
+  },
+  {
+    file: 'T7100-reel-download-feedback.qa.spec.js',
+    lane: 'c',
+    covers: 'reel download feedback: progress scrim, byte readout, failure toast (real server compose)',
+  },
+  {
+    file: 'T5710-per-layer-recap.spec.js',
+    lane: 'c',
+    localOnly: true,
+    covers: 'per-layer recap tabs/rails (seeds via dev-only seam; skips loudly on a deployed target)',
+  },
+  {
+    file: 'bug38-harness.qa.spec.js',
+    lane: 'c',
+    localOnly: true,
+    covers: 'bug38 dev-harness proofs (skips loudly on a deployed target)',
   },
 ];
 
 export const LOCAL_ONLY_SPECS = [
+  // --- T7800: inventory gaps found by the Staging Gate v2 analysis ------------------
+  {
+    file: 'T6190-project-open-fetches.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/gamesDataStore.js', '/src/stores/projectDataStore.js'],
+    reason:
+      'drives project selection / network-hygiene assertions via in-page /src store ' +
+      'imports (404 on a deployed BUILD). NOTE: its criterion-4 test permanently edits ' +
+      'a real clip boundary with no restore — a fixture-drift generator even locally.',
+  },
+  {
+    file: 'T7360-concurrent-uploads.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/uploadStore.js', '/src/stores/authStore.js'],
+    reason:
+      'drives the upload queue by import()ing uploadStore/authStore in-page; the /src ' +
+      'paths 404 on a deployed BUILD (the spec is otherwise fully network-stubbed).',
+  },
+  {
+    file: 'T7040-collection-download.qa.spec.js',
+    category: 'local-fixture',
+    depends: ['local ffprobe binary', 'relative /api request-context fetch', 'MODAL_ENABLED=false premise'],
+    reason:
+      'verifies the stitched collection download with a LOCAL ffprobe and a relative ' +
+      '/api call that hits the CF Pages SPA fallback on split-host staging; its header ' +
+      'targets the dev-verify stack (local ffmpeg branch).',
+  },
+  {
+    file: 'T5330-share-signup-nuf.spec.js',
+    category: 'seam',
+    depends: ['/api/test/ensure-pg-user'],
+    reason:
+      'seeds its sharer/recipient users via the dev-only ensure-pg-user seam (its ' +
+      'try/catch already degraded the seam 404 into a loud skip; now also gated).',
+  },
+  {
+    file: 'T5710-per-layer-recap.spec.js',
+    category: 'seam',
+    depends: ['/api/test/seed-recap-game'],
+    reason:
+      'seeds its game + stitched recaps via the dev-only seed-recap-game seam. Tagged ' +
+      '@staging-gate @gate-c for LOCAL gate runs; skips loudly on a deployed target.',
+  },
   {
     file: 'T5180-text-parity.spec.js',
     category: 'seam',

@@ -20,7 +20,7 @@ const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8000/api';
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
-test.describe('staging smoke @staging-gate', () => {
+test.describe('staging smoke @staging-gate @gate-a', () => {
   test('API health responds 200', async ({ request }) => {
     const res = await request.get(`${API_BASE}/health`, { headers: { 'X-Test-Mode': 'true' } });
     expect(res.status(), `GET ${API_BASE}/health`).toBe(200);
