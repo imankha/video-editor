@@ -198,6 +198,27 @@ _GAME_VIDEO_COLUMNS = (
 )
 
 
+class RecipientProfileBelowHead(RuntimeError):
+    """T6780: the cross-profile game copy targets a recipient/target profile DB whose
+    schema is BELOW head — a column the copy must write (`shared_by` v026,
+    `source_profile_id`/`source_game_id` v030) does not exist yet on that DB, because
+    it hasn't been migrated in the deploy->migrate window.
+
+    Reachable: the recipient/target DB is opened raw (`_open_profile_db` /
+    `ensure_profile_db_local`), NEITHER of which migrates to head, so a below-head DB
+    can reach this write. The matching READS are already column_exists-guarded
+    (games list, quests, move-reel source projection); this is the write-side sibling.
+
+    We REFUSE rather than write a partial row: omitting these columns is NOT an option
+    like `detections_data` (T6780 case A) — `shared_by` is the onboarding-blind quest
+    provenance marker (T5330) and `source_profile_id`/`source_game_id` DEFINE a
+    reference row (T5800); a row missing them is corrupt, not merely incomplete.
+    Callers map this to the right shape: share paths DEFER via `create_pending_share`
+    (retries post-migration through T3230 login materialization); the move-reel path
+    returns HTTP 503 (retryable, no deferral channel). Never a lying `{success:true}`,
+    never a raw 500 (this is a known, time-bounded state)."""
+
+
 def _insert_game_with_videos(
     target_conn: sqlite3.Connection,
     game_columns: dict,
@@ -211,9 +232,26 @@ def _insert_game_with_videos(
     game_videos rows (each an indexable mapping/Row carrying `_GAME_VIDEO_COLUMNS`).
     Returns the new game id. Touches ONLY the two profile-local tables; never
     game_storage / Postgres game_storage_refs / game_ref_counts (EPIC decision 4).
+
+    T6780: refuses (raises `RecipientProfileBelowHead`) when any column the copy must
+    write is absent on the target `games` table — a below-head recipient in the
+    deploy->migrate window — rather than 500 on an OperationalError or write a corrupt
+    partial row. Guarding the SHARED primitive covers both copiers AND any future
+    column added to a copy set, so a new call site cannot silently skip it. One PRAGMA
+    per copy (not per row).
     """
     cols = list(game_columns.keys())
     rcur = target_conn.cursor()
+    existing_cols = {
+        row[1] for row in rcur.execute("PRAGMA table_info(games)").fetchall()
+    }
+    missing = [c for c in cols if c not in existing_cols]
+    if missing:
+        raise RecipientProfileBelowHead(
+            "target profile DB is below head; games table missing column(s) "
+            f"{sorted(missing)} required by the cross-profile game copy "
+            "(pending migration)"
+        )
     rcur.execute(
         f"INSERT INTO games ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
         [game_columns[c] for c in cols],

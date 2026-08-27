@@ -125,12 +125,16 @@ POST_V023_COLUMNS = {
     #   toast read (`SELECT highlight_carry_note FROM working_videos WHERE id = ?`) is
     #   wrapped in a bare try/except that swallows OperationalError -> None (best-effort,
     #   never a 500). Verified directly by test_upsert_working_video_v046_window below,
-    #   which targets the v046 window specifically (NOT the shared floor-v23 below_head
-    #   fixture -- that fixture also drops v027's detections_data, which trips an
-    #   UNRELATED, PRE-EXISTING gap: upsert_working_video's historical-shape INSERT has
-    #   always named detections_data unconditionally, since before T4350. That gap
-    #   predates this task and is out of scope here; flagging it, not fixing it, to avoid
-    #   silently sweeping in an unrelated behavior change under a migration-head bump.
+    #   which targets the v046 window specifically. T6780 CLOSED the sibling gap the
+    #   T4350 note flagged (upsert_working_video's historical-shape INSERT / resume
+    #   UPDATE named v027's detections_data unconditionally): the write now column-omits
+    #   detections_data when absent, mirroring T6030's slowmo INSERT guard, so the shared
+    #   floor-v23 below_head fixture can now drive upsert_working_video too --
+    #   test_upsert_working_video_below_head below. (v027's guarded READ is
+    #   test_overlay_data.) The v026/v030 games columns (shared_by, source_profile_id,
+    #   source_game_id) have guarded reads above; their write-side sibling is the
+    #   cross-profile copy, which REFUSES (RecipientProfileBelowHead) rather than
+    #   column-omit -- test_game_copy_below_head_refuses below.
 }
 HEAD_VERSION_AUDITED = 46
 
@@ -431,3 +435,74 @@ def test_upsert_working_video_v046_window(monkeypatch):
             conn.commit()
 
     assert wv_id  # historical-shape INSERT still succeeds; carry is skipped, not crashed
+
+
+def test_upsert_working_video_below_head(below_head):
+    # T6780: the export finalizer's WRITE (upsert_working_video) is the write-side
+    # sibling of test_overlay_data's guarded detections_data (v027) READ. Before T6780
+    # its INSERT + resume UPDATE named detections_data unconditionally, so a below-v027
+    # DB 500'd the render (the gap the T4350 note flagged). Now the write column-OMITS
+    # detections_data when absent (an optional cache the v027 migration backfills), so
+    # this drives it against the shared floor-v23 fixture -- which DROPS detections_data
+    # -- and asserts no missing-column 500 on either branch.
+    import sqlite3
+
+    from app.services.export_finalize import upsert_working_video
+    from app.utils.encoding import encode_data
+
+    job = {"id": "t6780-wvguard-job", "project_id": below_head["project_id"], "output_video_id": None}
+    try:
+        # INSERT branch: carry columns (v046) AND detections_data (v027) both absent.
+        wv_id = upsert_working_video(
+            job,
+            filename="below_head_export.mp4",
+            duration=10.0,
+            highlights_data=encode_data([]),
+            detections_data=encode_data({}),  # supplied -> must be silently omitted
+        )
+        # Resume the SAME job -> UPDATE branch, also detections-omit.
+        resume_job = {
+            "id": "t6780-wvguard-job",
+            "project_id": below_head["project_id"],
+            "output_video_id": wv_id,
+        }
+        wv_id2 = upsert_working_video(
+            resume_job,
+            filename="below_head_export_resumed.mp4",
+            duration=11.0,
+            highlights_data=encode_data([]),
+            detections_data=encode_data({}),
+        )
+    except sqlite3.OperationalError as e:
+        pytest.fail(f"upsert_working_video hit an unguarded missing detections_data column: {e}")
+    assert wv_id and wv_id2 == wv_id  # resume reuses the row, no second coexisting version
+
+
+def test_game_copy_below_head_refuses(below_head):
+    # T6780: the cross-profile game copy WRITE (_insert_game_with_videos, shared by
+    # _copy_game share-materialization AND ensure_game_reference move-reel) is the
+    # write-side sibling of the guarded games.shared_by (v026) / source_profile_id +
+    # source_game_id (v030) READS. On a below-head recipient it must REFUSE with
+    # RecipientProfileBelowHead -- NOT 500 on an OperationalError, NOT write a partial
+    # row missing the provenance/reference columns (which would be corrupt, not merely
+    # incomplete like detections_data above). Callers map the refusal to defer-to-
+    # pending (share) or 503 (move-reel).
+    import sqlite3
+
+    from app.services.materialization import RecipientProfileBelowHead, _insert_game_with_videos
+
+    with get_db_connection() as conn:
+        game_columns = {
+            "name": "Copied Game",
+            "blake3_hash": "deadbeef",
+            "status": "ready",
+            "shared_by": None,  # v026 column dropped on the below_head fixture
+        }
+        try:
+            _insert_game_with_videos(conn, game_columns, [])
+        except RecipientProfileBelowHead:
+            pass  # correct: refuse loudly, no partial write
+        except sqlite3.OperationalError as e:
+            pytest.fail(f"game copy hit an unguarded missing column instead of refusing: {e}")
+        else:
+            pytest.fail("below-head game copy should refuse with RecipientProfileBelowHead")
