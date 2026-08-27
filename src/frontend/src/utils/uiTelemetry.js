@@ -74,7 +74,21 @@ export function recordUiImpression(kind, name) {
 
 // --- Tier 4: session-exit breadcrumbs -------------------------------------
 
-const _breadcrumbScreens = new Set(Object.values(EDITOR_MODES));
+// LAZY: computed on first use inside a function, never at module-load time.
+// Toast.jsx (which imports this module) sits in a circular import back to
+// editorStore.js via the store graph (focusStore/projectDataStore/overlayStore/
+// projectsStore/videoStore), so a top-level `Object.values(EDITOR_MODES)` here
+// could still read EDITOR_MODES as undefined depending on which module in that
+// cycle finishes evaluating first. Deferring the read until a function actually
+// RUNS (always after the whole module graph has finished settling) sidesteps
+// the race entirely — this module's own top level now touches nothing from
+// editorStore.js except the `useEditorStore` store reference itself (a stable
+// object identity, not read into a value at import time).
+let _breadcrumbScreensCache = null;
+function _breadcrumbScreens() {
+  if (!_breadcrumbScreensCache) _breadcrumbScreensCache = new Set(Object.values(EDITOR_MODES));
+  return _breadcrumbScreensCache;
+}
 
 let _breadcrumbsInstalled = false;
 const _dwellMs = {};        // screen -> accumulated FOREGROUND ms
@@ -103,7 +117,7 @@ function _onScreenChange(nextScreen) {
   _bankCurrentDwell();
   _currentScreen = nextScreen;
   _screenEnteredAt = _now();
-  if (_breadcrumbScreens.has(nextScreen)) _trail.push(nextScreen);
+  if (_breadcrumbScreens().has(nextScreen)) _trail.push(nextScreen);
 }
 
 /** Serialize the current trail + dwell (ms→seconds) for the beacon. */
@@ -187,7 +201,7 @@ export function installSessionBreadcrumbs() {
 
   _currentScreen = useEditorStore.getState().editorMode;
   _screenEnteredAt = _now();
-  if (_breadcrumbScreens.has(_currentScreen)) _trail.push(_currentScreen);
+  if (_breadcrumbScreens().has(_currentScreen)) _trail.push(_currentScreen);
 
   useEditorStore.subscribe((state) => _onScreenChange(state.editorMode));
 

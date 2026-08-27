@@ -79,7 +79,11 @@ function installFetchInterceptor() {
       if (!init.credentials) {
         init.credentials = 'include';
       }
-      const isPwa = window.matchMedia('(display-mode: standalone)').matches;
+      // jsdom (test env) has no window.matchMedia -- feature-detect same as
+      // every other matchMedia call site in this codebase (useIsMobile.js,
+      // useTilePreview.js, RecapPlayerModal.jsx, etc).
+      const isPwa = typeof window.matchMedia === 'function'
+        && window.matchMedia('(display-mode: standalone)').matches;
       const isMobile = window.innerWidth <= 768;
       const platform = `${isPwa ? 'pwa' : 'webapp'}-${isMobile ? 'mobile' : 'desktop'}`;
       init.headers = {
@@ -97,48 +101,57 @@ function installFetchInterceptor() {
       const promise = originalFetch.call(window, input, init);
       promise.then(
         (response) => {
-          // Tbug40p: passive truth check — every API response already in flight
-          // doubles as a build-number probe (zero extra requests). Gate iff the
-          // server's build is strictly newer than this client's baked build.
-          // Tbug41s made this async (it may consult the ServiceWorker for a waiting
-          // bundle); deliberately not awaited — the response path must not wait on a
-          // gate decision. Trailing catch keeps a probe failure off the console as an
-          // unhandled rejection.
-          checkServerVersion(response.headers.get('X-App-Build')).catch(() => {});
+          // This whole callback is passive diagnostics (build-version probe +
+          // slow-fetch logging + perf marks) riding an already-in-flight response
+          // -- it must never affect the real response the caller awaits, and a
+          // response shaped unlike a real fetch Response (e.g. a test's plain
+          // mock object with no `.headers`) must not turn into an unhandled
+          // rejection here (onFulfilled exceptions reject the derived promise
+          // from `.then()`, which nothing awaits).
+          try {
+            // Tbug40p: passive truth check — every API response already in flight
+            // doubles as a build-number probe (zero extra requests). Gate iff the
+            // server's build is strictly newer than this client's baked build.
+            // Tbug41s made this async (it may consult the ServiceWorker for a waiting
+            // bundle); deliberately not awaited — the response path must not wait on a
+            // gate decision. Trailing catch keeps a probe failure off the console as an
+            // unhandled rejection.
+            checkServerVersion(response.headers?.get('X-App-Build')).catch(() => {});
 
-          const ttfb = Math.round(performance.now() - t0);
-          // Clone + read body to measure body transfer time
-          if (PROFILING_ENABLED) {
-            const tBody0 = performance.now();
-            response.clone().text().then((bodyText) => {
-              const bodyMs = Math.round(performance.now() - tBody0);
-              const total = Math.round(performance.now() - t0);
-              const sizeKB = (bodyText.length / 1024).toFixed(1);
-              if (total >= SLOW_FETCH_MS) {
-                 
+            const ttfb = Math.round(performance.now() - t0);
+            // Clone + read body to measure body transfer time
+            if (PROFILING_ENABLED) {
+              const tBody0 = performance.now();
+              response.clone().text().then((bodyText) => {
+                const bodyMs = Math.round(performance.now() - tBody0);
+                const total = Math.round(performance.now() - t0);
+                const sizeKB = (bodyText.length / 1024).toFixed(1);
+                if (total >= SLOW_FETCH_MS) {
+
+                  console.warn(
+                    `[SLOW FETCH] ${method} ${pathOnly} total=${total}ms ttfb=${ttfb}ms body=${bodyMs}ms size=${sizeKB}KB req_id=${reqId} status=${response.status}`
+                  );
+                }
+                // User Timing mark for DevTools Performance timeline
+                try {
+                  const markName = `api:${method}:${pathOnly}`;
+                  performance.mark(`${markName}:start`, { startTime: t0 });
+                  performance.mark(`${markName}:end`);
+                  performance.measure(markName, `${markName}:start`, `${markName}:end`);
+                  performance.clearMarks(`${markName}:start`);
+                  performance.clearMarks(`${markName}:end`);
+                } catch { /* timing API unavailable */ }
+              }, () => {});
+            } else {
+              const elapsed = Math.round(performance.now() - t0);
+              if (elapsed >= SLOW_FETCH_MS) {
+
                 console.warn(
-                  `[SLOW FETCH] ${method} ${pathOnly} total=${total}ms ttfb=${ttfb}ms body=${bodyMs}ms size=${sizeKB}KB req_id=${reqId} status=${response.status}`
+                  `[SLOW FETCH] ${method} ${pathOnly} ${elapsed}ms req_id=${reqId} status=${response.status}`
                 );
               }
-              // User Timing mark for DevTools Performance timeline
-              try {
-                const markName = `api:${method}:${pathOnly}`;
-                performance.mark(`${markName}:start`, { startTime: t0 });
-                performance.mark(`${markName}:end`);
-                performance.measure(markName, `${markName}:start`, `${markName}:end`);
-                performance.clearMarks(`${markName}:start`);
-                performance.clearMarks(`${markName}:end`);
-              } catch { /* timing API unavailable */ }
-            }, () => {});
-          } else {
-            const elapsed = Math.round(performance.now() - t0);
-            if (elapsed >= SLOW_FETCH_MS) {
-               
-              console.warn(
-                `[SLOW FETCH] ${method} ${pathOnly} ${elapsed}ms req_id=${reqId} status=${response.status}`
-              );
             }
-          }
+          } catch { /* diagnostics only — never affect the real response */ }
         },
         () => {},
       );
