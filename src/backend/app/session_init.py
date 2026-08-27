@@ -261,7 +261,10 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
             inherited_sport = get_inherited_sport(user_id)
         except Exception as e:
             logger.warning(f"Sport inheritance lookup failed for {user_id}: {e}")
-        sport = inherited_sport or "soccer"
+        # T7850: new users default to "no_sport" (never chosen) rather than
+        # silently classifying them as soccer. An inherited sport (referral/share)
+        # still wins when present.
+        sport = inherited_sport or "no_sport"
         create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True, sport=sport)
         set_selected_profile_id(user_id, profile_id)
         # T7520: this create mutates the profiles registry. If the hint branch

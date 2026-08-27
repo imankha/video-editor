@@ -77,7 +77,7 @@ _USER_DB_SCHEMA = """
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         color TEXT NOT NULL,
-        sport TEXT NOT NULL DEFAULT 'soccer',
+        sport TEXT NOT NULL DEFAULT 'no_sport',
         is_default INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
     );
@@ -872,7 +872,7 @@ def backfill_preferences_from_profile(user_id: str) -> bool:
     return False
 
 
-def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False, sport: str = "soccer") -> None:
+def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False, sport: str = "no_sport") -> None:
     """Insert a new profile row."""
     with get_user_db_connection(user_id) as conn:
         conn.execute(

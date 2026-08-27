@@ -112,6 +112,64 @@ class TestProfilesRouter:
         assert data["color"] == "#10B981"
         assert len(data["id"]) == 8
 
+    def test_create_profile_defaults_to_no_sport(self):
+        """T7850: create_profile() with no sport arg stores the no_sport sentinel."""
+        from app.services.user_db import ensure_user_database, create_profile, get_profiles
+
+        uid = _uid("nosport_default")
+        p1 = uuid4().hex[:8]
+        ensure_user_database(uid)
+        create_profile(uid, p1, "Marcus", "#3B82F6", is_default=True)
+
+        profiles = get_profiles(uid)
+        created = next(p for p in profiles if p["id"] == p1)
+        assert created["sport"] == "no_sport"
+
+    @patch("app.routers.profiles.invalidate_user_cache")
+    @patch("app.database.ensure_database")
+    def test_create_profile_endpoint_defaults_to_no_sport(self, mock_ensure_db, mock_invalidate):
+        """T7850: POST /api/profiles without a sport lands the no_sport sentinel,
+        not the old 'soccer' default."""
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.services.user_db import ensure_user_database, create_profile, set_selected_profile_id
+
+        uid = _uid("nosport_create")
+        p1 = uuid4().hex[:8]
+        ensure_user_database(uid)
+        create_profile(uid, p1, "Marcus", "#3B82F6", is_default=True)
+        set_selected_profile_id(uid, p1)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/profiles", json={"name": "Jordan", "color": "#10B981"},
+            headers={"X-User-ID": uid, "X-Profile-ID": p1},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["sport"] == "no_sport"
+
+    def test_create_profile_endpoint_honors_explicit_sport(self):
+        """T7850: an explicit sport still wins over the no_sport default."""
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.services.user_db import ensure_user_database, create_profile, set_selected_profile_id
+
+        uid = _uid("explicit_sport")
+        p1 = uuid4().hex[:8]
+        ensure_user_database(uid)
+        create_profile(uid, p1, "Marcus", "#3B82F6", is_default=True)
+        set_selected_profile_id(uid, p1)
+
+        client = TestClient(app)
+        with patch("app.routers.profiles.invalidate_user_cache"), patch("app.database.ensure_database"):
+            response = client.post(
+                "/api/profiles", json={"name": "Jordan", "color": "#10B981", "sport": "basketball"},
+                headers={"X-User-ID": uid, "X-Profile-ID": p1},
+            )
+        assert response.status_code == 200
+        assert response.json()["sport"] == "basketball"
+
     def test_update_profile(self):
         """PUT /api/profiles/{id} should update profile name and color."""
         from fastapi.testclient import TestClient

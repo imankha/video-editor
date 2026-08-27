@@ -293,6 +293,28 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
   `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
 
+## "No Sport" sentinel (T7850) — new profiles default here, not to soccer
+New profiles are created with `sport = 'no_sport'` (never chosen), NOT the old
+`'soccer'` default. Backend write sites: `session_init.py` (`inherited_sport or
+"no_sport"`), `user_db.py` (`_USER_DB_SCHEMA` `DEFAULT 'no_sport'` + `create_profile`
+default param), `routers/profiles.py` (`request.sport or "no_sport"`). No migration:
+existing `'soccer'` rows are left as-is (indistinguishable in the DB from a deliberate
+soccer pick), and the column is `NOT NULL` so there is no `sport IS NULL` cohort.
+- `NO_SPORT`/`NO_SPORT_LABEL` are exported from `tagRegistry.js`. The sentinel is
+  deliberately **NOT in `SUPPORTED_SPORTS`** (that list = sports with a tag set);
+  `getTagSet('no_sport')` returns `null` like any unknown sport. `sportDisplayName`/
+  `sportStoredValue`/`sportEmoji` special-case it (glyph `❔`, distinct from the custom
+  medal `🏅`); `sportEmojiOrNull` is intentionally untouched (posters stay app-logo).
+- Add Clip UI is a **three-way branch** (not `{tagSet && …}`): known tag set → `TagSelector`;
+  `sport === NO_SPORT` → `<NoSportTagWarning>` (amber prompt, `compact` variant in the
+  fullscreen scrub bar); custom/"Other" sport → silent (deliberate choice, no registry).
+  Four call sites: `UploadClipModal`, `ClipDetailsEditor`, `AnnotateFullscreenOverlay` (×2).
+  The read fallback is now `currentProfile?.sport || NO_SPORT` (was `|| 'soccer'`).
+- `ManageProfilesModal` offers "No Sport" as an explicit option in BOTH the row
+  `InlineSportSelect` and the `ProfileForm` dropdown (distinct from the "Other" free-text branch).
+- Known gap (out of scope): `collections.py` `CURATED_COMBOS.get(sport or DEFAULT_SPORT, …)`
+  still falls a `no_sport` profile back to soccer curated combos — not a crash, flagged only.
+
 ## Adding a sport (T5695) — the tag registry is NOT the only place
 A sport = a tag-set file + registry wiring + a backend curated combo, but since
 T5695 it ALSO has a **cross-repo mirror in `src/landing/` that self-contradicts if

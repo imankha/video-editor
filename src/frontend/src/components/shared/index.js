@@ -5,6 +5,7 @@ export { Button, IconButton, ButtonGroup, Toggle } from './Button';
 export { CollapsibleGroup } from './CollapsibleGroup';
 export { ConfirmationDialog } from './ConfirmationDialog';
 export { ModeSwitcher } from './ModeSwitcher';
+export { NoSportTagWarning } from './NoSportTagWarning';
 export { StarRating } from './StarRating';
 export { TagSelector } from './TagSelector';
 export { ToastContainer, useToast, toast } from './Toast';
