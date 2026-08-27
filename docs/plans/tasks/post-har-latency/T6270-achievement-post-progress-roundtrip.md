@@ -1,6 +1,6 @@
 # T6270: Every achievement POST is chased by a `quests/progress` GET
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-07-31
