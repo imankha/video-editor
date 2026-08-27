@@ -81,18 +81,22 @@ def test_noop_on_missing_working_clips_table(tmp_path):
     V044WorkingClipsFramingVersion().up(conn)  # must not raise
 
 
-def test_registered_in_profile_db_migrations_and_is_the_new_head():
+def test_registered_in_profile_db_migrations():
     """v044 must be appended to MIGRATIONS in app/migrations/profile_db/__init__.py
     (design doc section 2.7) -- otherwise the runner never applies it and
     test_migrations.py::test_profile_db_track's ordering/no-duplicates
-    invariants would also fail once someone else registers a colliding v044."""
-    from app.migrations.profile_db import MIGRATIONS, RUNNER
+    invariants would also fail once someone else registers a colliding v044.
+
+    Deliberately does NOT assert v044 is the current head: several later
+    migrations (v045, v046, v047, ...) have already landed above it, and this
+    test does not own the track's head -- that's test_migrations.py's dynamic
+    RUNNER.latest_version check. Pinning a hardcoded head number here just
+    breaks every time an unrelated later migration lands (this test was
+    itself bumped 44->45->46 for that reason -- see git history)."""
+    from app.migrations.profile_db import MIGRATIONS
 
     versions = [m.version for m in MIGRATIONS]
     assert 44 in versions, "v044 must be registered in profile_db MIGRATIONS"
-    # T4340's v045 landed above v044, then T4350's v046 landed above THAT --
-    # head moved 44->45->46, v044 is no longer the tip.
-    assert RUNNER.latest_version == 46, "v044 must be registered (head has since advanced to v046)"
 
 
 def test_fresh_ensure_database_already_has_the_column(tmp_path):

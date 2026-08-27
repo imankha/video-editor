@@ -1,7 +1,9 @@
 """
-Tests for game storage functions after T2930 refactor:
+Tests for game storage functions after the T6770 derived-ref-set rework:
 - Per-user expiry in profile.sqlite (game_storage table)
-- Global ref counts in Postgres (game_ref_counts table)
+- Per-(user,profile,hash) ref-set in Postgres (game_storage_refs table) --
+  ref_count is DERIVED (COUNT(*) over real rows), not a hand-maintained
+  integer, so it cannot drift from the rows that back it.
 - Grace deletions in Postgres (r2_grace_deletions table)
 """
 
@@ -90,8 +92,18 @@ def _setup_user2_profile(tmp_path):
 # insert_game_storage_ref
 # ---------------------------------------------------------------------------
 
+def _pg_ref_count(blake3_hash):
+    with auth_db.get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM game_storage_refs WHERE blake3_hash = %s",
+            (blake3_hash,),
+        )
+        return cur.fetchone()["n"]
+
+
 class TestInsertGameStorageRef:
-    def test_inserts_into_sqlite_and_increments_ref_count(self, temp_auth_db):
+    def test_inserts_into_sqlite_and_creates_pg_ref_row(self, temp_auth_db):
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
@@ -100,8 +112,9 @@ class TestInsertGameStorageRef:
         assert ref["game_size_bytes"] == 1000
 
         assert auth_db.has_remaining_refs("hash_a") is True
+        assert _pg_ref_count("hash_a") == 1
 
-    def test_upsert_updates_expiry_without_incrementing_ref_count(self, temp_auth_db):
+    def test_upsert_updates_expiry_without_creating_a_second_row(self, temp_auth_db):
         future1 = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         future2 = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
 
@@ -111,12 +124,28 @@ class TestInsertGameStorageRef:
         ref = auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a")
         assert ref["storage_expires_at"] == future2
 
-        # Ref count should still be 1 (not 2)
-        with auth_db.get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_a",))
-            row = cur.fetchone()
-        assert row["ref_count"] == 1
+        # Derived count is COUNT(*) -- re-upserting the SAME (user,profile,hash)
+        # must stay at 1 row, never accumulate.
+        assert _pg_ref_count("hash_a") == 1
+
+    def test_second_profile_creates_a_second_row(self, temp_auth_db):
+        """Two profiles referencing the same hash are two distinct rows --
+        ref_count = COUNT(*) = 2, not a shared integer either profile can
+        under/over-write."""
+        _setup_user2_profile(temp_auth_db["tmp_path"])
+        from app.profile_context import set_current_profile_id
+        from app.user_context import set_current_user_id
+
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        set_current_user_id("user-1")
+        set_current_profile_id("prof-1")
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+
+        set_current_user_id("user-2")
+        set_current_profile_id("prof-2")
+        auth_db.insert_game_storage_ref("user-2", "prof-2", "hash_a", 1000, future)
+
+        assert _pg_ref_count("hash_a") == 2
 
     def test_clears_grace_deletion_on_insert(self, temp_auth_db):
         auth_db.insert_grace_deletion("hash_a")
@@ -129,20 +158,50 @@ class TestInsertGameStorageRef:
             cur.execute("SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s", ("hash_a",))
             assert cur.fetchone() is None
 
-    def test_updates_latest_expiry_via_greatest(self, temp_auth_db):
+    def test_updates_expiry_via_greatest(self, temp_auth_db):
         early = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         late = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
 
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, early)
 
-        # Simulate second user extending with a later expiry
+        # A later re-upsert for the SAME (user,profile,hash) must never move
+        # storage_expires_at backwards.
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, late)
 
         with auth_db.get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT latest_expiry FROM game_ref_counts WHERE blake3_hash = %s", ("hash_a",))
+            cur.execute(
+                "SELECT storage_expires_at FROM game_storage_refs "
+                "WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s",
+                ("user-1", "prof-1", "hash_a"),
+            )
             row = cur.fetchone()
-        assert row["latest_expiry"].isoformat() >= late[:19]
+        assert row["storage_expires_at"].isoformat() >= late[:19]
+
+    def test_creates_pg_row_even_when_sqlite_row_already_exists(self, temp_auth_db):
+        """Regression test for the 2026-08-11 missing-row finding: the OLD
+        is_new-gated write skipped the Postgres mutation whenever the SQLite
+        row already existed, so a PG row lost to a prior crash/purge could
+        never self-heal. The new upsert is keyed on the actual pair, not
+        SQLite novelty, so it must (re)create the PG row unconditionally."""
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+        # First call creates both rows normally.
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+        assert _pg_ref_count("hash_a") == 1
+
+        # Simulate the drift: the PG row vanishes (crash / purge / pre-backfill
+        # state) while the SQLite row survives.
+        with auth_db.get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM game_storage_refs WHERE blake3_hash = %s", ("hash_a",))
+        assert _pg_ref_count("hash_a") == 0
+
+        # Re-running the SAME gesture (SQLite row already exists) must still
+        # (re)create the PG row -- this is the exact case the old code missed.
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+        assert _pg_ref_count("hash_a") == 1
+        assert auth_db.has_remaining_refs("hash_a") is True
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +247,7 @@ class TestGetStorageRefsForUser:
 # ---------------------------------------------------------------------------
 
 class TestDeleteRef:
-    def test_deletes_from_sqlite_and_decrements_ref_count(self, temp_auth_db):
+    def test_deletes_from_sqlite_and_pg_ref_row(self, temp_auth_db):
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
@@ -196,9 +255,43 @@ class TestDeleteRef:
 
         assert auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a") is None
         assert auth_db.has_remaining_refs("hash_a") is False
+        assert _pg_ref_count("hash_a") == 0
 
     def test_no_op_for_nonexistent(self, temp_auth_db):
         auth_db.delete_ref("user-1", "prof-1", "nope")
+
+    def test_double_delete_is_a_no_op_never_undercounts(self, temp_auth_db):
+        """T6770: delete_ref is a keyed DELETE, not a decrement -- a double-
+        delete (or a delete racing a delete) is a zero-row no-op the second
+        time, never able to drive the count below the true number of live
+        refs (the old GREATEST(ref_count-1, 0) floor existed only because a
+        counter COULD be decremented past zero; a derived COUNT(*) cannot)."""
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+
+        auth_db.delete_ref("user-1", "prof-1", "hash_a")
+        auth_db.delete_ref("user-1", "prof-1", "hash_a")  # second delete: no-op
+
+        assert _pg_ref_count("hash_a") == 0
+
+    def test_deleting_one_profile_leaves_the_others_live(self, temp_auth_db):
+        _setup_user2_profile(temp_auth_db["tmp_path"])
+        from app.profile_context import set_current_profile_id
+        from app.user_context import set_current_user_id
+
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        set_current_user_id("user-1")
+        set_current_profile_id("prof-1")
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+        set_current_user_id("user-2")
+        set_current_profile_id("prof-2")
+        auth_db.insert_game_storage_ref("user-2", "prof-2", "hash_a", 1000, future)
+        assert _pg_ref_count("hash_a") == 2
+
+        auth_db.delete_ref("user-2", "prof-2", "hash_a")
+
+        assert _pg_ref_count("hash_a") == 1
+        assert auth_db.has_remaining_refs("hash_a") is True
 
 
 # ---------------------------------------------------------------------------

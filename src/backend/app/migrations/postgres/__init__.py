@@ -25,6 +25,7 @@ from .v023_rename_pending_share_recipient_email import (
     V023RenamePendingShareRecipientEmail,
 )
 from .v024_attempt_outcome_counters import V024AttemptOutcomeCounters
+from .v025_clear_stale_game_storage_refs import V025ClearStaleGameStorageRefs
 
 MIGRATIONS = [
     V001Baseline(),
@@ -51,6 +52,7 @@ MIGRATIONS = [
     V022UserUsageDaily(),
     V023RenamePendingShareRecipientEmail(),
     V024AttemptOutcomeCounters(),
+    V025ClearStaleGameStorageRefs(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

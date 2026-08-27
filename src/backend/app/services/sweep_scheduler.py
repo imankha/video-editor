@@ -24,7 +24,6 @@ from .auth_db import (
     get_expired_refs_for_profile,
     get_next_expiry,
     has_remaining_refs,
-    heal_ref_count,
     insert_grace_deletion,
 )
 from .auto_export import MAX_AUTO_EXPORT_ATTEMPTS, auto_export_game
@@ -195,11 +194,12 @@ def do_sweep():
     if grace_expired:
         logger.info(f"[Sweep] Phase 2: deleting {len(grace_expired)} grace-expired R2 objects")
     for blake3_hash in grace_expired:
-        # AUTHORITATIVE GATE (source of truth, not the drift-prone counter):
+        # AUTHORITATIVE GATE (SQLite source of truth, not the PG ref-set):
         # before permanently deleting the R2 source, verify no profile still
-        # holds a LIVE (non-expired) game_storage ref for this hash.  The
-        # grace deletion was queued off game_ref_counts.ref_count <= 0, which
-        # can be wrong (the counter drifts — see delete_ref / heal_ref_count).
+        # holds a LIVE (non-expired) game_storage ref for this hash.  The grace
+        # deletion was queued off has_remaining_refs (game_storage_refs empty),
+        # which can lag a profile's local SQLite state (T6770: no longer a
+        # driftable counter, but still a separate store that can be behind).
         # Deleting while a live ref exists strands a user with a "ready" game
         # and a 404 video (the bug that lost imankh games 2/3/5).
         total_refs, live_refs, authoritative = _count_refs_all_profiles(blake3_hash, users)
@@ -207,21 +207,22 @@ def do_sweep():
             if authoritative:
                 # Every profile was read from authoritative data and a live ref
                 # exists: the video is genuinely wanted.  Cancel the grace
-                # deletion and heal the drift-prone counter to the truth we just
-                # computed.
+                # deletion.  T6770: there is no counter to heal anymore --
+                # game_storage_refs is a derived ref-set (COUNT(*) can't drift),
+                # so the anomaly here is a grace row queued while a live ref
+                # already existed, not a stale counter value.
                 logger.error(
                     f"[Sweep] ABORT delete hash={blake3_hash[:12]} — {live_refs} live "
-                    f"ref(s) still exist across profiles; canceling grace deletion and "
-                    f"healing ref_count to {total_refs}"
+                    f"ref(s) still exist across profiles ({total_refs} total); "
+                    f"canceling grace deletion"
                 )
                 delete_grace_deletion(blake3_hash)
-                heal_ref_count(blake3_hash, total_refs)
             else:
                 # At least one profile could not be authoritatively read this
                 # sweep (transient R2 sync failure / missing DB).  total_refs is
-                # NOT the truth, so do not heal the counter, and leave the grace
-                # row queued so we re-evaluate next sweep once the profile syncs.
-                # Never delete on incomplete information.
+                # NOT the truth, so leave the grace row queued so we re-evaluate
+                # next sweep once the profile syncs.  Never delete on incomplete
+                # information.
                 logger.error(
                     f"[Sweep] DEFER delete hash={blake3_hash[:12]} — could not "
                     f"authoritatively confirm refs (indeterminate profile); keeping "

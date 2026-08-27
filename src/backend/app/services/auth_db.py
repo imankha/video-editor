@@ -390,22 +390,21 @@ def insert_game_storage_ref(
 
     with get_pg() as pg_conn:
         cur = pg_conn.cursor()
-        if is_new:
-            cur.execute(
-                """INSERT INTO game_ref_counts (blake3_hash, ref_count, latest_expiry)
-                   VALUES (%s, 1, %s)
-                   ON CONFLICT (blake3_hash) DO UPDATE
-                       SET ref_count = game_ref_counts.ref_count + 1,
-                           latest_expiry = GREATEST(game_ref_counts.latest_expiry, EXCLUDED.latest_expiry)""",
-                (blake3_hash, storage_expires_at),
-            )
-        else:
-            cur.execute(
-                """UPDATE game_ref_counts
-                   SET latest_expiry = GREATEST(latest_expiry, %s)
-                   WHERE blake3_hash = %s""",
-                (storage_expires_at, blake3_hash),
-            )
+        # T6770: game_storage_refs is the derived ref-set -- one row per
+        # (user, profile, hash), keyed on the actual pair rather than gated on
+        # SQLite row novelty (the old is_new gate could leave this row
+        # permanently missing if a prior PG write was lost -- see
+        # T6770-design.md §1, the 2026-08-11 missing-row finding).
+        cur.execute(
+            """INSERT INTO game_storage_refs
+                   (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
+               VALUES (%s, %s, %s, %s, %s)
+               ON CONFLICT (user_id, profile_id, blake3_hash) DO UPDATE
+                   SET storage_expires_at = GREATEST(
+                           game_storage_refs.storage_expires_at, EXCLUDED.storage_expires_at),
+                       game_size_bytes = EXCLUDED.game_size_bytes""",
+            (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at),
+        )
         cur.execute(
             "DELETE FROM r2_grace_deletions WHERE blake3_hash = %s",
             (blake3_hash,),
@@ -457,29 +456,26 @@ def get_expired_refs_for_profile() -> list[dict]:
 
 
 def delete_ref(user_id: str, profile_id: str, blake3_hash: str) -> None:
+    """Delete this profile's ref to a game video, in both stores.
+
+    T6770: the Postgres side is a keyed DELETE against the derived ref-set
+    (game_storage_refs), not a decrement of a hand-maintained counter -- a
+    double-delete or a hash whose row was already gone is simply a zero-row
+    no-op, never an under-count. There is no floor to apply because there is
+    no counter to drive negative (the bug that lost imankh games 2/3/5).
+    """
     from ..database import get_db_connection
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM game_storage WHERE blake3_hash = ?", (blake3_hash,))
-        row_existed = cursor.rowcount > 0
         conn.commit()
 
-    # Only decrement the shared counter when this profile actually held a ref.
-    # A no-op delete (double-delete, or a hash whose row was already gone) that
-    # still decremented would drive ref_count below the true number of live
-    # refs — and the sweep treats ref_count <= 0 as "no one wants this video"
-    # and permanently deletes the R2 source.  That is exactly how non-expired
-    # game videos were lost (imankh games 2/3/5).  Floor at 0 as defence in
-    # depth against any residual drift.
-    if not row_existed:
-        return
     with get_pg() as pg_conn:
         cur = pg_conn.cursor()
         cur.execute(
-            "UPDATE game_ref_counts SET ref_count = GREATEST(ref_count - 1, 0) "
-            "WHERE blake3_hash = %s",
-            (blake3_hash,),
+            "DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s",
+            (user_id, profile_id, blake3_hash),
         )
 
 
@@ -524,11 +520,11 @@ def has_remaining_refs(blake3_hash: str) -> bool:
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s",
+            "SELECT EXISTS(SELECT 1 FROM game_storage_refs WHERE blake3_hash = %s) AS has_refs",
             (blake3_hash,),
         )
         row = cur.fetchone()
-        return row is not None and row["ref_count"] > 0
+        return bool(row["has_refs"])
 
 
 def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
@@ -540,28 +536,10 @@ def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
         return {r["blake3_hash"] for r in rows}
 
 
-def heal_ref_count(blake3_hash: str, true_count: int) -> None:
-    """Force game_ref_counts.ref_count to a recomputed true value.
-
-    The counter is redundant, hand-maintained state that can drift out of sync
-    with the per-profile game_storage rows (the source of truth).  When the
-    sweep discovers a drift while deciding whether to delete an R2 object, it
-    heals the counter to the count it just derived from the profile DBs.
-    """
-    with get_pg() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE game_ref_counts SET ref_count = %s WHERE blake3_hash = %s",
-            (true_count, blake3_hash),
-        )
-
-
 def get_next_expiry() -> datetime | None:
     with get_pg() as conn:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT MIN(latest_expiry) as next_expiry FROM game_ref_counts WHERE ref_count > 0"
-        )
+        cur.execute("SELECT MIN(storage_expires_at) as next_expiry FROM game_storage_refs")
         ref_row = cur.fetchone()
         cur.execute("SELECT MIN(grace_expires_at) as next_expiry FROM r2_grace_deletions")
         grace_row = cur.fetchone()

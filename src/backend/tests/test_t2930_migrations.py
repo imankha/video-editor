@@ -395,49 +395,50 @@ class TestRunAllMigrations:
 # Integration: insert_game_storage_ref atomicity
 # ---------------------------------------------------------------------------
 
+def _refset_count(blake3_hash):
+    from app.services.pg import get_pg
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM game_storage_refs WHERE blake3_hash = %s",
+            (blake3_hash,),
+        )
+        return cur.fetchone()["n"]
+
+
 class TestRefCountAtomicity:
-    def test_new_hash_increments_ref_count(self, pg_with_seed_data, profile_db):
-        """First insert for a hash should set ref_count = 1."""
+    """T6770: ref_count is now DERIVED (COUNT(*) over game_storage_refs rows),
+    not a hand-maintained integer -- these assert the same behavioral contract
+    (new pair -> +1 row, re-insert same pair -> no new row, different pair ->
+    +1 row) against the new shape."""
+
+    def test_new_hash_creates_one_row(self, pg_with_seed_data, profile_db):
+        """First insert for a hash should create exactly one ref row."""
         from app.services.auth_db import insert_game_storage_ref
-        from app.services.pg import get_pg
 
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         insert_game_storage_ref("user-1", "prof-1", "hash_new", 5000, future)
 
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_new",))
-            row = cur.fetchone()
-        assert row["ref_count"] == 1
+        assert _refset_count("hash_new") == 1
 
-    def test_existing_hash_does_not_increment(self, pg_with_seed_data, profile_db):
-        """Re-inserting same user+profile+hash should NOT increment ref_count."""
+    def test_existing_pair_does_not_create_a_second_row(self, pg_with_seed_data, profile_db):
+        """Re-inserting same user+profile+hash should NOT create a second row."""
         from app.services.auth_db import insert_game_storage_ref
-        from app.services.pg import get_pg
 
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         insert_game_storage_ref("user-1", "prof-1", "hash_reinsert", 5000, future)
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_reinsert",))
-            initial = cur.fetchone()["ref_count"]
+        initial = _refset_count("hash_reinsert")
 
         # Re-insert same hash for same user
         future2 = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
         insert_game_storage_ref("user-1", "prof-1", "hash_reinsert", 5000, future2)
 
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_reinsert",))
-            after = cur.fetchone()["ref_count"]
+        assert _refset_count("hash_reinsert") == initial
 
-        assert after == initial
-
-    def test_different_user_same_hash_increments(self, pg_with_seed_data, profile_db):
-        """Different user inserting same hash should increment ref_count."""
+    def test_different_user_same_hash_creates_a_second_row(self, pg_with_seed_data, profile_db):
+        """Different user inserting same hash should add a second ref row."""
         from app.services.auth_db import insert_game_storage_ref
-        from app.services.pg import get_pg
         from app.user_context import set_current_user_id
         from app.profile_context import set_current_profile_id
 
@@ -472,11 +473,7 @@ class TestRefCountAtomicity:
 
         insert_game_storage_ref("user-2", "prof-2", "hash_shared", 5000, future)
 
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_shared",))
-            row = cur.fetchone()
-        assert row["ref_count"] == 2
+        assert _refset_count("hash_shared") == 2
 
 
 # ---------------------------------------------------------------------------
@@ -484,53 +481,52 @@ class TestRefCountAtomicity:
 # ---------------------------------------------------------------------------
 
 class TestLatestExpiryGreatest:
-    def test_later_expiry_updates_latest(self, pg_with_seed_data, profile_db):
-        """Extending expiry with a later date should update latest_expiry."""
-        from app.services.auth_db import insert_game_storage_ref
+    """T6770: latest_expiry is now per-row storage_expires_at on the single
+    (user,profile,hash) ref row (game_storage_refs), not a shared column on a
+    counter table -- GREATEST still guards against a re-insert moving that
+    row's expiry backwards."""
+
+    def _row_expiry(self, blake3_hash):
         from app.services.pg import get_pg
+
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT storage_expires_at FROM game_storage_refs "
+                "WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s",
+                ("user-1", "prof-1", blake3_hash),
+            )
+            return cur.fetchone()["storage_expires_at"]
+
+    def test_later_expiry_updates_latest(self, pg_with_seed_data, profile_db):
+        """Extending expiry with a later date should update storage_expires_at."""
+        from app.services.auth_db import insert_game_storage_ref
 
         early = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         late = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
 
         insert_game_storage_ref("user-1", "prof-1", "hash_greatest", 1000, early)
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT latest_expiry FROM game_ref_counts WHERE blake3_hash = %s", ("hash_greatest",))
-            first_expiry = cur.fetchone()["latest_expiry"]
+        first_expiry = self._row_expiry("hash_greatest")
 
         # Re-insert with later expiry
         insert_game_storage_ref("user-1", "prof-1", "hash_greatest", 1000, late)
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT latest_expiry FROM game_ref_counts WHERE blake3_hash = %s", ("hash_greatest",))
-            updated_expiry = cur.fetchone()["latest_expiry"]
+        updated_expiry = self._row_expiry("hash_greatest")
 
         assert updated_expiry > first_expiry
 
     def test_earlier_expiry_does_not_decrease_latest(self, pg_with_seed_data, profile_db):
-        """Re-inserting with an earlier date should NOT decrease latest_expiry."""
+        """Re-inserting with an earlier date should NOT decrease storage_expires_at."""
         from app.services.auth_db import insert_game_storage_ref
-        from app.services.pg import get_pg
 
         late = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
         early = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
 
         insert_game_storage_ref("user-1", "prof-1", "hash_no_decrease", 1000, late)
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT latest_expiry FROM game_ref_counts WHERE blake3_hash = %s", ("hash_no_decrease",))
-            original = cur.fetchone()["latest_expiry"]
+        original = self._row_expiry("hash_no_decrease")
 
         # Re-insert with earlier expiry
         insert_game_storage_ref("user-1", "prof-1", "hash_no_decrease", 1000, early)
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT latest_expiry FROM game_ref_counts WHERE blake3_hash = %s", ("hash_no_decrease",))
-            after = cur.fetchone()["latest_expiry"]
+        after = self._row_expiry("hash_no_decrease")
 
         assert abs((after - original).total_seconds()) < 2
 
@@ -540,24 +536,18 @@ class TestLatestExpiryGreatest:
 # ---------------------------------------------------------------------------
 
 class TestDeleteRefIntegration:
-    def test_delete_decrements_ref_count(self, pg_with_seed_data, profile_db):
+    def test_delete_removes_the_ref_row(self, pg_with_seed_data, profile_db):
+        """T6770: delete_ref removes the row outright (derived count drops to
+        0 rows), rather than decrementing a counter column to 0."""
         from app.services.auth_db import insert_game_storage_ref, delete_ref
-        from app.services.pg import get_pg
 
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         insert_game_storage_ref("user-1", "prof-1", "hash_del", 1000, future)
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_del",))
-            assert cur.fetchone()["ref_count"] == 1
+        assert _refset_count("hash_del") == 1
 
         delete_ref("user-1", "prof-1", "hash_del")
 
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_del",))
-            assert cur.fetchone()["ref_count"] == 0
+        assert _refset_count("hash_del") == 0
 
     def test_delete_removes_from_sqlite(self, pg_with_seed_data, profile_db):
         from app.services.auth_db import insert_game_storage_ref, delete_ref, get_game_storage_ref
@@ -575,26 +565,32 @@ class TestDeleteRefIntegration:
 # ---------------------------------------------------------------------------
 
 class TestGetNextExpiryIntegration:
-    def test_returns_earliest_from_ref_counts(self, pg_with_seed_data, profile_db):
-        """get_next_expiry returns MIN(latest_expiry) from game_ref_counts WHERE ref_count > 0."""
+    def test_returns_earliest_from_ref_set(self, pg_with_seed_data, profile_db):
+        """get_next_expiry returns MIN(storage_expires_at) from game_storage_refs
+        (T6770: derived ref-set, no ref_count > 0 filter needed -- every row IS
+        a live ref by construction)."""
         from app.services.auth_db import get_next_expiry
         from app.services.pg import get_pg
 
         # Clean slate: remove any pre-existing rows from dev DB
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM game_ref_counts")
+            cur.execute("DELETE FROM game_storage_refs")
             cur.execute("DELETE FROM r2_grace_deletions")
             # Insert controlled test data
             future_30d = datetime.now(timezone.utc) + timedelta(days=30)
             future_60d = datetime.now(timezone.utc) + timedelta(days=60)
             cur.execute(
-                "INSERT INTO game_ref_counts (blake3_hash, ref_count, latest_expiry) VALUES (%s, %s, %s)",
-                ("test_hash_a", 1, future_30d),
+                """INSERT INTO game_storage_refs
+                       (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                ("user-1", "prof-1", "test_hash_a", 1000, future_30d),
             )
             cur.execute(
-                "INSERT INTO game_ref_counts (blake3_hash, ref_count, latest_expiry) VALUES (%s, %s, %s)",
-                ("test_hash_b", 2, future_60d),
+                """INSERT INTO game_storage_refs
+                       (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                ("user-1", "prof-1", "test_hash_b", 2000, future_60d),
             )
 
         result = get_next_expiry()
@@ -602,7 +598,7 @@ class TestGetNextExpiryIntegration:
         # Should return the earlier of the two (30d)
         assert abs((result - future_30d).total_seconds()) < 2
 
-    def test_returns_none_when_all_ref_counts_zero(self, pg_conn):
+    def test_returns_none_when_no_refs(self, pg_conn):
         from app.services.auth_db import get_next_expiry, create_user
         from app.services.pg import get_pg
 
@@ -610,7 +606,7 @@ class TestGetNextExpiryIntegration:
 
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM game_ref_counts")
+            cur.execute("DELETE FROM game_storage_refs")
             cur.execute("DELETE FROM r2_grace_deletions")
 
         result = get_next_expiry()
@@ -620,10 +616,10 @@ class TestGetNextExpiryIntegration:
         from app.services.auth_db import get_next_expiry, insert_grace_deletion
         from app.services.pg import get_pg
 
-        # Set all ref_counts to 0 so grace deletion is the only source
+        # Remove all refs so grace deletion is the only source
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("UPDATE game_ref_counts SET ref_count = 0")
+            cur.execute("DELETE FROM game_storage_refs")
 
         insert_grace_deletion("hash_grace", grace_days=1)
 
@@ -638,18 +634,18 @@ class TestGetNextExpiryIntegration:
 # ---------------------------------------------------------------------------
 
 class TestHasRemainingRefsIntegration:
-    def test_true_when_ref_count_positive(self, pg_with_seed_data, profile_db):
+    def test_true_when_ref_rows_exist(self, pg_with_seed_data, profile_db):
         from app.services.auth_db import has_remaining_refs
-        # hash_a has ref_count = 2 from seed data migration
+        # hash_a has 2 rows in game_storage_refs from seed data
         assert has_remaining_refs("hash_a") is True
 
-    def test_false_when_ref_count_zero(self, pg_with_seed_data, profile_db):
+    def test_false_when_rows_removed(self, pg_with_seed_data, profile_db):
         from app.services.auth_db import has_remaining_refs
         from app.services.pg import get_pg
 
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("UPDATE game_ref_counts SET ref_count = 0 WHERE blake3_hash = %s", ("hash_a",))
+            cur.execute("DELETE FROM game_storage_refs WHERE blake3_hash = %s", ("hash_a",))
 
         assert has_remaining_refs("hash_a") is False
 

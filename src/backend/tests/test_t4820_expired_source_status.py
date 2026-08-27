@@ -635,13 +635,16 @@ class TestSweepPhase2AbortsOnLiveRef:
     """Phase 2 must NEVER delete a game video while a LIVE storage ref exists.
 
     This pins `fix(sweep): never delete a game video while a live storage ref
-    exists`. The grace deletion is queued off game_ref_counts.ref_count, a
-    hand-maintained Postgres counter that DRIFTS (one prod game sat at -1). When it
-    under-counts, the pre-guard sweep permanently deleted a video a profile still
-    held a future-expiry ref to, leaving a "ready" game with a 404 video — this is
-    how imankh games 2/3/5 were lost. So before the irreversible delete, Phase 2
-    authoritatively recounts refs across profiles; a live ref must cancel the grace
-    deletion and heal the counter to the truth it just computed.
+    exists`. The grace deletion was queued off Postgres ref state -- T6770
+    replaced the hand-maintained game_ref_counts.ref_count counter (which
+    DRIFTS: one prod game sat at -1) with a derived ref-set (game_storage_refs,
+    ref_count = COUNT(*)), so it can no longer independently disagree with
+    reality. Before this fix, an under-counting counter let the pre-guard sweep
+    permanently delete a video a profile still held a future-expiry ref to,
+    leaving a "ready" game with a 404 video -- this is how imankh games 2/3/5
+    were lost. So before the irreversible delete, Phase 2 authoritatively
+    recounts refs across profiles (reading SQLite game_storage, the real
+    source of truth); a live ref must cancel the grace deletion.
 
     Same production gate as TestSweepPhase2ExpiresGameStorage (deletion is prod-only).
     """
@@ -653,18 +656,19 @@ class TestSweepPhase2AbortsOnLiveRef:
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_wanted"])
     @patch(f"{M}.r2_delete_object_global", return_value=True)
     @patch(f"{M}.delete_grace_deletion")
-    @patch(f"{M}.heal_ref_count")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
     @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
     @patch("app.services.auth_db.get_all_users_for_admin",
            return_value=[{"user_id": USER_ID}])
-    def test_live_ref_aborts_delete_and_heals_counter(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_heal,
+    def test_live_ref_aborts_delete(
+        self, mock_users, mock_profiles, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):
         """A future-expiry (LIVE) ref must abort the R2 delete, cancel the grace
-        deletion, heal the counter to the recounted total, and leave the ref alone.
+        deletion, and leave the ref alone. T6770: no counter to heal anymore --
+        the recount is read straight off SQLite each time, so there is no
+        derived value to write back.
         """
         from app.services.sweep_scheduler import do_sweep
 
@@ -675,10 +679,8 @@ class TestSweepPhase2AbortsOnLiveRef:
 
         # The irreversible delete must NOT have happened.
         mock_r2_delete.assert_not_called()
-        # The bogus grace deletion is cancelled, and the drift-prone counter healed
-        # to the authoritative recount (1 profile holding 1 ref).
+        # The bogus grace deletion is cancelled.
         mock_del_grace.assert_called_once_with("hash_wanted")
-        mock_heal.assert_called_once_with("hash_wanted", 1)
         # The user's live ref must survive completely untouched.
         assert _read_storage_expiry(sweep_profile_db, "hash_wanted") == seeded, (
             "A live ref must not be expired by an aborted delete"
