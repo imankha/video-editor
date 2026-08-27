@@ -58,8 +58,21 @@ per-lane `E2E_RESULTS_DIR` report paths, and prints one aggregated verdict. Sing
 runs: `npm run test:e2e:gate-a` (or `-b` / `-c`) with the usual `E2E_*` env.
 
 Record actual per-lane times here after gate runs so the budget stays measured, not
-estimated. Expected: lane A ~6-11 min (export dominates: ~2-6 min on a framed draft, up
-to its 15-min cap when the discovered draft is unframed), lanes B/C ~6-10 min each.
+estimated.
+
+**Measured (2026-08-26, first full green run, machine at shared-cpu-4x/4096):**
+**5m 48s wall clock.** Lane A: 6 passed in 2.9m (incl. a REAL overlay export -> final
+video -> publish on a pre-framed draft); lane B: 13 passed in 5.1m; lane C: 21 passed in
+5.7m. An unframed draft adds a framing render to lane A (budget up to the spec's 15-min
+cap); the re-seed resets the fixture so the pre-framed fast path is the norm.
+
+**Machine-size requirement (measured 2026-08-26):** on the default staging VM
+(shared-cpu-1x/2048) the 3 concurrent lanes SATURATE the single shared vCPU — request
+times hit 8-14s (posters, share compose) and past Fly's proxy timeout the API returns
+502s, cascading into ~19 phantom failures and a 16m40s wall clock. On shared-cpu-4x/4096
+the same suite is fully green in 5m48s. Until the runner scales the machine itself,
+gate prep must temporarily scale up (and revert after):
+`fly machine update <id> -a reel-ballers-api-staging --vm-size shared-cpu-4x --vm-memory 4096 -y`
 
 ## What's in it (coverage view)
 

@@ -135,6 +135,19 @@ T5642, T5676, T5710 were tagged after T5400's 5-file inventory); all were kept a
 lanes, with T5710 additionally gated local-only (it depends on /api/test/seed-recap-game
 and would have hard-failed any deployed gate run).
 
+**2026-08-26 (live runs)**: Full prep + 3 timed gate runs executed against staging.
+Prep: 3 accounts seeded (--to-email worked end-to-end; two source-data issues found and
+fixed along the way: a dangling final_videos row in dev imankh from the pre-T6770
+ref-count-drift bug class, deleted with a JSON backup in the session scratchpad, and
+dev's deferred R2 sync requiring a manual profile push), postgres migrated v023->v025.
+Run 1 (1x/2048 VM): RED 16m40s, ~19 phantom failures from CPU-saturation proxy 502s +
+export spec skipped (no un-finalized draft; created draft 73 as fixture). Run 2
+(4x/4096): 5m43s, only 2 failures, both STALE SPEC SELECTORS (export button renamed to
+"Export Focused Video"/"Add Overlay"; framingDraft chip regex = the documented
+FIXTURE-CONTRACT bracket gotcha) - fixed in 29b9e867. Run 3: ALL GREEN in 5m48s with a
+real export->final->publish. Machine reverted to 1x/2048 and restarted. Branch CI green.
+Remaining for the user: merge verdict.
+
 **2026-08-26 (review)**: Reviewer (Opus) found 1 BLOCKING + 4 MAJOR + 8 MINOR; all
 addressed in c94b5ccb: invite_code unique-collision fix (re-derived per the app formula),
 lane C moved to its own alias account (e2e-gate2@test.local; B/C sharing was only safe on
@@ -160,4 +173,9 @@ verdict.
   listed in LOCAL_ONLY_SPECS
 - [x] copy_user_between_envs.py --to-email clones to an alias without touching the source
   account (google_id nulled, invite_code re-derived per the app's own formula)
-- [ ] First timed staging run completes under 20 min wall clock, times recorded in STAGING-GATE.md
+- [x] First timed staging run completes under 20 min wall clock, times recorded in
+  STAGING-GATE.md (2026-08-26: ALL LANES GREEN in 5m48s on a temporarily scaled-up
+  shared-cpu-4x/4096 machine; A: 6 passed/2.9m incl. real export+publish, B: 13/5.1m,
+  C: 21/5.7m. On the default 1x/2048 VM the lanes saturate the CPU into proxy-502
+  phantom failures, so gate prep scales the machine up and reverts after; see
+  STAGING-GATE.md § machine-size requirement)
