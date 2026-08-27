@@ -1,11 +1,11 @@
 # T7600: Expiry sweep auto-exported the same clips three times (triplicate R2 storage)
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-26 prod) — idempotency fix shipped; remaining items split to [T7830](T7830-sweep-orphan-audit-rankpool-question.md)
 **Priority:** P3 (cost/correctness hygiene)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-24
-**Updated:** 2026-08-24
+**Updated:** 2026-08-27
 
 ## Problem
 
@@ -51,6 +51,6 @@ idempotent, so re-runs re-export and re-upload with new names, orphaning prior c
 
 ## Acceptance Criteria
 
-- [ ] Re-running the sweep against an already-exported profile uploads nothing new (test)
-- [ ] Orphan audit across prod profiles produced; cleanup executed after dry-run sign-off
-- [ ] Rank-pool question answered (still live? filed or confirmed fixed)
+- [x] Re-running the sweep against an already-exported profile uploads nothing new (test)
+- [ ] ~~Orphan audit across prod profiles produced; cleanup executed after dry-run sign-off~~ — split to [T7830](T7830-sweep-orphan-audit-rankpool-question.md)
+- [ ] ~~Rank-pool question answered (still live? filed or confirmed fixed)~~ — split to [T7830](T7830-sweep-orphan-audit-rankpool-question.md)
