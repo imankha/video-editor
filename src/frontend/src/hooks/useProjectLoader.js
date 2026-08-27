@@ -75,7 +75,6 @@ export function useProjectLoader() {
     setProjectClips,
     setWorkingVideo,
     setAspectRatio,
-    setClipMetadata,
     setLoading,
     updateClipMetadata,
     setClipMetadataCache,
@@ -198,10 +197,15 @@ export function useProjectLoader() {
         ...clip,
         duration: metadataCache[clip.id]?.duration || 0,
       }));
+      // T6250: build the value for the return payload / onWorkingVideoLoaded, but
+      // do NOT seed projectDataStore.clipMetadata here. That store field is the
+      // "fresh framing export just happened" trigger for OverlayScreen's Effect A
+      // (screens/OverlayScreen.jsx:596) and is set ONLY by the genuine export
+      // gesture (FocusScreen.jsx:983). Seeding it on every project-open made
+      // Effect A misfire on a plain Framing->Overlay navigation, so overlay-data
+      // was fetched by two owners (Effect A + Effect B). Plain opens and
+      // direct-to-Overlay now fall to Effect B (the plain-load owner) alone.
       const overlayClipMetadata = buildClipMetadata(clipsWithDuration);
-      if (overlayClipMetadata) {
-        setClipMetadata(overlayClipMetadata);
-      }
 
       // Notify App.jsx about loaded clips (for legacy integration)
       if (onClipsLoaded && clipsData.length > 0) {
@@ -269,7 +273,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading, setClipMetadataCache, updateClipMetadata]);
+  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setAspectRatio, setLoading, setClipMetadataCache, updateClipMetadata]);
 
   return { loadProject };
 }
