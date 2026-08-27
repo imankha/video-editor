@@ -142,14 +142,22 @@ custom-sport-no-tags).
 Clip UI's tag-set rendering (ClipDetailsEditor.jsx, AnnotateFullscreenOverlay.jsx x2,
 UploadClipModal.jsx — all currently `{tagSet && ...}` silent-hide). Not yet classified/started.
 
+**2026-08-27 (later)**: Implemented via dotask container, merged [PR #290](https://github.com/imankha/video-editor/pull/290).
+`no_sport` sentinel added to `tagRegistry.js` (`NO_SPORT`/`NO_SPORT_LABEL`), distinct from custom
+sports; new `NoSportTagWarning` shared component (instructional-only, names the top-bar sport
+picker, non-clickable per the kickoff's UI decision). Reviewer approved: 0 blocking, 0 major, 2
+minor both flagged as intended/out-of-scope (header glyph for no_sport; collections soccer-combo
+fallback). QA live-drove all 6 acceptance criteria with screenshots except the mobile-compact Add
+Clip block, which was verified via component tests only (not live-driven — noted as a limitation).
+
 ## Acceptance Criteria
 
-- [ ] A brand-new user's default profile is created with sport = "No Sport", not "soccer"
-- [ ] Existing profiles with sport = "soccer" are unaffected (no migration/backfill)
-- [ ] Profile create/edit UI offers "No Sport" as an explicit sport choice
-- [ ] Add Clip UI (desktop sidebar, fullscreen, and Upload Clip modal) shows a warning-styled
+- [x] A brand-new user's default profile is created with sport = "No Sport", not "soccer"
+- [x] Existing profiles with sport = "soccer" are unaffected (no migration/backfill)
+- [x] Profile create/edit UI offers "No Sport" as an explicit sport choice
+- [x] Add Clip UI (desktop sidebar, fullscreen, and Upload Clip modal) shows a warning-styled
   message instructing the user how to set their sport when sport = "No Sport"
-- [ ] A profile with a custom/"Other" sport (no registry tag set) keeps today's behavior — no
+- [x] A profile with a custom/"Other" sport (no registry tag set) keeps today's behavior — no
   warning, tags section just doesn't render
-- [ ] Setting a sport (from "No Sport" or from a custom sport) makes the correct tag set appear on
+- [x] Setting a sport (from "No Sport" or from a custom sport) makes the correct tag set appear on
   the next Add Clip open
