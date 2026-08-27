@@ -37,6 +37,14 @@ export const useQuestStore = create((set, get) => ({
   detectionAssignProgress: null,
   setDetectionAssignProgress: (progress) => set({ detectionAssignProgress: progress }),
 
+  // T7840: Ephemeral opener for the `upload_game` current step. ProjectManager
+  // registers its auth-gated handleAddGameClick while mounted; QuestPanel reads
+  // this to render that step as a real "Add Your First Game" button. Pure
+  // component-lifetime wiring — never persisted, and deliberately NOT cleared in
+  // reset() (it is owned by the mounting component's lifecycle, not user data).
+  addGameOpener: null,
+  setAddGameOpener: (opener) => set({ addGameOpener: opener }),
+
   fetchDefinitions: () => {},
 
   setFromBootstrap: (questsProgress) => {
