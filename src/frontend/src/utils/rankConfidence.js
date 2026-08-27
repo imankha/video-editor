@@ -48,3 +48,8 @@ export function fetchRankConfidence(ratio) {
   _inflight.set(ratio, p);
   return p;
 }
+
+/** Test seam: clear the in-flight dedup map between tests. */
+export function __resetInflightForTests() {
+  _inflight.clear();
+}
