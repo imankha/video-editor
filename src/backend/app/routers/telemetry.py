@@ -124,3 +124,72 @@ async def report_client_error(payload: ClientErrorReport) -> Response:
         (payload.message or "")[:300],
     )
     return Response(status_code=204)
+
+
+class ImpressionReport(BaseModel):
+    """T7515 tier 3: a blocking-dialog / error-toast IMPRESSION fired from the
+    surface's SHOW gesture. `kind` is closed (toast|dialog, validated server-side);
+    `name` is the surface's title/key; `session_count` is how many times this same
+    surface has shown in the current session (the frustration-repetition signal)."""
+
+    kind: str
+    name: str
+    session_count: int | None = None
+
+
+@router.post("/api/telemetry/impression", status_code=204)
+async def report_impression(payload: ImpressionReport) -> Response:
+    """T7515 tier 3 sink. Routes to record_impression, which owns the impersonation
+    guard, the free-text `user_actions` aggregate upsert, and the per-user
+    `user_action_log` detail row (no PG schema change). Always 204, never raises."""
+    from app.analytics import record_impression
+
+    try:
+        record_impression(payload.kind, payload.name, payload.session_count)
+    except Exception:
+        logger.exception("[Telemetry] record_impression failed (ignored)")
+    return Response(status_code=204)
+
+
+class SessionBreadcrumbReport(BaseModel):
+    """T7515 tier 4: session-exit breadcrumb. `dwell` maps screen→foreground
+    seconds; `trail` is the ordered screen sequence; `last_screen` is where the
+    session died. All bounded/sanitized server-side against the known screen set."""
+
+    last_screen: str | None = None
+    dwell: dict[str, float] | None = None
+    trail: list[str] | None = None
+
+
+@router.post("/api/telemetry/session-breadcrumbs", status_code=204)
+async def report_session_breadcrumbs(payload: SessionBreadcrumbReport) -> Response:
+    """T7515 tier 4 sink. Writes the breadcrumb to the CURRENT user's own
+    `user_action_log` (per-event detail belongs in user.sqlite; Postgres stays
+    aggregate-only, so there is no PG write). Explicit impersonation guard — an
+    admin impersonating a user must leave ZERO footprint. Resolves the user from
+    the session context; an anonymous beacon (no resolvable user) is logged and
+    dropped — there is no user db to write to. Always 204, never raises."""
+    if get_current_impersonator_id():
+        return Response(status_code=204)
+
+    try:
+        user_id = get_current_user_id()
+    except RuntimeError:
+        user_id = None
+
+    if not user_id:
+        # This rides the same cross-site sendBeacon transport as the proven
+        # session-close beacon, so it can legitimately arrive with the session
+        # cookie stripped/expired. Per-event breadcrumbs have no home without a
+        # user db — LOG the drop (greppable) rather than silently accept, so an
+        # auth/transport regression that anonymizes every beacon is visible.
+        logger.warning("[Telemetry] session-breadcrumb beacon dropped: no resolvable user context")
+        return Response(status_code=204)
+
+    from app.analytics import record_session_exit
+
+    try:
+        record_session_exit(user_id, payload.last_screen, payload.dwell, payload.trail)
+    except Exception:
+        logger.exception("[Telemetry] record_session_exit failed (ignored)")
+    return Response(status_code=204)

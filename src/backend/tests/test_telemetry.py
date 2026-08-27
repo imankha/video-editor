@@ -108,3 +108,93 @@ class TestClientErrorReportBeacon:
         assert resp.status_code == 204
         assert not any("[CLIENT_ERROR]" in r.getMessage() for r in caplog.records), \
             "impersonated request must leave zero footprint, including in server logs"
+
+
+class TestImpressionBeacon:
+    """T7515 tier 3: POST /api/telemetry/impression. Contract: always 204,
+    graceful 422 (not 500) on wrong types, explicit impersonation guard."""
+
+    def test_returns_204(self):
+        client = _client()
+        resp = client.post("/api/telemetry/impression", json={
+            "kind": "dialog", "name": "Tag not submitted", "session_count": 3,
+        })
+        assert resp.status_code == 204
+
+    def test_missing_required_field_is_422_not_500(self):
+        client = _client()
+        resp = client.post("/api/telemetry/impression", json={"kind": "toast"})
+        assert resp.status_code == 422
+
+    def test_impersonation_writes_nothing(self, monkeypatch):
+        # The endpoint routes to record_impression, whose own guard early-returns.
+        called = {"n": 0}
+
+        def _spy(*a, **k):
+            called["n"] += 1
+
+        monkeypatch.setattr("app.analytics.get_current_impersonator_id", lambda: "admin-1")
+        monkeypatch.setattr("app.analytics.get_pg", _spy)
+        client = _client()
+        resp = client.post("/api/telemetry/impression", json={"kind": "dialog", "name": "x"})
+        assert resp.status_code == 204
+        assert called["n"] == 0, "impersonated impression must not touch Postgres"
+
+
+class TestSessionBreadcrumbBeacon:
+    """T7515 tier 4: POST /api/telemetry/session-breadcrumbs. Contract: always
+    204, drops silently when anonymous, explicit impersonation guard at endpoint."""
+
+    def test_returns_204(self):
+        client = _client()
+        resp = client.post("/api/telemetry/session-breadcrumbs", json={
+            "last_screen": "annotate",
+            "dwell": {"annotate": 12.3},
+            "trail": ["project-manager", "annotate"],
+        })
+        assert resp.status_code == 204
+
+    def test_empty_payload_is_204(self):
+        client = _client()
+        resp = client.post("/api/telemetry/session-breadcrumbs", json={})
+        assert resp.status_code == 204
+
+    def test_impersonation_short_circuits_before_write(self, monkeypatch):
+        called = {"n": 0}
+        monkeypatch.setattr(
+            "app.routers.telemetry.get_current_impersonator_id", lambda: "admin-1"
+        )
+        monkeypatch.setattr(
+            "app.analytics.record_session_exit",
+            lambda *a, **k: called.__setitem__("n", called["n"] + 1),
+        )
+        client = _client()
+        resp = client.post("/api/telemetry/session-breadcrumbs", json={"last_screen": "annotate"})
+        assert resp.status_code == 204
+        assert called["n"] == 0, "impersonated breadcrumb must never reach the writer"
+
+    def test_anonymous_beacon_logs_drop_and_does_not_write(self, monkeypatch, caplog):
+        # This beacon rides the same cross-site sendBeacon transport as the
+        # session-close beacon, so it can arrive with the session cookie
+        # stripped/expired. With no resolvable user there is no user db to write
+        # to: it must LOG the drop (not silently accept) and never reach the writer.
+        def _no_session():
+            raise RuntimeError("no session context")
+
+        called = {"n": 0}
+        monkeypatch.setattr("app.routers.telemetry.get_current_impersonator_id", lambda: None)
+        monkeypatch.setattr("app.routers.telemetry.get_current_user_id", _no_session)
+        monkeypatch.setattr(
+            "app.analytics.record_session_exit",
+            lambda *a, **k: called.__setitem__("n", called["n"] + 1),
+        )
+        client = _client()
+        with caplog.at_level(logging.WARNING, logger=TELEMETRY_LOGGER):
+            resp = client.post(
+                "/api/telemetry/session-breadcrumbs", json={"last_screen": "annotate"}
+            )
+        assert resp.status_code == 204
+        assert called["n"] == 0, "anonymous breadcrumb must never reach the writer"
+        assert any(
+            "no resolvable user context" in r.getMessage() for r in caplog.records
+        ), "anonymous breadcrumb beacon must LOG its drop, not silently accept"
