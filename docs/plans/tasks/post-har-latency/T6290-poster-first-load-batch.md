@@ -1,6 +1,6 @@
 # T6290: 10 posters fire at once during boot and compete with it
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-07-31
