@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Button } from './Button';
 import { Z } from '../../constants/zLayers';
+import { recordUiImpression } from '../../utils/uiTelemetry';
 
 /**
  * ConfirmationDialog - Modal dialog with configurable buttons
@@ -12,8 +13,10 @@ import { Z } from '../../constants/zLayers';
  * - buttons: Array of button configs [{ label, onClick, variant, disabled }]
  *   - variant: 'primary' (purple), 'danger' (red), 'secondary' (gray)
  * - onClose: Called when clicking outside or pressing Escape
+ * - impressionKey: Optional STABLE enum-like id (e.g. 'tag_not_submitted') that
+ *   opts this dialog into T7515 frustration impression counting. Never the title.
  */
-export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClose }) {
+export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClose, impressionKey }) {
   // Effect for Escape key - runs regardless of isOpen to avoid hook order issues
   useEffect(() => {
     if (!isOpen) return;
@@ -27,6 +30,23 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  // T7515 tier 3: count this blocking-dialog impression from its SHOW event —
+  // ConfirmationDialog is the single shared blocking-dialog primitive, so the
+  // open transition IS the "surface rendered to the user" gesture the frustration
+  // signal measures. This is telemetry-on-show (fire-and-forget, no app-state
+  // write-back), NOT the banned reactive-persistence pattern. Keyed on the open
+  // transition so it fires once per show.
+  //
+  // Counts ONLY when the caller pins a STABLE `impressionKey`. The title is
+  // display text — routinely runtime-interpolated with PII (names, emails, raw
+  // error strings) — so it must NEVER become the analytics key: that would leak
+  // PII into the shared user_actions aggregate and explode its cardinality (one
+  // singleton row per distinct message). Keys are literals, exactly like
+  // record_milestone's closed FLOW_EVENTS vocabulary.
+  useEffect(() => {
+    if (isOpen && impressionKey) recordUiImpression('dialog', impressionKey);
+  }, [isOpen, impressionKey]);
 
   // Early return AFTER hooks to maintain consistent hook order
   if (!isOpen) return null;

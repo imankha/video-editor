@@ -317,6 +317,128 @@ class TestAttemptOutcomeTaxonomy:
         assert _json.loads(rows[0][1])["reason"] == "refused"
 
 
+class TestRecordImpression:
+    """T7515 tier 3: blocking-dialog / error-toast impression counting."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        from app.user_context import reset_user_id, set_current_user_id
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+        set_current_user_id("user-a")
+        # user.sqlite persists across tests (pg_conn only resets Postgres); clear
+        # the per-user log so each test's user_action_log assertions are isolated.
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection("user-a") as conn:
+            conn.execute("DELETE FROM user_action_log")
+            conn.commit()
+        yield
+        reset_user_id()
+
+    def test_impression_upserts_named_action_row(self, pg_conn):
+        from app.analytics import record_impression
+        record_impression("dialog", "Tag not submitted")
+        # Name is slugified into a bounded, queryable per-name aggregate row,
+        # mirroring T7510's game_upload_failed:{reason} shape.
+        row = _get_action("user-a", "dialog_impression:tag_not_submitted")
+        assert row is not None and row["count"] == 1
+
+    def test_repeat_impression_increments_count(self, pg_conn):
+        from app.analytics import record_impression
+        record_impression("toast", "Copy failed")
+        record_impression("toast", "Copy failed")
+        assert _get_action("user-a", "toast_impression:copy_failed")["count"] == 2
+
+    def test_unknown_kind_is_dropped(self, pg_conn):
+        from app.analytics import record_impression
+        record_impression("banner", "whatever")
+        assert _get_action("user-a", "banner_impression:whatever") is None
+
+    def test_session_count_and_name_ride_user_action_log(self, pg_conn):
+        from app.analytics import record_impression
+        record_impression("dialog", "Tag not submitted", session_count=5)
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection("user-a") as conn:
+            rows = conn.execute(
+                "SELECT context FROM user_action_log "
+                "WHERE action = 'dialog_impression:tag_not_submitted'"
+            ).fetchall()
+        assert rows, "impression not written to user_action_log"
+        import json as _json
+        ctx = _json.loads(rows[0][0])
+        assert ctx["session_count"] == 5
+        assert ctx["name"] == "Tag not submitted"
+
+    def test_impersonation_leaves_zero_footprint(self, pg_conn, monkeypatch):
+        from app.analytics import record_impression
+        monkeypatch.setattr("app.analytics.get_current_impersonator_id", lambda: "admin-9")
+        record_impression("dialog", "Tag not submitted")
+        assert _get_action("user-a", "dialog_impression:tag_not_submitted") is None
+
+
+class TestRecordSessionExit:
+    """T7515 tier 4: session-exit breadcrumbs written to per-user user_action_log."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+        # user.sqlite persists across tests; clear it so breadcrumb-row counts
+        # aren't polluted by a sibling test's session_exit rows.
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection("user-a") as conn:
+            conn.execute("DELETE FROM user_action_log")
+            conn.commit()
+
+    def _breadcrumbs(self, user_id="user-a"):
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            rows = conn.execute(
+                "SELECT context FROM user_action_log WHERE action = 'session_exit'"
+            ).fetchall()
+        import json as _json
+        return [_json.loads(r[0]) for r in rows]
+
+    def test_writes_breadcrumb_to_user_action_log(self, pg_conn):
+        from app.analytics import record_session_exit
+        record_session_exit(
+            "user-a",
+            last_screen="annotate",
+            dwell={"annotate": 42.0, "framing": 8.5},
+            trail=["project-manager", "annotate", "framing", "annotate"],
+        )
+        crumbs = self._breadcrumbs()
+        assert crumbs, "no session_exit breadcrumb written"
+        ctx = crumbs[-1]
+        assert ctx["last_screen"] == "annotate"
+        assert ctx["dwell"]["annotate"] == 42.0
+        assert ctx["trail"][-1] == "annotate"
+
+    def test_unknown_screens_are_dropped(self, pg_conn):
+        from app.analytics import record_session_exit
+        record_session_exit(
+            "user-a",
+            last_screen="evil-screen",
+            dwell={"annotate": 5.0, "evil-screen": 999.0},
+            trail=["annotate", "evil-screen"],
+        )
+        ctx = self._breadcrumbs()[-1]
+        assert ctx["last_screen"] is None  # unknown screen not echoed back
+        assert "evil-screen" not in ctx["dwell"]
+        assert "evil-screen" not in ctx["trail"]
+
+    def test_empty_breadcrumb_writes_nothing(self, pg_conn):
+        from app.analytics import record_session_exit
+        record_session_exit("user-a", last_screen=None, dwell={}, trail=[])
+        assert self._breadcrumbs() == []
+
+    def test_impersonation_leaves_zero_footprint(self, pg_conn, monkeypatch):
+        from app.analytics import record_session_exit
+        monkeypatch.setattr("app.analytics.get_current_impersonator_id", lambda: "admin-9")
+        record_session_exit("user-a", last_screen="annotate", dwell={"annotate": 5.0}, trail=["annotate"])
+        assert self._breadcrumbs() == []
+
+
 class TestUpdateSession:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):

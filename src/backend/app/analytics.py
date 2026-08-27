@@ -7,7 +7,11 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from app.services.pg import get_pg
-from app.user_context import get_current_impersonator_id, get_current_platform
+from app.user_context import (
+    get_current_impersonator_id,
+    get_current_platform,
+    get_current_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -390,6 +394,157 @@ def record_milestone(
             conn.commit()
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s action=%s", user_id, action)
+
+
+# ---------------------------------------------------------------------------
+# T7515 — frustration mid-funnel instrumentation (tiers 3 + 4)
+# ---------------------------------------------------------------------------
+# These reuse T7510's storage EXACTLY — the free-text `user_actions` aggregate
+# (counts, no per-event rows) plus the per-user `user_action_log` detail trail —
+# and copy record_milestone's impersonation guard verbatim. They are SEPARATE
+# functions (not record_milestone calls) only because record_milestone gates its
+# `event` on the CLOSED FLOW_EVENTS funnel vocabulary, whereas a dialog/toast
+# name is OPEN-ended. Neither adds a Postgres column or table (no migration):
+# `user_actions.action` and `user_action_log.action` are both free text, so a new
+# action string is a new row, exactly like T7510's `game_upload_failed:{reason}`.
+
+# Blocking surfaces we count impressions for. Kept closed so a stray beacon can't
+# invent a new kind (the NAME within a kind is open, the kind is not).
+IMPRESSION_KINDS = frozenset({"toast", "dialog"})
+
+# Screens a session-exit breadcrumb may name (mirrors the frontend EDITOR_MODES).
+# Bounding the trail/dwell keys keeps the per-user log free of junk/PII.
+BREADCRUMB_SCREENS = frozenset({
+    "framing", "overlay", "annotate", "project-manager", "admin",
+})
+
+_IMPRESSION_NAME_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify_impression_name(name: str) -> str:
+    """Coarse, bounded, PII-free slug for an impression name.
+
+    Toast/dialog titles are short static strings ("Tag not submitted"), so a
+    lowercase alnum slug truncated to 48 chars keeps the `user_actions`
+    vocabulary bounded while staying human-readable in the admin log.
+    """
+    slug = _IMPRESSION_NAME_RE.sub("_", (name or "").strip().lower()).strip("_")
+    return slug[:48] or "unnamed"
+
+
+def record_impression(kind: str, name: str, session_count: int | None = None):
+    """T7515 tier 3: count a blocking-dialog / error-toast IMPRESSION.
+
+    Fires from the SHOW gesture (the surface actually rendering to the user), NOT
+    from a reactive state watch. Increments a per-name row in the `user_actions`
+    aggregate (`"{kind}_impression:{slug}"`, e.g. ``dialog_impression:tag_not_submitted``)
+    so a repeated refusal in one session — the T7540 tag-trap's "shown 5x, saved
+    0" — is queryable via ``LIKE 'dialog_impression:%'``, mirroring T7510's
+    per-reason failure rows. The per-session repetition count and the original
+    name ride the `user_action_log` detail trail. No daily_counters column, no
+    migration. Never raises.
+    """
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped impression %s/%s during impersonation by %s", kind, name, impersonator)
+        return
+
+    if kind not in IMPRESSION_KINDS:
+        logger.warning("[Analytics] Unknown impression kind: %r", kind)
+        return
+
+    slug = _slugify_impression_name(name)
+    action = f"{kind}_impression:{slug}"
+
+    try:
+        user_id = get_current_user_id()
+    except RuntimeError:
+        logger.warning("[Analytics] impression %s with no user context — dropped", action)
+        return
+
+    try:
+        platform = get_current_platform()
+    except Exception:
+        platform = "unknown"
+
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO user_actions (user_id, action, platform)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, action, platform)
+                DO UPDATE SET count = user_actions.count + 1
+            """, (user_id, action, platform))
+        logger.info("[Analytics] Impression: action=%s user=%s session_count=%s", action, user_id, session_count)
+    except Exception:
+        logger.exception("[Analytics] Failed to record impression %s for %s", action, user_id)
+        return
+
+    try:
+        from app.services.user_db import get_user_db_connection
+        log_context = {"kind": kind, "name": (name or "")[:120]}
+        if session_count is not None:
+            log_context["session_count"] = session_count
+        with get_user_db_connection(user_id) as conn:
+            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            conn.execute(
+                "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
+                (action, json.dumps(log_context), now),
+            )
+            conn.commit()
+    except Exception:
+        logger.warning("[Analytics] SQLite sync failed for impression user=%s action=%s", user_id, action)
+
+
+def record_session_exit(
+    user_id: str,
+    last_screen: str | None,
+    dwell: dict[str, float] | None,
+    trail: list[str] | None,
+):
+    """T7515 tier 4: write a session-exit BREADCRUMB to the user's own log.
+
+    Per-event detail (last screen + per-screen dwell + the ordered screen trail)
+    lives ONLY in the per-user `user_action_log` (user.sqlite) — Postgres stays
+    aggregate-only, so there is no PG write here at all. Fired from the tab-close /
+    visibility→hidden lifecycle event (a real exit gesture), never a reactive
+    watch. Copies record_milestone's impersonation guard verbatim because it does
+    not route through it. Inputs are sanitized/bounded (unknown screens dropped,
+    dwell clamped) since they arrive from an unauthenticated-tolerant beacon.
+    Never raises.
+    """
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped session-exit breadcrumb for %s during impersonation by %s", user_id, impersonator)
+        return
+
+    # Bound everything the beacon supplied to the known screen vocabulary.
+    clean_last = last_screen if last_screen in BREADCRUMB_SCREENS else None
+    clean_dwell = {
+        s: round(float(secs), 1)
+        for s, secs in (dwell or {}).items()
+        if s in BREADCRUMB_SCREENS and isinstance(secs, (int, float)) and 0 <= secs < 86400
+    }
+    clean_trail = [s for s in (trail or []) if s in BREADCRUMB_SCREENS][:50]
+
+    if not clean_last and not clean_dwell and not clean_trail:
+        # Nothing usable — don't write an empty breadcrumb row.
+        return
+
+    try:
+        from app.services.user_db import get_user_db_connection
+        log_context = {"last_screen": clean_last, "dwell": clean_dwell, "trail": clean_trail}
+        with get_user_db_connection(user_id) as conn:
+            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            conn.execute(
+                "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
+                ("session_exit", json.dumps(log_context), now),
+            )
+            conn.commit()
+        logger.info("[Analytics] Session-exit breadcrumb: user=%s last=%s screens=%d", user_id, clean_last, len(clean_trail))
+    except Exception:
+        logger.warning("[Analytics] SQLite sync failed for session-exit breadcrumb user=%s", user_id)
 
 
 def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] | None:

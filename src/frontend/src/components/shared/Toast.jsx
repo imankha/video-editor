@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, CheckCircle, AlertCircle, Info, ExternalLink } from 'lucide-react';
 import { create } from 'zustand';
+import { recordUiImpression } from '../../utils/uiTelemetry';
 
 /**
  * Toast Store - Global state for toast notifications
@@ -25,6 +26,18 @@ export const useToastStore = create((set, get) => ({
       duration: 5000,
       ...toast,
     };
+
+    // T7515 tier 3: count error-toast impressions from this SHOW gesture (the
+    // single choke point every toast funnels through). Only error toasts, and
+    // ONLY when the caller pins a STABLE `impressionKey`, are counted. The title
+    // is display text — often runtime-interpolated with PII (recipient emails,
+    // raw error messages) or a status code — so it must NEVER become the analytics
+    // key: that would leak PII into the shared user_actions aggregate and explode
+    // its cardinality (one singleton row per distinct message). Keys are literals,
+    // exactly like record_milestone's closed FLOW_EVENTS vocabulary.
+    if (newToast.type === 'error' && newToast.impressionKey) {
+      recordUiImpression('toast', newToast.impressionKey);
+    }
 
     // dedupKey: a repeat toast replaces the previous one instead of stacking
     // (e.g. hammering "Copy link" shows ONE toast, not a column of them).

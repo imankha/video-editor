@@ -1,6 +1,6 @@
 # T6260: Read endpoints send `no-cache` with no validator — nothing can ever 304
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-31

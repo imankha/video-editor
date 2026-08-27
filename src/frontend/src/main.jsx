@@ -13,12 +13,15 @@ import { ToastContainer } from './components/shared'
 import './index.css'
 import { installResponsivenessMonitor } from './utils/responsiveness.js'
 import { installClientLogger } from './utils/clientLogger.js'
+import { installSessionBreadcrumbs } from './utils/uiTelemetry.js'
 import { setupActionTracking } from './utils/analytics.js'
 import { setupPwaUpdatePrompt, evictStaleDevServiceWorker } from './utils/pwaUpdate.js'
 
 // T1650: Capture console.error/warn before anything else runs
 installClientLogger();
 setupActionTracking();
+// T7515 tier 4: accumulate per-screen dwell + trail, flushed on session exit.
+installSessionBreadcrumbs();
 
 console.info(`[Build] ${__COMMIT_HASH__} (#${__APP_BUILD__})`);
 installResponsivenessMonitor();
