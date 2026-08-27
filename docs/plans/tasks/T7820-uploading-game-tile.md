@@ -77,11 +77,14 @@ jump groups later). Same 16:9 geometry/overlay typography as GameTile (T5681).
 ## Implementation
 
 ### Steps
-1. [ ] uploadStore: `previewFrame` field + capture util invoked from uploadManager enqueue
-2. [ ] UploadingGameTile (active/queued/resume/failed states, bar colors per design)
-3. [ ] ProjectManager: swap ActiveUploadCard + PendingUploadCard rows for the tile grid
-4. [ ] Vitest for the capture util (mock video/canvas) + tile state rendering
-5. [ ] Extend T7360 e2e to assert tile shape (thumbnail img, bar width, state chips)
+1. [x] uploadStore: `previewFrame` field + capture util invoked at enqueue (capture
+       lives in uploadStore.startUpload, the actual enqueue site, so QUEUED entries
+       get frames too; new util src/frontend/src/utils/captureVideoFrame.js)
+2. [x] UploadingGameTile (active/queued/resume/failed states, bar colors per design)
+3. [x] ProjectManager: swap ActiveUploadCard + PendingUploadCard rows for the tile grid
+       (both card components deleted; they were file-local with no other importers)
+4. [x] Vitest for the capture util (mock video/canvas) + tile state rendering
+5. [x] Extend T7360 e2e to assert tile shape (thumbnail img, bar width, state chips)
 6. [ ] Real-browser drive on dev (upload a small file, reload mid-upload for resume state)
 
 ## Acceptance Criteria

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, FileVideo, Loader2, Share2, Trophy } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Share2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -42,6 +42,7 @@ import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
+import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
 import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor } from '../utils/draftStage';
 
@@ -1169,59 +1170,16 @@ export function ProjectManager({
           </div>
         ) : (
           <div className={GAMES_GRID_CONTAINER_CLASS}>
-            {/* Active/failed uploads (T7360) - the one uploading + any failed, each
-                rendered as a card. A single upload renders exactly as it did pre-queue. */}
+            {/* Uploading rail (T7820): every client upload (active/queued/failed,
+                T7360 queue) AND every resumable server-side pending session renders
+                as a REAL game tile — thumbnail + color-coded bottom-edge progress
+                bar — in the SAME grid geometry as the game groups below, replacing
+                the old ActiveUploadCard/PendingUploadCard banner rows. The rail
+                stays outside the month groups: the game date is unknown until
+                entered, so a grid placement would visibly jump groups later. */}
             {(() => {
-              const activeOrErrored = uploads.filter(
-                u => u.status === UPLOAD_STATUS.UPLOADING || u.status === UPLOAD_STATUS.ERROR,
-              );
-              return activeOrErrored.length > 0 && (
-                <div className="mb-6">
-                  <h2 className={`text-sm font-semibold ${GAME.accent} uppercase tracking-wide mb-3 flex items-center gap-2`}>
-                    <Loader2 size={14} className="animate-spin" />
-                    Uploading
-                  </h2>
-                  <div className="space-y-2">
-                    {activeOrErrored.map(upload => (
-                      <ActiveUploadCard
-                        key={upload.id}
-                        upload={upload}
-                        onClick={onClickActiveUpload}
-                        onCancel={() => onCancelActiveUpload(upload.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Queued uploads (T7360) - waiting behind the active one, each cancellable. */}
-            {(() => {
-              const queued = uploads.filter(u => u.status === UPLOAD_STATUS.QUEUED);
-              return queued.length > 0 && (
-                <div className="mb-6">
-                  <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                    <Upload size={14} />
-                    Queued
-                  </h2>
-                  <div className="space-y-2">
-                    {queued.map(upload => (
-                      <ActiveUploadCard
-                        key={upload.id}
-                        upload={upload}
-                        onClick={onClickActiveUpload}
-                        onCancel={() => onCancelActiveUpload(upload.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Pending Uploads Section - Paused/interrupted server-side uploads
-                (exclude any file already in the active/queued client queue). */}
-            {(() => {
-              // Filter out files being actively uploaded/queued to avoid duplication.
+              // Exclude server sessions whose file is already active/queued
+              // client-side (same dedup the old Pending Uploads section did).
               // For multi-video uploads, check against all individual file names.
               const queuedFileNames = new Set();
               uploads.forEach(u => {
@@ -1232,23 +1190,42 @@ export function ProjectManager({
               const filteredPending = pendingUploads.filter(
                 p => !queuedFileNames.has(p.original_filename),
               );
-              return filteredPending.length > 0 && (
-                <div className="mb-6">
-                  <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                    <Upload size={14} />
-                    Pending Uploads
-                  </h2>
-                  <div className="space-y-2">
-                    {filteredPending.map(upload => (
-                      <PendingUploadCard
-                        key={upload.session_id}
+              if (uploads.length === 0 && filteredPending.length === 0) return null;
+              const anyActive = uploads.some(u => u.status === UPLOAD_STATUS.UPLOADING);
+              // SAME grid map + derived column count as the games groups below, so
+              // an uploading tile is exactly the size of the game tile it becomes.
+              const tileGridClass = GAMES_TILE_GRID_BY_COLUMNS[gamesGridColumns(groupGamesForTab(games))];
+              return (
+                <section className={`mb-6 lg:mb-8 ${GAMES_GROUP_SECTION_CLASS}`} data-testid="uploading-rail">
+                  <header className={GAMES_GROUP_HEADER_CLASS}>
+                    <h2 className={`text-sm font-semibold ${anyActive ? GAME.accent : 'text-yellow-400'} uppercase tracking-wide flex items-center gap-2`}>
+                      {anyActive
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Upload size={14} />}
+                      Uploading
+                    </h2>
+                  </header>
+                  <div className={tileGridClass}>
+                    {uploads.map(upload => (
+                      <UploadingGameTile
+                        key={upload.id}
                         upload={upload}
-                        onResume={() => handleResumeClick(upload.original_filename)}
-                        onCancel={() => onCancelPendingUpload(upload.session_id)}
+                        onClick={onClickActiveUpload}
+                        onCancel={() => onCancelActiveUpload(upload.id)}
+                        onRetry={() => useUploadStore.getState().retryUpload(upload.id)}
+                        onDiscard={() => useUploadStore.getState().clearFailedUpload(upload.id)}
+                      />
+                    ))}
+                    {filteredPending.map(sessionRow => (
+                      <UploadingGameTile
+                        key={sessionRow.session_id}
+                        session={sessionRow}
+                        onResume={() => handleResumeClick(sessionRow.original_filename)}
+                        onCancel={() => onCancelPendingUpload(sessionRow.session_id)}
                       />
                     ))}
                   </div>
-                </div>
+                </section>
               );
             })()}
 
@@ -1602,181 +1579,9 @@ export function ProjectManager({
 }
 
 
-/**
- * PendingUploadCard - Shows a paused/pending upload with resume option
- * Clicking the card or Resume button opens file picker, then navigates to Annotate
- */
-function PendingUploadCard({ upload, onResume, onCancel }) {
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-
-  const handleCancel = (e) => {
-    e.stopPropagation();
-    if (showCancelConfirm) {
-      onCancel();
-    } else {
-      setShowCancelConfirm(true);
-      setTimeout(() => setShowCancelConfirm(false), 3000);
-    }
-  };
-
-  // Format file size
-  const formatSize = (bytes) => {
-    if (bytes >= 1024 * 1024 * 1024) {
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-  };
-
-  // Format as "Jan 15, 2:30 PM" or "Jan 15" if different day
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-
-    if (isToday) {
-      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
-
-  return (
-    <div
-      onClick={onResume}
-      className="group relative p-3 sm:p-4 bg-yellow-900/20 hover:bg-yellow-900/30 rounded-lg border border-yellow-600/50 hover:border-yellow-500 cursor-pointer transition-all"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <FileVideo size={18} className="text-yellow-400" />
-            {upload.label && <span className="text-yellow-400 text-sm font-medium shrink-0">{upload.label}:</span>}
-            <h3 className="text-white font-medium truncate">{upload.original_filename}</h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-            <span>{formatSize(upload.file_size)}</span>
-            <span>•</span>
-            <span>{upload.completed_parts} / {upload.total_parts} parts uploaded</span>
-            <span>•</span>
-            <span>Started {formatDate(upload.created_at)}</span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-yellow-600 transition-all duration-300"
-              style={{ width: `${upload.progress_percent}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 ml-4">
-          {/* Resume button */}
-          <Button
-            variant="warning"
-            size="sm"
-            icon={Upload}
-            onClick={(e) => { e.stopPropagation(); onResume(); }}
-          >
-            Resume
-          </Button>
-
-          {/* Cancel button */}
-          <Button
-            variant={showCancelConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={X}
-            iconOnly
-            onClick={handleCancel}
-            className={!showCancelConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
-            title={showCancelConfirm ? 'Click again to confirm' : 'Cancel upload'}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-/**
- * ActiveUploadCard - Shows an in-progress upload with progress bar
- * Clicking navigates back to annotate mode
- */
-function ActiveUploadCard({ upload, onClick, onCancel }) {
-  const retryUpload = useUploadStore(state => state.retryUpload);
-  const clearFailedUpload = useUploadStore(state => state.clearFailedUpload);
-  const isError = upload.status === UPLOAD_STATUS.ERROR;
-
-  // Format file size
-  const formatSize = (bytes) => {
-    if (!bytes) return '';
-    if (bytes >= 1024 * 1024 * 1024) {
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      className={`group relative p-3 sm:p-4 ${GAME.bgCard} ${GAME.bgCardHover} rounded-lg border ${GAME.borderCard} ${GAME.borderHover} cursor-pointer transition-all`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <FileVideo size={18} className={GAME.accent} />
-            <h3 className="text-white font-medium truncate">{upload.fileName}</h3>
-            {onCancel && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onCancel(); }}
-                className="ml-auto p-1 text-gray-500 hover:text-red-400 transition-colors"
-                title="Cancel upload"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-            {upload.fileSize && <span>{formatSize(upload.fileSize)}</span>}
-            {upload.fileSize && upload.message && <span>•</span>}
-            <span className={isError ? 'text-red-400' : undefined}>
-              {upload.message || (isError ? 'Upload failed' : 'Uploading...')}
-            </span>
-          </div>
-
-          {isError ? (
-            <div className="mt-2 flex items-center gap-3">
-              <button
-                onClick={(e) => { e.stopPropagation(); retryUpload(upload.id); }}
-                className="text-xs font-medium text-blue-400 hover:text-blue-300 underline"
-              >
-                Retry
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); clearFailedUpload(upload.id); }}
-                className="text-xs text-gray-400 hover:text-white underline"
-              >
-                Discard
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Progress bar */}
-              <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${GAME.progressBar} transition-all duration-300`}
-                  style={{ width: `${upload.progress || 0}%` }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-gray-500 text-right">
-                {upload.progress || 0}%
-              </div>
-            </>
-          )}
-        </div>
-
-      </div>
-    </div>
-  );
-}
+// ActiveUploadCard and PendingUploadCard were removed in T7820: uploads now render
+// as UploadingGameTile tiles inside the Uploading rail above (both card components
+// were file-local; nothing else imported them).
 
 
 /**

@@ -30,8 +30,14 @@ vi.mock('./questStore', () => ({
 vi.mock('./creditStore', () => ({
   useCreditStore: { getState: () => ({ fetchCredits: vi.fn() }) },
 }));
+// T7820: the local thumbnail capture is fire-and-forget at enqueue; default to the
+// "capture failed" null so unrelated tests are unaffected.
+vi.mock('../utils/captureVideoFrame', () => ({
+  captureVideoFrame: vi.fn(() => Promise.resolve(null)),
+}));
 
 import { useUploadStore, UPLOAD_STATUS } from './uploadStore';
+import { captureVideoFrame } from '../utils/captureVideoFrame';
 import { uploadGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { toast } from '../components/shared';
 
@@ -240,6 +246,51 @@ describe('uploadStore — failure surfacing (bug26p, per-entry)', () => {
     expect(store().insufficientCredits).toEqual({ required: 5, balance: 2 });
     expect(toast.error).not.toHaveBeenCalled();
     expect(uploads()).toHaveLength(0); // entry retired, queue can advance
+  });
+});
+
+// T7820: local preview frame for the uploading game tile — memory-only, fire-and-forget.
+describe('uploadStore — preview frame (T7820)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store().reset();
+  });
+
+  it('captures a preview frame at enqueue without blocking the upload start', async () => {
+    captureVideoFrame.mockResolvedValueOnce('data:image/jpeg;base64,FRAME');
+    uploadGame.mockReturnValueOnce(deferred().promise);
+    const id = startFile('a.mp4');
+
+    // Enqueue returns immediately with previewFrame still null (fire-and-forget).
+    expect(uploads().find(u => u.id === id).previewFrame).toBeNull();
+    expect(captureVideoFrame).toHaveBeenCalledTimes(1);
+
+    await vi.waitFor(() =>
+      expect(uploads().find(u => u.id === id).previewFrame).toBe('data:image/jpeg;base64,FRAME'),
+    );
+  });
+
+  it('a failed capture (null) leaves previewFrame null — the tile falls back to branded art', async () => {
+    captureVideoFrame.mockResolvedValueOnce(null);
+    uploadGame.mockReturnValueOnce(deferred().promise);
+    const id = startFile('a.mp4');
+
+    // Give the microtask chain a beat; the entry must still be null, never a fixup.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(uploads().find(u => u.id === id).previewFrame).toBeNull();
+  });
+
+  it('a late-resolving capture for a retired (cancelled) entry is a silent no-op', async () => {
+    let resolveCapture;
+    captureVideoFrame.mockReturnValueOnce(new Promise((r) => { resolveCapture = r; }));
+    uploadGame.mockReturnValueOnce(deferred().promise);
+    const id = startFile('a.mp4');
+    store().cancelUpload(id);
+    expect(uploads()).toHaveLength(0);
+
+    resolveCapture('data:image/jpeg;base64,LATE');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(uploads()).toHaveLength(0); // nothing resurrected, nothing thrown
   });
 });
 

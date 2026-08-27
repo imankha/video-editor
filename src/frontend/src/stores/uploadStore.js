@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
+import { captureVideoFrame } from '../utils/captureVideoFrame';
 import { toast } from '../components/shared';
 import { useQuestStore } from './questStore';
 import { useCreditStore } from './creditStore';
@@ -237,6 +238,10 @@ export const useUploadStore = create((set, get) => {
         // Display info for resuming the annotation view.
         blobUrl: displayInfo?.blobUrl || null,
         gameName: displayInfo?.gameName || primaryFile.name,
+        // T7820: local thumbnail for the uploading game tile, captured below
+        // fire-and-forget. MEMORY-ONLY — never persisted, gone on reload (upload
+        // state itself already is). null -> the tile shows the branded fallback.
+        previewFrame: null,
         // Per-entry state that used to be top-level globals:
         gameId: null,           // was uploadGameId — set at onGameCreated
         createdGameName: null,  // was uploadGameName
@@ -248,9 +253,22 @@ export const useUploadStore = create((set, get) => {
       };
 
       set((state) => ({ uploads: [...state.uploads, entry] }));
+      // T7820: capture a preview frame from the local file, fire-and-forget (the
+      // upload never waits on it; a retired entry is a silent no-op in the setter).
+      // Queued entries get their frame at enqueue too, so they render dimmed
+      // thumbnails while waiting. captureVideoFrame resolves null on any failure.
+      captureVideoFrame(primaryFile).then((frame) => {
+        if (frame) get().setPreviewFrame(id, frame);
+      });
       if (!anyActive) runEntry(entry);
       return id;
     },
+
+    /**
+     * T7820: attach the locally-captured thumbnail to one entry. Runtime-only
+     * cosmetic state — no persistence path exists for it by design.
+     */
+    setPreviewFrame: (id, previewFrame) => patchEntry(id, { previewFrame }),
 
     /**
      * Attach a completion callback to the CURRENTLY-active upload (for components that
