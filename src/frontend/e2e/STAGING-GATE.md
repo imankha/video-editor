@@ -37,9 +37,16 @@ The authoritative machine-readable inventory is `helpers/targetEnv.js`
 ## Runbook: running the gate against staging
 
 ```bash
-# Step 0 (idempotent seed, also resets drift from prior gate runs and guarantees
-# the export spec a framed draft; SUPERVISOR/host step, needs cross-env creds):
-#   see FIXTURE-CONTRACT.md § Seeding (all 3 accounts: imankh + the 2 --to-email aliases)
+# Step 0 — staging prep (SUPERVISOR/host step, needs cross-env creds + fly CLI).
+# Order matters: a live (or suspended) machine re-uploads its stale profile.sqlite
+# over a fresh copy (local-ahead guard), and migrations never auto-run on deploy.
+#   0a. fly machine stop <id> -a reel-ballers-api-staging     # STOP, not suspend
+#   0b. fly proxy 15432:5432 -a reel-ballers-db-staging       # staging PG proxy
+#   0c. seed all 3 accounts (idempotent; resets gate-run drift and guarantees the
+#       export spec a framed draft) — commands in FIXTURE-CONTRACT.md § Seeding
+#   0d. fly machine start <id> -a reel-ballers-api-staging
+#   0e. POST /api/admin/migrate with an admin session (idempotent; applies any
+#       postgres-track migrations master added since the last staging migrate)
 
 # Step 1: run the three lanes concurrently (~10-14 min typical):
 bash scripts/staging-gate.sh
