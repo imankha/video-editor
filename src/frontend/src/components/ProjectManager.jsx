@@ -28,6 +28,7 @@ import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
+import { useQuestStore } from '../stores/questStore';
 import {
   consumePendingRecap,
   setPendingGameReference,
@@ -745,6 +746,16 @@ export function ProjectManager({
     requireAuth(() => setShowGameDetailsModal(true));
   }, [requireAuth]);
 
+  // T7840: register the auth-gated add-game gesture as the quest panel's opener
+  // for the `upload_game` step so its "Add Your First Game" row is actionable
+  // (mirrors the WatchTutorialButton store-action idiom). Cleared on unmount —
+  // ephemeral, component-lifetime wiring, never persisted.
+  const setAddGameOpener = useQuestStore((s) => s.setAddGameOpener);
+  useEffect(() => {
+    setAddGameOpener(handleAddGameClick);
+    return () => setAddGameOpener(null);
+  }, [setAddGameOpener, handleAddGameClick]);
+
   // Handle game creation with details
   const handleCreateGame = useCallback(async (gameDetails) => {
     if (onAnnotateWithFile) {
@@ -1165,8 +1176,11 @@ export function ProjectManager({
           </div>
         ) : games.length === 0 && pendingUploads.length === 0 && uploads.length === 0 ? (
           <div className="text-gray-500 text-center">
-            <p className="mb-2">No games yet</p>
-            <p className="text-sm">Add a game to annotate your footage</p>
+            {/* T7840: single status line only — the green Add Game button and the
+                quest card's actionable "Add Your First Game" row carry the CTA, so
+                the old "Add a game to annotate your footage" sub-line was a third
+                duplicate prompt for the same action. */}
+            <p>No games yet</p>
           </div>
         ) : (
           <div className={GAMES_GRID_CONTAINER_CLASS}>
