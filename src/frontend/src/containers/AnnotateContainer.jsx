@@ -28,6 +28,45 @@ import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInpu
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
 
+// T7790: max time a clip import will wait for an in-flight upload to create the
+// game record before giving up. Generous ceiling — a real cold upload creates the
+// record in a few seconds; this only bounds a genuinely stuck/failed upload so the
+// import can't hang forever.
+const IMPORT_AWAIT_GAME_ID_TIMEOUT_MS = 120000;
+
+/**
+ * T7790: Resolve the raw-clip game id for a TSV import, WAITING for an in-flight
+ * upload to create the game record if it hasn't yet.
+ *
+ * A TSV import can fire before `onGameCreated` has created the game record (the
+ * upload is still in its prepare/create step — proven on a slow/cold upload). The
+ * old code read `annotateGameIdRef.current` ONCE and, finding it null, silently
+ * dropped every clip save; the id then arrived seconds later but nothing re-fired
+ * the saves, so the clips never reached the library. Here we poll the ref (which
+ * `onGameCreated` sets) while an upload is genuinely in flight, and fall back to
+ * the upload store's `uploadGameId` (its authoritative copy, set in the same
+ * callback). Returns the id, or null only if no upload can produce one (never
+ * started, or ended without creating a record — a real failure the caller surfaces).
+ */
+async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_TIMEOUT_MS) {
+  const readId = () => gameIdRef.current ?? useUploadStore.getState().uploadGameId ?? null;
+  const id = readId();
+  if (id) return id;
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const store = useUploadStore.getState();
+    // No upload in flight and no id anywhere -> nothing will produce one. Stop.
+    if (!store.isUploading() && store.uploadGameId == null && gameIdRef.current == null) {
+      return null;
+    }
+    await new Promise((r) => setTimeout(r, 200));
+    const resolved = readId();
+    if (resolved) return resolved;
+  }
+  return readId();
+}
+
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
  *
@@ -1313,13 +1352,24 @@ export function AnnotateContainer({
     const newRegions = importAnnotations(annotations, overrideDuration);
     const count = newRegions.length;
 
-    // Read gameId from ref to get the latest value (not a stale closure).
-    // The upload completion callback sets annotateGameId, but useCallback's closure
-    // may still have the old null value if React hasn't re-rendered yet.
-    const gameId = annotateGameIdRef.current;
-
-    // Then save raw_clips in background (don't block UI)
-    if (gameId) {
+    // Persist the imported clips to the library in the background so the UI stays
+    // responsive. This is part of the import GESTURE (not a reactive effect): the
+    // TSV-import handler owns the surgical saves for the clips it just created.
+    // T7790: the game record may not exist yet when a TSV is imported during a
+    // slow/cold upload, so resolveImportGameId WAITS for the in-flight upload to
+    // create it instead of dropping the saves. The clips are already on screen —
+    // they MUST reach the library, or the user is told loudly they did not.
+    void (async () => {
+      const gameId = await resolveImportGameId(annotateGameIdRef);
+      if (!gameId) {
+        // No upload could ever produce a game id (never started, or failed before
+        // creating the record). Fail LOUDLY — never silently drop visible clips.
+        console.error('[AnnotateContainer] No game available - imported clips could not be saved to the library');
+        toast.error('Clips not saved', {
+          message: "Your imported clips couldn't be saved because the game isn't ready. Please try importing again.",
+        });
+        return;
+      }
 
       // Fire off all saves in parallel (don't await each one sequentially)
       const savePromises = annotations
@@ -1355,11 +1405,8 @@ export function AnnotateContainer({
           }
         });
 
-      // Wait for all saves to complete (but UI already updated)
-      Promise.all(savePromises);
-    } else {
-      console.warn('[AnnotateContainer] No gameId available - clips will not be saved to library');
-    }
+      await Promise.all(savePromises);
+    })();
 
     return count;
   }, [importAnnotations, saveClip, setRawClipId]);
