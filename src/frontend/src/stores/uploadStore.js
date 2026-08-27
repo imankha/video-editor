@@ -136,6 +136,10 @@ export const useUploadStore = create((set, get) => {
       phase: UPLOAD_PHASE.HASHING,
       progress: 0,
       message: entry.isMultiVideo ? 'Hashing first half...' : 'Computing file hash...',
+      // T7820 review: re-stamp at RUN start (not enqueue) so the tile's ETA
+      // extrapolation isn't poisoned by queue wait or a retry gap — a queued
+      // upload promoted after 20 min would otherwise show hours of ETA.
+      startedAt: new Date().toISOString(),
     });
 
     const progressHandler = (progress) => {
@@ -259,7 +263,7 @@ export const useUploadStore = create((set, get) => {
       // thumbnails while waiting. captureVideoFrame resolves null on any failure.
       captureVideoFrame(primaryFile).then((frame) => {
         if (frame) get().setPreviewFrame(id, frame);
-      });
+      }).catch(() => { /* cosmetic-only chain; silent by design */ });
       if (!anyActive) runEntry(entry);
       return id;
     },

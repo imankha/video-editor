@@ -86,6 +86,25 @@ jump groups later). Same 16:9 geometry/overlay typography as GameTile (T5681).
 4. [x] Vitest for the capture util (mock video/canvas) + tile state rendering
 5. [x] Extend T7360 e2e to assert tile shape (thumbnail img, bar width, state chips)
 6. [ ] Real-browser drive on dev (upload a small file, reload mid-upload for resume state)
+   - user is testing on staging post-merge (2026-08-27 directive: no e2e runs, merge when ready)
+
+### Deliberate parity drops vs the deleted cards (reviewer-flagged, accepted)
+
+Lost from ActiveUploadCard/PendingUploadCard and NOT carried onto the tile (all still
+visible in the corner UploadProgressIndicator, which renders on this screen too):
+file size, "Started {date}", the pending session's multi-video half `label` prefix, the
+explicit Resume button (tile click resumes), and the concrete error message on failed
+(tile shows the fixed T7490 copy). Revisit only if users miss them.
+
+### Review follow-ups (minor, not blocking)
+
+- Rail header always reads "Uploading" even when only resume/failed tiles are present
+- Queued tile click navigates to the ACTIVE upload's annotate view (parity with the old
+  card, but a stronger affordance now)
+- captureVideoFrame lacks PosterFramePreview's EOF nudge (duration - 0.05) and a
+  fake-timers test for the 15s timeout
+- groupGamesForTab runs twice per ProjectManager render (hoistable)
+- ETA voice differs from GlobalExportIndicator ("~1m left" vs "About 1 minute")
 
 ## Acceptance Criteria
 

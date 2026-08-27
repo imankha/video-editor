@@ -24,10 +24,12 @@ import { UPLOAD_PHASE } from '../services/uploadManager';
  *     session whose page closed mid-upload. The browser LOST the File handle, so no
  *     local frame can exist — always the branded sport-ball fallback, never a fake
  *     thumbnail. Tile click reopens the file picker (onResume).
- *   - failed (rose, frozen at the failure point): mirrors the T7490 upload_failed
+ *   - failed (rose, frozen at the failure point): MIRRORS the T7490 upload_failed
  *     GameTile skin (rose chip + scrim, persistent Retry/Discard bar). Not GameTile
  *     itself: that component fetches /api/games/{id}/poster.jpg and needs a game
- *     row, which a client-side errored entry doesn't have.
+ *     row, which a client-side errored entry doesn't have. If the T7490 skin in
+ *     GameTile.jsx changes, change this mirror too — nothing enforces the link,
+ *     this comment is the guard (GameTile carries the matching pointer).
  *
  * Accepts EITHER an uploadStore entry (`upload`) OR a server pending_uploads
  * session row (`session`) — the two sources stay separate stores by design.
@@ -45,8 +47,11 @@ const TILE_STATE = {
 // Naive but honest ETA: extrapolate the remaining time from the elapsed time and
 // overall progress. Derived at render (progress ticks re-render the tile), never
 // stored. Hidden until progress is meaningful and once finalizing takes over.
+// `startedAt` is stamped at RUN start (uploadStore.runEntry), so queue wait and
+// retry gaps never inflate it. NOTE: `progress` is the composite bar (hashing
+// 0-15 / uploading 15-98), so the estimate firms up once transfer dominates.
 function formatEta(startedAt, progress) {
-  if (!startedAt || !progress || progress <= 5 || progress >= 98) return null;
+  if (!startedAt || !progress || progress <= 15 || progress >= 98) return null;
   const elapsedMs = Date.now() - new Date(startedAt).getTime();
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return null;
   const seconds = Math.round((elapsedMs * (100 - progress)) / progress / 1000);

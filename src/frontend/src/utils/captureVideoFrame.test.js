@@ -98,9 +98,11 @@ describe('captureVideoFrame — happy path', () => {
     expect(result).toBe('data:image/jpeg;base64,FRAME');
     expect(URL.createObjectURL).toHaveBeenCalledWith(file);
     expect(fakeVideo.currentTime).toBe(1); // seeked to 1s of a 10s video
-    expect(fakeCanvas.width).toBe(1920);
-    expect(fakeCanvas.height).toBe(1080);
-    expect(fakeCanvas._ctx.drawImage).toHaveBeenCalledWith(fakeVideo, 0, 0, 1920, 1080);
+    // T7820 review: capture is CAPPED near tile size (MAX_FRAME_WIDTH=640) so a 4K
+    // source doesn't park a multi-MB data URL in the store for a ~300px tile.
+    expect(fakeCanvas.width).toBe(640);   // 1920 scaled by 640/1920
+    expect(fakeCanvas.height).toBe(360);  // 1080 scaled by the same factor
+    expect(fakeCanvas._ctx.drawImage).toHaveBeenCalledWith(fakeVideo, 0, 0, 640, 360);
     expect(fakeCanvas.toDataURL).toHaveBeenCalledWith('image/jpeg', 0.7);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-object-url');
   });
