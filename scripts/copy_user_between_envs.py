@@ -18,6 +18,7 @@ Usage:
 
 import argparse
 import contextlib
+import hashlib
 import logging
 import sqlite3
 import sys
@@ -79,7 +80,12 @@ def get_pg_conn(config: dict):
 
 def alias_user_id(src_user_id: str, dst_email: str) -> str:
     """Deterministic user_id for an ALIAS clone (--to-email), so re-runs converge
-    on the same destination identity instead of accreting new users."""
+    on the same destination identity instead of accreting new users.
+
+    NOTE: the id derives from the SOURCE user_id -- if the source account is ever
+    recreated with a new user_id (dev DB reset), the alias id changes too; the old
+    alias's Postgres rows get cleaned up by the existing-email branch below, but its
+    R2 prefix ({env}/users/{old_alias_id}/) is orphaned and needs a manual purge."""
     import uuid
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rb-alias:{src_user_id}:{dst_email}"))
 
@@ -135,13 +141,23 @@ def copy_postgres_rows(
                 dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
                 dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
 
-            # Upsert user row (identity rewritten for an alias clone)
+            # Upsert user row (identity rewritten for an alias clone).
+            # GLOBALLY-UNIQUE columns must not collide with the straight copy of the
+            # same source account: google_id (users DDL) is nulled; invite_code
+            # (idx_users_invite_code, migration v004) is re-derived the same way the
+            # app derives it (routers/users.py: sha256(user_id)[:8]) so the stored
+            # value matches what the alias's own /api/me/invite-code would mint.
+            # If a future migration adds another global unique to users, it must be
+            # neutralized here too -- the ON CONFLICT target is user_id only, so any
+            # other unique collision aborts the seed.
             user_row = dict(user_row)
             if is_alias:
                 user_row["user_id"] = dst_user_id
                 user_row["email"] = dst_email
                 if "google_id" in user_row:
-                    user_row["google_id"] = None  # globally UNIQUE — must not collide with the straight copy
+                    user_row["google_id"] = None
+                if user_row.get("invite_code"):
+                    user_row["invite_code"] = hashlib.sha256(dst_user_id.encode()).hexdigest()[:8]
             cols = list(user_row.keys())
             vals = [user_row[c] for c in cols]
             placeholders = ", ".join(["%s"] * len(cols))

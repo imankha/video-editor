@@ -30,11 +30,13 @@ test('annotations render in the Annotate timeline on game open (T4060)', async (
     const res = await context.request.get(`${API_BASE}/games`, PROFILE ? { headers: { 'X-Profile-ID': PROFILE } } : undefined);
     expect(res.ok(), `GET /api/games (${res.status()})`).toBeTruthy();
     const games = (await res.json()).games || [];
-    const target = games.find((g) => g.storage_status === 'active');
+    // clip_count > 0 too: an active-but-unannotated game would hard-FAIL the
+    // .clip-marker assertion, turning a fixture gap into a phantom T4060 regression.
+    const target = games.find((g) => g.storage_status === 'active' && (g.clip_count || 0) > 0);
     if (!target) {
-      console.log('[T4060][SKIP] account has no ACTIVE game with annotations; seed one per FIXTURE-CONTRACT');
+      console.log('[T4060][SKIP] account has no ACTIVE game with clips (annotations); seed one per FIXTURE-CONTRACT');
     }
-    test.skip(!target, '[T7800] no active game available to open in Annotate');
+    test.skip(!target, '[T7800] no active game with clips available to open in Annotate');
     gameId = target.id;
   }
   await openGameInAnnotate(page, gameId);

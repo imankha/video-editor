@@ -57,9 +57,10 @@ export default async function globalSetup() {
     // T5400: when running the curated pre-deploy gate (`npm run test:e2e:staging-gate`,
     // i.e. --grep @staging-gate), announce exactly what the gate covers. Printed on
     // every deployed-target run so a gate run is self-documenting; harmless otherwise.
-    console.log('Curated @staging-gate subset (run: npm run test:e2e:staging-gate — THE pre-deploy gate):');
+    console.log('Curated @staging-gate subset (run: bash scripts/staging-gate.sh — THE pre-deploy gate, 3 parallel lanes):');
     for (const s of STAGING_GATE_SPECS) {
-      console.log(`  • ${s.file}`);
+      const lanes = Array.isArray(s.lane) ? s.lane.join('+') : s.lane;
+      console.log(`  • ${s.file}  [lane ${lanes}${s.localOnly ? ', local-only: skips on this target' : ''}]`);
       console.log(`      covers: ${s.covers}`);
     }
     console.log('\n  Data-dependent gate specs SKIP LOUDLY when the fixture lacks data (never a');

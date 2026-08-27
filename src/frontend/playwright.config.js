@@ -78,7 +78,13 @@ const GATED_TAGS = /@staging-gate|@tutorial-capture/;
 // e2e/STAGING-GATE.md). A lane invocation greps its lane tag, not @staging-gate,
 // so the lift must also recognize lane tags or the config-level grepInvert would
 // zero out every lane run (lane members all carry @staging-gate in their titles).
-const TARGETING_GATED = /@staging-gate|@tutorial-capture|@gate-[abc]\b/.test(process.argv.join(' '));
+// The lift ALSO applies when the invocation names a spec file by PATH (e.g.
+// `npx playwright test e2e/T4190-...spec.js`, the form spec headers and
+// scripts/dev-verify.sh document): an explicit file selection is never the
+// unattended default sweep T7750 protects, and without the lift a by-path run of
+// a tagged spec silently collects 0 tests.
+const ARGV = process.argv.join(' ');
+const TARGETING_GATED = /@staging-gate|@tutorial-capture|@gate-[abc]\b/.test(ARGV) || /\.spec\.js/.test(ARGV);
 const DEFAULT_GREP_INVERT = TARGETING_GATED ? undefined : GATED_TAGS;
 
 // T7800: parallel lane processes need disjoint report/artifact paths or the html/

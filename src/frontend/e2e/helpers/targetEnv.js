@@ -196,8 +196,8 @@ export const STAGING_GATE_SPECS = [
   },
   {
     file: 'T5676-aspect-stage-alignment.qa.spec.js',
-    lane: 'b',
-    covers: 'aspect-aware video stage on a real account (dev-harness describe is lane C, local-only)',
+    lane: ['b', 'c'],
+    covers: 'aspect-aware video stage: real-account describe in lane B; dev-harness describe in lane C (local-only, skips on a deployed target)',
   },
   {
     file: 'bug38-autoselect-and-frame-step.qa.spec.js',

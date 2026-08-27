@@ -24,11 +24,13 @@ test('T4070: annotation banner shows soccer-notation time @staging-gate @gate-b'
   const res = await context.request.get(`${API_BASE}/games`, PROFILE ? { headers: { 'X-Profile-ID': PROFILE } } : undefined);
   expect(res.ok(), `GET /api/games (${res.status()})`).toBeTruthy();
   const games = (await res.json()).games || [];
-  const target = games.find((g) => g.storage_status === 'active');
+  // T7800: clip_count > 0 too — an active-but-unannotated game would hard-FAIL the
+  // .clip-marker wait instead of skipping loudly.
+  const target = games.find((g) => g.storage_status === 'active' && (g.clip_count || 0) > 0);
   if (!target) {
-    console.log('[T4070][SKIP] account has no ACTIVE game to drive annotation playback; seed one per FIXTURE-CONTRACT');
+    console.log('[T4070][SKIP] account has no ACTIVE game with clips to drive annotation playback; seed one per FIXTURE-CONTRACT');
   }
-  test.skip(!target, '[T5420] no active game available for annotation playback');
+  test.skip(!target, '[T5420] no active game with clips available for annotation playback');
   console.log(`[T4070] driving active game id=${target.id} (${target.opponent_name})`);
   await openGameInAnnotate(page, target.id);
 

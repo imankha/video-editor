@@ -8,18 +8,28 @@ by running three parallel LANES (T7800).
 
 ## Lanes (T7800)
 
-Every gate member carries `@staging-gate` plus exactly one lane tag in its title. Each
-lane runs as its OWN Playwright process with its own account env, because specs read
-`E2E_REAL_EMAIL` / `E2E_REAL_PROFILE` into module constants at import time (per-process
-env is the account seam; Playwright projects cannot set per-project env). Lanes A vs B/C
-use DIFFERENT accounts: concurrent write sessions on one account cause `stale_baseline`
-R2 CAS freezes.
+Every gate member carries `@staging-gate` plus a lane tag in its title (`T5676` spans
+two lanes, one per describe). Each lane runs as its OWN Playwright process with its own
+account env, because specs read `E2E_REAL_EMAIL` / `E2E_REAL_PROFILE` into module
+constants at import time (per-process env is the account seam; Playwright projects
+cannot set per-project env). EVERY lane gets its own account: concurrent write sessions
+on one account cause `stale_baseline` R2 CAS freezes, and even a light-write/read
+pairing is only provably safe when staging runs a single API machine (a second machine
+gives each session its own profile.sqlite copy, and the CAS loser freezes; staging has
+`auto_start_machines = true`, so the machine count is not guaranteed). Alias clones are
+one seed command each, so no lane shares.
 
 | Lane | Account | Character | Members |
 |------|---------|-----------|---------|
 | `@gate-a` | `imankh@gmail.com` / `9fa7378c` | ALL heavy writes (real exports, publish, share links) | `staging-smoke`, `derisk-staging-export`, `derisk-staging-endcard-copylink` |
-| `@gate-b` | second seeded account (alias clone) | browsing + light writes (crop drag, share link) | `game-loading`, `annotate-game-clock`, `T4550-overlay-transform`, `T4190-my-reels-group-visibility`, `T5677-home-deeplinks`, `T7350-mobile-share-routing`, `T5642-overlay-working-video-presigned`, `T5676` (real-account describe), `bug38-autoselect-and-frame-step` |
-| `@gate-c` | none (route-mocked) + second account for slow reads | public viewers + slow reads + local-only members that skip loudly on a deployed target | `collection-share`, `shared-viewer-affordance-gating`, `T5290-recap-mobile-redesign`, `T5681-games-poster-grid`, `T7100-reel-download-feedback`, `T5710-per-layer-recap` (local-only, seam), `bug38-harness` (local-only, dev harness), `T5676` dev-harness describe (local-only) |
+| `@gate-b` | alias clone 1 (`e2e-gate@test.local`) | browsing + light writes (crop drag, share link) | `game-loading`, `annotate-game-clock`, `T4550-overlay-transform`, `T4190-my-reels-group-visibility`, `T5677-home-deeplinks`, `T7350-mobile-share-routing`, `T5642-overlay-working-video-presigned`, `T5676` (real-account describe), `bug38-autoselect-and-frame-step` |
+| `@gate-c` | alias clone 2 (`e2e-gate2@test.local`); the mocked specs need no account | public viewers + slow reads + local-only members that skip loudly on a deployed target | `collection-share`, `shared-viewer-affordance-gating`, `T5290-recap-mobile-redesign`, `T5681-games-poster-grid`, `T7100-reel-download-feedback`, `T5710-per-layer-recap` (local-only, seam), `bug38-harness` (local-only, dev harness), `T5676` dev-harness describe (local-only) |
+
+A cold-machine caveat for phantom REDs: the runner warms `/health`, but if a lane's
+traffic wakes a SECOND, cold staging machine, that lane's first tests can hit the ~145s
+cold start against the 60s deployed per-test timeout and fail spuriously. If a RED lane's
+first failures are all timeouts, check `fly machines list -a reel-ballers-api-staging`
+before believing them.
 
 The authoritative machine-readable inventory is `helpers/targetEnv.js`
 (`STAGING_GATE_SPECS`, printed by `global-setup` on every deployed-target run).
@@ -29,7 +39,7 @@ The authoritative machine-readable inventory is `helpers/targetEnv.js`
 ```bash
 # Step 0 (idempotent seed, also resets drift from prior gate runs and guarantees
 # the export spec a framed draft; SUPERVISOR/host step, needs cross-env creds):
-#   see FIXTURE-CONTRACT.md § Seeding (both accounts: imankh + the --to-email alias)
+#   see FIXTURE-CONTRACT.md § Seeding (all 3 accounts: imankh + the 2 --to-email aliases)
 
 # Step 1: run the three lanes concurrently (~10-14 min typical):
 bash scripts/staging-gate.sh
