@@ -175,3 +175,66 @@ test('active + failed + queued render as a stack, each with its own control', as
   });
   expect(count).toBe(2);
 });
+
+// T7820: the Games tab renders each upload as a REAL game tile (thumbnail +
+// color-coded bottom-edge bar) inside the Uploading rail, not as banner rows.
+// Fully network-stubbed like the rest of this file: entries are seeded straight
+// into the store (previewFrame included — it is memory-only runtime state), and
+// ProjectManager mounts on the default authenticated route with zero games.
+test('T7820: uploads render as game tiles — thumbnail, bar width, state chips, queued dim', async ({ page }) => {
+  await page.evaluate(async () => {
+    const { useUploadStore, UPLOAD_STATUS } = await import('/src/stores/uploadStore.js');
+    const mk = (id, name, status, over = {}) => ({
+      id, status, file: null, files: null, fileName: name, fileKey: `${name}:1`,
+      fileSize: 1000, progress: 0, phase: 'hashing', message: 'Queued',
+      startedAt: new Date().toISOString(), gameDetails: null, videoMetadata: null,
+      isMultiVideo: false, blobUrl: null, gameName: name, gameId: null,
+      createdGameName: null, previewFrame: null, onComplete: [], onGameCreated: null,
+      retryContext: {}, ...over,
+    });
+    // Tiny valid-enough JPEG data URL: the tile only needs an <img src="data:..."> —
+    // the browser renders a broken image silently if undecodable, which is fine here.
+    const FRAME = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    useUploadStore.setState({
+      uploads: [
+        mk('a', 'active.mp4', UPLOAD_STATUS.UPLOADING, { progress: 55, phase: 'uploading', message: 'Uploading...', previewFrame: FRAME }),
+        mk('b', 'failed.mp4', UPLOAD_STATUS.ERROR, { progress: 30, phase: 'error', message: 'Upload failed' }),
+        mk('c', 'waiting.mp4', UPLOAD_STATUS.QUEUED),
+      ],
+      insufficientCredits: null,
+    });
+  });
+
+  // The rail lives in ProjectManager's Games tab (the default tab with 0 projects).
+  const rail = page.getByTestId('uploading-rail');
+  await expect(rail).toBeVisible();
+  await expect(rail.getByTestId('uploading-game-tile')).toHaveCount(3);
+
+  // ACTIVE: locally-captured thumbnail <img>, green bar at the live width, chip + %.
+  const active = rail.locator('[data-tile-state="uploading"]');
+  await expect(active.getByTestId('upload-tile-thumb')).toHaveAttribute('src', /^data:image\/jpeg/);
+  // Exact: the meta line's "Uploading..." message must not double-match the chip.
+  await expect(active.getByText('Uploading', { exact: true })).toBeVisible(); // state chip
+  await expect(active.getByText('55%')).toBeVisible();
+  const activeFill = active.getByTestId('upload-tile-bar-fill');
+  await expect(activeFill).toHaveClass(/bg-green-600/); // GAME.progressBar, colors unchanged
+  await expect(activeFill).toHaveAttribute('style', /width:\s*55%/);
+
+  // QUEUED: dimmed branded fallback (no frame was seeded), empty track, no fill.
+  const queued = rail.locator('[data-tile-state="queued"]');
+  await expect(queued.getByTestId('upload-tile-fallback')).toHaveClass(/opacity-50/);
+  await expect(queued.getByTestId('upload-tile-bar')).toBeAttached();
+  await expect(queued.getByTestId('upload-tile-bar-fill')).toHaveCount(0);
+
+  // FAILED: T7490-converged skin — rose chip, frozen rose bar, Retry/Discard bar.
+  const failed = rail.locator('[data-tile-state="failed"]');
+  await expect(failed.getByText('Upload incomplete')).toBeVisible();
+  const failedFill = failed.getByTestId('upload-tile-bar-fill');
+  await expect(failedFill).toHaveClass(/bg-rose-600/);
+  await expect(failedFill).toHaveAttribute('style', /width:\s*30%/);
+  await expect(failed.getByRole('button', { name: /retry upload of/i })).toBeVisible();
+  await expect(failed.getByRole('button', { name: /^discard/i })).toBeVisible();
+
+  // The corner indicator (other-screens surface) is untouched and still renders.
+  await expect(page.locator('div.fixed.bottom-4.right-4').getByText('Uploading active.mp4')).toBeVisible();
+});

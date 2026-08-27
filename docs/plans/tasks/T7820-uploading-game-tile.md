@@ -77,12 +77,34 @@ jump groups later). Same 16:9 geometry/overlay typography as GameTile (T5681).
 ## Implementation
 
 ### Steps
-1. [ ] uploadStore: `previewFrame` field + capture util invoked from uploadManager enqueue
-2. [ ] UploadingGameTile (active/queued/resume/failed states, bar colors per design)
-3. [ ] ProjectManager: swap ActiveUploadCard + PendingUploadCard rows for the tile grid
-4. [ ] Vitest for the capture util (mock video/canvas) + tile state rendering
-5. [ ] Extend T7360 e2e to assert tile shape (thumbnail img, bar width, state chips)
+1. [x] uploadStore: `previewFrame` field + capture util invoked at enqueue (capture
+       lives in uploadStore.startUpload, the actual enqueue site, so QUEUED entries
+       get frames too; new util src/frontend/src/utils/captureVideoFrame.js)
+2. [x] UploadingGameTile (active/queued/resume/failed states, bar colors per design)
+3. [x] ProjectManager: swap ActiveUploadCard + PendingUploadCard rows for the tile grid
+       (both card components deleted; they were file-local with no other importers)
+4. [x] Vitest for the capture util (mock video/canvas) + tile state rendering
+5. [x] Extend T7360 e2e to assert tile shape (thumbnail img, bar width, state chips)
 6. [ ] Real-browser drive on dev (upload a small file, reload mid-upload for resume state)
+   - user is testing on staging post-merge (2026-08-27 directive: no e2e runs, merge when ready)
+
+### Deliberate parity drops vs the deleted cards (reviewer-flagged, accepted)
+
+Lost from ActiveUploadCard/PendingUploadCard and NOT carried onto the tile (all still
+visible in the corner UploadProgressIndicator, which renders on this screen too):
+file size, "Started {date}", the pending session's multi-video half `label` prefix, the
+explicit Resume button (tile click resumes), and the concrete error message on failed
+(tile shows the fixed T7490 copy). Revisit only if users miss them.
+
+### Review follow-ups (minor, not blocking)
+
+- Rail header always reads "Uploading" even when only resume/failed tiles are present
+- Queued tile click navigates to the ACTIVE upload's annotate view (parity with the old
+  card, but a stronger affordance now)
+- captureVideoFrame lacks PosterFramePreview's EOF nudge (duration - 0.05) and a
+  fake-timers test for the 15s timeout
+- groupGamesForTab runs twice per ProjectManager render (hoistable)
+- ETA voice differs from GlobalExportIndicator ("~1m left" vs "About 1 minute")
 
 ## Acceptance Criteria
 

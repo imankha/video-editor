@@ -307,7 +307,10 @@ export function GameTile({
       {/* Top-left chip. T7490: a failed upload shows a rose "Upload incomplete" badge
           (error) and suppresses the yellow expiry chip (an unfinished upload can't
           meaningfully be "expiring") — a deliberately different hue family so the two
-          states are never confused at a glance. */}
+          states are never confused at a glance.
+          T7820: UploadingGameTile.jsx MIRRORS this failed skin for client-side errored
+          uploads (it can't reuse this component: no game row/poster endpoint exists
+          yet). If you change this skin, change the mirror too. */}
       {isUploadFailed ? (
         <div className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-900/80 text-rose-200 ring-1 ring-rose-500/40">
           <AlertTriangle size={10} />
