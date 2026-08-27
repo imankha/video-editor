@@ -1,6 +1,6 @@
 # T7820: Uploading game renders as a real game tile (thumbnail + color-coded progress)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-27
