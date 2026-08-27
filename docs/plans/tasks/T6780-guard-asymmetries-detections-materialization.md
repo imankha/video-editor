@@ -1,6 +1,6 @@
 # T6780: Guard-asymmetry follow-up — `working_videos.detections_data` write + games materialization writes
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-11
