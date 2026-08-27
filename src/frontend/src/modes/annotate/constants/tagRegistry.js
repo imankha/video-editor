@@ -26,6 +26,15 @@ const TAG_SETS = {
 
 const DEFAULT_SPORT = 'soccer';
 
+// Sentinel for a profile whose sport was never chosen (the default for NEW
+// profiles as of T7850). Distinct from a custom/"Other" sport the user typed:
+// "no_sport" means "never picked", so the Add Clip UI prompts the user to set
+// one; a custom sport is a deliberate choice with no tag registry, so it stays
+// silent. Intentionally NOT in SUPPORTED_SPORTS (which lists sports that resolve
+// to a tag set); getTagSet('no_sport') returns null, same as any unknown sport.
+export const NO_SPORT = 'no_sport';
+export const NO_SPORT_LABEL = 'No Sport';
+
 export const SUPPORTED_SPORTS = [
   { id: 'soccer', name: 'Soccer' },
   { id: 'flag_football', name: 'Flag Football' },
@@ -42,12 +51,14 @@ export const SUPPORTED_SPORTS = [
 
 export function sportDisplayName(storedValue) {
   if (!storedValue) return '';
+  if (storedValue === NO_SPORT) return NO_SPORT_LABEL;
   const match = SUPPORTED_SPORTS.find(s => s.id === storedValue);
   return match ? match.name : storedValue;
 }
 
 export function sportStoredValue(displayName) {
   if (!displayName) return '';
+  if (displayName.toLowerCase() === NO_SPORT_LABEL.toLowerCase()) return NO_SPORT;
   const match = SUPPORTED_SPORTS.find(s => s.name.toLowerCase() === displayName.toLowerCase());
   return match ? match.id : displayName;
 }
@@ -70,6 +81,7 @@ const SPORT_EMOJI = {
 };
 
 export function sportEmoji(sport) {
+  if (sport === NO_SPORT) return '❔'; // "no sport chosen yet" — not a real sport's ball, not the custom medal
   return SPORT_EMOJI[sport] || '🏅'; // 🏅 fallback for custom sports
 }
 

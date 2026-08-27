@@ -199,7 +199,7 @@ async def create_profile(
 
     new_id = uuid4().hex[:8]
     name = request.name.strip()
-    sport = request.sport or "soccer"
+    sport = request.sport or "no_sport"
 
     # T5310: create the new profile.sqlite locally and durably push it to R2 FIRST,
     # before the registry row is written. Ordering the object sync ahead of the

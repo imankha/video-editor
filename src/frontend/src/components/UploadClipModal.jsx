@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Upload, Film, Loader } from 'lucide-react';
-import { Button, StarRating, TagSelector } from './shared';
+import { Button, StarRating, TagSelector, NoSportTagWarning } from './shared';
 import { generateClipName } from '../utils/clipDisplayName';
 import { ensureUniqueName, getExistingNamesForGame } from '../utils/uniqueName';
-import { getPositions, getTagSet } from '../modes/annotate/constants/tagRegistry';
+import { getPositions, getTagSet, NO_SPORT } from '../modes/annotate/constants/tagRegistry';
 import { useCurrentProfile } from '../stores';
 
 /**
@@ -29,7 +29,7 @@ export function UploadClipModal({
   existingClips = [],
 }) {
   const currentProfile = useCurrentProfile();
-  const sport = currentProfile?.sport || 'soccer';
+  const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
 
   // Form state
@@ -185,14 +185,16 @@ export function UploadClipModal({
           <div>
             <label className="block text-sm text-gray-400 mb-2">Tags</label>
             <div className="max-h-48 overflow-y-auto pr-2">
-              {tagSet && (
+              {tagSet ? (
                 <TagSelector
                   positions={getPositions(sport)}
                   tagsByPosition={tagSet.tags}
                   selectedTags={selectedTags}
                   onTagToggle={handleTagToggle}
                 />
-              )}
+              ) : sport === NO_SPORT ? (
+                <NoSportTagWarning />
+              ) : null}
             </div>
           </div>
 
