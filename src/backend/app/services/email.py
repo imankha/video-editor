@@ -592,6 +592,22 @@ def _get_share_url(share_token: str, share_type: str = "video") -> str:
     return f"{scheme}://{domain}/shared/{share_token}"
 
 
+def _get_game_editor_url(game_id: int, profile_id: str) -> str:
+    """Deep link that opens a specific game in the annotate editor (T7670).
+
+    The SPA has no per-game route; App.jsx reads `?game`/`?profile` query
+    params on load, switches to that profile if needed, then opens the game in
+    annotate mode (the frontend half of this deep link). `profile_id` is
+    REQUIRED to disambiguate — per-profile game ids are not globally unique, so
+    a bare `?game=<id>` could open the wrong game under a different active
+    profile.
+    """
+    from app.storage import APP_ENV
+    domain = DOMAIN_MAP.get(APP_ENV, "localhost:5173")
+    scheme = "http" if "localhost" in domain else "https"
+    return f"{scheme}://{domain}/?game={game_id}&profile={profile_id}"
+
+
 async def send_collection_share_email(
     recipient_email: str,
     sharer_email: str,
@@ -658,6 +674,70 @@ async def send_collection_share_email(
         return True
     except Exception as e:
         logger.error(f"[Email] Collection share email to {recipient_email} failed: {e}")
+        return False
+
+
+async def send_game_ready_email(
+    to_email: str,
+    game_name: str,
+    game_id: int,
+    profile_id: str,
+) -> bool:
+    """Upload-complete return-trigger email (T7670).
+
+    A full-game upload runs tens of minutes; the user leaves mid-wait. This
+    converts the wait into a re-entry path: "Your game is ready - start
+    clipping" with a deep link straight into the annotate editor. Sent ONLY at
+    the durable pending->ready transition (activate_game), deduped there.
+
+    Dev-mode (RESEND_API_KEY unset): log the would-be email and return True --
+    matches the share funcs, never raises, so a missing key never fails an
+    activation in local dev.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    game_url = _get_game_editor_url(game_id, profile_id)
+    safe_name = game_name or "Your game"
+
+    if not api_key:
+        logger.warning(
+            f"[Email] DEV MODE -- game-ready email to {to_email} "
+            f"for game {game_id} '{safe_name}'. URL: {game_url}"
+        )
+        return True
+
+    subject = f"{safe_name} is ready - start clipping"
+    html_body = _build_share_email(
+        heading="Your game is ready",
+        game_name=safe_name,
+        cta_url=game_url,
+        cta_text="Start Clipping",
+        footer_reason="You're receiving this because you uploaded a game to ReelBallers.",
+        is_first_touch=False,
+        preheader="Your game finished processing - jump back in and start clipping.",
+    )
+
+    try:
+        async def _send():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.post(
+                    RESEND_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "from": FROM_ADDRESS,
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html_body,
+                    },
+                )
+
+        resp = await retry_async_call(_send, operation="resend_game_ready", **TIER_1)
+        if resp.status_code not in (200, 201):
+            logger.error(f"[Email] Game-ready email failed: {resp.status_code} {resp.text}")
+            return False
+        logger.info(f"[Email] Game-ready email sent to {to_email} for game {game_id}")
+        return True
+    except Exception as e:
+        logger.error(f"[Email] Game-ready email to {to_email} for game {game_id} failed: {e}")
         return False
 
 
