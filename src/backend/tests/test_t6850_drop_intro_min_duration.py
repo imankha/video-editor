@@ -108,23 +108,26 @@ class TestMigrationV043:
         conn.execute("PRAGMA user_version = 42")
         conn.commit()
 
-        from app.migrations.profile_db import RUNNER
+        from app.migrations.profile_db import MIGRATIONS, RUNNER
 
         applied = RUNNER.run(conn, "sqlite")
-        assert any(m.version == 43 for m in applied)
-        # T4330 added v044 above this head, T4340 added v045 above THAT, and
-        # T4350 added v046 above THAT -- a below-head DB run through the RUNNER
-        # sweeps every version above its starting point, so it now also picks
-        # up v044, v045, AND v046. Asserting all four preserves this test's
-        # original intent (a below-head DB reaches the TRUE head), not just
-        # v043 in isolation.
-        assert any(m.version == 44 for m in applied)
-        assert any(m.version == 45 for m in applied)
-        assert any(m.version == 46 for m in applied)
+        applied_versions = {m.version for m in applied}
+        assert 43 in applied_versions
+
+        # A below-head DB run through the RUNNER sweeps every version above
+        # its starting point, reaching the TRUE current head -- this test's
+        # original intent, not just v043 in isolation. Assert that dynamically
+        # against the registry rather than hardcoding a list of version
+        # numbers: this test doesn't own the track's head, and a hardcoded
+        # list breaks every time an unrelated later migration lands (this
+        # line was itself extended 43->44,45,46 for exactly that reason --
+        # see git history).
+        expected_versions = {m.version for m in MIGRATIONS if m.version > 42}
+        assert applied_versions == expected_versions
 
         cols = {r[1] for r in conn.execute("PRAGMA table_info(user_settings)").fetchall()}
         assert "intro_min_duration_seconds" not in cols
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 46
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == RUNNER.latest_version
         conn.close()
 
     def test_v043_is_still_the_free_version(self):
@@ -136,13 +139,17 @@ class TestMigrationV043:
         assert versions.count(43) == 1
         assert versions == sorted(versions)
 
-    def test_registered_and_is_the_new_head(self):
-        from app.migrations.profile_db import MIGRATIONS, RUNNER
+    def test_registered_in_profile_db_migrations(self):
+        """Renamed from test_registered_and_is_the_new_head: v043 must be
+        registered in profile_db MIGRATIONS, but this test does not own the
+        track's head -- later migrations (v044, v045, v046, v047, ...) have
+        since landed above it. The hardcoded head assertion here had already
+        been bumped once (43-is-head -> ==46) purely to track unrelated later
+        migrations; test_migrations.py::test_profile_db_track owns that
+        dynamic check, so this test only asserts registration."""
+        from app.migrations.profile_db import MIGRATIONS
 
-        # T4330 (v044) landed above v043, then T4340 (v045) landed above v044,
-        # then T4350 (v046) landed above v045 -- v043 is no longer the head.
-        assert max(m.version for m in MIGRATIONS) == 46
-        assert RUNNER.latest_version == 46
+        assert 43 in {m.version for m in MIGRATIONS}
 
 
 class TestFreshDbHasNoColumn:

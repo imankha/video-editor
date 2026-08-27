@@ -128,22 +128,28 @@ def test_noop_column_on_missing_final_videos(tmp_path):
     assert "intro_cards" in tables
 
 
-def test_registry_head_is_v043():
+def test_registry_has_no_version_collisions():
+    """Renamed from test_registry_head_is_v043: this test's real job is a
+    no-collision / no-silent-renumber audit over the versions this file's
+    history touched (34-44), NOT tracking the track's current head -- that
+    hardcoded head assertion (last `== 46`) had already been bumped twice
+    (43->44->45->46, per git history) purely to keep pace with unrelated
+    later migrations, exactly the anti-pattern flagged in T6770's PR review.
+    test_migrations.py::test_profile_db_track owns the dynamic head check;
+    this test only owns "these specific numbers are registered exactly once,
+    and 37/39 were successfully renumbered away" below.
+
+    T6570 added v035 (intro_cards.subtitle_text); T6620 added v036 (null the
+    dead intro_cards.title_text); T6640 added v038 (null the dead
+    intro_cards.text_elements) and v040 (backfill exactly one default card);
+    T5215 was renumbered from v037 to v041 (intro_min_duration_seconds) when
+    it merged master and found v037 already past the v040 head; T6630 was
+    renumbered from v039 to v042 (text_overlays regions) for the same reason
+    once T5215 landed first; T6850 added v043 (drops
+    intro_min_duration_seconds -- T6680 made the v041 threshold dead); T4330
+    added v044 (working_clips.framing_version mutation counter for the
+    unified action client's two-writer 409 conflict detection)."""
     from app.migrations.profile_db import MIGRATIONS
-    # T6570 added v035 (intro_cards.subtitle_text); T6620 added v036 (null the
-    # dead intro_cards.title_text); T6640 added v038 (null the dead
-    # intro_cards.text_elements) and v040 (backfill exactly one default card);
-    # T5215 was renumbered from v037 to v041 (intro_min_duration_seconds) when
-    # it merged master and found v037 already past the v040 head; T6630 was
-    # renumbered from v039 to v042 (text_overlays regions) for the same reason
-    # once T5215 landed first; T6850 added v043 (drops
-    # intro_min_duration_seconds -- T6680 made the v041 threshold dead); T4330
-    # added v044 (working_clips.framing_version mutation counter for the
-    # unified action client's two-writer 409 conflict detection); T4340 added
-    # v045 (canonicalize working_clips.segments_data.boundaries to full-list);
-    # T4350 added v046 (working_videos.framing_snapshot + highlight_carry_note
-    # for carrying overlay-edited highlights across a framing re-export).
-    assert max(m.version for m in MIGRATIONS) == 46
     # Exactly one migration owns each version (no collision with a sibling branch).
     assert sum(1 for m in MIGRATIONS if m.version == 34) == 1
     assert sum(1 for m in MIGRATIONS if m.version == 35) == 1
