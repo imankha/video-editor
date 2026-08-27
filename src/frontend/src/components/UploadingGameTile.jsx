@@ -198,7 +198,7 @@ export function UploadingGameTile({
         </h3>
         {state === TILE_STATE.FAILED ? (
           <p className="mt-0.5 text-[11px] text-rose-200/90 leading-snug">
-            Upload didn't finish. Retry to resume, or discard.
+            Upload didn&apos;t finish. Retry to resume, or discard.
           </p>
         ) : (
           <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
