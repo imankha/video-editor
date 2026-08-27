@@ -35,6 +35,10 @@ const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 const CLIPS_LIST_RE = /\/api\/clips\/projects\/\d+\/clips(\?|$)/;
 const GAMES_RE = /\/api\/games(\?|$)/;
 const HEALTH_RE = /\/api\/health(\?|$)/;
+// T6250 Overlay-entry endpoints. overlay-data must have ONE owner; outdated-clips
+// is a single owner too (its dev x2 is StrictMode-only, verify with a prod build).
+const OVERLAY_DATA_RE = /\/api\/export\/projects\/\d+\/overlay-data(\?|$)/;
+const OUTDATED_CLIPS_RE = /\/api\/projects\/\d+\/outdated-clips(\?|$)/;
 // First real video bytes = a presigned R2 object (range request) OR a stream proxy.
 const VIDEO_BYTE_RE = /(r2\.cloudflarestorage\.com|\.r2\.dev|X-Amz-Signature|working_video\/stream|games\/[^/]+\/video|\/stream)/i;
 
@@ -384,6 +388,103 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     expect(clips, 're-edit gesture owns its clip fetch').toBeGreaterThanOrEqual(1);
     expect(list, 'Framing opened with a populated clip list (not empty after reset)').toBeGreaterThan(0);
     await saveEvidence(page, 'T6190-reedit-reel-populated-framing');
+    await context.close();
+  });
+
+  // ---- T6250: Framing -> Overlay must fetch overlay-data from ONE owner -------
+  // From the 2026-07-31 HAR, entering Overlay fired overlay-data x3 (two owners:
+  // OverlayScreen Effect A "fresh export" + Effect B "plain load") and
+  // outdated-clips x2. Root cause: useProjectLoader seeded projectDataStore
+  // .clipMetadata on EVERY project-open, so Effect A (whose trigger is that flag)
+  // misfired on a plain Framing->Overlay navigation alongside Effect B. Fix
+  // (T6250) removes that seed: plain opens fall to Effect B alone; a genuine
+  // framing export still sets the flag via FocusScreen and keeps Effect A.
+  //
+  // STRICTMODE NOTE: this runs the dev stack, where React 18 double-invokes each
+  // mount effect, so a single owner shows x2 on the wire (prod = x1). We can't
+  // assert an absolute "1" in dev without a prod build, so we pin the STRUCTURAL
+  // invariant that survives StrictMode: overlay-data must NOT be fetched by more
+  // owners than outdated-clips (a proven single owner). Pre-fix that was 3 > 2
+  // and this fails; post-fix both are the same single-owner count (2 in dev, 1
+  // in prod). The prod-build "exactly 1" check is a separate manual step
+  // (npm run build && npm run preview) recorded in the task file.
+  test('T6250: Framing -> Overlay fetches overlay-data from one owner (== outdated-clips)', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await loginAsRealUser(context, EMAIL, PROFILE);
+    const page = await context.newPage();
+    const net = recordRequests(page);
+
+    // T6250 regression guard: entering Overlay must not trip React's "Maximum
+    // update depth exceeded" (the T6190 render-loop class) now that a different
+    // effect owns the fetch on the plain path.
+    const maxDepthErrors = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error' && /Maximum update depth exceeded/i.test(m.text())) maxDepthErrors.push(m.text());
+    });
+    page.on('pageerror', (e) => {
+      if (/Maximum update depth exceeded/i.test(String(e))) maxDepthErrors.push(String(e));
+    });
+
+    await gotoDrafts(page);
+
+    // Overlay is only reachable when the project has a working video (already
+    // exported to Framing). A COMPLETED reel shows a "Focus ...: Complete (click
+    // to open)" SEGMENT chip (SegmentedProgressStrip.jsx:187) that opens that
+    // working-video project into Framing (non-overlay segment -> onClipClick),
+    // where the ModeSwitcher enables Overlay. Exclude the trailing "Overlay:"
+    // segment (deep-links into Overlay). Skip honestly with no completed reel.
+    const focusCompleteChip = page.getByTitle(/^(?!Overlay:).*:\s*Complete \(click to open\)$/).first();
+    const hasCompleted = await focusCompleteChip.count();
+    test.skip(!hasCompleted, 'no completed (framing-exported) reel on this account data — cannot enter Overlay');
+    await focusCompleteChip.click();
+    await page.locator('div.cursor-move.border-2, .crop-handle').first().waitFor({ timeout: 90000 });
+
+    // DETERMINISTIC regression pin for the T6250 fix (the network race below is
+    // timing-sensitive and does not always reproduce): a plain project-open must
+    // NOT seed projectDataStore.clipMetadata. Pre-fix, useProjectLoader wrote
+    // buildClipMetadata() here — a non-null {version, source_clips} object for any
+    // project with clips — and that flag is exactly what makes OverlayScreen's
+    // Effect A ("fresh export detected") misfire on a plain Framing->Overlay
+    // entry. Post-fix the flag stays null until a genuine export gesture
+    // (FocusScreen:983) sets it. This assertion FAILS on master / pre-fix.
+    const clipMetaAfterOpen = await page.evaluate(async () => {
+      const mod = await import('/src/stores/projectDataStore.js');
+      return mod.useProjectDataStore.getState().clipMetadata;
+    });
+    console.log('[T6250] projectDataStore.clipMetadata after plain Framing open =', JSON.stringify(clipMetaAfterOpen));
+    expect(clipMetaAfterOpen, 'plain project-open must not seed clipMetadata (the Effect A misfire trigger)').toBeNull();
+
+    // On a completed reel selectedProject.working_video_id is set, so Overlay is
+    // enabled. handleModeChange goes straight through (no unsaved overlay edits).
+    const overlayBtn = page.locator('[data-testid="mode-overlay"]');
+    await overlayBtn.waitFor({ timeout: 30000 });
+    await expect(overlayBtn, 'Overlay mode enabled on a completed reel in Framing').toBeEnabled({ timeout: 30000 });
+    // The transition gesture: click into Overlay. This is the window we count.
+    const switchAt = Date.now();
+    await overlayBtn.click();
+    await page.waitForURL(/\/overlay/, { timeout: 30000 }).catch(() => {});
+    // Wait for overlay-data to actually come back, then let any late/racing
+    // owner + StrictMode replay fire so the count is complete before we read it.
+    await page.waitForResponse((r) => OVERLAY_DATA_RE.test(r.url()), { timeout: 60000 }).catch(() => {});
+    await page.waitForTimeout(2500);
+
+    const overlayData = net.countSince(switchAt, 'GET', OVERLAY_DATA_RE);
+    const outdated = net.countSince(switchAt, 'GET', OUTDATED_CLIPS_RE);
+    console.log(`[T6250] Framing->Overlay counts: overlay-data=${overlayData} outdated-clips=${outdated} `
+      + `(dev StrictMode doubles a single owner; prod=1 each. Pre-fix HAR: overlay-data=3, outdated-clips=2)`);
+
+    // Overlay data actually loaded (owner fired, regions can restore).
+    expect(overlayData, 'overlay-data has an owner on the Overlay-entry transition').toBeGreaterThanOrEqual(1);
+    // THE regression pin: overlay-data must not exceed the single-owner baseline
+    // (outdated-clips). Pre-fix 3 > 2 fails here; post-fix they match.
+    expect(overlayData, 'overlay-data fetched by ONE owner (not more than the single-owner outdated-clips)')
+      .toBeLessThanOrEqual(outdated);
+
+    // No render loop on the transition (T6190 class regression guard).
+    await page.waitForTimeout(500);
+    expect(maxDepthErrors, `Framing->Overlay must not trip the render loop:\n${maxDepthErrors.join('\n')}`).toEqual([]);
+
+    await saveEvidence(page, 'T6250-overlay-entry-one-owner');
     await context.close();
   });
 });

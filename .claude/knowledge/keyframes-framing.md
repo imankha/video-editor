@@ -189,6 +189,26 @@ gesture lands — no save/export.
     split (it does NOT remount) — its one-shot `/api/health` fires once at boot, never on
     project-open. Renders `null` while connected (no chrome on Drafts). Verified on the wire: a pure
     SPA home→editor transition fires 0 health (only boot fires it; dev StrictMode doubles it, prod=1).
+- **Overlay-data has ONE owner per entry (T6250, 2026-08-27) — do not re-seed `clipMetadata` on
+  project-open.** `OverlayScreen` has two `overlay-data` fetch effects: **Effect A** (~L596, "fresh
+  export detected") whose trigger is `projectDataStore.clipMetadata` being truthy, and **Effect B**
+  (~L720, "plain load", guard `syncState==='idle' && duration && !clipMetadata`). `clipMetadata` is a
+  gesture flag meaning "a framing export just produced a new working video" — its ONLY store reader is
+  OverlayScreen, and its ONLY legitimate writer is the export gesture (`FocusScreen.jsx:983` /
+  `ExportButtonContainer`). **The bug:** `useProjectLoader.loadProject` also wrote it on EVERY
+  project-open, so a plain Drafts→Framing→Overlay navigation (or a direct Drafts→Overlay open) left
+  `clipMetadata` set with nothing to clear it, and Effect A ("fresh export") misfired alongside Effect
+  B → `overlay-data` fetched by two owners (HAR: x3 = A StrictMode-doubled + B once; `outdated-clips`
+  x2 is its single owner's StrictMode double, one caller `OverlayScreen.jsx:183`, prod=1). **Fix =
+  delete the `setClipMetadata` store seed in `useProjectLoader.js`** (the local `buildClipMetadata`
+  value is kept for the return payload + `onWorkingVideoLoaded`). Now: genuine fresh export → Effect A
+  owns (B's `!clipMetadata` guard blocks it); every plain open / Framing→Overlay nav / direct
+  Drafts→Overlay → Effect B owns (its `duration` comes from the working video `loadProject` sets before
+  OverlayScreen mounts). Same "one owner per entry gesture" rule as T6190's clips fetch. Do NOT collapse
+  the duplicate with a cache/in-flight latch (the two owners are genuinely concurrent, ~1-9ms apart) and
+  do NOT re-introduce a load-time `clipMetadata` seed. Pinned by the T6250 test in
+  `e2e/T6190-project-open-fetches.qa.spec.js` (overlay-data owner-count ≤ the single-owner
+  outdated-clips baseline, StrictMode-agnostic; + the "Maximum update depth" render-loop guard).
 - **Flat list, no permanent boundaries** (permanent-frame model removed ~2026-06-21).
   `INITIALIZE` seeds ZERO keyframes (keyframeController.js:186-197); `ensurePermanentKeyframes` is
   now just a sort — endFrame arg ignored (L138-148); `REMOVE_KEYFRAME` protects nothing (L272-287);

@@ -5,6 +5,10 @@ import {
   getPositions,
   getAllTagNames,
   sportEmoji,
+  sportDisplayName,
+  sportStoredValue,
+  NO_SPORT,
+  NO_SPORT_LABEL,
 } from '../tagRegistry';
 
 // Mirror of the backend's CURATED_COMBOS tag names
@@ -63,6 +67,18 @@ describe('tag registry — all supported sports', () => {
     // custom ("Other") sports and missing values fall back to the medal
     expect(sportEmoji('cricket')).toBe('🏅');
     expect(sportEmoji(undefined)).toBe('🏅');
+  });
+
+  it('treats the no_sport sentinel as a tagless, non-supported sport (T7850)', () => {
+    // Never chosen: not in SUPPORTED_SPORTS, resolves to no tag set (same as
+    // any unknown sport) so the Add Clip UI shows the warning branch.
+    expect(SUPPORTED_SPORTS.some((s) => s.id === NO_SPORT)).toBe(false);
+    expect(getTagSet(NO_SPORT)).toBeNull();
+    // Round-trips through the display <-> stored helpers used by the profile form.
+    expect(sportDisplayName(NO_SPORT)).toBe(NO_SPORT_LABEL);
+    expect(sportStoredValue(NO_SPORT_LABEL)).toBe(NO_SPORT);
+    // Its glyph is distinct from both a real sport's ball and the custom medal.
+    expect(sportEmoji(NO_SPORT)).not.toBe('🏅');
   });
 
   it('every backend curated-combo tag exists in the sport (cross-language guard)', () => {

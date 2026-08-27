@@ -1,6 +1,6 @@
 # T7830: Sweep orphan audit + rank-pool raw-1080p question
 
-**Status:** TODO
+**Status:** STAGING
 **Priority:** P3 (cost/correctness hygiene)
 **Impact:** 4
 **Complexity:** 3
@@ -44,7 +44,25 @@ acceptance-criteria items were never executed and are carried forward here so th
 - [T7600](T7600-sweep-duplicate-raw-clip-exports.md) - parent task, idempotency fix already shipped
 - T6770 (refcount derived set) shares the sweep corner; coordinate, do not entangle
 
+## Progress Log
+
+**2026-08-27**: Phase 1 done via dotask container, merged [PR #288](https://github.com/imankha/video-editor/pull/288).
+- Rank-pool question answered: ALREADY FIXED, no code change. `_export_brilliant_clip` (T4175)
+  writes no `final_videos` row; `rank._rankable_pool` selects only published `final_videos`;
+  historical leaked rows purged by migration v021.
+- Reviewing the existing `scripts/cleanup_orphan_raw_clips.py` (from T7600) for the orphan-audit
+  pass surfaced a CRITICAL data-loss false-positive: its reference set only checked
+  `raw_clips.filename`, missing `working_clips.uploaded_filename` (user-uploaded multi-clip
+  sources, also stored under `raw_clips/`, read directly by `multi_clip.py`/`export_helpers.py`).
+  Under `--apply` it would have deleted live user uploads. Fixed the reference-set gap, added a
+  defense-in-depth gate (only `auto_`-prefixed sweep objects are ever deletion candidates), added
+  5 regression tests. The actual prod dry-run cannot run from a container (no R2 creds by
+  design) — remaining work is an admin running
+  `python scripts/cleanup_orphan_raw_clips.py --env prod --report ...` for the reclaimable-bytes
+  total, then user sign-off, then a separate `--apply` pass.
+
 ## Acceptance Criteria
 
 - [ ] Orphan audit across prod profiles produced; cleanup executed after dry-run sign-off
-- [ ] Rank-pool question answered (still live? filed or confirmed fixed)
+  (script fixed + tested; prod dry-run itself is a pending admin action)
+- [x] Rank-pool question answered (still live? filed or confirmed fixed) — confirmed already fixed, no code change

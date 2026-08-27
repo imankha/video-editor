@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Star, Check, Plus } from 'lucide-react';
-import { getPositions, getTagSet } from '../constants/tagRegistry';
+import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
+import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
@@ -81,7 +82,7 @@ export function ClipDetailsEditor({
 }) {
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
-  const sport = currentProfile?.sport || 'soccer';
+  const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -233,7 +234,7 @@ export function ClipDetailsEditor({
         </div>
 
         {/* Tags Selection */}
-        {tagSet && (
+        {tagSet ? (
           <div>
             <label className="block text-gray-400 text-xs mb-1">Tags</label>
             <TagSelector
@@ -243,7 +244,12 @@ export function ClipDetailsEditor({
               onTagToggle={handleTagToggle}
             />
           </div>
-        )}
+        ) : sport === NO_SPORT ? (
+          <div>
+            <label className="block text-gray-400 text-xs mb-1">Tags</label>
+            <NoSportTagWarning />
+          </div>
+        ) : null}
 
         {/* Name Input */}
         <div className="flex items-center gap-2">

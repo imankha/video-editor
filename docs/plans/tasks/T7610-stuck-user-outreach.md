@@ -177,6 +177,36 @@ FOLLOW-UP, not a first contact (reference or at least not contradict the prior e
 framing), and sends should be spaced out from that campaign rather than landing as a
 second cold email in under 2 weeks. The other 9 recipients are net-new to outreach.
 
+## Addendum 2026-08-27: gate status + new cohort (from the drop-off report refresh)
+
+**Gate status: SATISFIABLE.** All 5 gate tasks (T7480/T7470/T7540/T7490/T7590) deployed to
+prod 2026-08-26. Mobile upload additionally verified live by a REAL user, not just us:
+mostafaali452010 uploaded 36 MB from an iPhone-class viewport on 2026-08-27 (first mobile
+upload success in prod history). Remaining before send: log per-task verification evidence
+here, booking link, and the pre-send checklist. NEW pre-send dependency: T7880 must
+reconcile rooom1h's and finneganscudder's stranded uploads first (their emails say "try
+again" — the Retry card must be what they see), and ojedalucas19 is HELD until T7870's
+verdict.
+
+**New cohort (Aug 24-27 signups, 14 users).** The user base doubled since the segment map
+was written. Segment assignments (existing approved templates reused where the segment
+matches; flag for user OK at pre-send):
+
+| User | Platform | Fall-off point | Segment |
+|---|---|---|---|
+| rikusbothainnz@gmail.com | Desktop | Uploaded 6.77 GB, 2 clips, 1 project, reached Framing, no export | lisagee-style: "your reel is two taps away" (strongest candidate in the whole list) |
+| mostafaali452010@gmail.com | Mobile | Uploaded (mobile!), opened Add Clip, saved nothing | uploaded-no-clips (mobile variant) |
+| t_tolovaeball@hotmail.com | Mobile->Desktop | Upload failed pre-fix; 1,895 s engaged (2nd-highest ever); empty account | upload-failed: "bug fixed, retry" |
+| finneganscudder@gmail.com | Desktop | 663 MB upload stalled at 209 MB | upload-failed (AFTER T7880 reconciliation) |
+| ojedalucas19@gmail.com | Desktop | Upload succeeded, game vanished, credits kept | HOLD until T7870 verdict (may need apology + credits, bigajosue-style) |
+| rogerio.klein.rsk@gmail.com | Desktop | 4 sessions / 31 min engaged, never created a game | desktop-never-started |
+| l.piress17@gmail.com | Desktop | Uploaded 95 MB, never pressed play, gone in 3 min | uploaded-no-clips |
+| mikhail.k.taylor@gmail.com | Desktop | Full account in 122 s incl. 1 clip; likely a tester | low priority; uploaded-no-clips if included |
+| lisa.sakaio, j86283162, coxey2000gaming, trejosedwin22, thomascleverkappes69, 3522448 | mixed/? | Signed up, zero recorded actions | ghost-signup |
+
+Also update cschwartz78's entry: he returned twice more (Aug 26: 3 s, Aug 27: 1 s) — six
+visits total, still zero clips; his follow-up copy should acknowledge persistence.
+
 ## Acceptance Criteria
 
 - [x] Email copy per segment approved by user (2026-08-24, with "Happy to reward your

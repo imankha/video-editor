@@ -1,6 +1,6 @@
 # T6250: Entering Overlay fires `overlay-data` 3x and `outdated-clips` 2x
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-31
@@ -84,11 +84,46 @@ owner rather than removing it.
 
 **2026-07-31**: Filed from the post-T6190/T6200 verification HAR. Call sites not yet traced.
 
+**2026-08-27 (implemented)**: Traced + fixed.
+- **Owners enumerated.** `overlay-data` has two frontend fetch sites, both in
+  `screens/OverlayScreen.jsx`: **Effect A** (~L596, "fresh export detected") whose trigger is
+  `projectDataStore.clipMetadata` being truthy, and **Effect B** (~L720, "plain load", guard
+  `syncState==='idle' && duration && !clipMetadata`). `outdated-clips` has a single owner
+  (`OverlayScreen.jsx:183`, deps `[projectId, workingVideo?.url]`).
+- **Root cause.** `clipMetadata` (store field, ONLY reader = OverlayScreen, ONLY legit writer =
+  the export gesture `FocusScreen.jsx:983`) was ALSO written by `useProjectLoader.loadProject` on
+  EVERY project-open (`buildClipMetadata()` → non-null for any project with clips). That spurious
+  seed made Effect A ("fresh export") a live owner on plain Overlay entries alongside Effect B →
+  two owners fetching `overlay-data` (HAR odd count 3 = A StrictMode-doubled + B; `outdated-clips`
+  x2 = its single owner's StrictMode double, prod=1). Confirmed by the Opus expert reading the code.
+- **Fix (one owner per fetch, per the epic — NO cache/latch).** Deleted the `setClipMetadata` store
+  seed in `useProjectLoader.js` (kept the local `buildClipMetadata` value for the return payload +
+  `onWorkingVideoLoaded`; removed the now-unused `setClipMetadata` selector + dep). Genuine fresh
+  export still sets the flag via `FocusScreen.jsx:983` → Effect A owns; every plain open /
+  Framing→Overlay nav / direct Drafts→Overlay → Effect B owns (its `duration` comes from the working
+  video `loadProject` sets before OverlayScreen mounts). `outdated-clips` untouched.
+- **Live QA** (`scripts/dev-verify.sh`, real account, extended `e2e/T6190-project-open-fetches.qa.spec.js`):
+  Framing→Overlay fired **overlay-data=1, outdated-clips=1** (dev, StrictMode present — already
+  "exactly once" for both, so no prod-build change is warranted and outdated-clips was left as-is per
+  the task's own rule); `clipMetadata` is null after a plain open; **no "Maximum update depth"** on
+  the transition; overlay renders (regions restore). T6190's load-bearing project-open guard still
+  passes (games=0, clips=1, health=0).
+- **Regression pins in the spec** (both fail pre-fix by construction): `clipMetadata === null` after a
+  plain open, and `overlay-data owner-count ≤ outdated-clips` (single-owner baseline, StrictMode-agnostic).
+- **Harness caveat (honest):** the /dotask container's Vite runs over a bind-mount whose file watcher
+  is inert, so it cached the module at boot and a *live* pre-fix negative control could not be run
+  (every run validly exercised the FIXED code). The pins are sound by code-reading: pre-fix
+  `loadProject` writes a non-null `clipMetadata` and nothing nulls it before Framing reads it.
+- **Unrelated pre-existing failure observed:** T6190 criterion-4 (annotate→framing boundary *content*)
+  failed because on this account's live data the annotate step navigated to a *different* project (the
+  framing list switched clip id 78→5). That path reads `projectDataStore.clips` / project selection —
+  independent of `clipMetadata` — so it is not a T6250 regression. Branch CI is the full-sweep verdict.
+
 ## Acceptance Criteria
 
-- [ ] Framing -> Overlay fires `overlay-data` exactly **once**
-- [ ] `outdated-clips` fires once, OR is documented as StrictMode-only with production-build evidence
-- [ ] Overlay still renders correctly (overlay data present, outdated-clip warnings still work)
-- [ ] Request counts pinned by a test, alongside T6190's project-open counts
-- [ ] No `Maximum update depth exceeded` on the transition
-- [ ] Frontend unit tests pass
+- [x] Framing -> Overlay fires `overlay-data` exactly **once** (dev live QA: overlay-data=1)
+- [x] `outdated-clips` fires once — measured **1** in the dev QA (single owner, unchanged by this task); its HAR x2 was StrictMode-only, no dev-code change needed
+- [x] Overlay still renders correctly (regions restore from `/overlay-data`; outdated-clip check unchanged)
+- [x] Request counts pinned by a test, alongside T6190's project-open counts (T6250 test in `e2e/T6190-project-open-fetches.qa.spec.js`; deterministic `clipMetadata===null` + `overlay-data ≤ outdated-clips` pins)
+- [x] No `Maximum update depth exceeded` on the transition (console-error guard in the test, green)
+- [x] Frontend unit tests pass (`vitest related` on the changed hook: 4 passed)

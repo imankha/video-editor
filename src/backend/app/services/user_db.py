@@ -77,7 +77,7 @@ _USER_DB_SCHEMA = """
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         color TEXT NOT NULL,
-        sport TEXT NOT NULL DEFAULT 'soccer',
+        sport TEXT NOT NULL DEFAULT 'no_sport',
         is_default INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
     );
@@ -552,6 +552,35 @@ def set_selected_profile_id(user_id: str, profile_id: str) -> None:
         conn.commit()
 
 
+# Opt-out flag for notification emails (T7670). This is the FIRST notification-
+# email preference surface, so it is intentionally a single user-level boolean
+# in the existing user_settings KV (no schema/migration, no preferences UI).
+# Absent key = opted IN (the default): a user only skips the game-ready email
+# after an explicit opt-out. Add finer-grained keys here if more notification
+# emails are introduced later.
+_NOTIFICATION_EMAIL_OPTOUT_KEY = "notification_email_optout"
+
+
+def get_notification_email_optout(user_id: str) -> bool:
+    """True if the user has opted out of notification emails (default False)."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_NOTIFICATION_EMAIL_OPTOUT_KEY,),
+        ).fetchone()
+        return bool(row) and row["value"] == "1"
+
+
+def set_notification_email_optout(user_id: str, opted_out: bool) -> None:
+    """Set (or clear) the notification-email opt-out flag for a user."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_NOTIFICATION_EMAIL_OPTOUT_KEY, "1" if opted_out else "0"),
+        )
+        conn.commit()
+
+
 # Parental-consent attestation for player-intro cards (T5190). Stored per
 # profile in the user.sqlite settings KV (keyed by profile id) rather than a
 # profiles column: consent must appear on the GET /api/profiles payload, which
@@ -843,7 +872,7 @@ def backfill_preferences_from_profile(user_id: str) -> bool:
     return False
 
 
-def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False, sport: str = "soccer") -> None:
+def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False, sport: str = "no_sport") -> None:
     """Insert a new profile row."""
     with get_user_db_connection(user_id) as conn:
         conn.execute(

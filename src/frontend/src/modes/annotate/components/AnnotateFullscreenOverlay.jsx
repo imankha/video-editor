@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Star, X, Plus } from 'lucide-react';
-import { getPositions, getTagSet } from '../constants/tagRegistry';
+import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
+import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput, commitPendingTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
@@ -114,7 +115,7 @@ export function AnnotateFullscreenOverlay({
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
-  const sport = currentProfile?.sport || 'soccer';
+  const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
 
   const [dockPosition, setDockPosition] = useState(savedDockPosition);
@@ -352,7 +353,7 @@ export function AnnotateFullscreenOverlay({
         </div>
 
         {/* Tag Selection */}
-        {tagSet && (
+        {tagSet ? (
           <div className="mb-4">
             <label className="block text-gray-400 text-sm mb-2">Tags</label>
             <TagSelector
@@ -363,7 +364,12 @@ export function AnnotateFullscreenOverlay({
               size="lg"
             />
           </div>
-        )}
+        ) : sport === NO_SPORT ? (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Tags</label>
+            <NoSportTagWarning />
+          </div>
+        ) : null}
 
         {/* Clip Name - always rendered to keep panel height stable */}
         <div className="mb-4">
@@ -509,7 +515,7 @@ export function AnnotateFullscreenOverlay({
           <span className="text-xs text-gray-500 w-4 text-center">{RATING_NOTATION[rating]}</span>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
           <div className="flex-1 overflow-x-auto scrollbar-hide">
-            {tagSet && (
+            {tagSet ? (
               <TagSelector
                 positions={getPositions(sport)}
                 tagsByPosition={tagSet.tags}
@@ -518,7 +524,9 @@ export function AnnotateFullscreenOverlay({
                 size="sm"
                 flat
               />
-            )}
+            ) : sport === NO_SPORT ? (
+              <NoSportTagWarning compact />
+            ) : null}
           </div>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
           <button

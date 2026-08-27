@@ -95,6 +95,53 @@ describe('beginGameVideoLoad dedup (StrictMode / remount)', () => {
   });
 });
 
+// T6280 QA — the "games/{id}/video 302 x2" HAR finding.
+//
+// Opening a saved game seeds the /video src TWICE by design, from two places:
+//   1. useAnnotateState's useState initializer (peekPendingGame) — the first-paint
+//      pre-seed, so the <video> mounts WITH a src (T4000).
+//   2. handleLoadGame -> beginGameVideoLoad, when it consumes the same breadcrumb.
+// The second assignment is a deliberate NO-OP: it must build the IDENTICAL URL, so
+// React sees the same src string and does not re-assign the <video> (no second 302).
+// applyGameData then never re-sets the single-video src. The net production request
+// count is therefore ONE — the HAR's x2 was React StrictMode's dev-only effect
+// double-invoke (a prod build makes <StrictMode> a no-op passthrough). This test pins
+// the URL-equality invariant that keeps the no-op a no-op.
+describe('early /video src is a single production request (T6280)', () => {
+  it('pre-seed URL equals the beginGameVideoLoad URL, so the second src-set is a no-op', () => {
+    const gameId = 6;
+    const seekTime = 12.5;
+
+    // (1) The pre-seed built in useAnnotateState's useState initializer.
+    const preSeedUrl = buildEarlyGameVideoSrc(gameId, seekTime);
+
+    // (2) The URL beginGameVideoLoad assigns when handleLoadGame consumes the
+    //     same breadcrumb (gameId + seekTime). Capture what it hands setAnnotateVideoUrl.
+    const setAnnotateVideoUrl = vi.fn();
+    const loadGame = vi.fn(() => new Promise(() => {}));
+    beginGameVideoLoad({ gameId, pendingClipSeekTime: seekTime, setAnnotateVideoUrl, loadGame });
+
+    expect(setAnnotateVideoUrl).toHaveBeenCalledTimes(1);
+    const beginLoadUrl = setAnnotateVideoUrl.mock.calls[0][0];
+
+    // Identical string -> setAnnotateVideoUrl(sameSrc) cannot trigger a second <video>
+    // load. If these ever diverge, the fragment/URL change would refetch the media.
+    expect(beginLoadUrl).toBe(preSeedUrl);
+  });
+
+  it('holds for a first-paint open with no clip seek (both resolve to the bare /video URL)', () => {
+    const gameId = 6;
+    const preSeedUrl = buildEarlyGameVideoSrc(gameId, null);
+
+    const setAnnotateVideoUrl = vi.fn();
+    const loadGame = vi.fn(() => new Promise(() => {}));
+    beginGameVideoLoad({ gameId, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+
+    expect(setAnnotateVideoUrl.mock.calls[0][0]).toBe(preSeedUrl);
+    expect(preSeedUrl).toBe(`${API_BASE}/api/games/${gameId}/video`);
+  });
+});
+
 describe('computeResumePosition', () => {
   it('prefers last_playhead_position when within the video duration', () => {
     expect(computeResumePosition({ video_duration: 100, last_playhead_position: 42 })).toBe(42);

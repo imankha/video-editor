@@ -6,7 +6,7 @@ import { useProfileStore, useEditorStore, EDITOR_MODES } from '../stores';
 import { useAuthStore } from '../stores/authStore';
 import { ProfileIntroSection } from './ProfileIntroSection';
 import { IntroCardsModal } from './introcards/IntroCardsModal';
-import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji } from '../modes/annotate/constants/tagRegistry';
+import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji, NO_SPORT, NO_SPORT_LABEL } from '../modes/annotate/constants/tagRegistry';
 
 /**
  * Pre-defined profile colors.
@@ -44,8 +44,11 @@ const INLINE_SPORT_OTHER = '__other__';
  * Custom/unknown sports stay selectable; "Other..." routes to the Edit form.
  */
 function InlineSportSelect({ sport, onChange, onPickOther }) {
-  const isKnown = !sport || SUPPORTED_SPORTS.some(s => s.id === sport);
-  const label = isKnown ? (sportDisplayName(sport) || 'Soccer') : sport;
+  const isNoSport = sport === NO_SPORT;
+  // "No Sport" renders as a first-class option below, so treat it as known for
+  // display (no raw "no_sport" label, no duplicate custom option).
+  const isKnown = !sport || isNoSport || SUPPORTED_SPORTS.some(s => s.id === sport);
+  const label = isNoSport ? NO_SPORT_LABEL : (isKnown ? (sportDisplayName(sport) || 'Soccer') : sport);
 
   return (
     // A big, tappable pill. The native <select> sits invisibly on top so we get
@@ -71,6 +74,7 @@ function InlineSportSelect({ sport, onChange, onPickOther }) {
       >
         {/* Custom sport (not in the supported list) stays selectable */}
         {!isKnown && <option value={sport}>{`${sportEmoji(sport)} ${sport}`}</option>}
+        <option value={NO_SPORT}>{`${sportEmoji(NO_SPORT)} ${NO_SPORT_LABEL}`}</option>
         {SUPPORTED_SPORTS.map(s => (
           <option key={s.id} value={s.id}>{`${sportEmoji(s.id)} ${s.name}`}</option>
         ))}
@@ -107,7 +111,7 @@ function ColorSelector({ value, onChange, usedColors = [] }) {
 // Profile Form (shared for Add and Edit)
 // ---------------------------------------------------------------------------
 
-function ProfileForm({ title, initialName = '', initialColor, initialSport = 'soccer', usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save', nameRequired = true }) {
+function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_SPORT, usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save', nameRequired = true }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor || getNextColor(usedColors));
   const [sport, setSport] = useState(sportDisplayName(initialSport) || 'Soccer');
@@ -119,15 +123,22 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
   );
   const canSubmit = (nameRequired ? !!trimmedName : true) && !isDuplicate && !submitting;
 
-  // Placeholder reflects the selected sport so unnamed profiles still get a useful hint.
-  const namePlaceholder = `e.g. Fall ${sport.trim() || 'Soccer'} 2025`;
+  // Placeholder reflects the selected sport so unnamed profiles still get a useful
+  // hint; fall back to "Soccer" for the no-sport / empty case so it stays natural.
+  const isNoSport = sport === NO_SPORT_LABEL;
+  const placeholderSport = (sport.trim() && !isNoSport) ? sport.trim() : 'Soccer';
+  const namePlaceholder = `e.g. Fall ${placeholderSport} 2025`;
+
+  const isSupportedName = SUPPORTED_SPORTS.some(s => s.name === sport);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const sportValue = sport.trim() ? sportStoredValue(sport.trim()) : 'soccer';
+      // sportStoredValue maps "No Sport" -> the no_sport sentinel and a known
+      // display name -> its id; a blank custom field falls back to no_sport.
+      const sportValue = sport.trim() ? sportStoredValue(sport.trim()) : NO_SPORT;
       await onSubmit(trimmedName, color, sportValue);
     } finally {
       setSubmitting(false);
@@ -149,16 +160,17 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">Sport</label>
           <select
-            value={SUPPORTED_SPORTS.some(s => s.name === sport) ? sport : '__custom__'}
+            value={isSupportedName ? sport : (isNoSport ? NO_SPORT_LABEL : '__custom__')}
             onChange={(e) => setSport(e.target.value === '__custom__' ? '' : e.target.value)}
             className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
           >
+            <option value={NO_SPORT_LABEL}>{NO_SPORT_LABEL}</option>
             {SUPPORTED_SPORTS.map(s => (
               <option key={s.id} value={s.name}>{s.name}</option>
             ))}
             <option value="__custom__">Other</option>
           </select>
-          {!SUPPORTED_SPORTS.some(s => s.name === sport) && (
+          {!isSupportedName && !isNoSport && (
             <input
               type="text"
               value={sport}
@@ -454,7 +466,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               title="Edit Profile"
               initialName={editingProfile.name || ''}
               initialColor={editingProfile.color}
-              initialSport={editingProfile.sport || 'soccer'}
+              initialSport={editingProfile.sport || NO_SPORT}
               usedColors={usedColors.filter(c => c !== editingProfile.color)}
               existingNames={existingNamesForEdit}
               submitLabel="Save"

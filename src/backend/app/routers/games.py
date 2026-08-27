@@ -588,6 +588,48 @@ def _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str)
     return inserted
 
 
+def _maybe_send_game_ready_email(game_id: int, game_name: str) -> None:
+    """Fire the T7670 upload-complete return-trigger email, best-effort.
+
+    All eligibility checks run SYNCHRONOUSLY here in request context (where the
+    impersonator contextvar and the user's user.sqlite are available), then only
+    the network send is handed to a fire-and-forget background task. Any failure
+    is swallowed — a game activation must never fail because an email couldn't
+    be sent. Skips:
+      - impersonation: an admin activating a user's game must not email them
+        (mirrors record_milestone's T1515 guard);
+      - opt-out: the user turned off notification emails;
+      - no address: guest / email-less accounts have nothing to send to.
+    """
+    try:
+        from app.services.auth_db import get_user_by_id
+        from app.services.email import send_game_ready_email
+        from app.services.poster_warmer import fire_and_forget
+        from app.services.user_db import get_notification_email_optout
+        from app.user_context import get_current_impersonator_id
+
+        if get_current_impersonator_id():
+            logger.debug(f"[game_ready_email] skipped game {game_id}: impersonation")
+            return
+
+        user_id = get_current_user_id()
+        if get_notification_email_optout(user_id):
+            logger.debug(f"[game_ready_email] skipped game {game_id}: user opted out")
+            return
+
+        user = get_user_by_id(user_id)
+        email = user.get("email") if user else None
+        if not email:
+            logger.debug(f"[game_ready_email] skipped game {game_id}: no email for user")
+            return
+
+        profile_id = get_current_profile_id()
+        fire_and_forget(send_game_ready_email(email, game_name, game_id, profile_id))
+    except Exception as e:
+        # Never let the return-trigger email break an activation.
+        logger.warning(f"[game_ready_email] failed to schedule for game {game_id}: {e}")
+
+
 @router.post("/{game_id:int}/activate")
 async def activate_game(game_id: int):
     """
@@ -600,10 +642,11 @@ async def activate_game(game_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id, status, blake3_hash FROM games WHERE id = ?", (game_id,))
+        cursor.execute("SELECT id, status, blake3_hash, name FROM games WHERE id = ?", (game_id,))
         game = cursor.fetchone()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        game_name = game["name"]
 
         if game['status'] == GameStatus.READY:
             # bug26p: A prior activation may have flipped status to ready before
@@ -778,13 +821,25 @@ async def activate_game(game_id: int):
                 },
             )
 
+        # T7670: conditional flip so the ready-email fires EXACTLY once per game
+        # even if two activate calls race past the status==READY early-return
+        # above — only the writer that actually flips pending->ready (rowcount
+        # == 1) sends the email; a concurrent loser gets rowcount 0 and skips it.
         cursor.execute(
-            "UPDATE games SET status = ? WHERE id = ?",
-            (GameStatus.READY, game_id),
+            "UPDATE games SET status = ? WHERE id = ? AND status != ?",
+            (GameStatus.READY, game_id, GameStatus.READY),
         )
+        flipped_to_ready = cursor.rowcount == 1
         conn.commit()
 
     logger.info(f"Activated game {game_id}: status=ready, cost={upload_cost}cr")
+
+    # T7670: upload-complete return-trigger email. Fired only on the genuine
+    # pending->ready transition (this game is now durably ready, refs + credits
+    # committed), deduped by flipped_to_ready. Best-effort and non-blocking —
+    # never fails or delays the activation response.
+    if flipped_to_ready:
+        _maybe_send_game_ready_email(game_id, game_name)
 
     # T5683: Warm the game source poster at gesture (non-blocking background task).
     # Best-effort -- never fails the activation. get_current_user_id/
