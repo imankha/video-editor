@@ -1,6 +1,6 @@
 # T7830: Sweep orphan audit + rank-pool raw-1080p question
 
-**Status:** TODO
+**Status:** WIP
 **Priority:** P3 (cost/correctness hygiene)
 **Impact:** 4
 **Complexity:** 3

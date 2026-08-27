@@ -1,6 +1,6 @@
 # T7850: Default New Users to "No Sport" + Add Clip Warning When Sport Unset
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-27

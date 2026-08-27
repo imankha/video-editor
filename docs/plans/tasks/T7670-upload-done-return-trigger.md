@@ -1,6 +1,6 @@
 # T7670: Upload-complete email: turn the long wait into a return trigger
 
-**Status:** TODO (post-P1; user 2026-08-24: not a priority vs blocking bugs)
+**Status:** WIP (post-P1; user 2026-08-24: not a priority vs blocking bugs)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-24
