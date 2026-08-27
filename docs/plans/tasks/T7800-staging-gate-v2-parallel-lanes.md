@@ -1,6 +1,6 @@
 # T7800: Staging Gate v2 - 13 specs, 3 parallel lanes, 2 accounts, under 20 min
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-26
