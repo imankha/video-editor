@@ -77,8 +77,27 @@ def get_pg_conn(config: dict):
     return psycopg2.connect(config["DATABASE_URL"], cursor_factory=RealDictCursor)
 
 
-def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: bool) -> str:
-    """Copy user + game_storage_refs from source to destination Postgres. Returns user_id."""
+def alias_user_id(src_user_id: str, dst_email: str) -> str:
+    """Deterministic user_id for an ALIAS clone (--to-email), so re-runs converge
+    on the same destination identity instead of accreting new users."""
+    import uuid
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rb-alias:{src_user_id}:{dst_email}"))
+
+
+def copy_postgres_rows(
+    src_config: dict, dst_config: dict, email: str, dry_run: bool, dst_email: str | None = None
+) -> tuple[str, str]:
+    """Copy user + game_storage_refs from source to destination Postgres.
+
+    With dst_email set (T7800 --to-email), the destination identity is an ALIAS:
+    a different email + a deterministic derived user_id, so the clone can coexist
+    with a straight copy of the source account in the same destination env (two
+    users can't share a user_id, and R2 prefixes are keyed by user_id).
+    google_id is nulled on the alias (globally UNIQUE) so it can't collide with
+    the straight copy. Intended for e2e fixture accounts, not real users.
+
+    Returns (src_user_id, dst_user_id) — equal for a straight copy.
+    """
     src_conn = get_pg_conn(src_config)
     dst_conn = get_pg_conn(dst_config)
 
@@ -91,17 +110,20 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
             sys.exit(1)
 
         user_id = user_row["user_id"]
-        log.info(f"Found user_id: {user_id}")
+        is_alias = bool(dst_email) and dst_email != email
+        dst_email = dst_email or email
+        dst_user_id = alias_user_id(user_id, dst_email) if is_alias else user_id
+        log.info(f"Found user_id: {user_id}" + (f" -> alias {dst_user_id} ({dst_email})" if is_alias else ""))
 
         if dry_run:
-            log.info(f"[DRY RUN] Would copy users row for {user_id}")
+            log.info(f"[DRY RUN] Would copy users row for {user_id} as {dst_user_id}")
         else:
             dst_cur = dst_conn.cursor()
 
             # Remove any existing user with this email but different user_id
-            dst_cur.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+            dst_cur.execute("SELECT user_id FROM users WHERE email = %s", (dst_email,))
             existing = dst_cur.fetchone()
-            if existing and existing["user_id"] != user_id:
+            if existing and existing["user_id"] != dst_user_id:
                 old_id = existing["user_id"]
                 log.info(f"Removing existing dev user {old_id} (same email, different user_id)")
                 for table in ("game_storage_refs", "sessions", "user_segments", "user_actions",
@@ -110,10 +132,16 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                 dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
                 dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
                 dst_cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (old_id, old_id))
-                dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
+                dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
                 dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
 
-            # Upsert user row
+            # Upsert user row (identity rewritten for an alias clone)
+            user_row = dict(user_row)
+            if is_alias:
+                user_row["user_id"] = dst_user_id
+                user_row["email"] = dst_email
+                if "google_id" in user_row:
+                    user_row["google_id"] = None  # globally UNIQUE — must not collide with the straight copy
             cols = list(user_row.keys())
             vals = [user_row[c] for c in cols]
             placeholders = ", ".join(["%s"] * len(cols))
@@ -124,12 +152,12 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                 f"ON CONFLICT (user_id) DO UPDATE SET {update_set}",
                 vals,
             )
-            log.info(f"Copied users row for {user_id}")
+            log.info(f"Copied users row for {dst_user_id}")
 
             # Copy game_storage_refs. Clear the destination's existing refs for this
             # user_id first so a re-copy is a faithful mirror -- otherwise refs that
             # were removed at the source linger (ON CONFLICT DO NOTHING never deletes).
-            dst_cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s", (user_id,))
+            dst_cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s", (dst_user_id,))
             src_cur.execute("SELECT * FROM game_storage_refs WHERE user_id = %s", (user_id,))
             refs = src_cur.fetchall()
             for ref in refs:
@@ -137,7 +165,7 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                     """INSERT INTO game_storage_refs (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (user_id, profile_id, blake3_hash) DO NOTHING""",
-                    (ref["user_id"], ref["profile_id"], ref["blake3_hash"],
+                    (dst_user_id, ref["profile_id"], ref["blake3_hash"],
                      ref["game_size_bytes"], ref["storage_expires_at"], ref["created_at"]),
                 )
             log.info(f"Copied {len(refs)} game_storage_refs rows")
@@ -146,11 +174,12 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
             # on (users ⋈ user_segments). Without it the copied account never shows in
             # the dashboard. referrer_id has a FK to users(user_id); null it if the
             # referrer isn't present at the destination so the insert can't fail.
-            dst_cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+            dst_cur.execute("DELETE FROM user_segments WHERE user_id = %s", (dst_user_id,))
             src_cur.execute("SELECT * FROM user_segments WHERE user_id = %s", (user_id,))
             seg = src_cur.fetchone()
             if seg:
                 seg = dict(seg)
+                seg["user_id"] = dst_user_id
                 ref = seg.get("referrer_id")
                 if ref:
                     dst_cur.execute("SELECT 1 FROM users WHERE user_id = %s", (ref,))
@@ -169,11 +198,12 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
 
             # Copy user_actions — drives the dashboard's funnel, last-step, session and
             # usage columns. Clear the destination first for a faithful mirror.
-            dst_cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+            dst_cur.execute("DELETE FROM user_actions WHERE user_id = %s", (dst_user_id,))
             src_cur.execute("SELECT * FROM user_actions WHERE user_id = %s", (user_id,))
             action_rows = src_cur.fetchall()
             for a in action_rows:
                 a = dict(a)
+                a["user_id"] = dst_user_id
                 cols = list(a.keys())
                 placeholders = ", ".join(["%s"] * len(cols))
                 dst_cur.execute(
@@ -207,8 +237,8 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                     "migrate to move them into Postgres."
                 )
             else:
-                dst_cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (user_id,))
-                dst_cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (user_id,))
+                dst_cur.execute("DELETE FROM credit_reservations WHERE user_id = %s", (dst_user_id,))
+                dst_cur.execute("DELETE FROM credit_transactions WHERE user_id = %s", (dst_user_id,))
                 src_cur.execute(
                     "SELECT amount, source, idempotency_key, reference_id, video_seconds, created_at "
                     "FROM credit_transactions WHERE user_id = %s", (user_id,),
@@ -220,7 +250,7 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                     placeholders = ", ".join(["%s"] * len(cols))
                     dst_cur.execute(
                         f"INSERT INTO credit_transactions ({', '.join(cols)}) VALUES ({placeholders})",
-                        [user_id, *[tx[c] for c in tx]],
+                        [dst_user_id, *[tx[c] for c in tx]],
                     )
                 dst_cur.execute(
                     """INSERT INTO credits (user_id, balance)
@@ -228,13 +258,13 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                        ON CONFLICT (user_id) DO UPDATE SET
                            balance = (SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s),
                            updated_at = now()""",
-                    (user_id, user_id, user_id),
+                    (dst_user_id, dst_user_id, dst_user_id),
                 )
                 log.info(f"Copied {len(tx_rows)} credit_transactions rows, re-derived balance")
 
             dst_conn.commit()
 
-        return user_id
+        return user_id, dst_user_id
 
     finally:
         src_conn.close()
@@ -250,19 +280,24 @@ def _list_keys(r2, bucket: str, prefix: str) -> list[str]:
     return keys
 
 
-def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str, dry_run: bool):
+def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str, dry_run: bool,
+                    dst_user_id: str | None = None):
     """Mirror all R2 objects for a user from source prefix to destination prefix.
 
     Source and destination share the same bucket (only the {env}/ prefix differs),
     so this is an in-bucket copy. The destination prefix is PURGED first so the
     result is a faithful mirror -- stale objects left over from a prior account
     (e.g. an old profile.sqlite that copy_object would never touch) don't survive.
+
+    T7800: with dst_user_id set (an --to-email alias clone), objects land under the
+    ALIAS user's prefix — the user_id path segment is rewritten along with the env.
     """
+    dst_user_id = dst_user_id or user_id
     r2 = get_r2_client(config)
     bucket = config["R2_BUCKET"]
 
     user_prefix = f"{src_prefix}/users/{user_id}/"
-    dst_user_prefix = f"{dst_prefix}/users/{user_id}/"
+    dst_user_prefix = f"{dst_prefix}/users/{dst_user_id}/"
     src_keys = _list_keys(r2, bucket, user_prefix)
     log.info(f"Found {len(src_keys)} R2 objects to copy")
 
@@ -285,7 +320,7 @@ def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str
 
     copied = 0
     for key in src_keys:
-        dst_key = key.replace(f"{src_prefix}/", f"{dst_prefix}/", 1)
+        dst_key = key.replace(user_prefix, dst_user_prefix, 1)
         if dry_run:
             log.info(f"  [DRY RUN] {key} -> {dst_key}")
         else:
@@ -303,8 +338,8 @@ def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str
     log.info(f"R2 copy complete: {copied} objects from {src_prefix}/ to {dst_prefix}/")
 
     if not dry_run:
-        verify_r2_copy(r2, bucket, user_id, src_prefix, dst_prefix, src_keys)
-        verify_media_refs(r2, bucket, user_id, dst_prefix)
+        verify_r2_copy(r2, bucket, user_id, src_prefix, dst_prefix, src_keys, dst_user_id)
+        verify_media_refs(r2, bucket, dst_user_id, dst_prefix)
 
 
 def _db_version(r2, bucket: str, key: str) -> str:
@@ -315,15 +350,18 @@ def _db_version(r2, bucket: str, key: str) -> str:
         return f"ERR({e})"
 
 
-def verify_r2_copy(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix: str, src_keys: list[str]):
+def verify_r2_copy(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix: str, src_keys: list[str],
+                   dst_user_id: str | None = None):
     """Fail loudly if the destination doesn't match the source after copy.
 
     Catches silent partial copies -- the failure mode that left dev/imankh stale.
     Compares object counts and the db-version metadata of every *.sqlite file.
     """
-    dst_user_prefix = f"{dst_prefix}/users/{user_id}/"
+    dst_user_id = dst_user_id or user_id
+    src_user_prefix = f"{src_prefix}/users/{user_id}/"
+    dst_user_prefix = f"{dst_prefix}/users/{dst_user_id}/"
     dst_keys = set(_list_keys(r2, bucket, dst_user_prefix))
-    expected = {k.replace(f"{src_prefix}/", f"{dst_prefix}/", 1) for k in src_keys}
+    expected = {k.replace(src_user_prefix, dst_user_prefix, 1) for k in src_keys}
 
     missing = expected - dst_keys
     extra = dst_keys - expected
@@ -340,10 +378,10 @@ def verify_r2_copy(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix: s
     for src_key in src_keys:
         if not src_key.endswith(".sqlite"):
             continue
-        dst_key = src_key.replace(f"{src_prefix}/", f"{dst_prefix}/", 1)
+        dst_key = src_key.replace(src_user_prefix, dst_user_prefix, 1)
         sv = _db_version(r2, bucket, src_key)
         dv = _db_version(r2, bucket, dst_key)
-        rel = src_key[len(f"{src_prefix}/users/{user_id}/"):]
+        rel = src_key[len(src_user_prefix):]
         if sv != dv:
             log.error(f"[VERIFY] db-version MISMATCH for {rel}: source={sv} dest={dv}")
             ok = False
@@ -492,6 +530,15 @@ def main():
     parser.add_argument("--email", required=True)
     parser.add_argument("--from", dest="from_env", required=True, choices=["dev", "staging", "production"])
     parser.add_argument("--to", dest="to_env", required=True, choices=["dev", "staging", "production"])
+    parser.add_argument(
+        "--to-email",
+        default=None,
+        help="T7800: clone the source account to this ALIAS email at the destination "
+        "(distinct deterministic user_id, google_id nulled) so it can coexist with a "
+        "straight copy of the same source account. For e2e fixture accounts only — the "
+        "cloned SQLite DBs still carry source-internal data (e.g. display email); "
+        "backend routing keys on Postgres email -> user_id, so the fixture works.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--dest-machines-stopped",
@@ -524,17 +571,20 @@ def main():
     src_config = load_env(args.from_env)
     dst_config = load_env(args.to_env)
 
-    log.info(f"Copying {args.email}: {args.from_env} -> {args.to_env}")
+    dst_email = args.to_email or args.email
+    log.info(f"Copying {args.email}: {args.from_env} -> {args.to_env}"
+             + (f" as {dst_email}" if dst_email != args.email else ""))
 
     # 1. Copy Postgres rows (users + game_storage_refs)
-    user_id = copy_postgres_rows(src_config, dst_config, args.email, args.dry_run)
+    user_id, dst_user_id = copy_postgres_rows(src_config, dst_config, args.email, args.dry_run, args.to_email)
 
     # 2. Copy R2 objects
     src_prefix = src_config["APP_ENV"]
     dst_prefix = dst_config["APP_ENV"]
-    copy_r2_objects(src_config, user_id, src_prefix, dst_prefix, args.dry_run)
+    copy_r2_objects(src_config, user_id, src_prefix, dst_prefix, args.dry_run, dst_user_id)
 
-    log.info(f"Done. User {args.email} ({user_id}) copied from {args.from_env} to {args.to_env}")
+    log.info(f"Done. User {args.email} ({user_id}) copied from {args.from_env} to {args.to_env}"
+             + (f" as {dst_email} ({dst_user_id})" if dst_user_id != user_id else ""))
 
 
 if __name__ == "__main__":

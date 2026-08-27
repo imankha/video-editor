@@ -74,8 +74,19 @@ const PER_TEST_TIMEOUT = process.env.E2E_TIMEOUT_MS
 // `--grep @tutorial-capture` (however launched: npm script or raw `npx playwright test ...`).
 // A plain `npx playwright test` names neither tag, so the exclusion applies.
 const GATED_TAGS = /@staging-gate|@tutorial-capture/;
-const TARGETING_GATED = GATED_TAGS.test(process.argv.join(' '));
+// T7800: the staging gate is split into parallel LANES (@gate-a/b/c, see
+// e2e/STAGING-GATE.md). A lane invocation greps its lane tag, not @staging-gate,
+// so the lift must also recognize lane tags or the config-level grepInvert would
+// zero out every lane run (lane members all carry @staging-gate in their titles).
+const TARGETING_GATED = /@staging-gate|@tutorial-capture|@gate-[abc]\b/.test(process.argv.join(' '));
 const DEFAULT_GREP_INVERT = TARGETING_GATED ? undefined : GATED_TAGS;
+
+// T7800: parallel lane processes need disjoint report/artifact paths or the html/
+// json reporters and the artifact dir clobber each other. Each lane process sets
+// E2E_RESULTS_DIR (e.g. test-results/gate-a); default is the historical path.
+const RESULTS_DIR = process.env.E2E_RESULTS_DIR
+  ? path.resolve(__dirname, process.env.E2E_RESULTS_DIR)
+  : path.join(__dirname, 'test-results');
 
 export default defineConfig({
   testDir: './e2e',
@@ -96,13 +107,13 @@ export default defineConfig({
   // - json: Structured results for AI/automated analysis
   // - list: Console output during test runs
   reporter: [
-    ['html', { outputFolder: path.join(__dirname, 'test-results/html') }],
-    ['json', { outputFile: path.join(__dirname, 'test-results/results.json') }],
+    ['html', { outputFolder: path.join(RESULTS_DIR, 'html') }],
+    ['json', { outputFile: path.join(RESULTS_DIR, 'results.json') }],
     ['list'],
   ],
 
   // Output directory for test artifacts (screenshots, traces, videos)
-  outputDir: path.join(__dirname, 'test-results/artifacts'),
+  outputDir: path.join(RESULTS_DIR, 'artifacts'),
 
   use: {
     baseURL: BASE_URL,

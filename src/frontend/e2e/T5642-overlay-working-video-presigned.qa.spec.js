@@ -59,7 +59,7 @@ async function findProjectWithWorkingVideo(request) {
   return null;
 }
 
-test.describe('T5642 overlay working-video presigned load @staging-gate', () => {
+test.describe('T5642 overlay working-video presigned load @staging-gate @gate-b', () => {
   test('presigned R2 <video> loads cross-site with 206 / no 401 and plays', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });

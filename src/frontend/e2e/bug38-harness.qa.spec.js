@@ -74,7 +74,7 @@ async function routeSample(page) {
   });
 }
 
-test.describe('bug38 harness @staging-gate', () => {
+test.describe('bug38 harness @staging-gate @gate-c', () => {
   // /bug38diag.html is a Vite-dev-only harness page: not an input to the production
   // build, so on a deployed target this RELATIVE path resolves against the Pages origin
   // and the SPA catch-all serves index.html instead — the harness never mounts.

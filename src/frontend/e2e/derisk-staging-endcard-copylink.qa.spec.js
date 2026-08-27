@@ -55,7 +55,7 @@ function firstNonEmptyGameCollection(summary) {
   return null;
 }
 
-test('T3950: end card appears at end of a shared REEL with UTM CTA @staging-gate', async ({ context, page }) => {
+test('T3950: end card appears at end of a shared REEL with UTM CTA @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(120_000);
   await loginAsRealUser(context, EMAIL, PROFILE);
 
@@ -93,7 +93,7 @@ test('T3950: end card appears at end of a shared REEL with UTM CTA @staging-gate
   await page.screenshot({ path: `${EVID}/endcard-reel.png` });
 });
 
-test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-gate', async ({ context, page }) => {
+test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(120_000);
   await loginAsRealUser(context, EMAIL, PROFILE);
 
@@ -140,7 +140,7 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-g
   await page.screenshot({ path: `${EVID}/endcard-collection.png` });
 });
 
-test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({ context, page }) => {
+test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(120_000);
   await loginAsRealUser(context, EMAIL, PROFILE);
 

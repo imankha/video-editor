@@ -60,7 +60,7 @@ async function expectInAnnotateMode(page) {
   await expect(page.locator('button:has-text("Add Game")')).toHaveCount(0);
 }
 
-test.describe('Game Loading', () => {
+test.describe('Game Loading @staging-gate @gate-b', () => {
   test.beforeAll(async ({ request }) => {
     let lastError = null;
     for (let i = 0; i < 30; i++) {

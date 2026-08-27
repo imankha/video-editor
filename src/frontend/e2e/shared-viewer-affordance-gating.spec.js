@@ -41,7 +41,7 @@ const AFFORDANCES = [
   { name: 'Re-rank', title: 'Re-rank this reel' },
 ];
 
-test.describe('Editor affordances are absent in the public shared viewer', () => {
+test.describe('Editor affordances are absent in the public shared viewer @staging-gate @gate-c', () => {
   for (const { name, title } of AFFORDANCES) {
     test(`public SharedCollectionView player shows no ${name} affordance`, async ({ page }) => {
       // Mock the public share endpoint so the viewer renders without a real share.

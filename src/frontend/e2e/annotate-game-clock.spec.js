@@ -13,7 +13,7 @@ const CLOCK = /\d{1,3}'\d{2}"/; // e.g. 34'12"
 const API_BASE = process.env.E2E_API_BASE || '/api';
 const PROFILE = process.env.E2E_REAL_PROFILE;
 
-test('T4070: annotation banner shows soccer-notation time', async ({ context, page }) => {
+test('T4070: annotation banner shows soccer-notation time @staging-gate @gate-b', async ({ context, page }) => {
   await loginAsRealUser(context, process.env.E2E_REAL_EMAIL || 'imankh@gmail.com', PROFILE);
 
   // Target an ACTIVE game (FIXTURE-CONTRACT §1): an EXPIRED game's card plays its recap

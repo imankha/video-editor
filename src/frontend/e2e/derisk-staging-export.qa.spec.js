@@ -110,7 +110,7 @@ async function openDraftCard(page, name) {
 
 const EXPORT_BTN = /^Export( \(\d+\/\d+\))?$/;
 
-test('staging export pipeline + publish (smoke + durability) @staging-gate', async ({ context, page }) => {
+test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(900_000);
 
   // Retry baked into loginAsRealUser (staging PG stale-pool 5xx blip) — T5400.

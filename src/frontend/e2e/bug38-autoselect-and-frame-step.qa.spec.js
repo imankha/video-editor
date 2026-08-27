@@ -54,7 +54,7 @@ function openOverlay(page) {
   return openLoadableOverlayDraft(page, { minReadyState: 3 });
 }
 
-test.describe('bug38 auto-select + frame-step @staging-gate', () => {
+test.describe('bug38 auto-select + frame-step @staging-gate @gate-b', () => {
   test('glitch 2: auto spotlight lands on the main centered player (when detections render)', async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });

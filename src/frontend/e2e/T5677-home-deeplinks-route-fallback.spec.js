@@ -22,7 +22,7 @@ import { saveEvidence } from './helpers/qa.js';
  */
 
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
-const PROFILE_ID = '9fa7378c';
+const PROFILE_ID = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
 const gamesTab = (page) => page.getByRole('button', { name: /^Games\b/ });
 const draftsTab = (page) => page.getByRole('button', { name: /^Reel Drafts\b/ });
@@ -52,7 +52,7 @@ test.beforeEach(async ({ context }) => {
   await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 });
 
-test('AC1: cold-load /home/games shows the Games tab (no bounce to Reel Drafts)', async ({ page }) => {
+test('AC1: cold-load /home/games shows the Games tab (no bounce to Reel Drafts) @staging-gate @gate-b', async ({ page }) => {
   await page.goto('/home/games');
   await waitForTabsSettled(page);
 
@@ -61,7 +61,7 @@ test('AC1: cold-load /home/games shows the Games tab (no bounce to Reel Drafts)'
   await saveEvidence(page, 'criterion-1-home-games-shows-games-tab');
 });
 
-test('AC1: cold-load /home/reels shows the Reel Drafts tab', async ({ page }) => {
+test('AC1: cold-load /home/reels shows the Reel Drafts tab @staging-gate @gate-b', async ({ page }) => {
   await page.goto('/home/reels');
   await waitForTabsSettled(page);
 
@@ -70,7 +70,7 @@ test('AC1: cold-load /home/reels shows the Reel Drafts tab', async ({ page }) =>
   await saveEvidence(page, 'criterion-1-home-reels-shows-drafts-tab');
 });
 
-test('AC2: refresh + back/forward preserve the visible tab', async ({ page }) => {
+test('AC2: refresh + back/forward preserve the visible tab @staging-gate @gate-b', async ({ page }) => {
   // Land on Games, then refresh — the tab must survive the reload (URL is state).
   await page.goto('/home/games');
   await waitForTabsSettled(page);
@@ -100,7 +100,7 @@ test('AC2: refresh + back/forward preserve the visible tab', async ({ page }) =>
   await saveEvidence(page, 'criterion-2-forward-restores-reels');
 });
 
-test('AC3: unknown route (/gallery) lands on /home, not inside an editor', async ({ page }) => {
+test('AC3: unknown route (/gallery) lands on /home, not inside an editor @staging-gate @gate-b', async ({ page }) => {
   await page.goto('/gallery');
   await waitForAppReady(page, { ready: gamesTab(page) });
 
@@ -113,7 +113,7 @@ test('AC3: unknown route (/gallery) lands on /home, not inside an editor', async
   await saveEvidence(page, 'criterion-3-gallery-lands-home');
 });
 
-test('AC4: cold /framing with no loaded project redirects home', async ({ page }) => {
+test('AC4: cold /framing with no loaded project redirects home @staging-gate @gate-b', async ({ page }) => {
   await page.goto('/framing');
   await waitForAppReady(page, { ready: gamesTab(page) });
 

@@ -29,6 +29,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { saveEvidence } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8000/api';
 const TEST_USER_ID = `e2e_t5710_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -69,7 +70,11 @@ async function cleanupTestUser(apiRequest) {
   } catch { /* best-effort */ }
 }
 
-test.describe('T5710 per-layer recaps @staging-gate', () => {
+test.describe('T5710 per-layer recaps @staging-gate @gate-c', () => {
+  // T7800: seeds its game via the dev-only /api/test/seed-recap-game seam, so a
+  // deployed-target gate run skips it loudly (it stays a LOCAL gate member).
+  skipOnDeployedTarget(test, 'seeds its game via the dev-only /api/test/seed-recap-game seam');
+
   test('Team Recap and {Athlete} Recap show layer-pure clip rails, chips, and Create Clip', async ({ page }) => {
     test.setTimeout(120_000);
     await authenticateTestUser(page);
