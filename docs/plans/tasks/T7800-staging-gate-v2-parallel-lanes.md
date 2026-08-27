@@ -1,6 +1,6 @@
 # T7800: Staging Gate v2 - 13 specs, 3 parallel lanes, 2 accounts, under 20 min
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-26
@@ -133,8 +133,17 @@ verified staging-safety, write-risk, and runtime for all 18 candidate specs.
 implementation: the live @staging-gate tag membership had drifted to 13 files (bug38 x2,
 T5642, T5676, T5710 were tagged after T5400's 5-file inventory); all were kept and given
 lanes, with T5710 additionally gated local-only (it depends on /api/test/seed-recap-game
-and would have hard-failed any deployed gate run). Reviewer pass spawned. Remaining:
-step 11 (user-gated: staging machines must be stopped for the seed).
+and would have hard-failed any deployed gate run).
+
+**2026-08-26 (review)**: Reviewer (Opus) found 1 BLOCKING + 4 MAJOR + 8 MINOR; all
+addressed in c94b5ccb: invite_code unique-collision fix (re-derived per the app formula),
+lane C moved to its own alias account (e2e-gate2@test.local; B/C sharing was only safe on
+single-machine staging), by-path grepInvert lift (tagged specs collected 0 tests when run
+by file path, breaking dev-verify.sh), honest runner output (no phantom html-report path),
+clip_count discovery guards, plus the minors. Branch pushed. WAITING ON USER: (1) seed the
+3 fixture accounts on staging (machines stopped; commands in FIXTURE-CONTRACT.md
+§ Seeding), (2) run `bash scripts/staging-gate.sh` for the first timed gate run, (3) merge
+verdict.
 
 ## Acceptance Criteria
 
