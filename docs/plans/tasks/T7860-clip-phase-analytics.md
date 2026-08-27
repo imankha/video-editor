@@ -4,7 +4,7 @@
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-27
-**Updated:** 2026-08-27
+**Updated:** 2026-08-27 (open questions answered by user, see Design Decisions)
 
 ## Problem
 
@@ -12,7 +12,7 @@ The user wants to see, per user, **how many clips sit at each phase of the lifec
 
 Two sub-facts uncovered while filing this task:
 
-1. **`clip_created` IS already tracked.** It is in `FLOW_EVENTS` ([analytics.py:124-187](../../../src/backend/app/analytics.py)), emitted at [clips.py:1292](../../../src/backend/app/routers/clips.py) on the new-clip branch of `POST /api/clips/raw/save`, and rolls into `daily_counters.clips_created`, `user_actions`, and per-user `user_action_log`. Admin `GET /api/admin/users` even exposes `clip_created_count` ([admin.py:241](../../../src/backend/app/routers/admin.py)). **First step of this task: find out which surface the user was looking at where clip creation is absent, and fix THAT surface** (likely the funnel or a user-detail view), rather than adding a duplicate event.
+1. **`clip_created` IS already tracked.** It is in `FLOW_EVENTS` ([analytics.py:124-187](../../../src/backend/app/analytics.py)), emitted at [clips.py:1292](../../../src/backend/app/routers/clips.py) on the new-clip branch of `POST /api/clips/raw/save`, and rolls into `daily_counters.clips_created`, `user_actions`, and per-user `user_action_log`. Admin `GET /api/admin/users` even exposes `clip_created_count` ([admin.py:241](../../../src/backend/app/routers/admin.py)). User confirmed 2026-08-27: they saw no data likely because no tracked user had created a clip yet — no surface fix needed; this task just verifies the event surfaces everywhere it should (funnel, user detail, pulse) once data exists.
 2. **There is no `status` column for clips.** Phase is derived from row presence/timestamps across `raw_clips`, `working_clips`, `projects`, `final_videos` (canonical derivation: the projects list query at [projects.py:328-398](../../../src/backend/app/routers/projects.py)). "Downloaded" exists ONLY as the `video_downloaded` milestone in `user_action_log` (context `{"video_id"}`); "shared" lives in Postgres `shares`/`share_videos`.
 
 Also requested: a future direct-upload path will need a **`clip_uploaded`** event distinct from `clip_created` (annotation-sourced). Reserve the name + funnel position now so the phase inventory's "created" bucket can carry an origin dimension from day one.
@@ -21,13 +21,13 @@ Also requested: a future direct-upload path will need a **`clip_uploaded`** even
 
 **Derived, read-time inventory — no new persisted state.** Per the no-redundant-state rule and the analytics policy (aggregates-only, no new Postgres event state), phase counts are computed on demand from the tables that already encode them, following the existing pattern of `analytics.share_view_counts` (admin reads per-user SQLite at request time).
 
-1. **Phase model (needs a short design pass, then user confirmation).** Phases are NOT strictly linear — propose: a per-clip **furthest-phase** ladder `created -> focus_started -> focused (working video exported) -> completed (final render) -> published`, plus orthogonal **flags** on the final video: `intro_attached`, `downloaded`, `shared`, `watched`. Derivations already exist:
+1. **Phase model (user-confirmed 2026-08-27, see Design Decisions).** Two-tier count: **clips** for the early phases (`created -> focus_started -> focused`), **reels** (final videos) from `completed` onward (`completed -> published`, plus orthogonal flags `intro_attached_explicit`, `intro_default_inherited`, `downloaded`, `shared`, `watched`). A 5-clip reel that publishes counts as 1 published, not 5. Derivations already exist:
    - created / not started: `raw_clips` row, no framing data yet
    - focus started: `working_clips.crop_data/segments_data/timing_data` non-null, `exported_at` null ([projects.py:374-378](../../../src/backend/app/routers/projects.py))
    - focused: `working_clips.exported_at` non-null / `projects.working_video_id` set
    - completed: `final_videos` row exists for the project
    - published: `final_videos.published_at` non-null
-   - intro attached: `final_videos.intro_card_id` (raw semantics: `0` opted out, `NULL` inherit default, id = explicit — [downloads.py:240](../../../src/backend/app/routers/downloads.py); define which count as "attached")
+   - intro attached: `final_videos.intro_card_id` (raw semantics: `0` opted out, `NULL` inherit default, id = explicit — [downloads.py:240](../../../src/backend/app/routers/downloads.py)); tracked as TWO separate counts per user decision: explicit attachment vs inherit-default
    - downloaded: `video_downloaded` events in `user_action_log` joined on context `video_id`
    - shared: PG `share_videos.video_id` -> final video
 2. **Backend:** new admin analytics endpoint (e.g. `GET /api/admin/analytics/user/{user_id}/clip-phases`) that opens the user's profile DB(s) read-only and returns the counts; optionally an all-users aggregate for a dashboard column. Read-only DB access must go through the existing shared connection-opening path (restore-if-newer guard) — no writes, no sync side effects.
@@ -55,7 +55,7 @@ Also requested: a future direct-upload path will need a **`clip_uploaded`** even
 
 ### Technical Notes
 - **No new persisted clip state.** Phase is derivable; storing it would violate the no-redundant-state rule and invite drift. If the all-users aggregate proves too slow to compute live (N profile DBs per user), THAT is the moment to discuss a cached rollup (analytics.sqlite, per T7400's direction) — not before.
-- **Per-clip vs per-reel ambiguity is a real design point:** a final video can contain multiple clips (`final_videos.clip_count`), and a raw clip reaches "completed" through a project. Decide whether the unit of count is the raw clip (attribute the project's furthest phase back to each member clip) or the reel, and state it in the UI label. Multi-clip attribution needs the `raw_clips.auto_project_id` / project-membership join.
+- **Unit of count is resolved (user 2026-08-27):** clips for early phases, reels from `completed` onward — a multi-clip publish counts as 1. UI labels must make the tier switch explicit (e.g. "clips: 12 created / 5 focused; reels: 3 completed / 2 published"). A clip that is a member of a completed/published reel leaves the clip-tier ladder's "focused" bucket only if we choose mutually exclusive buckets — prefer furthest-phase-exclusive within each tier so the numbers sum sensibly; needs the project-membership join (`raw_clips.auto_project_id` + custom-project membership).
 - Impersonation guard: read endpoint only, so no milestone writes — nothing to guard, but confirm no accidental `record_milestone` calls in the read path.
 - `clip_created` is NOT emitted on the idempotent update branch of `save_raw_clip` ([clips.py:1199-1269](../../../src/backend/app/routers/clips.py)) — correct behavior; do not change.
 
@@ -71,37 +71,37 @@ Also requested: a future direct-upload path will need a **`clip_uploaded`** even
 | Agent | Include? | Justification |
 |-------|----------|---------------|
 | Code Expert | No | Audit already done at filing time (findings embedded above) |
-| Architect | No | Design section above; the two open questions below go to the user directly |
+| Architect | No | Design settled at filing time; all open questions answered by user 2026-08-27 |
 | Tester | Yes | Derivation SQL is the risk surface — fixture DB with clips at every phase |
 | Reviewer | Yes | M-tier default |
 | Migration | Only if `clips_uploaded` PG column is added now | `daily_counters` is postgres track |
 
-## Open Questions (confirm with user before implementation)
+## Design Decisions (user, 2026-08-27)
 
-1. **Which surface** were you looking at when clip creation seemed untracked? (Funnel chart? User detail? Pulse?) That surface gets the fix.
-2. **Unit of count:** raw clips or reels? (A 5-clip reel that publishes: does "published" count 5 or 1?)
-3. **Intro attached:** does inherit-default (`NULL` resolving to a default card) count as attached, or only explicit attachment?
+1. **clip_created gap was empty data, not a broken surface.** No fix needed; verify comprehensiveness (event flows to funnel/user-detail/pulse) as part of testing.
+2. **Unit of count:** a multi-clip reel publishing counts as **1**. Hence the two-tier model: clips for created/focus phases, reels for completed/published and the flags.
+3. **Intro attached:** track explicit attachment and inherit-default as **two separate counts**.
 
 ## Implementation
 
 ### Steps
-1. [ ] Confirm the 3 open questions with the user
-2. [ ] Locate the surface where clip_created is missing; fix it
-3. [ ] Extract/reuse the phase-derivation SQL into a shared helper (single source of truth with projects list query)
-4. [ ] Backend endpoint: per-user clip-phase counts (+ downloaded via user_action_log, shared via PG join)
-5. [ ] Backend tests against a fixture profile DB covering every phase + flags
-6. [ ] UserDetailPanel phase breakdown UI (+ optional UserTable column)
-7. [ ] Reserve `clip_uploaded` in the taxonomy per design decision
-8. [ ] Update `.claude/knowledge/backend-services.md` (new endpoint) at Stage 7
+1. [ ] Extract/reuse the phase-derivation SQL into a shared helper (single source of truth with projects list query)
+2. [ ] Backend endpoint: per-user phase counts — clip tier + reel tier + flags (downloaded via user_action_log, shared via PG join, intro split explicit/inherited)
+3. [ ] Backend tests against a fixture profile DB covering every phase + flag (incl. a multi-clip reel counting as 1)
+4. [ ] Verify clip_created surfaces correctly in funnel/user-detail/pulse with the fixture data
+5. [ ] UserDetailPanel phase breakdown UI (+ optional UserTable column)
+6. [ ] Reserve `clip_uploaded` in the taxonomy per design decision
+7. [ ] Update `.claude/knowledge/backend-services.md` (new endpoint) at Stage 7
 
 ### Progress Log
 
-**2026-08-27**: Task filed. Codebase audit embedded (event taxonomy, emit sites, phase derivations, admin surfaces). Not started.
+**2026-08-27**: Task filed. Codebase audit embedded (event taxonomy, emit sites, phase derivations, admin surfaces). Same day: user answered all 3 open questions (see Design Decisions) — task is fully specced and ready to implement.
 
 ## Acceptance Criteria
 
-- [ ] Admin can see, for any user, the count of clips at each lifecycle phase and the downloaded/shared/intro flags
-- [ ] Clip creation visible on the surface the user identified as missing it
+- [ ] Admin can see, for any user, clip counts per early phase and reel counts per late phase + downloaded/shared/intro(explicit vs inherited)/watched flags
+- [ ] A multi-clip reel publishing counts as 1 published
+- [ ] clip_created verified to surface in funnel/user-detail/pulse with fixture data
 - [ ] `clip_uploaded` name + funnel position reserved (implementation per design decision)
 - [ ] No new persisted derivable state; read path is write-free
 - [ ] Tests pass (fixture DB covers every phase and flag)
