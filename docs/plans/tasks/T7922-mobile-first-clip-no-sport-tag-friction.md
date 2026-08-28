@@ -1,6 +1,6 @@
 # T7922: First mobile clip — no_sport Tags block is a dead-feeling prompt, not tags
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-28 (filed from the T7920 mobile clip-save live-drive audit)
@@ -51,7 +51,7 @@ mobile top-bar reachability). Pair with the T7640 Tutorial Redesign real-device 
 
 ## Acceptance Criteria
 
-- [ ] A first-time mobile `no_sport` user can reach a tag set (or a deliberate no-tag save) from
+- [x] A first-time mobile `no_sport` user can reach a tag set (or a deliberate no-tag save) from
       the Add Clip form without a dead-feeling detour, verified on a mobile viewport with evidence
-- [ ] T7850's "instructional-only, no new nav plumbing" decision is explicitly revisited or upheld
+- [x] T7850's "instructional-only, no new nav plumbing" decision is explicitly revisited or upheld
       in the design doc

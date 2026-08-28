@@ -1,6 +1,6 @@
 # T7930: "Annotation Done" analytics mislabel + star-rating breakdown report
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-27
@@ -240,15 +240,30 @@ mechanism; rating-audit script pointer).
 2. Run `scripts/audit_rating_distribution.py --env <dev|staging|prod>` and report the 1-5 (+ any
    NULL) distribution to the user (Part B's actual data deliverable).
 
+**2026-08-28 (supervisor handoff resolved)**: Worker (t7930) shipped Part A relabel + Part B script, pushed as
+`feature/T7930-annotation-done-mislabel-and-rating-breakdown` (066bfb7e). Supervisor ran the
+two DB-credential-gated confirmations the container couldn't:
+- **lincdyn.j19@gmail.com confirmed (prod Postgres + R2, 2026-08-28)**: `users.user_id =
+  b01453fb-9acb-442c-8aac-00ef82fc2fc8`. `user_actions` breakdown: `annotation_completed`=1,
+  `game_created`=1, `game_upload_succeeded`=1, `session_started`=1,
+  `watched_annotate_tutorial`=1 — **no clip-creation action at all**. Their sole profile
+  (`9280ebbb`) `raw_clips` row count = **0**. Pure mislabel confirmed, not a second data-loss
+  bug — matches the watched-video-not-clip hypothesis exactly.
+- **Part B rating distribution run against prod (2026-08-28)**: 42 users, 52 profiles, 12
+  accounts with clips, 467 total `raw_clips`. Distribution: 1★ 3 (0.6%), 2★ 26 (5.6%), 3★ 37
+  (7.9%), 4★ 268 (57.4%), 5★ 133 (28.5%). No NULL/unrated rows found (schema holds). Full
+  per-account breakdown in the script's stdout (supervisor-run, not persisted to a file in this
+  repo).
+
 ## Acceptance Criteria
 
-- [ ] Confirmed (or ruled out) that `lincdyn.j19@gmail.com`'s case is explained by the
+- [x] Confirmed (or ruled out) that `lincdyn.j19@gmail.com`'s case is explained by the
       watched-video-not-clip semantics, with the actual query/lookup evidence recorded here
-- [ ] The other three examples (`mostafaali452010`, `ojedalucas19`, `finneganscudder`) are
+- [x] The other three examples (`mostafaali452010`, `ojedalucas19`, `finneganscudder`) are
       cross-checked against their owning tasks (T7920/T7870/T7880) and confirmed consistent with
       this task's explanation, not left as open loose ends
-- [ ] If mislabel confirmed: label updated everywhere `annotation_completed`/
+- [x] If mislabel confirmed: label updated everywhere `annotation_completed`/
       `annotations_completed` renders as a user-facing string, event key and column name
       unchanged
-- [ ] Star-rating breakdown script exists, runs read-only, and its output has been shared with
+- [x] Star-rating breakdown script exists, runs read-only, and its output has been shared with
       the user for at least one environment

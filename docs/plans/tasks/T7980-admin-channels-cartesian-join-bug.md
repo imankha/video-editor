@@ -1,6 +1,6 @@
 # T7980: Admin campaign/channels table cartesian-joins exports x purchases — inflates avg_exports, revenue, and sort order
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-28

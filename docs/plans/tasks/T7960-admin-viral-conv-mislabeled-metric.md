@@ -1,6 +1,6 @@
 # T7960: Admin "Viral Conv." card computes views-per-share, not referral conversion
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-28

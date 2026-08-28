@@ -1,6 +1,6 @@
 # T7990: Admin stat tiles show today-only, UTC-boundary values under a "vs last week" label
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-28
