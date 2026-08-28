@@ -37,6 +37,7 @@ def _make_profile_db() -> sqlite3.Connection:
         CREATE TABLE final_videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id INTEGER,
+            version INTEGER NOT NULL DEFAULT 1,
             published_at TIMESTAMP,
             watched_at TIMESTAMP,
             intro_card_id INTEGER
@@ -68,13 +69,14 @@ def _working_clip(conn, raw_clip_id, *, project_id=None, exported=False,
     )
 
 
-def _final_video(conn, *, project_id=None, published=False, watched=False,
-                 intro_card_id=None):
+def _final_video(conn, *, project_id=None, version=1, published=False,
+                 watched=False, intro_card_id=None):
     cur = conn.execute(
-        "INSERT INTO final_videos (project_id, published_at, watched_at, intro_card_id) "
-        "VALUES (?, ?, ?, ?)",
+        "INSERT INTO final_videos (project_id, version, published_at, watched_at, intro_card_id) "
+        "VALUES (?, ?, ?, ?, ?)",
         (
             project_id,
+            version,
             "2026-08-28T00:00:00" if published else None,
             "2026-08-28T00:00:00" if watched else None,
             intro_card_id,
@@ -163,6 +165,30 @@ class TestReelTierAndFlags:
         _final_video(conn)  # v2 not downloaded
         inv = compute_profile_phase_inventory(conn, {v1})
         assert inv["flags"]["downloaded"] == 1
+
+    def test_kept_prior_share_orphan_counts_reel_once(self):
+        """A re-export of a currently-shared reel KEEPS the prior final_videos row
+        (overlay.py `keep_prior`), so a project can hold two coexisting versions.
+        The current reel per project must count ONCE — not once per version — and
+        its flags must not double-count."""
+        conn = _make_profile_db()
+        pid = 200
+        # v1 kept-prior orphan (older, still-shared), published + watched
+        _final_video(conn, project_id=pid, version=1, published=True, watched=True)
+        # v2 current re-export, published + watched
+        _final_video(conn, project_id=pid, version=2, published=True, watched=True)
+        inv = compute_profile_phase_inventory(conn, set())
+        assert inv["reels"] == {"completed": 0, "published": 1}
+        assert inv["flags"]["watched"] == 1
+
+    def test_project_less_finals_each_count(self):
+        # A project-less final (project_id NULL) is its own reel — two of them
+        # are two reels, never collapsed together.
+        conn = _make_profile_db()
+        _final_video(conn, project_id=None, published=True)
+        _final_video(conn, project_id=None, published=True)
+        inv = compute_profile_phase_inventory(conn, set())
+        assert inv["reels"]["published"] == 2
 
     def test_multi_clip_reel_counts_as_one_published(self):
         """The core design decision: a 3-clip reel that publishes is 1 published,

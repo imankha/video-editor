@@ -9,10 +9,12 @@ Two-tier model (user decision 2026-08-27):
   * CLIP tier — the annotation unit (``raw_clips``). Each clip is counted in
     EXACTLY ONE furthest-phase bucket: ``created`` -> ``focus_started`` ->
     ``focused`` (so the three buckets sum to the profile's clip count).
-  * REEL tier — the final-render unit (``final_videos``). Each reel is counted in
-    EXACTLY ONE furthest-phase bucket: ``completed`` -> ``published``. A
-    multi-clip reel is a SINGLE ``final_videos`` row, so it counts as 1 (never N)
-    — the core design decision.
+  * REEL tier — the final-render unit. Each reel is counted in EXACTLY ONE
+    furthest-phase bucket: ``completed`` -> ``published``. The unit is the
+    CURRENT reel per project (latest ``final_videos`` version; a kept-prior share
+    orphan is not a second reel), plus each project-less final individually. A
+    multi-clip reel is a single render, so it counts as 1 (never N) — the core
+    design decision.
   Orthogonal reel FLAGS (not mutually exclusive, each reel may set several):
   ``intro_explicit`` / ``intro_inherited`` / ``downloaded`` / ``shared`` /
   ``watched``.
@@ -25,6 +27,10 @@ ever changes, change it in BOTH places:
   * focus_started  = not focused, but a working_clip has crop/segments/timing data
   * created        = neither (a bare ``raw_clips`` row, or one whose working_clips
                      carry no framing yet)
+Note the clip tier takes the FURTHEST phase across ALL of a raw clip's
+working_clip versions ("has this clip ever been focused?"), whereas projects.py's
+list query reports the LATEST version only — the predicates are identical, the
+version aggregation intentionally differs (activation inventory vs current state).
 
 Intro semantics (``final_videos.intro_card_id``, raw stored value — see
 downloads.py:240): ``0`` = opted out (counted in NEITHER intro flag), ``NULL`` =
@@ -87,9 +93,27 @@ def compute_profile_phase_inventory(
         "focused": (crow["focused"] if crow else 0) or 0,
     }
 
-    # --- REEL tier + orthogonal flags: one final_video == one reel ------------
+    # --- REEL tier + orthogonal flags: one CURRENT reel == one row -----------
+    # final_videos is versioned (overlay.py bumps version on re-export). A
+    # re-export normally DELETEs the prior row, but when the prior final still
+    # backs a live share it is KEPT (overlay.py:263 `not keep_prior`), so a
+    # project can hold two coexisting rows. Counting raw rows would then count
+    # that reel twice. Mirror projects.py's per-project reel semantics: keep only
+    # the latest (version, id) row per project (the current reel), plus every
+    # project-less row individually (each is its own reel). NOT-EXISTS anti-join,
+    # the same "latest version" idiom projects.py uses for clips.
     cur.execute(
-        "SELECT id, published_at, intro_card_id, watched_at FROM final_videos"
+        """
+        SELECT fv.id, fv.published_at, fv.intro_card_id, fv.watched_at
+        FROM final_videos fv
+        WHERE fv.project_id IS NULL
+           OR NOT EXISTS (
+                SELECT 1 FROM final_videos fv2
+                WHERE fv2.project_id = fv.project_id
+                  AND (fv2.version > fv.version
+                       OR (fv2.version = fv.version AND fv2.id > fv.id))
+           )
+        """
     )
     reels = {"completed": 0, "published": 0}
     flags = {
@@ -160,6 +184,11 @@ def gather_shared_video_ids(user_id: str, profile_id: str) -> set[int]:
     Scoped to Postgres ``shares.sharer_profile_id`` because ``video_id`` is only
     unique within a profile. Revoked shares are excluded (a taken-back share is
     not "currently shared"). Returns an empty set on failure (logged).
+
+    Like the downloaded flag, this is NOT intersected with the profile's live
+    ``final_videos`` set — a share pointing at a since-deleted or re-versioned
+    reel id still counts — so the flags can legitimately exceed the reel count.
+    Accepted imprecision for an admin inventory (documented, not a billing figure).
     """
     from app.services.pg import get_pg
 
