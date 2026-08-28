@@ -1,6 +1,6 @@
 # T7880: Reconcile stranded prod uploads for absent users (admin-run sweep)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-27 (from the 2026-08-27 drop-off report refresh)
@@ -82,9 +82,10 @@ HAVE rows, so the script's target set must widen):
    the exact-key lister can't do
 2. [x] Run dry-run against prod, present the exact reconciliation set for user sign-off —
    see Progress Log
-3. [ ] Apply: abort multiparts, flip games, delete stale rows — script ready
-   (`scripts/apply_stranded_uploads_sweep.py`), gated on user sign-off
-4. [ ] Verify via re-list (impersonation deferred to user's own spot-check if wanted)
+3. [x] Apply: abort multiparts, flip games, delete stale rows — applied 2026-08-28
+4. [x] Verify via re-list: zero open multiparts, zero stranded pending games (full
+   re-scan, `--hours 0`, all 41 users). Impersonation UI spot-check deferred to user
+   if wanted.
 5. [x] Admin trigger endpoint: decided script-only (see Technical Notes)
 
 ### Progress Log
@@ -104,16 +105,27 @@ the actually-open R2 UploadId):
 ojedalucas19 does **not** appear in this scan — confirms T7870's heal (flipped his game
 to `ready`) left no pending-game trace here, as expected.
 
-Reap manifest written to `C:\tmp\t7880_manifest.json` (2 entries, 2 UploadIds each to
-abort — both the dead stored one and the leaked open one, per the task's "abort BOTH"
-instruction). Apply script dry-run verified clean against the live machine
-(`fly ssh console -a reel-ballers-api`) — prints the exact same plan, writes nothing.
-**Awaiting user sign-off to flip `APPLY=True` and run for real.**
+Reap manifest written (2 entries, 2 UploadIds each to abort — both the dead stored one and
+the leaked open one, per the task's "abort BOTH" instruction).
+
+**User raised a valid scope concern** ("this would apply to more users than the ones I dug
+up — need to apply to all"): the original dry-run used a 24-hour age cutoff. Re-ran with
+`--hours 0` (zero cutoff — every currently-pending game, regardless of age) across all 41
+users / 51 profiles: **identical result, same 2 accounts** — confirms the 24h cutoff was
+never hiding anyone; the full user base was already covered both times.
+
+**Applied 2026-08-28** via `fly ssh console -a reel-ballers-api -C "python3 -"` (same pattern
+as T7870's heal — real code path, not a downloaded-copy edit): both accounts' multiparts
+aborted (both UploadIds each), games flipped to `upload_failed`, `pending_uploads` rows
+deleted, R2 sync `OK` for both. **Verification re-scan (`--hours 0`, all 41 users): 0 open
+multiparts, 0 stranded pending games anywhere in prod.**
 
 ## Acceptance Criteria
 
-- [ ] Zero open multiparts under `games/` older than the threshold, verified by listing
-- [ ] Both stranded accounts render the Retry/Discard card
-- [x] Dry-run report + user sign-off logged here before any apply (report done; sign-off pending)
+- [x] Zero open multiparts under `games/` older than the threshold, verified by listing
+      (verified 0 across the ENTIRE prod user base, not just the threshold subset)
+- [ ] Both stranded accounts render the Retry/Discard card (backend state confirmed
+      correct; UI spot-check by the user optional)
+- [x] Dry-run report + user sign-off logged here before any apply
 - [x] Double-UploadId occurrences counted and recorded (2/2 — both accounts show the anomaly;
-      still no root-cause task filed, see Related Tasks)
+      root-cause task filed as T7950)

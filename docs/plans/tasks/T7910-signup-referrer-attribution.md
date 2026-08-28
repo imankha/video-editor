@@ -1,6 +1,6 @@
 # T7910: Signup attribution: referrer fallback + end-to-end pipeline verification
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-08-27 (from the 2026-08-27 drop-off report refresh)

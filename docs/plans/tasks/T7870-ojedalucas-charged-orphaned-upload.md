@@ -1,6 +1,6 @@
 # T7870: ojedalucas19 - upload succeeded, credits charged, game row deleted (investigate + heal)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-08-27 (from the 2026-08-27 drop-off report refresh)
