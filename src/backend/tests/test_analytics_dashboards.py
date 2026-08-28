@@ -334,6 +334,37 @@ class TestPulseEndpoint:
         for key in ("signups", "exports", "active_users", "revenue", "viral_conversion"):
             assert len(data["cards"][key]["sparkline"]) == 14
 
+    def _direct_referral_rate(self, days=30):
+        # Direct referred/total over the endpoint's exact window (start = today-(days-1)).
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COUNT(*) AS total,
+                       COUNT(*) FILTER (WHERE referrer_id IS NOT NULL) AS referred
+                FROM user_segments
+                WHERE acquired_at::date
+                      BETWEEN CURRENT_DATE - make_interval(days => %s) AND CURRENT_DATE
+            """, (days - 1,))
+            row = cur.fetchone()
+        return round(row["referred"] / row["total"] * 100, 1) if row["total"] else None
+
+    def test_viral_conversion_is_bounded_referral_rate(self, client):
+        # T7960: "Viral Conv." must be referred signups / total signups (bounded 0-100%),
+        # NOT the old unbounded views-per-share ratio (which read e.g. 2000%). The fixture
+        # has user-b referred by user-a, so at least one referred signup exists -> > 0.
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["viral_conversion"]
+        assert card["today"] is not None and card["today"] > 0
+        # A conversion rate can never exceed 100% -- guards against the 2000% regression.
+        assert card["today"] <= 100
+
+    def test_viral_conversion_matches_referrer_id_counts(self, client, pg_conn):
+        # Cross-check the card against a direct count of user_segments.referrer_id.
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.json()["cards"]["viral_conversion"]["today"] == self._direct_referral_rate()
+
 
 class TestUserActions:
     def test_record_milestone_upserts_action(self, analytics_setup, pg_conn):

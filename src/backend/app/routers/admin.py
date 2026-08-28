@@ -1679,17 +1679,6 @@ def analytics_pulse(
             revenue_total = cur.fetchone()["total"]
 
             cur.execute(f"""
-                SELECT
-                    COALESCE(SUM(CASE WHEN a.action = 'share_completed' THEN a.count END), 0) AS shares,
-                    COALESCE(SUM(CASE WHEN a.action = 'share_viewed' THEN a.count END), 0) AS views
-                FROM user_actions a
-                JOIN user_segments s ON a.user_id = s.user_id
-                {seg_where} AND a.action IN ('share_completed', 'share_viewed')
-            """, filter_params)
-            sv = cur.fetchone()
-            total_shares, total_views = sv["shares"], sv["views"]
-
-            cur.execute(f"""
                 SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt
                 FROM user_actions a
                 JOIN user_segments s ON a.user_id = s.user_id
@@ -1699,28 +1688,9 @@ def analytics_pulse(
             """, [*filter_params, start, today])
             revenue_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
-            cur.execute(f"""
-                SELECT a.first_at::date AS d, a.action,
-                       COUNT(DISTINCT a.user_id) AS cnt
-                FROM user_actions a
-                JOIN user_segments s ON a.user_id = s.user_id
-                {seg_where} AND a.action IN ('share_completed', 'share_viewed')
-                    AND a.first_at::date BETWEEN %s AND %s
-                GROUP BY d, a.action ORDER BY d
-            """, [*filter_params, start, today])
-            shares_by_date = {}
-            views_by_date = {}
-            for r in cur.fetchall():
-                if r["action"] == "share_completed":
-                    shares_by_date[r["d"]] = r["cnt"]
-                else:
-                    views_by_date[r["d"]] = r["cnt"]
-
         else:
             cur.execute("""
                 SELECT counter_date, signups, exports_completed, credit_purchases,
-                       COALESCE(shares_completed, 0) AS shares_completed,
-                       COALESCE(shares_viewed, 0) AS shares_viewed,
                        COALESCE(sessions_started, 0) AS sessions_started,
                        COALESCE(game_uploads_succeeded, 0) AS game_uploads_succeeded,
                        COALESCE(game_uploads_failed, 0) AS game_uploads_failed
@@ -1744,12 +1714,7 @@ def analytics_pulse(
             revenue_total = cur.fetchone()["total"]
 
             date_range_tmp = [(start + timedelta(days=i)) for i in range(days)]
-            total_shares = sum(_cv(d, "shares_completed") for d in date_range_tmp)
-            total_views = sum(_cv(d, "shares_viewed") for d in date_range_tmp)
-
             revenue_by_date = {d: _cv(d, "credit_purchases") for d in date_range_tmp if _cv(d, "credit_purchases")}
-            shares_by_date = {d: _cv(d, "shares_completed") for d in date_range_tmp if _cv(d, "shares_completed")}
-            views_by_date = {d: _cv(d, "shares_viewed") for d in date_range_tmp if _cv(d, "shares_viewed")}
 
             # T7510: upload success rate from the new daily_counters columns.
             upload_succeeded_total = sum(_cv(d, "game_uploads_succeeded") for d in date_range_tmp)
@@ -1762,12 +1727,36 @@ def analytics_pulse(
     active_spark = [active_by_date.get(d, 0) for d in date_range]
     revenue_spark = [revenue_by_date.get(d, 0) for d in date_range]
 
-    viral_pct = round(total_views / total_shares * 100, 1) if total_shares else 0
-    viral_spark = []
-    for d in date_range:
-        s = shares_by_date.get(d, 0)
-        v = views_by_date.get(d, 0)
-        viral_spark.append(round(v / s * 100, 1) if s else 0)
+    # T7960: "Viral Conv." now measures referral conversion (referred signups / total
+    # signups) over the window, bounded 0-100%, using the referrer_id attribution signal
+    # (the same signal as the channels endpoint's `viral` column). This replaces the prior
+    # views-per-share ratio, which was UNBOUNDED (one share link viewed 20x read as 2000%)
+    # and had nothing to do with referrals. Honors the active segment filter.
+    viral_where = ("WHERE " + " AND ".join(filter_parts)) if has_filter else "WHERE TRUE"
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE s.referrer_id IS NOT NULL) AS referred
+            FROM user_segments s
+            {viral_where} AND s.acquired_at::date BETWEEN %s AND %s
+        """, [*filter_params, start, today])
+        vr = cur.fetchone()
+        cur.execute(f"""
+            SELECT s.acquired_at::date AS d, COUNT(*) AS cnt
+            FROM user_segments s
+            {viral_where} AND s.referrer_id IS NOT NULL
+                AND s.acquired_at::date BETWEEN %s AND %s
+            GROUP BY d ORDER BY d
+        """, [*filter_params, start, today])
+        referred_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+    # referred/total can never exceed 100% -- an honest, bounded conversion rate. null when
+    # no signups landed in the window, so the card renders "--" instead of a fake 0%.
+    viral_total, viral_referred = vr["total"], vr["referred"]
+    viral_pct = round(viral_referred / viral_total * 100, 1) if viral_total else None
+    # Sparkline = per-day referred-signup COUNT (a referral-activity trend), mirroring the
+    # revenue card's aggregate-headline + per-day-count sparkline shape.
+    viral_spark = [referred_by_date.get(d, 0) for d in date_range]
 
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
