@@ -43,7 +43,11 @@ export function PulseCards({ data }) {
         const up = card.change_pct >= 0;
         let displayVal = card.today;
         if (key === 'revenue') displayVal = `$${((card.today || 0) / 100).toFixed(2)}`;
-        if (key === 'viral_conversion') displayVal = `${card.today || 0}%`;
+        // T7960: viral_conversion is referral conversion (referred/total signups), bounded
+        // 0-100%. null when there were no signups in the window -> honest "--", not a fake 0%.
+        if (key === 'viral_conversion') {
+          displayVal = card.today == null ? '--' : `${card.today}%`;
+        }
         // T7510: upload success rate is null when there were no attempts -> "--".
         if (key === 'upload_success_rate') {
           displayVal = card.today == null ? '--' : `${card.today}%`;
