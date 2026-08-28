@@ -2522,6 +2522,54 @@ def r2_list_multipart_uploads(key: str) -> list:
         return []
 
 
+def r2_list_multipart_uploads_by_prefix(prefix: str) -> list:
+    """
+    List every open multipart upload whose key starts with `prefix` (e.g. "games/").
+
+    Unlike r2_list_multipart_uploads (exact-key match, for one known object), this
+    is a broad admin-sweep primitive (T7880): it surfaces multiparts for hashes we
+    don't already have a local record for, and lets a sweep catch the double-UploadId
+    anomaly (an object with 2+ open multiparts, one matching a stored pending_uploads
+    row and one not).
+
+    Returns a list of {'Key': str, 'UploadId': str, 'Initiated': datetime}.
+    """
+    client = get_r2_client()
+    if not client:
+        return []
+
+    try:
+        from .utils.retry import TIER_3, retry_r2_call
+        uploads: list = []
+        key_marker = None
+        id_marker = None
+        while True:
+            kwargs = {"Bucket": R2_BUCKET, "Prefix": prefix}
+            if key_marker is not None:
+                kwargs["KeyMarker"] = key_marker
+            if id_marker is not None:
+                kwargs["UploadIdMarker"] = id_marker
+            response = retry_r2_call(
+                client.list_multipart_uploads,
+                operation=f"list_multipart_uploads_by_prefix {prefix}", **TIER_3, **kwargs,
+            )
+            for u in response.get('Uploads', []):
+                uploads.append({
+                    'Key': u['Key'],
+                    'UploadId': u['UploadId'],
+                    'Initiated': u.get('Initiated'),
+                })
+            if response.get('IsTruncated'):
+                key_marker = response.get('NextKeyMarker')
+                id_marker = response.get('NextUploadIdMarker')
+            else:
+                break
+        return uploads
+    except Exception as e:
+        logger.warning(f"Error listing multipart uploads by prefix: {prefix} - {e}")
+        return []
+
+
 def r2_abort_orphan_multipart_uploads(key: str, keep_upload_id: str | None = None) -> int:
     """
     Abort every open multipart upload on `key`, optionally sparing one.

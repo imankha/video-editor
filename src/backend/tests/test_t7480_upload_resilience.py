@@ -109,6 +109,54 @@ def test_list_multipart_uploads_filters_by_exact_key():
     assert [u["UploadId"] for u in got] == ["u1"]
 
 
+def test_list_multipart_uploads_by_prefix_returns_every_key_under_prefix():
+    """T7880: unlike the exact-key lister, the prefix lister returns EVERY open
+    multipart under a prefix (e.g. 'games/'), across different hashes/keys -- the
+    primitive an admin sweep needs to find stranded uploads with no local record."""
+    client = MagicMock()
+    client.list_multipart_uploads.return_value = {
+        "Uploads": [
+            {"Key": "games/aaa.mp4", "UploadId": "u1"},
+            {"Key": "games/bbb.mp4", "UploadId": "u2"},
+            {"Key": "games/bbb.mp4", "UploadId": "u3"},  # double-UploadId anomaly
+        ],
+        "IsTruncated": False,
+    }
+    from app.storage import r2_list_multipart_uploads_by_prefix
+    with patch("app.storage.get_r2_client", return_value=client):
+        got = r2_list_multipart_uploads_by_prefix("games/")
+    assert {(u["Key"], u["UploadId"]) for u in got} == {
+        ("games/aaa.mp4", "u1"), ("games/bbb.mp4", "u2"), ("games/bbb.mp4", "u3"),
+    }
+    call_kwargs = client.list_multipart_uploads.call_args.kwargs
+    assert call_kwargs["Prefix"] == "games/"
+
+
+def test_list_multipart_uploads_by_prefix_paginates():
+    """A truncated first page must be followed using the Next*Marker fields."""
+    client = MagicMock()
+    client.list_multipart_uploads.side_effect = [
+        {
+            "Uploads": [{"Key": "games/aaa.mp4", "UploadId": "u1"}],
+            "IsTruncated": True,
+            "NextKeyMarker": "games/aaa.mp4",
+            "NextUploadIdMarker": "u1",
+        },
+        {
+            "Uploads": [{"Key": "games/zzz.mp4", "UploadId": "u2"}],
+            "IsTruncated": False,
+        },
+    ]
+    from app.storage import r2_list_multipart_uploads_by_prefix
+    with patch("app.storage.get_r2_client", return_value=client):
+        got = r2_list_multipart_uploads_by_prefix("games/")
+    assert [u["UploadId"] for u in got] == ["u1", "u2"]
+    assert client.list_multipart_uploads.call_count == 2
+    second_kwargs = client.list_multipart_uploads.call_args_list[1].kwargs
+    assert second_kwargs["KeyMarker"] == "games/aaa.mp4"
+    assert second_kwargs["UploadIdMarker"] == "u1"
+
+
 def test_abort_orphan_multipart_uploads_aborts_all_matching():
     """Two open multiparts on a key (the double-UploadId leak) are both aborted."""
     client = MagicMock()
