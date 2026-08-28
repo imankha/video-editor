@@ -1,6 +1,6 @@
 # T8010: Two more admin analytics handlers still block the event loop (T8000 follow-up)
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-28 (filed by T8000 per its own "found but out of scope" note)
@@ -48,11 +48,18 @@ removed.
 ## Implementation
 
 ### Steps
-1. [ ] Convert `analytics_journey` and `analytics_user_actions` from `async def` to `def`
-2. [ ] Verify neither handler body contains an `await` that would break under the sync signature
-3. [ ] Run the relevant admin/analytics test set to confirm no regression
+1. [x] Convert `analytics_journey` and `analytics_user_actions` from `async def` to `def`
+2. [x] Verify neither handler body contains an `await` that would break under the sync signature
+3. [x] Run the relevant admin/analytics test set to confirm no regression
+
+### Progress Log
+
+**2026-08-28**: Implemented inline (S-tier, no container). Both handlers converted, neither
+had an `await`. Extended T8000's `test_all_six_analytics_handlers_are_sync_def` regression
+guard to `test_all_eight_...` to cover both new handlers. 33 tests in
+`test_t8000_admin_analytics_concurrency.py` + `test_analytics_dashboards.py` green.
 
 ## Acceptance Criteria
 
-- [ ] Both handlers are plain `def`, dispatched to FastAPI's threadpool like the other 6
-- [ ] Existing admin/analytics tests still pass
+- [x] Both handlers are plain `def`, dispatched to FastAPI's threadpool like the other 6
+- [x] Existing admin/analytics tests still pass

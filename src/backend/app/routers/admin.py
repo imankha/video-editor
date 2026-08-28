@@ -1373,7 +1373,8 @@ def _rollup_failures(action_rows: list[dict]) -> dict[str, dict]:
 
 
 @router.get("/analytics/journey/{user_id}")
-async def analytics_journey(user_id: str):
+# T8010: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_journey(user_id: str):
     _require_admin()
 
     with get_pg() as conn:
@@ -1519,7 +1520,8 @@ async def analytics_user_clip_phases(user_id: str):
 
 
 @router.get("/analytics/user/{user_id}/actions")
-async def analytics_user_actions(
+# T8010: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_user_actions(
     user_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
