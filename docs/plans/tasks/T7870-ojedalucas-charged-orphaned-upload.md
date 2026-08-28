@@ -72,16 +72,70 @@ Investigate first, then heal; the fix depends on the verdict.
 ## Implementation
 
 ### Steps
-1. [ ] Pin deploy timestamp vs deletion timestamp
-2. [ ] Read `user_action_log` timelines (read-only, live machine) + any server logs
-3. [ ] Name the deleting code path with evidence
-4. [ ] Fix (if Verdict A) with regression test, or file the UX/refund follow-up (if Verdict B)
+1. [x] Pin deploy timestamp vs deletion timestamp
+2. [x] Read `user_action_log` timelines (read-only, live machine) + any server logs
+3. [x] Name the deleting code path with evidence
+4. [x] Fix (Verdict A, see below) with regression test — commit `40eca8f5`, branch
+   `feature/T7870-ojedalucas-charged-orphaned-upload`
 5. [ ] Dry-run heal proposal -> user sign-off -> apply -> verify in R2 + live DB
 6. [ ] Update T7610 segment addendum with the verdict
 
+### Progress Log
+
+**2026-08-28 — Forensics + verdict + fix:**
+
+**Deploy timeline (fly releases --json + git merge commit timestamps):** prod ran v276
+(deployed 2026-08-24T19:31:59Z) for the ENTIRE incident window — the next deploy (v277)
+didn't land until 2026-08-27T06:52:50Z, almost 8 hours after the incident. T7470's guard
+merged to master 2026-08-25T02:27:40Z (also T7490, T7500) — all inside the gap, never
+reached prod before 22:04 UTC Aug 26.
+
+**user_action_log (read-only fly ssh probe):** `game_created` (22:03:41), `annotation_completed`
+x2 (22:05:17, 22:05:27), last activity 22:05:37. `games`/`game_videos`/`game_storage`
+sqlite_sequence all show seq=1 with zero surviving rows — full cascade delete ran. No
+`raw_clips` sqlite_sequence entry at all -> no clip was ever inserted (only watched video,
+consistent with `annotation_completed`'s `viewed_duration > 0` semantics, not a saved clip).
+PG: `credit_transactions` shows only the expected 2 rows (261 signup bonus, 262 the
+`game_upload:1` debit); `game_storage_refs` empty (confirms `delete_ref` ran, not the sweep
+scheduler); no `r2_grace_deletions` row for the object hash -> the orphaned 164MB object has
+**no reclamation deadline**, safe to heal at leisure.
+
+**Verdict A, confirmed with the expert agent (Opus) given the async-timing reasoning
+involved:** the pre-T7470 code (running in prod for the whole incident window) had NO
+content guard at all on `DELETE /api/games/{id}` — `uploadManager.js`'s failure catch block
+called it unconditionally whenever a game_id existed. `activateGame()` succeeded server-side
+(R2 validated, credits charged, status->ready) around 22:04:07-09, but some later step in the
+SAME client-side try block (a lost response, a slow request, or the final `commit()` racing
+the annotate screen's own writes — cannot be narrowed further, no surviving Aug-26 server logs)
+threw, and the unconditional cleanup DELETE cascaded the whole game away.
+
+**Not purely a "fix hadn't shipped" story — a live gap survived T7470 into current master:**
+`_game_has_user_content` checks `raw_clips`/`viewed_duration` but never game `status`. A
+client that misses `activateGame`'s 200 still runs the cleanup DELETE against a game the
+server already validated and charged credits for — the content check can't catch it because,
+at that instant, there IS no content yet (this is exactly what happened here: zero raw_clips
+ever existed). **Fixed** (commit `40eca8f5`): `delete_game`'s `only_if_empty` branch now also
+refuses when `status != PENDING` (200 no-op, `reason: 'activated'`); `uploadManager.js` tracks
+an `activated` flag (set once `activateGame` or the `already_owned` dedup path succeeds) that
+suppresses the cleanup call entirely as defense in depth. 8/8 backend + 25/25 frontend tests
+green (2 new backend cases, 1 new frontend case pinning the exact ojedalucas shape).
+
+**User-initiated delete (Verdict B) not fully excluded but low confidence (~20%, per expert):**
+would require navigating to Projects, opening the tile menu, and confirming a two-tap delete
+within an ~88-second window on a 3-minute-old account, with zero retry afterward
+(`sqlite_sequence(games)=1` proves no second game was ever created). The cleanup-path
+explanation matches the same bug class T7470 itself documents happening to another prod user
+(bigajosue) that same week.
+
+**Idempotency-key finding that shapes the heal decision:** `deduct_credits` keys on
+`game_upload:{game_id}`. His consumed key is `game_upload:1`. Restoring game row id 1 costs
+him nothing extra on re-activation (idempotent). If he instead re-uploads from scratch, the
+new game becomes id 2 -> key `game_upload:2` -> **he would be charged 2 credits again** for
+the same video. This asymmetry argues for restore-in-place over refund-and-let-him-reupload.
+
 ## Acceptance Criteria
 
-- [ ] Deleting actor identified with evidence (code path + timestamp), written up here
-- [ ] If a code bug: fixed + regression test; if user-initiated: refund decision + UX finding recorded
+- [x] Deleting actor identified with evidence (code path + timestamp), written up here
+- [x] Code bug confirmed (Verdict A) — fixed + regression tests (commit `40eca8f5`)
 - [ ] Account heal (or explicit decision not to) signed off by user and executed
 - [ ] T7610 addendum updated for this user
