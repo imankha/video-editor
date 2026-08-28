@@ -743,7 +743,15 @@ export function ProjectManager({
 
   // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {
-    requireAuth(() => setShowGameDetailsModal(true));
+    requireAuth(() => {
+      // Open the picker FIRST so the funnel beacon can never delay it.
+      setShowGameDetailsModal(true);
+      // T7890: pre-upload funnel beacon — the entry gesture of the signup->first-upload
+      // cliff. Fire-and-forget through the impersonation-guarded milestone bridge
+      // (session-deduped, keepalive). Fired only after auth succeeds so it maps to a
+      // real user and matches the funnel cohort. Not a quest step — analytics only.
+      useQuestStore.getState().recordAchievement('add_game_opened');
+    });
   }, [requireAuth]);
 
   // T7840: register the auth-gated add-game gesture as the quest panel's opener

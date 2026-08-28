@@ -3,6 +3,12 @@ import React from 'react';
 const STAGES = [
   { key: 'signed_up', label: 'Signed Up' },
   { key: 'session', label: 'Session' },
+  // T7890: pre-upload funnel stages. "Add Game Opened" (entry gesture) and
+  // "File Selected" (file chosen, pre-prepare) localize the signup->first-upload
+  // cliff that was dark before game_created. Keys derive from the backend label
+  // (label.lower().replace(' ','_')) — see analytics.FLOW_EVENTS/FUNNEL_STEPS.
+  { key: 'add_game_opened', label: 'Add Game Opened' },
+  { key: 'file_selected', label: 'File Selected' },
   // T7510: attempt vs durable-outcome are now distinct stages. "Upload Attempted"
   // (game_created, pending insert) precedes "Uploaded" (game_upload_succeeded,
   // R2-verified) so the attempt->durable drop-off gap is visible.

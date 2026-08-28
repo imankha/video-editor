@@ -180,6 +180,20 @@ FLOW_EVENTS = {
     "move_attempted":               {"label": "Move Attempted",             "daily_col": None},
     "move_succeeded":               {"label": "Moved to Reels",             "daily_col": None},
     "payment_failed":               {"label": "Payment Failed",             "daily_col": None},
+    # T7890: pre-upload funnel beacons. Everything before game_created (the
+    # "Upload Attempted" pending insert) was previously dark, so a signup who
+    # bailed before the prepare POST was indistinguishable from one who never
+    # clicked Add Game. These two frontend gestures now bridge through
+    # record_milestone (impersonation-guarded) into user_actions. Read side is
+    # the existing user_actions aggregate (per-user first_at + count) — no
+    # daily_col / day-grain needed, so no daily_counters column and no migration.
+    # Interpretation contract: add_game_opened WITHOUT upload_file_selected =
+    # picker/entry failure or bail; upload_file_selected WITHOUT game_created =
+    # pre-prepare death (JS error, validation, navigation). picker-abandoned is
+    # NOT instrumented (no reliable browser cancel event) — derive it in reads as
+    # add_game_opened - upload_file_selected.
+    "add_game_opened":              {"label": "Add Game Opened",            "daily_col": None},
+    "upload_file_selected":         {"label": "File Selected",              "daily_col": None},
     # T7510: previously-dropped engagement milestones (frontend achievements
     # bridged to these names, which were absent from FLOW_EVENTS -> "Unknown
     # event" drops). Registered as engagement dimensions (no daily rollup).
@@ -204,6 +218,8 @@ MILESTONE_REASONS = frozenset({
 
 FUNNEL_STEPS = [
     "session_started",
+    "add_game_opened",        # T7890: pre-upload entry gesture (Add Game click)
+    "upload_file_selected",   # T7890: file chosen, before the prepare POST
     "game_created",           # T7510: upload ATTEMPT (pending insert)
     "game_upload_succeeded",  # T7510: durable upload OUTCOME (finalize)
     "clip_created",
