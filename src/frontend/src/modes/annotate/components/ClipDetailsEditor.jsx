@@ -5,7 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile } from '../../../stores';
+import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
@@ -82,8 +82,16 @@ export function ClipDetailsEditor({
 }) {
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
+  const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
+
+  // T7922: picking a sport from the inline no_sport Tag picker. Optimistic +
+  // rolled back in the store; swallow the rejection here (store logs + reverts).
+  const handleSetSport = useCallback((nextSport) => {
+    if (!currentProfile?.id) return;
+    updateProfile(currentProfile.id, { sport: nextSport }).catch(() => {});
+  }, [updateProfile, currentProfile?.id]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [reelRequested, setReelRequested] = useState(false);
@@ -247,7 +255,7 @@ export function ClipDetailsEditor({
         ) : sport === NO_SPORT ? (
           <div>
             <label className="block text-gray-400 text-xs mb-1">Tags</label>
-            <NoSportTagWarning />
+            <NoSportTagWarning onChange={handleSetSport} />
           </div>
         ) : null}
 

@@ -310,6 +310,28 @@ soccer pick), and the column is `NOT NULL` so there is no `sport IS NULL` cohort
   fullscreen scrub bar); custom/"Other" sport → silent (deliberate choice, no registry).
   Four call sites: `UploadClipModal`, `ClipDetailsEditor`, `AnnotateFullscreenOverlay` (×2).
   The read fallback is now `currentProfile?.sport || NO_SPORT` (was `|| 'soccer'`).
+- **T7922 — the FULL `<NoSportTagWarning>` variant is ACTIONABLE, not instructional.**
+  T7850's "instructional-only, names the top-bar path" was a dead end on mobile: the named
+  control (`ProfileSportButton`) is mounted only on the ProjectManager home header, NOT on the
+  annotate surface, so a first-clip `no_sport` user was told to tap an off-screen icon. The full
+  variant now renders an inline `<InlineSportSelect sport={NO_SPORT} onChange=…>` (extracted from
+  `ManageProfilesModal` to `components/shared/InlineSportSelect.jsx`) under the prompt "Pick your
+  sport to tag this clip". Picking a sport calls `updateProfile(currentProfileId, {sport})`; the
+  open form re-renders IN PLACE via `useCurrentProfile()` (no remount — in-progress range/rating/
+  name survive) and `getTagSet(newSport)` swaps the `TagSelector` in. The three full call sites
+  (`UploadClipModal`, `ClipDetailsEditor`, `AnnotateFullscreenOverlay` portrait) pass
+  `onChange={handleSetSport}` (a `.catch(()=>{})` fire-and-forget — the store logs+rolls back on
+  failure, and the visible tag revert IS the feedback). **The `compact` landscape scrub-bar
+  variant is DEFERRED (fast-follow): it is UNCHANGED, still the non-interactive prose "Set your
+  sport (top bar) for tags".** `InlineSportSelect` renders its "Other…" option ONLY when
+  `onPickOther` is passed — `ManageProfilesModal` still passes it; the T7922 picker does NOT (a
+  custom sport yields no tags anyway, and its edit modal at `Z.MODAL` z-50 can't render over the
+  `z-[100]` fullscreen overlay). `updateProfile` (profileStore) is now OPTIMISTIC: it patches the
+  local profile before the PUT and rolls back to the pre-gesture snapshot on failure (mirrors
+  `setIntroFact`), then reconciles via `fetchProfiles({force:true})`. Covered by
+  `NoSportTagWarning.test.jsx`, `profileStore.updateProfile.test.js`, updated
+  `UploadClipModal.noSport.test.jsx`, and live-drive `e2e/T7922-mobile-inline-sport-picker.qa.spec.js`
+  (320+375, picker→tags swap + rating-survives-remount + Save round-trip).
 - `ManageProfilesModal` offers "No Sport" as an explicit option in BOTH the row
   `InlineSportSelect` and the `ProfileForm` dropdown (distinct from the "Other" free-text branch).
 - Known gap (out of scope): `collections.py` `CURATED_COMBOS.get(sport or DEFAULT_SPORT, …)`

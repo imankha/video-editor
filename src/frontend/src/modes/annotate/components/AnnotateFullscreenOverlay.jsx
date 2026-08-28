@@ -6,7 +6,7 @@ import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput, commitPendingTeammateText } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile } from '../../../stores';
+import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
@@ -115,8 +115,16 @@ export function AnnotateFullscreenOverlay({
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
+  const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
+
+  // T7922: picking a sport from the inline no_sport Tag picker. Optimistic +
+  // rolled back in the store; swallow the rejection here (store logs + reverts).
+  const handleSetSport = useCallback((nextSport) => {
+    if (!currentProfile?.id) return;
+    updateProfile(currentProfile.id, { sport: nextSport }).catch(() => {});
+  }, [updateProfile, currentProfile?.id]);
 
   const [dockPosition, setDockPosition] = useState(savedDockPosition);
   const handleDockChange = useCallback((pos) => {
@@ -367,7 +375,7 @@ export function AnnotateFullscreenOverlay({
         ) : sport === NO_SPORT ? (
           <div className="mb-4">
             <label className="block text-gray-400 text-sm mb-2">Tags</label>
-            <NoSportTagWarning />
+            <NoSportTagWarning onChange={handleSetSport} />
           </div>
         ) : null}
 
