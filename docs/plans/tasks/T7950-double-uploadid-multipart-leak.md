@@ -1,6 +1,6 @@
 # T7950: Root-cause the double-UploadId multipart leak (2/2 recurrence)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-28 (filed by T7880 per its own "if this reproduces, file a task" instruction)
@@ -73,6 +73,6 @@ firing on this path.
 
 ## Acceptance Criteria
 
-- [ ] Mechanism confirmed with evidence, not guessed
-- [ ] Fix implemented with a regression test that would have caught both prod occurrences
-- [ ] No double-UploadId recurrence in the next sweep (re-run T7880's scan script as verification)
+- [x] Mechanism confirmed with evidence, not guessed
+- [x] Fix implemented with a regression test that would have caught both prod occurrences
+- [ ] No double-UploadId recurrence in the next sweep (re-run T7880's scan script as verification) — pending a future sweep, can't verify until then
