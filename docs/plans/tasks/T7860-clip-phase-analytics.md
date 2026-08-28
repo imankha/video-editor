@@ -85,13 +85,13 @@ Also requested: a future direct-upload path will need a **`clip_uploaded`** even
 ## Implementation
 
 ### Steps
-1. [ ] Extract/reuse the phase-derivation SQL into a shared helper (single source of truth with projects list query)
-2. [ ] Backend endpoint: per-user phase counts — clip tier + reel tier + flags (downloaded via user_action_log, shared via PG join, intro split explicit/inherited)
-3. [ ] Backend tests against a fixture profile DB covering every phase + flag (incl. a multi-clip reel counting as 1)
-4. [ ] Verify clip_created surfaces correctly in funnel/user-detail/pulse with the fixture data
-5. [ ] UserDetailPanel phase breakdown UI (+ optional UserTable column)
-6. [ ] Reserve `clip_uploaded` in the taxonomy per design decision
-7. [ ] Update `.claude/knowledge/backend-services.md` (new endpoint) at Stage 7
+1. [x] Extract/reuse the phase-derivation SQL into a shared helper (`services/clip_phases.py`; projects list query carries a cross-ref comment — single source of truth)
+2. [x] Backend endpoint `GET /api/admin/analytics/user/{user_id}/clip-phases`: per-user phase counts — clip tier + reel tier + flags (downloaded via user_action_log, shared via PG join scoped by sharer_profile_id, intro split explicit/inherited)
+3. [x] Backend tests against a fixture profile DB covering every phase + flag (incl. a multi-clip reel counting as 1) — `tests/test_clip_phases.py` (16 tests)
+4. [x] Verify clip_created surfaces correctly in funnel/user-detail/pulse — confirmed via passing `test_analytics_dashboards.py` (27) + existing surfaces (FLOW_EVENTS/FUNNEL_STEPS, FunnelChart 'clipped', UserDetailPanel PIPELINE_STEPS). No code fix needed, as expected.
+5. [x] UserDetailPanel phase breakdown UI (ClipPhaseBreakdown band + adminStore best-effort fetch). UserTable summary column deferred (optional; keeps the panel the single surface).
+6. [x] Reserve `clip_uploaded` in the taxonomy (FLOW_EVENTS + FUNNEL_STEPS; daily_counters.clips_uploaded PG column DEFERRED — no dead column)
+7. [x] Update `.claude/knowledge/backend-services.md` (new endpoint)
 
 ### Progress Log
 

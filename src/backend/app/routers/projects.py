@@ -369,6 +369,9 @@ def _read_projects_list():
                 -- Identity: COALESCE(rc.end_time, wc.uploaded_filename) - matches queries.py
                 SELECT
                     project_id,
+                    -- T7860: these exported/in_progress phase predicates are the
+                    -- SAME rule the clip-phase inventory uses. Canonical copy +
+                    -- rationale live in services/clip_phases.py — change both.
                     COUNT(*) as total,
                     SUM(CASE WHEN exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
                     SUM(CASE WHEN exported_at IS NULL AND (

@@ -74,3 +74,31 @@ describe('UserDetailPanel attempted vs succeeded (T7510)', () => {
     expect(container.firstChild).toBeNull();
   });
 });
+
+describe('UserDetailPanel clip-phase inventory (T7860)', () => {
+  const CLIP_PHASES = {
+    clips: { created: 5, focus_started: 3, focused: 2 },
+    reels: { completed: 1, published: 2 },
+    flags: { intro_explicit: 1, intro_inherited: 1, downloaded: 2, shared: 1, watched: 3 },
+  };
+
+  it('renders clip and reel tier counts plus reel flags when clipPhases is present', () => {
+    const data = { ...BASE_DATA, milestones: [], clipPhases: CLIP_PHASES };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    expect(screen.getByText('Clip Phases')).toBeTruthy();
+    // Tier labels
+    expect(screen.getByText('Clips')).toBeTruthy();
+    expect(screen.getByText('Reels')).toBeTruthy();
+    // A bucket count and a flag label render
+    expect(screen.getByText('Focused')).toBeTruthy();
+    expect(screen.getByText('Published')).toBeTruthy();
+    expect(screen.getByText('Reel flags')).toBeTruthy();
+    expect(screen.getByText('Shared')).toBeTruthy();
+  });
+
+  it('omits the phase breakdown when clipPhases is absent (best-effort read failed)', () => {
+    const data = { ...BASE_DATA, milestones: [] };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    expect(screen.queryByText('Clip Phases')).toBeNull();
+  });
+});

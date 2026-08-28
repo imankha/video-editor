@@ -1452,6 +1452,34 @@ async def analytics_journey(user_id: str):
     }
 
 
+@router.get("/analytics/user/{user_id}/clip-phases")
+async def analytics_user_clip_phases(user_id: str):
+    """T7860: per-user clip/reel lifecycle-phase inventory (read-only).
+
+    Clip tier (created/focus_started/focused, furthest-phase-exclusive) + reel
+    tier (completed/published, furthest-phase-exclusive) + orthogonal reel flags
+    (intro explicit vs inherited, downloaded, shared, watched). Aggregated across
+    all the user's profiles and broken out per profile. Derived at read time from
+    the tables that already encode phase — NO new persisted state, NO writes, NO
+    R2 sync (each profile.sqlite is opened mode=ro through the shared connection
+    path). A multi-clip reel is one final_videos row, so it counts as 1 published.
+    """
+    _require_admin()
+
+    from ..services.clip_phases import compute_user_clip_phases
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # One offload: the whole inventory is synchronous, and sqlite3 connections are
+    # thread-affine, so open/read/close every profile DB on the SAME thread.
+    return await asyncio.to_thread(compute_user_clip_phases, user_id, row["email"])
+
+
 @router.get("/analytics/user/{user_id}/actions")
 async def analytics_user_actions(
     user_id: str,
