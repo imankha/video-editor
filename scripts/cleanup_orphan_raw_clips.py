@@ -76,99 +76,32 @@ def _fmt_bytes(n: int) -> str:
     return f"{size:.1f}TB"
 
 
-# --- Pure classification helpers (unit-tested, no DB/R2) --------------------
-
-def is_sweep_orphan_name(basename: str) -> bool:
-    """True if `basename` matches the expiry-sweep writer's naming signature.
-
-    The sweep uploads `auto_{game_id}_{clip_id}_{hex8}.mp4` (auto_export.py). Only
-    these are deletion candidates — user uploads are `{uuid_hex}{ext}` and must
-    never be swept even if a reference-set gap left them unreferenced.
-    """
-    return basename.startswith("auto_")
-
-
-def classify_objects(
-    referenced: set[str], objects: list[tuple[str, int]]
-) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
-    """Split raw_clips/ objects into (sweep_orphans, other_unreferenced).
-
-    `objects` is a list of (relative_path, size) where relative_path is
-    'raw_clips/<basename>'. An object is unreferenced when its basename is not in
-    `referenced`. Unreferenced objects further split by the sweep signature:
-      - sweep_orphans     — `auto_` prefixed → DELETION candidates.
-      - other_unreferenced — everything else → REPORT ONLY, never deleted.
-    Referenced objects are dropped from both lists.
-    """
-    sweep_orphans: list[tuple[str, int]] = []
-    other: list[tuple[str, int]] = []
-    for rel_path, size in objects:
-        basename = rel_path.split("/", 1)[1] if "/" in rel_path else rel_path
-        if basename in referenced:
-            continue
-        if is_sweep_orphan_name(basename):
-            sweep_orphans.append((rel_path, size))
-        else:
-            other.append((rel_path, size))
-    return sweep_orphans, other
+# --- Pure classification helpers -------------------------------------------
+# Shared with the v048 profile_db migration — see app/services/orphan_raw_clips.py
+# for the reviewed implementation (T7830) and why it lives there, not here.
+from app.services.orphan_raw_clips import (  # noqa: E402
+    classify_objects,
+    is_sweep_orphan_name,
+    list_raw_clip_objects,
+    referenced_raw_clip_filenames,
+)
 
 
 # --- DB / R2 access ---------------------------------------------------------
 
 def _referenced_filenames() -> set[str]:
-    """Every basename under raw_clips/ that a live DB pointer references, in the
-    active profile context. Unions BOTH columns that name raw_clips/ objects:
-      - raw_clips.filename
-      - working_clips.uploaded_filename (ALL versions — an older working_clips
-        version's source object is still load-bearing and must never be swept).
-    NULL/empty excluded. Missing table (fresh/empty profile DB) tolerated."""
+    """Referenced raw_clips/ basenames for the active profile context (this
+    script's DB connection uses a Row row-factory; the shared helper reads by
+    position, which works for both row-factory styles)."""
     from app.database import get_db_connection
-    referenced: set[str] = set()
     with get_db_connection() as conn:
-        tables = {
-            r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
-        if "raw_clips" in tables:
-            for r in conn.execute(
-                "SELECT filename FROM raw_clips "
-                "WHERE filename IS NOT NULL AND filename != ''"
-            ).fetchall():
-                referenced.add(r["filename"])
-        if "working_clips" in tables:
-            for r in conn.execute(
-                "SELECT uploaded_filename FROM working_clips "
-                "WHERE uploaded_filename IS NOT NULL AND uploaded_filename != ''"
-            ).fetchall():
-                referenced.add(r["uploaded_filename"])
-    return referenced
-
-
-def _list_raw_clip_objects(user_id: str) -> list[tuple[str, int]]:
-    """(relative_path, size) for every object under the active profile's raw_clips/
-    prefix. relative_path is the 'raw_clips/<file>' key the app's helpers accept."""
-    from app.storage import R2_BUCKET, get_r2_client, r2_key
-    client = get_r2_client()
-    if not client:
-        return []
-    full_prefix = r2_key(user_id, "raw_clips/")
-    strip = full_prefix[: -len("raw_clips/")]  # env/users/<uid>/profiles/<pid>/
-    out: list[tuple[str, int]] = []
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=full_prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith("/"):
-                continue  # skip folder markers
-            out.append((key[len(strip):], obj.get("Size", 0)))
-    return out
+        return referenced_raw_clip_filenames(conn)
 
 
 def _scan_profile(user_id: str) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
     """(sweep_orphans, other_unreferenced) for the active profile context."""
     referenced = _referenced_filenames()
-    return classify_objects(referenced, _list_raw_clip_objects(user_id))
+    return classify_objects(referenced, list_raw_clip_objects(user_id))
 
 
 def main():

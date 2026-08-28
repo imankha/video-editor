@@ -139,7 +139,7 @@ POST_V023_COLUMNS = {
     #   cross-profile copy, which REFUSES (RecipientProfileBelowHead) rather than
     #   column-omit -- test_game_copy_below_head_refuses below.
 }
-HEAD_VERSION_AUDITED = 47
+HEAD_VERSION_AUDITED = 48  # v048 (T7830): delete-only R2 cleanup, adds no columns
 
 
 def _cleanup(user_id: str) -> None:
