@@ -161,9 +161,10 @@ def test_single_slow_request_actually_pays_the_delay(monkeypatch):
     assert wall >= DELAY * 0.8, f"single request too fast ({wall:.3f}s) — stub not blocking?"
 
 
-def test_all_six_analytics_handlers_are_sync_def():
+def test_all_eight_analytics_handlers_are_sync_def():
     """Regression guard: FastAPI only threadpools PLAIN def handlers. If any of
-    these reverts to `async def`, its blocking psycopg2 body is back on the loop."""
+    these reverts to `async def`, its blocking psycopg2 body is back on the loop.
+    T8010 added analytics_journey and analytics_user_actions to T8000's original six."""
     from app.routers import admin
     for name in (
         "analytics_funnel",
@@ -172,6 +173,8 @@ def test_all_six_analytics_handlers_are_sync_def():
         "analytics_cohorts",
         "analytics_pulse",
         "analytics_platforms",
+        "analytics_journey",
+        "analytics_user_actions",
     ):
         fn = getattr(admin, name)
         assert not inspect.iscoroutinefunction(fn), (
