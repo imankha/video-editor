@@ -32,6 +32,9 @@ const MANIFEST = {
     isVariable: true,
     variationRange: [200, 700],
   },
+  // T6500 overlay faces — both static, must resolve through the API origin too.
+  inter: { file: 'Inter-Medium.ttf', weight: 500, style: 'normal', isVariable: false },
+  archivoblack: { file: 'ArchivoBlack-Regular.ttf', weight: 900, style: 'normal', isVariable: false },
 };
 
 const SPEC = {
@@ -89,6 +92,9 @@ describe('RichText font URLs are API-base resolved', () => {
     const css = document.querySelector('style[data-rich-text-font-faces]').textContent;
     expect(css).toContain(`url("${API_BASE}/api/fonts/Anton-Regular.ttf")`);
     expect(css).toContain(`url("${API_BASE}/api/fonts/Oswald-Variable.ttf")`);
+    // T6500 overlay faces go through the SAME injection loop — pin them too.
+    expect(css).toContain(`url("${API_BASE}/api/fonts/Inter-Medium.ttf")`);
+    expect(css).toContain(`url("${API_BASE}/api/fonts/ArchivoBlack-Regular.ttf")`);
     // No bare-path src survived.
     expect(css).not.toContain('url("/api/');
   });

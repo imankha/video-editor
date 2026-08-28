@@ -33,7 +33,32 @@ export const FontKey = {
   OSWALD: 'oswald',
   GRADUATE: 'graduate',
   PLAYFAIR: 'playfair',
+  // T6500: overlay-oriented faces — Inter (neutral sans that holds up small
+  // over busy footage) + Archivo Black (heavy enough to survive a bright
+  // background). Mirror app/schemas.py::FontKey and fonts.json keys exactly.
+  INTER: 'inter',
+  ARCHIVOBLACK: 'archivoblack',
 };
+
+// T6500: the catalogue SPLITS by context (user decision, 2026-08-28, against
+// rendered samples) — each picker shows only the faces suited to its job, not
+// the whole union. The `font` field stays a free FontKey string; these are
+// per-picker curation lists passed to TextSpecEditor's `fonts` prop, never a
+// schema boundary. Oswald is deliberately in BOTH sets (its condensed display
+// weight works as an overlay callout AND an intro-card face). Greppable literal
+// arrays, never computed — a face only appears in a picker if it is listed here.
+export const OVERLAY_FONT_KEYS = [
+  FontKey.INTER,
+  FontKey.ARCHIVOBLACK,
+  FontKey.OSWALD,
+];
+
+export const INTRO_CARD_FONT_KEYS = [
+  FontKey.ANTON,
+  FontKey.OSWALD,
+  FontKey.GRADUATE,
+  FontKey.PLAYFAIR,
+];
 
 // T6620: "blur implies a shadow." The Overlay text rail exposes ONLY a Shadow
 // blur slider (no opacity control), and a new overlay text block defaults to

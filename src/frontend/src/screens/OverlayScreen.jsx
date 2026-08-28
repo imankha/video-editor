@@ -56,7 +56,10 @@ import { clipGameClock } from '../utils/timeFormat';
 // round 8 bare-coordinates format) and override whatever's here, same as
 // position/align below -- a static default here would be dead code.
 const DEFAULT_TEXT_SPEC = {
-  font: FontKey.ANTON,
+  // T6500: overlay text defaults to Inter — a neutral sans in the OVERLAY set
+  // (Anton is now an intro-card-only face, absent from the overlay picker, so a
+  // new block must not seed a font its own picker can't show).
+  font: FontKey.INTER,
   size: 0.06,
   color: '#FFFFFF',
   align: Align.CENTER,

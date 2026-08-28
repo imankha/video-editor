@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import '../index.css';
 import { TextSpecEditor } from '../components/textspec/TextSpecEditor';
 import { COLOR_SWATCHES } from '../components/introcards/introCardEditorConstants';
+import { OVERLAY_FONT_KEYS, INTRO_CARD_FONT_KEYS } from '../constants/textSpec';
 
 /**
  * T6480 -- DEV-ONLY real-browser harness proving the SHARED TextSpecEditor reads
@@ -16,6 +17,22 @@ import { COLOR_SWATCHES } from '../components/introcards/introCardEditorConstant
  * Panels are given stable data-testids so the Playwright spec can screenshot each
  * and sanity-check the applied surface colour.
  */
+
+// The overlay host defaults to an OVERLAY-set face; the card host to an
+// intro-card face — each picker's default must live in its own curated set
+// (T6500 split).
+const OVERLAY_SPEC = {
+  text: 'GOAL',
+  font: 'inter',
+  size: 0.08,
+  color: '#FFFFFF',
+  align: 'center',
+  position: { x: 0.5, y: 0.5 },
+  maxWidth: 0.8,
+  shadow: { blur: 0.05, color: '#000000', opacity: 0.5 },
+  stroke: { width: 0.01, color: '#000000' },
+  animation: 'none',
+};
 
 const DEFAULT_SPEC = {
   text: 'GOAL',
@@ -49,7 +66,7 @@ function OverlayHostPanel({ variant, spec, onChange }) {
         </h3>
         <button className="text-gray-400 hover:text-white text-xs">Done</button>
       </div>
-      <TextSpecEditor spec={spec} onChange={onChange} />
+      <TextSpecEditor spec={spec} onChange={onChange} fonts={OVERLAY_FONT_KEYS} />
     </div>
   );
 }
@@ -66,6 +83,7 @@ function CardHostPanel({ spec, onChange }) {
       <TextSpecEditor
         spec={spec}
         onChange={onChange}
+        fonts={INTRO_CARD_FONT_KEYS}
         hideText
         hideSize
         hideAlign
@@ -77,8 +95,8 @@ function CardHostPanel({ spec, onChange }) {
 }
 
 function Harness() {
-  const [specA, setSpecA] = useState(DEFAULT_SPEC);
-  const [specB, setSpecB] = useState(DEFAULT_SPEC);
+  const [specA, setSpecA] = useState(OVERLAY_SPEC);
+  const [specB, setSpecB] = useState(OVERLAY_SPEC);
   const [specC, setSpecC] = useState(DEFAULT_SPEC);
   return (
     <div className="p-6 flex flex-wrap gap-6 items-start">

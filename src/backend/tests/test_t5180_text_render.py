@@ -48,16 +48,22 @@ from app.schemas import (
     Stroke,
     TextSpec,
 )
+from app.services.fonts import load_manifest
 from app.services.text_render import render_text_layer
 
 FONT_ASSETS_DIR = Path(__file__).resolve().parent.parent / "app" / "assets" / "fonts"
 
 # Every font key the catalogue must cover (design §4, final keys after the static-file swap).
+# T6500 added the overlay-oriented faces (inter, archivoblack) — the catalogue now
+# SPLITS by picker context on the frontend, but the backend rasterizer must render
+# EVERY shippable key, so parity coverage stays the union of both sets.
 ALL_FONT_KEYS = [
     FontKey.ANTON,
     FontKey.OSWALD,
     FontKey.GRADUATE,
     FontKey.PLAYFAIR,
+    FontKey.INTER,
+    FontKey.ARCHIVOBLACK,
 ]
 
 FRAME_W, FRAME_H = 1080, 1920
@@ -114,16 +120,26 @@ class TestFontCatalogueRenders:
         img = render_text_layer(spec, FRAME_W, FRAME_H)
         assert _alpha(img).sum() > 0, f"{font_key} produced a fully transparent layer"
 
-    def test_all_four_fonts_present_on_disk(self):
-        # Sanity: the assets this test suite depends on are already sourced (per task brief).
-        expected_files = {
-            "anton": "Anton-Regular.ttf",
-            "oswald": "Oswald-Variable.ttf",
-            "graduate": "Graduate-Regular.ttf",
-            "playfair": "PlayfairDisplay-Variable.ttf",
-        }
-        for _key, filename in expected_files.items():
-            assert (FONT_ASSETS_DIR / filename).exists(), f"missing font asset {filename}"
+    def test_all_catalogue_fonts_present_on_disk(self):
+        # Sanity: every catalogue face's TTF is sourced. A font is only real when
+        # BOTH renderers resolve the SAME file (task brief) — the manifest's `file`
+        # is the single source of truth, so read it rather than restating names.
+        for key in ALL_FONT_KEYS:
+            entry = load_manifest()[key.value]
+            assert (FONT_ASSETS_DIR / entry["file"]).exists(), (
+                f"missing font asset {entry['file']} for key {key.value}"
+            )
+
+    def test_overlay_faces_are_static_single_file_instances(self):
+        # T6500 landmine: Inter is multi-axis (opsz+wght) upstream — shipping it
+        # as a variable TTF would break fonts.py's single-`wght`-axis pin. It must
+        # ship PRE-INSTANCED to a static (isVariable false), same as archivoblack.
+        manifest = load_manifest()
+        for key in ("inter", "archivoblack"):
+            assert manifest[key]["isVariable"] is False, (
+                f"{key} must ship as a static instance, not a variable TTF "
+                f"(fonts.py only pins a single wght axis)"
+            )
 
 
 # ===========================================================================================

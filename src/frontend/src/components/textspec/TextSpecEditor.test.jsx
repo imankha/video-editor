@@ -95,6 +95,21 @@ describe('TextSpecEditor - pure presentational contract (T5225 design §4.1)', (
     expect(nextSpec.text).toBe(baseSpec().text);
   });
 
+  // T6500: the picker shows ONLY the curated `fonts` set, so the split catalogue
+  // (overlay set vs intro-card set) is honoured per host — a face absent from the
+  // passed list must not appear as an option.
+  it('renders exactly the faces in the `fonts` prop, with their catalogue labels', () => {
+    const overlaySet = [FontKey.INTER, FontKey.ARCHIVOBLACK, FontKey.OSWALD];
+    render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} fonts={overlaySet} />);
+
+    const options = Array.from(screen.getByLabelText(/font/i).querySelectorAll('option'));
+    expect(options.map((o) => o.value)).toEqual(overlaySet);
+    // New faces surface human labels, not raw keys.
+    expect(options.map((o) => o.textContent)).toEqual(['Inter', 'Archivo Black', 'Oswald']);
+    // An intro-card-only face is not offered here.
+    expect(options.map((o) => o.value)).not.toContain(FontKey.GRADUATE);
+  });
+
   it('changing the color control calls onChange with the new color, spec otherwise intact', () => {
     const onChange = vi.fn();
     render(<TextSpecEditor spec={baseSpec()} onChange={onChange} fonts={FONT_CATALOGUE} />);

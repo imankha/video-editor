@@ -34,5 +34,21 @@
     "variationAxis": "wght",
     "variationRange": [400, 900],
     "fallback": ["Georgia", "serif"]
+  },
+  "inter": {
+    "displayName": "Inter",
+    "file": "Inter-Medium.ttf",
+    "weight": 500,
+    "style": "normal",
+    "isVariable": false,
+    "fallback": ["Helvetica Neue", "Arial", "sans-serif"]
+  },
+  "archivoblack": {
+    "displayName": "Archivo Black",
+    "file": "ArchivoBlack-Regular.ttf",
+    "weight": 400,
+    "style": "normal",
+    "isVariable": false,
+    "fallback": ["Arial Black", "Impact", "sans-serif"]
   }
 }

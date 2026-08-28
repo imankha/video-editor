@@ -324,6 +324,12 @@ class FontKey(str, Enum):
     OSWALD = "oswald"
     GRADUATE = "graduate"
     PLAYFAIR = "playfair"
+    # T6500: overlay-oriented faces (a neutral sans + a heavy display face). The
+    # catalogue SPLITS by context in the pickers (overlay set vs intro-card set,
+    # see frontend constants/textSpec.js), but the enum is the union of every
+    # shippable key — the split is a per-picker curation, not a schema boundary.
+    INTER = "inter"
+    ARCHIVOBLACK = "archivoblack"
 
 
 class Position(BaseModel):
