@@ -1,6 +1,6 @@
 # T6500: A font catalogue for overlay text (the current four are intro-card faces)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6 | **Complexity:** 4
 **Follows:** [T5180](player-intro/T5180-rich-text-engine.md), [T5225](player-intro/T5225-overlay-text-layer.md)
 

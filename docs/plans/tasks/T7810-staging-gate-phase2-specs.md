@@ -1,6 +1,6 @@
 # T7810: Staging Gate phase 2 - adapt annotate-save and credits specs into the lanes
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-26
