@@ -1,6 +1,6 @@
 # T7890: Pre-upload funnel beacons (Add Game click -> file selected -> prepare)
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-27 (from the 2026-08-27 drop-off report refresh)
