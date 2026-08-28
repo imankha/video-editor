@@ -87,6 +87,10 @@ scripts/.task-manager-config.json
 
 # SQLite databases
 *.db
+*.sqlite
+
+# Local cache of downloaded prod/staging user DBs (scripts/edit-user-db.py) -- real user data
+scripts/.dbcache/
 
 # Deploy output
 deploy_output.txt
