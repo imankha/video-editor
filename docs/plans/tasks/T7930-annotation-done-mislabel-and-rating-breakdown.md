@@ -1,6 +1,6 @@
 # T7930: "Annotation Done" analytics mislabel + star-rating breakdown report
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-27
