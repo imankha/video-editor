@@ -335,6 +335,58 @@ describe('uploadManager', () => {
       expect(deleteCall).toBeTruthy();
       expect(String(deleteCall[0])).toContain('only_if_empty=true');
     });
+
+    // T7870: ojedalucas19 (2026-08-26) — activateGame succeeded server-side (game
+    // validated, credits charged) but a LATER step in the same try block threw. The
+    // pre-fix code fired the cleanup DELETE anyway, cascade-deleting a paid, ready
+    // game. The `activated` flag must suppress the cleanup call entirely once
+    // activateGame has resolved — the backend's own status check (T7870) is the real
+    // invariant, this is defense in depth on the client.
+    it('never fires the cleanup DELETE once activateGame already succeeded', async () => {
+      const { useQuestStore } = await import('../stores/questStore');
+      const originalGetState = useQuestStore.getState;
+      useQuestStore.getState = () => ({
+        fetchProgress: () => {
+          throw new Error('Post-activation store update failed');
+        },
+      });
+
+      try {
+        // Mock 1: POST /api/games -> game created as pending.
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            status: 'created',
+            game_id: 999,
+            name: 'Activated Then Later Throw',
+            video_url: 'https://example.com/video.mp4',
+          }),
+        });
+        // Mock 2: POST /api/games/prepare-upload -> video already in R2, skip upload.
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ status: 'exists', blake3_hash: 'a'.repeat(64), file_size: 1024 }),
+        });
+        // Mock 3: POST /api/games/999/activate -> activation succeeds (game is now
+        // READY, credits already charged server-side).
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ game_id: 999, status: 'ready' }),
+        });
+
+        const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+
+        await expect(uploadGame(mockFile, () => {})).rejects.toThrow(
+          'Post-activation store update failed'
+        );
+
+        // No DELETE call must have been made at all — the game is already activated.
+        const deleteCall = mockFetch.mock.calls.find(([, opts]) => opts?.method === 'DELETE');
+        expect(deleteCall).toBeUndefined();
+      } finally {
+        useQuestStore.getState = originalGetState;
+      }
+    });
   });
 });
 
