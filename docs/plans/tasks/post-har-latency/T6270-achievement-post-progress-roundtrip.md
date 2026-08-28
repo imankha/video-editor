@@ -1,6 +1,6 @@
 # T6270: Every achievement POST is chased by a `quests/progress` GET
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-07-31
@@ -68,9 +68,16 @@ gesture.
 
 **2026-07-31**: Filed from the post-T6190/T6200 verification HAR.
 
+**2026-08-28**: Implemented via dotask container, merged [PR #297](https://github.com/imankha/video-editor/pull/297).
+Extracted `_assemble_quests()` shared by GET /progress and the achievements POST; the POST now
+returns `progress.quests` additively. Frontend `recordAchievement` consumes it via a new
+`_deriveQuestState()` helper (also now shared by `fetchProgress`/`setFromBootstrap`, removing
+triplicated derivation logic), falling back to the standalone GET on deploy-skew. Live-driven:
+achievement path is now 1 request instead of POST+GET. Reviewer approved.
+
 ## Acceptance Criteria
 
-- [ ] An achievement POST is not followed by a `quests/progress` GET
-- [ ] Quest progress UI still updates immediately after each achievement
-- [ ] Boot still loads progress correctly
-- [ ] Frontend unit tests pass
+- [x] An achievement POST is not followed by a `quests/progress` GET
+- [x] Quest progress UI still updates immediately after each achievement
+- [x] Boot still loads progress correctly (standalone GET unchanged)
+- [x] Frontend unit tests pass
