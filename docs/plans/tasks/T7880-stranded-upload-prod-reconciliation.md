@@ -1,6 +1,6 @@
 # T7880: Reconcile stranded prod uploads for absent users (admin-run sweep)
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-08-27 (from the 2026-08-27 drop-off report refresh)
