@@ -58,22 +58,62 @@ HAVE rows, so the script's target set must widen):
 - `src/backend/app/routers/admin.py` — optional admin trigger endpoint
 
 ### Related Tasks
-- Depends on: T7870 verdict for the ojedalucas object only (the two multiparts can proceed)
+- Depends on: T7870 verdict for the ojedalucas object only — resolved, healed 2026-08-28
 - Blocks: T7610 sends to rooom1h + finneganscudder segments
-- Root-cause follow-up: if the double-UploadId anomaly reproduces, file a dedicated task — this sweep only cleans up
+- Root-cause follow-up: the double-UploadId anomaly reproduced in BOTH accounts scanned
+  (2/2) — filed as [T7950](T7950-double-uploadid-multipart-leak.md) per this task's own
+  instruction; this sweep only cleans up the symptom
+
+### Technical Notes
+- **Admin trigger endpoint: decided script-only, not built.** The apply step's
+  manifest-review gate (dry-run -> human reads the classified findings -> apply) doesn't
+  map cleanly onto a single HTTP trigger without either skipping the review step or
+  duplicating the whole two-phase flow behind `require_admin`. Incident frequency is low
+  (this is the first sweep ever run); re-run `scan_stranded_uploads_sweep.py` +
+  `apply_stranded_uploads_sweep.py` by hand if it recurs. Revisit if this becomes routine.
 
 ## Implementation
 
 ### Steps
-1. [ ] Widen scan script: pending games + rows + full open-multipart listing, dry-run report
-2. [ ] Run dry-run against prod, present the exact reconciliation set for user sign-off
-3. [ ] Apply: abort multiparts, flip games, delete stale rows
-4. [ ] Verify via impersonation + R2 re-list
-5. [ ] Admin trigger endpoint (or record the decision to keep it script-only)
+1. [x] Widen scan script: pending games + rows + full open-multipart listing, dry-run report
+   — `scripts/scan_stranded_uploads_sweep.py` (new, offline/read-only, mirrors
+   `audit_clip_dimensions.py`'s R2-download pattern); added
+   `r2_list_multipart_uploads_by_prefix` to `storage.py` for the broad "games/" listing
+   the exact-key lister can't do
+2. [x] Run dry-run against prod, present the exact reconciliation set for user sign-off —
+   see Progress Log
+3. [ ] Apply: abort multiparts, flip games, delete stale rows — script ready
+   (`scripts/apply_stranded_uploads_sweep.py`), gated on user sign-off
+4. [ ] Verify via re-list (impersonation deferred to user's own spot-check if wanted)
+5. [x] Admin trigger endpoint: decided script-only (see Technical Notes)
+
+### Progress Log
+
+**2026-08-28:** Branch `feature/T7880-stranded-upload-prod-reconciliation`, commit
+`da742b67`, CI running. Dry-run against prod (`--hours 24`) downloaded 51 profile DBs
+across 41 users and cross-referenced against a full R2 listing of open multiparts under
+`games/`. Result: **exactly the 2 accounts named in this task's Problem section**, both
+classified `double_uploadid_anomaly` (stored `pending_uploads.r2_upload_id` differs from
+the actually-open R2 UploadId):
+
+| User | Game | Stored UploadId (dead) | Open UploadId (leaked) |
+|---|---|---|---|
+| roooooooooom1h (`efb1e9e8`, profile `4a613b52`) | "Vs cocke Sep 2" | `AAi3jIZ...` | `AMW7ZUH...` |
+| finneganscudder (`4f03d25d`, profile `e55c1489`) | "Vs Boise JV Aug 3" | `AK7DkCv...` | `AOb-Ejz...` |
+
+ojedalucas19 does **not** appear in this scan — confirms T7870's heal (flipped his game
+to `ready`) left no pending-game trace here, as expected.
+
+Reap manifest written to `C:\tmp\t7880_manifest.json` (2 entries, 2 UploadIds each to
+abort — both the dead stored one and the leaked open one, per the task's "abort BOTH"
+instruction). Apply script dry-run verified clean against the live machine
+(`fly ssh console -a reel-ballers-api`) — prints the exact same plan, writes nothing.
+**Awaiting user sign-off to flip `APPLY=True` and run for real.**
 
 ## Acceptance Criteria
 
 - [ ] Zero open multiparts under `games/` older than the threshold, verified by listing
 - [ ] Both stranded accounts render the Retry/Discard card
-- [ ] Dry-run report + user sign-off logged here before any apply
-- [ ] Double-UploadId occurrences counted and recorded (input for a root-cause task)
+- [x] Dry-run report + user sign-off logged here before any apply (report done; sign-off pending)
+- [x] Double-UploadId occurrences counted and recorded (2/2 — both accounts show the anomaly;
+      still no root-cause task filed, see Related Tasks)
