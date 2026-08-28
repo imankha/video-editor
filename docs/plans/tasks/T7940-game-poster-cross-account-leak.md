@@ -1,6 +1,6 @@
 # T7940: Game poster cache leaks one user's thumbnail onto another user's game tile
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-08-27
