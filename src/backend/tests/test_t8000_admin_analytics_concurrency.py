@@ -19,6 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
+import pytest
 
 from app.main import app
 from app.session_init import _init_cache
@@ -139,6 +140,74 @@ def test_slow_admin_analytics_does_not_serialize_concurrent_requests(monkeypatch
         f"admin analytics serialized: N={N} concurrent took {tN:.3f}s vs a single "
         f"request's {t1:.3f}s (serialized projection ~{t1 * N:.3f}s). A handler is "
         f"likely back to async def, blocking the single event loop."
+    )
+
+
+_JOURNEY_URL = "/api/admin/analytics/journey/test-user-t8010"
+_USER_ACTIONS_URL = "/api/admin/analytics/user/test-user-t8010/actions"
+
+
+def _run_concurrency_probe(url, monkeypatch):
+    """Shared probe for test_journey_and_user_actions_do_not_serialize_concurrent_requests.
+
+    Patches BOTH `get_pg` binding styles found in admin.py: most handlers (including
+    analytics_platforms, analytics_user_actions) do a LOCAL `from ..services.pg import
+    get_pg` inside the function body, so patching the source attribute
+    (`app.services.pg.get_pg`) is enough. analytics_journey instead calls the plain
+    `get_pg` name bound at MODULE IMPORT TIME (`from ..services.pg import get_pg` at the
+    top of admin.py, line ~32) — patching only the source attribute would silently miss
+    it and let the test hit a REAL Postgres connection. Patching
+    `app.routers.admin.get_pg` too covers that binding regardless of which style the
+    specific handler under test uses."""
+    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
+    monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg)
+    _seed_owned_profile(monkeypatch)
+
+    async def go():
+        asyncio.get_running_loop().set_default_executor(
+            ThreadPoolExecutor(max_workers=32, thread_name_prefix="io-test")
+        )
+        tr = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=tr, base_url="http://testserver") as c:
+            await asyncio.gather(*[c.get(url, headers=dict(_HEADERS)) for _ in range(N)])
+
+            t0 = time.perf_counter()
+            single = await c.get(url, headers=dict(_HEADERS))
+            t1 = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
+            responses = await asyncio.gather(*[c.get(url, headers=dict(_HEADERS)) for _ in range(N)])
+            tN = time.perf_counter() - t0
+
+            return single, responses, t1, tN
+
+    return asyncio.run(go())
+
+
+@pytest.mark.parametrize("url,handler_name", [
+    (_JOURNEY_URL, "analytics_journey"),
+    (_USER_ACTIONS_URL, "analytics_user_actions"),
+])
+def test_journey_and_user_actions_do_not_serialize_concurrent_requests(url, handler_name, monkeypatch):
+    """T8010: the same behavioral proof T8000 established for analytics_platforms,
+    extended to the two handlers T8010 converted. Each request's DB call blocks for
+    DELAY; a burst of N must finish in ~one DELAY (threadpooled), not ~N*DELAY
+    (serialized on the event loop). _FakeCursor.fetchone() returns None, so both
+    handlers 404 ("User not found") immediately after paying the blocking DELAY —
+    that 404 IS the normal flow for a nonexistent user, not an error; the test's
+    concurrency assertion doesn't depend on which status code comes back, only that
+    every response gets the SAME one and the burst overlaps.
+    """
+    single, responses, t1, tN = _run_concurrency_probe(url, monkeypatch)
+
+    assert single.status_code == 404, single.status_code
+    assert all(r.status_code == 404 for r in responses), [r.status_code for r in responses]
+
+    assert tN < t1 * N * 0.5, (
+        f"{handler_name} serialized: N={N} concurrent took {tN:.3f}s vs a single "
+        f"request's {t1:.3f}s (serialized projection ~{t1 * N:.3f}s). Likely back to "
+        f"async def, blocking the single event loop."
     )
 
 
