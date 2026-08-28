@@ -1,6 +1,6 @@
 # T7970: Upload failures are almost never recorded — "Upload Success" is 100% by construction
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-28
@@ -77,9 +77,9 @@ mode. Preserve the existing `user_abandoned` reaper path unchanged — it's a re
 
 ## Acceptance Criteria
 
-- [ ] A simulated R2/network/validation upload failure produces a `game_upload_failed:<reason>`
+- [x] A simulated R2/network/validation upload failure produces a `game_upload_failed:<reason>`
       row, not silence
-- [ ] Admin "Upload Success" card reflects a real denominator (successes + all failure types, not
+- [x] Admin "Upload Success" card reflects a real denominator (successes + all failure types, not
       just abandonment)
-- [ ] Existing `user_abandoned` reaper behavior unchanged
-- [ ] Tests cover at least one non-reaper failure path end to end
+- [x] Existing `user_abandoned` reaper behavior unchanged
+- [x] Tests cover at least one non-reaper failure path end to end
