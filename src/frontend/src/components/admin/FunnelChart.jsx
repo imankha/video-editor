@@ -15,7 +15,11 @@ const STAGES = [
   { key: 'upload_attempted', label: 'Upload Attempted' },
   { key: 'uploaded', label: 'Uploaded' },
   { key: 'clipped', label: 'Clipped' },
-  { key: 'annotation_done', label: 'Annotation Done' },
+  // T7930: was 'annotation_done'/'Annotation Done'. This step fires on
+  // finish-annotation (viewed_duration > 0), NOT on a clip being saved, so the
+  // old label misread as content creation. Key derives from the backend label
+  // (label.lower().replace(' ','_')), so it moved to 'watched_annotate_video'.
+  { key: 'watched_annotate_video', label: 'Watched Annotate Video' },
   { key: 'framing_opened', label: 'Focus Opened' },
   { key: 'framing_exported', label: 'Focus Exported' },
   { key: 'overlay_exported', label: 'Overlay Exported' },

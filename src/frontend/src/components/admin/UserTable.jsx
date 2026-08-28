@@ -61,7 +61,7 @@ const STEP_STYLES = {
   'Signed Up': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
   'Uploaded': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   'Clipped': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  'Annotation Done': 'bg-cyan-600/20 text-cyan-300 border-cyan-600/30',
+  'Watched Annotate Video': 'bg-cyan-600/20 text-cyan-300 border-cyan-600/30', // T7930: was 'Annotation Done'; keyed by backend label (admin._compute_last_step)
   'Focus Opened': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
   'Focus Exported': 'bg-teal-600/20 text-teal-300 border-teal-600/30',
   'Overlay Exported': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',

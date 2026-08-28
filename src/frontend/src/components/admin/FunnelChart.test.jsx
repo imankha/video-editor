@@ -30,6 +30,21 @@ describe('FunnelChart (T7510 attempted vs completed)', () => {
     expect(screen.getByText('25')).toBeTruthy();
   });
 
+  it('labels the annotation step "Watched Annotate Video", not "Annotation Done" (T7930)', () => {
+    // The step fires on finish-annotation (viewed_duration > 0), NOT on a clip
+    // being saved, so the old "Annotation Done" label misread as content creation.
+    // Funnel key is derived from the backend label -> 'watched_annotate_video'.
+    const data = {
+      funnel: [
+        { origin: 'all', signed_up: 100, clipped: 30, watched_annotate_video: 20 },
+      ],
+    };
+    render(<FunnelChart data={data} />);
+    expect(screen.getByText('Watched Annotate Video')).toBeTruthy();
+    expect(screen.queryByText('Annotation Done')).toBeNull();
+    expect(screen.getByText('20')).toBeTruthy();
+  });
+
   it('shows a lower conversion% for Uploaded than a step with no attempt/success gap', () => {
     const data = {
       funnel: [

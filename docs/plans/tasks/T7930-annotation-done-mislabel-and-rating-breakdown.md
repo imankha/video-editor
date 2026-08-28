@@ -198,6 +198,48 @@ aggregate exists today — `rating` lives only in each user's per-user SQLite
 semantic gap — high confidence, not yet confirmed against the specific reported user. Part B
 confirmed to require a new script; no existing aggregate covers `raw_clips.rating`.
 
+**2026-08-28 (M-tier, branch `feature/T7930-...`)**: Implemented in a permission-free container
+worker (NO backend venv, NO R2/PG creds in-container — see handoff below).
+
+Part A — mislabel fix (DONE, code):
+- Confirmed by code read that `annotation_completed` requires no clip: `finish_annotation`
+  (games.py) fires `record_milestone("annotation_completed")` on `viewed_duration > 0` alone; the
+  engagement-not-content semantics are already documented (backend-services.md rule 10 / T7510,
+  `UserDetailPanel.jsx` Engagement band). Treated as a pure mislabel.
+- Renamed the LABEL only, "Annotation Done" -> "Watched Annotate Video", on every admin surface:
+  `analytics.FLOW_EVENTS["annotation_completed"].label`, `FunnelChart.jsx` (STAGES key derived from
+  the label also moved `annotation_done` -> `watched_annotate_video`), `UserTable.jsx` STEP_STYLES
+  map key (kept cyan), `PlatformBreakdown.jsx` ACTION_LABELS. Event KEY + `annotations_completed`
+  daily_col UNCHANGED (stored history). `UserDetailPanel.jsx` "Annotate" (Engagement) left as-is
+  (already correctly scoped; guarded by its test).
+- Cross-checked the four reported accounts against their owning tasks: `lincdyn.j19` (no owning task
+  — explained by watched-video mislabel; live-data confirmation deferred to supervisor, see below),
+  `mostafaali452010`/T7920, `ojedalucas19`/T7870, `finneganscudder`/T7880. The "credit survived
+  content deletion" half (ojedalucas19) is the quests.py LIFETIME-achievement mechanism — a real but
+  SEPARATE finding from T7870's delete bug, documented in annotate.md, not "fixed" (product policy).
+- Tests: added a FunnelChart regression asserting "Watched Annotate Video" renders and "Annotation
+  Done" does not. Full admin vitest folder green (20/20). Grep-verified no live surface renders the
+  old label.
+
+Part B — rating breakdown script (DONE, code; RUN pending):
+- Wrote `scripts/audit_rating_distribution.py` (read-only, `--env dev|staging|prod`, mirrors
+  `audit_clip_dimensions.py` env-load/R2-download/tempdir-cleanup). Tallies `COUNT(*) GROUP BY
+  rating` over every profile's `raw_clips`; reports the env-wide 1-5 distribution + a per-account
+  breakdown; counts NULL/out-of-range ratings SEPARATELY as schema-drift (exit 1 on drift).
+- Core SQL/aggregation logic smoke-tested against synthetic profile DBs (normal dist, legacy
+  no-`raw_clips`-table, NULL/out-of-range drift) — all correct. Could NOT run against a live env
+  in-container (no R2 creds).
+
+Knowledge: annotate.md updated (two Landmines: the watched-video mislabel + the lifetime-achievement
+mechanism; rating-audit script pointer).
+
+**SUPERVISOR HANDOFF (needs an env with creds — cannot run in the worker container):**
+1. Confirm `lincdyn.j19@gmail.com`: look up `user_id` via Postgres `users` (never `auth.sqlite`),
+   check `user_actions` `annotation_completed` count vs. that profile's `raw_clips` row count
+   (expect >0 milestone, 0 clips). Fold the result into the first acceptance criterion.
+2. Run `scripts/audit_rating_distribution.py --env <dev|staging|prod>` and report the 1-5 (+ any
+   NULL) distribution to the user (Part B's actual data deliverable).
+
 ## Acceptance Criteria
 
 - [ ] Confirmed (or ruled out) that `lincdyn.j19@gmail.com`'s case is explained by the
