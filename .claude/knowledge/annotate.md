@@ -1,5 +1,6 @@
 ---
 domain: annotate
+updated: 2026-08-28 (T7930 "annotation_completed" is watched-video, not a clip: relabeled "Annotation Done" -> "Watched Annotate Video" on every admin surface (analytics.FLOW_EVENTS + FunnelChart/UserTable/PlatformBreakdown); event KEY + daily_col unchanged (stored history); the "credit survives content deletion" half is the quests.py LIFETIME-achievement mechanism, a SEPARATE finding from T7870's delete bug — see Landmines "annotation_completed fires on watched video, not clips (T7930)")
 updated: 2026-08-25 (T7590 mobile "Add your first game" dead-end ROOT-CAUSED + fixed: GameDetailsModal panel was fixed-centered with NO max-height/scroll, so on short iPhone viewports (reports 320x498, 352x541) the submit + close controls clipped off-screen unreachable — added max-h-[90vh] overflow-y-auto; see Landmines "GameDetailsModal short-viewport dead-end (T7590)")
 updated: 2026-08-25 (T7470 upload-failure cleanup is only-if-empty: DELETE /api/games/{id}?only_if_empty=true refuses to cascade-delete a game with raw_clips or viewed_duration>0; protects annotate-during-upload — see Landmines "Upload-failure cleanup is ONLY-IF-EMPTY (T7470)")
 updated: 2026-08-24 (T7480 upload lifecycle: PART_SIZE 25MB->5MB, stall watchdog replaces flat per-part timeout, completed-parts honest progress, resume part-size guard, UploadId orphan-abort + double-UploadId root cause, failure beacon + [UPLOAD_LIFECYCLE] logs + admin stuck-uploads — see Landmines "Upload lifecycle invariants (T7480)")
@@ -368,6 +369,47 @@ The full checklist for an 11th→Nth sport:
   Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
+- **`annotation_completed` fires on WATCHED VIDEO, not a clip created — its label is display-only (T7930, 2026-08-28).**
+  `POST /{game_id}/finish-annotation` (games.py, fired from `AnnotateScreen` mode-change/unmount via
+  `gamesDataStore.finishAnnotation`) emits `record_milestone("annotation_completed")` purely on
+  `body.viewed_duration > 0` — a user watching the Annotate video for any nonzero time, with ZERO
+  `raw_clips` required. It is deliberately an ENGAGEMENT signal, not a content outcome
+  (`UserDetailPanel.jsx` already scopes it into the Engagement band, not `PIPELINE_STEPS`; see
+  backend-services.md rule 10 / T7510). A 2026-08-27 user report flagged accounts with no visible clip
+  showing "Annotation Done" — the fix was to RELABEL only. The label lives in
+  `analytics.FLOW_EVENTS["annotation_completed"]` and was renamed **"Annotation Done" -> "Watched
+  Annotate Video"** (joins the sibling "Watched * Tutorial" family). **The event KEY
+  (`annotation_completed`) and daily_col (`annotations_completed`) are UNCHANGED — they are stored
+  history in `user_actions`/`daily_counters`; a rename would sever the time series.** Every admin
+  surface that renders this label had to follow, because two of them derive/hardcode it:
+  - `admin.py` builds funnel keys + `last_step` at READ time via `label.lower().replace(" ", "_")`, so
+    the funnel step key moved `annotation_done` -> `watched_annotate_video`
+    (`FunnelChart.jsx` STAGES key updated) and the `last_step` badge string moved "Annotation Done" ->
+    "Watched Annotate Video" (`UserTable.jsx` STEP_STYLES map key updated to keep the cyan style).
+  - `PlatformBreakdown.jsx` ACTION_LABELS is keyed by the event action (`annotation_completed`), not the
+    label, so it was a pure text swap ('Annotations' -> 'Watched Annotate Video').
+  `UserDetailPanel.jsx`'s ENGAGEMENT label ("Annotate") was left as-is — already correctly scoped and
+  guarded by `UserDetailPanel.test.jsx`. The T7500 zero-row guard in `finish_annotation` (no milestone
+  on a deleted/missing game) is correct and UNRELATED — do not touch it.
+- **Quest credit SURVIVES content deletion — a lifetime-achievement mechanism, NOT a bug to "fix" (T7930).**
+  `quests.py::_check_all_steps` marks onboarding steps (`add_clip`, `rate_clip`, ...) complete from a
+  PERSISTENT `achievements` table (`achieved` set, e.g. `add_clip_opened`, `clip_rated`) that is
+  deliberately never revoked (docstring: "Quest steps are derived... Reward claiming is idempotent —
+  credits are only granted once per quest"; comment: steps are "LIFETIME achievements"). The only live
+  re-derivation is an OR-BACKFILL (`'add_clip_opened' in achieved OR rc["total"] >= 1`) that can only
+  STRENGTHEN a step, never weaken one — nothing re-checks CURRENT `raw_clips`/`games` rows once an
+  achievement key is recorded. So a user who opened Add Clip / rated a clip fires the achievement + claims
+  credit; if the game row is later deleted (e.g. T7870's delete bug), the achievement + already-granted
+  credit are untouched. This explains ojedalucas19's "got credit but has no game" half and is a REAL but
+  SEPARATE finding from T7870's deletion bug — revoking credit would be a product-policy change, out of
+  scope here. Corroborated across all four reported accounts (T7870/T7880/T7920 own the per-account
+  root causes; T7930 is the umbrella label fix for the SIGNAL).
+  - **Rating distribution audit:** `raw_clips.rating` (1-5, app-default 4, `INTEGER NOT NULL` per
+    database.py profile_db schema) lives ONLY in each per-profile SQLite, never in the Postgres
+    analytics aggregate — no dashboard can answer "how many clips at each star". `scripts/audit_rating_distribution.py`
+    (read-only, mirrors `audit_clip_dimensions.py`; `--env dev|staging|prod`) tallies
+    `COUNT(*) GROUP BY rating` across every account and reports NULL/out-of-range buckets separately as
+    schema-drift signals.
 - **TSV clip import must WAIT for the in-flight upload's game id, never one-shot-drop (T7790, 2026-08-26).**
   `importAnnotationsWithRawClips` (AnnotateContainer.jsx) imports annotations to the UI immediately,
   then saves each as a `raw_clips` row via `saveClip(gameId, ...)`. The game id comes from

@@ -11,7 +11,7 @@ const ACTION_LABELS = {
   session_started: 'Sessions',
   game_created: 'Games Uploaded',
   clip_created: 'Clips Created',
-  annotation_completed: 'Annotations',
+  annotation_completed: 'Watched Annotate Video', // T7930: watched-video, not a clip created
   framing_opened: 'Focus Opened',
   framing_exported: 'Focus Exports',
   export_started: 'Exports Started',

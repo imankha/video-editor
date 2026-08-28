@@ -147,7 +147,20 @@ FLOW_EVENTS = {
     "credits_consumed":     {"label": None,                 "daily_col": "credits_consumed"},
     "pwa_installed":        {"label": "PWA Installed",      "daily_col": None},
     # New flow events (T3040)
-    "annotation_completed": {"label": "Annotation Done",    "daily_col": "annotations_completed"},
+    # T7930: LABEL renamed "Annotation Done" -> "Watched Annotate Video". This
+    # event fires from POST /{game_id}/finish-annotation purely on
+    # viewed_duration > 0 (games.py) — a user watching the Annotate video, with
+    # ZERO raw_clips required. The old label read as "a clip was created" on every
+    # dashboard (funnel/last-step badge/platform table), which is what prompted the
+    # 2026-08-27 user report (accounts with no visible clip showing "Annotation
+    # Done"). It joins the sibling "Watched * Tutorial" engagement family below.
+    # The event KEY (annotation_completed) and daily_col (annotations_completed)
+    # are UNCHANGED on purpose — they are stored history in user_actions /
+    # daily_counters; a key/column rename would sever the time series. The funnel
+    # step key is derived at READ time from this label (admin.py:
+    # label.lower().replace(" ", "_")), so it becomes "watched_annotate_video" —
+    # FunnelChart.jsx / UserTable.jsx step-style map updated to match.
+    "annotation_completed": {"label": "Watched Annotate Video", "daily_col": "annotations_completed"},
     "framing_opened":       {"label": "Focus Opened",       "daily_col": None},
     "framing_exported":     {"label": "Focus Exported",     "daily_col": "framing_exports"},
     "overlay_exported":     {"label": "Overlay Exported",   "daily_col": "overlay_exports"},
