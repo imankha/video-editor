@@ -1295,8 +1295,10 @@ def ensure_database():
         """)
 
         # T82: Multi-video games - track individual video files per game
-        # Single-video games use games.blake3_hash directly (no game_videos rows)
-        # Multi-video games set games.blake3_hash = NULL and use game_videos rows
+        # T7870 correction: create_game writes a game_videos row for EVERY game,
+        # including single-video ones (_insert_game_videos is called unconditionally) --
+        # games.blake3_hash is also set for single-video games as a legacy/query
+        # convenience, not as the sole source of truth this comment used to claim.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS game_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
