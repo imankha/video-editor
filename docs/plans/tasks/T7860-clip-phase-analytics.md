@@ -1,6 +1,6 @@
 # T7860: Clip Lifecycle Phase Analytics (per-user clip counts by phase)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-27
