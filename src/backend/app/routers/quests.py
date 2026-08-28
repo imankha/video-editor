@@ -28,6 +28,11 @@ router = APIRouter(prefix="/quests", tags=["quests"])
 # Known achievement keys — only these can be recorded.
 # T3700: added the per-step framing/overlay events so quest drop-off is measurable.
 KNOWN_ACHIEVEMENT_KEYS = {
+    # T7890: pre-upload funnel beacons — analytics-only (NOT quest steps, so they
+    # are absent from _STEP_ACHIEVEMENT_KEYS). They ride the achievement POST purely
+    # to bridge into record_milestone (impersonation-guarded) via ACHIEVEMENT_TO_MILESTONE.
+    "add_game_opened",
+    "upload_file_selected",
     "add_clip_opened",
     "opened_framing_editor",
     "opened_overlay_editor",
@@ -60,6 +65,9 @@ KNOWN_ACHIEVEMENT_KEYS = {
 }
 
 ACHIEVEMENT_TO_MILESTONE = {
+    # T7890: pre-upload funnel beacons (identity bridge — key == milestone name).
+    "add_game_opened": "add_game_opened",
+    "upload_file_selected": "upload_file_selected",
     "add_clip_opened": "add_clip_opened",
     "opened_framing_editor": "framing_opened",
     "opened_overlay_editor": "overlay_opened",

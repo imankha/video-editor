@@ -6,6 +6,7 @@ const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ defa
 import { toast } from './shared';
 import { GameType, VideoMode } from '../constants/gameConstants';
 import { useCreditStore } from '../stores/creditStore';
+import { useQuestStore } from '../stores/questStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -66,12 +67,24 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     t.toLowerCase().includes(tournamentName.toLowerCase())
   );
 
+  // T7890: pre-upload funnel beacon — the moment a file is actually chosen (input
+  // or drop, single or multi), which is the gesture BEFORE the details form and the
+  // prepare POST. Fired here (not at upload start) so a user who picks a file but
+  // dies at the form / the T7590 short-viewport dead-end / navigation is
+  // distinguishable from one who never picked a file (task acceptance criterion).
+  // Fire-and-forget + session-deduped, so every path records "File Selected" once
+  // and selection is never delayed. Not a quest step — analytics only.
+  const recordFileSelected = useCallback(() => {
+    useQuestStore.getState().recordAchievement('upload_file_selected');
+  }, []);
+
   const handleFileSelect = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      recordFileSelected();
     }
-  }, []);
+  }, [recordFileSelected]);
 
   const handleHalfFileSelect = useCallback((index, event) => {
     const file = event.target.files?.[0];
@@ -81,8 +94,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
         updated[index] = file;
         return updated;
       });
+      recordFileSelected();
     }
-  }, []);
+  }, [recordFileSelected]);
 
   const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
 
@@ -124,8 +138,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setIsDragging(false);
     if (isSubmitting) return;
     const file = getVideoFile(e.dataTransfer);
-    if (file) setSelectedFile(file);
-  }, [isSubmitting, getVideoFile]);
+    if (file) {
+      setSelectedFile(file);
+      recordFileSelected();
+    }
+  }, [isSubmitting, getVideoFile, recordFileSelected]);
 
   const handleHalfDrop = useCallback((index, e) => {
     e.preventDefault();
@@ -139,8 +156,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
         updated[index] = file;
         return updated;
       });
+      recordFileSelected();
     }
-  }, [isSubmitting, getVideoFile]);
+  }, [isSubmitting, getVideoFile, recordFileSelected]);
 
   const hasVideo = videoMode === VideoMode.PER_GAME ? selectedFile : (halfFiles[0] && halfFiles[1]);
   const isValid = opponentName.trim() && gameDate && hasVideo;
