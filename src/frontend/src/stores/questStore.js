@@ -14,6 +14,27 @@ const _recordedAchievements = new Set();
 const _totalSteps = QUEST_DEFINITIONS.reduce((sum, q) => sum + q.step_ids.length, 0);
 
 /**
+ * Derive the store slice (quests + totals + active quest) from a quests-progress
+ * array. Shared by setFromBootstrap, fetchProgress, and recordAchievement so all
+ * three interpret the SAME backend shape identically (T6270).
+ */
+function _deriveQuestState(quests) {
+  let totalCompleted = 0;
+  for (const quest of quests) {
+    totalCompleted += Object.values(quest.steps).filter(Boolean).length;
+  }
+  // Progressive disclosure: show the first unclaimed quest.
+  const q1 = quests.find((q) => q.id === 'quest_1');
+  const q2 = quests.find((q) => q.id === 'quest_2');
+  const q3 = quests.find((q) => q.id === 'quest_3');
+  let activeQuestId = 'quest_1';
+  if (q1?.reward_claimed) activeQuestId = 'quest_2';
+  if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+  if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
+  return { quests, loaded: true, totalCompleted, activeQuestId };
+}
+
+/**
  * Quest Store — manages quest progress and reward claiming (T540, T1000).
  *
  * Quest definitions (structure, titles, rewards) are fetched from the backend
@@ -48,18 +69,7 @@ export const useQuestStore = create((set, get) => ({
   fetchDefinitions: () => {},
 
   setFromBootstrap: (questsProgress) => {
-    let totalCompleted = 0;
-    for (const quest of questsProgress) {
-      totalCompleted += Object.values(quest.steps).filter(Boolean).length;
-    }
-    const q1 = questsProgress.find(q => q.id === 'quest_1');
-    const q2 = questsProgress.find(q => q.id === 'quest_2');
-    const q3 = questsProgress.find(q => q.id === 'quest_3');
-    let activeQuestId = 'quest_1';
-    if (q1?.reward_claimed) activeQuestId = 'quest_2';
-    if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
-    if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
-    set({ quests: questsProgress, loaded: true, totalCompleted, activeQuestId });
+    set(_deriveQuestState(questsProgress));
   },
 
   fetchProgress: async ({ force = false } = {}) => {
@@ -92,26 +102,7 @@ export const useQuestStore = create((set, get) => ({
         // Stale response guard: a newer fetch was started while we were in flight
         if (generation !== _fetchProgressGeneration) return;
 
-        let totalCompleted = 0;
-        for (const quest of data.quests) {
-          totalCompleted += Object.values(quest.steps).filter(Boolean).length;
-        }
-
-        // Progressive disclosure: show first unclaimed quest
-        const q1 = data.quests.find(q => q.id === 'quest_1');
-        const q2 = data.quests.find(q => q.id === 'quest_2');
-        const q3 = data.quests.find(q => q.id === 'quest_3');
-        let activeQuestId = 'quest_1';
-        if (q1?.reward_claimed) activeQuestId = 'quest_2';
-        if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
-        if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
-
-        set({
-          quests: data.quests,
-          loaded: true,
-          totalCompleted,
-          activeQuestId,
-        });
+        set(_deriveQuestState(data.quests));
       } catch {
         // Best-effort
       } finally {
@@ -157,12 +148,28 @@ export const useQuestStore = create((set, get) => ({
       // marker every other reconciliation/lifecycle call site carries (T6020).
       rbNonDataWrite: true,
     })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) {
           console.error(`[Quests] Achievement POST failed for '${key}': ${res.status}`);
           _recordedAchievements.delete(key);
           return;
         }
+        // T6270: the POST now returns the updated progress in its body — consume it
+        // instead of chasing it with a GET /quests/progress. Bump the fetch
+        // generation so any in-flight fetchProgress can't overwrite this fresher,
+        // post-write snapshot when it resolves.
+        try {
+          const data = await res.json();
+          if (data?.progress?.quests) {
+            ++_fetchProgressGeneration;
+            set(_deriveQuestState(data.progress.quests));
+            return;
+          }
+        } catch {
+          // Unreadable body — fall through to the standalone GET.
+        }
+        // Deploy-skew fallback: an older backend that predates T6270 omits
+        // `progress`, so fetch it the old way to keep the UI correct.
         get().fetchProgress({ force: true });
       })
       .catch(() => {
