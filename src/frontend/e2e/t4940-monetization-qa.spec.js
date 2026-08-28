@@ -2,11 +2,18 @@
  * T4940 QA — live-drive the credit transparency + repricing surfaces.
  *
  * Verifies (per acceptance criteria) against the running dev app with a real account:
- *  - Buy-credits modal renders the repriced 80/160/340 packs single-sourced from backend.
+ *  - Buy-credits modal renders the credit packs single-sourced from backend.
  *  - "1 credit = 1 second of exported video" rule is visible; free actions listed.
  *  - Usage history surface renders from /credits/transactions.
  *  - Game upload preview shows credit cost + 30-day window before activation.
  * Captures screenshot evidence at desktop (1280) and mobile (375).
+ *
+ * T7810 (staging-gate phase 2): the identity is env-driven (E2E_REAL_EMAIL /
+ * E2E_REAL_PROFILE — see scripts/staging-gate.sh) instead of a hardcoded email,
+ * and the pack assertions are STRUCTURAL (3 packs, prices present + ascending,
+ * explainer copy) rather than literal prices ($3.99/$6.99/$12.99), so a future
+ * repricing that preserves the ladder does NOT fail this gate spec. The desktop
+ * buy-credits test is tagged @staging-gate @gate-c (mocked/read lane).
  */
 import { test, expect } from '@playwright/test';
 import path from 'path';
@@ -20,7 +27,8 @@ import fs from 'fs';
 // failed all 4 tests in ~180ms before touching the app. QA_DIR resolves from the
 // checkout, so it works on the host AND in a container (bind-mounted).
 const EVID = path.join(QA_DIR, 'T4940');
-const EMAIL = 'imankh@gmail.com';
+const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
+const PROFILE = process.env.E2E_REAL_PROFILE; // omit -> account's default profile
 
 test.beforeAll(() => fs.mkdirSync(EVID, { recursive: true }));
 
@@ -31,19 +39,39 @@ async function openBuyCredits(page) {
   await expect(page.getByText(/1 credit = 1 second/).first()).toBeVisible({ timeout: 10000 });
 }
 
-test('desktop: buy-credits rule + repriced packs + explainer', async ({ context, page }) => {
-  await loginAsRealUser(context, EMAIL);
+/**
+ * Read the rendered pack ladder STRUCTURALLY: each pack is a <button> that shows
+ * "... of exported video" and a "$" price. Returns the price of each pack in cents
+ * (regex-extracted from the button's own text, so it survives class refactors AND
+ * a repricing). No literal price is baked into the assertions.
+ */
+async function readPackPricesCents(page) {
+  const packs = page.locator('button:has-text("of exported video")');
+  await expect(packs).toHaveCount(3);
+  const cents = [];
+  for (let i = 0; i < 3; i++) {
+    const text = (await packs.nth(i).textContent()) || '';
+    const m = text.match(/\$(\d+(?:\.\d{2})?)/);
+    expect(m, `pack ${i} must show a $ price (button text: "${text.trim()}")`).toBeTruthy();
+    cents.push(Math.round(parseFloat(m[1]) * 100));
+  }
+  return cents;
+}
+
+test('desktop: buy-credits rule + packs + explainer @staging-gate @gate-c', async ({ context, page }) => {
+  await loginAsRealUser(context, EMAIL, PROFILE);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await openBuyCredits(page);
 
-  await expect(page.getByText('80 credits').first()).toBeVisible();
-  await expect(page.getByText('160 credits').first()).toBeVisible();
-  await expect(page.getByText('340 credits').first()).toBeVisible();
-  await expect(page.getByText('$3.99')).toBeVisible();
-  await expect(page.getByText('$6.99')).toBeVisible();
-  await expect(page.getByText('$12.99')).toBeVisible();
-  await expect(page.getByText(/5m 40s of exported video/)).toBeVisible();
+  // STRUCTURAL: exactly 3 packs, each with a $ price present, prices strictly
+  // ascending (cheapest -> best value). This is the whole point of T7810 — the
+  // spec must survive a price change without edits, so NO literal price appears.
+  const cents = await readPackPricesCents(page);
+  expect(cents.every((c) => Number.isFinite(c) && c > 0), `prices present: ${cents}`).toBeTruthy();
+  for (let i = 1; i < cents.length; i++) {
+    expect(cents[i], `prices ascending (cents): ${cents}`).toBeGreaterThan(cents[i - 1]);
+  }
   await page.screenshot({ path: `${EVID}/buy-credits-desktop.png` });
 
   await page.getByText('How credits work').click();
@@ -53,7 +81,7 @@ test('desktop: buy-credits rule + repriced packs + explainer', async ({ context,
 });
 
 test('desktop: usage history renders from transactions', async ({ context, page }) => {
-  await loginAsRealUser(context, EMAIL);
+  await loginAsRealUser(context, EMAIL, PROFILE);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await openBuyCredits(page);
@@ -67,7 +95,7 @@ test('desktop: usage history renders from transactions', async ({ context, page 
 });
 
 test('desktop: upload preview shows cost + 30 days before activation', async ({ context, page }) => {
-  await loginAsRealUser(context, EMAIL);
+  await loginAsRealUser(context, EMAIL, PROFILE);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/home/games');
   await page.getByRole('button', { name: /Add Game/ }).click();
@@ -84,12 +112,12 @@ test('desktop: upload preview shows cost + 30 days before activation', async ({ 
 });
 
 test('mobile 375: buy-credits + upload preview render', async ({ context, page }) => {
-  await loginAsRealUser(context, EMAIL);
+  await loginAsRealUser(context, EMAIL, PROFILE);
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto('/');
   await openBuyCredits(page);
-  await expect(page.getByText('340 credits')).toBeVisible();
-  await expect(page.getByText('$12.99')).toBeVisible();
+  // STRUCTURAL: the pack ladder renders on a narrow viewport too (no literal price).
+  await readPackPricesCents(page);
   await page.screenshot({ path: `${EVID}/buy-credits-mobile-375.png` });
 
   // Fresh navigation to the games tab for the upload preview.
