@@ -197,9 +197,7 @@ Single-server bugs sitting inside sequenced epics — do their prerequisite firs
 
 From the [code quality audit](audit-2026-07-03-code-quality.md) (directives: DRY / sync model / dependence minimization), user-approved 2026-07-03. Bug tier is in the Bugs section above (T4200-T4280). Guardrails land first; epics run in listed order internally; standalone tasks are independent. Epics with **Stage 2 gates** (T4460, T4600) need design approval before implementation.
 
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-| T3810 | [Delete Dead useHighlight Hook](tasks/T3810-delete-dead-usehighlight-hook.md) | 2 | 1 | 2.0 | TODO | [ ] | **ABSORBED into T4440** (keyframe-unification epic dead-code sweep). `useHighlight.js` is exported from overlay/index.js but never instantiated (live system is useHighlightRegions). A third keyframe implementation that adds confusion. Confirm no callers, delete hook + re-export + dead test. |
+T3810 (Delete Dead useHighlight Hook) fully absorbed into [T4440](tasks/keyframe-unification/T4440-dead-code-deletion-sweep.md) — no standalone row; see T4440's description for scope.
 
 Surfaced while fixing the keyframe-identity divergence (display snaps an edit to a nearby keyframe, but the surgical persistence sent the raw clicked frame/time, so the backend accumulated near-duplicate keyframes that, on delete, stripped a permanent boundary). Root fix + profile_db v014 heal shipped on branch `fix/crop-keyframe-dup-snap`; these are the remaining DRY/UX cleanups.
 
