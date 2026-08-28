@@ -1,6 +1,6 @@
 # T7960: Admin "Viral Conv." card computes views-per-share, not referral conversion
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-28
@@ -65,7 +65,7 @@ unbounded ratio by 100 and call it a conversion rate.
 
 ## Acceptance Criteria
 
-- [ ] "Viral Conv." (or its renamed equivalent) never exceeds 100% and tracks actual referred-user
+- [x] "Viral Conv." (or its renamed equivalent) never exceeds 100% and tracks actual referred-user
       conversion, verifiable against `user_segments.referrer_id`
-- [ ] No remaining UI surface presents an unbounded ratio as a "%" metric
+- [x] No remaining UI surface presents an unbounded ratio as a "%" metric
 - [ ] Backend test covers the new computation
