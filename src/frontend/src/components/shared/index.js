@@ -4,6 +4,7 @@ export { Breadcrumb } from './Breadcrumb';
 export { Button, IconButton, ButtonGroup, Toggle } from './Button';
 export { CollapsibleGroup } from './CollapsibleGroup';
 export { ConfirmationDialog } from './ConfirmationDialog';
+export { InlineSportSelect } from './InlineSportSelect';
 export { ModeSwitcher } from './ModeSwitcher';
 export { NoSportTagWarning } from './NoSportTagWarning';
 export { StarRating } from './StarRating';

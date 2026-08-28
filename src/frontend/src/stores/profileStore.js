@@ -139,6 +139,18 @@ export const useProfileStore = create((set, get) => ({
   updateProfile: async (profileId, updates) => {
     set({ error: null });
 
+    // Optimistic patch (T7922): reflect the change locally BEFORE the network
+    // resolves so the Add Clip tag picker swaps to real tags the instant a sport
+    // is picked (no PUT+refetch lag). Snapshot the prior list to roll back on
+    // failure. This is a memory reflection of a gesture-driven persisted change
+    // (same pattern as setIntroFact/setIntroConsent), not reactive persistence.
+    const prevProfiles = get().profiles;
+    set(state => ({
+      profiles: state.profiles.map(p =>
+        p.id === profileId ? { ...p, ...updates } : p
+      ),
+    }));
+
     try {
       const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}`, {
         method: 'PUT',
@@ -150,11 +162,12 @@ export const useProfileStore = create((set, get) => ({
         throw new Error(`Failed to update profile: ${response.status}`);
       }
 
-      // Refetch to get updated list
+      // Refetch to reconcile with server truth
       await get().fetchProfiles({ force: true });
     } catch (error) {
       console.error('[ProfileStore] Failed to update profile:', error);
-      set({ error: error.message });
+      // Roll the optimistic patch back to the pre-gesture state.
+      set({ profiles: prevProfiles, error: error.message });
       throw error;
     }
   },

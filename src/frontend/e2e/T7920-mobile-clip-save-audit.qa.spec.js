@@ -242,9 +242,13 @@ test('mobile clip-save live-drive audit (320x568 + 375x667)', async ({ page }) =
     // A fresh guest profile is no_sport (T7850) -> the amber prompt replaces the
     // sport TagSelector. If a sport WAS chosen this asserts nothing false — we
     // record which branch actually rendered.
-    const noSportWarn = form.getByText('Set your sport to see sport-specific tags');
+    // T7922: the full (portrait) no_sport prompt is now the ACTIONABLE inline
+    // sport picker ("Pick your sport to tag this clip" + a Change-sport select),
+    // not the old dead "top bar" prose. The compact landscape variant (asserted
+    // later) still shows the instructional prose (deferred).
+    const noSportWarn = form.getByText('Pick your sport to tag this clip');
     const hasNoSport = await noSportWarn.isVisible().catch(() => false);
-    expect(hasNoSport, 'fresh guest should hit the no_sport NoSportTagWarning branch').toBeTruthy();
+    expect(hasNoSport, 'fresh guest should hit the no_sport inline sport picker branch').toBeTruthy();
     await saveEvidence(page, `criterion-3-nosport-warning-${vp.name}`);
 
     // --- Criterion 2: teammate tag typed WITHOUT Enter must not dead-end Save --

@@ -55,3 +55,34 @@ mobile top-bar reachability). Pair with the T7640 Tutorial Redesign real-device 
       the Add Clip form without a dead-feeling detour, verified on a mobile viewport with evidence
 - [x] T7850's "instructional-only, no new nav plumbing" decision is explicitly revisited or upheld
       in the design doc
+
+## Progress Log
+
+**2026-08-28 — Direction A implemented (design gate approved by founder).**
+Design doc: `docs/plans/tasks/T7922-design.md` (§5 REVERSES T7850's instructional-only call —
+the named top-bar `ProfileSportButton` is not mounted on the annotate surface, so the instruction
+was a dead end).
+
+Scope shipped (per founder approval):
+- **Portrait / FULL variant only.** The full `<NoSportTagWarning>` is now an actionable inline
+  sport picker (`InlineSportSelect`, extracted to `components/shared/`), wired to
+  `updateProfile(profileId, {sport})`. Picking a sport swaps the `TagSelector` in without a form
+  remount (in-progress clip survives). Three full call sites: `UploadClipModal`,
+  `ClipDetailsEditor`, `AnnotateFullscreenOverlay` (portrait).
+- **Compact landscape variant DEFERRED (fast-follow).** The compact scrub-bar call site
+  (`AnnotateFullscreenOverlay`) is UNTOUCHED — still the non-interactive prose "Set your sport
+  (top bar) for tags". Not in this task per founder scope.
+- **`updateProfile` optimistic patch + rollback** on PUT failure (founder-approved), reconciled by
+  `fetchProfiles({force:true})`.
+- **Deviation from the design's `onPickOther`→modal wiring (intentional):** the "Other…" custom
+  branch was dropped from the T7922 picker. Reasons: (a) `ManageProfilesModal` sits at `Z.MODAL`
+  (z-50) which is below the annotate fullscreen overlay's `z-[100]`, so it would open behind the
+  form on the primary surface; (b) a custom sport yields no tags anyway (silent branch), so
+  "Other" is a dead end in a tag picker. Custom-sport setting stays available via profile
+  management, unchanged. `InlineSportSelect` gates its "Other…" option on `onPickOther` being
+  passed (ManageProfilesModal still passes it). — **Flagged for founder awareness at PUSHREADY.**
+
+Evidence: 20 relevant unit tests green, eslint 0 errors, production build passes, Reviewer
+APPROVED (0 blocking/major), and live-drive `e2e/T7922-mobile-inline-sport-picker.qa.spec.js`
+passed at 320px + 375px (picker→tags swap, rating survives remount, Save round-trips to real
+`raw_clips` rows) — artifacts in `qa/criterion-1*`.
