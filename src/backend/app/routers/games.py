@@ -1799,8 +1799,9 @@ async def delete_game(game_id: int, only_if_empty: bool = False):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, status FROM games WHERE id = ?", (game_id,))
+        row = cursor.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Game not found")
 
         # T7470: the backend guard is the invariant, not the frontend pre-check. Re-checking
@@ -1809,6 +1810,19 @@ async def delete_game(game_id: int, only_if_empty: bool = False):
         if only_if_empty and _game_has_user_content(cursor, game_id):
             logger.info(f"[T7470] Refused only-if-empty delete of game {game_id}: has user content; left pending")
             return {'success': True, 'deleted': False, 'reason': 'has_content'}
+
+        # T7870: only_if_empty means "clean up a game that never became real" -- a game
+        # that already reached READY has been validated in R2 and charged credits, so it
+        # is a paid asset even before the user annotates anything. Without this check, a
+        # client that missed activate_game's 200 (transport loss, slow response) runs
+        # the cleanup delete against a game the server already finished -- cascade-deleting
+        # a paid, empty game and orphaning its R2 object with no refund (ojedalucas19,
+        # 2026-08-26: this predates the check above catching it, since he had annotated
+        # before the delete and would have been caught by content -- but the same race
+        # without any annotation slips past that guard entirely).
+        if only_if_empty and row['status'] != GameStatus.PENDING:
+            logger.info(f"[T7870] Refused only-if-empty delete of game {game_id}: status={row['status']} (not pending)")
+            return {'success': True, 'deleted': False, 'reason': 'activated'}
 
         video_hashes, orphaned = _delete_game_cascade(cursor, game_id)
         conn.commit()

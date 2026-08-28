@@ -818,6 +818,12 @@ export async function uploadGame(file, onProgress, options = {}) {
   };
 
   let gameResult = null;
+  // T7870: once the server has validated the game (dedup 'already_owned' or
+  // activateGame's 200), it is a real, credited asset — the cleanup delete below must
+  // never target it, even if a LATER step in this same try block throws (e.g. a lost
+  // response, a slow request). The backend's own only_if_empty status check is the
+  // real invariant; this flag just avoids firing an already-doomed cleanup call.
+  let activated = false;
 
   try {
     // Step 1: Hash the file (accurate progress from sampled hash).
@@ -841,6 +847,7 @@ export async function uploadGame(file, onProgress, options = {}) {
     // and go straight to complete.
     if (gameResult.status === 'already_owned') {
       console.log('[uploadGame] Dedup: user already owns this video, skipping upload');
+      activated = true;
       if (options.onGameCreated) {
         options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
       }
@@ -871,6 +878,7 @@ export async function uploadGame(file, onProgress, options = {}) {
 
     // Step 4: Activate game (validates R2, backfills FPS, flips to 'ready').
     await activateGame(gameResult.game_id);
+    activated = true;
 
     useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
@@ -894,7 +902,11 @@ export async function uploadGame(file, onProgress, options = {}) {
     // The backend refuses (no-op) when content exists, leaving the game pending; the
     // failure toast (uploadStore.onUploadError) is the user-visible surface until T7490
     // builds the pending/retry UI.
-    if (gameResult?.game_id) {
+    // T7870: never fire the cleanup at all once the game is validated (dedup or
+    // activateGame succeeded) — a later throw in this try block (a lost response, a
+    // slow request) must not race a paid, ready game into the cleanup path. The
+    // backend's own status check is the real invariant; this is defense in depth.
+    if (gameResult?.game_id && !activated) {
       try {
         await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
@@ -927,6 +939,9 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
   };
 
   let gameResult = null;
+  // T7870: see uploadGame's identical flag — never let a later throw in this try
+  // block race the cleanup delete against a game the server already activated.
+  let activated = false;
 
   try {
     const fileCount = files.length;
@@ -984,6 +999,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
 
     // Step E: Activate game (validates R2, backfills FPS, flips to 'ready').
     await activateGame(gameResult.game_id);
+    activated = true;
 
     useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
@@ -1004,7 +1020,8 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     // T7470: only-if-empty cleanup (see uploadGame). Never cascade-delete a game the
     // user annotated against during a multi-video upload; the backend refuses when
     // content exists and leaves the game pending.
-    if (gameResult?.game_id) {
+    // T7870: also never fire it once activateGame already succeeded (see uploadGame).
+    if (gameResult?.game_id && !activated) {
       try {
         await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
