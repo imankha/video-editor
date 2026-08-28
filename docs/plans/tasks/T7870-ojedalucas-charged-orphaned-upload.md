@@ -76,9 +76,9 @@ Investigate first, then heal; the fix depends on the verdict.
 2. [x] Read `user_action_log` timelines (read-only, live machine) + any server logs
 3. [x] Name the deleting code path with evidence
 4. [x] Fix (Verdict A, see below) with regression test — commit `40eca8f5`, branch
-   `feature/T7870-ojedalucas-charged-orphaned-upload`
-5. [ ] Dry-run heal proposal -> user sign-off -> apply -> verify in R2 + live DB
-6. [ ] Update T7610 segment addendum with the verdict
+   `feature/T7870-ojedalucas-charged-orphaned-upload`, Branch CI green
+5. [x] Dry-run heal proposal -> user sign-off -> apply -> verify in R2 + live DB
+6. [x] Update T7610 segment addendum with the verdict
 
 ### Progress Log
 
@@ -133,9 +133,31 @@ him nothing extra on re-activation (idempotent). If he instead re-uploads from s
 new game becomes id 2 -> key `game_upload:2` -> **he would be charged 2 credits again** for
 the same video. This asymmetry argues for restore-in-place over refund-and-let-him-reupload.
 
+**2026-08-28 — Heal executed and verified:** user approved "restore game row in-place." Script
+co-designed with the expert agent (safest strategy: insert `pending` rows matching real
+`create_game` output, then invoke the actual `activate_game(1)` production code path so R2
+validation + ffprobe backfill + ref-counting all run through real code, not hand-rolled SQL —
+see full reasoning in the agent transcript). Dry-run then apply, both via
+`fly ssh console -a reel-ballers-api -C "python3 -"` (stdin-piped, per the read-only-probe
+recipe). Result, fully verified:
+- `games` id=1 status=ready, `video_duration=225.113356s`, `512x1108 @ 30fps` (real ffprobe
+  against the durable R2 object, not fabricated)
+- `game_videos` id=1 restored; `game_storage` + PG `game_storage_refs` (id 38) recreated;
+  `r2_grace_deletions` empty (no reclamation deadline, confirmed both before and after)
+- R2 sync durable: db-version 20 -> 21, round-tripped and re-downloaded to confirm
+- **Credit ledger unchanged**: `credit_transactions` still exactly 2 rows (261 signup bonus,
+  262 the original `game_upload:1` debit), `credits.balance` 6 before and after —
+  `activate_game`'s idempotent debit logged `applied=False (retry)`, proving no double charge
+- Also fixed in the same pass: the stale schema comment at `database.py:1298` claiming
+  single-video games have no `game_videos` rows (false since T82 — `create_game` always
+  writes one) — this staleness is what made the restore's exact row shape ambiguous until the
+  expert traced `create_game` directly.
+- `feature/T7870-ojedalucas-charged-orphaned-upload` Branch CI: green.
+
 ## Acceptance Criteria
 
 - [x] Deleting actor identified with evidence (code path + timestamp), written up here
 - [x] Code bug confirmed (Verdict A) — fixed + regression tests (commit `40eca8f5`)
-- [ ] Account heal (or explicit decision not to) signed off by user and executed
-- [ ] T7610 addendum updated for this user
+- [x] Account heal executed and verified: game 1 restored to `ready`, durable in R2, PG ref
+      recreated, credit ledger provably unchanged
+- [x] T7610 addendum updated for this user (see that task file)

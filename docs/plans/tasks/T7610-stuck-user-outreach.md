@@ -185,8 +185,17 @@ mostafaali452010 uploaded 36 MB from an iPhone-class viewport on 2026-08-27 (fir
 upload success in prod history). Remaining before send: log per-task verification evidence
 here, booking link, and the pre-send checklist. NEW pre-send dependency: T7880 must
 reconcile rooom1h's and finneganscudder's stranded uploads first (their emails say "try
-again" — the Retry card must be what they see), and ojedalucas19 is HELD until T7870's
-verdict.
+again" — the Retry card must be what they see).
+
+**2026-08-28: ojedalucas19's HOLD is lifted — T7870 resolved.** Verdict: a cascade-delete
+bug (pre-existing, now fixed) deleted his game after a successful upload. Healed: his game
+is restored and `ready` in his account (225s video, correctly playable), no re-upload needed.
+Credits were NOT double-charged (verified) and no refund was issued (none was owed — the
+heal restores the asset he already paid for). He does not know any of this happened; his
+segment moves from "HOLD" to a normal uploaded-no-clips-style send (he never got past
+watching the video, same shape as l.piress17). **Open call for whoever finalizes copy:**
+whether to acknowledge the hiccup ("we found and fixed an issue with your upload") vs. a
+plain re-engagement email as if nothing happened — not resolved here, flag at pre-send.
 
 **New cohort (Aug 24-27 signups, 14 users).** The user base doubled since the segment map
 was written. Segment assignments (existing approved templates reused where the segment
@@ -198,7 +207,7 @@ matches; flag for user OK at pre-send):
 | mostafaali452010@gmail.com | Mobile | Uploaded (mobile!), opened Add Clip, saved nothing | uploaded-no-clips (mobile variant) |
 | t_tolovaeball@hotmail.com | Mobile->Desktop | Upload failed pre-fix; 1,895 s engaged (2nd-highest ever); empty account | upload-failed: "bug fixed, retry" |
 | finneganscudder@gmail.com | Desktop | 663 MB upload stalled at 209 MB | upload-failed (AFTER T7880 reconciliation) |
-| ojedalucas19@gmail.com | Desktop | Upload succeeded, game vanished, credits kept | HOLD until T7870 verdict (may need apology + credits, bigajosue-style) |
+| ojedalucas19@gmail.com | Desktop | Upload succeeded, game vanished (bug, now fixed + healed 2026-08-28 — see addendum above) | uploaded-no-clips (watched video, no clip saved); copy-tone call open |
 | rogerio.klein.rsk@gmail.com | Desktop | 4 sessions / 31 min engaged, never created a game | desktop-never-started |
 | l.piress17@gmail.com | Desktop | Uploaded 95 MB, never pressed play, gone in 3 min | uploaded-no-clips |
 | mikhail.k.taylor@gmail.com | Desktop | Full account in 122 s incl. 1 clip; likely a tester | low priority; uploaded-no-clips if included |
