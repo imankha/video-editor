@@ -204,6 +204,11 @@ export const STAGING_GATE_SPECS = [
     lane: 'b',
     covers: 'auto-spotlight landing + frame-step on a real account',
   },
+  {
+    file: 'T7540-annotate-save-tag-trap.qa.spec.js',
+    lane: 'b',
+    covers: 'Add Clip Save auto-commits an uncommitted teammate tag (no dead-end); real write, self-cleans the clip (T7810)',
+  },
   // ---- lane C: public viewers (mocked, no account) + slow reads ---------------
   {
     file: 'collection-share.spec.js',
@@ -229,6 +234,11 @@ export const STAGING_GATE_SPECS = [
     file: 'T7100-reel-download-feedback.qa.spec.js',
     lane: 'c',
     covers: 'reel download feedback: progress scrim, byte readout, failure toast (real server compose)',
+  },
+  {
+    file: 't4940-monetization-qa.spec.js',
+    lane: 'c',
+    covers: 'buy-credits modal: 3 backend-sourced packs, prices present + ascending, "1 credit = 1 second" rule + explainer (STRUCTURAL, survives repricing; T7810)',
   },
   {
     file: 'T5710-per-layer-recap.spec.js',

@@ -1,8 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { loginAsRealUser } from './helpers/realAuth.js';
-import { assertGameStorageActive } from './helpers/fixtureGuard.js';
+import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
-import { gotoGame, openAddClipForm, deleteClip } from './helpers/annotateClips.js';
+import { openAddClipForm, deleteClip } from './helpers/annotateClips.js';
 
 /**
  * T7540 — Add Clip Save no longer dead-ends on an uncommitted teammate tag:
@@ -14,9 +13,13 @@ import { gotoGame, openAddClipForm, deleteClip } from './helpers/annotateClips.j
  * genuine dead-end. The fix auto-commits the pending text (same as Enter) and
  * saves.
  *
- * Drives the REAL account (imankh@gmail.com, game 6) via dev-login. The created
- * clip is deleted via context.request (SAME cookie jar) in afterEach; a failed
- * cleanup THROWS so a stray test clip never lingers in the real account.
+ * T7810 (staging-gate phase 2): DISCOVERS an ACTIVE game with clips instead of
+ * the old hardcoded game 6 / profile 9fa7378c, so it runs against ANY seeded
+ * lane-B account (per-process E2E_REAL_EMAIL / E2E_REAL_PROFILE — see
+ * scripts/staging-gate.sh). Tagged @gate-b: it does a real write (POST
+ * /api/clips/raw/save) but SELF-CLEANS the created clip in afterEach (a failed
+ * cleanup THROWS, so a stray test clip never lingers), which is why lane B —
+ * which owns light writes — is safe for it.
  *
  * Proves, against the running app:
  *   - typed-but-not-Entered teammate name + click Save -> the save request FIRES
@@ -27,27 +30,45 @@ import { gotoGame, openAddClipForm, deleteClip } from './helpers/annotateClips.j
  */
 
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
-const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
-const GAME_ID = Number(process.env.E2E_GAME_ID || 6);
-const apiBase = process.env.E2E_API_BASE || '/api';
+const PROFILE = process.env.E2E_REAL_PROFILE; // omit -> account's default profile
+const API_BASE = process.env.E2E_API_BASE || '/api';
 const PENDING_TAG = 'QA T7540 NoEnter';
 
 test.use({ viewport: { width: 1280, height: 800 } });
-
-// Fail fast + loud if game GAME_ID's source storage has drifted/expired, instead
-// of hanging the full per-test timeout on an Annotate screen that never mounts a
-// <video>. Same guard the T5725 spec uses.
-test.beforeAll(async ({ request }) => {
-  await assertGameStorageActive(request, GAME_ID, { email: REAL_EMAIL, apiBase });
-});
 
 test.describe('T7540 — Save auto-commits an uncommitted teammate tag (no dead-end)', () => {
   let clipId;
 
   test.beforeEach(async ({ context, page }) => {
-    await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
-    await gotoGame(page);
-    // openAddClipForm (shared helper) waits for the <video> to be seekable itself.
+    // openAddClipForm waits up to 120s for the (large) game-source MP4 to become
+    // seekable before it can seek to a clip-free gap; the deployed 60s per-test
+    // default would spuriously fail that legitimate cold load, and trimming the
+    // gap-candidate scan would trade away gap-finding reliability on a densely
+    // clipped game — so budget the seek+save cost explicitly rather than blindly.
+    test.setTimeout(120000);
+
+    await loginAsRealUser(context, REAL_EMAIL, PROFILE);
+
+    // Discover an ACTIVE game WITH clips (mirror annotate-game-clock): a hardcoded
+    // id could land on an EXPIRED/absent game on an alias lane-B account and hang
+    // the whole per-test timeout. Skip LOUDLY if the account has none — never a
+    // silent pass (CLAUDE.md: no silent fallback for a missing fixture).
+    const res = await context.request.get(
+      `${API_BASE}/games`,
+      PROFILE ? { headers: { 'X-Profile-ID': PROFILE } } : undefined,
+    );
+    expect(res.ok(), `GET ${API_BASE}/games (${res.status()})`).toBeTruthy();
+    const games = (await res.json()).games || [];
+    const target = games.find((g) => g.storage_status === 'active' && (g.clip_count || 0) > 0);
+    if (!target) {
+      console.log('[T7540][SKIP] account has no ACTIVE game with clips to add a clip into; seed one per FIXTURE-CONTRACT');
+    }
+    test.skip(!target, '[T7540] no active game with clips available to drive Add Clip');
+    console.log(`[T7540] driving active game id=${target.id} (${target.opponent_name})`);
+
+    await openGameInAnnotate(page, target.id);
+    // Clips loaded before we can find a gap to add into.
+    await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 30000 });
   });
 
   test.afterEach(async ({ context }) => {
@@ -55,7 +76,7 @@ test.describe('T7540 — Save auto-commits an uncommitted teammate tag (no dead-
     clipId = undefined;
   });
 
-  test('type a teammate name, do NOT press Enter, click Save -> clip saves with the tag, no dialog', async ({ page }) => {
+  test('type a teammate name, do NOT press Enter, click Save -> clip saves with the tag, no dialog @staging-gate @gate-b', async ({ page }) => {
     const form = await openAddClipForm(page);
 
     // Ensure the clip is on the Team layer so the Teammates field renders.
