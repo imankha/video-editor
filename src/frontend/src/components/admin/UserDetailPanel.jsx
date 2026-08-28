@@ -81,6 +81,80 @@ function formatFailures(failures) {
     .join(', ');
 }
 
+// T7860: clip/reel lifecycle-phase inventory. Two furthest-phase-exclusive tiers
+// (clips graduate created -> focusing -> focused; reels completed -> published) so
+// each tier's buckets sum to its total, plus orthogonal reel flags. A multi-clip
+// reel is one final render, so it counts as 1 published (not N).
+const CLIP_BUCKETS = [
+  { key: 'created', label: 'Created', color: 'bg-gray-500' },
+  { key: 'focus_started', label: 'Focusing', color: 'bg-blue-500' },
+  { key: 'focused', label: 'Focused', color: 'bg-purple-500' },
+];
+const REEL_BUCKETS = [
+  { key: 'completed', label: 'Completed', color: 'bg-teal-500' },
+  { key: 'published', label: 'Published', color: 'bg-green-500' },
+];
+const REEL_FLAGS = [
+  { key: 'intro_explicit', label: 'Intro set' },
+  { key: 'intro_inherited', label: 'Intro default' },
+  { key: 'downloaded', label: 'Downloaded' },
+  { key: 'shared', label: 'Shared' },
+  { key: 'watched', label: 'Watched' },
+];
+
+function PhaseStackedBar({ buckets, counts }) {
+  const total = buckets.reduce((sum, b) => sum + (counts[b.key] || 0), 0);
+  if (total === 0) return <div className="h-1.5 rounded bg-white/5" />;
+  return (
+    <div className="flex h-1.5 rounded overflow-hidden">
+      {buckets.map(b => {
+        const v = counts[b.key] || 0;
+        if (v === 0) return null;
+        return <div key={b.key} className={b.color} style={{ width: `${(v / total) * 100}%` }} />;
+      })}
+    </div>
+  );
+}
+
+function PhaseTier({ label, buckets, counts }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px] mb-1 gap-2">
+        <span className="text-gray-400 font-mono">{label}</span>
+        <span className="font-mono text-gray-300 text-right">
+          {buckets.map(b => (
+            <span key={b.key} className="ml-2">{b.label} <span className="text-white">{counts[b.key] || 0}</span></span>
+          ))}
+        </span>
+      </div>
+      <PhaseStackedBar buckets={buckets} counts={counts} />
+    </div>
+  );
+}
+
+function ClipPhaseBreakdown({ phases }) {
+  const clips = phases?.clips || {};
+  const reels = phases?.reels || {};
+  const flags = phases?.flags || {};
+  return (
+    <div className="pt-2 mt-2 border-t border-white/5">
+      <div className="text-[11px] text-cyan-400/70 font-mono uppercase tracking-wide mb-1.5">Clip Phases</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+        <PhaseTier label="Clips" buckets={CLIP_BUCKETS} counts={clips} />
+        <PhaseTier label="Reels" buckets={REEL_BUCKETS} counts={reels} />
+      </div>
+      <div className="flex items-center gap-3 flex-wrap text-[11px] font-mono mt-2">
+        <span className="text-gray-500 uppercase tracking-wide">Reel flags</span>
+        {REEL_FLAGS.map(f => (
+          <span key={f.key} className="text-gray-400">
+            {f.label} <span className={(flags[f.key] || 0) > 0 ? 'text-cyan-300' : 'text-gray-600'}>{flags[f.key] || 0}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function UserDetailPanel({ data, onClose }) {
   const [actionFilter, setActionFilter] = useState('all');
   const [searchText, setSearchText] = useState('');
@@ -227,6 +301,10 @@ export function UserDetailPanel({ data, onClose }) {
               ))}
             </div>
           )}
+
+          {/* T7860: clip/reel lifecycle-phase inventory (best-effort — absent if
+              the read failed; the panel still renders the journey above). */}
+          {data.clipPhases && <ClipPhaseBreakdown phases={data.clipPhases} />}
         </div>
 
         {/* Filters */}

@@ -133,6 +133,13 @@ FLOW_EVENTS = {
     # funnel/journey stop counting attempts as uploads (the reported prod lie).
     "game_created":         {"label": "Upload Attempted",   "daily_col": "games_created"},
     "clip_created":         {"label": "Clipped",            "daily_col": "clips_created"},
+    # T7860: RESERVED name + funnel position for the future direct-upload path (a
+    # clip that ENTERS via upload rather than annotation). Registered now so the
+    # phase inventory's "created" bucket can carry an origin dimension from day
+    # one, but it is NOT emitted anywhere yet and daily_col stays None — the
+    # daily_counters.clips_uploaded Postgres column is DEFERRED (no dead column)
+    # until the direct-upload feature ships and actually records this event.
+    "clip_uploaded":        {"label": "Clip Uploaded",      "daily_col": None},
     "export_completed":     {"label": "Exported",           "daily_col": "exports_completed"},
     "export_failed":        {"label": None,                 "daily_col": "exports_failed"},
     "share_completed":      {"label": "Shared",             "daily_col": "shares_completed"},
@@ -207,6 +214,7 @@ FUNNEL_STEPS = [
     "game_created",           # T7510: upload ATTEMPT (pending insert)
     "game_upload_succeeded",  # T7510: durable upload OUTCOME (finalize)
     "clip_created",
+    "clip_uploaded",          # T7860: RESERVED direct-upload origin (no data yet)
     "annotation_completed",
     "framing_opened",
     "framing_exported",

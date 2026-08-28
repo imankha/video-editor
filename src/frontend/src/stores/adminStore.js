@@ -254,14 +254,18 @@ export const useAdminStore = create((set, get) => ({
   fetchUserDetail: async (userId) => {
     set({ userDetailLoading: true, userDetailUserId: userId });
     try {
-      const [journeyRes, actionsRes] = await Promise.all([
+      const [journeyRes, actionsRes, phasesRes] = await Promise.all([
         apiFetch(`${API_BASE}/api/admin/analytics/journey/${userId}`),
         apiFetch(`${API_BASE}/api/admin/analytics/user/${userId}/actions?page_size=200`),
+        // T7860: clip/reel lifecycle-phase inventory (best-effort — the panel
+        // renders without it if this read fails, so it never blocks the journey).
+        apiFetch(`${API_BASE}/api/admin/analytics/user/${userId}/clip-phases`),
       ]);
       if (!journeyRes.ok || !actionsRes.ok) throw new Error('Failed to fetch user detail');
       const journey = await journeyRes.json();
       const actions = await actionsRes.json();
-      set({ userDetailData: { ...journey, actionLog: actions.actions }, userDetailLoading: false });
+      const clipPhases = phasesRes.ok ? await phasesRes.json() : null;
+      set({ userDetailData: { ...journey, actionLog: actions.actions, clipPhases }, userDetailLoading: false });
     } catch { set({ userDetailLoading: false }); }
   },
 
