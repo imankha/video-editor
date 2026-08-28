@@ -80,7 +80,7 @@ def test_scan_reports_only_unreferenced_sweep_objects(profile_db):
         ("raw_clips/auto_1_1_wave1.mp4", 3000),     # orphan (overwritten wave 1)
         ("raw_clips/auto_1_1_wave2.mp4", 4000),     # orphan (overwritten wave 2)
     ]
-    with patch.object(cleanup, "_list_raw_clip_objects", return_value=r2_objects), \
+    with patch.object(cleanup, "list_raw_clip_objects", return_value=r2_objects), \
          patch.object(cleanup, "delete_from_r2", create=True) as mock_delete:
         sweep_orphans, other = cleanup._scan_profile(USER_ID)
 
@@ -99,7 +99,7 @@ def test_uploaded_filename_reference_is_not_an_orphan(profile_db):
         ("raw_clips/deadbeef.mp4", 5000),           # referenced via working_clips
         ("raw_clips/auto_9_9_orphan.mp4", 6000),    # true sweep orphan
     ]
-    with patch.object(cleanup, "_list_raw_clip_objects", return_value=r2_objects):
+    with patch.object(cleanup, "list_raw_clip_objects", return_value=r2_objects):
         sweep_orphans, other = cleanup._scan_profile(USER_ID)
 
     assert {p for p, _ in sweep_orphans} == {"raw_clips/auto_9_9_orphan.mp4"}
@@ -115,7 +115,7 @@ def test_unreferenced_non_sweep_object_is_review_only(profile_db):
         ("raw_clips/auto_1_1_wave1.mp4", 3000),     # sweep orphan -> deletion candidate
         ("raw_clips/mystery_uuid.mp4", 9000),       # unreferenced but NOT auto_ -> review only
     ]
-    with patch.object(cleanup, "_list_raw_clip_objects", return_value=r2_objects):
+    with patch.object(cleanup, "list_raw_clip_objects", return_value=r2_objects):
         sweep_orphans, other = cleanup._scan_profile(USER_ID)
 
     assert {p for p, _ in sweep_orphans} == {"raw_clips/auto_1_1_wave1.mp4"}
@@ -128,7 +128,7 @@ def test_scan_empty_when_all_referenced(profile_db):
         ("raw_clips/upload_keepme.mp4", 2000),
         ("raw_clips/deadbeef.mp4", 5000),
     ]
-    with patch.object(cleanup, "_list_raw_clip_objects", return_value=r2_objects):
+    with patch.object(cleanup, "list_raw_clip_objects", return_value=r2_objects):
         assert cleanup._scan_profile(USER_ID) == ([], [])
 
 
