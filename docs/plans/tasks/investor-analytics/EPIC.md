@@ -94,6 +94,7 @@ Tracked in their own dashboard (T7460): goal + our number + green/yellow/red per
 | T7430 | [Retention curves & triangle, seasonality-adjusted](T7430-retention-cohort-curves.md) | TODO |
 | T7440 | [Organic growth & attribution report + investor export](T7440-organic-growth-report.md) | TODO |
 | T7450 | [Flow-event coverage: clip-library & repeat-usage signals](T7450-compounding-value-event-coverage.md) | TODO |
+| T7455 | [Editor-open event coverage: per-open Focus/Overlay/Annotate entries with clip context](T7455-editor-open-event-coverage.md) | TODO |
 | T7460 | [Success-criteria scorecard (goal vs actual, green/yellow/red)](T7460-success-criteria-scorecard.md) | TODO |
 
 Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level views; T7410 unlocks T7440's visit→signup conversion; T7420 needs nothing new (reads existing `first_at`) and can run in parallel with T7400/T7410. T7450 is independent and small. T7460 is the capstone — it composes the query functions the other tasks build, so it goes last.
