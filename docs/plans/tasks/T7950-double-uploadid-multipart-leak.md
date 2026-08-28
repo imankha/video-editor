@@ -1,6 +1,6 @@
 # T7950: Root-cause the double-UploadId multipart leak (2/2 recurrence)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-28 (filed by T7880 per its own "if this reproduces, file a task" instruction)
