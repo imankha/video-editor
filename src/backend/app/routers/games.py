@@ -3205,7 +3205,9 @@ async def stream_game_bounded(
 
 
 @router.get("/{game_id:int}/poster.jpg")
-async def get_game_poster(game_id: int, request: Request):
+async def get_game_poster(
+    game_id: int, request: Request, profile_id: str | None = None
+):
     """Poster thumbnail for a game's recap video (T5681).
 
     Cache-first from R2 (`recaps/posters/{game_id}.card.jpg`, a SEPARATE
@@ -3220,6 +3222,16 @@ async def get_game_poster(game_id: int, request: Request):
     `If-None-Match` is honored -> 304 without a full R2 GET.
     """
     from fastapi.responses import Response
+
+    # T7940: profile_id is a per-owner cache-correctness token on the URL, not an
+    # authorization mechanism -- the real scoping is the session's X-Profile-ID
+    # contextvar driving the profile-scoped DB read below. When the URL carries a
+    # profile_id that does NOT match the caller's session profile, refuse BEFORE
+    # any DB read or R2 call so a URL-keyed cache can never serve one account's
+    # poster bytes for another account's identical-looking request. Absent param =
+    # no check possible (defense-in-depth token, not the primary guard).
+    if profile_id is not None and profile_id != get_current_profile_id():
+        raise HTTPException(status_code=403, detail="Profile mismatch")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()

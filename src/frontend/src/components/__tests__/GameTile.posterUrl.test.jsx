@@ -55,7 +55,10 @@ describe('GameTile — poster URL (T5890 split-host)', () => {
     const img = document.querySelector('img');
     expect(img).toBeTruthy();
     const src = img.getAttribute('src');
-    expect(src).toBe(`${API_HOST}/api/games/42/poster.jpg`);
+    // T7940: the poster URL carries the owner's profile_id as a cache-correctness
+    // token so a URL-keyed cache can't cross-serve one account's poster for another
+    // account's same-numbered game (currentProfileId is mocked as 'p1' above).
+    expect(src).toBe(`${API_HOST}/api/games/42/poster.jpg?profile_id=p1`);
     // The defining regression check: an absolute host, never the bare Pages-origin path.
     expect(src.startsWith(API_HOST)).toBe(true);
     expect(src.startsWith('/api/')).toBe(false);

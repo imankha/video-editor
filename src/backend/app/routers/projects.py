@@ -1416,7 +1416,9 @@ async def _serve_draft_poster_jpeg(rel_path: str, if_none_match: str | None = No
 
 
 @router.get("/{project_id}/poster.jpg")
-async def get_draft_poster(project_id: int, request: Request):
+async def get_draft_poster(
+    project_id: int, request: Request, profile_id: str | None = None
+):
     """Poster thumbnail for a reel DRAFT (T5671).
 
     Cache-first from R2 (`posters/drafts/{project_id}.jpg`, per-profile);
@@ -1436,8 +1438,18 @@ async def get_draft_poster(project_id: int, request: Request):
     """
     from fastapi.responses import Response
 
+    from app.profile_context import get_current_profile_id
     from app.services.poster import draft_poster_rel_path, ensure_draft_poster
     from app.storage import r2_head_object
+
+    # T7940: profile_id on the URL is a per-owner cache-correctness token, not an
+    # authorization mechanism -- real scoping is the session's X-Profile-ID
+    # contextvar driving the profile-scoped DB read. Refuse a mismatched token
+    # BEFORE any DB read or R2 call so a URL-keyed cache can never serve one
+    # account's poster bytes for another account's identical-looking request.
+    # Absent param = no check possible (defense-in-depth token, not primary guard).
+    if profile_id is not None and profile_id != get_current_profile_id():
+        raise HTTPException(status_code=403, detail="Profile mismatch")
 
     user_id = get_current_user_id()
 

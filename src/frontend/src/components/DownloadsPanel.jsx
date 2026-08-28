@@ -674,7 +674,7 @@ export function DownloadsPanel({
     <ReelTile
       key={download.id}
       download={download}
-      posterUrl={`${API_BASE}/api/downloads/${download.id}/poster.jpg`}
+      posterUrl={`${API_BASE}/api/downloads/${download.id}/poster.jpg?profile_id=${currentProfileId}`}
       isUnwatched={!download.watched_at}
       unwatchedStyle={getUnwatchedStyle(download.id)}
       displayName={download.project_name}

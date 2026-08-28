@@ -155,7 +155,12 @@ export function GameTile({
   // returns the SPA shell (200 text/html) instead of the image -> the <img> errors
   // into the branded fallback and every poster silently breaks (T5890). Locally the
   // Vite proxy masks it. Mirrors DraftTile/DownloadsPanel/CollectionHeader poster URLs.
-  const posterUrl = `${API_BASE}/api/games/${game.id}/poster.jpg`;
+  // T7940: append the owner's profile_id so a URL-keyed cache (CDN/proxy/browser)
+  // can never serve one account's poster bytes for another account's same-numbered
+  // game. game.id is a per-profile AUTOINCREMENT (not globally unique), so the bare
+  // path collides across accounts; the query param disambiguates. Backend rejects a
+  // mismatched profile_id with 403 (cache-correctness token, not the auth check).
+  const posterUrl = `${API_BASE}/api/games/${game.id}/poster.jpg?profile_id=${currentProfileId}`;
 
   // Action descriptors -- rendered once for the desktop popover and once for the
   // mobile sheet (Delete is separate: it carries the two-tap confirm).
