@@ -1,6 +1,6 @@
 # T7922: First mobile clip — no_sport Tags block is a dead-feeling prompt, not tags
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-28 (filed from the T7920 mobile clip-save live-drive audit)

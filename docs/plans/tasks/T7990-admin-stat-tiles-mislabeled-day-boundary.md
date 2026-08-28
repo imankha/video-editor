@@ -1,6 +1,6 @@
 # T7990: Admin stat tiles show today-only, UTC-boundary values under a "vs last week" label
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-28
@@ -70,7 +70,7 @@ explicitly — this is a product call on precision vs. effort, not purely techni
 
 ## Acceptance Criteria
 
-- [ ] Stat tile labels accurately describe the period they show (no "week" language on a
+- [x] Stat tile labels accurately describe the period they show (no "week" language on a
       single-day value, unless a genuine weekly total is added)
-- [ ] Day-boundary behavior (UTC vs reference timezone) is a deliberate, documented choice, not an
+- [x] Day-boundary behavior (UTC vs reference timezone) is a deliberate, documented choice, not an
       accident

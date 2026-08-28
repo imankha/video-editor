@@ -1,6 +1,6 @@
 # T7980: Admin campaign/channels table cartesian-joins exports x purchases — inflates avg_exports, revenue, and sort order
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-28
@@ -76,8 +76,8 @@ computes.
 
 ## Acceptance Criteria
 
-- [ ] A user with N export rows across multiple platforms and M purchase rows contributes exactly
+- [x] A user with N export rows across multiple platforms and M purchase rows contributes exactly
       their true export count and true spend to the aggregate, not N*M
-- [ ] `avg_exports` and `revenue_cents` match a manual sum computed against `user_actions`/
+- [x] `avg_exports` and `revenue_cents` match a manual sum computed against `user_actions`/
       `user_segments` directly for a test dataset
-- [ ] Campaign sort order (`ORDER BY revenue_cents`) is verified stable/correct post-fix
+- [x] Campaign sort order (`ORDER BY revenue_cents`) is verified stable/correct post-fix

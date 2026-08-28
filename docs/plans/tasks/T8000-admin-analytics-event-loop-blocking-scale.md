@@ -1,6 +1,6 @@
 # T8000: Admin analytics handlers block the event loop; share-funnel does one R2 HEAD per sharer — both bite at scale
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-28
@@ -89,9 +89,9 @@ Revisit only if the admin panel is still slow after items 1-3, or past ~100k use
 
 ## Acceptance Criteria
 
-- [ ] A slow/expensive admin analytics request does not delay concurrent non-admin requests
+- [x] A slow/expensive admin analytics request does not delay concurrent non-admin requests
       (verified via test, not just code inspection)
-- [ ] share-funnel's R2 HEAD fan-out is bounded and doesn't scale linearly with share count at
+- [x] share-funnel's R2 HEAD fan-out is bounded and doesn't scale linearly with share count at
       default limits
-- [ ] Cohort query has a default bounded window and no longer scans full signup history by default
-- [ ] No new caching layer, materialized view, or index added (out of scope per this task's design)
+- [x] Cohort query has a default bounded window and no longer scans full signup history by default
+- [x] No new caching layer, materialized view, or index added (out of scope per this task's design)
