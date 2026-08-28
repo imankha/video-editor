@@ -156,7 +156,22 @@ function App() {
     else if (params.has('epik'))                                                 click_source = 'pinterest';
     else if (params.has('rdt_cid'))                                              click_source = 'reddit';
 
-    if (ref || utm_campaign || click_source) {
+    // T7910: external referrer hint (hostname ONLY — never query strings/paths).
+    // Prefer `lref`, the original external host the landing relays across the
+    // landing->app hop (PageLayout.astro); otherwise fall back to our own
+    // document.referrer host. Skip our own domains (reelballers.com landing/app)
+    // so a landing->app hop without lref isn't misattributed as a real referrer.
+    let referrer_host = params.get('lref') || null;
+    if (!referrer_host && document.referrer) {
+      try {
+        const h = new URL(document.referrer).hostname;
+        if (h && h !== window.location.hostname && !/(^|\.)reelballers\.com$/i.test(h)) {
+          referrer_host = h;
+        }
+      } catch { /* malformed referrer — ignore */ }
+    }
+
+    if (ref || utm_campaign || click_source || referrer_host) {
       const data = {};
       if (ref)          data.ref = ref;
       if (ref && ref_sport) data.ref_sport = ref_sport;  // only meaningful alongside a referral
@@ -166,6 +181,7 @@ function App() {
       if (utm_content)  data.utm_content = utm_content;
       if (utm_term)     data.utm_term = utm_term;
       if (click_source) data.click_source = click_source;
+      if (referrer_host) data.referrer_host = referrer_host;
       sessionStorage.setItem('campaignParams', JSON.stringify(data));
     }
   }, []);

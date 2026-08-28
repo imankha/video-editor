@@ -65,6 +65,7 @@ async function handleCredential(response) {
       if (campaign.utm_content)  authBody.utm_content = campaign.utm_content;
       if (campaign.utm_term)     authBody.utm_term = campaign.utm_term;
       if (campaign.click_source) authBody.click_source = campaign.click_source;
+      if (campaign.referrer_host) authBody.referrer_host = campaign.referrer_host;
     }
     const res = await apiFetch(`${API_BASE}/api/auth/google`, {
       method: 'POST',

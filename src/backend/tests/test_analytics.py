@@ -157,6 +157,87 @@ class TestDetermineOrigin:
         assert origin == "ig_summer_camp"
         assert referrer_id is None
 
+    # --- T7910: referrer-host branch (lowest priority, only breaks organic) ---
+
+    def test_referrer_host_search_buckets_seo(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", None, referrer_host="www.google.com")
+        assert origin == "seo"
+        assert referrer_id is None
+
+    def test_referrer_host_social_buckets_social_network(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", None, referrer_host="www.reddit.com")
+        assert origin == "community"
+        origin2, _ = _determine_origin("user-b", None, referrer_host="m.facebook.com")
+        assert origin2 == "social-facebook"
+
+    def test_referrer_host_unknown_is_organic(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", None, referrer_host="some-blog.example")
+        assert origin == "organic"
+        assert referrer_id is None
+
+    def test_referrer_host_does_not_override_click_source(self, pg_conn):
+        # click-ID outranks a referrer hint.
+        origin, _ = _determine_origin(
+            "user-b", None, click_source="facebook", referrer_host="www.google.com"
+        )
+        assert origin == "facebook_unknown"
+
+    def test_referrer_host_does_not_override_utm_campaign(self, pg_conn):
+        origin, _ = _determine_origin(
+            "user-b", None, utm_campaign="summer_sale", referrer_host="www.reddit.com"
+        )
+        assert origin == "summer_sale"
+
+    def test_referrer_host_does_not_override_nonhex_ref(self, pg_conn):
+        origin, _ = _determine_origin(
+            "user-b", "ig_summer_camp", referrer_host="www.google.com"
+        )
+        assert origin == "ig_summer_camp"
+
+    def test_referrer_host_does_not_override_invite_code(self, pg_conn):
+        from app.services.sharing_db import persist_invite_code
+        create_user_segment("user-a", "ig_summer", None, "otp")
+        persist_invite_code("user-a", "abc12345")
+        origin, referrer_id = _determine_origin(
+            "user-b", "abc12345", referrer_host="www.google.com"
+        )
+        assert origin == "ig_summer"
+        assert referrer_id == "user-a"
+
+
+class TestBucketReferrerHost:
+    """T7910: pure host->bucket mapping (no DB). Shared with T7410."""
+
+    from app.analytics import bucket_referrer_host as _fn
+
+    @pytest.mark.parametrize("host,expected", [
+        ("google.com", "seo"),
+        ("www.google.com", "seo"),
+        ("google.co.uk", "seo"),          # international ccTLD
+        ("bing.com", "seo"),
+        ("duckduckgo.com", "seo"),
+        ("instagram.com", "social-instagram"),
+        ("facebook.com", "social-facebook"),
+        ("m.facebook.com", "social-facebook"),
+        ("l.facebook.com", "social-facebook"),
+        ("x.com", "social-twitter"),
+        ("t.co", "social-twitter"),
+        ("youtube.com", "social-youtube"),
+        ("youtu.be", "social-youtube"),
+        ("reddit.com", "community"),
+        ("www.reddit.com", "community"),
+        ("news.ycombinator.com", "community"),
+        ("t.me", "community"),
+        ("google.com:443", "seo"),        # port stripped
+        ("REDDIT.COM", "community"),       # case-insensitive
+        ("example.com", None),             # unknown -> organic fallback
+        ("reelballers.com", None),         # our own host is never a referrer
+        ("", None),
+        (None, None),
+    ])
+    def test_bucketing(self, host, expected):
+        assert TestBucketReferrerHost._fn(host) == expected
+
 
 class TestCreateUserSegmentUtm:
     @pytest.fixture(autouse=True)

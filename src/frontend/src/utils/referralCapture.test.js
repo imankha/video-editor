@@ -7,10 +7,13 @@
  * - Click source derivation from platform click IDs
  * - Include campaign fields in Google auth request body
  * - Include campaign fields in OTP verify request body
+ * - T7910: referrer-host capture (lref param, else external document.referrer host)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-function simulateCampaignCapture(searchString, existingParams = null) {
+// Mirrors the campaignParams capture in App.jsx. `referrer`/`hostname` model
+// document.referrer and window.location.hostname for the T7910 referrer branch.
+function simulateCampaignCapture(searchString, existingParams = null, { referrer = '', hostname = 'app.reelballers.com' } = {}) {
   if (existingParams) {
     sessionStorage.setItem('campaignParams', JSON.stringify(existingParams));
   }
@@ -34,7 +37,17 @@ function simulateCampaignCapture(searchString, existingParams = null) {
   else if (params.has('epik'))                                                 click_source = 'pinterest';
   else if (params.has('rdt_cid'))                                              click_source = 'reddit';
 
-  if (ref || utm_campaign || click_source) {
+  let referrer_host = params.get('lref') || null;
+  if (!referrer_host && referrer) {
+    try {
+      const h = new URL(referrer).hostname;
+      if (h && h !== hostname && !/(^|\.)reelballers\.com$/i.test(h)) {
+        referrer_host = h;
+      }
+    } catch { /* malformed referrer — ignore */ }
+  }
+
+  if (ref || utm_campaign || click_source || referrer_host) {
     const data = {};
     if (ref)          data.ref = ref;
     if (ref && ref_sport) data.ref_sport = ref_sport;
@@ -44,6 +57,7 @@ function simulateCampaignCapture(searchString, existingParams = null) {
     if (utm_content)  data.utm_content = utm_content;
     if (utm_term)     data.utm_term = utm_term;
     if (click_source) data.click_source = click_source;
+    if (referrer_host) data.referrer_host = referrer_host;
     sessionStorage.setItem('campaignParams', JSON.stringify(data));
   }
 }
@@ -129,6 +143,68 @@ describe('campaign param capture (App.jsx logic)', () => {
   it('does not store utm_source alone without utm_campaign or click_source', () => {
     simulateCampaignCapture('?utm_source=google&utm_medium=cpc');
     expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('T7910: referrer-host capture', () => {
+  let originalSessionStorage;
+
+  beforeEach(() => {
+    originalSessionStorage = globalThis.sessionStorage;
+    const store = {};
+    globalThis.sessionStorage = {
+      getItem: vi.fn((key) => store[key] || null),
+      setItem: vi.fn((key, val) => { store[key] = val; }),
+      removeItem: vi.fn((key) => { delete store[key]; }),
+    };
+  });
+
+  afterEach(() => {
+    globalThis.sessionStorage = originalSessionStorage;
+    vi.restoreAllMocks();
+  });
+
+  it('captures lref param relayed by the landing (preferred over document.referrer)', () => {
+    simulateCampaignCapture('?lref=reddit.com', null, { referrer: 'https://www.google.com/search' });
+    expect(JSON.parse(sessionStorage.setItem.mock.calls[0][1]).referrer_host).toBe('reddit.com');
+  });
+
+  it('falls back to external document.referrer host (hostname only) when no lref', () => {
+    simulateCampaignCapture('', null, { referrer: 'https://old.reddit.com/r/soccer/comments/xyz' });
+    expect(JSON.parse(sessionStorage.setItem.mock.calls[0][1]).referrer_host).toBe('old.reddit.com');
+  });
+
+  it('captures referrer alone when no ref/utm/click present', () => {
+    simulateCampaignCapture('?foo=bar', null, { referrer: 'https://www.google.com/' });
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored).toEqual({ referrer_host: 'www.google.com' });
+  });
+
+  it('ignores our own domains as referrer (landing->app hop without lref)', () => {
+    simulateCampaignCapture('', null, { referrer: 'https://www.reelballers.com/features', hostname: 'app.reelballers.com' });
+    expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('ignores same-host self-referral', () => {
+    simulateCampaignCapture('', null, { referrer: 'https://app.reelballers.com/gallery', hostname: 'app.reelballers.com' });
+    expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('does not capture when referrer is empty and no other params', () => {
+    simulateCampaignCapture('', null, { referrer: '' });
+    expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('handles a malformed referrer gracefully', () => {
+    simulateCampaignCapture('', null, { referrer: 'not a url' });
+    expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('sends referrer_host in the auth request body', () => {
+    const campaign = { referrer_host: 'www.google.com' };
+    const authBody = { token: 'mock' };
+    if (campaign.referrer_host) authBody.referrer_host = campaign.referrer_host;
+    expect(authBody).toEqual({ token: 'mock', referrer_host: 'www.google.com' });
   });
 });
 
