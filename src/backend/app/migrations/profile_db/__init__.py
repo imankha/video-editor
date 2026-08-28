@@ -44,6 +44,7 @@ from .v044_working_clips_framing_version import V044WorkingClipsFramingVersion
 from .v045_canonicalize_working_clip_segments import V045CanonicalizeWorkingClipSegments
 from .v046_working_video_framing_snapshot import V046WorkingVideoFramingSnapshot
 from .v047_backfill_game_storage_refs import V047BackfillGameStorageRefs
+from .v048_cleanup_sweep_orphan_raw_clips import V048CleanupSweepOrphanRawClips
 
 MIGRATIONS = [
     V001Baseline(),
@@ -91,6 +92,7 @@ MIGRATIONS = [
     V045CanonicalizeWorkingClipSegments(),
     V046WorkingVideoFramingSnapshot(),
     V047BackfillGameStorageRefs(),
+    V048CleanupSweepOrphanRawClips(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

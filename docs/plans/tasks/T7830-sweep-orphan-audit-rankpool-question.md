@@ -60,6 +60,27 @@ acceptance-criteria items were never executed and are carried forward here so th
   design) — remaining work is an admin running
   `python scripts/cleanup_orphan_raw_clips.py --env prod --report ...` for the reclaimable-bytes
   total, then user sign-off, then a separate `--apply` pass.
+- **Packaged the cleanup as a migration** (user directive: "package any cleanup code as a
+  migration"). Extracted the script's reviewed classification logic (`is_sweep_orphan_name`,
+  `classify_objects`, the `raw_clips.filename` + `working_clips.uploaded_filename` reference-set
+  union) into `src/backend/app/services/orphan_raw_clips.py` — this was the second occurrence of
+  that exact logic, and the data-loss-bug history above made a hand-copied second version too
+  risky, so extraction won over inlining. Both the standalone script and the new migration now
+  import from this one module. Added `src/backend/app/migrations/profile_db/v048_cleanup_sweep_orphan_raw_clips.py`
+  — a profile_db migration that, per profile, computes the reference set, lists `raw_clips/`
+  objects, classifies them, and deletes ONLY `auto_` sweep-signature orphans (never non-sweep
+  unreferenced objects), R2_ENABLED-guarded, idempotent, logging every delete at INFO for an
+  audit trail (this is the first migration that deletes from R2 — no existing migration did
+  before it). Registered in `profile_db/__init__.py`'s `MIGRATIONS` list; bumped
+  `test_t6030_migration_window_structural_guard.py`'s `HEAD_VERSION_AUDITED` to 48 (v048 adds no
+  columns, so no `POST_V023_COLUMNS` entry needed). Added `tests/test_v048_migration.py` (6 tests:
+  sweep-signature delete, non-sweep left alone, both reference columns respected, R2-disabled
+  no-op, idempotent re-run). The standalone script is UNCHANGED in behavior and still exists for
+  a human-readable dry-run report before an admin triggers this migration (`POST
+  /api/admin/migrate` per this project's migration rules — AI does not trigger it). Execution
+  path is now: admin runs the script with `--report` for a pre-migration audit (optional but
+  recommended, since the migration itself has no dry-run step once it's registered), then
+  triggers a normal migrate run once satisfied.
 
 ## Acceptance Criteria
 

@@ -85,8 +85,11 @@ export const useQuestStore = create((set, get) => ({
       try {
         const res = await apiFetch(`${API_BASE}/api/quests/progress`);
         if (!res.ok) {
-          // T1330: unauthenticated — render the quest panel with zero progress
-          // so new visitors see the onboarding checklist pre-login.
+          // T1330 (stale premise corrected T7840-followup 2026-08-27): App.jsx
+          // hard-gates the entire app to <SignInScreen /> for unauthenticated
+          // users, so nothing ever renders this zero-progress state pre-login —
+          // this only short-circuits a stray 401 raced during the auth-bootstrap
+          // window, avoiding a console warning, not an onboarding UI.
           if (res.status === 401 && generation === _fetchProgressGeneration) {
             set({ quests: [], loaded: true, totalCompleted: 0, activeQuestId: 'quest_1' });
             return;
