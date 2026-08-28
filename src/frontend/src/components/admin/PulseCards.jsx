@@ -58,7 +58,11 @@ export function PulseCards({ data }) {
               </div>
             ) : (
               <div className={`text-xs mt-0.5 ${up ? 'text-green-400' : 'text-red-400'}`}>
-                {up ? '+' : ''}{card.change_pct}% vs last week
+                {/* T7990: the card value is a single day and change_pct compares it to the
+                    SAME WEEKDAY one week prior (sparkline[-1] vs sparkline[-8]), not a
+                    weekly rollup. Say "same day last week" so the tile isn't misread as a
+                    weekly total. */}
+                {up ? '+' : ''}{card.change_pct}% vs same day last week
               </div>
             )}
             <Sparkline data={card.sparkline} />

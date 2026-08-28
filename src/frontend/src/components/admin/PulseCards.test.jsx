@@ -42,3 +42,13 @@ describe('PulseCards upload success rate (T7510)', () => {
     expect(screen.getByText('0/0 succeeded')).toBeTruthy();
   });
 });
+
+describe('PulseCards day-boundary labeling (T7990)', () => {
+  it('labels the delta "vs same day last week", not an implied weekly rollup', () => {
+    // The tile value is a single (UTC) day and change_pct compares it to the same weekday
+    // one week prior, so the old "vs last week" copy misread as a weekly total.
+    const { container } = render(<PulseCards data={{ cards: BASE_CARDS }} />);
+    expect(container.textContent).toContain('vs same day last week');
+    expect(container.textContent).not.toContain('% vs last week');
+  });
+});

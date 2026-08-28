@@ -1564,6 +1564,14 @@ async def analytics_pulse(
     filter: str = Query(None),
 ):
     _require_admin()
+    # T7990: "today" is the UTC calendar day. This is DELIBERATE, not an accident: the
+    # daily_counters and user_actions rows this endpoint reads are stamped CURRENT_DATE in
+    # Postgres (UTC, analytics.py), so the tile boundary MUST match the data's boundary. For
+    # a US-timezone admin this means "today" flips 5-8h early relative to their local day, so
+    # late-evening activity lands in what reads as "yesterday" on the panel. We accept that
+    # (no per-viewer timezone shift) rather than misalign the tiles from their own counters.
+    # The cohort table's Monday-start week grouping (date_trunc('week', ...)) is likewise UTC
+    # and independent -- documented so the two boundaries staying UTC is a choice, not drift.
     today = date.today()
     start = today - timedelta(days=days - 1)
 
