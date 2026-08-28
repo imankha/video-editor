@@ -1056,39 +1056,60 @@ async def analytics_channels(
 
     with get_pg() as conn:
         cur = conn.cursor()
+        # T7980: pre-aggregate exports and purchases to ONE row per user BEFORE joining to
+        # user_segments. user_actions' PK is (user_id, action, PLATFORM), so a single user
+        # has multiple export_completed rows (e.g. platform='unknown' from the worker,
+        # platform='web' from the request path). Joining that fan-out directly against the
+        # purchases table multiplied every user's revenue by (export_rows x purchase_rows)
+        # and their export SUM by purchase_rows -- inflating avg_exports, revenue_cents, AND
+        # the ORDER BY revenue ranking. Collapsing each action to a per-user subquery first
+        # makes each user contribute exactly one row, eliminating the cartesian fan-out.
         cur.execute("""
             SELECT
                 s.origin,
-                COUNT(DISTINCT s.user_id) AS users,
-                COUNT(DISTINCT s.user_id) FILTER (WHERE s.referrer_id IS NULL) AS direct,
-                COUNT(DISTINCT s.user_id) FILTER (WHERE s.referrer_id IS NOT NULL) AS viral,
-                COUNT(DISTINCT CASE WHEN a_exp.action = 'export_completed' THEN s.user_id END) AS exported,
-                COUNT(DISTINCT CASE WHEN a_pur.action = 'credit_purchased' THEN s.user_id END) AS purchased,
-                COALESCE(SUM(a_exp.count), 0) AS total_exports,
-                SUM(s.total_spent_cents) AS revenue_cents
+                COUNT(*) AS users,
+                COUNT(*) FILTER (WHERE s.referrer_id IS NULL) AS direct,
+                COUNT(*) FILTER (WHERE s.referrer_id IS NOT NULL) AS viral,
+                COUNT(*) FILTER (WHERE exp.export_count > 0) AS exported,
+                COUNT(pur.user_id) AS purchased,
+                COALESCE(SUM(exp.export_count), 0) AS total_exports,
+                COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
             FROM user_segments s
-            LEFT JOIN user_actions a_exp ON s.user_id = a_exp.user_id AND a_exp.action = 'export_completed'
-            LEFT JOIN user_actions a_pur ON s.user_id = a_pur.user_id AND a_pur.action = 'credit_purchased'
+            LEFT JOIN (
+                SELECT user_id, SUM(count) AS export_count
+                FROM user_actions
+                WHERE action = 'export_completed'
+                GROUP BY user_id
+            ) exp ON exp.user_id = s.user_id
+            LEFT JOIN (
+                SELECT DISTINCT user_id
+                FROM user_actions
+                WHERE action = 'credit_purchased'
+            ) pur ON pur.user_id = s.user_id
             WHERE s.acquired_at BETWEEN %s AND %s
             GROUP BY s.origin
-            ORDER BY SUM(s.total_spent_cents) DESC NULLS LAST
+            ORDER BY revenue_cents DESC NULLS LAST
         """, (d_from, d_to))
         rows = cur.fetchall()
 
     channels = []
     for r in rows:
         users = r["users"]
+        exported = r["exported"]
         revenue = r["revenue_cents"] or 0
         channels.append({
             "origin": r["origin"],
             "users": users,
             "direct": r["direct"],
             "viral": r["viral"],
-            "exported": r["exported"],
-            "export_pct": round(r["exported"] / users * 100, 1) if users else 0,
+            "exported": exported,
+            "export_pct": round(exported / users * 100, 1) if users else 0,
             "purchased": r["purchased"],
             "purchase_pct": round(r["purchased"] / users * 100, 1) if users else 0,
-            "avg_exports": round(r["total_exports"] / users, 1) if users else 0,
+            # T7980: "avg exports" = exports per EXPORTING user (what the label promises),
+            # not per all segment users. Denominator is exporters, so a channel where 4 of
+            # 100 users exported 3 clips each reads 3.0, not 0.12.
+            "avg_exports": round(r["total_exports"] / exported, 1) if exported else 0,
             "revenue_cents": revenue,
         })
 

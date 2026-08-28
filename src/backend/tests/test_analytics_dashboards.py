@@ -159,6 +159,41 @@ class TestChannelsEndpoint:
         assert "avg_exports" in ch
         assert "revenue_cents" in ch
 
+    def test_no_cartesian_fanout_across_platforms(self, client, pg_conn):
+        # T7980: a user with export rows on MULTIPLE platforms and multiple purchase rows
+        # must contribute their TRUE export count and TRUE spend, not (exp_rows x pur_rows).
+        # user_actions PK includes platform, so this fixture reproduces the fan-out shape:
+        # 3 export rows (2+3+1 = 6 exports) x 2 purchase rows would 12x exports and 6x
+        # revenue under the old double-LEFT-JOIN.
+        # user-c is in conftest's _TEST_USER_IDS cleanup set and unused by analytics_setup.
+        create_user("user-c", email="fanout@test.com")
+        create_user_segment("user-c", "fanout_origin", None, "otp")
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            for platform, cnt in [("web", 2), ("ios", 3), ("unknown", 1)]:
+                cur.execute(
+                    "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
+                    ("user-c", "export_completed", platform, cnt),
+                )
+            for platform in ("web", "ios"):
+                cur.execute(
+                    "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
+                    ("user-c", "credit_purchased", platform, 1),
+                )
+            cur.execute(
+                "UPDATE user_segments SET total_spent_cents = 500 WHERE user_id = 'user-c'"
+            )
+
+        resp = client.get("/api/admin/analytics/channels", headers=_auth())
+        assert resp.status_code == 200
+        ch = next(c for c in resp.json()["channels"] if c["origin"] == "fanout_origin")
+        assert ch["users"] == 1
+        assert ch["exported"] == 1
+        assert ch["purchased"] == 1
+        assert ch["revenue_cents"] == 500          # not 500 * 6
+        assert ch["avg_exports"] == 6.0            # 6 true exports / 1 exporter, not 12
+
 
 class TestCohortsEndpoint:
     def test_returns_cohorts(self, client):
