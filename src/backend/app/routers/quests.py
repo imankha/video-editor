@@ -247,6 +247,38 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     return steps
 
 
+def _assemble_quests(all_steps: dict, completed_quest_ids: set, claimed_quest_ids: set) -> list:
+    """Build the per-quest progress list from derived steps + user-scoped state.
+
+    Shared by GET /progress and the achievements POST (T6270) so both return an
+    identical `quests` shape. A quest in the user-scoped completed set renders all
+    of ITS CURRENT step_ids True (self-heal — adding a step can't un-complete a
+    quest already finished); otherwise steps derive from the active profile.
+    """
+    quests = []
+    for qdef in QUEST_DEFINITIONS:
+        quest_id = qdef["id"]
+
+        if quest_id in completed_quest_ids:
+            # Quest already completed (user-scoped) — all steps true, reward claimed
+            quests.append({
+                "id": quest_id,
+                "steps": {sid: True for sid in qdef["step_ids"]},
+                "completed": True,
+                "reward_claimed": True,
+            })
+        else:
+            quest_steps = {sid: all_steps.get(sid, False) for sid in qdef["step_ids"]}
+            quests.append({
+                "id": quest_id,
+                "steps": quest_steps,
+                "completed": all(quest_steps.values()),
+                "reward_claimed": quest_id in claimed_quest_ids,
+            })
+
+    return quests
+
+
 @router.get("/definitions")
 async def get_definitions():
     """Return quest structure for the frontend. No auth required."""
@@ -304,30 +336,7 @@ async def get_progress():
         if PROFILING_ENABLED:
             _t_check_steps = time.perf_counter() - _t
 
-    quests = []
-    for qdef in QUEST_DEFINITIONS:
-        quest_id = qdef["id"]
-
-        if quest_id in completed_quest_ids:
-            # Quest already completed (user-scoped) — all steps true, reward claimed
-            quest_steps = {sid: True for sid in qdef["step_ids"]}
-            quests.append({
-                "id": quest_id,
-                "steps": quest_steps,
-                "completed": True,
-                "reward_claimed": True,
-            })
-        else:
-            quest_steps = {sid: all_steps.get(sid, False) for sid in qdef["step_ids"]}
-            completed = all(quest_steps.values())
-            reward_claimed = quest_id in claimed_quest_ids
-
-            quests.append({
-                "id": quest_id,
-                "steps": quest_steps,
-                "completed": completed,
-                "reward_claimed": reward_claimed,
-            })
+    quests = _assemble_quests(all_steps, completed_quest_ids, claimed_quest_ids)
 
     if PROFILING_ENABLED:
         total_ms = (time.perf_counter() - _t_total) * 1000
@@ -413,6 +422,15 @@ async def record_achievement(key: str):
     if key not in KNOWN_ACHIEVEMENT_KEYS:
         raise HTTPException(status_code=400, detail=f"Unknown achievement key: {key}")
 
+    # user_id is required for the profile write below (get_db_connection resolves it)
+    # and for reading the user-scoped completed/claimed sets when building progress.
+    user_id = get_current_user_id()
+
+    # T6270: this write mutates quest progress, and every client caller chased it
+    # with a GET /quests/progress. Fold that read into this response so the caller
+    # can update the quest UI from the POST alone (the follow-up GET disappears).
+    completed_quest_ids, claimed_quest_ids = get_completed_and_claimed_quest_ids(user_id)
+
     # Per-step timing attributes conn vs write vs read. Full cProfile dump
     # is handled by the request middleware (see app/profiling.py) when
     # PROFILE_ON_BREACH_ENABLED=true — grep the matching [SLOW REQUEST] line
@@ -434,6 +452,11 @@ async def record_achievement(key: str):
         ).fetchone()
         t_read = time.perf_counter()
 
+        # Reuse the same profile connection to derive the updated step booleans.
+        all_steps = _check_all_steps(user_id, conn, skip_quest_ids=completed_quest_ids)
+
+    quests = _assemble_quests(all_steps, completed_quest_ids, claimed_quest_ids)
+
     conn_ms = (t_conn - t0) * 1000
     write_ms = (t_write - t_conn) * 1000
     read_ms = (t_read - t_write) * 1000
@@ -446,7 +469,9 @@ async def record_achievement(key: str):
     milestone_event = ACHIEVEMENT_TO_MILESTONE.get(key)
     if milestone_event:
         from ..analytics import record_milestone
-        record_milestone(get_current_user_id(), milestone_event, {})
+        record_milestone(user_id, milestone_event, {})
 
     logger.info(f"[Quests] Achievement recorded: {key} ({total_ms:.0f}ms)")
-    return {"key": row["key"], "achieved_at": row["achieved_at"]}
+    # T6270: `progress` is ADDITIVE — existing callers reading key/achieved_at are
+    # unaffected; the client uses `progress` in place of a follow-up GET.
+    return {"key": row["key"], "achieved_at": row["achieved_at"], "progress": {"quests": quests}}
