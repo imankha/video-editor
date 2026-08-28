@@ -1,6 +1,6 @@
 # T7940: Game poster cache leaks one user's thumbnail onto another user's game tile
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-08-27
@@ -98,11 +98,11 @@ external cache is configured to do, and doesn't depend on getting CDN dashboard 
 ## Implementation
 
 ### Steps
-1. [ ] Add a per-owner disambiguator (profile_id) to the three poster URLs, frontend + backend
-2. [ ] Server-side: verify session-owned profile_id matches the URL's before serving (403 on mismatch)
-3. [ ] Confirm/rule out CDN-level caching of `/api/**` (check `cf-cache-status` on a live poster request)
-4. [ ] Regression test: two different accounts each with a game numbered the same id must never receive each other's poster bytes
-5. [ ] Manually verify mikhail.k.taylor@gmail.com now sees his own frame after the fix + a cache-bust
+1. [x] Add a per-owner disambiguator (profile_id) to the three poster URLs, frontend + backend
+2. [x] Server-side: verify session-owned profile_id matches the URL's before serving (403 on mismatch)
+3. [ ] Confirm/rule out CDN-level caching of `/api/**` (check `cf-cache-status` on a live poster request) — DEFERRED, needs Cloudflare dashboard access, not available in the container worker
+4. [x] Regression test: two different accounts each with a game numbered the same id must never receive each other's poster bytes
+5. [ ] Manually verify mikhail.k.taylor@gmail.com now sees his own frame after the fix + a cache-bust — DEFERRED to post-merge/post-deploy, needs prod access
 
 ### Progress Log
 
@@ -111,10 +111,25 @@ imankh's video frame as its thumbnail. Root-caused via code audit + prod read-on
 (see Evidence table above). Hash mismatch on both accounts' `id=1` games rules out a real video
 collision; confirms URL-keyed cache collision on `/api/games/{id}/poster.jpg`. Not yet fixed.
 
+**2026-08-28**: Implemented via container worker (M-tier). All 3 routes
+(`get_game_poster`/games.py, `get_draft_poster`/projects.py, `get_reel_poster`/downloads.py
+— note: the task file originally cited the downloads route at projects.py:1447, which was
+stale; it actually lives in downloads.py) now take `profile_id: str | None = None` and 403
+on a mismatch against `get_current_profile_id()`, checked before any DB/R2 work. Frontend
+(GameTile/DraftTile/DownloadsPanel) appends `?profile_id=<currentProfileId>` to all 3 URLs.
+9 new unit tests in `test_t7940_poster_cross_account_leak.py` pin the exact bug scenario per
+route (mismatch -> 403 + DB never read; match/absent -> normal flow). Existing
+`GameTile.posterUrl.test.jsx` / `DraftTile.test.jsx` updated for the new URL shape.
+`.claude/knowledge/backend-services.md` updated. CI verdict: red on first run
+(`test_t6200_concurrency.py::test_authed_burst_larger_than_pool_does_not_503`, a known
+pre-existing sqlite-lock flake already in `docs/testing/known-failures.md`, unrelated to
+this diff) -> green on same-SHA rerun. Branch `feature/T7940-game-poster-cross-account-leak`
+pushed, awaiting merge. Steps 3 and 5 remain deferred (prod/dashboard access needed).
+
 ## Acceptance Criteria
 
-- [ ] Poster URLs are unique per (user, profile), not just per numeric game/project/download id
-- [ ] Server rejects/ignores a URL profile_id that doesn't match the caller's session
-- [ ] mikhail.k.taylor@gmail.com's game tile shows his own footage, verified live
-- [ ] Regression test covers the two-accounts-same-numeric-id scenario
-- [ ] Tests pass
+- [x] Poster URLs are unique per (user, profile), not just per numeric game/project/download id
+- [x] Server rejects/ignores a URL profile_id that doesn't match the caller's session
+- [ ] mikhail.k.taylor@gmail.com's game tile shows his own footage, verified live — deferred to post-merge/deploy verification
+- [x] Regression test covers the two-accounts-same-numeric-id scenario
+- [x] Tests pass
