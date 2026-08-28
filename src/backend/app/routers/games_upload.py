@@ -69,6 +69,30 @@ def validate_file_size(size: int) -> bool:
     return 0 < size <= MAX_FILE_SIZE
 
 
+def _record_upload_failure(user_id: str | None, reason: str) -> None:
+    """
+    T7970: record a `game_upload_failed` milestone at a REAL in-flight failure site.
+
+    Before T7970 the ONLY emitter of `game_upload_failed` was the stale-pending
+    reaper (`list_pending_uploads`, reason=user_abandoned), so the admin "Upload
+    Success" denominator was success-only by construction (100% by construction).
+    This records the actual failure branches (R2 error, validation rejection, size
+    mismatch, explicit cancel, client-side network abort) using the existing
+    `analytics.MILESTONE_REASONS` taxonomy — never a new reason string.
+
+    Best-effort: analytics must NEVER break the upload's own error path, so a failed
+    milestone write is swallowed (and an absent user_id — anon beacon — is skipped).
+    Each caller traces to a named terminal failure event, not a reactive sweep.
+    """
+    if not user_id:
+        return
+    try:
+        from app.analytics import record_milestone
+        record_milestone(user_id, "game_upload_failed", reason=reason)
+    except Exception:
+        logger.exception("[T7970] failed to record game_upload_failed milestone")
+
+
 # ==============================================================================
 # Request/Response Models
 # ==============================================================================
@@ -115,20 +139,26 @@ async def prepare_upload(request: PrepareUploadRequest):
     the user gets linked to it without re-uploading.
     """
     if not R2_ENABLED:
+        # R2 is always enabled in prod (this branch is dev/test only), so it is not
+        # instrumented as a real upload failure — it cannot contribute to the prod rate.
         raise HTTPException(
             status_code=503,
             detail="R2 storage not enabled. Multipart upload requires R2."
         )
 
-    # Validate inputs
+    user_id = get_current_user_id()
+
+    # Validate inputs. A malformed hash/size is a real rejected upload attempt (T7970).
     blake3_hash = request.blake3_hash.lower()
     if not validate_blake3_hash(blake3_hash):
+        _record_upload_failure(user_id, "refused")
         raise HTTPException(
             status_code=400,
             detail="Invalid BLAKE3 hash format. Expected 64 hex characters."
         )
 
     if not validate_file_size(request.file_size):
+        _record_upload_failure(user_id, "refused")
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file size. Must be between 1 byte and {MAX_FILE_SIZE // (1024**3)}GB."
@@ -141,7 +171,6 @@ async def prepare_upload(request: PrepareUploadRequest):
 
     # T1580: compute upload cost for all response paths
     upload_cost = calculate_upload_cost(request.file_size)
-    user_id = get_current_user_id()
     balance = get_credit_balance(user_id)["balance"]
 
     if head_result:
@@ -232,6 +261,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     # e.g. an executed-but-unacked create from a prior attempt).
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
+        _record_upload_failure(user_id, "sync_failed")
         raise HTTPException(
             status_code=500,
             detail="Failed to initiate multipart upload"
@@ -343,6 +373,8 @@ async def finalize_upload(
                 f"hash={blake3_hash} upload_id={r2_upload_id} parts={len(r2_parts)} "
                 f"reason=complete_multipart_failed"
             )
+            # T7970: R2 refused/failed to assemble the multipart — a durable-sync failure.
+            _record_upload_failure(user_id, "sync_failed")
             raise HTTPException(
                 status_code=500,
                 detail="Failed to complete multipart upload"
@@ -355,6 +387,8 @@ async def finalize_upload(
                 f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
                 f"hash={blake3_hash} reason=object_not_found_after_complete"
             )
+            # T7970: R2 completed but the object is not durably readable — sync failure.
+            _record_upload_failure(user_id, "sync_failed")
             raise HTTPException(
                 status_code=500,
                 detail="Upload completed but object not found"
@@ -368,6 +402,9 @@ async def finalize_upload(
                 f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
                 f"hash={blake3_hash} reason=size_mismatch expected={expected_size} got={actual_size}"
             )
+            # T7970: bytes on R2 don't match the declared size — the transfer dropped/
+            # duplicated data in flight (transport-level corruption) -> network.
+            _record_upload_failure(user_id, "network")
             # Don't delete - let admin investigate
             raise HTTPException(
                 status_code=400,
@@ -510,6 +547,20 @@ async def upload_failure_beacon(request: Request):
         f"phase={phase} session={session_id} hash={blake3_hash} "
         f"attempts={attempts} elapsed_ms={elapsed_ms} reason={reason!r} detail={payload!r}"
     )
+
+    # T7970: a terminal client-side failure in the PART-UPLOAD phase is the one real
+    # failure the server never otherwise sees — the client exhausted its part retries
+    # and gave up WITHOUT ever calling finalize (no server-side branch fired). Record
+    # it as `network` (a dropped/too-slow transport, the dominant slow-uplink failure).
+    # The 'preparing' and 'finalizing' phases are DELIBERATELY skipped here: those
+    # failures already reached the server and are recorded by prepare-upload's
+    # validation/create branches and finalize's complete/size branches respectively,
+    # so emitting again would double-count the SAME failure and inflate the denominator.
+    # `_record_upload_failure` guards a None user_id (anon beacon) and never throws, so
+    # the fire-and-forget/always-204 contract holds.
+    if phase == "uploading":
+        _record_upload_failure(user_id, "network")
+
     # 204 No Content — nothing to return.
     return None
 
@@ -627,6 +678,8 @@ async def cancel_upload(session_id: str):
             detail="R2 storage not enabled"
         )
 
+    user_id = get_current_user_id()
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -636,6 +689,7 @@ async def cancel_upload(session_id: str):
         pending = cursor.fetchone()
 
         if not pending:
+            # Idempotent no-op cancel (row already gone) — not a distinct failure event.
             raise HTTPException(
                 status_code=404,
                 detail="Upload session not found"
@@ -655,7 +709,13 @@ async def cancel_upload(session_id: str):
 
         logger.info(f"Cancelled upload: {session_id}")
 
-        return {"status": "cancelled"}
+    # T7970: an explicit user cancel is a real terminated-without-success upload —
+    # same category as the reaper's silent abandonment (user_abandoned), but this is
+    # the EXPLICIT gesture. It deletes the pending row above, so the reaper can never
+    # re-count it (no double-count). Emitted outside the SQLite txn (reaper convention).
+    _record_upload_failure(user_id, "user_abandoned")
+
+    return {"status": "cancelled"}
 
 
 @router.get("/dedupe/{game_id}/url")
