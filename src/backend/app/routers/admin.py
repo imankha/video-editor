@@ -975,7 +975,10 @@ async def backfill_share_posters_status():
 # ---------------------------------------------------------------------------
 
 @router.get("/analytics/funnel")
-async def analytics_funnel(
+# T8000: plain def -> FastAPI runs the whole (blocking psycopg2) body in its threadpool, off
+# the single event loop, so a slow admin query can't stall every other user's request. See
+# .claude/knowledge/backend-services.md "Request concurrency model". No await ceremony needed.
+def analytics_funnel(
     request: Request,
     origin: str = Query("all"),
     date_from: str = Query(None, alias="from"),
@@ -1046,7 +1049,8 @@ async def analytics_funnel(
 
 
 @router.get("/analytics/channels")
-async def analytics_channels(
+# T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_channels(
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
 ):
@@ -1117,7 +1121,11 @@ async def analytics_channels(
 
 
 @router.get("/analytics/share-funnel")
-async def analytics_share_funnel(limit: int = Query(100)):
+# T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+# limit lowered 100 -> 25 (and hard-capped) because each returned link's sharer costs one R2
+# HEAD via share_view_counts -> get_user_db_connection (user_db.py); at limit=100 that was up
+# to ~100 sequential network round-trips per page load, scaling with share count, not users.
+def analytics_share_funnel(limit: int = Query(25, ge=1, le=100)):
     """Read-only per-link growth funnel for public game links (T5740).
 
     Answers ONE question per link: views -> claims -> activated accounts, so we can
@@ -1188,20 +1196,29 @@ async def analytics_share_funnel(limit: int = Query(100)):
 
 
 @router.get("/analytics/cohorts")
-async def analytics_cohorts(
+# T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_cohorts(
     granularity: str = Query("week"),
     origin: str = Query("all"),
+    date_from: str = Query(None, alias="from"),
+    date_to: str = Query(None, alias="to"),
 ):
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
 
     _require_admin()
     trunc = "week" if granularity == "week" else "month"
-    params: list = []
 
-    origin_filter = ""
+    # T8000: default to a 12-month window so these four full-history aggregations don't scan
+    # the ever-growing signup history on every admin page load (idx_segments_acquired drives a
+    # bounded segment set instead). Overridable via the from/to params for deeper look-backs.
+    d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else date.today()
+    where_parts = ["s.acquired_at BETWEEN %s AND %s"]
+    where_params: list = [d_from, d_to]
     if origin != "all":
-        origin_filter = "WHERE s.origin = %s"
-        params.append(origin)
+        where_parts.append("s.origin = %s")
+        where_params.append(origin)
+    where_clause = "WHERE " + " AND ".join(where_parts)
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -1212,10 +1229,10 @@ async def analytics_cohorts(
                 COUNT(*) AS signups,
                 COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
             FROM user_segments s
-            {origin_filter}
+            {where_clause}
             GROUP BY cohort_period
             ORDER BY cohort_period DESC
-        """, [trunc, *params])
+        """, [trunc, *where_params])
         signup_data = {}
         for r in cur.fetchall():
             cp = str(r["cohort_period"])
@@ -1228,10 +1245,10 @@ async def analytics_cohorts(
                 COUNT(DISTINCT a.user_id) AS users
             FROM user_actions a
             JOIN user_segments s ON a.user_id = s.user_id
-            {origin_filter}
+            {where_clause}
             GROUP BY cohort_period, a.action
             ORDER BY cohort_period DESC
-        """, [trunc, *params])
+        """, [trunc, *where_params])
         action_rows = cur.fetchall()
 
         cur.execute(f"""
@@ -1242,9 +1259,9 @@ async def analytics_cohorts(
                 ) AS median_days_to_export
             FROM user_segments s
             JOIN user_actions a ON s.user_id = a.user_id AND a.action = 'export_completed'
-            {origin_filter}
+            {where_clause}
             GROUP BY cohort_period
-        """, [trunc, *params])
+        """, [trunc, *where_params])
         tte_rows = {str(r["cohort_period"]): round(float(r["median_days_to_export"]), 1) if r["median_days_to_export"] else None for r in cur.fetchall()}
 
         cur.execute(f"""
@@ -1254,9 +1271,9 @@ async def analytics_cohorts(
                     WHERE s.last_active_at >= s.created_at + INTERVAL '7 days'
                 ) AS returned
             FROM user_segments s
-            {origin_filter}
+            {where_clause}
             GROUP BY cohort_period
-        """, [trunc, *params])
+        """, [trunc, *where_params])
         return_rows = {str(r["cohort_period"]): r["returned"] for r in cur.fetchall()}
 
     by_cohort: dict[str, dict] = {}
@@ -1577,7 +1594,8 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter):
 
 
 @router.get("/analytics/pulse")
-async def analytics_pulse(
+# T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_pulse(
     days: int = Query(30, ge=7, le=90),
     origin: str = Query(None),
     acquired_from: str = Query(None),
@@ -1876,7 +1894,8 @@ async def referral_tree(user_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/analytics/platforms")
-async def analytics_platforms(
+# T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_platforms(
     action: str | None = Query(None),
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""

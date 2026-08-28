@@ -372,8 +372,6 @@ class TestShareViewCounts:
 
 class TestAdminShareFunnel:
     def test_multi_claim_aggregation(self, pg_conn):
-        import asyncio
-
         from app.services.auth_db import create_user
         from app.services.pg import get_pg
         from app.services.sharing_db import (
@@ -412,7 +410,9 @@ class TestAdminShareFunnel:
              patch("app.routers.admin.get_current_user_id", return_value="admin-user"), \
              patch("app.analytics.share_view_counts",
                    return_value={share["share_token"]: 5}):
-            result = asyncio.run(admin_mod.analytics_share_funnel(limit=100))
+            # T8000: analytics_share_funnel is now a sync def (runs in FastAPI's
+            # threadpool, off the event loop) — call it directly, not via asyncio.run.
+            result = admin_mod.analytics_share_funnel(limit=100)
 
         assert result["activation_metric"] == "export_completed"
         links = [l for l in result["links"] if l["share_token"] == share["share_token"]]
