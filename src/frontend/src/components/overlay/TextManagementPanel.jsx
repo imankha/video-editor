@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
 import { TextSpecEditor } from '../textspec/TextSpecEditor';
+import { OVERLAY_FONT_KEYS } from '../../constants/textSpec';
 import PositionPresetGrid from './PositionPresetGrid';
 import { formatTimeSimple } from '../shared/clipConstants';
 
@@ -264,6 +265,9 @@ export default function TextManagementPanel({
             />
             <TextSpecEditor
               spec={selectedElement.spec}
+              // T6500: the Overlay picker shows only overlay-suited faces
+              // (neutral sans + heavy display + Oswald), not the intro-card set.
+              fonts={OVERLAY_FONT_KEYS}
               onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedElement.id, nextSpec)}
               // T6980: focus target for the inline-edit entry; blur/Escape/Enter
               // end inline edit (commit itself is unchanged -- the debounce fired).

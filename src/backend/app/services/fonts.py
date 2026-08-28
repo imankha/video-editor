@@ -70,6 +70,13 @@ def load_font_for_render(key: str, px: int) -> ImageFont.FreeTypeFont:
     if entry.get("isVariable"):
         # Both current variable faces (oswald, playfair) expose a single
         # `wght` axis — pin it to the manifest weight. A face with more axes
-        # would need a fuller mapping; not needed by this catalogue.
+        # would need a fuller mapping (set_variation_by_axes takes one value
+        # PER axis, in font-table order — a single-element list would only pin
+        # the first axis and silently leave the rest at their defaults). T6500's
+        # Inter is multi-axis upstream (opsz + wght), so it ships PRE-INSTANCED
+        # to a single static (wght=500, opsz=14) via fontTools rather than as a
+        # variable TTF — it never reaches this branch, keeping this catalogue's
+        # only variable faces single-axis. Add a multi-axis mapping here (not
+        # another static) only if a genuinely user-variable face is ever added.
         font.set_variation_by_axes([entry["weight"]])
     return font

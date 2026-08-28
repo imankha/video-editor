@@ -57,7 +57,10 @@ skipOnDeployedTarget(test, 'uses /api/test/render-text-bbox (dev/local-only seam
 const TOL_BOX_FRACTION = 0.015; // 1.5% of the relevant frame dimension
 const TOL_BASELINE_FRACTION = 0.005; // 0.5% of frame HEIGHT
 
-const FONT_KEYS = ['anton', 'oswald', 'graduate', 'playfair'];
+// T6500 added the overlay-oriented faces (inter, archivoblack). Parity must hold
+// for EVERY shippable face regardless of which picker shows it, so the spec loops
+// the full union, not just the intro-card set.
+const FONT_KEYS = ['anton', 'oswald', 'graduate', 'playfair', 'inter', 'archivoblack'];
 
 const RESOLUTIONS = [
   { w: 1080, h: 1920 },

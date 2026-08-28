@@ -38,6 +38,8 @@ const FONT_LABELS = {
   [FontKey.OSWALD]: 'Oswald',
   [FontKey.GRADUATE]: 'Graduate',
   [FontKey.PLAYFAIR]: 'Playfair',
+  [FontKey.INTER]: 'Inter',
+  [FontKey.ARCHIVOBLACK]: 'Archivo Black',
 };
 
 const ALIGN_LABELS = {
