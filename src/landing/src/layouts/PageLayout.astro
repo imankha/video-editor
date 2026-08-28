@@ -41,17 +41,43 @@ const { trail, current, ...base } = Astro.props
     Carry attribution query params (utm_*, ref, etc.) across to the app, which
     is a different host. Progressive enhancement: without JS the CTA still
     links correctly, it just loses the params.
+
+    T7910: also relay the ORIGINAL external referrer host as `lref`. The app's
+    own document.referrer would read this landing host after the hop, losing the
+    real source (reddit, a search engine, ...), so we capture it here. Hostname
+    ONLY — never the full referrer URL. The landing sets no Referrer-Policy, so
+    the browser default (strict-origin-when-cross-origin) still yields the
+    cross-origin origin, which is all we need.
   -->
   <script is:inline>
     ;(function () {
       var search = window.location.search
-      if (!search) return
+
+      // Strip a leading www. so apex<->www navigation isn't treated as external.
+      function bare(h) { return h.replace(/^www\./i, '') }
+
+      var lref = ''
+      try {
+        if (document.referrer) {
+          var refHost = new URL(document.referrer).hostname
+          if (refHost && bare(refHost) !== bare(window.location.hostname)) {
+            lref = refHost
+          }
+        }
+      } catch (e) { /* malformed referrer — leave lref empty */ }
+
+      if (!search && !lref) return
+
+      var incoming = new URLSearchParams(search)
       document.querySelectorAll('a[data-cta]').forEach(function (a) {
         try {
           var url = new URL(a.href)
-          new URLSearchParams(search).forEach(function (v, k) {
+          incoming.forEach(function (v, k) {
             if (!url.searchParams.has(k)) url.searchParams.set(k, v)
           })
+          if (lref && !url.searchParams.has('lref') && !incoming.has('lref')) {
+            url.searchParams.set('lref', lref)
+          }
           a.href = url.toString()
         } catch (e) {
           /* leave the href untouched */

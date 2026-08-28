@@ -161,6 +161,7 @@ export function OtpAuthForm({ resetKey = null }) {
         if (campaign.utm_content)  verifyBody.utm_content = campaign.utm_content;
         if (campaign.utm_term)     verifyBody.utm_term = campaign.utm_term;
         if (campaign.click_source) verifyBody.click_source = campaign.click_source;
+        if (campaign.referrer_host) verifyBody.referrer_host = campaign.referrer_host;
       }
       const res = await apiFetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',

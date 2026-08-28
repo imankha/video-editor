@@ -269,6 +269,7 @@ class GoogleAuthRequest(BaseModel):
     utm_content: str | None = None
     utm_term: str | None = None
     click_source: str | None = None
+    referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
 
 
 class AuthResponse(BaseModel):
@@ -393,6 +394,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             user_id, body.ref,
             utm_campaign=body.utm_campaign,
             click_source=body.click_source,
+            referrer_host=body.referrer_host,
         )
         create_user_segment(
             user_id, origin, referrer_id, signup_method="google",
@@ -540,6 +542,7 @@ class VerifyOtpRequest(BaseModel):
     utm_content: str | None = None
     utm_term: str | None = None
     click_source: str | None = None
+    referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
 
 
 @router.post("/send-otp")
@@ -653,6 +656,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             user_id, body.ref,
             utm_campaign=body.utm_campaign,
             click_source=body.click_source,
+            referrer_host=body.referrer_host,
         )
         create_user_segment(
             user_id, origin, referrer_id, signup_method="otp",

@@ -236,16 +236,105 @@ def _get_user_origin(user_id: str) -> str:
     return row["origin"] if row else "organic"
 
 
+# ---------------------------------------------------------------------------
+# Referrer-host attribution buckets (T7910)
+# ---------------------------------------------------------------------------
+# SHARED CONSTANT — the single server-side source of truth mapping a referrer
+# hostname to an attribution bucket. T7410 (first-party visit beacon) is specced
+# to reuse this EXACT mapping via bucket_referrer_host(); do NOT fork it.
+#
+# Keys are registrable-domain suffixes: a host matches a key when it equals the
+# key or ends with "." + key, AFTER a leading www./m./l./lm. label is stripped
+# (see bucket_referrer_host). A referrer is only ever a HINT (privacy settings
+# and Referrer-Policy strip it), so partial coverage is fine — an unlisted host
+# buckets to "organic", never a wrong channel. Extend the dict as data warrants.
+REFERRER_HOST_BUCKETS: dict[str, str] = {
+    # --- search engines -> seo ---
+    "google.com": "seo",
+    "bing.com": "seo",
+    "duckduckgo.com": "seo",
+    "search.yahoo.com": "seo",
+    "yahoo.com": "seo",
+    "yandex.com": "seo",
+    "yandex.ru": "seo",
+    "baidu.com": "seo",
+    "ecosia.org": "seo",
+    "search.brave.com": "seo",
+    # --- social networks -> social-<network> ---
+    "instagram.com": "social-instagram",
+    "facebook.com": "social-facebook",
+    "fb.com": "social-facebook",
+    "fb.me": "social-facebook",
+    "twitter.com": "social-twitter",
+    "x.com": "social-twitter",
+    "t.co": "social-twitter",
+    "tiktok.com": "social-tiktok",
+    "youtube.com": "social-youtube",
+    "youtu.be": "social-youtube",
+    "linkedin.com": "social-linkedin",
+    "lnkd.in": "social-linkedin",
+    "pinterest.com": "social-pinterest",
+    "snapchat.com": "social-snapchat",
+    "threads.net": "social-threads",
+    "threads.com": "social-threads",
+    # --- communities / forums -> community ---
+    "reddit.com": "community",
+    "news.ycombinator.com": "community",
+    "discord.com": "community",
+    "discord.gg": "community",
+    "quora.com": "community",
+    "whatsapp.com": "community",
+    "telegram.org": "community",
+    "t.me": "community",
+}
+
+# International Google ccTLDs (google.co.uk, google.de, ...) are too many to
+# enumerate; a leading "google." host is treated as search regardless of TLD.
+_GOOGLE_HOST_RE = re.compile(r'^google\.[a-z.]+$')
+
+
+def bucket_referrer_host(host: str | None) -> str | None:
+    """Map an external referrer hostname to an attribution bucket, or None.
+
+    Returns one of ``seo`` / ``social-<network>`` / ``community`` for a known
+    host, else ``None`` (caller falls back to ``organic``). Hostname only — no
+    query strings or paths are ever consulted. Shared with T7410.
+    """
+    if not host:
+        return None
+    host = host.strip().lower().rstrip(".")
+    if ":" in host:  # strip an accidental :port
+        host = host.split(":", 1)[0]
+    # Normalize a leading mobile/link-shim label so m.facebook.com etc. match.
+    for prefix in ("www.", "m.", "l.", "lm."):
+        if host.startswith(prefix):
+            host = host[len(prefix):]
+            break
+    if host in REFERRER_HOST_BUCKETS:
+        return REFERRER_HOST_BUCKETS[host]
+    for key, bucket in REFERRER_HOST_BUCKETS.items():
+        if host.endswith("." + key):
+            return bucket
+    if host == "google" or _GOOGLE_HOST_RE.match(host):
+        return "seo"
+    return None
+
+
 def _determine_origin(
     user_id: str,
     ref: str | None,
     utm_campaign: str | None = None,
     click_source: str | None = None,
+    referrer_host: str | None = None,
 ) -> tuple[str, str | None]:
     """Determine origin and referrer_id for a new user.
 
     Priority: ref invite code -> ref campaign ID -> utm_campaign ->
-    share-based -> click_source fallback -> organic.
+    share-based -> click_source fallback -> referrer host -> organic.
+
+    ``referrer_host`` (T7910) is the LOWEST-priority signal: it only ever breaks
+    the ``organic`` fallback into seo/social/community, never overriding a real
+    campaign/invite/click signal above it.
     """
     from app.services.sharing_db import resolve_invite_code
 
@@ -277,6 +366,10 @@ def _determine_origin(
 
     if click_source:
         return f"{click_source}_unknown", None
+
+    referrer_bucket = bucket_referrer_host(referrer_host)
+    if referrer_bucket:
+        return referrer_bucket, None
 
     return "organic", None
 

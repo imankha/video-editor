@@ -76,6 +76,43 @@ Three parts, no new Postgres columns (better population of EXISTING `user_segmen
 4. [ ] `_determine_origin` referrer branch + shared bucket constant + tests (priority order proven by test)
 5. [ ] Deploy landing + app; verify a real staging signup from an external referrer buckets correctly
 
+## Progress Log
+
+### 2026-08-28 — Step 1: end-to-end UTM pipeline verification (BEFORE any code change)
+
+Drove a synthetic signup through the real FastAPI app against the local dev
+Postgres via `TestClient` (seeded OTP -> `POST /api/auth/verify-otp` with UTM
+params), exercising the real path: `_find_or_create_user` -> `_determine_origin`
+-> `create_user_segment`. Script: `src/backend/verify_t7910_pipeline.py`.
+
+```
+verify-otp status=200
+user_segments row: origin='pipeline_check' utm_source='t7910test'
+                   utm_medium='verify' utm_campaign='pipeline_check' signup_method='otp'
+PIPELINE OK: UTM signup landed in user_segments with correct origin/utm fields.
+```
+
+**Verdict:** the attribution pipeline is NOT broken. A signup carrying UTM params
+persists them and buckets `origin` correctly. The Aug 24-27 all-`organic` surge is
+therefore a **capture gap** (referrer never captured), not a pipeline defect —
+confirming the root cause in the Problem section. No pipeline fix needed; proceed
+with the three capture/bucketing parts.
+
+(Container cannot reach real Google OAuth; the OTP path drives the identical
+segment-creation code, so this is equivalent end-to-end evidence per the kickoff.
+`verify_t7910_pipeline.py` was a scratch harness against dev PG, not committed.)
+
+### 2026-08-28 — Post-implementation end-to-end re-verification
+
+After the three parts landed, re-drove the same harness. A signup carrying a
+referrer host and NO UTM/ref/click now buckets correctly (acceptance criterion 2):
+
+```
+referrer-only verify-otp status=200
+referrer-only user_segments row: origin='community' utm_source=None
+REFERRER OK: external reddit.com signup with no UTM bucketed as 'community', not organic.
+```
+
 ## Acceptance Criteria
 
 - [ ] Synthetic `?utm_source=t7910test` staging signup lands in `user_segments` (or the broken pipeline is found and fixed)
