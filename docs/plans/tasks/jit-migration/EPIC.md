@@ -3,6 +3,12 @@
 **Status:** TODO
 **Started:** —
 **Created:** 2026-08-04 (promoted from standalone T5080, created 2026-07-13)
+**Re-affirmed:** 2026-08-28 — user direction: signups are growing and the per-account bulk sweep is
+outgrown. Target timeline: the NEXT deploy ships JIT (T5081+T5083 at minimum), that deploy's
+post-deploy migrate is the LAST manual batch run, and from then on accounts migrate on first login
+under the new version; the bulk machinery (T5087) and already-applied migration files (T5089) are
+then deleted. Scale is now a second argument alongside the correctness holes below (the 2026-08-25
+signup surge doubled users — the "10 prod users" figure in the field findings is stale).
 
 ## Goal
 
