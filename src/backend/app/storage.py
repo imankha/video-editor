@@ -2265,24 +2265,93 @@ def r2_create_multipart_upload(key: str, content_type: str = "video/mp4") -> str
 
     Returns:
         Upload ID string if successful, None otherwise
+
+    T7950 — CreateMultipartUpload is NOT idempotent, so it must NOT be retried.
+    A blind retry after a lost ack (the old `retry_r2_call(**TIER_3)` wrap) mints a
+    SECOND live multipart when the first attempt actually EXECUTED at R2 but its ack
+    arrived slower than the client read_timeout — leaving an orphan whose UploadId the
+    server never learns (the double-UploadId leak: stored id ≠ the id open in R2).
+
+    Instead we call create ONCE and classify any exception with retry.py's EXISTING
+    transient/non-transient split (do NOT invent a new classification):
+
+      | Exception class (from is_transient_error)            | Meaning                       | Action                    |
+      |------------------------------------------------------|-------------------------------|---------------------------|
+      | ReadTimeoutError / ConnectTimeoutError /             | request MAY have reached R2   | list open multiparts +    |
+      | EndpointConnectionError / ConnectionClosedError /    | and minted a multipart whose  | adopt the newest by       |
+      | BotoCoreError / ConnectionError / 5xx/429 ClientError| ack we lost (ambiguous)       | Initiated, abort extras   |
+      | ClientError 403/404 / AccessDenied / NoSuchKey /     | rejected BEFORE anything was  | fail fast, return None,    |
+      | validation 4xx (definitive rejection)                | created — nothing to adopt    | do NOT call list          |
+
+    On a transient failure the adopt path recovers the executed-but-unacked multipart
+    (returns None only if nothing materialized); on a definitive rejection we never
+    touch list_multipart_uploads because R2 could not have created anything.
     """
     client = get_r2_client()
     if not client:
         return None
 
     try:
-        from .utils.retry import TIER_3, retry_r2_call
-        response = retry_r2_call(
-            client.create_multipart_upload,
+        # ONE create attempt — no retry wrap (non-idempotent; see docstring).
+        response = client.create_multipart_upload(
             Bucket=R2_BUCKET, Key=key, ContentType=content_type,
-            operation=f"create_multipart {key}", **TIER_3,
         )
         upload_id = response.get('UploadId')
         logger.info(f"Created multipart upload: {key}, upload_id: {upload_id}")
         return upload_id
     except Exception as e:
-        logger.error(f"Failed to create multipart upload: {key} - {e}")
+        from .utils.retry import is_transient_error
+        if not is_transient_error(e):
+            # Definitive rejection — the request was refused before R2 created
+            # anything, so there is nothing to adopt. Fail fast without listing.
+            logger.error(
+                f"Failed to create multipart upload (non-transient rejection, "
+                f"nothing created): {key} - {type(e).__name__}: {e}"
+            )
+            return None
+        # Ambiguous ack loss — R2 may have created the multipart. Recover it by
+        # listing + adopting rather than blind-retrying the non-idempotent create.
+        logger.warning(
+            f"create_multipart_upload ack lost (transient {type(e).__name__}); "
+            f"listing to adopt any live multipart on {key} - {e}"
+        )
+        return _adopt_live_multipart_after_ack_loss(key)
+
+
+def _adopt_live_multipart_after_ack_loss(key: str) -> str | None:
+    """
+    T7950 — recover from a lost CreateMultipartUpload ack.
+
+    A create attempt raised a transient/ambiguous error, so R2 may or may not have
+    minted a multipart. List the open multiparts on `key`: if none materialized the
+    create truly failed (return None → caller surfaces a clean 500 and the client
+    re-prepares); otherwise ADOPT the newest by `Initiated` (founder decision: the most
+    recently initiated is the one this request just tried to create) and abort any
+    extras so exactly one live multipart remains — the one we return and store.
+    """
+    uploads = r2_list_multipart_uploads(key)
+    if not uploads:
+        logger.error(
+            f"create_multipart_upload ack lost and no live multipart materialized "
+            f"on {key} — treating as create failure"
+        )
         return None
+
+    # Adopt the newest by Initiated (tz-aware; tolerate a missing timestamp).
+    from datetime import UTC, datetime
+    _epoch = datetime.min.replace(tzinfo=UTC)
+    adopted = max(uploads, key=lambda u: u.get('Initiated') or _epoch)
+    adopted_id = adopted['UploadId']
+
+    aborted = 0
+    for u in uploads:
+        if u['UploadId'] != adopted_id and r2_abort_multipart_upload(key, u['UploadId']):
+            aborted += 1
+    logger.warning(
+        f"Adopted live multipart {adopted_id} on {key} after create ack loss "
+        f"(had {len(uploads)} open, aborted {aborted} extra)"
+    )
+    return adopted_id
 
 
 def r2_complete_multipart_upload(

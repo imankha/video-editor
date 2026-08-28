@@ -223,20 +223,21 @@ async def prepare_upload(request: PrepareUploadRequest):
                 # Fall through to create new upload below
 
     # Game doesn't exist and no valid resumable pending upload.
-    # T7480 UploadId hygiene: reclaim any open multipart(s) already sitting on this
-    # key before creating a new one. This is only reached after a valid resume was
-    # declined, so every open multipart here is a genuine orphan (e.g. the duplicate
-    # leaked when retry_r2_call fired a second CreateMultipartUpload on a slow-but-
-    # executed first attempt). Prevents the double-UploadId accumulation.
-    r2_abort_orphan_multipart_uploads(r2_key)
-
-    # Create new multipart upload
+    # T7950 (B2): create the new multipart FIRST, then reclaim orphans while SPARING
+    # the id we are about to store (keep_upload_id). The old order (abort-all THEN
+    # create, with no keep) let a concurrent prepare's unscoped abort strand the id
+    # this request stores. Creating first means we always have the id to protect;
+    # T7480's orphan reclaim still fires (this path is only reached after a valid
+    # resume was declined, so every OTHER open multipart here is a genuine orphan —
+    # e.g. an executed-but-unacked create from a prior attempt).
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
         raise HTTPException(
             status_code=500,
             detail="Failed to initiate multipart upload"
         )
+
+    r2_abort_orphan_multipart_uploads(r2_key, keep_upload_id=upload_id)
 
     # Generate session ID
     session_id = f"upload_{uuid.uuid4().hex}"
