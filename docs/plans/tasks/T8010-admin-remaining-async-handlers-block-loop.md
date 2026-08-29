@@ -1,6 +1,6 @@
 # T8010: Two more admin analytics handlers still block the event loop (T8000 follow-up)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-28 (filed by T8000 per its own "found but out of scope" note)
@@ -58,6 +58,15 @@ removed.
 had an `await`. Extended T8000's `test_all_six_analytics_handlers_are_sync_def` regression
 guard to `test_all_eight_...` to cover both new handlers. 33 tests in
 `test_t8000_admin_analytics_concurrency.py` + `test_analytics_dashboards.py` green.
+
+**2026-08-28 (later)**: Added a behavioral concurrency test (N-concurrent-requests-overlap)
+for both new handlers, extending T8000's own proof past `analytics_platforms` — the
+structural sync-def check alone didn't prove the property, just the mechanism.
+`analytics_journey` needed patching `app.routers.admin.get_pg` directly since it binds
+`get_pg` at module-import time (unlike the other handlers' per-call local re-import).
+Counterfactually verified: reverting `analytics_journey` to `async def` makes the burst take
+~N*DELAY instead of ~DELAY, test fails as expected. 35 relevant tests green. Merged to master
+(PR #307, CI green after confirming a known unrelated flake via rerun).
 
 ## Acceptance Criteria
 

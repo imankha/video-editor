@@ -1,6 +1,6 @@
 # T7940: Game poster cache leaks one user's thumbnail onto another user's game tile
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-08-27
@@ -125,6 +125,14 @@ route (mismatch -> 403 + DB never read; match/absent -> normal flow). Existing
 pre-existing sqlite-lock flake already in `docs/testing/known-failures.md`, unrelated to
 this diff) -> green on same-SHA rerun. Branch `feature/T7940-game-poster-cross-account-leak`
 pushed, awaiting merge. Steps 3 and 5 remain deferred (prod/dashboard access needed).
+
+**2026-08-28 (later)**: Added 3 real-HTTP-route integration tests
+(`test_t7940_poster_http_integration.py`) closing the gap the unit tests couldn't: a live
+`TestClient` against the real app, two real accounts each with a real `games` row numbered
+id=1 (the exact prod incident shape), only the R2/ffmpeg boundary mocked — proving FastAPI's
+query-param binding, the X-Profile-ID middleware, and the guard all work together, not just
+the guard's isolated logic. Counterfactually verified: removing the guard makes the
+integration test fail. Merged to master (PR #306, CI green).
 
 ## Acceptance Criteria
 
