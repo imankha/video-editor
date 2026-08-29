@@ -80,6 +80,44 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
+  // T8020: one round-trip for the whole admin dashboard on mount. Fans the combined
+  // GET /api/admin/dashboard response out into the SAME state fields the 5 individual
+  // actions populate, so downstream components don't change. The individual actions
+  // (fetchUsers/fetchPulse/...) stay for their other callers (pagination, campaign
+  // click-through). Mirrors fetchUsers' exact users->state field mapping.
+  fetchDashboard: async () => {
+    set({
+      usersLoading: true, usersError: null,
+      pulseLoading: true, channelsLoading: true,
+      cohortsLoading: true, platformsLoading: true,
+    });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/dashboard`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      set({
+        users: data.users.users,
+        currentPage: data.users.page,
+        totalPages: data.users.total_pages,
+        totalUsers: data.users.total_users,
+        pageSize: data.users.page_size,
+        funnelTotals: data.users.funnel_totals || null,
+        pulseData: data.pulse,
+        channelsData: data.channels,
+        cohortsData: data.cohorts,
+        platformsData: data.platforms,
+        usersLoading: false, pulseLoading: false, channelsLoading: false,
+        cohortsLoading: false, platformsLoading: false,
+      });
+    } catch (err) {
+      set({
+        usersError: err.message,
+        usersLoading: false, pulseLoading: false, channelsLoading: false,
+        cohortsLoading: false, platformsLoading: false,
+      });
+    }
+  },
+
   nextPage: () => {
     const { currentPage, totalPages, fetchUsers } = get();
     if (currentPage < totalPages) fetchUsers(currentPage + 1);

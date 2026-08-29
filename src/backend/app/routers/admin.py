@@ -91,7 +91,8 @@ async def admin_me():
 
 
 @router.get("/users")
-async def list_users(
+# T8020: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=50),
     origin: str = Query(None),
@@ -1954,6 +1955,41 @@ def analytics_platforms(
         "total_actions": total_actions,
         "platforms": platforms,
         "by_action": by_action,
+    }
+
+
+@router.get("/dashboard")
+# T8020: sync def -> threadpool, off the event loop (see backend-services.md concurrency
+# model). Composes the 5 individual admin-dashboard reads into ONE round-trip, mirroring
+# /api/bootstrap. Every callee is now a plain sync def (list_users joined that set in T8020),
+# so this stays sync all the way down -- do NOT make it `async def` and call these inline,
+# which would re-block the single event loop (the exact bug T8000/T8010/T8020 just fixed).
+def get_admin_dashboard():
+    """Combined admin-dashboard read: users + pulse + channels + cohorts + platforms in one
+    response, so AdminScreen fires ONE request on mount instead of five (T8020).
+
+    The individual routes stay for their other callers (campaign click-through, pagination,
+    filtered search); this endpoint reuses their handler functions, not duplicate SQL.
+
+    Callee args are passed EXPLICITLY: these are FastAPI route handlers whose defaults are
+    `Query(...)` sentinels, resolved to real values only through the DI layer. Calling them as
+    plain functions with an OMITTED arg would bind the parameter to the truthy `Query(...)`
+    FieldInfo object, not `None` -- silently behaving as if a filter were supplied. Passing
+    every parameter here keeps Python from ever falling back to the `Query(...)` default.
+
+    Partial failure follows the /api/bootstrap precedent: NO per-section try/except, NO
+    partial-data response -- if any callee raises, it propagates to a full 500.
+    """
+    _require_admin()
+    return {
+        "users": list_users(page=1, page_size=DEFAULT_PAGE_SIZE, origin=None,
+                            acquired_from=None, acquired_to=None, filter=None),
+        "pulse": analytics_pulse(days=30, origin=None, acquired_from=None,
+                                 acquired_to=None, filter=None),
+        "channels": analytics_channels(date_from=None, date_to=None),
+        "cohorts": analytics_cohorts(granularity="week", origin="all",
+                                     date_from=None, date_to=None),
+        "platforms": analytics_platforms(action=None),
     }
 
 

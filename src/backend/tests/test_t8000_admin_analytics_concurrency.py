@@ -211,6 +211,95 @@ def test_journey_and_user_actions_do_not_serialize_concurrent_requests(url, hand
     )
 
 
+_LIST_USERS_URL = "/api/admin/users"
+
+
+class _ListUsersFakeCursor:
+    """list_users subscripts `cur.fetchone()["cnt"]` for its COUNT query, so the shared
+    _FakeCursor (fetchone -> None) would raise TypeError -> a 500 that httpx.ASGITransport
+    RE-RAISES into the test (raise_app_exceptions defaults True), breaking the probe. This
+    stub returns an empty-but-well-formed result set so list_users runs its whole body to a
+    clean 200: 0 users -> page_user_ids empty -> stats_for_admin([]) short-circuits to {}
+    without any real get_pg, and no per-user branch executes."""
+
+    def execute(self, *a, **k):
+        pass
+
+    def fetchone(self):
+        return {"cnt": 0}
+
+    def fetchall(self):
+        return []
+
+    def close(self):
+        pass
+
+
+class _ListUsersFakeConn:
+    def cursor(self):
+        return _ListUsersFakeCursor()
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
+@contextlib.contextmanager
+def _blocking_get_pg_listusers(*a, **k):
+    """Same blocking model as _blocking_get_pg, but yields the list_users-shaped fake."""
+    time.sleep(DELAY)
+    yield _ListUsersFakeConn()
+
+
+def test_list_users_does_not_serialize_concurrent_requests(monkeypatch):
+    """T8020: list_users is the single heaviest-hit admin endpoint (fires on every admin
+    page load) and was `async def` with blocking psycopg2 inline — the same event-loop
+    bug T8000/T8010 fixed on the analytics handlers, missed by both prior sweeps. Same
+    behavioral proof: N concurrent slow-DB requests must OVERLAP (finish in ~one DELAY,
+    threadpooled) not SERIALIZE (~N*DELAY, on the loop).
+
+    list_users binds `get_pg` at MODULE import time (top-of-file `from ..services.pg import
+    get_pg`, used at the `with get_pg()` inside its body), so patching admin.get_pg is what
+    actually redirects it; we patch app.services.pg.get_pg too for symmetry. Verified
+    counterfactually: reverting list_users to `async def` makes the burst ~N*t1 and fails.
+    """
+    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg_listusers)
+    monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg_listusers)
+    _seed_owned_profile(monkeypatch)
+
+    async def go():
+        asyncio.get_running_loop().set_default_executor(
+            ThreadPoolExecutor(max_workers=32, thread_name_prefix="io-test")
+        )
+        tr = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=tr, base_url="http://testserver") as c:
+            await asyncio.gather(*[c.get(_LIST_USERS_URL, headers=dict(_HEADERS)) for _ in range(N)])
+
+            t0 = time.perf_counter()
+            single = await c.get(_LIST_USERS_URL, headers=dict(_HEADERS))
+            t1 = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
+            responses = await asyncio.gather(*[c.get(_LIST_USERS_URL, headers=dict(_HEADERS)) for _ in range(N)])
+            tN = time.perf_counter() - t0
+
+            return single, responses, t1, tN
+
+    single, responses, t1, tN = asyncio.run(go())
+
+    assert single.status_code == 200, single.status_code
+    assert all(r.status_code == 200 for r in responses), [r.status_code for r in responses]
+
+    assert tN < t1 * N * 0.5, (
+        f"list_users serialized: N={N} concurrent took {tN:.3f}s vs a single request's "
+        f"{t1:.3f}s (serialized projection ~{t1 * N:.3f}s). Likely back to async def, "
+        f"blocking the single event loop."
+    )
+
+
 def test_single_slow_request_actually_pays_the_delay(monkeypatch):
     """Sanity: a single request pays ~DELAY, so the overlap guard is measuring a
     real per-request cost (guards against the stub silently becoming a no-op)."""
@@ -230,10 +319,14 @@ def test_single_slow_request_actually_pays_the_delay(monkeypatch):
     assert wall >= DELAY * 0.8, f"single request too fast ({wall:.3f}s) — stub not blocking?"
 
 
-def test_all_eight_analytics_handlers_are_sync_def():
+def test_all_nine_admin_dashboard_handlers_are_sync_def():
     """Regression guard: FastAPI only threadpools PLAIN def handlers. If any of
     these reverts to `async def`, its blocking psycopg2 body is back on the loop.
-    T8010 added analytics_journey and analytics_user_actions to T8000's original six."""
+    T8010 added analytics_journey and analytics_user_actions to T8000's original six.
+    T8020 added list_users (the heaviest-hit admin endpoint — every admin page load —
+    which shared the same async-def-blocking bug, missed by both prior sweeps) and the
+    new get_admin_dashboard composer (which calls all of these inline, so it too must be
+    sync all the way down)."""
     from app.routers import admin
     for name in (
         "analytics_funnel",
@@ -244,9 +337,11 @@ def test_all_eight_analytics_handlers_are_sync_def():
         "analytics_platforms",
         "analytics_journey",
         "analytics_user_actions",
+        "list_users",
+        "get_admin_dashboard",
     ):
         fn = getattr(admin, name)
         assert not inspect.iscoroutinefunction(fn), (
             f"{name} is async def — it must be a plain def so FastAPI runs its "
-            f"blocking DB body in the threadpool, off the event loop (T8000)."
+            f"blocking DB body in the threadpool, off the event loop (T8000/T8010/T8020)."
         )

@@ -16,10 +16,7 @@ already has NO join, so it always included segmentless users — pinned here so 
 future refactor can't reintroduce a segment dependency and silently under-cover.
 """
 
-import asyncio
 from unittest.mock import patch
-
-import pytest
 
 from app.services.auth_db import create_user, get_all_users_for_admin
 
@@ -57,12 +54,13 @@ def test_list_users_endpoint_includes_segmentless_with_null_fields(pg_conn):
 
     with patch.object(admin, "_require_admin", return_value=None), \
          patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
-        # Pass explicit args: calling the coroutine directly bypasses FastAPI's
+        # Pass explicit args: calling the handler directly bypasses FastAPI's
         # Query() default resolution, so the filter params must be real None.
-        resp = asyncio.run(admin.list_users(
+        # T8020: list_users is now a plain sync def — call it directly, no asyncio.run.
+        resp = admin.list_users(
             page=1, page_size=50,
             origin=None, acquired_from=None, acquired_to=None, filter=None,
-        ))
+        )
 
     by_id = {u["user_id"]: u for u in resp["users"]}
     assert SEGMENTLESS_USER in by_id, (

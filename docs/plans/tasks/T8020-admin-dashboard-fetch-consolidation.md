@@ -79,17 +79,19 @@ add the combined endpoint alongside them, don't replace them.
 ## Implementation
 
 ### Steps
-0. [ ] BUNDLED FIX (user-approved 2026-08-28): `list_users` (admin.py:94) was found during
-       kickoff prep to share T8000/T8010's exact async-def-blocking-the-loop bug (zero
-       `await` calls in its body) — missed by both prior sweeps. Convert to `def`, extend
-       the sync-def regression guard, add a behavioral concurrency test, counterfactually
-       verify. Fixed here because the new combined endpoint calls this function directly.
-1. [ ] Add `GET /api/admin/dashboard` in `admin.py`, composing the 5 existing query functions
-2. [ ] Add `fetchDashboard()` to `adminStore.js`, populating the same 5 existing state fields
-3. [ ] Update `AdminScreen.jsx`'s effect to call `fetchDashboard()` instead of the 5 individual
-       actions
-4. [ ] Verify campaign-click-through and any other standalone callers of the individual
-       endpoints are unaffected (they keep using the individual endpoints)
+0. [x] BUNDLED FIX (user-approved 2026-08-28): `list_users` (admin.py) converted `async def`
+       -> `def` (threadpooled off the loop). Sync-def guard extended to 9 handlers
+       (`test_all_nine_admin_dashboard_handlers_are_sync_def`), behavioral concurrency probe
+       added (`test_list_users_does_not_serialize_concurrent_requests`), counterfactually
+       verified (reverting to `async def` makes the N-burst ~N*DELAY and fails both the
+       behavioral probe and the sync-def guard).
+1. [x] Added `GET /api/admin/dashboard` (`get_admin_dashboard`, sync `def`) composing the 5
+       existing handler functions; every param passed explicitly (Query-sentinel trap).
+2. [x] Added `fetchDashboard()` to `adminStore.js`, fanning the combined response into the
+       same 5 state fields.
+3. [x] `AdminScreen.jsx` mount effect now calls `fetchDashboard()` once.
+4. [x] Individual endpoints unchanged; `setSegmentFilter`/`nextPage`/`prevPage` still call the
+       individual `fetchUsers`/`fetchPulse` actions (grep-confirmed sole other callers).
 
 ### Progress Log
 
@@ -105,9 +107,25 @@ T8010 merged (PR #307), spawning now. During kickoff prep, found `list_users` sh
 T8000/T8010 bug pattern (see Step 0) — user approved bundling the fix into this task rather
 than filing separately, since the new combined endpoint calls `list_users` directly anyway.
 
+**2026-08-29 (implementation)**: Implemented on `feature/T8020-admin-dashboard-fetch-consolidation`.
+Backend: `list_users` -> sync `def`; new `/dashboard` composer. Fixed two pre-existing direct-call
+tests (`test_t5770_usage_daily.py`, `test_t4970_admin_segmentless_enumeration.py`) that did
+`asyncio.run(list_users(...))` — now a sync call. Frontend: `fetchDashboard` + single mount
+fetch, removed 5 now-unused individual-fetch consts from AdminScreen. Evidence: backend
+`test_analytics_dashboards.py` (34, incl. new `TestDashboardEndpoint`), `test_t8000_admin_analytics_concurrency.py`
+(6, incl. new list_users probe + 9-handler guard), `test_t5770`/`test_t4970` green; frontend
+`adminStore.dashboard.test.js` (3) + `AdminScreen.test.jsx` (1) + `adminStore.reconciliation.test.js`
+(4) green. Counterfactual for the list_users fix verified (async-def revert fails). Knowledge doc
+`backend-services.md` updated.
+
 ## Acceptance Criteria
 
-- [ ] Admin dashboard load fires 1 request for users+pulse+channels+cohorts+platforms instead of 5
-- [ ] Individual endpoints still work for their other callers (campaign click-through, etc.)
-- [ ] Fresh HAR capture confirms the reduced request count
-- [ ] Frontend tests pass
+- [x] Admin dashboard load fires 1 request for users+pulse+channels+cohorts+platforms instead of 5
+      (`AdminScreen.test.jsx` asserts exactly one mount request to `/api/admin/dashboard`)
+- [x] Individual endpoints still work for their other callers (campaign click-through, etc.)
+      (routes + signatures untouched; `TestDashboardEndpoint` proves each section == its individual
+      endpoint's unfiltered default)
+- [ ] Fresh HAR capture confirms the reduced request count — **DEFERRED** (needs live staging/prod
+      access, unavailable in the container). Substituted by the `AdminScreen.test.jsx` single-mount-
+      request proof; same treatment T7940 gave its deferred prod-verification steps.
+- [x] Frontend tests pass

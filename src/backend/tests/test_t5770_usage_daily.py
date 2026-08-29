@@ -11,7 +11,6 @@ These tests are written test-first (Stage 3): they fail until the helper, the
 schema, and the endpoint fields exist.
 """
 
-import asyncio
 from contextlib import contextmanager
 
 import pytest
@@ -79,10 +78,12 @@ def _call_list_users():
     from app.routers import admin
     with patch.object(admin, "_require_admin", return_value=None), \
          patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
-        return asyncio.run(admin.list_users(
+        # T8020: list_users is now a plain sync def (off the event loop via the FastAPI
+        # threadpool), so call it directly — no asyncio.run.
+        return admin.list_users(
             page=1, page_size=50,
             origin=None, acquired_from=None, acquired_to=None, filter=None,
-        ))
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -324,10 +325,11 @@ class TestBoundedQueries:
         with patch.object(admin, "get_pg", counting_get_pg), \
              patch.object(admin, "_require_admin", return_value=None), \
              patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
-            asyncio.run(admin.list_users(
+            # T8020: list_users is now a plain sync def — call it directly.
+            admin.list_users(
                 page=1, page_size=50,
                 origin=None, acquired_from=None, acquired_to=None, filter=None,
-            ))
+            )
         return counter[0]
 
     def test_query_count_flat_under_growth(self, pg_conn):
