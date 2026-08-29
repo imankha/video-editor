@@ -1,6 +1,6 @@
 # T8020: Admin dashboard fires 5 separate analytics fetches instead of one combined round-trip
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-28
@@ -79,6 +79,11 @@ add the combined endpoint alongside them, don't replace them.
 ## Implementation
 
 ### Steps
+0. [ ] BUNDLED FIX (user-approved 2026-08-28): `list_users` (admin.py:94) was found during
+       kickoff prep to share T8000/T8010's exact async-def-blocking-the-loop bug (zero
+       `await` calls in its body) — missed by both prior sweeps. Convert to `def`, extend
+       the sync-def regression guard, add a behavioral concurrency test, counterfactually
+       verify. Fixed here because the new combined endpoint calls this function directly.
 1. [ ] Add `GET /api/admin/dashboard` in `admin.py`, composing the 5 existing query functions
 2. [ ] Add `fetchDashboard()` to `adminStore.js`, populating the same 5 existing state fields
 3. [ ] Update `AdminScreen.jsx`'s effect to call `fetchDashboard()` instead of the 5 individual
@@ -94,6 +99,11 @@ other) is not this task — it's [T8000](T8000-admin-analytics-event-loop-blocki
 already merged and sitting in STAGING; this HAR is fresh proof prod hasn't gotten that fix yet.
 This task captures the smaller, independent, not-yet-filed finding from the same HAR: the admin
 dashboard's own fetch count was never consolidated the way `/api/bootstrap` was.
+
+**2026-08-28 (later)**: Queued behind T8010 (same file, admin.py) to avoid a merge conflict;
+T8010 merged (PR #307), spawning now. During kickoff prep, found `list_users` shares the
+T8000/T8010 bug pattern (see Step 0) — user approved bundling the fix into this task rather
+than filing separately, since the new combined endpoint calls `list_users` directly anyway.
 
 ## Acceptance Criteria
 
