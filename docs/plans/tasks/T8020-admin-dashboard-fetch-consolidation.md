@@ -1,6 +1,6 @@
 # T8020: Admin dashboard fires 5 separate analytics fetches instead of one combined round-trip
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-28
@@ -105,9 +105,22 @@ T8010 merged (PR #307), spawning now. During kickoff prep, found `list_users` sh
 T8000/T8010 bug pattern (see Step 0) — user approved bundling the fix into this task rather
 than filing separately, since the new combined endpoint calls `list_users` directly anyway.
 
+**2026-08-28 (worker complete)**: Container worker (Opus, M-tier) implemented both the
+consolidation and the bundled `list_users` fix in ~19 minutes: `list_users` converted to
+sync `def`, `GET /api/admin/dashboard` added (all callee params passed explicitly to avoid
+the FastAPI `Query()` sentinel default trap; bootstrap-style no-partial-failure), `fetchDashboard()`
+added to `adminStore.js`, `AdminScreen.jsx`'s mount effect switched to the single call.
+Structural + behavioral concurrency tests for `list_users` (counterfactually verified),
+extended sync-def guard to 9 handlers + the new composer, 2 existing tests
+(`test_t4970_admin_segmentless_enumeration.py`, `test_t5770_usage_daily.py`) updated for the
+now-sync `list_users` call signature, a new `AdminScreen.test.jsx` proving exactly 1 fetch on
+mount. The supervisor independently re-ran every relevant test (56 backend + 4 frontend, all
+green) AND independently re-ran the `list_users` counterfactual (revert -> fails, restore ->
+passes) before pushing, rather than trusting the worker's status-line claim alone. Branch
+pushed, CI green on first run (no flake this time).
 ## Acceptance Criteria
 
-- [ ] Admin dashboard load fires 1 request for users+pulse+channels+cohorts+platforms instead of 5
-- [ ] Individual endpoints still work for their other callers (campaign click-through, etc.)
-- [ ] Fresh HAR capture confirms the reduced request count
-- [ ] Frontend tests pass
+- [x] Admin dashboard load fires 1 request for users+pulse+channels+cohorts+platforms instead of 5 — proven via `AdminScreen.test.jsx` asserting the mount effect fires exactly one fetch
+- [x] Individual endpoints still work for their other callers (campaign click-through, etc.) — untouched, `test_analytics_dashboards.py`'s existing tests still pass unchanged
+- [ ] Fresh HAR capture confirms the reduced request count — DEFERRED, needs a live staging/prod capture, not available to this container worker (same treatment T7940 gave its own deferred prod-verification steps)
+- [x] Frontend tests pass — 4 green (`AdminScreen.test.jsx` + `adminStore.dashboard.test.js`)
