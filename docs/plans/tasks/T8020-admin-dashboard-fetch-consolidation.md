@@ -1,6 +1,6 @@
 # T8020: Admin dashboard fires 5 separate analytics fetches instead of one combined round-trip
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-08-28
