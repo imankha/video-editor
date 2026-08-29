@@ -42,7 +42,6 @@ const USER_FILTERS = [
 ];
 
 export function AdminScreen({ onBack }) {
-  const fetchUsers = useAdminStore(s => s.fetchUsers);
   const users = useAdminStore(s => s.users);
   const loading = useAdminStore(s => s.usersLoading);
   const error = useAdminStore(s => s.usersError);
@@ -60,24 +59,20 @@ export function AdminScreen({ onBack }) {
   const clearUserDetail = useAdminStore(s => s.clearUserDetail);
   const environment = useAuthStore(s => s.adminEnvironment);
 
-  const fetchPulse = useAdminStore(s => s.fetchPulse);
   const pulseData = useAdminStore(s => s.pulseData);
-  const fetchChannels = useAdminStore(s => s.fetchChannels);
   const channelsData = useAdminStore(s => s.channelsData);
   const channelsLoading = useAdminStore(s => s.channelsLoading);
-  const fetchCohorts = useAdminStore(s => s.fetchCohorts);
   const cohortsData = useAdminStore(s => s.cohortsData);
   const cohortsLoading = useAdminStore(s => s.cohortsLoading);
-  const fetchPlatforms = useAdminStore(s => s.fetchPlatforms);
   const platformsData = useAdminStore(s => s.platformsData);
+  const fetchDashboard = useAdminStore(s => s.fetchDashboard);
 
+  // T8020: one combined round-trip on mount instead of 5 separate fetches. The
+  // individual actions above stay wired for their other callers (pagination,
+  // setSegmentFilter campaign click-through), which keep hitting their own endpoints.
   useEffect(() => {
-    fetchUsers();
-    fetchPulse();
-    fetchChannels();
-    fetchCohorts();
-    fetchPlatforms();
-  }, [fetchUsers, fetchPulse, fetchChannels, fetchCohorts, fetchPlatforms]);
+    fetchDashboard();
+  }, [fetchDashboard]);
 
   const hasFilter = segmentOrigin || segmentFrom || segmentTo || userFilter;
   const knownUsers = users.filter(u => u.email);

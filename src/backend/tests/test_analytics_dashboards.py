@@ -1,14 +1,11 @@
 """Tests for analytics dashboard endpoints and daily_counters."""
 
-from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.analytics import create_user_segment, record_milestone, _counter_buffer
-
-
+from app.analytics import _counter_buffer, create_user_segment, record_milestone
 from app.services.auth_db import create_user
 
 
@@ -436,3 +433,51 @@ class TestUserActions:
                 "SELECT * FROM user_actions WHERE user_id = 'user-a' AND action = 'nonexistent_event'"
             )
             assert cur.fetchone() is None
+
+
+class TestDashboardEndpoint:
+    """T8020: GET /api/admin/dashboard composes the 5 individual admin reads into ONE
+    response. These tests prove (a) it fires the same underlying reads and (b) the
+    Query-sentinel trap is avoided -- each section MUST equal what the individual endpoint
+    returns for its own defaults. If a combined-call arg were left bound to a `Query(...)`
+    FieldInfo (truthy) instead of None, the filtered section would DIFFER from its
+    unfiltered individual endpoint and these equality asserts would fail."""
+
+    def test_dashboard_returns_all_five_sections(self, client):
+        resp = client.get("/api/admin/dashboard", headers=_auth())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {"users", "pulse", "channels", "cohorts", "platforms"}
+
+    def test_dashboard_sections_match_individual_endpoints(self, client):
+        combined = client.get("/api/admin/dashboard", headers=_auth())
+        assert combined.status_code == 200
+        data = combined.json()
+
+        # Each section must be byte-identical to the individual endpoint's default
+        # (unfiltered) response -- the direct proof no Query(...) sentinel leaked in.
+        users = client.get("/api/admin/users", headers=_auth())
+        pulse = client.get("/api/admin/analytics/pulse", headers=_auth())
+        channels = client.get("/api/admin/analytics/channels", headers=_auth())
+        cohorts = client.get("/api/admin/analytics/cohorts", headers=_auth())
+        platforms = client.get("/api/admin/analytics/platforms", headers=_auth())
+        for r in (users, pulse, channels, cohorts, platforms):
+            assert r.status_code == 200
+
+        assert data["users"] == users.json()
+        assert data["pulse"] == pulse.json()
+        assert data["channels"] == channels.json()
+        assert data["cohorts"] == cohorts.json()
+        assert data["platforms"] == platforms.json()
+
+    def test_dashboard_users_uses_first_page_defaults(self, client):
+        # list_users default is page=1, page_size=DEFAULT_PAGE_SIZE -- confirm the combined
+        # call passes those explicitly (not a Query sentinel) by checking the echoed paging.
+        data = client.get("/api/admin/dashboard", headers=_auth()).json()
+        assert data["users"]["page"] == 1
+        assert data["users"]["page_size"] == 10
+
+    def test_dashboard_requires_admin(self, client):
+        # Non-admin caller gets 403, same gate as the individual endpoints.
+        resp = client.get("/api/admin/dashboard", headers={"X-User-ID": "user-a"})
+        assert resp.status_code == 403
