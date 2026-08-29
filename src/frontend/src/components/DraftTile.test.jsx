@@ -61,6 +61,11 @@ vi.mock('../stores/questStore', () => {
   useQuestStore.getState = () => api;
   return { useQuestStore };
 });
+// T7940: DraftTile appends the current profile's id to the poster URL so a
+// URL-keyed cache can't cross-serve same-numbered drafts across accounts.
+vi.mock('../stores/profileStore', () => ({
+  useCurrentProfile: () => ({ id: 'p1', sport: 'soccer' }),
+}));
 
 import { DraftTile } from './DraftTile';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -101,7 +106,8 @@ describe('DraftTile (T5672)', () => {
     const { container } = renderTile();
     const img = container.querySelector('img[loading="lazy"]');
     expect(img).toBeTruthy();
-    expect(img.getAttribute('src')).toMatch(/\/api\/projects\/7\/poster\.jpg$/);
+    // T7940: URL carries the owner's profile_id as a cache-correctness token.
+    expect(img.getAttribute('src')).toMatch(/\/api\/projects\/7\/poster\.jpg\?profile_id=p1$/);
   });
 
   it('shows a shimmer skeleton while the poster loads, then hides it on load', () => {

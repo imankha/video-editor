@@ -1270,7 +1270,9 @@ async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = Non
 
 
 @router.get("/{download_id}/poster.jpg")
-async def get_reel_poster(download_id: int, request: Request):
+async def get_reel_poster(
+    download_id: int, request: Request, profile_id: str | None = None
+):
     """Poster THUMBNAIL for a PUBLISHED reel's My Reels tile (T5673, card-size
     since T5682).
 
@@ -1298,6 +1300,15 @@ async def get_reel_poster(download_id: int, request: Request):
 
     from app.services.poster import ensure_reel_card_poster, reel_card_poster_rel_path
     from app.storage import r2_head_object
+
+    # T7940: profile_id on the URL is a per-owner cache-correctness token, not an
+    # authorization mechanism -- real scoping is the session's X-Profile-ID
+    # contextvar driving the profile-scoped DB read below. Refuse a mismatched
+    # token BEFORE any DB read or R2 call so a URL-keyed cache can never serve one
+    # account's poster bytes for another account's identical-looking request.
+    # Absent param = no check possible (defense-in-depth token, not primary guard).
+    if profile_id is not None and profile_id != get_current_profile_id():
+        raise HTTPException(status_code=403, detail="Profile mismatch")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()

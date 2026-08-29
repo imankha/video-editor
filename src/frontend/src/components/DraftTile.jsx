@@ -77,7 +77,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const isOffline = useSyncStore((state) => state.isOffline);
   // T5130: the preview plays this profile's published reel, so the scrub handle
   // is the active profile's sport ball (undefined sport -> plain dot in MediaPlayer).
-  const currentProfileSport = useCurrentProfile()?.sport;
+  const currentProfile = useCurrentProfile();
+  const currentProfileSport = currentProfile?.sport;
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
@@ -353,7 +354,11 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const isComplete = project.has_final_video;
   const isReadyToPublish = isComplete && !project.is_published;
 
-  const posterUrl = `${API_BASE}/api/projects/${project.id}/poster.jpg`;
+  // T7940: append the owner's profile_id so a URL-keyed cache (CDN/proxy/browser)
+  // can never serve one account's poster bytes for another account's same-numbered
+  // draft. project.id is a per-profile AUTOINCREMENT (not globally unique); the
+  // query param disambiguates. Backend rejects a mismatched profile_id with 403.
+  const posterUrl = `${API_BASE}/api/projects/${project.id}/poster.jpg?profile_id=${currentProfile?.id}`;
 
   // T6420 — inline hover preview (fine pointer only; the hook self-gates on
   // useIsCoarsePointer + prefers-reduced-motion). Prefers the final video; T6441
