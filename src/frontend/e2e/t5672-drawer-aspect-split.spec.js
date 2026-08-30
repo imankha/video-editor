@@ -129,13 +129,15 @@ test('T5672 drawer: single-aspect game shows no aspect chip (unchanged look)', a
   await page.getByRole('button', { name: 'My Reels', exact: true }).click();
   await page.waitForTimeout(800);
 
-  // Scope to the My Reels drawer panel. The Reel Drafts screen BEHIND the drawer
-  // also renders [data-testid="collapsible-group-header"] game groups (full-width,
-  // x~64), so an unscoped .first() resolves to one of those -- and the drawer's
-  // z-40 backdrop intentionally blocks the page behind it, so clicking that header
-  // hangs on the backdrop intercept (it never receives the event). The real target
-  // is the first game header INSIDE the panel (pinned right, above the backdrop),
-  // which is what a user actually clicks.
+  // Scope to the My Reels drawer panel. The Reel Drafts screen BEHIND the drawer can
+  // also render [data-testid="collapsible-group-header"] game groups (full-width,
+  // x~64) when its own classification is switched to "By Game" (T8080 -- the screen
+  // now defaults to "By Phase", which renders no such elements), so an unscoped
+  // .first() is never safe to rely on -- and the drawer's z-40 backdrop intentionally
+  // blocks the page behind it, so clicking that header hangs on the backdrop
+  // intercept (it never receives the event). The real target is the first game
+  // header INSIDE the panel (pinned right, above the backdrop), which is what a
+  // user actually clicks.
   const drawer = page.locator('.max-w-md.bg-gray-800', {
     has: page.getByRole('heading', { name: 'My Reels', exact: true }),
   });

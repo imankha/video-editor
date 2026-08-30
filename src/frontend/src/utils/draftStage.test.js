@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DRAFT_STAGE, getDraftStage, rendersSourceAspect, splitByStage, stageRowsFor } from './draftStage';
+import { DRAFT_STAGE, getDraftStage, rendersSourceAspect, splitByStage, stageRowsFor, phaseRowsFor } from './draftStage';
 import { RATIO } from '../constants/aspectRatios';
 
 // Minimal draft shapes — only the fields the derivation reads.
@@ -150,5 +150,72 @@ describe('stageRowsFor', () => {
     expect(rows[0].byAspect[0].ratio).toBeNull();
     expect(rows[1].byAspect[0].ratio).toBe(RATIO.LANDSCAPE);
     expect(rows[2].byAspect[0].ratio).toBe(RATIO.PORTRAIT);
+  });
+});
+
+describe('phaseRowsFor (T8080 — By Phase view)', () => {
+  it('sections by pipeline stage, each sub-grouped by game, in the CALLER-supplied game order', () => {
+    const gameA = { ...inFraming, id: 1 };       // Game A, In Framing
+    const gameB1 = { ...ready, id: 2 };          // Game B, Ready
+    const gameB2 = { ...notStarted, id: 3 };     // Game B, Not Started
+    const rows = phaseRowsFor([
+      { key: 'Game B', label: 'Game B', projects: [gameB1, gameB2] },
+      { key: 'Game A', label: 'Game A', projects: [gameA] },
+    ]);
+
+    expect(rows.map(r => r.stage)).toEqual([
+      DRAFT_STAGE.NOT_STARTED,
+      DRAFT_STAGE.IN_FRAMING,
+      DRAFT_STAGE.READY,
+    ]);
+    // Not Started section: only Game B has a draft in this stage.
+    expect(rows[0].byGame.map(g => g.key)).toEqual(['Game B']);
+    // Ready section: Game B ordering is preserved even though it's listed first.
+    expect(rows[2].byGame.map(g => g.key)).toEqual(['Game B']);
+    // In Framing section: only Game A.
+    expect(rows[1].byGame.map(g => g.key)).toEqual(['Game A']);
+  });
+
+  it('drops a phase entirely when no game has a draft in it', () => {
+    const rows = phaseRowsFor([
+      { key: 'Game A', label: 'Game A', projects: [{ ...ready, id: 1 }] },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].stage).toBe(DRAFT_STAGE.READY);
+  });
+
+  it('drops a game row within a phase when that game has nothing in that stage', () => {
+    const rows = phaseRowsFor([
+      { key: 'Game A', label: 'Game A', projects: [{ ...ready, id: 1 }] },
+      { key: 'Game B', label: 'Game B', projects: [{ ...notStarted, id: 2 }] },
+    ]);
+    const readyRow = rows.find(r => r.stage === DRAFT_STAGE.READY);
+    expect(readyRow.byGame.map(g => g.key)).toEqual(['Game A']);
+  });
+
+  it('an ungrouped "Other reels" entry behaves like any other game group', () => {
+    const rows = phaseRowsFor([
+      { key: 'Game A', label: 'Game A', projects: [{ ...ready, id: 1 }] },
+      { key: '__ungrouped__', label: 'Other reels', projects: [{ ...ready, id: 2 }] },
+    ]);
+    const readyRow = rows.find(r => r.stage === DRAFT_STAGE.READY);
+    expect(readyRow.byGame.map(g => g.label)).toEqual(['Game A', 'Other reels']);
+  });
+
+  it('each game row carries the same aspect sub-split as stageRowsFor (shared invariant)', () => {
+    const rows = phaseRowsFor([
+      {
+        key: 'Game A', label: 'Game A', projects: [
+          { ...inFraming, id: 1, aspect_ratio: RATIO.LANDSCAPE, has_crop_keyframes: true },
+          { ...inFraming, id: 2, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: true },
+        ],
+      },
+    ]);
+    const framingRow = rows.find(r => r.stage === DRAFT_STAGE.IN_FRAMING);
+    expect(framingRow.byGame[0].byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+  });
+
+  it('empty input yields no sections', () => {
+    expect(phaseRowsFor([])).toEqual([]);
   });
 });
