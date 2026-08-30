@@ -153,8 +153,8 @@ describe('stageRowsFor', () => {
   });
 });
 
-describe('phaseRowsFor (T8080 — By Phase view)', () => {
-  it('sections by pipeline stage, each sub-grouped by game, in the CALLER-supplied game order', () => {
+describe('phaseRowsFor (T8080 — By Phase view, aspect-major per follow-up)', () => {
+  it('sections by pipeline stage, each aspect-bucketed then sub-grouped by game, in the CALLER-supplied game order', () => {
     const gameA = { ...inFraming, id: 1 };       // Game A, In Framing
     const gameB1 = { ...ready, id: 2 };          // Game B, Ready
     const gameB2 = { ...notStarted, id: 3 };     // Game B, Not Started
@@ -168,12 +168,46 @@ describe('phaseRowsFor (T8080 — By Phase view)', () => {
       DRAFT_STAGE.IN_FRAMING,
       DRAFT_STAGE.READY,
     ]);
-    // Not Started section: only Game B has a draft in this stage.
-    expect(rows[0].byGame.map(g => g.key)).toEqual(['Game B']);
+    // Not Started section: only Game B has a draft in this stage (single null-ratio bucket).
+    expect(rows[0].byAspect).toHaveLength(1);
+    expect(rows[0].byAspect[0].byGame.map(g => g.key)).toEqual(['Game B']);
     // Ready section: Game B ordering is preserved even though it's listed first.
-    expect(rows[2].byGame.map(g => g.key)).toEqual(['Game B']);
+    expect(rows[2].byAspect[0].byGame.map(g => g.key)).toEqual(['Game B']);
     // In Framing section: only Game A.
-    expect(rows[1].byGame.map(g => g.key)).toEqual(['Game A']);
+    expect(rows[1].byAspect[0].byGame.map(g => g.key)).toEqual(['Game A']);
+  });
+
+  it('never mixes aspect ratios within one bucket — a landscape and a portrait game each get their own aspect row', () => {
+    // The bug this rewrite fixes: the first version grouped by GAME first, so a
+    // landscape game's cluster and a portrait game's cluster could land in the
+    // same wrapped line and mix tile heights. Aspect must be the outer axis.
+    const rows = phaseRowsFor([
+      { key: 'Landscape Game', label: 'Landscape Game', projects: [
+        { ...ready, id: 1, aspect_ratio: RATIO.LANDSCAPE },
+      ] },
+      { key: 'Portrait Game', label: 'Portrait Game', projects: [
+        { ...ready, id: 2, aspect_ratio: RATIO.PORTRAIT },
+      ] },
+    ]);
+    const readyRow = rows.find(r => r.stage === DRAFT_STAGE.READY);
+    expect(readyRow.byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+    const portraitBucket = readyRow.byAspect.find(b => b.ratio === RATIO.PORTRAIT);
+    const landscapeBucket = readyRow.byAspect.find(b => b.ratio === RATIO.LANDSCAPE);
+    expect(portraitBucket.byGame.map(g => g.key)).toEqual(['Portrait Game']);
+    expect(landscapeBucket.byGame.map(g => g.key)).toEqual(['Landscape Game']);
+  });
+
+  it('a game with drafts in BOTH aspects for one stage appears once per aspect bucket, never sharing a bucket', () => {
+    const rows = phaseRowsFor([
+      { key: 'Game A', label: 'Game A', projects: [
+        { ...inFraming, id: 1, aspect_ratio: RATIO.LANDSCAPE, has_crop_keyframes: true },
+        { ...inFraming, id: 2, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: true },
+      ] },
+    ]);
+    const framingRow = rows.find(r => r.stage === DRAFT_STAGE.IN_FRAMING);
+    expect(framingRow.byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+    expect(framingRow.byAspect[0].byGame).toEqual([{ key: 'Game A', label: 'Game A', projects: [expect.objectContaining({ id: 2 })] }]);
+    expect(framingRow.byAspect[1].byGame).toEqual([{ key: 'Game A', label: 'Game A', projects: [expect.objectContaining({ id: 1 })] }]);
   });
 
   it('drops a phase entirely when no game has a draft in it', () => {
@@ -190,7 +224,7 @@ describe('phaseRowsFor (T8080 — By Phase view)', () => {
       { key: 'Game B', label: 'Game B', projects: [{ ...notStarted, id: 2 }] },
     ]);
     const readyRow = rows.find(r => r.stage === DRAFT_STAGE.READY);
-    expect(readyRow.byGame.map(g => g.key)).toEqual(['Game A']);
+    expect(readyRow.byAspect[0].byGame.map(g => g.key)).toEqual(['Game A']);
   });
 
   it('an ungrouped "Other reels" entry behaves like any other game group', () => {
@@ -199,20 +233,7 @@ describe('phaseRowsFor (T8080 — By Phase view)', () => {
       { key: '__ungrouped__', label: 'Other reels', projects: [{ ...ready, id: 2 }] },
     ]);
     const readyRow = rows.find(r => r.stage === DRAFT_STAGE.READY);
-    expect(readyRow.byGame.map(g => g.label)).toEqual(['Game A', 'Other reels']);
-  });
-
-  it('each game row carries the same aspect sub-split as stageRowsFor (shared invariant)', () => {
-    const rows = phaseRowsFor([
-      {
-        key: 'Game A', label: 'Game A', projects: [
-          { ...inFraming, id: 1, aspect_ratio: RATIO.LANDSCAPE, has_crop_keyframes: true },
-          { ...inFraming, id: 2, aspect_ratio: RATIO.PORTRAIT, has_crop_keyframes: true },
-        ],
-      },
-    ]);
-    const framingRow = rows.find(r => r.stage === DRAFT_STAGE.IN_FRAMING);
-    expect(framingRow.byGame[0].byAspect.map(b => b.ratio)).toEqual([RATIO.PORTRAIT, RATIO.LANDSCAPE]);
+    expect(readyRow.byAspect[0].byGame.map(g => g.label)).toEqual(['Game A', 'Other reels']);
   });
 
   it('empty input yields no sections', () => {
