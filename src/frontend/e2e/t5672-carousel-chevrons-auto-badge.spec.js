@@ -205,6 +205,11 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     // (helpers/appReady.js), which hung this test to the 60s deployed-target timeout.
     await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
+    // T8080: the Reel Drafts screen now defaults to By-Phase classification, which
+    // does NOT render the game-group stage rows this test pins (T6810). Switch to
+    // By Game explicitly so the assertions below exercise what they're named for.
+    await page.getByRole('button', { name: 'By Game' }).click();
+
     // Splice synthetic drafts under an existing group_key to exercise the
     // T6810 stage rows DETERMINISTICALLY (the real account's stages vary):
     // force one portrait+one landscape draft into In Framing (mixed-aspect
@@ -258,16 +263,20 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
 
     // The mixed-aspect In Framing stage sub-splits: one carousel per aspect,
     // portrait first, ratios in the aria-labels + visible aspect chips.
-    const portraitRow = page.locator('[role="group"][aria-label*="In Framing"][aria-label*="9:16"]');
-    const landscapeRow = page.locator('[role="group"][aria-label*="In Framing"][aria-label*="16:9"]');
+    // Rendered label is "In Focus" (T7700 renamed it; the internal stage key
+    // and its testid stay "in_framing" -- this was stale "In Framing" text
+    // that silently no-op'd these assertions before T8080's By-Game click
+    // made this test reach real draft rows again).
+    const portraitRow = page.locator('[role="group"][aria-label*="In Focus"][aria-label*="9:16"]');
+    const landscapeRow = page.locator('[role="group"][aria-label*="In Focus"][aria-label*="16:9"]');
     await expect(portraitRow).toHaveCount(1);
     await expect(landscapeRow).toHaveCount(1);
-    const framingLabels = await page.locator('[role="group"][aria-label*="In Framing"]').evaluateAll(
+    const framingLabels = await page.locator('[role="group"][aria-label*="In Focus"]').evaluateAll(
       (els) => els.map((el) => el.getAttribute('aria-label'))
     );
     const portraitIdx = framingLabels.findIndex((l) => l?.includes('9:16'));
     const landscapeIdx = framingLabels.findIndex((l) => l?.includes('16:9'));
-    console.log(`In Framing row order: ${JSON.stringify(framingLabels)}`);
+    console.log(`In Focus row order: ${JSON.stringify(framingLabels)}`);
     expect(portraitIdx).toBeGreaterThanOrEqual(0);
     expect(landscapeIdx).toBeGreaterThan(portraitIdx);
     expect(await page.getByText('9:16', { exact: true }).count()).toBeGreaterThan(0);

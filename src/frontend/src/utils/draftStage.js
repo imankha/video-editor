@@ -110,23 +110,63 @@ export function splitByStage(list) {
 }
 
 /**
- * Stage rows for a draft list — one entry per pipeline stage present, each
- * carrying its aspect sub-rows (T6810). Not-Started drafts all render
- * landscape (DraftTile sizes them at source aspect regardless of target
- * ratio, T6800), so that stage gets ONE row with no aspect chip (ratio null)
- * instead of a split that would separate identically-shaped tiles by an
- * invisible target ratio. Every other stage buckets by RENDERED aspect
- * (splitByRenderedAspect), so an In-Framing draft that hasn't been cropped yet
- * — which DraftTile renders landscape (T6900) — groups with the landscape
- * tiles instead of its target-ratio row. This null-ratio branch,
+ * Aspect sub-rows for ONE stage's projects (T6810, extracted for T8080 so the
+ * By-Phase view's phase-then-game grouping can reuse the exact same
+ * row-height invariant instead of re-deriving it). Not-Started drafts all
+ * render landscape (DraftTile sizes them at source aspect regardless of
+ * target ratio, T6800), so that stage gets ONE row with no aspect chip
+ * (ratio null) instead of a split that would separate identically-shaped
+ * tiles by an invisible target ratio. Every other stage buckets by RENDERED
+ * aspect (splitByRenderedAspect), so an In-Framing draft that hasn't been
+ * cropped yet — which DraftTile renders landscape (T6900) — groups with the
+ * landscape tiles instead of its target-ratio row. This null-ratio branch,
  * splitByRenderedAspect, and DraftTile's landscape override are the halves of
  * the same row-height invariant — change together via rendersSourceAspect.
+ */
+export function aspectRowsForStage(stage, projects) {
+  return stage === DRAFT_STAGE.NOT_STARTED
+    ? [{ ratio: null, projects }]
+    : splitByRenderedAspect(projects);
+}
+
+/**
+ * Stage rows for a draft list — one entry per pipeline stage present, each
+ * carrying its aspect sub-rows via aspectRowsForStage (T6810).
  */
 export function stageRowsFor(draftList) {
   return splitByStage(draftList).map(({ stage, projects }) => ({
     stage,
-    byAspect: stage === DRAFT_STAGE.NOT_STARTED
-      ? [{ ratio: null, projects }]
-      : splitByRenderedAspect(projects),
+    byAspect: aspectRowsForStage(stage, projects),
   }));
+}
+
+/**
+ * By-Phase view (T8080) — flips stageRowsFor's primary axis: one entry per
+ * pipeline stage present (pipeline order), each carrying one row per game
+ * present in that stage. Games/phases with no drafts in a given stage are
+ * dropped, mirroring splitByStage's empty-bucket behavior.
+ *
+ * `orderedGameGroups` must already be in the SAME order the By-Game view uses
+ * (ProjectManager's `groupedProjects.sortedKeys`, "Other reels" appended last)
+ * so the two views can never disagree on game ordering — only which axis is
+ * outermost.
+ *
+ * @param {Array<{key: string, label: string, projects: Array}>} orderedGameGroups
+ */
+export function phaseRowsFor(orderedGameGroups) {
+  return DRAFT_STAGE_ORDER.map(stage => {
+    const byGame = orderedGameGroups
+      .map(({ key, label, projects }) => {
+        const stageProjects = projects.filter(project => getDraftStage(project) === stage);
+        return stageProjects.length > 0
+          ? { key, label, byAspect: aspectRowsForStage(stage, stageProjects) }
+          : null;
+      })
+      .filter(Boolean);
+
+    const count = byGame.reduce(
+      (n, game) => n + game.byAspect.reduce((m, bucket) => m + bucket.projects.length, 0), 0
+    );
+    return { stage, count, byGame };
+  }).filter(({ count }) => count > 0);
 }

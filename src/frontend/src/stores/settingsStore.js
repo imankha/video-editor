@@ -25,6 +25,10 @@ const DEFAULT_SETTINGS = {
     statusFilter: 'all',
     aspectFilter: 'all',
     creationFilter: 'all',
+    // T8080: primary classification of the Reel Drafts list — 'phase' (pipeline
+    // stage, sub-grouped by game) or 'game' (today's grouping). Session-only,
+    // same as the other projectFilters fields.
+    classification: 'phase',
   },
   framing: {
     includeAudio: true,
@@ -139,6 +143,10 @@ export const useSettingsStore = create((set, get) => ({
 
   setCreationFilter: (value) => {
     set(state => ({ settings: deepMerge(state.settings, { projectFilters: { creationFilter: value } }) }));
+  },
+
+  setClassification: (value) => {
+    set(state => ({ settings: deepMerge(state.settings, { projectFilters: { classification: value } }) }));
   },
 
   // Framing setters

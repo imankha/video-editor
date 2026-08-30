@@ -45,7 +45,7 @@ import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
-import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor } from '../utils/draftStage';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
 
 // Shared layout class strings for the Games tab poster grid (T5681/T6310). The
 // loaded games grid AND its loading skeleton both consume these so the skeleton
@@ -71,14 +71,13 @@ const GAMES_GROUP_SECTION_CLASS = 'lg:grid lg:grid-cols-[8rem_minmax(0,1fr)] lg:
 const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start '
   + 'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:block';
 
-// T6810: the stage-labeled carousel rows for one draft list (a game group or
-// "Other reels"). ONE renderer for both call sites so the two surfaces can
-// never drift. Each stage row = a label chip (legend-tinted stage name +
-// count) then one carousel per aspect present within that stage; the aspect
-// chip only appears when a stage actually mixes aspects (mirrors the old
-// byAspect behavior, now scoped per stage).
-function DraftStageRows({
-  byStage,
+// T6810/T8080: labeled carousel rows for one draft list. ONE renderer shared by
+// every call site (a game group's stage rows, "Other reels", and T8080's
+// By-Phase game rows) so they can never drift. Each row = a label chip
+// (tinted name + count) then one carousel per aspect present within that row;
+// the aspect chip only appears when a row actually mixes aspects.
+function DraftCarouselRows({
+  rows,
   ariaPrefix,
   onSelectProject,
   onSelectProjectWithMode,
@@ -86,15 +85,15 @@ function DraftStageRows({
   exportingProject,
   pendingGameIds,
 }) {
-  return byStage.map(({ stage, byAspect }) => {
-    const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
+  return rows.map(({ key, testId, label, tint, byAspect }) => {
+    const rowCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
     return (
-      <div key={stage} data-testid={`stage-row-${stage}`}>
+      <div key={key} data-testid={testId}>
         <div className="px-3 pb-1 flex items-center gap-1.5">
-          <span className={`text-[10px] font-semibold ${DRAFT_STAGE_TINTS[stage]} bg-gray-700/40 px-1.5 py-0.5 rounded`}>
-            {DRAFT_STAGE_LABELS[stage]}
+          <span className={`text-[10px] font-semibold ${tint} bg-gray-700/40 px-1.5 py-0.5 rounded`}>
+            {label}
           </span>
-          <span className="text-[10px] text-gray-500">{stageCount}</span>
+          <span className="text-[10px] text-gray-500">{rowCount}</span>
         </div>
         {byAspect.map(({ ratio, projects: aspectProjects }) => (
           <div key={ratio ?? 'source'}>
@@ -106,7 +105,7 @@ function DraftStageRows({
               </div>
             )}
             <CardCarousel
-              ariaLabel={`${ariaPrefix} ${DRAFT_STAGE_LABELS[stage]}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
+              ariaLabel={`${ariaPrefix} ${label}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
             >
               {aspectProjects.map(project => (
                 <DraftTile
@@ -125,6 +124,32 @@ function DraftStageRows({
       </div>
     );
   });
+}
+
+// By-Game view (T6810): one row per pipeline stage present within a game group
+// or "Other reels". Wraps DraftCarouselRows, keeping the exact stage-row-*
+// testid the existing e2e coverage asserts on.
+function DraftStageRows({ byStage, ...rest }) {
+  const rows = byStage.map(({ stage, byAspect }) => ({
+    key: stage,
+    testId: `stage-row-${stage}`,
+    label: DRAFT_STAGE_LABELS[stage],
+    tint: DRAFT_STAGE_TINTS[stage],
+    byAspect,
+  }));
+  return <DraftCarouselRows rows={rows} {...rest} />;
+}
+
+// By-Phase view (T8080): one row per game present within a phase section.
+function DraftGameRows({ byGame, ...rest }) {
+  const rows = byGame.map(({ key, label, byAspect }) => ({
+    key,
+    testId: `game-row-${key}`,
+    label,
+    tint: 'text-gray-300',
+    byAspect,
+  }));
+  return <DraftCarouselRows rows={rows} {...rest} />;
 }
 
 // T7290: the Games tab organizes by MATCH date, the date the user thinks in and the
@@ -399,9 +424,10 @@ export function ProjectManager({
     setStatusFilter,
     setAspectFilter,
     setCreationFilter,
+    setClassification,
   } = useSettingsStore();
 
-  const { statusFilter, aspectFilter, creationFilter } = settings.projectFilters;
+  const { statusFilter, aspectFilter, creationFilter, classification } = settings.projectFilters;
 
   // Viewport-aware cache warming: promote visible game videos in the warm queue
   useEffect(() => {
@@ -672,6 +698,23 @@ export function ProjectManager({
 
     return { groups, sortedKeys, ungrouped, ungroupedByStage: stageRowsFor(ungrouped) };
   }, [filteredProjects, getProjectStatusCounts]);
+
+  // T8080: the same drafts, primary axis flipped to pipeline stage. Reuses
+  // groupedProjects' own game ordering verbatim (sortedKeys, already
+  // "incomplete first, then most recent game date") so the two views can
+  // never disagree on the RELATIVE order of two real games -- only which
+  // axis is outermost. "Other reels" is appended last here (By Game renders
+  // it first, above sortedKeys); that's a deliberate per-view placement
+  // choice, not an ordering disagreement about games themselves.
+  const groupedByPhase = useMemo(() => {
+    const orderedGameGroups = groupedProjects.sortedKeys.map(key => ({
+      key, label: key, projects: groupedProjects.groups[key].projects,
+    }));
+    if (groupedProjects.ungrouped.length > 0) {
+      orderedGameGroups.push({ key: '__ungrouped__', label: 'Other reels', projects: groupedProjects.ungrouped });
+    }
+    return phaseRowsFor(orderedGameGroups);
+  }, [groupedProjects]);
 
   // Compute most recent items for "Continue Where You Left Off" section
   const recentItems = useMemo(() => {
@@ -1466,12 +1509,41 @@ export function ProjectManager({
               </div>
             )}
 
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
                 {filteredProjects.length === projects.length
                   ? `Your ${SECTION_NAMES.DRAFTS}`
                   : `Showing ${filteredProjects.length} of ${projects.length} ${SECTION_NAMES.DRAFTS}`}
               </h2>
+              {/* T8080: primary classification toggle, session-only (never persisted,
+                  same as the other project filters), default By Phase. Deliberately NOT
+                  role="group" -- CardCarousel already owns that role for its carousel
+                  rows on this screen (aria-label="... drafts"), and several e2e specs
+                  locate carousels via an unqualified [role="group"]; aliasing it here
+                  would make this toggle the first match and silently void those
+                  assertions instead of failing loudly. */}
+              {filteredProjects.length > 0 && (
+                <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
+                  {[
+                    { value: 'phase', label: 'By Phase' },
+                    { value: 'game', label: 'By Game' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setClassification(opt.value)}
+                      aria-pressed={classification === opt.value}
+                      className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded-md transition-colors ${
+                        classification === opt.value
+                          ? `${REEL.bg} text-white`
+                          : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
@@ -1488,11 +1560,40 @@ export function ProjectManager({
                     {`Clear filters (show all ${projects.length})`}
                   </button>
                 </div>
+              ) : classification === 'phase' ? (
+                <>
+                  {/* T8080: By Phase — one section per pipeline stage present
+                      (Not Started -> In Focus -> In Overlay -> Ready), each
+                      sub-grouped by game (one labeled carousel row per game,
+                      aspect-split within so no row ever mixes tile heights). */}
+                  {groupedByPhase.map(({ stage, count, byGame }) => (
+                    <div key={stage} className="mb-2" data-testid={`phase-section-${stage}`}>
+                      <div className="flex items-center gap-2 px-3 py-2 min-h-11">
+                        <span className={`text-sm font-medium flex-1 ${DRAFT_STAGE_TINTS[stage]}`}>
+                          {DRAFT_STAGE_LABELS[stage]}
+                        </span>
+                        <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                          {count}
+                        </span>
+                      </div>
+                      <DraftGameRows
+                        byGame={byGame}
+                        ariaPrefix={`${DRAFT_STAGE_LABELS[stage]} drafts`}
+                        onSelectProject={onSelectProject}
+                        onSelectProjectWithMode={onSelectProjectWithMode}
+                        onDeleteProject={onDeleteProject}
+                        exportingProject={exportingProject}
+                        pendingGameIds={pendingGameIds}
+                      />
+                    </div>
+                  ))}
+                </>
               ) : (
                 <>
-                  {/* Ungrouped drafts (no game) -> one "Other reels" section; one
-                      labeled carousel row per pipeline stage present, each stage
-                      aspect-split so row heights stay consistent (T6810) */}
+                  {/* By Game — Ungrouped drafts (no game) -> one "Other reels"
+                      section; one labeled carousel row per pipeline stage
+                      present, each stage aspect-split so row heights stay
+                      consistent (T6810) */}
                   {groupedProjects.ungrouped.length > 0 && (
                     <div className="mb-2">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
