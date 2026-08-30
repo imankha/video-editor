@@ -250,44 +250,6 @@ function generateClipId() {
   return `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-/**
- * T6400: resolve the layer a NEW clip should default to when a game is opened,
- * by inheriting the layer of the game's MOST RECENTLY CREATED own clip.
- *
- * Returns true for My Athlete, false for Team (matching the `newClipLayerIsMine`
- * boolean). This is the game-open seed (case 2b); thereafter the value is driven
- * imperatively by layer-assignment gestures (creating a clip, or changing a
- * clip's layer via a per-clip control) — never by a state-watching effect.
- *
- * Resolution:
- *  - Most recent OWN clip = highest raw_clip id. Imported clips (`shared_by` set)
- *    are IGNORED: their Team layer is forced (epic decision 2) and expresses no
- *    intent, so they must not drag the default to Team.
- *  - No own clip (empty game, or only imported clips) => My Athlete (true), the
- *    app's default, returned explicitly.
- *
- * `annotations` are the raw `/load` shape (snake_case `my_athlete`/`shared_by`,
- * `id` = raw_clip id). Layer read uses the legacy-NULL rule (`my_athlete ?? true`,
- * NULL/1 = My Athlete, 0/false = Team) — never a truthiness check on the bit.
- */
-export function resolveInheritedNewClipLayer(annotations) {
-  if (!Array.isArray(annotations) || annotations.length === 0) return true;
-
-  let bestId = -Infinity;
-  let bestIsMine = null;
-  for (const a of annotations) {
-    if (a.shared_by != null) continue; // imported clip — not a signal
-    const rawId = a.id ?? a.raw_clip_id ?? a.rawClipId;
-    if (rawId == null) continue;
-    if (rawId > bestId) {
-      bestId = rawId;
-      bestIsMine = (a.my_athlete ?? true) !== false;
-    }
-  }
-
-  return bestIsMine == null ? true : bestIsMine;
-}
-
 export default function useAnnotate(videoMetadata, { selectedRegionId = null, onSelect } = {}) {
   // Clip regions
   const [clipRegions, setClipRegions] = useState([]);

@@ -1,5 +1,10 @@
 ---
 domain: annotate
+updated: 2026-08-29 (T8030 reverses T6400's inherit-last-layer new-clip default: a new clip now
+always defaults to My Athlete regardless of the previous clip's layer -- reported live-testing
+staging as "Add Clip defaults to Team" and confirmed the old inherited behavior was working exactly
+as T6400 designed, so this is a product reversal; `resolveInheritedNewClipLayer` deleted from
+`useAnnotate.js` -- see Invariants "New-clip layer always defaults to My Athlete (T8030)")
 updated: 2026-08-28 (T7930 "annotation_completed" is watched-video, not a clip: relabeled "Annotation Done" -> "Watched Annotate Video" on every admin surface (analytics.FLOW_EVENTS + FunnelChart/UserTable/PlatformBreakdown); event KEY + daily_col unchanged (stored history); the "credit survives content deletion" half is the quests.py LIFETIME-achievement mechanism, a SEPARATE finding from T7870's delete bug — see Landmines "annotation_completed fires on watched video, not clips (T7930)")
 updated: 2026-08-25 (T7590 mobile "Add your first game" dead-end ROOT-CAUSED + fixed: GameDetailsModal panel was fixed-centered with NO max-height/scroll, so on short iPhone viewports (reports 320x498, 352x541) the submit + close controls clipped off-screen unreachable — added max-h-[90vh] overflow-y-auto; see Landmines "GameDetailsModal short-viewport dead-end (T7590)")
 updated: 2026-08-25 (T7470 upload-failure cleanup is only-if-empty: DELETE /api/games/{id}?only_if_empty=true refuses to cascade-delete a game with raw_clips or viewed_duration>0; protects annotate-during-upload — see Landmines "Upload-failure cleanup is ONLY-IF-EMPTY (T7470)")
@@ -222,20 +227,20 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `AnnotateContainer.handleLoadGame` (the game-open gesture), never via a state-watching effect, and
   never persisted (no store write, no API call). Timeline marker tint (`ClipRegionLayer.jsx`) is
   a secondary cue (colored border/underline), not a replacement for the rating-hue primary signal.
-- **New-clip layer is INHERITED, not toggled (T6400 — supersedes T5700's "Surface (a)").** The
-  "New clips go to:" mode toggle in the `ClipsSidePanel` header was REMOVED (it cost sidebar space
-  for little value). A new clip now defaults to the LAST layer the user assigned. `newClipLayerIsMine`
-  is still the ephemeral, screen-owned boolean in `useAnnotateState.js` (never persisted), but its
-  setter is now internal to `AnnotateContainer` and driven by GESTURES, never a control:
-  resolution order — (a) the last layer assigned this session (creating a clip via
-  `handleFullscreenCreateClip`, or changing a clip's layer via `updateClipRegionWithSync` — both
-  call `setNewClipLayerIsMine` imperatively; the switch path IGNORES imported clips, `shared_by`
-  set, whose Team layer is forced and expresses no intent); else (b) on game open, seeded from the
-  game's most recently created OWN clip (`resolveInheritedNewClipLayer(gameData.annotations)`,
-  exported from `useAnnotate.js` — highest raw_clip `id`, skipping `shared_by` clips, legacy-NULL
-  rule for the layer read); else (c) My Athlete for a game with no own clips. Still reset per game
-  open (via 2b) and NEVER via a state-watching effect (the banned reactive shape — it would also
-  fight the user mid-edit). No sessionStorage, no DB column, no backend change.
+- **New-clip layer always defaults to My Athlete (T8030, 2026-08-29 — REVERSES T6400's
+  inherit-last-layer default below).** T6400's "inherited, not toggled" design made a Team clip
+  "stick" as the default for every subsequent Add Clip in that game until manually switched back —
+  reported as a bug live-testing staging ("Add Clip defaults to My Team"), and confirmed working
+  exactly as T6400 designed it, so the fix is a product reversal, not a bug fix in the mechanism.
+  `resolveInheritedNewClipLayer` (the game-open/last-assigned resolver) is DELETED — `useAnnotate.js`
+  no longer exports it. `newClipLayerIsMine` (still the ephemeral, screen-owned boolean in
+  `useAnnotateState.js`, never persisted) is now reset to `true` unconditionally on every game-open
+  gesture (`AnnotateContainer.handleLoadGame`) and is NEVER updated by layer-assignment gestures
+  (creating a clip, switching a clip's layer) — those gestures still write `my_athlete` on the CLIP
+  itself via the normal surgical path, they just no longer feed back into the next clip's default.
+  T6400's original point still stands and is UNCHANGED: the "New clips go to:" mode-toggle control
+  in the `ClipsSidePanel` header stays removed (it cost sidebar space for little value) — there is
+  still no control, just a fixed default now instead of an inherited one.
 - **Teammate tagging is Team-layer only (T5725).** Teammates <-> Team is now a hard invariant: the
   Teammates control (`ClipDetailsEditor.jsx`, `AnnotateFullscreenOverlay.jsx`) renders ONLY when the
   clip is on the Team layer (`(my_athlete ?? true) === false`), replacing the old `!isMobile` gate --

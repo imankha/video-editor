@@ -53,9 +53,9 @@ export function ClipsSidePanel({
   onOverlayClose,
   teammateSuggestions = [],
   boundaryOffsets,
-  // T6400: which layer a NEW clip lands on. No longer a toggle here — it is
-  // inherited from the last layer the user assigned (seeded on game open from
-  // the most recent own clip). Still threaded to the inline add-clip overlay below.
+  // T8030: which layer a NEW clip lands on. No toggle here — it always defaults
+  // to My Athlete (reset on game open). Still threaded to the inline add-clip
+  // overlay below.
   newClipLayerIsMine = true,
   layerFilter = 'all',
   onSetLayerFilter,
@@ -178,10 +178,11 @@ export function ClipsSidePanel({
             </div>
             <p className="text-xs text-gray-500 mb-2">Click timeline to add clip</p>
 
-            {/* T6400: the "New clips go to" mode toggle was removed here. A new
-                clip now inherits the last layer the user assigned (see
-                resolveInheritedNewClipLayer + the create/switch gestures in
-                AnnotateContainer), so the control no longer costs sidebar space. */}
+            {/* T6400 removed the "New clips go to" mode toggle to save sidebar
+                space; T8030 dropped the inherit-last-layer default it was
+                replaced with (it made a Team clip "stick" as the default until
+                manually switched back). A new clip now always starts on My
+                Athlete — see handleLoadGame in AnnotateContainer. */}
 
             {/* Surface (e): clip-list layer filter — client-side only, ephemeral. */}
             <div className="flex flex-wrap items-center gap-1.5 mb-3">
