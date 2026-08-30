@@ -195,15 +195,26 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // would route through Home for the fetch's duration (resolveEditorScreen
   // sends editorMode=framing with no selectedProject to Home) and a failed
   // fetch would strand the user there with no feedback.
-  const openClipInFocus = useCallback(async (autoProjectId) => {
+  const openClipInEditorMode = useCallback(async (autoProjectId, mode) => {
     persistAnnotateProgress();
     const project = await selectProject(autoProjectId);
     if (!project) {
       toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
       return;
     }
-    onModeChange?.(EDITOR_MODES.FRAMING);
+    onModeChange?.(mode);
   }, [persistAnnotateProgress, selectProject, onModeChange]);
+
+  const openClipInFocus = useCallback(
+    (autoProjectId) => openClipInEditorMode(autoProjectId, EDITOR_MODES.FRAMING),
+    [openClipInEditorMode]
+  );
+  // T8060: once Focus has been exported (project.has_working_video), the Reel
+  // control's next-stage button is Overlay, not Focus again.
+  const openClipInOverlay = useCallback(
+    (autoProjectId) => openClipInEditorMode(autoProjectId, EDITOR_MODES.OVERLAY),
+    [openClipInEditorMode]
+  );
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -654,6 +665,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           layerFilter={layerFilter}
           onSetLayerFilter={setLayerFilter}
           onOpenClipInFocus={openClipInFocus}
+          onOpenClipInOverlay={openClipInOverlay}
         />
       </div>
       {/* Mobile sidebar overlay */}
