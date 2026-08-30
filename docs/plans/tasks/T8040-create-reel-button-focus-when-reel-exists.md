@@ -1,6 +1,6 @@
 # T8040: Replace disabled "Create Reel" button with a Focus button when a reel already exists
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-29 (reported live-testing staging)
@@ -77,3 +77,15 @@ for T8040 wasn't worth the risk of losing more time; flagging this explicitly
 rather than claiming a live-tested result. Recommend the user click through the
 flow (a clip with an existing reel -> Focus button -> lands in Focus on that reel)
 before merging.
+
+**2026-08-30**: Root-caused the local hangs: an orphaned uvicorn --reload process
+tree from 8/19 (10 days stale) was still bound to port 8000 alongside a newer,
+also-wedged tree from this morning -- both silently accepted TCP connections but
+never responded, explaining every prior timeout (curl/PowerShell/Playwright fetch
+all hung identically). Killed all uvicorn/multiprocessing.spawn_main PIDs, started
+a single fresh instance, dev-login completed in 4s. Live-verified in the real
+browser as imankh@gmail.com (game "Vs g1 Jan 22", clip with an existing reel
+"Clip 162"): the Reel row shows an enabled Focus button (not disabled), clicking
+it navigates straight to /focus with the correct clip/reel loaded (breadcrumb
+"Reel Drafts > Clip 162", crop keyframes present, no Home-screen flash). Merged
+to master via PR #309 (squash, CI green).

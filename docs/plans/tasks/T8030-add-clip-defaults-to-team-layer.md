@@ -1,6 +1,6 @@
 # T8030: "Add Clip" sometimes defaults to Team layer instead of My Athlete
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-29 (reported live-testing staging)
@@ -78,6 +78,14 @@ opened against master. **Not manually verified in a browser this session** — s
 T8040's progress log for the same environment caveat. Recommend a quick click-
 through (create a Team clip, click Add Clip again, confirm it offers My Athlete)
 before merging.
+
+**2026-08-30**: Fixed the local dev-login hangs (see T8040's progress log — an
+orphaned/stuck uvicorn process pair on port 8000, unrelated to this change).
+Live-verified as imankh@gmail.com on "New Game": created a clip, switched it to
+Team, saved (Clip 2, Team layer, confirmed in the sidebar); clicked Add Clip
+again — the new form defaulted to "My Athlete layer" (checked), not Team,
+confirming the fix. Cleaned up the test Team clip afterward. Merged to master
+via PR #310 (squash, CI green).
 
 ## Acceptance Criteria
 
