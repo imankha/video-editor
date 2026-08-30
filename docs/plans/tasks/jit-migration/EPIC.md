@@ -192,15 +192,51 @@ correct response to a CAS refusal on the migration path is re-pull-then-retry-on
 are pinned to one machine ([[project_fire_and_forget_deferred]]), assume the cross-machine shape is
 reachable.
 
-### 4. The conflict banner must be split before cutover (T5081)
+### 4. A related false-conflict class was upstream of the CAS guard, not inside it (T5081)
 
-| Local copy | Meaning | Correct handling |
-|---|---|---|
-| Has unsynced local writes | Genuinely ambiguous — real user data on both sides | Freeze, log CRITICAL, ask the user (current behavior, correct) |
-| Clean (no unsynced writes), R2 ahead | Nothing to arbitrate | Re-pull under the write lock, retry the upload once, stay silent |
+**Corrected 2026-08-29, twice (T5081 implementation, expert design review + reviewer catch):** this
+section originally proposed a clean/dirty discriminator at the CAS refusal site in `storage.py`, on
+the theory that 2026-08-04 was "a read-only warmed copy against a healed R2 copy" — i.e. a case with
+nothing to arbitrate. That diagnosis was wrong, and the fix built on it does not work. A first
+correction pass then over-corrected the other way, crediting T5081's actual fix as "the true
+mechanism behind the 2026-08-04 incident" — also wrong, caught in review: the incident's own log line
+(`method=GET`) rules that out, since `retry_pending_sync` only ever runs on a WRITE request
+(`WRITE_METHODS` gate, `db_sync.py`). Both corrections are folded in below.
 
-2026-08-04 was entirely row two: a read-only warmed copy against a healed R2 copy, and the user was
-still asked to adjudicate a decision with one possible answer.
+- **What 2026-08-04 actually was: finding 1 above, full stop.** The out-of-band T5830 heal moved R2
+  to v2866 while the long-lived uvicorn process's in-memory `_user_db_versions` cache stayed at v2865
+  (`get_local_db_version` prefers the cache over the file). The first post-login request's own
+  `_background_sync` → `sync_db_to_r2_explicit` (NOT `retry_pending_sync`, which never runs on a GET)
+  refused the CAS check against that stale in-memory baseline — a real, correct refusal, because the
+  local copy genuinely was dirty (session-init's `archive_completed_projects` had just written to it)
+  and genuinely was behind R2. Nothing in T5081 touches this path or would have changed that outcome.
+- **What T5081 actually fixes: a DIFFERENT, real defect found while investigating the incident, not
+  its cause.** `.sync_pending` was the one marker T6390 never scoped per-DB — it stayed a single
+  per-USER file while `.sync_conflict`/`.sync_failed` were already split per scope. So
+  `retry_pending_sync` (which DOES run on a later WRITE request once something is marked pending)
+  read "the user has *something* pending" and re-uploaded BOTH profile.sqlite and user.sqlite
+  unconditionally (a plain file-exists check, not "does THIS db have anything pending") — a write to
+  user.sqlite alone made the retry also re-attempt a profile.sqlite that had nothing queued, and if
+  R2 had moved ahead there for any unrelated reason, that re-upload would trip a real CAS conflict
+  against a copy with nothing to arbitrate. This is a genuine, separate false-conflict class; it does
+  not require 2026-08-04 to justify fixing.
+- **The fix** finishes T6390's scoping for `.sync_pending` (same per-scope marker files, gate
+  `retry_pending_sync`'s branches on `has_sync_pending_scope` for that db, retry EVERY pending profile
+  of the user rather than only the caller's own) instead of adding a discriminator to the CAS
+  primitive. No `storage.py` changes; migrations-path retry-once logic belongs to **T5083** (which has
+  the migration-runner context needed to safely re-apply, not this primitive).
+- **Implementation grew past the initial scoping** (5 further review rounds, 2026-08-29/30): the
+  per-scope marker is a DURABILITY record (INV-P), so every place that CLEARS it needed the same
+  compare-and-clear discipline the upload path already had — first for uploads (a marker must not be
+  discharged if a newer write re-marked the scope mid-upload), then, less obviously, for RESTORES too
+  (a CAS conflict's re-pull can equally race a concurrent write, and — the harder-won finding — the
+  restore that actually discharges a marker is very often NOT the conflict-retry endpoint itself but
+  an ordinary unrelated request that happens to trigger the same first-access re-pull first). The
+  shipped design clears `.sync_pending` at every site that performs a real restore-if-newer swap
+  (`ensure_database`, `ensure_user_database`, `ensure_user_database_fresh`,
+  `materialization.ensure_profile_db_local`, `migrations._migrate_profile_db`), never at a caller
+  guessing whether it was the one that just restored. See
+  [T5081](T5081-clean-copy-conflict-self-heal.md)'s progress log for the full round-by-round record.
 
 ### 5. The non-login writer list is concrete (T5085)
 

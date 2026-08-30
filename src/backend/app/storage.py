@@ -2236,14 +2236,25 @@ def delete_local_profile_data(user_id: str, profile_id: str) -> bool:
     """
     import shutil
 
-    from .database import USER_DATA_BASE
+    from .database import USER_DATA_BASE, clear_scope_markers
 
     profile_path = USER_DATA_BASE / user_id / "profiles" / profile_id
     if not profile_path.exists():
+        # T5081 (INV-P clear reason c): an already-gone dir can still have a
+        # live .sync_pending/.sync_conflict/.sync_failed marker (e.g. a delete
+        # that ran before this cleanup existed) — that marker can never be
+        # discharged (no db left to upload or restore) and wedges
+        # has_sync_pending/has_sync_conflict true forever with no gesture able
+        # to clear it. Clear here too, not only on the rmtree path below.
+        clear_scope_markers(user_id, profile_id)
         return True
 
     try:
         shutil.rmtree(profile_path)
+        # T5081 (INV-P clear reason c): clear AFTER the delete succeeds, never
+        # before — clearing first and then failing the rmtree would lose the
+        # pending record for data that is still sitting on disk.
+        clear_scope_markers(user_id, profile_id)
         logger.info(f"Deleted local data for profile {profile_id} of user {user_id}")
         return True
     except Exception as e:

@@ -18,6 +18,7 @@ import logging
 import sqlite3
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
@@ -58,35 +59,23 @@ DB_SIZE_CRITICAL_THRESHOLD = 768 * 1024  # 768KB - sync performance degrades
 # ---------------------------------------------------------------------------
 
 def _sync_pending_path(user_id: str) -> Path:
-    """Path to marker file indicating unsynced writes."""
+    """Path to the LEGACY (unscoped) pending marker. `scope=None` callers and a
+    marker written by a previous deploy still land/read here."""
     return USER_DATA_BASE / user_id / ".sync_pending"
 
 
-def mark_sync_pending(user_id: str) -> None:
-    """Write marker file indicating this user has unsynced writes."""
-    path = _sync_pending_path(user_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(str(time.time()))
-
-
-def clear_sync_pending(user_id: str) -> None:
-    """Remove marker file after successful sync."""
-    path = _sync_pending_path(user_id)
-    path.unlink(missing_ok=True)
-
-
-def has_sync_pending(user_id: str) -> bool:
-    """Check if this user has unsynced writes from a previous request."""
-    return _sync_pending_path(user_id).exists()
-
-
 # ---------------------------------------------------------------------------
-# T4310/T5870/T6390: CAS-conflict and genuine-failure markers.
+# T4310/T5870/T6390/T5081: CAS-conflict, genuine-failure, and pending markers.
 #
 # T4310 introduced .sync_conflict; T5870 added .sync_failed (a definitively-failed
 # sync the bounded re-drain could not heal, distinct from a merely-PENDING one).
 # Both drive the "Could not save to the cloud" banner and both LEAVE .sync_pending
-# set, so the existing retry UX is unchanged.
+# set, so the existing retry UX is unchanged. T5081 scoped .sync_pending itself
+# the same way (see mark_sync_pending/has_sync_pending_scope below) — it was the
+# last unscoped marker in this family. UNLIKE conflict/failed (alarm state,
+# clearable on judgement), pending is a DURABILITY RECORD — see the INV-P
+# comment above mark_sync_pending for its stricter three-reason-only clear rule
+# and why `scope` is required (no `scope=None`) on pending's mark/clear.
 #
 # T6390 fixes a correctness defect AND adds diagnostics:
 #   * SCOPING — the markers were per-USER files (USER_DATA_BASE/{user_id}/.sync_*)
@@ -106,9 +95,11 @@ def has_sync_pending(user_id: str) -> bool:
 #     Readers TOLERATE the legacy bare `str(time.time())` body (a marker written by
 #     the running deploy) and the legacy unscoped path — never raise on them.
 #
-# Backward-compatible signatures: `scope=None` on mark_* writes the legacy bare
-# file and on clear_* clears ALL scopes + the legacy file (reserved for genuine
-# full-recovery callers and legacy tolerance — NOT a single-DB success path).
+# Backward-compatible signatures (CONFLICT/FAILED ONLY — pending's mark/clear
+# require an explicit scope, see INV-P above): `scope=None` on mark_* writes
+# the legacy bare file and on clear_* clears ALL scopes + the legacy file
+# (reserved for genuine full-recovery callers and legacy tolerance — NOT a
+# single-DB success path).
 # ---------------------------------------------------------------------------
 
 USER_DB_SCOPE = "user"  # marker scope for user.sqlite (profile DBs use their profile_id)
@@ -167,6 +158,238 @@ def _has(user_id: str, kind: str) -> bool:
         return any(_marker_dir(user_id).glob(f".sync_{kind}.*"))
     except OSError:
         return False
+
+
+_PENDING_KIND = "pending"
+
+# ---------------------------------------------------------------------------
+# T5081 — INV-P, the pending-marker invariant (expert design, review round 3):
+#
+#   `.sync_pending.{scope}` exists  <=>  that scope's local DB may hold
+#   committed writes not yet confirmed present in R2.
+#
+#   SET by: a write observed for that scope, or an upload attempt for that
+#   scope that did not confirm success.
+#   CLEARED by exactly three things, and NOTHING else:
+#     (a) the code that just received success=True from the R2 upload
+#         primitive FOR THAT EXACT SCOPE (sync_db_to_r2_explicit /
+#         sync_user_db_to_r2_explicit — the only two callers; sync_db_to_cloud
+#         is a separate legacy primitive with no production caller left after
+#         T5081 and does NOT participate in INV-P);
+#     (b) a restore-if-newer that actually replaced that scope's local DB
+#         with R2's copy — the peer fact to recording the new baseline via
+#         set_local_db_version/set_local_user_db_version. EVERY site that
+#         performs that download+swap clears its own scope right after
+#         recording the baseline: database.ensure_database (site 1),
+#         services.user_db.ensure_user_database (site 2),
+#         services.user_db.ensure_user_database_fresh (site 3),
+#         services.materialization.ensure_profile_db_local (site 4),
+#         migrations._migrate_profile_db (site 5). There is deliberately no
+#         SINGLE call site for reason (b) — a caller like a CAS-conflict
+#         retry endpoint cannot tell whether IT performed the restore or an
+#         earlier, unrelated request already did (a conflict schedules a
+#         reheal via schedule_profile_db_reheal/schedule_user_db_reheal,
+#         which nulls the cached version and makes the NEXT access of ANY
+#         kind — e.g. an ordinary status poll — perform the actual restore);
+#         round 6 tried plumbing a "did I just download" signal out to such a
+#         caller and found it silently no-ops in the realistic sequence
+#         (conflict -> an intervening read re-pulls -> the caller runs and
+#         sees "already current"). Clearing at the swap site itself has no
+#         such race: whichever request's restore branch actually replaces
+#         the bytes is, structurally, the one that observes it;
+#     (c) deletion of that scope's local DB (clear_scope_markers).
+#
+#   There is no fourth clear — no `scope=None`, no "recovery", no
+#   opportunistic sweep. `.sync_pending` is a DURABILITY RECORD (unlike
+#   `.sync_conflict`/`.sync_failed`, which are ALARM STATE and may be cleared
+#   on judgement calls, e.g. a manual Retry). Once every non-(a)/(b)/(c) clear
+#   is gone, absence of a marker is a durability PROOF: has_sync_pending()
+#   False means "confirmed in R2 or never written", never "someone force-
+#   cleared it" — which is what makes /api/sync/flush-verify trustworthy.
+#
+#   `scope` is REQUIRED on mark/clear (no default, ValueError if falsy).
+#   Production has no legitimate reason to write a bare marker: both fly.toml
+#   files declare no [mounts], so USER_DATA_BASE is the container's ephemeral
+#   writable layer — a marker from a previous deploy cannot survive into the
+#   new one. Legacy-format back-compat exists ONLY for a stray file (a bug
+#   elsewhere, or a test), handled loudly by adopt_legacy_pending_marker, not
+#   silently tolerated in the scoped read path.
+#
+#   CLEAR REASON (a) MUST BE COMPARE-AND-CLEAR (review round 3, BLOCKING):
+#   an upload takes real wall-clock time (checkpoint + PUT, commonly >0.5s
+#   under the T5870 burst harness), during which a DIFFERENT request can
+#   commit a NEWER write to the SAME scope and re-mark it pending. If the
+#   in-flight upload's eventual success then unconditionally unlinked the
+#   marker, it would discharge a write it never uploaded — and because
+#   "nothing pending" is read downstream as a durability PROOF (the re-drain
+#   returns "healed" on an empty drain), a genuinely still-outstanding write
+#   would be silently reported as saved. `mark_sync_pending` returns the
+#   token it wrote (a timestamp made unique by construction with a uuid
+#   suffix, not by clock resolution alone — two marks landing in the same
+#   tick must still compare as different tokens, or the guard silently
+#   degrades to the pre-fix unconditional clear); a caller about to attempt
+#   an upload reads the CURRENT token with `read_pending_token` first and
+#   passes it to
+#   `clear_sync_pending(..., if_token=token)` on success — the clear then only
+#   fires if nothing re-marked the scope since.
+#
+#   CLEAR REASON (b) IS ALSO COMPARE-AND-CLEAR (review round 5, BLOCKING, found
+#   after an earlier version of this doc claimed otherwise): a restore-if-newer
+#   is a HEAD plus, when behind, a full DB download — real wall-clock time with
+#   no lock held. A write can commit and mark the SAME scope pending WHILE that
+#   download is in flight; an unconditional clear right after would discharge
+#   that brand-new write's durability record along with the stale one the
+#   restore actually addressed. Sites 1-4 download STRAIGHT INTO the live
+#   local path, so the vulnerable window is the whole download; they read
+#   `read_pending_token` immediately BEFORE calling the R2 restore helper.
+#   Site 5 (_migrate_profile_db) downloads into a TEMP file first and only
+#   touches the live path at the `shutil.move` swap — the live file is
+#   provably untouched during the download itself, so its vulnerable window
+#   is just the swap, and it reads `read_pending_token` immediately before
+#   THAT instead (a tighter bracket than sites 1-4, not a different rule).
+#   Every site then passes what it captured to
+#   `clear_sync_pending(..., if_token=...)` right after recording the new
+#   baseline — identical shape to reason (a), just triggered by a download
+#   landing instead of an upload landing.
+#
+#   Reason (c) does not need this: deleting the scope's local DB entirely
+#   invalidates any pending record for it regardless of when it was marked
+#   (there is no local file left for an in-flight write to land in), so
+#   clear_scope_markers calls `clear_sync_pending` WITHOUT `if_token`
+#   (unconditional).
+# ---------------------------------------------------------------------------
+
+_PENDING_TOKEN_UNCHECKED = object()  # sentinel: "no if_token given" != "token was None"
+
+
+def mark_sync_pending(user_id: str, scope: str) -> str:
+    """Mark `scope` (a profile_id or USER_DB_SCOPE) as having unsynced writes.
+    See the INV-P comment above. Content is not the JSON diag payload `_mark`
+    writes for conflict/failed — pending has no diagnosis to carry — but it is
+    NOT a bare `time.time()` either: two marks landing in the same clock tick
+    (`time.time()`'s resolution is platform-dependent — observed colliding on
+    Windows dev machines) must still produce distinct tokens, or the INV-P
+    compare-and-clear guard silently degrades to an unconditional clear. A
+    `:`-suffixed uuid makes the token unique by construction; the leading
+    timestamp is kept for humans grepping the raw file.
+    Returns the token written, for a compare-and-clear via clear_sync_pending
+    (see read_pending_token)."""
+    if not scope:
+        raise ValueError("mark_sync_pending requires an explicit scope "
+                          "(USER_DB_SCOPE or a profile_id)")
+    path = _scoped_marker_path(user_id, _PENDING_KIND, scope)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    token = f"{time.time()}:{uuid.uuid4().hex}"
+    path.write_text(token)
+    return token
+
+
+def read_pending_token(user_id: str, scope: str) -> str | None:
+    """The current pending marker's content for `scope`, or None if absent.
+    Call this BEFORE attempting an upload, then pass the result to
+    `clear_sync_pending(..., if_token=...)` on success — see the INV-P
+    compare-and-clear comment above `_PENDING_TOKEN_UNCHECKED`."""
+    try:
+        return _scoped_marker_path(user_id, _PENDING_KIND, scope).read_text()
+    except (FileNotFoundError, OSError):
+        return None
+
+
+def clear_sync_pending(user_id: str, scope: str, *, if_token=_PENDING_TOKEN_UNCHECKED) -> None:
+    """Clear THIS scope's pending marker — one of the three INV-P clear
+    reasons ONLY (see the comment above). Deliberately does NOT delegate to
+    `_clear` and does NOT sweep the legacy bare file: `.sync_conflict`/
+    `.sync_failed`'s opportunistic legacy-sweep is fine for alarm state, but
+    for a durability record it is exactly wrong — sweeping the bare marker on
+    the FIRST scope's success silently discards whatever the bare marker
+    might have also meant for every OTHER scope (found in review round 2).
+
+    `if_token`: pass the value `read_pending_token` returned BEFORE the
+    upload or restore this clear is discharging — the clear then fires only
+    if the marker's content is still exactly that (including both being
+    absent). REQUIRED for both reason (a) (upload success) and reason (b)
+    (restore-if-newer download+swap) — both take real wall-clock time with
+    no lock held, during which a different write can re-mark the same scope.
+    Omit it ONLY for reason (c) (clear_scope_markers, on local DB deletion):
+    there is no local file left for an in-flight write to land in, so an
+    unconditional clear is correct there.
+    """
+    if not scope:
+        raise ValueError("clear_sync_pending requires an explicit scope")
+    path = _scoped_marker_path(user_id, _PENDING_KIND, scope)
+    if if_token is not _PENDING_TOKEN_UNCHECKED:
+        try:
+            current = path.read_text()
+        except (FileNotFoundError, OSError):
+            current = None
+        if current != if_token:
+            return  # re-marked (a newer write) or already cleared — not ours to discard
+    path.unlink(missing_ok=True)
+
+
+def has_sync_pending(user_id: str) -> bool:
+    """True if ANY scope (or a stray legacy bare marker) has unsynced writes."""
+    return _has(user_id, _PENDING_KIND)
+
+
+def has_sync_pending_scope(user_id: str, scope: str) -> bool:
+    """True if THIS scope specifically has unsynced writes — the gate
+    `drain_pending_scopes` uses so it never re-uploads a db with nothing
+    pending. Pure per-scope check: a legacy bare marker is NOT consulted here
+    (it cannot name which scope it meant) — see `adopt_legacy_pending_marker`,
+    which upgrades one into real per-scope markers before any scoped decision
+    is made, so this function never needs to guess."""
+    return _scoped_marker_path(user_id, _PENDING_KIND, scope).exists()
+
+
+def list_pending_scopes(user_id: str) -> set[str]:
+    """Every profile_id/USER_DB_SCOPE with its OWN scoped pending marker (never
+    the legacy bare file — see has_sync_pending_scope)."""
+    try:
+        return {p.name.split(".", 2)[2] for p in _marker_dir(user_id).glob(f".sync_{_PENDING_KIND}.*")}
+    except OSError:
+        return set()
+
+
+def adopt_legacy_pending_marker(user_id: str) -> set[str]:
+    """One-shot upgrade of a stray pre-T5081 unscoped `.sync_pending` into
+    explicit per-scope markers for every db this user has on local disk.
+
+    Production should never actually hit this (see the INV-P comment above —
+    ephemeral disk, and every real caller now passes a scope) — if one turns
+    up, it means a bug wrote one, and we refuse to guess which single db it
+    meant: "every db of this user" is the only sound reading. Logs CRITICAL
+    rather than silently self-repairing. Idempotent; writes the scoped markers
+    FIRST and unlinks the bare file LAST, so a crash mid-adopt leaves
+    duplicated-but-correct state, never a lost record.
+    """
+    legacy = _sync_pending_path(user_id)
+    if not legacy.exists():
+        return set()
+    scopes: set[str] = set()
+    if (USER_DATA_BASE / user_id / "user.sqlite").exists():
+        scopes.add(USER_DB_SCOPE)
+    profiles_dir = USER_DATA_BASE / user_id / "profiles"
+    if profiles_dir.is_dir():
+        scopes |= {p.name for p in profiles_dir.iterdir() if (p / "profile.sqlite").exists()}
+    for s in sorted(scopes):
+        mark_sync_pending(user_id, s)
+    legacy.unlink(missing_ok=True)
+    logger.critical(
+        f"[SYNC] adopted a stray unscoped .sync_pending for user={user_id} into "
+        f"scopes={sorted(scopes)} — no production caller should produce this"
+    )
+    return scopes
+
+
+def clear_scope_markers(user_id: str, scope: str) -> None:
+    """Clear every sync marker (pending, conflict, failed) for a scope whose
+    LOCAL db no longer exists — INV-P clear reason (c). Call this whenever a
+    profile's (or user's) local db is deleted: a marker left behind for a db
+    that will never be uploaded again wedges `has_sync_pending`/
+    `has_sync_conflict` true forever, with no gesture able to clear it."""
+    for kind in (_PENDING_KIND, _CONFLICT_KIND, _FAILED_KIND):
+        _scoped_marker_path(user_id, kind, scope).unlink(missing_ok=True)
 
 
 def _read_marker_diag(user_id: str, kind: str) -> dict | None:
@@ -850,6 +1073,14 @@ def ensure_database():
 
                 from .services.db_refresh import clear_stale_wal_sidecars, wal_sidecars_present
                 restore_start = _time.perf_counter()
+                # T5081 (INV-P reason b, site 1): capture BEFORE the download --
+                # this ORDINARY-request first-access path is exactly what a CAS
+                # conflict re-triggers (schedule_profile_db_reheal nulled the
+                # version), so it is very often the actual restore that
+                # discharges a .sync_pending record a later conflict-retry
+                # endpoint would otherwise find already resolved. See the INV-P
+                # comment below sync_db_to_r2_explicit.
+                pending_token = read_pending_token(user_id, profile_id)
                 was_synced, new_version, was_error = sync_database_from_r2_if_newer(
                     user_id, db_path, local_version,
                     before_download=lambda: not wal_sidecars_present(db_path),
@@ -888,6 +1119,7 @@ def ensure_database():
                             f"against the healed DB"
                         )
                     set_local_db_version(user_id, profile_id, new_version)
+                    clear_sync_pending(user_id, profile_id, if_token=pending_token)
                     # Force re-initialization since we got a new DB
                     already_initialized = False
                 elif was_error:
@@ -1695,6 +1927,14 @@ def sync_db_to_r2_explicit(
 
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
+    # T5081 (INV-P compare-and-clear, review round 3 BLOCKING): capture the
+    # pending token BEFORE the upload starts. The upload below takes real
+    # wall-clock time (checkpoint + PUT); if a DIFFERENT request commits a
+    # NEWER write to this same scope while this upload is in flight, it
+    # re-marks the scope with a fresh token. This upload's eventual success
+    # must not discharge that newer write's marker — only clear if the token
+    # is unchanged.
+    pending_token = read_pending_token(user_id, profile_id)
 
     success, new_version, r2_diag = sync_database_to_r2_with_version(
         user_id, db_path, current_version, skip_version_check=skip_version_check,
@@ -1709,6 +1949,11 @@ def sync_db_to_r2_explicit(
         clear_sync_failed(user_id, scope=profile_id)  # T5870 round 2 MINOR-1: an
         # out-of-band success (export worker etc.) heals a stale .sync_failed so an
         # idle user's red alarm clears instead of sticking indefinitely.
+        # T5081 (INV-P clear reason a): the ONE place this scope's pending
+        # record is discharged — the exact point R2 confirmed the bytes.
+        # Compare-and-clear against the token captured before the upload
+        # started (see the INV-P comment above mark_sync_pending).
+        clear_sync_pending(user_id, profile_id, if_token=pending_token)
         logger.debug(f"[ExportWorker] Database synced to R2: user={user_id}, profile={profile_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:
@@ -1772,6 +2017,9 @@ def sync_user_db_to_r2_explicit(
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
+    # T5081 (INV-P compare-and-clear, review round 3 BLOCKING): see the
+    # matching comment in sync_db_to_r2_explicit.
+    pending_token = read_pending_token(user_id, USER_DB_SCOPE)
     success, new_version, r2_diag = sync_user_db_to_r2_with_version(
         user_id, db_path, local_version, skip_version_check=skip_version_check,
         lock_timeout=lock_timeout, with_diag=True,
@@ -1782,6 +2030,7 @@ def sync_user_db_to_r2_explicit(
         # T6390: clear ONLY the user.sqlite scope — never a live profile conflict.
         clear_sync_conflict(user_id, scope=USER_DB_SCOPE)
         clear_sync_failed(user_id, scope=USER_DB_SCOPE)  # T5870 round 2 MINOR-1: see profile sync above.
+        clear_sync_pending(user_id, USER_DB_SCOPE, if_token=pending_token)  # T5081 (INV-P clear reason a).
         logger.debug(f"[ExportWorker] user.sqlite synced to R2: user={user_id}, v={new_version}")
         return SyncResult.OK
     elif not success and new_version is not None:

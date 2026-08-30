@@ -51,19 +51,19 @@ def _run(coro):
 class TestPendingIsNotFailed:
     def test_pending_marker_alone_is_not_a_failure(self):
         u = "t5870-pending"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         assert has_sync_pending(u)
         # RED without fix: old is_sync_failed := has_sync_pending returned True.
         assert is_sync_failed(u) is False
 
     def test_pending_marker_emits_quiet_pending_header(self):
         u = "t5870-pending-hdr"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         assert sync_status_header(u) == "pending"
 
     def test_in_flight_sync_suppresses_header(self):
         u = "t5870-inflight"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         _begin_sync_attempt(u)
         assert sync_status_header(u) is None  # covered by the in-progress set
         _end_sync_attempt(u)
@@ -71,14 +71,14 @@ class TestPendingIsNotFailed:
 
     def test_failed_marker_emits_failed_header(self):
         u = "t5870-failed-hdr"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         mark_sync_failed(u)
         assert is_sync_failed(u) is True
         assert sync_status_header(u) == "failed"
 
     def test_conflict_outranks_failed(self):
         u = "t5870-conflict-hdr"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         mark_sync_failed(u)
         mark_sync_conflict(u)
         assert sync_status_header(u) == "conflict"
@@ -96,7 +96,8 @@ class TestReDrainHealsTransient:
         marker stays and sync_status_header returns 'failed'.
         """
         u = "t5870-redrain-heal"
-        mark_sync_pending(u)
+        # T5081: scoped, matching what a real had_writes=True request marks.
+        mark_sync_pending(u, scope="prof1")
         _begin_sync_attempt(u)
         mw = RequestContextMiddleware(app=None)
 
@@ -116,14 +117,21 @@ class TestReDrainHealsTransient:
     def test_exhausted_redrain_marks_genuinely_failed(self):
         """When every re-drain attempt fails, the write IS genuinely failed and
         the user must be told (no silencing)."""
+        from app.middleware.db_sync import PendingDrainReport
+
         u = "t5870-redrain-exhaust"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         _begin_sync_attempt(u)
         mw = RequestContextMiddleware(app=None)
 
+        # T5081: _redrain_failed_sync now calls drain_pending_scopes directly
+        # (not retry_pending_sync) — patch THAT to keep reporting a failure.
+        failed_report = PendingDrainReport(
+            attempted={"prof1": SyncResult.FAILED}, orphaned=set(), not_pending=set())
+
         with patch("app.middleware.db_sync.sync_db_to_r2_explicit",
                    return_value=SyncResult.FAILED), \
-             patch("app.middleware.db_sync.retry_pending_sync", return_value=False):
+             patch("app.middleware.db_sync.drain_pending_scopes", return_value=failed_report):
             _run(mw._background_sync(
                 u, "prof1", "rid", "POST", "/clips/working/actions",
                 had_writes=True, had_user_db_writes=False,
@@ -134,10 +142,10 @@ class TestReDrainHealsTransient:
         assert sync_status_header(u) == "failed"
 
     def test_conflict_skips_redrain(self):
-        """A CAS conflict is NOT blind-retryable -> the re-drain (retry_pending_sync)
+        """A CAS conflict is NOT blind-retryable -> the re-drain (drain_pending_scopes)
         must not run; it is surfaced as 'conflict' for the restore path instead."""
         u = "t5870-conflict-skip"
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         _begin_sync_attempt(u)
         mw = RequestContextMiddleware(app=None)
 
@@ -146,13 +154,13 @@ class TestReDrainHealsTransient:
             return SyncResult.CONFLICT
 
         with patch("app.middleware.db_sync.sync_db_to_r2_explicit", side_effect=_conflict), \
-             patch("app.middleware.db_sync.retry_pending_sync", return_value=True) as retry_fn:
+             patch("app.middleware.db_sync.drain_pending_scopes", return_value=None) as drain_fn:
             _run(mw._background_sync(
                 u, "prof1", "rid", "POST", "/clips/working/actions",
                 had_writes=True, had_user_db_writes=False,
                 do_profile=False, force_profile=False,
             ))
-            retry_fn.assert_not_called()
+            drain_fn.assert_not_called()
 
         assert has_sync_conflict(u)
         assert sync_status_header(u) == "conflict"
@@ -162,31 +170,49 @@ class TestReDrainHealsTransient:
 # Criterion 4: Retry (or the next write's sync) recovers WITHOUT a refresh.
 # --------------------------------------------------------------------------
 class TestRecoversWithoutRefresh:
-    def test_failed_banner_clears_on_next_successful_sync_no_refresh(self):
+    def test_failed_banner_clears_on_next_successful_sync_no_refresh(self, tmp_path):
         """A 'failed' banner is showing. The user's next edit syncs successfully;
         the banner clears with NO page reload.
 
-        RED without fix: remove `clear_sync_failed(user_id)` from the ok branch of
-        _background_sync -> .sync_failed persists and the header stays 'failed'
-        even after a successful sync (the exact refresh-only-recovery bug).
+        T5081 (review round 3): the .sync_failed clear-on-success now lives
+        INSIDE sync_db_to_r2_explicit itself (alongside its INV-P pending
+        clear) rather than in _background_sync's own "ok" branch — mocking the
+        primitive away bypasses that real clearing, so this drives it for real
+        against FakeR2.
         """
+        import sqlite3
+
+        from app.database import set_local_db_version
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
         u = "t5870-no-refresh"
-        mark_sync_pending(u)
+        profile_dir = tmp_path / u / "profiles" / "prof1"
+        profile_dir.mkdir(parents=True)
+        conn = sqlite3.connect(str(profile_dir / "profile.sqlite"))
+        conn.execute("CREATE TABLE marker (who TEXT)")
+        conn.commit()
+        conn.close()
+        mark_sync_pending(u, scope="prof1")
         mark_sync_failed(u)
         assert sync_status_header(u) == "failed"
 
         _begin_sync_attempt(u)
         mw = RequestContextMiddleware(app=None)
-        with patch("app.middleware.db_sync.sync_db_to_r2_explicit",
-                   return_value=SyncResult.OK):
+
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            fake._objects[profile_r2_key(u, "prof1", "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "0"}}
+            set_local_db_version(u, "prof1", 0)
             _run(mw._background_sync(
                 u, "prof1", "rid", "POST", "/clips/working/actions",
                 had_writes=True, had_user_db_writes=False,
                 do_profile=False, force_profile=False,
             ))
 
-        assert not has_sync_failed(u)
-        assert sync_status_header(u) is None, "banner cleared without any refresh"
+            assert not has_sync_failed(u)
+            assert sync_status_header(u) is None, "banner cleared without any refresh"
 
 
 # --------------------------------------------------------------------------
@@ -239,6 +265,75 @@ class TestConflictRetryRestores:
         assert result.get("conflict") is True
         assert "reload" in result["message"].lower(), "honest, non-looping message"
         assert has_sync_conflict(u), "still conflicted; not silently cleared"
+
+
+class TestConflictRetryDeliversAGenuinelyDeferredScope:
+    """T5081 (round 6 review, Finding 3): _retry_resolve_conflict used to
+    report success/restored right after the two confirm_current_before_write
+    calls, without ever draining whatever .sync_pending markers survived them.
+    A scope that was merely deferred (a committed local write that was never
+    behind R2 at all, so its restore is a no-op) kept its marker through that
+    no-op — correctly, per INV-P — but nothing then uploaded it: Retry
+    reported "restored" while quietly leaving that write stranded. Retry must
+    now drain whatever remains after the confirms, so a merely-deferred scope
+    actually gets delivered instead of just correctly not-lied-about."""
+
+    def _ctx(self, monkeypatch, user_id):
+        from app import profile_context, user_context
+        monkeypatch.setattr("app.routers.health.R2_ENABLED", True)
+        user_context.set_current_user_id(user_id)
+        profile_context.set_current_profile_id("deadbeef")
+
+    def test_retry_uploads_a_merely_deferred_user_db_alongside_the_conflict(self, monkeypatch):
+        """RED without the post-confirm drain: revert _retry_resolve_conflict
+        to return success right after the two confirm_current_before_write
+        calls -> user.sqlite's committed-but-never-uploaded write never
+        reaches R2, even though the endpoint reports restored=True."""
+        import sqlite3
+
+        from app.database import (
+            USER_DB_SCOPE,
+            get_local_user_db_version,
+            has_sync_pending_scope,
+            mark_sync_pending,
+            set_local_user_db_version,
+        )
+        from app.routers import health
+        from app.storage import _user_db_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
+        u = "t5081-c6-deferred-user-db"
+        base_dir = db_module.USER_DATA_BASE
+        user_db_path = base_dir / u / "user.sqlite"
+        user_db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(user_db_path))
+        conn.execute("CREATE TABLE marker (who TEXT)")
+        conn.execute("INSERT INTO marker (who) VALUES ('deferred_write')")
+        conn.commit()
+        conn.close()
+
+        fake = FakeR2()
+        with _r2_patched(fake):
+            key = _user_db_r2_key(u)
+            fake._objects[key] = {"data": b"old", "metadata": {"db-version": "1"}}
+            set_local_user_db_version(u, 1)  # local matches R2 -- never behind, just unsynced
+            mark_sync_pending(u, USER_DB_SCOPE)  # the committed write's durability record
+
+            mark_sync_conflict(u)  # unrelated profile conflict is what triggers Retry
+            self._ctx(monkeypatch, u)
+            monkeypatch.setattr(
+                "app.services.db_refresh.confirm_current_before_write",
+                lambda user_id, profile_id=None: None,
+            )
+
+            result = _run(health.retry_sync())
+
+        assert result["success"] is True
+        assert result.get("restored") is True
+        assert fake._objects[key]["data"] != b"old", \
+            "the merely-deferred user.sqlite write must actually reach R2, not just avoid being lied about"
+        assert get_local_user_db_version(u) == 2
+        assert not has_sync_pending_scope(u, USER_DB_SCOPE)
 
 
 # ==========================================================================
@@ -332,7 +427,7 @@ class TestConflictRetryRequiresProfile:  # MAJOR-4
 
         u = "t5870-m4-noprofile"
         mark_sync_conflict(u)
-        mark_sync_pending(u)
+        mark_sync_pending(u, scope="prof1")
         monkeypatch.setattr("app.routers.health.R2_ENABLED", True)
         user_context.set_current_user_id(u)
 

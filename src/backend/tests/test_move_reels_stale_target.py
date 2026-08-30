@@ -96,3 +96,46 @@ class TestRequireFresh:
         )
 
         assert m.ensure_profile_db_local("u1", "fresh-target", require_fresh=True) is None
+
+
+class TestClearsPendingMarkerForTheArgProfileNotTheAmbientOne:
+    """T5081 (INV-P reason b, site 4, round 7 review MAJOR — no site 4
+    coverage existed): ensure_profile_db_local temporarily points the
+    profile_context ContextVar at its OWN profile_id argument (so the R2
+    helpers' ContextVar-derived key resolution finds the right object) — the
+    single site where the scope a caller has in mind and the ambient
+    ContextVar it started with can legitimately differ (e.g. a session
+    actively working profile A calls this to resolve profile B's share). The
+    .sync_pending clear must target the function's own (user_id, profile_id)
+    ARGUMENTS, never whatever the ambient ContextVar happened to hold when
+    the call started."""
+
+    def test_clear_targets_the_argument_profile_not_the_ambient_context(self, mat, monkeypatch):
+        import app.database as db_module
+        from app.database import has_sync_pending_scope, mark_sync_pending
+        from app.profile_context import set_current_profile_id
+
+        m, base = mat
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", base)  # same dir as `m`'s patch
+
+        path = _make_local(base, "u1", "target1")
+        monkeypatch.setattr(m, "get_local_db_version", lambda u, p: 3, raising=False)
+        monkeypatch.setattr(m, "set_local_db_version", lambda u, p, v: None, raising=False)
+        monkeypatch.setattr(
+            "app.storage.sync_database_from_r2_if_newer",
+            lambda u, p_, v, **kw: (True, 4, False),
+        )
+
+        # The caller's ambient session is on a DIFFERENT profile than the one
+        # being resolved -- exactly the divergence this function exists for.
+        set_current_profile_id("ambient-profile")
+        mark_sync_pending("u1", "target1")          # the arg profile's refused write
+        mark_sync_pending("u1", "ambient-profile")   # an unrelated marker on the ambient one
+
+        result = m.ensure_profile_db_local("u1", "target1", require_fresh=True)
+
+        assert result == path
+        assert has_sync_pending_scope("u1", "target1") is False, \
+            "the restore replaced the ARGUMENT profile's content -- its marker must clear"
+        assert has_sync_pending_scope("u1", "ambient-profile") is True, \
+            "the ambient ContextVar's profile was never touched by this call -- its marker must survive"

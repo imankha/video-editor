@@ -47,8 +47,12 @@ def mw(monkeypatch):
 
     monkeypatch.setattr(m, "sync_user_db_to_r2_explicit", _user_sync)
     monkeypatch.setattr(m, "sync_db_to_r2_explicit", _profile_sync)
-    monkeypatch.setattr(m, "mark_sync_pending", lambda uid: calls["pending"].append(uid))
-    monkeypatch.setattr(m, "clear_sync_pending", lambda uid: calls["cleared"].append(uid))
+    # T5081: mark_sync_pending requires an explicit scope now (no more
+    # scope=None default) — the real foreign-db loops always pass one
+    # (USER_DB_SCOPE or the foreign profile_id).
+    monkeypatch.setattr(m, "mark_sync_pending", lambda uid, scope: calls["pending"].append((uid, scope)))
+    # T5081: clear_sync_pending is no longer imported into db_sync.py at all —
+    # the sync_*_explicit primitives (mocked above) own that clear internally.
     # neutralise the in-flight-attempt bookkeeping (finally calls _end_sync_attempt)
     monkeypatch.setattr(m, "_end_sync_attempt", lambda uid: None)
 
@@ -101,8 +105,10 @@ class TestMiddlewareForeignDbSync:
             do_profile=False, force_profile=False, foreign_user_dbs={GRANTEE},
         )
         assert status == "failed"
-        assert calls["pending"] == [GRANTEE], "the GRANTEE (not the admin) must be marked pending"
-        assert SESSION_USER not in calls["pending"]
+        from app.database import USER_DB_SCOPE
+        assert calls["pending"] == [(GRANTEE, USER_DB_SCOPE)], \
+            "the GRANTEE (not the admin) must be marked pending, scoped to their user.sqlite"
+        assert not any(uid == SESSION_USER for uid, _ in calls["pending"])
 
     @pytest.mark.asyncio
     async def test_no_foreign_dbs_is_a_plain_session_sync(self, mw):
@@ -116,3 +122,116 @@ class TestMiddlewareForeignDbSync:
         assert status == "ok"
         assert calls["user_sync"] == [SESSION_USER]
         assert calls["pending"] == []
+
+
+# ---------------------------------------------------------------------------
+# 2. Foreign scopes are marked pending BEFORE the response returns (T5081
+#    review round 3, MAJOR): before this fix, a foreign DB's marker was
+#    written only in _background_sync's FAILURE branch, so for the whole
+#    upload window (and permanently if the machine died mid-upload) it held a
+#    committed write with no durability record at all.
+# ---------------------------------------------------------------------------
+
+class TestForeignDbCrashSafetyMarking:
+
+    @pytest.mark.asyncio
+    async def test_foreign_profile_write_is_marked_pending_before_background_task(self, tmp_path, monkeypatch):
+        """A request that writes to a DIFFERENT user's profile.sqlite (e.g. a
+        teammate-share materialization) must have that scope's .sync_pending
+        marker on disk the instant _sync_aware_flow returns — BEFORE the
+        fire-and-forget background upload even starts — so a machine death in
+        that window still leaves a durability record."""
+        from unittest.mock import MagicMock
+
+        import app.database as db_module
+        from app.database import has_sync_pending_scope
+        from app.middleware import db_sync as m
+
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        monkeypatch.setattr(m, "sync_user_db_to_r2_explicit", lambda uid, lock_timeout=None: True)
+        monkeypatch.setattr(m, "sync_db_to_r2_explicit", lambda uid, pid=None, lock_timeout=None: True)
+        # Never let the real background upload run in this test — only the
+        # synchronous pre-marking (before asyncio.create_task) is under test.
+        monkeypatch.setattr(m.asyncio, "create_task", lambda coro: coro.close())
+
+        foreign_uid, foreign_pid = "grantee-2", "abcd9999"
+        monkeypatch.setattr(m, "get_request_has_writes", lambda: False)
+        monkeypatch.setattr(m, "get_request_has_user_db_writes", lambda: False)
+        monkeypatch.setattr(m, "get_request_written_profile_dbs", lambda: {(foreign_uid, foreign_pid)})
+        monkeypatch.setattr(m, "get_request_written_user_dbs", lambda: set())
+
+        mock_request = MagicMock()
+        mock_request.method = "POST"
+        mock_request.url.path = "/api/test"
+        mock_request.headers = {"X-Request-ID": "test-fg", "X-Profile-Request": ""}
+
+        async def fake_call_next(req):
+            return MagicMock(headers={})
+
+        inst = m.RequestContextMiddleware.__new__(m.RequestContextMiddleware)
+        meta = {"sync_duration": 0.0, "handler_duration": 0.0,
+                "user_id": "session-user", "inflight_entry": 0, "inflight_exit": 0}
+        await inst._sync_aware_flow(mock_request, fake_call_next, meta, "session-user", "test-fg")
+
+        assert has_sync_pending_scope(foreign_uid, foreign_pid), \
+            "a foreign profile write must be marked pending before the background task fires"
+
+    @pytest.mark.asyncio
+    async def test_foreign_mark_precedes_create_task_call(self, tmp_path, monkeypatch):
+        """T5081 review round 4 (MINOR): the previous test's `create_task`
+        stub was never reached (own_profile_written/own_user_written were both
+        False, so `_sync_aware_flow`'s `if had_writes or had_user_db_writes:`
+        gate never ran) — it proved the marker exists on disk AFTER the whole
+        call, not that it precedes create_task specifically. This variant
+        forces the session's OWN write too, so the gate (and its
+        `asyncio.create_task` call) genuinely fires, and the stub asserts the
+        foreign marker's presence AT THE MOMENT create_task is invoked — the
+        actual "before the background task starts" claim."""
+        from unittest.mock import MagicMock
+
+        import app.database as db_module
+        from app.database import has_sync_pending_scope
+        from app.middleware import db_sync as m
+
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        monkeypatch.setattr(m, "sync_user_db_to_r2_explicit", lambda uid, lock_timeout=None: True)
+        monkeypatch.setattr(m, "sync_db_to_r2_explicit", lambda uid, pid=None, lock_timeout=None: True)
+
+        foreign_uid, foreign_pid = "grantee-3", "abcd8888"
+        own_profile_id = "abcd7777"
+        marked_at_task_time = {}
+
+        def _create_task_stub(coro):
+            marked_at_task_time["foreign"] = has_sync_pending_scope(foreign_uid, foreign_pid)
+            coro.close()
+            return MagicMock()
+
+        monkeypatch.setattr(m.asyncio, "create_task", _create_task_stub)
+        monkeypatch.setattr(m, "get_request_has_writes", lambda: True)
+        monkeypatch.setattr(m, "get_request_has_user_db_writes", lambda: False)
+        monkeypatch.setattr(
+            m, "get_request_written_profile_dbs",
+            lambda: {("session-user", own_profile_id), (foreign_uid, foreign_pid)},
+        )
+        monkeypatch.setattr(m, "get_request_written_user_dbs", lambda: set())
+
+        mock_request = MagicMock()
+        mock_request.method = "POST"
+        mock_request.url.path = "/api/test"
+        mock_request.headers = {"X-Request-ID": "test-fg2", "X-Profile-Request": ""}
+        # A bare MagicMock auto-creates request.state.durable_sync as a truthy
+        # Mock, which would route this into the AWAITED durable branch instead
+        # of the fire-and-forget asyncio.create_task branch under test.
+        mock_request.state.durable_sync = False
+
+        async def fake_call_next(req):
+            return MagicMock(headers={})
+
+        inst = m.RequestContextMiddleware.__new__(m.RequestContextMiddleware)
+        meta = {"sync_duration": 0.0, "handler_duration": 0.0,
+                "user_id": "session-user", "inflight_entry": 0, "inflight_exit": 0}
+        await inst._sync_aware_flow(mock_request, fake_call_next, meta, "session-user", "test-fg2",
+                                     profile_id=own_profile_id)
+
+        assert marked_at_task_time.get("foreign") is True, \
+            "the foreign scope must already be marked pending WHEN create_task fires, not merely by the time the whole flow returns"

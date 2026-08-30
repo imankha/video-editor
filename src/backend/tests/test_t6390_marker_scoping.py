@@ -64,7 +64,9 @@ class TestRetryPendingSyncSelfStomp:
         success calls clear_sync_conflict(user_id) and wipes it → has_sync_conflict
         reads False and the aggregate return is a bare False (mislabelled failed)."""
         from app.database import (
+            USER_DB_SCOPE,
             has_sync_conflict,
+            mark_sync_pending,
             set_local_db_version,
             set_local_user_db_version,
         )
@@ -84,6 +86,9 @@ class TestRetryPendingSyncSelfStomp:
             # user.sqlite: loaded v5, R2 at v5 → clean upload to v6.
             _seed_r2(fake, _user_db_r2_key(USER), b"USER_OLD", 5)
             set_local_user_db_version(USER, 5)
+            # T5081: retry_pending_sync is now gated on the scoped pending marker.
+            mark_sync_pending(USER, scope=PROFILE)
+            mark_sync_pending(USER, scope=USER_DB_SCOPE)
 
             outcome = retry_pending_sync(USER, PROFILE)
 
@@ -165,7 +170,7 @@ class TestRedrainDoesNotBlindRetryConflict:
         the RETURN VALUE, not by re-reading a marker file the self-stomp defeated."""
         import asyncio
 
-        from app.database import has_sync_conflict, set_local_db_version
+        from app.database import has_sync_conflict, mark_sync_pending, set_local_db_version
         from app.middleware.db_sync import RequestContextMiddleware
         from app.storage import _user_db_r2_key, profile_r2_key
 
@@ -179,6 +184,9 @@ class TestRedrainDoesNotBlindRetryConflict:
             _seed_r2(fake, _user_db_r2_key(USER), b"U", 5)
             from app.database import set_local_user_db_version
             set_local_user_db_version(USER, 5)
+            # T5081: retry_pending_sync (which the re-drain calls) is now gated
+            # on the scoped pending marker.
+            mark_sync_pending(USER, scope=PROFILE)
 
             mw = RequestContextMiddleware.__new__(RequestContextMiddleware)
 

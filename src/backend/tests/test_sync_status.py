@@ -107,40 +107,52 @@ class TestRetrySyncEndpoint:
         data = response.json()
         assert data["success"] is True
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value="ok")
     @patch("app.routers.health.R2_ENABLED", True)
-    def test_retry_sync_success(self, mock_sync, client):
+    def test_retry_sync_success(self, client):
         """Successful sync should clear the failure marker.
 
-        sync_db_to_cloud returns the STRING "ok" (not a bare bool) -- the mock
-        must match the real contract, otherwise this test would have kept
-        passing under the round-2 BLOCKING-2 truthiness bug (`if success:`
-        treated ANY non-empty string, including "conflict"/"failed", as
-        success too).
+        T5081 (review round 3): retry_sync() now routes through
+        drain_pending_scopes (database.py's real sync primitives), not the
+        retired sync_db_to_cloud -- patch THAT to report a verified OK for
+        both scopes it drains.
         """
-        set_sync_failed(TEST_USER_ID, True)
+        from app.database import SyncResult
+        from app.middleware.db_sync import PendingDrainReport
 
-        response = client.post("/api/retry-sync")
+        set_sync_failed(TEST_USER_ID, True)
+        ok_report = PendingDrainReport(
+            attempted={"prof1": SyncResult.OK, "user": SyncResult.OK},
+            orphaned=set(), not_pending=set())
+
+        with patch("app.routers.health.drain_pending_scopes", return_value=ok_report) as mock_drain:
+            response = client.post("/api/retry-sync")
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert is_sync_failed(TEST_USER_ID) is False
-        mock_sync.assert_called_once()
+        mock_drain.assert_called_once()
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value="failed")
     @patch("app.routers.health.R2_ENABLED", True)
-    def test_retry_sync_failure(self, mock_sync, client):
+    def test_retry_sync_failure(self, client):
         """A transient failure should return success=False."""
-        response = client.post("/api/retry-sync")
+        from app.database import SyncResult
+        from app.middleware.db_sync import PendingDrainReport
+
+        failed_report = PendingDrainReport(
+            attempted={"prof1": SyncResult.FAILED}, orphaned=set(), not_pending=set())
+
+        with patch("app.routers.health.drain_pending_scopes", return_value=failed_report) as mock_drain:
+            response = client.post("/api/retry-sync")
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
-        mock_sync.assert_called_once()
+        mock_drain.assert_called_once()
 
-    @patch("app.routers.health.sync_db_to_cloud", return_value="conflict")
     @patch("app.routers.health.R2_ENABLED", True)
     def test_retry_sync_conflict_that_cannot_restore_reports_failure_not_success(
-        self, mock_sync, client, monkeypatch
+        self, client, monkeypatch
     ):
         """T4310 BLOCKING-2 intent, preserved under T5870's redesign: a CAS
         conflict must NEVER be reported as a durable success while it is

@@ -139,7 +139,13 @@ def ensure_user_database(user_id: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # R2 restore on first access (before schema creation so restored DB is used)
-    from ..database import get_local_user_db_version, set_local_user_db_version
+    from ..database import (
+        USER_DB_SCOPE,
+        clear_sync_pending,
+        get_local_user_db_version,
+        read_pending_token,
+        set_local_user_db_version,
+    )
     from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
 
     if R2_ENABLED:
@@ -170,6 +176,14 @@ def ensure_user_database(user_id: str) -> None:
                 # compare below can't wrongly skip the download on a "local >= r2"
                 # read of a version that has no corresponding local file.
                 version_for_compare = local_version if db_path.exists() else None
+                # T5081 (INV-P reason b, site 2): capture BEFORE the download --
+                # this is precisely the path a CAS conflict re-triggers on an
+                # ORDINARY request (schedule_user_db_reheal nulled the cached
+                # version), so this is very often the actual restore that
+                # discharges a .sync_pending record a conflict-retry endpoint
+                # will look at later and find already resolved. See the INV-P
+                # comment in database.py.
+                pending_token = read_pending_token(user_id, USER_DB_SCOPE)
                 was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(
                     user_id, db_path, version_for_compare,
                     before_download=lambda: not wal_sidecars_present(db_path),
@@ -182,6 +196,7 @@ def ensure_user_database(user_id: str) -> None:
                         f"version={new_version}, took {restore_elapsed:.2f}s{req_suffix}"
                     )
                     set_local_user_db_version(user_id, new_version)
+                    clear_sync_pending(user_id, USER_DB_SCOPE, if_token=pending_token)
                 elif was_error:
                     _r2_user_restore_cooldowns[user_id] = time.time()
                     logger.warning(
@@ -292,6 +307,14 @@ def ensure_user_database_fresh(user_id: str) -> None:
 
     db_path = _get_user_db_path(user_id)
 
+    # T5081 (INV-P reason b, site 3): capture the pending token before the
+    # restore attempt, same as the upload path's reason (a) -- see the INV-P
+    # comment in database.py. A restore-if-newer that actually replaces local
+    # content discharges whatever committed-but-unconfirmed write earned this
+    # scope its marker.
+    from ..database import USER_DB_SCOPE, clear_sync_pending, read_pending_token
+    pending_token = read_pending_token(user_id, USER_DB_SCOPE)
+
     local_version = get_local_user_db_version(user_id)
     downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
         user_id, db_path, local_version,
@@ -305,8 +328,14 @@ def ensure_user_database_fresh(user_id: str) -> None:
         # Defense-in-depth for the narrow window between before_download's
         # check and this download completing -- see clear_stale_wal_sidecars.
         clear_stale_wal_sidecars(db_path)
-    if new_version is not None:
+    if downloaded and new_version is not None:
+        # Gated the same way as sites 1/2/4 (baseline recorded AND cleared
+        # together) rather than on `downloaded` alone: this pairing is what
+        # makes INV-P reason (b) true as stated -- clearing without a
+        # confirmed baseline would discharge the durability record while
+        # leaving CAS unable to ever upload from this scope again.
         set_local_user_db_version(user_id, new_version)
+        clear_sync_pending(user_id, USER_DB_SCOPE, if_token=pending_token)
 
 
 def forget_user_db(user_id: str) -> None:

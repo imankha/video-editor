@@ -49,60 +49,122 @@ def isolate_markers(tmp_path, monkeypatch):
     yield
 
 
-class TestBackgroundSyncSuccess:
-    """_background_sync clears marker and ends sync attempt on success."""
+def _make_dbs(tmp_path, user_id, profile_id="prof1"):
+    import sqlite3
+    profile_dir = tmp_path / user_id / "profiles" / profile_id
+    profile_dir.mkdir(parents=True)
+    user_db = tmp_path / user_id / "user.sqlite"
+    for db_path in (profile_dir / "profile.sqlite", user_db):
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE marker (who TEXT)")
+        conn.commit()
+        conn.close()
 
-    def test_clears_marker_on_profile_and_user_sync(self):
+
+class TestBackgroundSyncSuccess:
+    """_background_sync clears marker and ends sync attempt on success.
+
+    T5081 (review round 3): the pending-clear now happens INSIDE
+    sync_db_to_r2_explicit/sync_user_db_to_r2_explicit the instant they observe
+    a real upload success (INV-P clear reason a) — _background_sync itself no
+    longer clears anything. Mocking those primitives away with a bare
+    `return_value=True` bypasses that real clearing entirely, so these tests
+    now drive the REAL primitives against FakeR2 (same harness as
+    test_t5081_pending_scoping.py) to prove the actual behavior.
+    """
+
+    _make_dbs = staticmethod(_make_dbs)
+
+    def test_clears_marker_on_profile_and_user_sync(self, tmp_path):
+        from app.database import USER_DB_SCOPE, set_local_db_version, set_local_user_db_version
+        from app.storage import _user_db_r2_key, profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
         user_id = "test-bg-both-ok"
-        mark_sync_pending(user_id)
+        self._make_dbs(tmp_path, user_id)
+        mark_sync_pending(user_id, "prof1")
+        mark_sync_pending(user_id, USER_DB_SCOPE)
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
-        async def runner():
-            with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=True), \
-                 patch("app.middleware.db_sync.sync_user_db_to_r2_explicit", return_value=True):
-                await middleware._background_sync(
+        fake = FakeR2()
+        with patch.object(db_module, "USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            fake._objects[profile_r2_key(user_id, "prof1", "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "0"}}
+            fake._objects[_user_db_r2_key(user_id)] = {
+                "data": b"U", "metadata": {"db-version": "0"}}
+            set_local_db_version(user_id, "prof1", 0)
+            set_local_user_db_version(user_id, 0)
+
+            async def runner():
+                return await middleware._background_sync(
                     user_id, "prof1", "rid1", "POST", "/api/test",
                     had_writes=True, had_user_db_writes=True,
                     do_profile=False, force_profile=False,
                 )
 
-        asyncio.run(runner())
+            status = asyncio.run(runner())
+
+        assert status == "ok"
         assert not has_sync_pending(user_id), "marker should be cleared after successful sync"
         assert not is_sync_attempt_in_progress(user_id), "_end_sync_attempt should have been called"
 
-    def test_clears_marker_on_profile_only_sync(self):
+    def test_clears_marker_on_profile_only_sync(self, tmp_path):
+        from app.database import set_local_db_version
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
         user_id = "test-bg-profile-ok"
-        mark_sync_pending(user_id)
+        self._make_dbs(tmp_path, user_id)
+        mark_sync_pending(user_id, "prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
-        async def runner():
-            with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=True):
-                await middleware._background_sync(
+        fake = FakeR2()
+        with patch.object(db_module, "USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            fake._objects[profile_r2_key(user_id, "prof1", "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "0"}}
+            set_local_db_version(user_id, "prof1", 0)
+
+            async def runner():
+                return await middleware._background_sync(
                     user_id, "prof1", "rid1", "PATCH", "/api/test",
                     had_writes=True, had_user_db_writes=False,
                     do_profile=False, force_profile=False,
                 )
 
-        asyncio.run(runner())
+            status = asyncio.run(runner())
+
+        assert status == "ok"
         assert not has_sync_pending(user_id)
 
-    def test_clears_marker_on_user_db_only_sync(self):
+    def test_clears_marker_on_user_db_only_sync(self, tmp_path):
+        from app.database import USER_DB_SCOPE, set_local_user_db_version
+        from app.storage import _user_db_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
         user_id = "test-bg-userdb-ok"
-        mark_sync_pending(user_id)
+        self._make_dbs(tmp_path, user_id)
+        mark_sync_pending(user_id, USER_DB_SCOPE)
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
-        async def runner():
-            with patch("app.middleware.db_sync.sync_user_db_to_r2_explicit", return_value=True):
-                await middleware._background_sync(
+        fake = FakeR2()
+        with patch.object(db_module, "USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            fake._objects[_user_db_r2_key(user_id)] = {
+                "data": b"U", "metadata": {"db-version": "0"}}
+            set_local_user_db_version(user_id, 0)
+
+            async def runner():
+                return await middleware._background_sync(
                     user_id, None, "rid1", "POST", "/api/test",
                     had_writes=False, had_user_db_writes=True,
                     do_profile=False, force_profile=False,
                 )
 
-        asyncio.run(runner())
+            status = asyncio.run(runner())
+
+        assert status == "ok"
         assert not has_sync_pending(user_id)
 
 
@@ -110,16 +172,26 @@ class TestBackgroundSyncFailure:
     """_background_sync leaves marker and ends sync attempt on failure."""
 
     def test_leaves_marker_on_sync_failure(self):
+        from app.database import SyncResult
+        from app.middleware.db_sync import PendingDrainReport
+
         user_id = "test-bg-fail"
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
+
+        # T5081: _redrain_failed_sync now calls drain_pending_scopes directly
+        # (not retry_pending_sync) — patch THAT so the exhausted-failure path
+        # is pinned without needing a real db file (drain_pending_scopes would
+        # otherwise correctly treat a missing file as an orphan and clear it).
+        exhausted_report = PendingDrainReport(
+            attempted={"prof1": SyncResult.FAILED}, orphaned=set(), not_pending=set())
 
         async def runner():
             # T5870: the bounded re-drain now retries a failed sync; patch it to
             # keep failing so this pins the EXHAUSTED-failure path (marker stays).
             with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=False), \
-                 patch("app.middleware.db_sync.retry_pending_sync", return_value=False), \
+                 patch("app.middleware.db_sync.drain_pending_scopes", return_value=exhausted_report), \
                  patch("app.middleware.db_sync._REDRAIN_BASE_BACKOFF_S", 0.001):
                 await middleware._background_sync(
                     user_id, "prof1", "rid1", "POST", "/api/test",
@@ -134,7 +206,8 @@ class TestBackgroundSyncFailure:
 
     def test_leaves_marker_on_exception(self):
         user_id = "test-bg-exc"
-        mark_sync_pending(user_id)
+        # T5081: scoped, matching what a real had_writes=True request marks.
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
@@ -152,7 +225,7 @@ class TestBackgroundSyncFailure:
 
     def test_error_path_calls_set_sync_failed(self):
         user_id = "test-bg-error-path"
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
@@ -165,11 +238,11 @@ class TestBackgroundSyncFailure:
                     do_profile=False, force_profile=False,
                     is_error_path=True,
                 )
-                mock_set_failed.assert_called_once_with(user_id, True)
+                mock_set_failed.assert_called_once_with(user_id, True, profile_id="prof1")
 
     def test_error_path_clears_on_success(self):
         user_id = "test-bg-error-ok"
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
@@ -182,30 +255,59 @@ class TestBackgroundSyncFailure:
                     do_profile=False, force_profile=False,
                     is_error_path=True,
                 )
-                mock_set_failed.assert_called_once_with(user_id, False)
+                mock_set_failed.assert_called_once_with(user_id, False, profile_id="prof1")
 
-    def test_partial_sync_leaves_marker(self):
-        """When profile sync succeeds but user sync fails, marker stays."""
+    def test_partial_sync_leaves_marker(self, tmp_path):
+        """When profile sync succeeds but user sync fails, marker stays —
+        AND only for the scope that actually failed (T5081).
+
+        Drives the REAL sync_db_to_r2_explicit/sync_user_db_to_r2_explicit
+        against FakeR2 (a subclass that can fail user.sqlite selectively)
+        rather than mocking them away — mocking bypasses the primitives' own
+        INV-P pending-clear entirely, which is where clearing now lives.
+        """
+        from app.database import USER_DB_SCOPE, has_sync_pending_scope, set_local_db_version
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
+
+        class _FailUserR2(FakeR2):
+            def upload_file(self, Filename, Bucket, Key, ExtraArgs=None, Callback=None, Config=None):
+                if Key.endswith("user.sqlite"):
+                    from botocore.exceptions import ClientError
+                    raise ClientError({"Error": {"Code": "403", "Message": "forced failure"}}, "PutObject")
+                return super().upload_file(Filename, Bucket, Key, ExtraArgs, Callback, Config)
+
         user_id = "test-bg-partial"
-        mark_sync_pending(user_id)
+        _make_dbs(tmp_path, user_id)
+        mark_sync_pending(user_id, scope="prof1")
+        mark_sync_pending(user_id, scope=USER_DB_SCOPE)
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
-        async def runner():
-            # T5870: patch the re-drain to keep failing so a partial failure that
-            # cannot be healed still keeps the marker (exhausted path).
-            with patch("app.middleware.db_sync.sync_db_to_r2_explicit", return_value=True), \
-                 patch("app.middleware.db_sync.sync_user_db_to_r2_explicit", return_value=False), \
-                 patch("app.middleware.db_sync.retry_pending_sync", return_value=False), \
-                 patch("app.middleware.db_sync._REDRAIN_BASE_BACKOFF_S", 0.001):
-                await middleware._background_sync(
+        fake = _FailUserR2()
+        with patch.object(db_module, "USER_DATA_BASE", tmp_path), _r2_patched(fake), \
+             patch("app.middleware.db_sync._REDRAIN_BASE_BACKOFF_S", 0.001):
+            fake._objects[profile_r2_key(user_id, "prof1", "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "0"}}
+            set_local_db_version(user_id, "prof1", 0)
+            # user.sqlite is never pre-seeded in R2 — its upload will fail via
+            # _FailUserR2 regardless, so no baseline is needed for this test.
+
+            async def runner():
+                return await middleware._background_sync(
                     user_id, "prof1", "rid1", "POST", "/api/test",
                     had_writes=True, had_user_db_writes=True,
                     do_profile=False, force_profile=False,
                 )
 
-        asyncio.run(runner())
+            status = asyncio.run(runner())
+
+        assert status == "failed"
         assert has_sync_pending(user_id), "partial failure must keep marker"
+        assert has_sync_pending_scope(user_id, "prof1") is False, \
+            "the profile scope genuinely synced and must clear"
+        assert has_sync_pending_scope(user_id, USER_DB_SCOPE) is True, \
+            "the user.sqlite scope genuinely failed and must survive"
 
 
 class TestWriteLockDoesNotBlockOnSync:
@@ -263,7 +365,7 @@ class TestWriteLockDoesNotBlockOnSync:
                     user, "DELETE", f"/api/projects/{project_id}", f"rid_{project_id}"
                 ):
                     await asyncio.sleep(0.01)  # handler: ~10ms
-                    mark_sync_pending(user)
+                    mark_sync_pending(user, scope="prof1")
                     _begin_sync_attempt(user)
                     task = asyncio.create_task(slow_r2_sync(project_id))
                     sync_tasks.append(task)
@@ -322,14 +424,14 @@ class TestSyncPendingBeforeResponse:
         synchronously, THEN create_task fires the background sync."""
         user_id = "test-marker-timing"
 
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
 
         assert has_sync_pending(user_id), "marker must exist before task starts"
         assert is_sync_attempt_in_progress(user_id), "attempt must be signaled before task starts"
 
         _end_sync_attempt(user_id)
-        clear_sync_pending(user_id)
+        clear_sync_pending(user_id, scope="prof1")
 
     def test_begin_attempt_suppresses_header(self):
         """T5870: an in-flight sync suppresses ANY X-Sync-Status header via
@@ -350,7 +452,7 @@ class TestSyncPendingBeforeResponse:
     def test_pending_only_is_quiet_not_failed(self):
         """T5870: a merely-pending write is 'pending' (quiet), never 'failed'."""
         user_id = "test-pending-quiet"
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         assert db_sync.is_sync_failed(user_id) is False
         assert sync_status_header(user_id) == "pending"
 

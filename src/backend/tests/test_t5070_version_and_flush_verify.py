@@ -71,7 +71,7 @@ def test_get_version_works_unauthenticated():
     resp = _request(app, "GET", VERSION_URL)
     assert resp.status_code == 200
     body = resp.json()
-    assert "version" in body and body["version"]
+    assert body.get("version")
     assert resp.headers.get("cache-control") == "no-store"
 
 
@@ -200,7 +200,7 @@ async def test_flush_verify_ok_when_nothing_pending(flush_env):
     """Clean session, nothing dirty: the barrier degrades to a cheap verify and
     returns 200 immediately — the ideal outcome per the design doc, since
     every committed edit is already surgically persisted."""
-    app, fake, db_path = flush_env
+    app, _fake, _db_path = flush_env
     async with _client(app) as c:
         resp = await c.post(FLUSH_VERIFY_URL)
     assert resp.status_code == 200, resp.text
@@ -214,11 +214,13 @@ async def test_flush_verify_confirms_and_clears_a_previously_deferred_sync(flush
     triggers the middleware's pending-sync retry BEFORE the handler runs; R2
     is healthy, so the retry lands the upload and the handler sees no pending
     sync -> 200."""
-    app, fake, db_path = flush_env
+    app, fake, _db_path = flush_env
     from app.database import has_sync_pending, mark_sync_pending
     from app.storage import r2_key
 
-    mark_sync_pending(USER_ID)
+    # T5081: retry_pending_sync (which the middleware's pending-retry block
+    # calls) is now gated on the SCOPED marker for the db actually pending.
+    mark_sync_pending(USER_ID, scope=PROFILE_ID)
     assert has_sync_pending(USER_ID)
 
     async with _client(app) as c:
@@ -238,10 +240,11 @@ async def test_flush_verify_503_when_sync_genuinely_failing(flush_env):
     and flush-verify must return 503 sync_failed/retryable — never a lying
     200 that would let the update gate proceed to the destructive cache
     flush with unsynced state."""
-    app, fake, db_path = flush_env
+    app, fake, _db_path = flush_env
     from app.database import has_sync_pending, mark_sync_pending
 
-    mark_sync_pending(USER_ID)
+    # T5081: scoped, so retry_pending_sync's gate actually attempts this db.
+    mark_sync_pending(USER_ID, scope=PROFILE_ID)
     fake.fail_profile_upload = True
 
     async with _client(app) as c:

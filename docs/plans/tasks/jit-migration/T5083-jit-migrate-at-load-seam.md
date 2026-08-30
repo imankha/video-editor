@@ -35,8 +35,13 @@ Produce `docs/plans/tasks/T5083-design.md` covering:
   version via `set_local_db_version`; confirm nothing bypasses it.
 - **Concurrency & idempotency.** Two concurrent requests for the same (user, profile) must not both
   migrate or both upload. Reuse `_get_user_write_lock` in-process. Across processes/machines the lock
-  does not apply: define CAS-refusal-on-the-migration-path as re-pull-then-retry-once (T5081 makes
-  that silent for a clean copy). Migration is idempotent under the `user_version` gate — confirm.
+  does not apply: define CAS-refusal-on-the-migration-path as re-pull-then-retry-once. T5081 does NOT
+  change CAS-refusal handling itself (that idea was explored and abandoned — see T5081's Problem
+  section); what it gives this task is a `.sync_pending` marker that is trustworthy per-scope
+  (INV-P: exists iff that exact scope may hold committed writes R2 hasn't confirmed, cleared only by
+  a confirmed upload or an actual restore-if-newer swap) — so a migration-path re-pull-and-retry can
+  safely check "does this profile actually have anything pending" instead of guessing. Migration is
+  idempotent under the `user_version` gate — confirm.
 - **WAL / `wal_busy`.** The runner swaps the file and refuses when a live connection holds it. At the
   first-access seam no connection should exist yet; specify what happens if one does (block, retry,
   or fail the request) — never serve un-migrated.

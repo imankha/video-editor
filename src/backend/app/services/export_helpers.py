@@ -36,9 +36,9 @@ def create_export_job(
     export_id: str,
     project_id: int,
     export_type: str,
-    input_data: dict = None,
-    game_id: int = None,
-    game_name: str = None,
+    input_data: dict | None = None,
+    game_id: int | None = None,
+    game_name: str | None = None,
 ) -> str:
     """
     Create an export_jobs record for tracking.
@@ -78,8 +78,8 @@ def create_export_job(
 
 def complete_export_job(
     export_id: str,
-    output_filename: str = None,
-    output_video_id: int = None,
+    output_filename: str | None = None,
+    output_video_id: int | None = None,
 ):
     """
     Mark an export job as complete.
@@ -158,10 +158,10 @@ async def send_progress(
     phase: str,
     message: str,
     export_type: str,
-    project_id: int = None,
-    project_name: str = None,
-    game_id: int = None,
-    game_name: str = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    game_id: int | None = None,
+    game_name: str | None = None,
     log_every: int = 5,
 ):
     """
@@ -207,10 +207,10 @@ async def send_progress(
 def create_progress_callback(
     export_id: str,
     export_type: str,
-    project_id: int = None,
-    project_name: str = None,
-    game_id: int = None,
-    game_name: str = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    game_id: int | None = None,
+    game_name: str | None = None,
 ):
     """
     Create an async progress callback for unified Modal/local processors.
@@ -349,31 +349,41 @@ def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     pending on failure as the secondary recovery path.
     """
     from app.database import (
+        USER_DB_SCOPE,
         mark_sync_pending,
         sync_db_to_r2_explicit,
         sync_user_db_to_r2_explicit,
     )
 
-    ok = True
+    # T5081: track each db's own outcome so the pending marker is scoped to the
+    # db that actually failed — a blanket mark_sync_pending(user_id) made a
+    # user.sqlite-only failure here also re-attempt an untouched profile.sqlite
+    # on the next retry (see retry_pending_sync's docstring for the incident).
+    profile_ok = True
     if profile_id:
         try:
             # Coerce at the call site: `SyncResult.CONFLICT/FAILED and ok` would
             # otherwise short-circuit to the SyncResult enum itself (falsy operand
             # wins in `and`), leaking a non-bool into `ok` until the final `bool()`.
-            ok = bool(sync_db_to_r2_explicit(user_id, profile_id)) and ok
+            profile_ok = bool(sync_db_to_r2_explicit(user_id, profile_id))
         except Exception as e:
             logger.error(f"[Export] Background profile DB sync failed for user={user_id}: {e}")
-            ok = False
+            profile_ok = False
+    user_ok = True
     try:
-        ok = bool(sync_user_db_to_r2_explicit(user_id)) and ok
+        user_ok = bool(sync_user_db_to_r2_explicit(user_id))
     except Exception as e:
         logger.error(f"[Export] Background user DB sync failed for user={user_id}: {e}")
-        ok = False
+        user_ok = False
 
+    ok = profile_ok and user_ok
     if ok:
         logger.info(f"[SYNC] EXPORT user={user_id} -> R2 sync OK")
     else:
-        mark_sync_pending(user_id)
+        if profile_id and not profile_ok:
+            mark_sync_pending(user_id, scope=profile_id)
+        if not user_ok:
+            mark_sync_pending(user_id, scope=USER_DB_SCOPE)
         logger.warning(f"[SYNC] EXPORT user={user_id} -> R2 sync FAILED - marked pending for retry")
     # T4310: sync_db_to_r2_explicit/sync_user_db_to_r2_explicit now return a
     # 3-state SyncResult; this function's declared -> bool contract still holds,

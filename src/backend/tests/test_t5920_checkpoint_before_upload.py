@@ -156,7 +156,7 @@ class TestCheckpointGuardProfile:
             key = profile_r2_key(USER, PROFILE, "profile.sqlite")
             _seed_r2_from_file(fake, key, db_path, version=0)
             set_local_db_version(USER, PROFILE, 0)
-            mark_sync_pending(USER)  # a write is outstanding
+            mark_sync_pending(USER, scope=PROFILE)  # a write is outstanding
 
             # Writer commits a change INTO the WAL; kept open so the main file is
             # never auto-checkpointed. Reader holds an open snapshot -> busy.
@@ -345,7 +345,10 @@ class TestBackgroundSyncCheckpointCoverage:
             key = profile_r2_key(USER, PROFILE, "profile.sqlite")
             _seed_r2_from_file(fake, key, db_path, version=0)
             set_local_db_version(USER, PROFILE, 0)
-            mark_sync_pending(USER)
+            # T5081: retry_pending_sync (which the re-drain below calls) is now
+            # gated on the SCOPED marker — mark the profile scope specifically so
+            # the re-drain actually re-attempts it instead of vacuously no-op'ing.
+            mark_sync_pending(USER, scope=PROFILE)
             _begin_sync_attempt(USER)
 
             writer = sqlite3.connect(str(db_path))
