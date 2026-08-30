@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trash2, Star, Check, Plus, Crop } from 'lucide-react';
+import { Trash2, Star, Check, Plus, Crop, Sparkles } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile, useProfileStore } from '../../../stores';
+import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
@@ -80,6 +80,7 @@ export function ClipDetailsEditor({
   onScrubUnlock,
   teammateSuggestions = [],
   onOpenInFocus,
+  onOpenInOverlay,
 }) {
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
@@ -113,6 +114,13 @@ export function ClipDetailsEditor({
 
   const hasReel = !!region.autoProjectId;
   const notesLength = region.notes?.length || 0;
+
+  // T8060: once a reel exists, the Reel control tracks it through Focus ->
+  // Overlay -> Completed/Published, using the same has_working_video/
+  // has_final_video/is_published fields DraftTile already reads for the
+  // Reel Drafts list — no separate stage computation to keep in sync.
+  const projects = useProjectsList();
+  const linkedProject = hasReel ? projects.find(p => p.id === region.autoProjectId) : null;
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
   // (`my_athlete ?? true` => My Athlete) — never read region.my_athlete bare.
@@ -337,14 +345,33 @@ export function ClipDetailsEditor({
         )}
 
         {/* Create Reel Button — desktop only. Once a reel exists
-            (region.autoProjectId), this becomes a "Focus" button that opens
-            it directly instead of just sitting disabled (T8040). While the
-            create-reel request is in flight (reelRequested but no
-            autoProjectId yet), it stays disabled/"Reel Created" as before. */}
+            (region.autoProjectId), this tracks the reel's own progress
+            (T8040/T8060): Focus, then Overlay, then a plain status once
+            there's nothing left to open from here. While the create-reel
+            request is in flight (reelRequested but no autoProjectId yet),
+            it stays disabled/"Reel Created" as before.
+            T8070 (filed, not yet built): none of this accounts for the
+            clip's start/end time changing after the reel was produced —
+            the linked reel's stage is shown even if it no longer reflects
+            the clip's current footage window. */}
         {!isMobile && (
           <div className="flex items-center justify-between">
             <label className="text-gray-400 text-xs">Reel</label>
-            {hasReel ? (
+            {hasReel && linkedProject?.has_final_video ? (
+              <span className="text-xs text-green-400 flex items-center gap-1.5">
+                <Check size={14} />
+                {linkedProject.is_published ? 'Published' : 'Completed'}
+              </span>
+            ) : hasReel && linkedProject?.has_working_video ? (
+              <Button
+                variant="cyan"
+                size="sm"
+                icon={Sparkles}
+                onClick={() => onOpenInOverlay(region.autoProjectId)}
+              >
+                Overlay
+              </Button>
+            ) : hasReel ? (
               <Button
                 variant="cyan"
                 size="sm"

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ClipDetailsEditor } from './ClipDetailsEditor';
+import { useProjectsStore } from '../../../stores/projectsStore';
 
 // jsdom lacks matchMedia; ClipDetailsEditor renders through the real useIsMobile hook.
 // matches:false => desktop, where the Reel button renders.
@@ -66,6 +67,48 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Focus' }));
     expect(onOpenInFocus).toHaveBeenCalledTimes(1);
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
+  });
+
+  describe('once the linked project has a stage (T8060)', () => {
+    afterEach(() => {
+      useProjectsStore.setState({ projects: [] });
+    });
+
+    it('still shows "Focus" when the linked project has not been exported yet', () => {
+      useProjectsStore.setState({ projects: [{ id: 42, has_working_video: false, has_final_video: false, is_published: false }] });
+      render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42 }} onUpdate={() => {}} onDelete={() => {}} />);
+      expect(screen.getByRole('button', { name: 'Focus' })).toBeTruthy();
+    });
+
+    it('shows "Overlay" once Focus has been exported (has_working_video)', () => {
+      useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: false, is_published: false }] });
+      const onOpenInOverlay = vi.fn();
+      render(
+        <ClipDetailsEditor
+          region={{ ...baseRegion, autoProjectId: 42 }}
+          onUpdate={() => {}}
+          onDelete={() => {}}
+          onOpenInOverlay={onOpenInOverlay}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Overlay' }));
+      expect(onOpenInOverlay).toHaveBeenCalledWith(42);
+    });
+
+    it('shows a "Completed" status (no button) once Overlay has exported a final video', () => {
+      useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: true, is_published: false }] });
+      render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42 }} onUpdate={() => {}} onDelete={() => {}} />);
+      expect(screen.getByText('Completed')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Overlay' })).toBeNull();
+    });
+
+    it('shows a "Published" status (no button) once the reel is published', () => {
+      useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: true, is_published: true }] });
+      render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42 }} onUpdate={() => {}} onDelete={() => {}} />);
+      expect(screen.getByText('Published')).toBeTruthy();
+    });
   });
 
   describe('on mobile', () => {

@@ -669,7 +669,16 @@ function App() {
     const activeProjectId = useProjectsStore.getState().selectedProjectId;
     if (editorMode === EDITOR_MODES.ANNOTATE && activeProjectId &&
         (newMode === EDITOR_MODES.FRAMING || newMode === EDITOR_MODES.OVERLAY)) {
-      useProjectDataStore.getState().invalidateClips(activeProjectId);
+      // T8050: this invalidateClips call is fire-and-forget, so FocusScreen mounts
+      // before the fetch resolves with selectedClip/videoUrl still null. Without a
+      // loading flag around it, VideoPlayer's `videoUrl ? ... : isLoading ? spinner
+      // : "No video loaded"` chain falls all the way to the empty-state branch for
+      // that window -- reads as broken, not loading. setLoading mirrors how
+      // useProjectLoader brackets its own fetchClips call for the Drafts-tile path.
+      const projectDataStore = useProjectDataStore.getState();
+      projectDataStore.setLoading(true, 'clips');
+      projectDataStore.invalidateClips(activeProjectId)
+        .finally(() => useProjectDataStore.getState().setLoading(false));
     }
 
     // For project-manager, also clear selection
@@ -976,7 +985,12 @@ function App() {
           // T6190: this re-edit path never runs loadProject and FocusScreen no longer
           // fetches clips on mount, so load the restored project's clips here — the
           // "open reel" gesture owns its own fetch (reset() above cleared the old list).
-          useProjectDataStore.getState().invalidateClips(projectId);
+          // T8050: bracket with setLoading so FocusScreen shows its spinner instead of
+          // "No video loaded" for the gap before this fetch resolves (see the sibling
+          // call in handleModeChange for the full explanation).
+          useProjectDataStore.getState().setLoading(true, 'clips');
+          useProjectDataStore.getState().invalidateClips(projectId)
+            .finally(() => useProjectDataStore.getState().setLoading(false));
           // Default to framing mode when opening a completed reel
           setEditorMode(EDITOR_MODES.FRAMING);
         }}
