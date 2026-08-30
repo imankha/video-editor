@@ -1,6 +1,6 @@
 # T8050: Focus mode briefly shows "No video loaded" instead of a loading state
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-30 (reported live-testing the T8040 Focus button)

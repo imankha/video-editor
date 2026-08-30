@@ -1,6 +1,6 @@
 # T8060: Reel control tracks Focus -> Overlay -> Completed/Published
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-30 (follow-up to T8040 while live-testing)
