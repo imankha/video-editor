@@ -142,9 +142,13 @@ export function stageRowsFor(draftList) {
 
 /**
  * By-Phase view (T8080) — flips stageRowsFor's primary axis: one entry per
- * pipeline stage present (pipeline order), each carrying one row per game
- * present in that stage. Games/phases with no drafts in a given stage are
- * dropped, mirroring splitByStage's empty-bucket behavior.
+ * pipeline stage present (pipeline order). WITHIN a stage, buckets by
+ * RENDERED aspect first (via aspectRowsForStage, same row-height invariant
+ * every other grouping in this file honors), then by game within each aspect
+ * bucket — never the other way around, or a landscape game's cluster could
+ * sit on the same wrapped line as a portrait game's cluster and mix tile
+ * heights (found live-testing the first version of this view, which grouped
+ * game-first and let aspect vary freely within one game's row).
  *
  * `orderedGameGroups` must already be in the SAME order the By-Game view uses
  * (ProjectManager's `groupedProjects.sortedKeys`, "Other reels" appended last)
@@ -155,18 +159,31 @@ export function stageRowsFor(draftList) {
  */
 export function phaseRowsFor(orderedGameGroups) {
   return DRAFT_STAGE_ORDER.map(stage => {
-    const byGame = orderedGameGroups
-      .map(({ key, label, projects }) => {
-        const stageProjects = projects.filter(project => getDraftStage(project) === stage);
-        return stageProjects.length > 0
-          ? { key, label, byAspect: aspectRowsForStage(stage, stageProjects) }
-          : null;
-      })
-      .filter(Boolean);
+    // This stage's projects per game, preserving the caller's game order.
+    const perGameStageProjects = orderedGameGroups
+      .map(({ key, label, projects }) => ({
+        key, label, projects: projects.filter(project => getDraftStage(project) === stage),
+      }))
+      .filter(game => game.projects.length > 0);
 
-    const count = byGame.reduce(
-      (n, game) => n + game.byAspect.reduce((m, bucket) => m + bucket.projects.length, 0), 0
-    );
-    return { stage, count, byGame };
+    if (perGameStageProjects.length === 0) return { stage, count: 0, byAspect: [] };
+
+    // Aspect-major (row-height invariant): bucket ALL of this stage's projects
+    // by rendered aspect first via the shared helper, then re-split each
+    // aspect bucket by game (id lookup, since aspectRowsForStage only knows
+    // projects, not which game each came from).
+    const allStageProjects = perGameStageProjects.flatMap(game => game.projects);
+    const byAspect = aspectRowsForStage(stage, allStageProjects).map(({ ratio, projects: aspectProjects }) => {
+      const aspectIds = new Set(aspectProjects.map(p => p.id));
+      const byGame = perGameStageProjects
+        .map(({ key, label, projects }) => {
+          const gameAspectProjects = projects.filter(p => aspectIds.has(p.id));
+          return gameAspectProjects.length > 0 ? { key, label, projects: gameAspectProjects } : null;
+        })
+        .filter(Boolean);
+      return { ratio, byGame };
+    });
+
+    return { stage, count: allStageProjects.length, byAspect };
   }).filter(({ count }) => count > 0);
 }

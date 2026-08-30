@@ -71,13 +71,12 @@ const GAMES_GROUP_SECTION_CLASS = 'lg:grid lg:grid-cols-[8rem_minmax(0,1fr)] lg:
 const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start '
   + 'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:block';
 
-// T6810/T8080: labeled carousel rows for one draft list. ONE renderer shared by
-// every call site (a game group's stage rows, "Other reels", and T8080's
-// By-Phase game rows) so they can never drift. Each row = a label chip
-// (tinted name + count) then one carousel per aspect present within that row;
-// the aspect chip only appears when a row actually mixes aspects.
-function DraftCarouselRows({
-  rows,
+// T6810: the stage-labeled carousel rows for one draft list (a game group or
+// "Other reels"). Each stage row = a label chip (legend-tinted stage name +
+// count) then one carousel per aspect present within that stage; the aspect
+// chip only appears when a stage actually mixes aspects.
+function DraftStageRows({
+  byStage,
   ariaPrefix,
   onSelectProject,
   onSelectProjectWithMode,
@@ -85,15 +84,15 @@ function DraftCarouselRows({
   exportingProject,
   pendingGameIds,
 }) {
-  return rows.map(({ key, testId, label, tint, byAspect }) => {
-    const rowCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
+  return byStage.map(({ stage, byAspect }) => {
+    const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
     return (
-      <div key={key} data-testid={testId}>
+      <div key={stage} data-testid={`stage-row-${stage}`}>
         <div className="px-3 pb-1 flex items-center gap-1.5">
-          <span className={`text-[10px] font-semibold ${tint} bg-gray-700/40 px-1.5 py-0.5 rounded`}>
-            {label}
+          <span className={`text-[10px] font-semibold ${DRAFT_STAGE_TINTS[stage]} bg-gray-700/40 px-1.5 py-0.5 rounded`}>
+            {DRAFT_STAGE_LABELS[stage]}
           </span>
-          <span className="text-[10px] text-gray-500">{rowCount}</span>
+          <span className="text-[10px] text-gray-500">{stageCount}</span>
         </div>
         {byAspect.map(({ ratio, projects: aspectProjects }) => (
           <div key={ratio ?? 'source'}>
@@ -105,7 +104,7 @@ function DraftCarouselRows({
               </div>
             )}
             <CardCarousel
-              ariaLabel={`${ariaPrefix} ${label}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
+              ariaLabel={`${ariaPrefix} ${DRAFT_STAGE_LABELS[stage]}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
             >
               {aspectProjects.map(project => (
                 <DraftTile
@@ -126,30 +125,68 @@ function DraftCarouselRows({
   });
 }
 
-// By-Game view (T6810): one row per pipeline stage present within a game group
-// or "Other reels". Wraps DraftCarouselRows, keeping the exact stage-row-*
-// testid the existing e2e coverage asserts on.
-function DraftStageRows({ byStage, ...rest }) {
-  const rows = byStage.map(({ stage, byAspect }) => ({
-    key: stage,
-    testId: `stage-row-${stage}`,
-    label: DRAFT_STAGE_LABELS[stage],
-    tint: DRAFT_STAGE_TINTS[stage],
-    byAspect,
-  }));
-  return <DraftCarouselRows rows={rows} {...rest} />;
-}
+// By-Phase view (T8080, aspect-major follow-up): one section per aspect
+// PRESENT in a phase (row-height invariant -- a wrapped line must never mix
+// tile heights, so aspect is the outer axis, matching every other grouping in
+// this file), each carrying compact per-game clusters. Games are usually
+// sparse within one (phase, aspect) bucket (a single game contributes 1-2
+// drafts), so a full-width row per game would leave most of the row empty
+// next to a small fixed-width tile (DraftTile.sizeClass is a fixed px width
+// from `sm:` up, not fluid) -- clusters shrink-wrap to their content and a
+// flex-wrap container packs several onto the same line. The max-width cap
+// keeps a genuinely large cluster (many drafts, one game, one aspect, one
+// phase) from growing unbounded -- CardCarousel only detects overflow (and
+// shows its scroll/arrow affordances) when its container has a bounded width
+// to overflow past.
+const COMPACT_ROW_MAX_WIDTH = 'max-w-full sm:max-w-[420px]';
 
-// By-Phase view (T8080): one row per game present within a phase section.
-function DraftGameRows({ byGame, ...rest }) {
-  const rows = byGame.map(({ key, label, byAspect }) => ({
-    key,
-    testId: `game-row-${key}`,
-    label,
-    tint: 'text-gray-300',
-    byAspect,
-  }));
-  return <DraftCarouselRows rows={rows} {...rest} />;
+function DraftPhaseAspectRows({
+  byAspect,
+  ariaPrefix,
+  onSelectProject,
+  onSelectProjectWithMode,
+  onDeleteProject,
+  exportingProject,
+  pendingGameIds,
+}) {
+  return byAspect.map(({ ratio, byGame }) => (
+    <div key={ratio ?? 'source'}>
+      {byAspect.length > 1 && (
+        <div className="px-3 pb-1">
+          <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+            {ratio}
+          </span>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-x-5 gap-y-3">
+        {byGame.map(({ key, label, projects }) => (
+          <div key={key} data-testid={`game-row-${key}`} className={`shrink-0 ${COMPACT_ROW_MAX_WIDTH}`}>
+            <div className="px-3 pb-1 flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold text-gray-300 bg-gray-700/40 px-1.5 py-0.5 rounded">
+                {label}
+              </span>
+              <span className="text-[10px] text-gray-500">{projects.length}</span>
+            </div>
+            <CardCarousel
+              ariaLabel={`${ariaPrefix} ${label}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
+            >
+              {projects.map(project => (
+                <DraftTile
+                  key={project.id}
+                  project={project}
+                  onSelect={() => onSelectProject(project.id)}
+                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                  onDelete={() => onDeleteProject(project.id)}
+                  exportingProject={exportingProject}
+                  pendingGameIds={pendingGameIds}
+                />
+              ))}
+            </CardCarousel>
+          </div>
+        ))}
+      </div>
+    </div>
+  ));
 }
 
 // T7290: the Games tab organizes by MATCH date, the date the user thinks in and the
@@ -1402,10 +1439,13 @@ export function ProjectManager({
                 and wrap onto their own line when they don't. */}
             {showFilters && (
               <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                {/* Status Filter */}
+                {/* Status Filter (T8080: displayed label renamed to "Phase" -- the
+                    internal statusFilter name/values are untouched, this is a
+                    DIFFERENT bucketing than DRAFT_STAGE/getDraftStage, see the
+                    filteredProjects logic above) */}
                 {filterCounts.showStatusFilter && (
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Status</span>
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Phase</span>
                     {[
                       { value: 'all', label: 'All' },
                       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
@@ -1563,11 +1603,16 @@ export function ProjectManager({
               ) : classification === 'phase' ? (
                 <>
                   {/* T8080: By Phase — one section per pipeline stage present
-                      (Not Started -> In Focus -> In Overlay -> Ready), each
-                      sub-grouped by game (one labeled carousel row per game,
-                      aspect-split within so no row ever mixes tile heights). */}
-                  {groupedByPhase.map(({ stage, count, byGame }) => (
-                    <div key={stage} className="mb-2" data-testid={`phase-section-${stage}`}>
+                      (Not Started -> In Focus -> In Overlay -> Ready), each a
+                      bordered card (distinguishes phases from each other) with
+                      aspect-major rows inside (row-height invariant: a wrapped
+                      line never mixes tile heights) sub-grouped by game. */}
+                  {groupedByPhase.map(({ stage, count, byAspect }) => (
+                    <div
+                      key={stage}
+                      className="mb-4 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3"
+                      data-testid={`phase-section-${stage}`}
+                    >
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
                         <span className={`text-sm font-medium flex-1 ${DRAFT_STAGE_TINTS[stage]}`}>
                           {DRAFT_STAGE_LABELS[stage]}
@@ -1576,8 +1621,8 @@ export function ProjectManager({
                           {count}
                         </span>
                       </div>
-                      <DraftGameRows
-                        byGame={byGame}
+                      <DraftPhaseAspectRows
+                        byAspect={byAspect}
                         ariaPrefix={`${DRAFT_STAGE_LABELS[stage]} drafts`}
                         onSelectProject={onSelectProject}
                         onSelectProjectWithMode={onSelectProjectWithMode}
@@ -1591,11 +1636,11 @@ export function ProjectManager({
               ) : (
                 <>
                   {/* By Game — Ungrouped drafts (no game) -> one "Other reels"
-                      section; one labeled carousel row per pipeline stage
-                      present, each stage aspect-split so row heights stay
-                      consistent (T6810) */}
+                      section (bordered card, matches each game's card below);
+                      one labeled carousel row per pipeline stage present, each
+                      stage aspect-split so row heights stay consistent (T6810) */}
                   {groupedProjects.ungrouped.length > 0 && (
-                    <div className="mb-2">
+                    <div className="mb-4 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
                         <span className="text-sm font-medium text-gray-200 flex-1">Other reels</span>
                         <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
@@ -1614,7 +1659,9 @@ export function ProjectManager({
                     </div>
                   )}
 
-                  {/* Grouped projects by game - expand if has incomplete or unpublished projects */}
+                  {/* Grouped projects by game - expand if has incomplete or unpublished projects.
+                      Bordered card (T8080 follow-up) so one game's group reads as visually
+                      distinct from the next, matching the By-Phase treatment above. */}
                   {groupedProjects.sortedKeys.map(groupKey => {
                     const group = groupedProjects.groups[groupKey];
                     const hasIncomplete = group.statusCounts.done < group.statusCounts.total;
@@ -1626,6 +1673,7 @@ export function ProjectManager({
                       count={group.projects.length}
                       statusCounts={group.statusCounts}
                       defaultExpanded={hasIncomplete || hasUnpublished}
+                      className="rounded-lg border border-gray-700/50 bg-gray-900/20 p-1.5"
                     >
                       {/* One labeled carousel row per pipeline stage present
                           (Not Started -> In Framing -> In Overlay -> Ready), each

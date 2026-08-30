@@ -235,8 +235,15 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
         has_overlay_edits: false,
         is_published: false,
       };
-      const framingPortrait = { ...inFramingBase, id: 888887, name: 'Synthetic Framing Portrait', aspect_ratio: '9:16' };
-      const framingLandscape = { ...inFramingBase, id: 888888, name: 'Synthetic Landscape Draft', aspect_ratio: '16:9' };
+      // has_crop_keyframes: true is REQUIRED on both -- T6900 renders an In-Focus
+      // draft at LANDSCAPE (not its target ratio) until real crop keyframes exist,
+      // so without this both synthetics would render landscape regardless of
+      // aspect_ratio and merge into ONE bucket, never exercising the aspect split
+      // this test is named for. `...inFramingBase` alone inherits whatever the
+      // SEED project's has_crop_keyframes happened to be (false on this account),
+      // which silently no-op'd this test's core assertions until caught here.
+      const framingPortrait = { ...inFramingBase, id: 888887, name: 'Synthetic Framing Portrait', aspect_ratio: '9:16', has_crop_keyframes: true };
+      const framingLandscape = { ...inFramingBase, id: 888888, name: 'Synthetic Landscape Draft', aspect_ratio: '16:9', has_crop_keyframes: true };
       const freshDraft = {
         ...inFramingBase,
         id: 888889,
