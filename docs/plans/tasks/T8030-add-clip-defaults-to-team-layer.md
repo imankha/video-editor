@@ -4,6 +4,7 @@
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-29 (reported live-testing staging)
+**Updated:** 2026-08-29
 
 ## Problem
 
@@ -60,3 +61,27 @@ Is this report:
 
 ### Related
 - `.claude/knowledge/annotate.md` § T6400 (design rationale + resolution order)
+
+## Progress Log
+
+**2026-08-29**: User picked the recommended option: new clips always default to My
+Athlete, regardless of the previous clip's layer (full reversion of T6400's
+inherit-last-layer default, not just the game-open seed). Implemented:
+`resolveInheritedNewClipLayer` deleted from `useAnnotate.js` (+ its test file);
+`AnnotateContainer` now resets `newClipLayerIsMine` to `true` unconditionally on
+every game-open gesture and no longer updates it from create/switch-layer
+gestures; stale T6400 comments and the annotate.md knowledge doc updated in the
+same commit. Per-clip Team switching is unchanged. 65 targeted unit tests green
+(layer/teammate/filter tests across ClipDetailsEditor, AnnotateFullscreenOverlay,
+ClipsSidePanel, useAnnotateState), `npm run build` clean. Branch pushed, PR #310
+opened against master. **Not manually verified in a browser this session** — see
+T8040's progress log for the same environment caveat. Recommend a quick click-
+through (create a Team clip, click Add Clip again, confirm it offers My Athlete)
+before merging.
+
+## Acceptance Criteria
+
+- [x] A new clip's default layer is always My Athlete, regardless of the
+  previous clip's layer in that game.
+- [x] Switching a clip to Team is still a one-click per-clip action (unchanged).
+- [x] Targeted frontend unit tests pass.

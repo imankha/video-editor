@@ -1,9 +1,10 @@
 # T8040: Replace disabled "Create Reel" button with a Focus button when a reel already exists
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-29 (reported live-testing staging)
+**Updated:** 2026-08-29
 
 ## Problem
 
@@ -50,7 +51,29 @@ existing "open in Focus" entry points (e.g. `DraftTile`'s per-clip-segment click
 
 ## Acceptance Criteria
 
-- [ ] Clip with an existing reel shows an enabled "Focus" button, not a disabled one.
-- [ ] Clicking it opens Focus mode on that clip's reel.
-- [ ] A clip with no reel yet still shows the original "Create Reel" button, unchanged.
-- [ ] Targeted frontend unit tests pass.
+- [x] Clip with an existing reel shows an enabled "Focus" button, not a disabled one.
+- [x] Clicking it opens Focus mode on that clip's reel.
+- [x] A clip with no reel yet still shows the original "Create Reel" button, unchanged.
+- [x] Targeted frontend unit tests pass.
+
+## Progress Log
+
+**2026-08-29**: Implemented (ClipDetailsEditor, ClipsSidePanel, AnnotateScreen +
+`openClipInFocus`). Reviewer agent found 2 MAJOR issues: (1) `selectProject` wasn't
+awaited before `onModeChange('framing')`, which on the button's primary path
+(opening a game fresh, no project pre-selected) would route through Home for the
+duration of the fetch and strand the user there silently on failure; (2) the
+persist-view-progress block (`finishAnnotation` + `saveLastPlayhead`) hit its 3rd
+copy. Both fixed: `openClipInFocus` now awaits `selectProject`, toasts + bails on a
+null result (mirrors `ProjectsScreen.handleSelectProjectWithMode`), and the shared
+block is extracted into `persistAnnotateProgress`. Also addressed reviewer MINOR
+findings (EDITOR_MODES.FRAMING constant, dropped redundant `reelCreated` alias,
+`cyan` instead of `success` for the actionable button, non-optional `onOpenInFocus`
+call, added prop-wiring + mobile-hidden test coverage). 28 targeted unit tests
+green, `npm run build` clean. Branch pushed, PR #309 opened against master.
+**Not manually verified in a browser this session** — local dev-login/API calls in
+this sandboxed environment hung repeatedly investigating T8030, and re-attempting
+for T8040 wasn't worth the risk of losing more time; flagging this explicitly
+rather than claiming a live-tested result. Recommend the user click through the
+flow (a clip with an existing reel -> Focus button -> lands in Focus on that reel)
+before merging.
