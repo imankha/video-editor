@@ -188,6 +188,22 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     onModeChange?.(newMode);
   }, [handleBackToProjects, finishAnnotation, saveLastPlayhead, selectProject, onModeChange]);
 
+  // T8040: open Focus mode directly on a specific clip's existing reel — the
+  // "Focus" button ClipDetailsEditor shows once region.autoProjectId is set.
+  // Unlike handleAnnotateModeChange('framing') (which guesses the MOST RECENT
+  // autoProjectId across all clips), this opens the clip the user actually
+  // clicked from.
+  const openClipInFocus = useCallback((autoProjectId) => {
+    if (gameIdRef.current) {
+      const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
+      finishAnnotation(gameIdRef.current, viewedDuration);
+      const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
+      if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
+    }
+    selectProject(autoProjectId);
+    onModeChange?.('framing');
+  }, [finishAnnotation, saveLastPlayhead, selectProject, onModeChange]);
+
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
   const annotate = AnnotateContainer({
@@ -636,6 +652,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           newClipLayerIsMine={newClipLayerIsMine}
           layerFilter={layerFilter}
           onSetLayerFilter={setLayerFilter}
+          onOpenClipInFocus={openClipInFocus}
         />
       </div>
       {/* Mobile sidebar overlay */}
