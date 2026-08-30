@@ -1,6 +1,6 @@
 # T8080: Reel Drafts classification toggle (By Game / By Phase)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-29
@@ -93,7 +93,9 @@ wording in a new comment, added `type="button"`. Also fixed a pre-existing, unre
 "In Framing" label (T7700 renamed it to "In Focus") in the same e2e spec my By-Game click
 now reaches, so those aspect-split assertions actually run instead of silently matching
 nothing. 103 targeted unit tests green (7 files), lint clean (pre-existing warnings only).
-Ready for merge approval.
+Merged to master (PR [#312](https://github.com/imankha/video-editor/pull/312), squash, CI
+green — frontend job passed, backend job correctly skipped per the layer-scoped Branch CI
+diff, no backend files touched).
 
 ## Acceptance Criteria
 
