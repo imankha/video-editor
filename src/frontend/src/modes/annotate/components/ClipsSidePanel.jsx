@@ -59,6 +59,7 @@ export function ClipsSidePanel({
   newClipLayerIsMine = true,
   layerFilter = 'all',
   onSetLayerFilter,
+  onOpenClipInFocus,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
 
@@ -331,6 +332,7 @@ export function ClipsSidePanel({
                 onScrubLock={onScrubLock}
                 onScrubUnlock={onScrubUnlock}
                 teammateSuggestions={teammateSuggestions}
+                onOpenInFocus={onOpenClipInFocus}
               />
             </div>
           )}

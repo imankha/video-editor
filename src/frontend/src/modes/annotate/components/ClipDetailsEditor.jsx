@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trash2, Star, Check, Plus } from 'lucide-react';
+import { Trash2, Star, Check, Plus, Crop } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
@@ -79,6 +79,7 @@ export function ClipDetailsEditor({
   onScrubLock,
   onScrubUnlock,
   teammateSuggestions = [],
+  onOpenInFocus,
 }) {
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
@@ -110,7 +111,7 @@ export function ClipDetailsEditor({
     setReelRequested(false);
   }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const reelCreated = !!region.autoProjectId || reelRequested;
+  const hasReel = !!region.autoProjectId;
   const notesLength = region.notes?.length || 0;
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
@@ -335,22 +336,37 @@ export function ClipDetailsEditor({
           </div>
         )}
 
-        {/* Create Reel Button — desktop only */}
+        {/* Create Reel Button — desktop only. Once a reel exists
+            (region.autoProjectId), this becomes a "Focus" button that opens
+            it directly instead of just sitting disabled (T8040). While the
+            create-reel request is in flight (reelRequested but no
+            autoProjectId yet), it stays disabled/"Reel Created" as before. */}
         {!isMobile && (
           <div className="flex items-center justify-between">
             <label className="text-gray-400 text-xs">Reel</label>
-            <Button
-              variant={reelCreated ? 'success' : 'cyan'}
-              size="sm"
-              icon={reelCreated ? Check : Plus}
-              disabled={reelCreated}
-              onClick={() => {
-                setReelRequested(true);
-                onUpdate({ createProject: true });
-              }}
-            >
-              {reelCreated ? 'Reel Created' : 'Create Reel'}
-            </Button>
+            {hasReel ? (
+              <Button
+                variant="cyan"
+                size="sm"
+                icon={Crop}
+                onClick={() => onOpenInFocus(region.autoProjectId)}
+              >
+                Focus
+              </Button>
+            ) : (
+              <Button
+                variant={reelRequested ? 'success' : 'cyan'}
+                size="sm"
+                icon={reelRequested ? Check : Plus}
+                disabled={reelRequested}
+                onClick={() => {
+                  setReelRequested(true);
+                  onUpdate({ createProject: true });
+                }}
+              >
+                {reelRequested ? 'Reel Created' : 'Create Reel'}
+              </Button>
+            )}
           </div>
         )}
 
