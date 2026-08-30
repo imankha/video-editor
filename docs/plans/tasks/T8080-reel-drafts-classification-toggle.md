@@ -4,7 +4,7 @@
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-08-29
-**Updated:** 2026-08-29
+**Updated:** 2026-08-30
 
 ## Problem
 
@@ -96,6 +96,29 @@ nothing. 103 targeted unit tests green (7 files), lint clean (pre-existing warni
 Merged to master (PR [#312](https://github.com/imankha/video-editor/pull/312), squash, CI
 green — frontend job passed, backend job correctly skipped per the layer-scoped Branch CI
 diff, no backend files touched).
+
+**2026-08-30 (follow-up, PR [#313](https://github.com/imankha/video-editor/pull/313))**: user
+feedback after seeing it live: (1) By-Phase rows were sparse (one game per row) wasting
+horizontal space since `DraftTile` is a fixed px width from `sm:` up — fixed with shrink-wrapped,
+flex-wrap-packed game clusters; (2) that fix initially grouped by game first, which let a
+landscape cluster and a portrait cluster share a wrapped line and mix tile heights — caught by
+the user directly ("keep rows to items with the same aspect ratio") and fixed by rewriting
+`phaseRowsFor` to be aspect-major (bucket by rendered aspect first, then by game — matches the
+row-height invariant already used everywhere else in this file); (3) both By-Phase sections and
+By-Game groups now render as bordered cards for clearer visual distinction (user: "we need
+better distinction between phases... between games"); (4) the "Status" filter label now reads
+"Phase" (internal `statusFilter` name/values untouched — a different, older bucketing than
+`DRAFT_STAGE`, just the displayed label changed). Also fixed a latent fixture bug found while
+running `t5672-carousel-chevrons-auto-badge.spec.js`'s T6810 test end-to-end for the first time
+(synthetic drafts never set `has_crop_keyframes`, so they silently never exercised the aspect
+split the test is named for). 104 targeted unit tests green, lint clean, e2e spec 3/3 green,
+live-verified at mobile/medium/desktop widths. Merged to master (PR #313, squash, CI green).
+Two OTHER pre-existing, unrelated e2e failures were discovered while spot-checking
+(`T5672-drafts-tiles-carousel.spec.js` waits for a route regex that doesn't include the app's
+actual `/focus` route; `t5672-drawer-aspect-split.spec.js` uses `getByRole('button', {name:
+'My Reels', exact:true})` but that button's accessible name includes its count badge, e.g.
+"My Reels 7") — NOT fixed here (out of scope, unrelated to Reel Drafts), flagged for a
+separate task if the user wants them addressed.
 
 ## Acceptance Criteria
 
