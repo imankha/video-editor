@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// T6400: the "New clips go to" mode toggle was REMOVED — a new clip now inherits
-// the last layer the user assigned. The clip-list filter pills (surface e) remain
-// and filter the rendered list client-side only.
+// T6400: the "New clips go to" mode toggle was REMOVED — a new clip defaults to
+// My Athlete instead (T8030). The clip-list filter pills (surface e) remain and
+// filter the rendered list client-side only.
 vi.mock('./ClipListItem', () => ({
   default: ({ region }) => <div data-testid="row" data-id={region.id} data-mine={String(region.my_athlete ?? true)} />,
 }));

@@ -64,13 +64,12 @@ export default function useAnnotateState() {
   // NOTE: showAnnotateOverlay removed — now derived from useClipSelection state machine
   const [annotateSelectedLayer, setAnnotateSelectedLayer] = useState(DEFAULT_SELECTED_LAYER);
 
-  // T5700/T6400: which raw_clips.my_athlete layer NEW clips land on, and which
+  // T5700/T8030: which raw_clips.my_athlete layer NEW clips land on, and which
   // layer the clip list is filtered to. Both are ephemeral session view state —
   // never persisted (no backend write, no store that syncs). The filter resets to
-  // 'all' on the game-open gesture; the new-clip layer is INHERITED — seeded from
-  // the game's most recent own clip on open, then updated by layer-assignment
-  // gestures (create a clip / switch a clip's layer) — both imperative, never via
-  // a state-watching effect (AnnotateContainer). No toggle drives it anymore.
+  // 'all' on the game-open gesture; the new-clip layer always defaults to My
+  // Athlete, reset imperatively on the same gesture (AnnotateContainer) — never
+  // inherited from the previous clip and never via a state-watching effect.
   const [newClipLayerIsMine, setNewClipLayerIsMine] = useState(true);
   const [layerFilter, setLayerFilter] = useState(DEFAULT_LAYER_FILTER);
 
