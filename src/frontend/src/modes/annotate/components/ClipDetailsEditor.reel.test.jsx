@@ -67,4 +67,26 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
     expect(onOpenInFocus).toHaveBeenCalledTimes(1);
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });
+
+  describe('on mobile', () => {
+    beforeEach(() => {
+      window.matchMedia = (query) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      });
+    });
+
+    it('never renders the Reel control (Create Reel or Focus) — desktop only', () => {
+      render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42 }} onUpdate={() => {}} onDelete={() => {}} />);
+      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Reel Created' })).toBeNull();
+    });
+  });
 });

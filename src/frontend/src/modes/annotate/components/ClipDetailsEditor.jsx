@@ -112,7 +112,6 @@ export function ClipDetailsEditor({
   }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasReel = !!region.autoProjectId;
-  const reelCreated = hasReel || reelRequested;
   const notesLength = region.notes?.length || 0;
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
@@ -347,25 +346,25 @@ export function ClipDetailsEditor({
             <label className="text-gray-400 text-xs">Reel</label>
             {hasReel ? (
               <Button
-                variant="success"
+                variant="cyan"
                 size="sm"
                 icon={Crop}
-                onClick={() => onOpenInFocus?.(region.autoProjectId)}
+                onClick={() => onOpenInFocus(region.autoProjectId)}
               >
                 Focus
               </Button>
             ) : (
               <Button
-                variant={reelCreated ? 'success' : 'cyan'}
+                variant={reelRequested ? 'success' : 'cyan'}
                 size="sm"
-                icon={reelCreated ? Check : Plus}
-                disabled={reelCreated}
+                icon={reelRequested ? Check : Plus}
+                disabled={reelRequested}
                 onClick={() => {
                   setReelRequested(true);
                   onUpdate({ createProject: true });
                 }}
               >
-                {reelCreated ? 'Reel Created' : 'Create Reel'}
+                {reelRequested ? 'Reel Created' : 'Create Reel'}
               </Button>
             )}
           </div>

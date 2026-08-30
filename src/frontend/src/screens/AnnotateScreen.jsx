@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
+import { toast } from '../components/shared/Toast';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -146,20 +147,24 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const pendingSourceSelectAttemptsRef = useRef(0);
 
   // Handlers
+  // Persist watch progress on the way out of Annotate (leave-annotate gesture).
+  // Shared by every exit path below — extracted once it hit its 3rd copy.
+  const persistAnnotateProgress = useCallback(() => {
+    if (!gameIdRef.current) return;
+    const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
+    finishAnnotation(gameIdRef.current, viewedDuration);
+    // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
+    const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
+    if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
+  }, [finishAnnotation, saveLastPlayhead]);
+
   const handleBackToProjects = useCallback(() => {
-    // Persist view progress and trigger finish-annotation
-    if (gameIdRef.current) {
-      const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
-      finishAnnotation(gameIdRef.current, viewedDuration);
-      // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
-      const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
-      if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
-    }
+    persistAnnotateProgress();
     // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
     sessionStorage.setItem('projectManagerTab', 'games');
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
-  }, [finishAnnotation, saveLastPlayhead, onClearSelection, setEditorMode]);
+  }, [persistAnnotateProgress, onClearSelection, setEditorMode]);
 
   // T1550: Unified mode change handler — fires finishAnnotation before delegating
   const handleAnnotateModeChange = useCallback((newMode) => {
@@ -167,14 +172,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       handleBackToProjects();
       return;
     }
-    // Persist view progress before switching modes
-    if (gameIdRef.current) {
-      const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
-      finishAnnotation(gameIdRef.current, viewedDuration);
-      // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
-      const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
-      if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
-    }
+    persistAnnotateProgress();
     // When switching to framing, select the auto-project from the most recent clip
     if (newMode === 'framing') {
       const regions = clipRegionsRef.current;
@@ -186,23 +184,26 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     }
     // Delegate to App.jsx mode change handler (handles project selection, confirmations)
     onModeChange?.(newMode);
-  }, [handleBackToProjects, finishAnnotation, saveLastPlayhead, selectProject, onModeChange]);
+  }, [handleBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
 
   // T8040: open Focus mode directly on a specific clip's existing reel — the
   // "Focus" button ClipDetailsEditor shows once region.autoProjectId is set.
   // Unlike handleAnnotateModeChange('framing') (which guesses the MOST RECENT
   // autoProjectId across all clips), this opens the clip the user actually
-  // clicked from.
-  const openClipInFocus = useCallback((autoProjectId) => {
-    if (gameIdRef.current) {
-      const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
-      finishAnnotation(gameIdRef.current, viewedDuration);
-      const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
-      if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
+  // clicked from. Awaits selectProject (mirrors ProjectsScreen's
+  // handleSelectProjectWithMode): switching mode before the project resolves
+  // would route through Home for the fetch's duration (resolveEditorScreen
+  // sends editorMode=framing with no selectedProject to Home) and a failed
+  // fetch would strand the user there with no feedback.
+  const openClipInFocus = useCallback(async (autoProjectId) => {
+    persistAnnotateProgress();
+    const project = await selectProject(autoProjectId);
+    if (!project) {
+      toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
+      return;
     }
-    selectProject(autoProjectId);
-    onModeChange?.('framing');
-  }, [finishAnnotation, saveLastPlayhead, selectProject, onModeChange]);
+    onModeChange?.(EDITOR_MODES.FRAMING);
+  }, [persistAnnotateProgress, selectProject, onModeChange]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
