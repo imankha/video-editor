@@ -34,6 +34,26 @@ Design document (docs/plans/tasks/T7620-design.md), USER APPROVAL GATE, covering
    guided step FAILS (e.g. upload error mid-tour: the tour must surface the failure
    honestly, never loop on a broken step; coordinates with T7490's retry states).
 
+## 2026-08-31 directive addendum (binding)
+
+EPIC.md gained the Help-button directive; this design must additionally cover:
+- **Context engine**: next-best-action derivation from FLOW_EVENTS milestone state +
+  current route (the "smart" half - what does THIS user on THIS screen need next).
+- **Question steps**: intent-question dialogs that branch the path (full game vs
+  pre-cut clips is the known first branch); branch coverage must equal the retired
+  tutorial videos' curriculum - enumerate the video content and map every topic to a
+  guided branch.
+- **Step interaction contract**: one-clickable-control OR one-input OR one-question per
+  step; explainer dialog placement algorithm that provably never overlaps the target or
+  essential UI at 320px+.
+- **Stall-pulse trigger**: dwell-without-key-action detection pulsing the Help button
+  (never auto-open) - spec threshold, screens, and rate limit.
+- **Report-a-problem** entry from Help (reuses T7515 + bug_reports paths).
+- **Voice-ready copy**: per-step copy as short spoken-style sentences (V2 TTS is a
+  renderer swap).
+- Quest reconciliation is now simpler and harsher: the quest panel dies (T8120 collapses
+  it; this design decides what of the quest STATE survives as milestone tracking).
+
 ## Inputs
 
 - EPIC.md product requirements (user-specified, binding)

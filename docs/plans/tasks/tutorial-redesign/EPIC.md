@@ -55,6 +55,42 @@ constraints from the same evidence:
    first need, resumable independently. (This also degrades gracefully: skipping the
    upload tour does not forfeit the clip tour later.)
 
+## 2026-08-31 user directive: the Help button (binding; supersedes conflicting lines below)
+
+The quest panel surface is retired in favor of a single **Help button** (the mechanical
+collapse ships early as [T8120](../first-clip-funnel/T8120-quest-overlay-help-collapse.md);
+this epic builds what the button opens). Requirements:
+
+1. **Context-aware**: help derives its guidance from the user's CURRENT screen plus what
+   they have already done (existing FLOW_EVENTS milestone state + route). It never plays
+   a generic sequence.
+2. **Totally modal steps.** Each step is exactly ONE of:
+   - the one control we want clicked is the only interactive element (shade everything
+     else), bouncy arrow anchored to it, explainer dialog positioned to NEVER overlap
+     the target or other essential UI;
+   - the one input we want filled, same arrow + non-overlapping explainer;
+   - a question dialog that asks the user about their intent and BRANCHES the guided
+     path on the answer (e.g. full game video vs pre-cut clips).
+3. **No more tutorial videos.** The guided branches must cover EVERYTHING the videos
+   covered, plus the branch points. The videos are removed as a mechanism, not demoted
+   (this supersedes the "T5140 videos stay for the help surface" line below; the
+   assets contract retires with them).
+4. **On/off**: user can toggle help off and back on (unchanged from requirement 1 below).
+5. **Report a problem** from Help - wires into the existing T7515 frustration/impression
+   channel and the bug_reports path.
+6. **Breakthrough guarantee**: help must do its best to get the user past any blocker.
+   Complement the pull surface with one push element: when a funnel screen shows dwell
+   with no key action (~45s), PULSE the Help button with a contextual label - never
+   auto-open, never occlude (that is the exact bug T8120 removes).
+7. **Credits upfront**: the quest credit drip is replaced by a full upfront grant
+   (ships in T8120); the guided path never gates on earning credits.
+8. **V2 (out of scope, design for it)**: text-to-speech - the help speaks each step.
+   Keep step copy as short plain spoken-style sentences per step so voice is a renderer
+   swap, not a rewrite.
+
+Naming alignment: step copy uses the approved vocabulary - "Add Play", "Clips",
+"Build Highlight Reel" (see first-clip-funnel epic decisions).
+
 ## Design constraints
 
 - Motion is core product value (animation polish direction memory): the arrow bounce and
