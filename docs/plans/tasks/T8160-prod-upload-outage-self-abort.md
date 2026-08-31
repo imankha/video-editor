@@ -1,6 +1,6 @@
 # T8160: P0 PROD OUTAGE - prepare-upload aborts its own multipart (every fresh upload fails)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 
 **2026-08-31 implementation complete (inline session).** Branch
 `feature/T8160-upload-self-abort` pushed, Branch CI GREEN (changes/frontend/backend all
