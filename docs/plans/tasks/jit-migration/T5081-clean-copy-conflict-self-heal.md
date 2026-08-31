@@ -1,6 +1,6 @@
 # T5081: Split clean-copy conflicts from unsynced-write conflicts
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-31 prod)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-04

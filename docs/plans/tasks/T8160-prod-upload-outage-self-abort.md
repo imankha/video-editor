@@ -1,6 +1,6 @@
 # T8160: P0 PROD OUTAGE - prepare-upload aborts its own multipart (every fresh upload fails)
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-08-31 prod)
 
 **2026-08-31 implementation complete (inline session).** Branch
 `feature/T8160-upload-self-abort` pushed, Branch CI GREEN (changes/frontend/backend all
@@ -123,9 +123,16 @@ meaningless.
 
 ## Acceptance Criteria
 
-- [ ] Unit test with unstable listed UploadIds passes (old code demonstrably fails it)
-- [ ] A novel (never-before-hashed) file uploads successfully on staging AND prod
-- [ ] Zero self-aborts: after a prod upload, `Aborted multipart upload` does not appear for
-      the just-created id/key in the same request window
-- [ ] `upload_success_rate` on the admin pulse recovers to pre-2026-08-30 levels
-- [ ] Knowledge doc updated with the R2 UploadId landmine
+- [x] Unit test with unstable listed UploadIds passes (old code demonstrably fails it)
+- [x] A novel (never-before-hashed) file uploads successfully on staging AND prod — verified
+      2026-08-31 post-deploy: novel-hash prepare -> `upload_required` -> real part PUT 200
+      with ETag -> clean cancel, on both environments (prod via legitimate admin
+      impersonation of a real account, session stopped after)
+- [x] Zero self-aborts: after a prod upload, `Aborted multipart upload` does not appear for
+      the just-created id/key in the same request window — age-scoped reclaim + keeper
+      post-check make this structural, not just observed-clean once
+- [ ] `upload_success_rate` on the admin pulse recovers to pre-2026-08-30 levels — PENDING
+      OBSERVATION: this is a trailing daily aggregate that still includes this morning's
+      outage-window failures; it will climb as real post-deploy attempts accrue through the
+      day, not instantly on deploy. Re-check later 2026-08-31.
+- [x] Knowledge doc updated with the R2 UploadId landmine
