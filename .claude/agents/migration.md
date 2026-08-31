@@ -58,6 +58,13 @@ After Implementation (Stage 4), before Review (Stage 4.5). The Implementor chang
 
 ## Operations
 
+**How your migration actually reaches accounts (T5083/T5085, 2026-08-31):** a `user_db` or
+`profile_db` migration needs NO operator action — `run_user_seam`/`run_profile_seam` apply it
+just-in-time at the per-user DB-load seam (first access after deploy, before any read; blocked
+cases return a retryable 503 `pending_migration`). A `postgres` migration is still
+deploy/admin-triggered via `POST /api/admin/migrate`. Write per-user migrations expecting them to
+run one account at a time under a request, not in a single bulk sweep.
+
 Fallback when the admin endpoint (`POST /api/admin/migrate`) is unavailable:
 
 ```

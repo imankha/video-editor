@@ -245,7 +245,8 @@ Process rules for structural refactors (catalog: [code-smells.md](.claude/refere
 
 ## Migration System
 
-AI never manually migrates accounts. AI writes migration code; admin hits the endpoint.
+AI never manually migrates accounts. AI writes migration code; the per-user tracks migrate
+themselves just-in-time, and an admin triggers the Postgres track after deploy.
 
 | Track | DB Type | Version Mechanism | Schema Location |
 |-------|---------|-------------------|-----------------|
@@ -253,7 +254,24 @@ AI never manually migrates accounts. AI writes migration code; admin hits the en
 | `profile_db` | Profile SQLite (per-user-per-profile) | `PRAGMA user_version` | `src/backend/app/database.py` (`ensure_database()`) |
 | `postgres` | Fly Postgres (shared) | `schema_migrations` table | `src/backend/app/services/pg.py` (`_SCHEMA_DDL`) |
 
-Migration files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`. **Migrations do NOT auto-run on deploy or startup** (`init_pg_schema()` only creates fresh DBs) — trigger after deploy via `POST /api/admin/migrate` (admin session); SSH fallback in [migration.md](.claude/agents/migration.md). Schema changes: include the Migration agent in classification AND update `_SCHEMA_DDL` in `pg.py` for fresh deployments. Key rule: `PRAGMA user_version` = schema version; `db_version` table / R2 `x-amz-meta-db-version` = sync version. Independent.
+Migration files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`.
+
+**How each track runs (T5083 + T5085, 2026-08-31 — this replaced the old "nothing ever
+auto-runs; always hit the admin endpoint" rule):**
+
+| Track | Trigger | Operator action after deploy |
+|-------|---------|------------------------------|
+| `user_db`, `profile_db` | **JUST-IN-TIME at the per-user DB-load seam** — `run_user_seam`/`run_profile_seam` (`app/migrations/__init__.py`), called from `ensure_database`/`ensure_user_database` AND from every non-login opener (share materialization, admin cross-user reads, cross-profile moves, background loops). Migrates on FIRST access, before any read. | **None.** Accounts migrate themselves as they are touched. |
+| `postgres` | Deploy/admin-triggered ONLY (`init_pg_schema()` creates fresh DBs but never migrates). | `POST /api/admin/migrate` (admin session); SSH fallback in [migration.md](.claude/agents/migration.md). |
+
+A blocked per-user migration (WAL-busy, CAS-refused sync, below-head R2 verify) raises
+`migrations.MigrationBlocked` → retryable HTTP 503 `{"code": "pending_migration"}` — it never
+opens a below-head DB silently. `run_all_migrations` / `POST /api/admin/migrate` still exist
+and still sweep every user as a backstop (JIT Migration epic child T5087 deletes the per-user
+half once JIT has proven itself); running it is harmless and idempotent, just no longer
+required for the SQLite tracks.
+
+Schema changes: include the Migration agent in classification AND update `_SCHEMA_DDL` in `pg.py` for fresh deployments. Key rule: `PRAGMA user_version` = schema version; `db_version` table / R2 `x-amz-meta-db-version` = sync version. Independent. Mechanism details (locking, CAS re-pull-retry-once, fail-loud): [persistence-sync.md](.claude/knowledge/persistence-sync.md) §T5083/§T5085.
 
 ## Log handling
 

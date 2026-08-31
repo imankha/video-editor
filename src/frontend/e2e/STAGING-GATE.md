@@ -39,14 +39,18 @@ The authoritative machine-readable inventory is `helpers/targetEnv.js`
 ```bash
 # Step 0 — staging prep (SUPERVISOR/host step, needs cross-env creds + fly CLI).
 # Order matters: a live (or suspended) machine re-uploads its stale profile.sqlite
-# over a fresh copy (local-ahead guard), and migrations never auto-run on deploy.
+# over a fresh copy (local-ahead guard).
 #   0a. fly machine stop <id> -a reel-ballers-api-staging     # STOP, not suspend
 #   0b. fly proxy 15432:5432 -a reel-ballers-db-staging       # staging PG proxy
 #   0c. seed all 3 accounts (idempotent; resets gate-run drift and guarantees the
 #       export spec a framed draft) — commands in FIXTURE-CONTRACT.md § Seeding
 #   0d. fly machine start <id> -a reel-ballers-api-staging
-#   0e. POST /api/admin/migrate with an admin session (idempotent; applies any
-#       postgres-track migrations master added since the last staging migrate)
+#   0e. POST /api/admin/migrate with an admin session — POSTGRES track only.
+#       T5083/T5085: user_db/profile_db migrate JUST-IN-TIME at the per-user load
+#       seam, so the freshly seeded accounts migrate themselves on the gate's first
+#       login. Budget for it: that first dev-login pays the seam's migration cost
+#       for every seeded profile (observed minutes, not seconds, right after a
+#       re-seed), which is why the runner's dev-login probe can look "hung".
 
 # Step 1: run the three lanes concurrently (~10-14 min typical):
 bash scripts/staging-gate.sh

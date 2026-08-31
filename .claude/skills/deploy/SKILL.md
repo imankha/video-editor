@@ -61,16 +61,19 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    `deploy_production.sh` does **not** migrate and does **not** backfill. Run these in order after a
    successful deploy, and report the result of each:
 
-   **Migration window is real on every deploy, not just this one.** Because migrations never
-   auto-run, EVERY deploy opens a window where new code runs against below-head profile DBs — column
-   guards (`.claude/knowledge/backend-services.md` § "Migration-window column guard audit (T5970)")
-   shrink the blast radius but do not close the window. Run 6a **immediately** after a green deploy
-   (don't let it sit), and prefer deploying at a quiet-traffic hour when a release carries several
-   migration versions.
+   **Migration window (T5083/T5085 changed this).** `user_db`/`profile_db` now migrate
+   **just-in-time** at the per-user DB-load seam — an account migrates on its own first access
+   after the deploy, before any read, so the old "every deploy opens a window where new code runs
+   against below-head profile DBs" hazard is closed for the SQLite tracks (the T5970 column guards
+   are now belt-and-braces, not the only defense). **Postgres is still deploy-triggered and still
+   needs step 6a**, so run it immediately after a green deploy. A per-user migration that cannot
+   proceed returns a retryable 503 `pending_migration` rather than silently opening a stale DB.
 
-   **6a. Migrations (schema).** `POST /api/admin/migrate` (admin session), or the fly-ssh fallback in
-   [migration.md](../../agents/migration.md). Verify per-user tracks landed **in R2**, not just on
-   the machine — that distinction is the entire T6340 bug:
+   **6a. Migrations (schema) — Postgres track.** `POST /api/admin/migrate` (admin session), or the
+   fly-ssh fallback in [migration.md](../../agents/migration.md). The same call still sweeps every
+   user's SQLite DBs as an idempotent backstop (harmless, no longer required — JIT covers them;
+   T5087 will delete that half). If you want to confirm per-user tracks landed **in R2**, not just
+   on the machine — the distinction that was the entire T6340 bug:
    ```
    fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"
    ```
