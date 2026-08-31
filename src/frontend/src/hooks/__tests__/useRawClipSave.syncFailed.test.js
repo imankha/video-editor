@@ -50,6 +50,24 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       expect(toast.error).not.toHaveBeenCalled();
     });
 
+    it('T8180: 404 (game deleted / ghost session) → returns { notFound: true }, not null, no throw', async () => {
+      // The backend now refuses to write an orphan clip against a deleted game. The
+      // hook must signal the ghost distinctly (so the caller preserves the in-memory
+      // region + surfaces the ghost) rather than the generic null/thrown-error path.
+      apiFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({ detail: 'Game not found' }) });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { result } = renderHook(() => useRawClipSave());
+
+      let res;
+      await act(async () => { res = await result.current.saveClip(7, { start_time: 1, end_time: 2 }); });
+
+      expect(res).toEqual({ notFound: true });
+      // Distinct from the durable-fail path: no sync_failed toast fires here.
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
     it('503 sync_failed → returns null, marks not-saved with clip copy, offers Retry', async () => {
       apiFetch.mockResolvedValue(syncFailed503());
       const { result } = renderHook(() => useRawClipSave());

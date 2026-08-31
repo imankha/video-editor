@@ -15,6 +15,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { GameCreateStatus } from '../constants/gameConstants';
 import { useQuestStore } from '../stores/questStore';
+import { useEditorStore } from '../stores/editorStore';
 import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
 import { getWarmingDiag } from '../utils/cacheWarming';
 
@@ -29,6 +30,26 @@ export const UPLOAD_PHASE = {
   ERROR: 'error',
   INSUFFICIENT_CREDITS: 'insufficient_credits',
 };
+
+/**
+ * T8180: is the user right now annotating the game whose upload just failed?
+ *
+ * The failure-cleanup path fires DELETE /api/games/{id}?only_if_empty=true to remove a
+ * pending game that acquired no content. But annotate-during-upload (T1540) is the
+ * NORMAL case: the user is inside Annotate on this very game, playing it from a local
+ * blob, and has not committed a clip yet — so only_if_empty happily deletes the game
+ * out from under them (bug 47p: a user annotated a deleted game for 26 minutes). Skip
+ * the cleanup when the editor is still bound to this game; the errored upload entry is
+ * retained (uploadStore) so Retry re-uses the game row and Discard deletes it.
+ *
+ * Gated on isAnnotateMode() so "the user navigated away from Annotate" reverts to the
+ * normal cleanup — the game is then genuinely abandoned-and-empty.
+ */
+function isUserAnnotatingGame(gameId) {
+  if (gameId == null) return false;
+  const editor = useEditorStore.getState();
+  return editor.isAnnotateMode() && editor.activeAnnotateGameId === gameId;
+}
 
 // R2 upload status returned from prepare-upload / finalize-upload
 export const UPLOAD_STATUS = {
@@ -906,13 +927,17 @@ export async function uploadGame(file, onProgress, options = {}) {
     // activateGame succeeded) — a later throw in this try block (a lost response, a
     // slow request) must not race a paid, ready game into the cleanup path. The
     // backend's own status check is the real invariant; this is defense in depth.
-    if (gameResult?.game_id && !activated) {
+    // T8180: also never fire it while the user is still annotating this game — see
+    // isUserAnnotatingGame. The entry stays errored (uploadStore) for Retry/Discard.
+    if (gameResult?.game_id && !activated && !isUserAnnotatingGame(gameResult.game_id)) {
       try {
         await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
         // Best-effort cleanup — log but don't mask the original error.
         console.warn('[uploadGame] Failed to clean up pending game:', cleanupErr);
       }
+    } else if (gameResult?.game_id && !activated) {
+      console.warn(`[uploadGame] Upload failed but user is annotating game ${gameResult.game_id} — skipping cleanup delete; game retained for Retry/Discard`);
     }
     notify(UPLOAD_PHASE.ERROR, 0, error.message);
     throw error;
@@ -1021,12 +1046,15 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     // user annotated against during a multi-video upload; the backend refuses when
     // content exists and leaves the game pending.
     // T7870: also never fire it once activateGame already succeeded (see uploadGame).
-    if (gameResult?.game_id && !activated) {
+    // T8180: also never fire it while the user is still annotating this game.
+    if (gameResult?.game_id && !activated && !isUserAnnotatingGame(gameResult.game_id)) {
       try {
         await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
         console.warn('[uploadMultiVideoGame] Failed to clean up pending game:', cleanupErr);
       }
+    } else if (gameResult?.game_id && !activated) {
+      console.warn(`[uploadMultiVideoGame] Upload failed but user is annotating game ${gameResult.game_id} — skipping cleanup delete; game retained for Retry/Discard`);
     }
     notify(UPLOAD_PHASE.ERROR, 0, error.message);
     throw error;

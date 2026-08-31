@@ -26,6 +26,21 @@ vi.mock('../stores/questStore', () => ({
 vi.mock('../stores/gamesDataStore', () => ({
   useGamesDataStore: { getState: () => ({ invalidateGames: vi.fn() }) },
 }));
+// T8180: the failure-cleanup path reads editorStore to decide whether to skip the
+// only_if_empty DELETE. Mock it with a mutable state object so tests control whether
+// the user is "annotating this game". Default: not in annotate → cleanup proceeds
+// (preserving the T7470/T7870 behavior the existing tests assert).
+const { editorMockState } = vi.hoisted(() => ({
+  editorMockState: { mode: 'project-manager', activeAnnotateGameId: null },
+}));
+vi.mock('../stores/editorStore', () => ({
+  useEditorStore: {
+    getState: () => ({
+      isAnnotateMode: () => editorMockState.mode === 'annotate',
+      activeAnnotateGameId: editorMockState.activeAnnotateGameId,
+    }),
+  },
+}));
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -63,6 +78,10 @@ const originalURL = globalThis.URL;
 describe('uploadManager', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // T8180: reset the editor mock to "not annotating" so each cleanup test starts
+    // from the default where cleanup proceeds; the bound-session test opts in.
+    editorMockState.mode = 'project-manager';
+    editorMockState.activeAnnotateGameId = null;
     globalThis.Worker = MockWorker;
     globalThis.URL = class extends originalURL {
       static createObjectURL = vi.fn(() => 'blob:mock-url');
@@ -386,6 +405,74 @@ describe('uploadManager', () => {
       } finally {
         useQuestStore.getState = originalGetState;
       }
+    });
+
+    // T8180: bug 47p — annotate-during-upload (T1540) is the normal case, so when the
+    // upload fails while the user is STILL inside Annotate on that game, the cleanup
+    // DELETE must NOT fire (only_if_empty would delete the game the user is actively
+    // annotating, since no clip is committed yet). The errored entry is retained for
+    // Retry/Discard instead.
+    it('never fires the cleanup DELETE while the user is annotating the failed game', async () => {
+      // The user is inside Annotate on game 789 (the game this upload created).
+      editorMockState.mode = 'annotate';
+      editorMockState.activeAnnotateGameId = 789;
+
+      // Mock 1: POST /api/games -> game created as pending (game_id now exists).
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'created',
+          game_id: 789,
+          name: 'Annotating While It Fails',
+          video_url: 'https://example.com/video.mp4',
+        }),
+      });
+      // Mock 2: POST /api/games/prepare-upload -> fails (transfer error).
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: 'Upload failed' }),
+      });
+
+      const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+
+      await expect(uploadGame(mockFile, () => {})).rejects.toThrow('Upload failed');
+
+      // No DELETE at all — the game the user is annotating must survive.
+      const deleteCall = mockFetch.mock.calls.find(([, opts]) => opts?.method === 'DELETE');
+      expect(deleteCall).toBeUndefined();
+    });
+
+    // T8180 companion: once the user has LEFT annotate (editor no longer bound to the
+    // game), the cleanup reverts to the T7470 behavior and fires the only_if_empty
+    // DELETE — an abandoned, empty pending game is still cleaned up.
+    it('still fires cleanup when the user is NOT bound to the failed game', async () => {
+      // In annotate, but on a DIFFERENT game — not bound to 789.
+      editorMockState.mode = 'annotate';
+      editorMockState.activeAnnotateGameId = 111;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'created', game_id: 789, name: 'Abandoned', video_url: 'x' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: 'Upload failed' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, deleted: true }),
+      });
+
+      const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+      await expect(uploadGame(mockFile, () => {})).rejects.toThrow('Upload failed');
+
+      const deleteCall = mockFetch.mock.calls.find(
+        ([url, opts]) => opts?.method === 'DELETE' && String(url).includes('/api/games/789')
+      );
+      expect(deleteCall).toBeTruthy();
+      expect(String(deleteCall[0])).toContain('only_if_empty=true');
     });
   });
 });

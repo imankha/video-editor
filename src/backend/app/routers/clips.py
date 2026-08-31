@@ -1187,6 +1187,22 @@ async def save_raw_clip(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # T8180: a clip must belong to a real game. Historically this endpoint wrote
+        # the row against WHATEVER game_id the client sent, with no existence check —
+        # so a clip saved during a "ghost" annotate session (the game was deleted out
+        # from under the user, e.g. the T7470 failed-upload cleanup) silently landed as
+        # an ORPHAN raw_clip and returned 200. Fail LOUDLY instead so the client can
+        # surface the ghost and preserve the user's work in memory. raw_clips.game_id
+        # is an FK-in-spirit to games.id; an expired game still has its row (only the
+        # R2 media is reclaimed), so this 404s ONLY when the game is truly gone.
+        cursor.execute("SELECT 1 FROM games WHERE id = ?", (clip_data.game_id,))
+        if cursor.fetchone() is None:
+            logger.warning(
+                f"[ClipSave] REJECT save: game {clip_data.game_id} no longer exists "
+                f"(ghost session) — refusing to write an orphan raw_clip"
+            )
+            raise HTTPException(status_code=404, detail="Game not found")
+
         # Check if clip already exists (natural key: game_id + end_time + video_sequence)
         if clip_data.video_sequence is not None:
             cursor.execute("""

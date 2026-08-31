@@ -71,9 +71,52 @@ annotate, watch the cleanup delete land, click Ready) - failing e2e/unit before 
 
 ## Implementation
 
+### Design decision (finalized 2026-08-31): option (a) client-driven skip
+
+Chose **(a)** — no backend state, no grace window. The uploadManager failure path already
+knows the game it created for the upload (`gameResult.game_id`); in the T1540
+annotate-during-upload normal case that IS the game the user is annotating. The client can
+therefore decide, at failure time, whether the user is still bound to that game and skip the
+cleanup delete when they are. Rejected (b) server-side grace window: it adds "last accessed by
+a live session" state to the game row for no gain over the client check, which is exact.
+
+**Mechanism — how the cleanup caller knows the user is bound.** The active annotate game id
+lives in a React hook (`useAnnotateState`), unreadable from the `uploadManager` service. Mirror
+it into `editorStore.activeAnnotateGameId` (a pure client UI mirror, same class as the existing
+`annotateHasSelectedClip`) via a one-line sync effect in `AnnotateContainer` — NOT a persistence
+path (no DB/R2 write). `uploadManager`'s two catch blocks then read
+`useEditorStore.getState()` and SKIP the `only_if_empty` DELETE when
+`isAnnotateMode() && activeAnnotateGameId === gameResult.game_id`. The `isAnnotateMode()` gate
+means "left annotate" reverts to the current cleanup behavior — exactly (a)'s "not bound" branch.
+The errored upload entry stays in `status:error` (uploadStore already retains it), so Retry
+re-uses the retained game row and Discard (dismiss gesture) is the only path that removes it.
+
+**Second half — ghost sessions impossible to miss (three loud 404 paths):**
+1. `finish-annotation` 404: `gamesDataStore.finishAnnotation` returns `{ notFound: true }`
+   (was a silent no-op, T7500). `AnnotateScreen.persistAnnotateProgress` reacts by surfacing a
+   toast, refreshing the games list, and redirecting to the project manager (exits the ghost).
+2. Clip save 404: `save_raw_clip` (backend) currently writes an ORPHAN raw_clip against a
+   deleted game_id with NO existence check — a silent success into the void. Add a
+   `SELECT 1 FROM games WHERE id = ?` guard → 404 when the game is gone. `useRawClipSave.saveClip`
+   returns `{ notFound: true }` on 404; `handleAddClip` keeps the just-added region (work
+   preserved in memory) and shows a loud toast with a "Back to games" action — no forced
+   navigation, so the in-memory clip stays visible.
+3. Continue-card: `handleLoadGame`'s existing "not found" branch already toasts + redirects on a
+   /load 404; add `fetchGames()` there so the deleted game drops out of "Continue where you left
+   off". The finish-annotation handler's `fetchGames()` covers the same for the normal exit.
+
+### Files
+- `stores/editorStore.js` — `activeAnnotateGameId` state + `setActiveAnnotateGameId`.
+- `containers/AnnotateContainer.jsx` — sync effect; clip-save 404 handling; `fetchGames` on load-404.
+- `services/uploadManager.js` — skip cleanup DELETE when bound (both catch blocks).
+- `stores/gamesDataStore.js` — `finishAnnotation` returns `{ notFound: true }` on 404.
+- `screens/AnnotateScreen.jsx` — `persistAnnotateProgress` reacts to `notFound` (toast+refresh+exit).
+- `hooks/useRawClipSave.js` — `saveClip` returns `{ notFound: true }` on 404.
+- `src/backend/app/routers/clips.py` — `save_raw_clip` 404 when game row is gone.
+
 ### Steps
-1. [ ] Reproduce ghost session on dev + failing test
-2. [ ] Design choice (a) vs (b) - brief, in-file; no full architect gate unless it grows
+1. [x] Reproduce ghost session on dev + failing test
+2. [x] Design choice (a) vs (b) - option (a), documented above
 3. [ ] Server/client fix + loud 404 handling in annotate
 4. [ ] Verify: failed upload while annotating never strands the user; Ready either works or
        visibly errors with work preserved

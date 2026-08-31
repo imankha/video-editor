@@ -103,7 +103,7 @@ describe('gamesDataStore — getGame() in-flight dedup', () => {
   });
 });
 
-describe('gamesDataStore — finishAnnotation 404 tolerance (T7500)', () => {
+describe('gamesDataStore — finishAnnotation 404 reporting (T8180, reverses T7500)', () => {
   beforeEach(async () => {
     await loadModule();
   });
@@ -113,19 +113,23 @@ describe('gamesDataStore — finishAnnotation 404 tolerance (T7500)', () => {
     vi.restoreAllMocks();
   });
 
-  it('swallows a 404 quietly (debug log, no error) — game already deleted', async () => {
+  it('REPORTS a 404 ({ notFound: true }, warn not error) — ghost session, no longer swallowed', async () => {
+    // T7500 used to swallow this silently (returned undefined, debug log). T8180
+    // reverses that: a 404 means the user was annotating a deleted game, and the
+    // caller must be able to surface a toast + exit. So finishAnnotation returns a
+    // { notFound: true } signal and warns (not errors, not silent).
     const fetchMock = vi.fn(() =>
       Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Game not found' }) })
     );
     vi.stubGlobal('fetch', fetchMock);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await useGamesDataStore.getState().finishAnnotation(4, 120);
 
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ notFound: true });
     expect(errorSpy).not.toHaveBeenCalled();
-    expect(debugSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   it('still logs an error for a genuine non-404 failure', async () => {

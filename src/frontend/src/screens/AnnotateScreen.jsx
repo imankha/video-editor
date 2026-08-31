@@ -147,16 +147,36 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const pendingSourceSelectAttemptsRef = useRef(0);
 
   // Handlers
+  // T8180: the game the user was annotating turned out to be deleted (a "ghost
+  // session"). Make it impossible to miss: loud toast, refresh the games list (so the
+  // deleted game drops out of "Continue where you left off"), and return to the
+  // project manager. Read/notify only — never a persistence path.
+  const handleGhostGame = useCallback(() => {
+    toast.error('This game no longer exists', {
+      message: 'It was removed, so we returned you to your games.',
+      duration: 6000,
+      dedupKey: 'annotate-ghost-game',
+    });
+    useGamesDataStore.getState().fetchGames();
+    redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
+  }, [redirectToMode]);
+
   // Persist watch progress on the way out of Annotate (leave-annotate gesture).
   // Shared by every exit path below — extracted once it hit its 3rd copy.
   const persistAnnotateProgress = useCallback(() => {
     if (!gameIdRef.current) return;
     const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
-    finishAnnotation(gameIdRef.current, viewedDuration);
+    // T8180: finishAnnotation now REPORTS a 404 ({ notFound: true }) instead of
+    // swallowing it (T7500). A 404 means the game vanished under the session — exit
+    // the ghost loudly rather than the old silent no-op (bug 47p: Ready 404'd silently
+    // after 26 min of annotating a deleted game).
+    Promise.resolve(finishAnnotation(gameIdRef.current, viewedDuration)).then((res) => {
+      if (res?.notFound) handleGhostGame();
+    });
     // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
     const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
     if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
-  }, [finishAnnotation, saveLastPlayhead]);
+  }, [finishAnnotation, saveLastPlayhead, handleGhostGame]);
 
   const handleBackToProjects = useCallback(() => {
     persistAnnotateProgress();
