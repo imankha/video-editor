@@ -241,6 +241,11 @@ export const STAGING_GATE_SPECS = [
     covers: 'buy-credits modal: 3 backend-sourced packs, prices present + ascending, "1 credit = 1 second" rule + explainer (STRUCTURAL, survives repricing; T7810)',
   },
   {
+    file: 'T8160-upload-transport-probe.spec.js',
+    lane: 'c',
+    covers: 'multipart upload TRANSPORT alive: NOVEL-hash prepare -> real part PUT 200 -> cancel (side-effect-free; a fixture re-upload dedups to EXISTS and proves nothing — the bug 47p outage was invisible to every other spec)',
+  },
+  {
     file: 'T5710-per-layer-recap.spec.js',
     lane: 'c',
     localOnly: true,
