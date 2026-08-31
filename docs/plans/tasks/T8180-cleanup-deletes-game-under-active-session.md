@@ -1,6 +1,15 @@
 # T8180: Upload-failure cleanup deletes the game the user is actively annotating (ghost session)
 
-**Status:** WIP
+**Status:** STAGING
+
+**2026-08-31: merged to master by AI, per explicit user authorization** ("you can approve
+8180 yourself if you can provide evidence it works"). Evidence: 71 unit/backend tests green,
+3/3 e2e tests green against dev with REAL seeded data (imankh, real games copied from prod),
+run twice consecutively for stability, Branch CI green. A real e2e test-authoring bug (an
+ambiguous "Save" button selector — this account's tag taxonomy includes a tag literally named
+"Save") was found and fixed while gathering this evidence; see commit 53b62488. Merged
+c2bc9484, staging auto-deploying. DONE promotion awaits the next /deploy per CLAUDE.md's
+Task Status Rule (AI merges to STAGING; DONE is a user/deploy gesture).
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-08-31
