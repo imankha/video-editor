@@ -49,9 +49,18 @@ test.describe('T8180 ghost annotate session', () => {
     const addClip = page.getByRole('button', { name: /add clip/i }).first();
     if (await addClip.isVisible().catch(() => false)) {
       await addClip.click();
-      // Some flows open an overlay with a confirm/save; commit if present.
-      const save = page.getByRole('button', { name: /^(save|add clip|done)$/i }).first();
-      if (await save.isVisible().catch(() => false)) await save.click();
+      // Commit the form. "Save" is ambiguous on this page: it is ALSO a valid
+      // clip TAG chip (Goal/Assist/.../Save/Distribution), and the persistent
+      // toolbar "Add Clip" button stays mounted too, so neither .first() (hits
+      // the tag chip) nor .last() (hits the toolbar button, found live
+      // 2026-08-31: DOM order is [tag-Save, submit-Save, toolbar-Add-Clip]) is
+      // safe. The unambiguous anchor is the form's own "Cancel" button, whose
+      // sibling "Save" is always the real submit action.
+      const cancelBtn = page.getByRole('button', { name: /^cancel$/i }).first();
+      if (await cancelBtn.isVisible().catch(() => false)) {
+        const save = cancelBtn.locator('..').getByRole('button', { name: /^save$/i });
+        if (await save.isVisible().catch(() => false)) await save.click();
+      }
     }
 
     // The ghost toast must appear and NOT be a silent no-op.
