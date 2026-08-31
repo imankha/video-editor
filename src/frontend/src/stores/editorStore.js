@@ -189,6 +189,15 @@ export const useEditorStore = create((set, get) => ({
   annotateHasSelectedClip: false,
   setAnnotateHasSelectedClip: (value) => set({ annotateHasSelectedClip: value }),
 
+  // T8180: the game id the annotate screen is currently bound to (mirror of
+  // useAnnotateState's annotateGameId, synced from AnnotateContainer). Pure client UI
+  // state — never persisted. Read by uploadManager's failure-cleanup path (a service
+  // that cannot see React hook state) to skip the only_if_empty DELETE when the user
+  // is still annotating the game whose upload just failed (annotate-during-upload,
+  // T1540). null when no game is loaded.
+  activeAnnotateGameId: null,
+  setActiveAnnotateGameId: (gameId) => set({ activeAnnotateGameId: gameId ?? null }),
+
   // Actions
 
   /**

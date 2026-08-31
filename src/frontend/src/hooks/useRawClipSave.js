@@ -166,6 +166,14 @@ export function useRawClipSave(activeGameIdRef = null) {
           surfaceClipSyncFailed('save', () => saveClip(gameId, clipData));
           return null;
         }
+        // T8180: the game was deleted out from under the user (ghost session). The
+        // backend now refuses to write an orphan clip (was a silent 200). Signal the
+        // caller distinctly so it can preserve the in-memory region and surface the
+        // ghost — never a silent drop.
+        if (response.status === 404) {
+          console.warn('[useRawClipSave] saveClip: game no longer exists (404) — ghost session, clip not saved');
+          return { notFound: true };
+        }
         throw new Error(errorData.detail || 'Failed to save clip');
       }
 

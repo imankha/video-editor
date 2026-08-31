@@ -372,12 +372,16 @@ export const useGamesDataStore = create((set, get) => ({
       });
 
       if (!response.ok) {
-        // T7500: a 404 here is EXPECTED and correct — the teardown fires after
-        // the game was already deleted (failed-upload cascade or a user delete
-        // mid-annotate). Swallow it quietly; only genuine failures are errors.
+        // T8180: a 404 here means the user was annotating a game that no longer
+        // exists (a "ghost session"). This is NO LONGER swallowed silently (the old
+        // T7500 behavior hid bug 47p: a user annotated a deleted game for 26 min and
+        // the 404 on Ready was a no-op). Report it so the caller can surface a toast,
+        // refresh the games list, and exit the ghost session. The primary fix (the
+        // uploadManager cleanup no longer deleting a game under an active session)
+        // makes this path genuinely exceptional rather than routine teardown.
         if (response.status === 404) {
-          console.debug('[gamesDataStore] finish-annotation: game already gone (404), ignoring');
-          return;
+          console.warn('[gamesDataStore] finish-annotation: game no longer exists (404) — ghost session');
+          return { notFound: true };
         }
         const errorData = await response.json().catch(() => ({}));
         console.error('[gamesDataStore] finish-annotation failed:', errorData);

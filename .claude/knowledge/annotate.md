@@ -1,5 +1,14 @@
 ---
 domain: annotate
+updated: 2026-08-31 (T8180 ghost annotate session: the T7470 only_if_empty cleanup was necessary but
+NOT sufficient — an annotate-during-upload session has committed nothing yet, so a failed upload's
+only_if_empty DELETE deleted the game UNDER the live session (bug 47p: 26 min annotating a deleted game,
+Ready → finish-annotation 404 silently). Both uploadManager catch blocks now skip the DELETE when the
+editor is still bound to the game (isUserAnnotatingGame via editorStore.activeAnnotateGameId — a session
+-binding check, NOT the banned content pre-check); and three loud-404 paths reverse prior silent swallows
+(finishAnnotation returns {notFound}, save_raw_clip 404s instead of writing an orphan raw_clip,
+continue-card refreshes on load-404) — see Landmines "Upload-failure cleanup is ONLY-IF-EMPTY" T8180
+addendum + "Ghost annotate session must be impossible to miss (T8180)")
 updated: 2026-08-29 (T8030 reverses T6400's inherit-last-layer new-clip default: a new clip now
 always defaults to My Athlete regardless of the previous clip's layer -- reported live-testing
 staging as "Add Clip defaults to Team" and confirmed the old inherited behavior was working exactly
@@ -610,6 +619,42 @@ The full checklist for an 11th→Nth sport:
   `uploadManager.test.js` ("cleans up a failed pending game with only_if_empty=true").
   Prod forensic that filed this: bigajosue (PAYING user) had 4 games insert+delete in one session
   (`sqlite_sequence.games=4`, 0 rows), work saved only by luck of having zero clips.
+  **T8180 (2026-08-31) — the only_if_empty guard was NECESSARY but NOT SUFFICIENT.** At cleanup
+  time the annotate-during-upload user has committed NOTHING yet (they're mid-session), so the game
+  is genuinely empty and `only_if_empty` happily deletes it OUT FROM UNDER the live session — bug 47p:
+  bknoto annotated a deleted game for 26 min, then Ready → `finish-annotation` 404 SILENTLY. So both
+  `uploadManager.js` catch blocks now ALSO skip the DELETE entirely when the user is still bound to the
+  game, via `isUserAnnotatingGame(gameId)` = `useEditorStore.getState().isAnnotateMode() &&
+  activeAnnotateGameId === gameId`. This is NOT the banned "frontend content pre-check" (that gated on
+  clip content, which the frontend can't be trusted to know and the backend already guards) — it gates
+  on EDITOR SESSION BINDING, information ONLY the client has. The errored `uploadStore` entry is
+  retained (`status:'error'`) so Retry re-uses the game row and Discard (dismiss gesture) is the only
+  delete path. `activeAnnotateGameId` is a pure client UI mirror in `editorStore` (same class as
+  `annotateHasSelectedClip`), synced from `AnnotateContainer` by a one-line effect off the hook's
+  `annotateGameId` — NOT a persistence path. When the user LEAVES annotate (`isAnnotateMode()` false)
+  the guard reverts to T7470's behavior and an abandoned-empty game is still cleaned up. See the
+  "Ghost session" landmine below and `uploadManager.test.js` (bound-skip + unbound-still-fires).
+- **Ghost annotate session must be impossible to miss (T8180, 2026-08-31).** If a game IS deleted
+  under an active annotate session (any path — a residual race, a user delete elsewhere), the app must
+  never let the user keep working into the void. Three loud-404 paths, all reversing prior silent
+  swallows:
+  1. **`finish-annotation` 404** — `gamesDataStore.finishAnnotation` now RETURNS `{ notFound: true }`
+     (was T7500's silent `return`/debug-log). `AnnotateScreen.persistAnnotateProgress` reacts via
+     `handleGhostGame()`: loud toast ("This game no longer exists"), `fetchGames()`, and
+     `redirectToMode(project-manager)` — exits the ghost. **The T7500 zero-row guard in the BACKEND
+     `finish_annotation` (no milestone on a missing game) is UNRELATED and unchanged** — only the
+     frontend's swallow was reversed.
+  2. **Clip save 404** — `save_raw_clip` (clips.py) historically wrote an ORPHAN raw_clip against a
+     deleted `game_id` with NO existence check (returned 200 into the void; this is bknoto's stray
+     raw_clip). Now a `SELECT 1 FROM games WHERE id = ?` guard → **HTTP 404** when the game is gone.
+     An EXPIRED game still has its row (only R2 media is reclaimed), so this 404s ONLY when truly gone.
+     `useRawClipSave.saveClip` returns `{ notFound: true }` on 404; `AnnotateContainer.handleAddClip`
+     KEEPS the just-added region (work preserved in memory — the region is already in `clipRegions`)
+     and shows a persistent toast with a "Back to games" action, NO forced navigation (so the clip
+     stays visible). Covered by `tests/test_t8180_ghost_clip_save.py` (404 + no orphan row) and
+     `useRawClipSave.syncFailed.test.js` (returns `{notFound:true}`, distinct from the 503 sync-fail).
+  3. **Continue-card** — `handleLoadGame`'s existing "not found" branch (toast + redirect) now also
+     `fetchGames()` so a clicked-but-deleted "Continue where you left off" game drops off the list.
 - **`uploadStore` holds a QUEUE, not a singular upload (T7360).** `uploads: []` replaced the old
   singular `activeUpload` + top-level globals (`uploadGameId`/`uploadGameName`/`retryContext`/
   `onCompleteCallbacks`) — those moved INTO each entry so N uploads coexist without cross-talk.

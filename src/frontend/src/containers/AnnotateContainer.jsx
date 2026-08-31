@@ -290,11 +290,20 @@ export function AnnotateContainer({
 
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const setAnnotateHasSelectedClip = useEditorStore((s) => s.setAnnotateHasSelectedClip);
+  const setActiveAnnotateGameId = useEditorStore((s) => s.setActiveAnnotateGameId);
 
   // Sync clip selection state to editorStore for quest panel auto-collapse
   useEffect(() => {
     setAnnotateHasSelectedClip(!!annotateSelectedRegionId);
   }, [annotateSelectedRegionId, setAnnotateHasSelectedClip]);
+
+  // T8180: mirror the game the user is annotating into editorStore so the
+  // uploadManager failure-cleanup path (a service, blind to hook state) can skip the
+  // only_if_empty DELETE while the user is still bound to this game. UI-mirror only —
+  // no persistence path. Clears to null on reset/new-load (annotateGameId goes null).
+  useEffect(() => {
+    setActiveAnnotateGameId(annotateGameId);
+  }, [annotateGameId, setActiveAnnotateGameId]);
 
 
   // T2810: Teammate tag suggestions (server baseline + locally-used tags).
@@ -749,6 +758,10 @@ export function AnnotateContainer({
       console.warn('[AnnotateContainer] Failed to load game:', err.message);
       if (err.message?.includes('not found')) {
         toast.error('Game not found');
+        // T8180: refresh the games list so a deleted game (e.g. one offered by
+        // "Continue where you left off" from a stale list) drops off after the click
+        // that 404'd, instead of lingering as a dead card.
+        useGamesDataStore.getState().fetchGames();
         useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       } else if (err.message?.includes('401')) {
         useAuthStore.setState({ isAuthenticated: false });
@@ -887,7 +900,23 @@ export function AnnotateContainer({
           ...(clipData.createProject != null && { create_project: clipData.createProject }),
         });
 
-        if (result?.raw_clip_id) {
+        if (result?.notFound) {
+          // T8180: the game was deleted out from under this annotate session (ghost).
+          // The region is ALREADY in clipRegions (added above) so the user's work is
+          // preserved in memory and stays on screen — we do NOT navigate away or drop
+          // it. Surface a loud, persistent error with an explicit way back to the
+          // games list, and refresh that list so the ghost game drops off.
+          useGamesDataStore.getState().fetchGames();
+          toast.error('This game no longer exists', {
+            message: "Your clip couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+            duration: 0,
+            dedupKey: 'annotate-ghost-game',
+            action: {
+              label: 'Back to games',
+              onClick: () => useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER),
+            },
+          });
+        } else if (result?.raw_clip_id) {
           setRawClipId(newRegion.id, result.raw_clip_id);
 
           if (result.project_created) {
