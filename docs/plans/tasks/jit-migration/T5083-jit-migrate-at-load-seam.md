@@ -1,6 +1,6 @@
 # T5083: JIT migrate at the per-user load seam
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-08-04 (carries the 2026-07-13 T5080 scope)
