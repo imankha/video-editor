@@ -72,7 +72,12 @@ def ensure_profile_db_local(
     it to the sharer's profile_id and restore it in a finally (same pattern the
     background workers use: auto_export, modal_queue, sweep_scheduler).
     """
-    from app.database import get_local_db_version, set_local_db_version
+    from app.database import (
+        clear_sync_pending,
+        get_local_db_version,
+        read_pending_token,
+        set_local_db_version,
+    )
     from app.profile_context import reset_profile_id_token, set_current_profile_id
     from app.storage import sync_database_from_r2_if_newer
 
@@ -87,6 +92,15 @@ def ensure_profile_db_local(
         # this restore, has the file open right now for perfectly normal
         # reasons). before_download is only consulted once R2 is confirmed
         # newer, so a live connection blocks the actual swap, not every call.
+        #
+        # T5081 (INV-P reason b, site 4): capture this SCOPE's (the DB's
+        # owner, from the explicit args -- NEVER the ContextVar, which this
+        # function may have just pointed at a different sharer) pending
+        # token before the download, same as the upload path's reason (a).
+        # A restore-if-newer that actually replaces local content discharges
+        # whatever committed-but-unconfirmed write earned that scope its
+        # marker -- the peer fact to recording the new baseline below.
+        pending_token = read_pending_token(user_id, profile_id)
         downloaded, new_version, was_error = sync_database_from_r2_if_newer(
             user_id, db_path, local_version,
             before_download=lambda: not wal_sidecars_present(db_path),
@@ -103,6 +117,7 @@ def ensure_profile_db_local(
         if downloaded and new_version is not None:
             # Cache bookkeeping only (db_version table); not owner data.
             set_local_db_version(user_id, profile_id, new_version)
+            clear_sync_pending(user_id, profile_id, if_token=pending_token)
         if was_error and require_fresh:
             # A writer must never build on an unconfirmed copy: the sync back is a
             # force-push, so proceeding here silently REVERTS the profile in R2 to

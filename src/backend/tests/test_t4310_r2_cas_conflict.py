@@ -236,7 +236,7 @@ class TestBackgroundSyncConflictRouting:
         from app.middleware.db_sync import RequestContextMiddleware, _begin_sync_attempt
 
         user_id = "test-t4310-conflict"
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
@@ -259,47 +259,44 @@ class TestBackgroundSyncConflictRouting:
         # persistent "edits aren't saving - Retry" for the user.
         assert has_sync_pending(user_id), "conflict must NOT silently clear the retry marker"
 
-    def test_ok_status_clears_pending_marker(self):
-        """Reviewer round 2 (MINOR, test name over-promise): this test mocks
-        away sync_db_to_r2_explicit entirely, so it can only exercise
-        _background_sync's OWN clear_sync_pending-on-"ok" handling -- it never
-        reaches the real clear_sync_conflict (that lives inside the mocked
-        function). Renamed from *_clears_both_markers, which it didn't actually
-        assert. See TestSetSyncFailedClearsConflictMarker below for the real
-        both-markers behavior (set_sync_failed)."""
+    def test_ok_status_clears_pending_marker(self, tmp_path):
+        """T5081 (review round 3): clearing now lives ENTIRELY inside
+        sync_db_to_r2_explicit (INV-P clear reason a) -- _background_sync
+        itself clears nothing anymore. Mocking the primitive away with a bare
+        SyncResult.OK would bypass that real clearing, so this drives it for
+        real against FakeR2."""
         from app.database import (
-            clear_sync_pending,
             has_sync_pending,
-            mark_sync_conflict,
             mark_sync_pending,
+            set_local_db_version,
         )
         from app.middleware.db_sync import RequestContextMiddleware, _begin_sync_attempt
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
 
         user_id = "test-t4310-recover"
-        mark_sync_pending(user_id)
-        mark_sync_conflict(user_id)
+        _make_profile_db(tmp_path, user_id=user_id, profile_id="prof1")
+        mark_sync_pending(user_id, scope="prof1")
         _begin_sync_attempt(user_id)
         middleware = RequestContextMiddleware(app=None)
 
-        async def runner():
-            with patch(
-                "app.middleware.db_sync.sync_db_to_r2_explicit",
-                return_value=SyncResult.OK,
-            ):
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            fake._objects[profile_r2_key(user_id, "prof1", "profile.sqlite")] = {
+                "data": b"P", "metadata": {"db-version": "0"}}
+            set_local_db_version(user_id, "prof1", 0)
+
+            async def runner():
                 return await middleware._background_sync(
                     user_id, "prof1", "rid1", "POST", "/api/test",
                     had_writes=True, had_user_db_writes=False,
                     do_profile=False, force_profile=False,
                 )
 
-        status = asyncio.run(runner())
+            status = asyncio.run(runner())
 
         assert status == "ok"
         assert not has_sync_pending(user_id)
-        # _background_sync itself doesn't call clear_sync_conflict (that lives
-        # inside sync_db_to_r2_explicit, mocked away here) -- clean up directly
-        # so this test only asserts what it set up.
-        clear_sync_pending(user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -311,21 +308,35 @@ class TestBackgroundSyncConflictRouting:
 class TestSetSyncFailedClearsConflictMarker:
 
     def test_clearing_sync_failed_also_clears_conflict_marker(self, tmp_path, monkeypatch):
+        """T5081 (review round 3, Q4): set_sync_failed manages ONLY the alarm
+        markers (.sync_conflict/.sync_failed) now — it must NEVER touch
+        .sync_pending, a durability record only a confirmed upload, a restore,
+        or the db's deletion may discharge (INV-P). The old behavior (clearing
+        .sync_pending here too) let a manual-retry-adjacent call erase the
+        record of a write this call never verified landed."""
         import app.database as db_module
-        from app.database import has_sync_conflict, has_sync_pending, mark_sync_conflict, mark_sync_pending
+        from app.database import (
+            USER_DB_SCOPE,
+            has_sync_conflict,
+            has_sync_pending,
+            mark_sync_conflict,
+            mark_sync_pending,
+        )
         from app.middleware.db_sync import set_sync_failed
 
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         user_id = "test-t4310-clear-both"
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope=USER_DB_SCOPE)
         mark_sync_conflict(user_id)
         assert has_sync_pending(user_id) and has_sync_conflict(user_id)
 
         set_sync_failed(user_id, False)
 
-        assert not has_sync_pending(user_id)
         assert not has_sync_conflict(user_id), \
             "a stale conflict marker must not survive a real sync success"
+        assert has_sync_pending(user_id), \
+            "set_sync_failed must NOT clear .sync_pending — that's a durability " \
+            "record only a confirmed upload/restore/delete may discharge"
 
     def test_marking_sync_failed_does_not_touch_conflict_marker(self, tmp_path, monkeypatch):
         """Marking a NEW plain failure (failed=True) must not fabricate a
@@ -373,6 +384,7 @@ class TestParallelSyncMarkerRaceFixed:
         profile success must NOT clear the user's conflict (the cross-DB stomp), the
         header still reports "conflict", and the user-scope marker survives."""
         from app.database import (
+            USER_DB_SCOPE,
             has_sync_conflict,
             mark_sync_pending,
             set_local_db_version,
@@ -394,7 +406,8 @@ class TestParallelSyncMarkerRaceFixed:
                 "data": b"U_NEWER", "metadata": {"db-version": "9"}}
             set_local_user_db_version(user_id, 3)
 
-            mark_sync_pending(user_id)
+            mark_sync_pending(user_id, scope=profile_id)
+            mark_sync_pending(user_id, scope=USER_DB_SCOPE)
             _begin_sync_attempt(user_id)
             middleware = RequestContextMiddleware(app=None)
 
@@ -437,7 +450,8 @@ class TestParallelSyncMarkerRaceFixed:
             # Leftover conflicts on BOTH scopes from a prior attempt.
             mark_sync_conflict(user_id, scope=profile_id, diag={"reason": "stale_baseline"})
             mark_sync_conflict(user_id, scope=USER_DB_SCOPE, diag={"reason": "stale_baseline"})
-            mark_sync_pending(user_id)
+            mark_sync_pending(user_id, scope=profile_id)
+            mark_sync_pending(user_id, scope=USER_DB_SCOPE)
             _begin_sync_attempt(user_id)
             middleware = RequestContextMiddleware(app=None)
 
@@ -462,35 +476,43 @@ class TestRetryPendingSyncConflict:
         conflict, so retry_pending_sync must NOT ADVANCE the baseline to R2's
         version. T6160: it instead INVALIDATES it (schedule_profile_db_reheal ->
         set_local_db_version(..., None)) so the next request re-pulls — never a
-        force-push of the stale copy. Only the conflict marker gets set."""
+        force-push of the stale copy. Only the conflict marker gets set.
+
+        T5081 (review round 3): retry_pending_sync now delegates to
+        sync_db_to_r2_explicit (database.py) for the actual upload/conflict
+        handling, so this drives the real primitive against FakeR2 rather than
+        mocking storage.py's copy of sync_database_to_r2_with_version (which
+        database.py binds separately at import time — patching storage's copy
+        doesn't reach a call made from inside database.py) or a
+        db_sync.mark_sync_conflict name that no longer exists in that module.
+        """
+        from app.database import get_local_db_version, has_sync_conflict, mark_sync_pending, set_local_db_version
         from app.middleware.db_sync import retry_pending_sync
+        from app.storage import profile_r2_key
+        from tests.test_t4050_durable_sync import FakeR2, _r2_patched
 
-        profile_dir = tmp_path / USER / "profiles" / PROFILE
-        profile_dir.mkdir(parents=True)
-        (profile_dir / "profile.sqlite").write_text("fake")
+        _make_profile_db(tmp_path, marker="stale_local")
 
-        with patch("app.storage.sync_database_to_r2_with_version",
-                   return_value=(False, 9, {"reason": "stale_baseline"})) as mock_sync, \
-             patch("app.database.get_local_db_version", return_value=3), \
-             patch("app.database.set_local_db_version") as mock_set_ver, \
-             patch("app.database.get_local_user_db_version", return_value=None), \
-             patch("app.database.set_local_user_db_version"), \
-             patch("app.middleware.db_sync.mark_sync_conflict") as mock_mark_conflict, \
-             patch("app.database.USER_DATA_BASE", tmp_path):
+        fake = FakeR2()
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            # Loaded baseline v3; R2 has genuinely moved ahead to v9.
+            fake._objects[profile_r2_key(USER, PROFILE, "profile.sqlite")] = {
+                "data": b"NEWER", "metadata": {"db-version": "9"}}
+            set_local_db_version(USER, PROFILE, 3)
+            mark_sync_pending(USER, scope=PROFILE)  # T5081: retry is now gated on this
+
             result = retry_pending_sync(USER, profile_id=PROFILE)
 
-        # T6390: retry_pending_sync now returns the aggregate SyncResult (CONFLICT),
-        # still falsy so legacy `if not result` callers are unaffected.
-        assert result is SyncResult.CONFLICT
-        assert not result, "a conflict is not a successful retry"
-        # CAS is on (skip_version_check=False) for this always-off-thread path.
-        assert mock_sync.call_args.kwargs["skip_version_check"] is False
-        # T6160: the baseline is INVALIDATED (None), never ADVANCED to R2's v9.
-        mock_set_ver.assert_called_once_with(USER, PROFILE, None)
-        # T6390: the conflict marker is scoped to this profile and carries the diag.
-        mock_mark_conflict.assert_called_once()
-        assert mock_mark_conflict.call_args.args[0] == USER
-        assert mock_mark_conflict.call_args.kwargs["scope"] == PROFILE
+            # T6390: retry_pending_sync now returns the aggregate SyncResult
+            # (CONFLICT), still falsy so legacy `if not result` callers are
+            # unaffected.
+            assert result is SyncResult.CONFLICT
+            assert not result, "a conflict is not a successful retry"
+            # T6160: the baseline is INVALIDATED (None), never ADVANCED to R2's v9.
+            assert get_local_db_version(USER, PROFILE) is None
+            # T6390: the conflict marker is scoped to this profile.
+            assert has_sync_conflict(USER)
+            assert fake.upload_calls == [], "a refused conflict must never upload"
 
 
 # ---------------------------------------------------------------------------
@@ -671,7 +693,10 @@ class TestRetrySyncEndpointConflictMapping:
         monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         user_id = "test-t4310-retry-conflict"
         monkeypatch.setattr(health_mod, "R2_ENABLED", True)
-        monkeypatch.setattr(health_mod, "sync_db_to_cloud", lambda: "conflict")
+        # T5081: retry_sync() checks has_sync_conflict() BEFORE ever calling
+        # drain_pending_scopes (its sync_db_to_cloud replacement) — a
+        # pre-existing conflict marker routes straight to
+        # _retry_resolve_conflict, so no sync_db_to_cloud stand-in is needed.
 
         def _boom(uid, profile_id=None):
             raise RefreshFailed("R2 unreachable")
@@ -680,7 +705,7 @@ class TestRetrySyncEndpointConflictMapping:
             "app.services.db_refresh.confirm_current_before_write", _boom
         )
         set_current_user_id(user_id)
-        mark_sync_pending(user_id)
+        mark_sync_pending(user_id, scope="prof1")
         mark_sync_conflict(user_id)
 
         import asyncio as _asyncio

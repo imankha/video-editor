@@ -716,8 +716,9 @@ that, not merely quieting the alarm.
 freezes the baseline → a re-push re-refuses forever), and `session_init` is first-access-only so a
 refresh may not heal it → **Retry is the only cure.** The endpoint calls
 `confirm_current_before_write(user_id, None/profile_id)` (T4315 restore-if-newer) off the event loop to
-pull R2's newer copy; on success clears all markers, on `RefreshFailed` returns
-`{success:false, conflict:true, message:"…reload…"}` — honest, never a loop.
+pull R2's newer copy, then drains whatever `.sync_pending` markers survive, on `RefreshFailed` returns
+`{success:false, conflict:true, message:"…reload…"}` — honest, never a loop. **T5081 changed what
+"on success" means here** — see that section below; it no longer clears markers itself at all.
 
 **Test-seam faithfulness (storage.py).** `FORCE_R2_SYNC_FAILURE` now also short-circuits the two upload
 PRIMITIVES (`sync_database_to_r2_with_version`/`sync_user_db_to_r2_with_version`), not just the
@@ -763,6 +764,86 @@ exhausts / skips-conflict, no-refresh recovery, conflict-restore + honest-refusa
 real-browser `e2e/T5870-sync-failed-retry-no-refresh.spec.js` (seed fault → real write → alarm banner →
 Retry-while-down stays → clear fault → Retry clears the banner with NO reload). Each regression proven
 red-without-fix.
+
+## T5081 — INV-P: `.sync_pending` is a durability record, not a hint
+
+**What it closes.** `.sync_pending` was the one marker T6390 never scoped per-DB — a single per-USER
+file while `.sync_conflict`/`.sync_failed` were already split per scope. `retry_pending_sync` read "the
+user has *something* pending" and unconditionally re-uploaded BOTH profile.sqlite and user.sqlite; if
+R2 had moved ahead on the untouched one for any unrelated reason, that gratuitous re-upload tripped a
+real CAS conflict against a copy with nothing to arbitrate — a false-conflict class distinct from (and
+found while investigating, but NOT the cause of) the 2026-08-04 in-memory-baseline incident (see T6402
+above / EPIC field-findings §4 in the JIT Migration epic for that postmortem).
+
+**INV-P, the invariant governing every mark/clear from here on** (full text: the comment block above
+`mark_sync_pending` in `database.py`): `.sync_pending.{scope}` exists **iff** that scope's local DB
+may hold committed writes not yet confirmed present in R2. Cleared by exactly three reasons, nothing
+else:
+- **(a) upload success** for that exact scope (`sync_db_to_r2_explicit`/`sync_user_db_to_r2_explicit`).
+- **(b) a restore-if-newer that actually replaced that scope's local content with R2's copy** — the
+  peer fact to recording the new baseline. Discharged at every site that performs that download+swap:
+  `ensure_database` (profile, database.py), `ensure_user_database`/`ensure_user_database_fresh`
+  (user.sqlite, user_db.py), `materialization.ensure_profile_db_local`,
+  `migrations._migrate_profile_db`. Deliberately NOT at a caller (see below for why).
+- **(c) deletion of that scope's local DB** (`clear_scope_markers`).
+
+`scope` is REQUIRED on mark/clear (`USER_DB_SCOPE` or a profile_id) — no default, `ValueError` if
+falsy. A stray legacy bare `.sync_pending` file (no legitimate production cause — neither fly.toml
+declares `[mounts]`, so `USER_DATA_BASE` is ephemeral) is upgraded loudly by
+`adopt_legacy_pending_marker` into real per-scope markers, never silently tolerated as a dual format.
+
+**Both (a) and (b) are compare-and-clear**, not unconditional unlink — this took 3 review rounds to
+land correctly. An upload or a restore-if-newer both take real wall-clock time (checkpoint+PUT, or a
+HEAD-plus-download) with no lock held; a DIFFERENT write can commit to the SAME scope and re-mark it
+pending while one is in flight. `mark_sync_pending` returns a unique token (`{timestamp}:{uuid}` —
+plain `time.time()` collided under load); a clearing site reads the CURRENT token with
+`read_pending_token` before starting its upload/restore and passes it to
+`clear_sync_pending(..., if_token=...)` after — the clear only fires if unchanged. A stale-token clear
+is a safe no-op: the scope's own next drain resolves it correctly either way. Reason (c) alone stays
+unconditional — deleting the local DB entirely invalidates any pending record for it regardless of
+when it was marked.
+
+**Why reason (b)'s clear lives at the swap site, never at a caller (the hard-won part — 3 more rounds
+after the compare-and-clear landed).** The natural place to look is `POST /api/retry-sync`'s conflict
+branch (`_retry_resolve_conflict`, health.py) — it calls the shared `confirm_current_before_write`
+restore guard, so surely it knows if it restored something? It does not, reliably: a CAS conflict
+schedules a reheal (`schedule_profile_db_reheal`/`schedule_user_db_reheal` null the cached version),
+and that reheal is consumed by whichever request's `ensure_database`/`ensure_user_database` first-
+access branch runs NEXT — often an ordinary, unrelated GET (even the `X-Sync-Status` poll that renders
+the conflict banner) that races ahead of the user clicking Retry. By the time `_retry_resolve_conflict`
+calls `confirm_current_before_write`, local is frequently already current — the restore already
+happened, just not on this call. Two designs tried to detect "did I just restore this scope" from the
+caller side (a version-before/after delta, then a `downloaded` boolean returned from the confirm call)
+and both were provably wrong for this reason. The shipped fix: clear at the actual swap, using the
+scope identifier from the function's own explicit args (never an ambient ContextVar —
+`ensure_profile_db_local` temporarily points the ContextVar at a share's SHARER profile while its
+`user_id`/`profile_id` arguments stay the caller's real target, so using the ContextVar there would
+clear the wrong user's marker). `_retry_resolve_conflict` no longer tries to detect anything: it calls
+`confirm_current_before_write` for both scopes, then `drain_pending_scopes(user_id, {USER_DB_SCOPE,
+profile_id})` to deliver whatever is still genuinely undelivered (a scope that was merely deferred —
+never actually behind R2 — keeps its marker through the no-op restore and gets uploaded by the drain;
+before this fix Retry could report `restored: true` without ever having uploaded such a scope).
+
+**`drain_pending_scopes` (middleware/db_sync.py)** is the one function that uploads exactly the scopes
+with something pending — gated per-scope on `has_sync_pending_scope`, so a clean db is never dragged
+into a retry. A pending marker whose local db file is missing (deleted profile, or predates
+`clear_scope_markers`) is treated as an orphan and cleared (nothing to lose, would otherwise wedge
+`has_sync_pending`/`/api/sync/flush-verify` true forever). Returns a `PendingDrainReport` whose
+`.aggregate()` is `None` for "nothing attempted" vs. `SyncResult.OK`/`FAILED`/`CONFLICT` — callers must
+not confuse "nothing to do" with "verified success". `retry_pending_sync(user_id, profile_id)` is a
+thin wrapper scoped to `session_scopes(profile_id) = {profile_id, USER_DB_SCOPE}` — deliberately never
+folds in other profiles (an earlier shape that did broke a caller's own verdict when a foreign profile
+was stuck in CONFLICT, permanently disabling this user's in-band healing). `POST
+/api/sync/flush-verify` is the one deliberate full barrier — it drains EVERY pending scope, own and
+foreign, awaited.
+
+**Tests:** `tests/test_t5081_pending_scoping.py` (scope isolation, compare-and-clear race protection
+for both upload and restore, swap-site clears including a concurrent-remark-survives repro),
+`tests/test_t5870_pending_vs_failed.py::TestConflictRetryDeliversAGenuinelyDeferredScope` (drain-based
+Retry actually uploads a merely-deferred scope), `tests/test_move_reels_stale_target.py` (scope-
+identity: the clear targets the function's argument profile, not the ambient ContextVar),
+`tests/test_t6340_migration_sync_baseline.py` (migration-swap clears its own scope, leaves a different
+profile's marker untouched).
 
 ## T5960 / T6010 / T6020 — Alarm gated on write-attempt, classified by call-site marker
 

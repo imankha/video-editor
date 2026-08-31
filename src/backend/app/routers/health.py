@@ -11,23 +11,23 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Response
 
-logger = logging.getLogger(__name__)
-
 from ..database import (
+    SyncResult,
     get_database_path,
     get_user_data_path,
     has_sync_conflict,
-    has_sync_pending,
     is_database_initialized,
-    sync_db_to_cloud,
+    list_pending_scopes,
 )
-from ..middleware.db_sync import set_sync_failed
+from ..middleware.db_sync import USER_DB_SCOPE, drain_pending_scopes, set_sync_failed
 from ..models import HelloResponse
 from ..profile_context import get_current_profile_id
 from ..storage import R2_ENABLED
 from ..user_context import get_current_user_id
 from ..version import APP_BUILD, APP_VERSION
 from ..websocket import export_progress
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
 
@@ -55,14 +55,41 @@ async def flush_verify():
     sync (the 0.5s upload-lock defer window, T3250). This handler makes no
     writes of its own: the barrier confirms EXISTING state landed, it does not
     create new state to sync.
+
+    T5081 (review round 3, Q2): the middleware's own retry only covers THIS
+    session's two scopes (its profile + user.sqlite) -- a pending marker on a
+    DIFFERENT profile of this user (a stuck background export worker, e.g.)
+    is deliberately NOT drained there (folding a foreign scope into that
+    retry's verdict would let one stuck foreign profile poison every future
+    write's in-band healing -- see retry_pending_sync's docstring). This
+    endpoint's contract is "confirm EVERYTHING landed", so it is the one place
+    that drains every pending scope, own and foreign, awaited -- the barrier
+    a user occasionally hits (the update gate) is exactly where correctness
+    should win over latency.
     """
     user_id = get_current_user_id()
-    if has_sync_pending(user_id):
+    # round 2 MAJOR-4 precedent (_retry_resolve_conflict): get_current_profile_id()
+    # raises RuntimeError when unset BY DESIGN. This barrier must still drain
+    # every OTHER pending scope even without a profile context (a webhook-only
+    # or admin session) rather than 500 — the profile scope is simply absent
+    # from the extra set below; list_pending_scopes still finds it if a real
+    # profile marker exists on disk.
+    try:
+        profile_id = get_current_profile_id()
+    except RuntimeError:
+        profile_id = None
+    scopes = list_pending_scopes(user_id) | {USER_DB_SCOPE}
+    if profile_id:
+        scopes.add(profile_id)
+    await asyncio.to_thread(drain_pending_scopes, user_id, scopes)
+    remaining = sorted(list_pending_scopes(user_id))
+    if remaining:
         raise HTTPException(
             status_code=503,
             detail={
                 "code": "sync_failed",
                 "retryable": True,
+                "scopes": remaining,
                 "detail": "Could not confirm your latest changes were saved. Please try again.",
             },
         )
@@ -204,21 +231,29 @@ async def retry_sync():
     if has_sync_conflict(user_id):
         return await _retry_resolve_conflict(user_id)
 
-    status = sync_db_to_cloud()
-
-    # T4310 reviewer round 2 (BLOCKING-2): sync_db_to_cloud returns a STRING
-    # ("ok" | "conflict" | "failed"), and every non-empty string is truthy in
-    # Python -- `if success:` treated a refused "conflict" (and even "failed")
-    # as success, clearing .sync_pending after a sync that never landed.
-    # Compare explicitly so only a real "ok" reports success / clears the marker.
-    if status == "ok":
-        set_sync_failed(user_id, False)
-        return {"success": True}
-    elif status == "conflict":
-        # The resync surfaced a fresh conflict — resolve it the same way.
+    # T5081 (review round 3, Q4): route through drain_pending_scopes (the same
+    # primitives every other sync path uses) instead of sync_db_to_cloud, which
+    # only ever uploaded the CURRENT profile and then had its caller blanket-
+    # clear .sync_pending for user.sqlite too, without ever having uploaded it.
+    profile_id = get_current_profile_id()
+    report = await asyncio.to_thread(
+        drain_pending_scopes, user_id, {profile_id, USER_DB_SCOPE}
+    )
+    agg = report.aggregate()
+    if agg is None:
+        # Nothing was pending: the alarm the user clicked is stale (another
+        # request's sync already landed these dbs). Clear the ALARM, not a
+        # durability record — under INV-P there is none left to clear.
+        set_sync_failed(user_id, False, profile_id=profile_id)
+        logger.info(f"[SYNC] Manual retry user={user_id}: nothing pending, alarm was stale")
+        return {"success": True, "nothing_pending": True}
+    if agg == SyncResult.CONFLICT:
+        # The drain surfaced a fresh conflict — resolve it the same way.
         return await _retry_resolve_conflict(user_id)
-    else:
-        return {"success": False, "message": f"Sync to R2 {status}"}
+    if agg == SyncResult.FAILED:
+        return {"success": False, "message": "Sync to R2 failed"}
+    set_sync_failed(user_id, False, profile_id=profile_id)
+    return {"success": True}
 
 
 async def _retry_resolve_conflict(user_id: str) -> dict:
@@ -226,9 +261,31 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
 
     Pulls R2's newer copy into the local user.sqlite AND the current profile.sqlite
     (whichever moved) via the shared confirm_current_before_write guard, off the
-    event loop. On success the local copy is current again and every sync marker is
-    cleared. On a refresh failure we DO NOT loop or force-push — we tell the user a
-    newer version exists and to reload.
+    event loop, then drains whatever .sync_pending markers survive. On success the
+    local copy is current again. On a refresh failure we DO NOT loop or force-push
+    — we tell the user a newer version exists and to reload.
+
+    T5081 (rounds 3-6): this function does NOT try to detect which scope its own
+    confirm_current_before_write calls actually restored, and does not clear
+    .sync_pending itself. Two failed designs tried that: (round 5) a version-
+    before/after comparison across the two awaited restores was neither necessary
+    nor sufficient proof a scope's pending record was moot; (round 6 self-found)
+    a `downloaded` signal plumbed out of confirm_current_before_write was also
+    wrong, because the reheal a CAS conflict schedules (schedule_profile_db_reheal
+    / schedule_user_db_reheal) is very often already consumed by an ORDINARY
+    request before Retry ever runs (e.g. the status poll that renders the
+    conflict banner) — so by the time this function calls confirm_current_before_
+    write, local is already current and it reports no download, even though the
+    scope genuinely WAS just restored moments earlier by a different code path.
+    INV-P reason (b) is now discharged at every site that actually performs a
+    restore's download+swap (ensure_database, ensure_user_database,
+    ensure_user_database_fresh, materialization.ensure_profile_db_local,
+    migrations._migrate_profile_db — see the INV-P comment in database.py), so
+    by the time we reach drain_pending_scopes below, has_sync_pending_scope is
+    already accurate: a marker survives iff its scope's write is still
+    genuinely undelivered (merely deferred, never behind R2), and the drain is
+    exactly what delivers it — closing the gap where Retry used to report
+    "restored" without ever uploading a scope that needed uploading.
     """
     from ..services.db_refresh import RefreshFailed, confirm_current_before_write
 
@@ -258,11 +315,31 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
         logger.warning(f"[SYNC] Conflict restore failed for user {user_id}: {e}")
         return honest_refusal
 
+    # Deliver whatever is genuinely still undelivered (a scope merely deferred,
+    # never behind R2, keeps its marker through the no-op restore above and
+    # must still be uploaded) — drain_pending_scopes is a no-op per scope where
+    # has_sync_pending_scope is already False, so this costs nothing when both
+    # restores fully resolved everything.
+    report = await asyncio.to_thread(
+        drain_pending_scopes, user_id, {USER_DB_SCOPE, profile_id}
+    )
+    agg = report.aggregate()
+    if agg == SyncResult.CONFLICT:
+        # A fresh conflict surfaced during the drain (e.g. another machine wrote
+        # again in the interim). Do NOT call set_sync_failed(False) first — that
+        # would wipe the marker mark_sync_conflict just set for this new one.
+        logger.warning(f"[SYNC] Conflict retry for user {user_id} hit a fresh conflict during drain")
+        return honest_refusal
+    if agg == SyncResult.FAILED:
+        return {"success": False, "message": "Sync to R2 failed"}
+
     # Local is now current with R2 — BUT the user's refused local edit was replaced
     # by the newer copy from R2. The frontend MUST tell the user and reload so the
     # in-memory UI matches the restored DB (see syncStore.retrySyncToR2); it must
-    # never silently flip to a clean state (round 2 BLOCKING).
-    set_sync_failed(user_id, False)
+    # never silently flip to a clean state (round 2 BLOCKING). A conflict always
+    # means the edit was superseded, regardless of whether THIS call is what
+    # performed the download.
+    set_sync_failed(user_id, False, profile_id=profile_id)
     logger.info(f"[SYNC] Conflict resolved via restore-if-newer for user {user_id} (local edit superseded)")
     return {
         "success": True,

@@ -217,8 +217,14 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
     Verifies in R2 after every run.  Returns MigrateResult; status "ok" means
     the profile verified at head in R2.
     """
-    from ..database import (USER_DATA_BASE, get_local_db_version, set_local_db_version,
-                            sync_db_to_r2_explicit)
+    from ..database import (
+        USER_DATA_BASE,
+        clear_sync_pending,
+        get_local_db_version,
+        read_pending_token,
+        set_local_db_version,
+        sync_db_to_r2_explicit,
+    )
     from ..profile_context import set_current_profile_id
     from ..storage import get_r2_client
     from ..user_context import set_current_user_id
@@ -353,11 +359,17 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
                         user_id, profile_id,
                     )
                     return MigrateResult(status="wal_busy", applied=[])
+                # T5081 (INV-P reason b, site 5): same class of swap as
+                # ensure_database's first-access restore -- capture the pending
+                # token before the swap, clear only if unchanged after. See the
+                # INV-P comment in database.py.
+                pending_token = read_pending_token(user_id, profile_id)
                 shutil.move(str(tmp_path), str(db_path))
                 # Defense-in-depth for the window between the check above and the
                 # move completing (a new connection could open mid-swap).
                 clear_stale_wal_sidecars(db_path)
                 set_local_db_version(user_id, profile_id, downloaded_sync_version)
+                clear_sync_pending(user_id, profile_id, if_token=pending_token)
         elif not found:
             # Key not in R2 — registered profile has no R2 object (fail loud)
             return MigrateResult(status="missing", applied=[])
@@ -380,15 +392,14 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
     finally:
         conn.close()
 
-    if applied and client:
-        if not sync_db_to_r2_explicit(user_id, profile_id):
-            # T6340 #3: thread the REAL R2 sync version into the error row instead
-            # of null (which made a CAS refusal read as an R2 outage). One HEAD,
-            # and ONLY on the failure path — never added to the success path.
-            return MigrateResult(
-                status="sync_failed", applied=applied,
-                r2_version=_r2_version_or_none(user_id, profile_id),
-            )
+    if applied and client and not sync_db_to_r2_explicit(user_id, profile_id):
+        # T6340 #3: thread the REAL R2 sync version into the error row instead
+        # of null (which made a CAS refusal read as an R2 outage). One HEAD,
+        # and ONLY on the failure path — never added to the success path.
+        return MigrateResult(
+            status="sync_failed", applied=applied,
+            r2_version=_r2_version_or_none(user_id, profile_id),
+        )
 
     # Always verify in R2 (when R2 available): re-download and assert user_version == head
     if client:

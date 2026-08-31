@@ -151,7 +151,7 @@ class TestProfileSelfHeal:
     def test_retry_pending_sync_conflict_also_invalidates(self, tmp_path):
         """retry_pending_sync calls the lower-level primitive directly, so it
         needs the invalidation explicitly (not via sync_db_to_r2_explicit)."""
-        from app.database import get_local_db_version, set_local_db_version
+        from app.database import get_local_db_version, mark_sync_pending, set_local_db_version
         from app.middleware.db_sync import retry_pending_sync
         from app.storage import profile_r2_key
 
@@ -162,6 +162,8 @@ class TestProfileSelfHeal:
             set_local_db_version(USER, PROFILE, 3)
             key = profile_r2_key(USER, PROFILE, "profile.sqlite")
             fake._objects[key] = {"data": _newer_r2_bytes(tmp_path), "metadata": {"db-version": "9"}}
+            # T5081: retry_pending_sync is now gated on the scoped pending marker.
+            mark_sync_pending(USER, scope=PROFILE)
 
             # T6390: retry_pending_sync returns the aggregate SyncResult (CONFLICT),
             # still falsy so "not ok" callers are unaffected.

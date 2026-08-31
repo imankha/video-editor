@@ -282,7 +282,6 @@ class TestRetryPendingSyncTryLock:
             with patch("app.middleware.db_sync.asyncio.to_thread") as mock_to_thread, \
                  patch("app.middleware.db_sync._begin_sync_attempt"), \
                  patch("app.middleware.db_sync._end_sync_attempt"), \
-                 patch("app.middleware.db_sync.clear_sync_pending"), \
                  patch("app.middleware.db_sync._inflight_enter", return_value=1), \
                  patch("app.middleware.db_sync._inflight_exit", return_value=0), \
                  patch("app.middleware.db_sync.init_request_context"), \
@@ -337,7 +336,6 @@ class TestRetryPendingSyncTryLock:
             with patch("app.middleware.db_sync.asyncio.to_thread", side_effect=fake_to_thread), \
                  patch("app.middleware.db_sync._begin_sync_attempt"), \
                  patch("app.middleware.db_sync._end_sync_attempt"), \
-                 patch("app.middleware.db_sync.clear_sync_pending"), \
                  patch("app.middleware.db_sync._inflight_enter", return_value=1), \
                  patch("app.middleware.db_sync._inflight_exit", return_value=0), \
                  patch("app.middleware.db_sync.init_request_context"), \

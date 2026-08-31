@@ -149,6 +149,21 @@ def confirm_current_before_write(user_id: str, profile_id: str | None = None) ->
     share materialization, cross-profile reel moves) must call this before
     mutating, instead of hand-rolling its own refresh -- the guard lives
     here exactly once.
+
+    T5081: does NOT report whether a download happened. An earlier version of
+    this fix tried to plumb that out to gate a .sync_pending clear at the
+    caller -- wrong seam: by the time a caller like a CAS-conflict retry
+    reaches this, the reheal-triggered re-pull has usually already happened
+    via an ORDINARY request (ensure_database/ensure_user_database's own
+    first-access restore, triggered by schedule_*_db_reheal nulling the
+    version), so this call sees "already current" and reports no download
+    even though the scope genuinely was just restored moments earlier by a
+    different code path. The clear for INV-P reason (b) now lives at every
+    site that actually performs the download+swap (ensure_database,
+    ensure_user_database, ensure_user_database_fresh,
+    materialization.ensure_profile_db_local, migrations._migrate_profile_db)
+    -- see the INV-P comment in database.py. Callers here don't need to know
+    which of them (if any) fired.
     """
     if profile_id is None:
         from .user_db import ensure_user_database_fresh

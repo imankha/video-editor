@@ -196,6 +196,43 @@ def test_swapped_profile_reaches_head_in_r2_after_reheal(tmp_path):
         f"R2 sync version must advance to {N + 1}, got {_r2_sync_version(fake, key)}"
 
 
+def test_swap_clears_pending_marker_for_this_exact_scope(tmp_path):
+    """T5081 (INV-P reason b, site 5, round 7 review MAJOR — no site 5
+    coverage existed): the migrate-time swap is the R2-is-canonical branch's
+    shutil.move — the same class of restore-if-newer as ensure_database's
+    first-access repull (site 1), just triggered by an admin migration run
+    instead of an ordinary request. A .sync_pending marker for this profile
+    (e.g. a refused write from before the version was wiped for re-heal) must
+    be discharged by the swap, and a DIFFERENT profile's marker must survive
+    untouched -- the clear targets the exact (user_id, profile_id) args, not
+    some broader scope."""
+    from app.database import has_sync_pending_scope, mark_sync_pending
+
+    user_id, profile_id, other_profile_id, N = "t6340u5", "aaaa5555", "bbbb5555", 7
+    fake = FakeR2()
+    data = _build_profile_bytes(tmp_path, user_version=HEAD - 1, games=3)
+    _seed_r2_profile(fake, user_id, profile_id, data, sync_version=N)
+    _clear_baseline(user_id, profile_id)
+
+    p1, p2 = _profile_env(tmp_path)
+    with p1, p2, _r2_patched(fake):
+        mark_sync_pending(user_id, profile_id)
+        mark_sync_pending(user_id, other_profile_id)
+
+        result = _migrate_profile_db(user_id, profile_id)
+
+        # has_sync_pending_scope reads app.database.USER_DATA_BASE, which
+        # only stays patched to tmp_path inside this `with` block -- these
+        # assertions must run in here (unlike the FakeR2-only ones in the
+        # sibling tests above, which check `fake`'s own dict and so are safe
+        # after the patch unwinds).
+        assert result.status == "ok"
+        assert has_sync_pending_scope(user_id, profile_id) is False, \
+            "the swap replaced this profile's local content with R2's canonical copy"
+        assert has_sync_pending_scope(user_id, other_profile_id) is True, \
+            "a DIFFERENT profile's marker must not be touched by this profile's migration"
+
+
 def test_swapped_profile_with_stale_persisted_row_overridden_by_baseline(tmp_path):
     """The DOMINANT prod shape: a normally-synced R2 object carries an INTERNAL
     db_version row equal to metadata_version - 1 (sync_db_to_r2_explicit persists
