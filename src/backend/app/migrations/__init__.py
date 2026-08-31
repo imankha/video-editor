@@ -65,6 +65,36 @@ def _get_migration_lock(user_id: str, profile_id_or_scope: str) -> threading.Loc
         return lock
 
 
+# T5083 fix (2026-08-31 CI escalation): the seam's fail-loud guarantee was only
+# one request deep. `set_local_db_version`/`set_local_user_db_version` run
+# INSIDE the restore block, BEFORE the seam call — so a request 1 that raises
+# MigrationBlocked still leaves `local_version` non-None. Request 2 then finds
+# `entered_restore_branch` False (the restore branch is gated on
+# `local_version is None`) and SKIPS the seam entirely, silently serving the
+# below-head DB — exactly the silent fallback the design exists to prevent.
+# `_seam_verified` is a SEPARATE per-(user_id, profile_id-or-USER_DB_SCOPE)
+# success flag, added ONLY after a real "ok" result, so a below-head DB keeps
+# re-entering the seam on every request until it verifiably reaches head —
+# independent of the restore branch's own version-cache gate. Deliberately
+# NOT `_initialized_users` (database.py) — that set is keyed on user_id ALONE,
+# so a user's second profile would wrongly inherit the first profile's
+# verified flag. Cleared alongside the existing per-user/per-profile caches
+# (forget_local_db_state / forget_user_db / invalidate_user_cache) so an
+# account purge-then-reregister can't skip the seam on the new registration.
+_seam_verified: set[tuple[str, str]] = set()
+
+
+def _clear_seam_verified(user_id: str, scope: str | None = None) -> None:
+    """Drop the verified-at-head flag for one scope, or every scope of a user
+    when `scope` is None (account purge / forget_local_db_state without a
+    specific profile in hand)."""
+    if scope is not None:
+        _seam_verified.discard((user_id, scope))
+        return
+    for key in [k for k in _seam_verified if k[0] == user_id]:
+        _seam_verified.discard(key)
+
+
 def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateResult:
     """Leaner seam variant of `_migrate_profile_db` (design §2.3): operates on
     the file the seam's restore already downloaded+swapped — NO second
@@ -98,7 +128,18 @@ def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateRe
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     try:
-        applied = PROFILE_DB_RUNNER.run(conn, "sqlite")
+        try:
+            applied = PROFILE_DB_RUNNER.run(conn, "sqlite")
+        except Exception as e:
+            # Mirrors _migrate_user's exception handling — a migration.up()
+            # failure (a bad ALTER, a data-shape assumption that doesn't hold)
+            # must surface as a MigrateResult the seam can act on (-> raise
+            # MigrationBlocked -> HTTP 503), never escape as a raw 500.
+            logger.error(
+                f"[Migration] seam migration raised for user={user_id} "
+                f"profile={profile_id} db={db_path}: {e}", exc_info=True,
+            )
+            return MigrateResult(status=f"exception: {e}", applied=[])
     finally:
         conn.close()
 
@@ -127,16 +168,32 @@ def migrate_local_user_db_at_seam(user_id: str) -> MigrateResult:
     the baseline already recorded. Raw connect -> USER_DB_RUNNER.run ->
     sync_user_db_to_r2_explicit if applied -> return MigrateResult."""
     from ..database import sync_user_db_to_r2_explicit
+    from ..services.db_refresh import wal_sidecars_present
     from ..services.user_db import _get_user_db_path
 
     db_path = _get_user_db_path(user_id)
     if not db_path.exists():
         return MigrateResult(status="missing")
 
+    if wal_sidecars_present(db_path):
+        # Mirrors migrate_local_profile_db_at_seam's guard (2026-08-31 CI
+        # escalation minor fix (a)): this branch was previously unreachable
+        # here (the caller's `if result.status == "wal_busy":` retry was dead
+        # code) since nothing ever checked for a live/stale sidecar before
+        # migrating in place.
+        return MigrateResult(status="wal_busy")
+
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     try:
-        applied = USER_DB_RUNNER.run(conn, "sqlite")
+        try:
+            applied = USER_DB_RUNNER.run(conn, "sqlite")
+        except Exception as e:
+            logger.error(
+                f"[Migration] seam migration raised for user={user_id} "
+                f"db={db_path}: {e}", exc_info=True,
+            )
+            return MigrateResult(status=f"exception: {e}", applied=[])
     finally:
         conn.close()
 

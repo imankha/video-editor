@@ -74,10 +74,15 @@ def invalidate_user_cache(user_id: str) -> None:
     Called after profile switch or delete to ensure the middleware
     picks up the new selected profile on the next request. T7520: also drops
     the registered-profile-ids cache so a just-created/deleted profile is
-    reflected by the ownership guard on the next request.
+    reflected by the ownership guard on the next request. T5083 fix: also
+    drops the JIT seam's verified-at-head flags for this user so an account
+    purge-then-reregister (or a delete leaving stale in-process state) can't
+    let the new registration silently skip the seam.
     """
     _init_cache.pop(user_id, None)
     _profile_registry_cache.pop(user_id, None)
+    from .migrations import _clear_seam_verified
+    _clear_seam_verified(user_id)
 
 
 def peek_registered_profile_ids(user_id: str) -> frozenset[str] | None:

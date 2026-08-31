@@ -139,6 +139,7 @@ def ensure_user_database(user_id: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # R2 restore on first access (before schema creation so restored DB is used)
+    from .. import migrations
     from ..database import (
         USER_DB_SCOPE,
         clear_sync_pending,
@@ -146,11 +147,13 @@ def ensure_user_database(user_id: str) -> None:
         read_pending_token,
         set_local_user_db_version,
     )
+    from ..migrations import (
+        MigrationBlocked,
+        _get_migration_lock,
+        _seam_repull_and_retry_user,
+        migrate_local_user_db_at_seam,
+    )
     from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
-
-    # T5083: this request entered the restore (first-access) branch below --
-    # the JIT migration seam hangs off this SAME gate (design §3.3/Q4).
-    entered_restore_branch = False
 
     if R2_ENABLED:
         local_version = get_local_user_db_version(user_id)
@@ -159,7 +162,6 @@ def ensure_user_database(user_id: str) -> None:
         # a stale non-None version here would skip the restore below and let a
         # brand-new BLANK db silently replace the real one.
         if local_version is None or not db_path.exists():
-            entered_restore_branch = True
             # Check cooldown
             last_fail = _r2_user_restore_cooldowns.get(user_id)
             if last_fail and (time.time() - last_fail) < USER_RESTORE_COOLDOWN_SECONDS:
@@ -222,6 +224,46 @@ def ensure_user_database(user_id: str) -> None:
                     )
                     set_local_user_db_version(user_id, 0)
 
+        # T5083 fix (2026-08-31 CI escalation, FIX 1): the seam runs BEFORE
+        # schema creation, not after, and stays INSIDE `if R2_ENABLED:` as a
+        # sibling of the restore branch above (mirrors database.py's profile
+        # seam exactly). `executescript(_USER_DB_SCHEMA)` below is the
+        # CURRENT (head) schema — for a table that's fully ABSENT in an old
+        # restored user.sqlite, CREATE TABLE IF NOT EXISTS would create it in
+        # its FULL CURRENT shape, so a migration running AFTER that step
+        # finds the column ALREADY present and a bare `ALTER TABLE ADD
+        # COLUMN` blows up with "duplicate column name" (mirrors
+        # test_r2_restore_retry.py's repro: a restored user.sqlite below v004
+        # was bricked on every future request). Moving the seam here means it
+        # always sees the genuinely-restored below-head bytes, before schema
+        # creation can paper over missing tables/columns.
+        #
+        # Guarded on db_path.exists(): a genuinely NEW user (R2 NOT_FOUND, no
+        # prior local file) has nothing to migrate yet -- the fresh-DB stamp
+        # below already puts it at head directly.
+        #
+        # T5083 fix (FIX 4): gated on `_seam_verified`, NOT "did this request
+        # enter the restore branch" -- see the identical rationale in
+        # database.py's profile seam. `set_local_user_db_version` above runs
+        # BEFORE this block, so a request that raised MigrationBlocked here
+        # would otherwise make request 2 see a cached local_version, skip the
+        # restore branch, and silently serve the still-below-head DB.
+        # Referenced via `migrations._seam_verified` (module attribute, not a
+        # bound name) so a test's `monkeypatch.setattr(migrations_module,
+        # "_seam_verified", set())` reset actually takes effect here.
+        if db_path.exists() and (user_id, USER_DB_SCOPE) not in migrations._seam_verified:
+            with _get_migration_lock(user_id, USER_DB_SCOPE):
+                result = migrate_local_user_db_at_seam(user_id)
+                if result.status == "wal_busy":
+                    from .db_refresh import clear_stale_wal_sidecars
+                    clear_stale_wal_sidecars(db_path)
+                    result = migrate_local_user_db_at_seam(user_id)  # one retry
+                if result.status == "sync_failed":
+                    result = _seam_repull_and_retry_user(user_id, db_path)
+                if result.status != "ok":
+                    raise MigrationBlocked(user_id, None, result.status)
+                migrations._seam_verified.add((user_id, USER_DB_SCOPE))
+
     is_fresh_db = not db_path.exists()
 
     conn = sqlite3.connect(str(db_path), timeout=30)
@@ -240,30 +282,6 @@ def ensure_user_database(user_id: str) -> None:
     # T5840: credits moved to Postgres (credit_ledger.py) -- the legacy `credits`
     # table stays in _USER_DB_SCHEMA unread AND unwritten (pre-migration record /
     # rollback substrate only; dropped in a later user_db migration).
-
-    # T5083: JIT migrate-at-load-seam, symmetric with ensure_database's profile
-    # seam (design §3.3). Runs ONLY on first access, strictly AFTER the
-    # restore-then-clear sequence and schema creation, before the DB is marked
-    # initialized -- never serves a below-head user.sqlite (§2.6).
-    if entered_restore_branch:
-        from ..database import USER_DB_SCOPE
-        from ..migrations import (
-            MigrationBlocked,
-            _get_migration_lock,
-            _seam_repull_and_retry_user,
-            migrate_local_user_db_at_seam,
-        )
-
-        with _get_migration_lock(user_id, USER_DB_SCOPE):
-            result = migrate_local_user_db_at_seam(user_id)
-            if result.status == "wal_busy":
-                from .db_refresh import clear_stale_wal_sidecars
-                clear_stale_wal_sidecars(db_path)
-                result = migrate_local_user_db_at_seam(user_id)  # one retry
-            if result.status == "sync_failed":
-                result = _seam_repull_and_retry_user(user_id, db_path)
-            if result.status != "ok":
-                raise MigrationBlocked(user_id, None, result.status)
 
     with _init_lock:
         _initialized_user_dbs.add(user_id)

@@ -25,6 +25,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from . import migrations
 from .migrations import (
     MigrationBlocked,
     _get_migration_lock,
@@ -1052,15 +1053,8 @@ def ensure_database():
         profile_id = get_current_profile_id()
         local_version = get_local_db_version(user_id, profile_id)
 
-        # T5083: this request entered the restore (first-access) branch below --
-        # the JIT migration seam hangs off this SAME gate (design §3.2/Q4) so it
-        # costs one PRAGMA user_version read on the cold path and NOTHING on hot
-        # requests (which never set this True).
-        entered_restore_branch = False
-
         # Only download from R2 if we've never synced for this user+profile (first access)
         if local_version is None:
-            entered_restore_branch = True
             # Check cooldown — don't hammer R2 on repeated transient failures
             cache_key = f"{user_id}:{profile_id}"
             last_fail = _r2_restore_cooldowns.get(cache_key)
@@ -1158,16 +1152,25 @@ def ensure_database():
                     )
                     set_local_db_version(user_id, profile_id, 0)
 
-        # T5083: JIT migrate-at-load-seam. Runs ONLY on first access (same
-        # gate as the restore branch above), strictly AFTER the
-        # restore-then-clear sequence (set_local_db_version / clear_sync_pending)
-        # has completed — never reorders INV-P (design §2.8). Operates on the
+        # T5083: JIT migrate-at-load-seam, strictly AFTER the restore-then-
+        # clear sequence (set_local_db_version / clear_sync_pending) has
+        # completed — never reorders INV-P (design §2.8). Operates on the
         # already-restored local file; never serves a below-head DB (§2.6).
         # Guarded on db_path.exists(): a genuinely NEW profile (R2 NOT_FOUND,
         # no prior local copy) has nothing to migrate yet — CREATE TABLE below
         # stamps it straight to head. Without this guard the seam would see a
         # missing file and raise MigrationBlocked on every brand-new signup.
-        if entered_restore_branch and db_path.exists():
+        #
+        # T5083 fix (2026-08-31 CI escalation): gated on `_seam_verified`, NOT
+        # `entered_restore_branch` — the restore branch's own version-cache
+        # gate is set by set_local_db_version() BEFORE this block runs, so a
+        # request that raised MigrationBlocked here would otherwise make
+        # request 2 see `local_version` already non-None, skip the restore
+        # branch, and silently serve the still-below-head DB. `_seam_verified`
+        # is a separate flag, added ONLY after a real "ok" result, so a
+        # below-head DB keeps re-entering the seam on every request until it
+        # verifiably reaches head — independent of the version cache.
+        if db_path.exists() and (user_id, profile_id) not in migrations._seam_verified:
             with _get_migration_lock(user_id, profile_id):
                 result = migrate_local_profile_db_at_seam(user_id, profile_id)
                 if result.status == "wal_busy":
@@ -1178,6 +1181,7 @@ def ensure_database():
                     result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
                 if result.status != "ok":
                     raise MigrationBlocked(user_id, profile_id, result.status)
+                migrations._seam_verified.add((user_id, profile_id))
 
     # If already initialized, skip table creation
     if already_initialized:
@@ -1829,6 +1833,10 @@ def forget_local_db_state(user_id: str) -> None:
     with _db_version_lock:
         for key in [k for k in _user_db_versions if k[0] == user_id]:
             _user_db_versions.pop(key, None)
+    # T5083 fix: drop the seam's verified-at-head flag too, or a purge-then-
+    # reregister under the same user_id would inherit the OLD profile's
+    # verified status and skip the seam on the new registration's first access.
+    migrations._clear_seam_verified(user_id)
 
 
 def sync_db_to_cloud() -> str:
