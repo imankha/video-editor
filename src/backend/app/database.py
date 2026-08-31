@@ -25,6 +25,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .migrations import (
+    MigrationBlocked,
+    _get_migration_lock,
+    _seam_repull_and_retry_profile,
+    migrate_local_profile_db_at_seam,
+)
 from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
@@ -1046,8 +1052,15 @@ def ensure_database():
         profile_id = get_current_profile_id()
         local_version = get_local_db_version(user_id, profile_id)
 
+        # T5083: this request entered the restore (first-access) branch below --
+        # the JIT migration seam hangs off this SAME gate (design §3.2/Q4) so it
+        # costs one PRAGMA user_version read on the cold path and NOTHING on hot
+        # requests (which never set this True).
+        entered_restore_branch = False
+
         # Only download from R2 if we've never synced for this user+profile (first access)
         if local_version is None:
+            entered_restore_branch = True
             # Check cooldown — don't hammer R2 on repeated transient failures
             cache_key = f"{user_id}:{profile_id}"
             last_fail = _r2_restore_cooldowns.get(cache_key)
@@ -1144,6 +1157,27 @@ def ensure_database():
                         f"starting fresh (took {restore_elapsed:.2f}s)"
                     )
                     set_local_db_version(user_id, profile_id, 0)
+
+        # T5083: JIT migrate-at-load-seam. Runs ONLY on first access (same
+        # gate as the restore branch above), strictly AFTER the
+        # restore-then-clear sequence (set_local_db_version / clear_sync_pending)
+        # has completed — never reorders INV-P (design §2.8). Operates on the
+        # already-restored local file; never serves a below-head DB (§2.6).
+        # Guarded on db_path.exists(): a genuinely NEW profile (R2 NOT_FOUND,
+        # no prior local copy) has nothing to migrate yet — CREATE TABLE below
+        # stamps it straight to head. Without this guard the seam would see a
+        # missing file and raise MigrationBlocked on every brand-new signup.
+        if entered_restore_branch and db_path.exists():
+            with _get_migration_lock(user_id, profile_id):
+                result = migrate_local_profile_db_at_seam(user_id, profile_id)
+                if result.status == "wal_busy":
+                    from .services.db_refresh import clear_stale_wal_sidecars
+                    clear_stale_wal_sidecars(db_path)
+                    result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
+                if result.status == "sync_failed":
+                    result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
+                if result.status != "ok":
+                    raise MigrationBlocked(user_id, profile_id, result.status)
 
     # If already initialized, skip table creation
     if already_initialized:

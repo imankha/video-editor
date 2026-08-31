@@ -36,6 +36,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.migrations import MigrationBlocked
 from app.version import APP_BUILD, APP_VERSION
 
 _project_root = Path(__file__).parent.parent.parent.parent
@@ -560,6 +561,25 @@ async def _shutdown_event():
 
     from app.services.pg import close_pg_pool
     close_pg_pool()
+
+
+@app.exception_handler(MigrationBlocked)
+async def migration_blocked_handler(request, exc):
+    """T5083: the JIT load-seam raises MigrationBlocked when a profile/user
+    DB cannot be verified at head (wal_busy after one retry, sync_failed
+    after one re-pull+retry, not_at_head, missing, or an outright exception —
+    design §2.6). Never serve a below-head DB (no silent fallback) — map to a
+    retryable 503 so the client re-lands once migration completes, matching
+    the existing T5970/T6550 "pending migration" convention.
+    """
+    logger.warning(
+        "[Migration] blocked user=%s profile=%s reason=%s",
+        exc.user_id, exc.profile_id, exc.reason,
+    )
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+    )
 
 
 @app.exception_handler(Exception)
