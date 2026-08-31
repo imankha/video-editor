@@ -13,6 +13,35 @@ import pytest
 from psycopg2.extras import RealDictCursor
 
 
+def stamp_schema_head(conn, track: str) -> None:
+    """Stamp `PRAGMA user_version` to the REAL head version for `track`
+    ("profile_db" or "user_db") on an already-open sqlite3 connection.
+
+    T5083 (2026-08-31 CI escalation, FIX 2): test fixtures across several
+    files built a synthetic marker-only DB (no base schema tables) and left
+    `PRAGMA user_version` at SQLite's default of 0 -- a state that cannot
+    occur in real production (a fresh DB is always stamped to head
+    immediately via `ensure_database`/`ensure_user_database`'s `is_fresh_db`
+    branch, and any GENUINELY below-head DB was created via the real base
+    schema long ago, so it always has every base table). With migration now
+    firing on every `ensure_database`/`ensure_user_database` first access
+    (not just the admin sweep), a `user_version=0` synthetic fixture makes
+    the runner try to apply the FULL migration history against a DB missing
+    tables those migrations assume exist -- an impossible-in-prod crash, not
+    a real bug (CLAUDE.md: no defensive fixes for internal bugs that cannot
+    occur; fix the fixture, not the seam). Use the REAL runner's
+    `latest_version`, not a magic/sentinel number, so a future migration
+    bump can't silently leave a fixture claiming to be at an OLD head.
+    """
+    if track == "profile_db":
+        from app.migrations.profile_db import RUNNER as _RUNNER
+    elif track == "user_db":
+        from app.migrations.user_db import RUNNER as _RUNNER
+    else:
+        raise ValueError(f"stamp_schema_head: unknown track {track!r} (expected 'profile_db' or 'user_db')")
+    conn.execute(f"PRAGMA user_version = {_RUNNER.latest_version}")
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _set_default_profile_context():
     """Set a default profile context for all tests.

@@ -34,10 +34,16 @@ HEADERS = {"X-User-ID": USER, "X-Profile-ID": PROFILE, "X-Request-ID": "reqQA001
 
 def _make_profile_db(base):
     import sqlite3
+
+    from tests.conftest import stamp_schema_head
     d = base / USER / "profiles" / PROFILE
     d.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(d / "profile.sqlite"))
     conn.execute("CREATE TABLE marker (who TEXT)")
+    # T5083: stamp head so the JIT load-seam (now firing on every
+    # ensure_database first access) treats this marker-only fixture as
+    # already-migrated and no-ops — see stamp_schema_head's docstring.
+    stamp_schema_head(conn, "profile_db")
     conn.commit()
     conn.close()
 

@@ -195,12 +195,17 @@ PROFILE_H = "beef7010"
 
 
 def _write_marker_db(path, marker):
+    from tests.conftest import stamp_schema_head
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE IF NOT EXISTS marker (who TEXT)")
     conn.execute("DELETE FROM marker")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    # T5083: stamp head so the JIT load-seam (now firing on every
+    # ensure_database first access) treats this marker-only fixture (this
+    # helper always builds profile.sqlite here) as already-migrated.
+    stamp_schema_head(conn, "profile_db")
     conn.commit()
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.close()

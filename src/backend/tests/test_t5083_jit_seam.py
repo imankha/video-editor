@@ -132,11 +132,21 @@ def _ctx(user_id=USER, profile_id=PROFILE):
 def _reset_registries(monkeypatch):
     """Isolate the process-global init caches so tests don't leak into each other."""
     import app.database as db_module
+    import app.migrations as migrations_module
     import app.services.user_db as user_db_module
     monkeypatch.setattr(db_module, "_initialized_users", set())
     monkeypatch.setattr(db_module, "_user_db_versions", {})
     monkeypatch.setattr(user_db_module, "_initialized_user_dbs", set())
     monkeypatch.setattr(db_module, "_user_sqlite_versions", {})
+    # T5083 (CI escalation FIX 4): `_seam_verified` is a NEW process-global
+    # success cache (see migrations/__init__.py) — without resetting it here,
+    # a prior test's successful migration for the same USER/PROFILE constants
+    # (reused across most tests in this file) marks the pair verified and a
+    # LATER test's fresh tmp_path/fresh R2 seed gets silently skipped by the
+    # seam, since `database.py`/`user_db.py` read it via `migrations.
+    # _seam_verified` (module attribute, not a bound import) specifically so
+    # this reset takes effect.
+    monkeypatch.setattr(migrations_module, "_seam_verified", set())
     yield
 
 
@@ -340,8 +350,10 @@ def test_seam_concurrent_same_pair(tmp_path):
 
         t1 = threading.Thread(target=_worker)
         t2 = threading.Thread(target=_worker)
-        t1.start(); t2.start()
-        t1.join(timeout=10); t2.join(timeout=10)
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
 
     assert not errors, f"worker threads raised: {errors}"
     assert len(fake.profile_uploads()) == 1, \
@@ -358,7 +370,7 @@ def test_seam_wal_busy_blocks(tmp_path):
 
     Direct-primitive proof (isolation): the primitive alone returns wal_busy
     for a busy file, regardless of migration need."""
-    from app.migrations import MigrationBlocked, migrate_local_profile_db_at_seam  # NEW symbols
+    from app.migrations import migrate_local_profile_db_at_seam  # NEW symbols
 
     fake = FakeR2()
     data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=5)
@@ -574,7 +586,7 @@ class TestSeamCasRefusalRepullRetryOnce:
         """(b) sync_failed WITH something pending: re-pull + one retry ->
         head -> serve."""
         from app.database import mark_sync_pending
-        from app.migrations import migrate_local_profile_db_at_seam, _seam_repull_and_retry_profile  # NEW
+        from app.migrations import _seam_repull_and_retry_profile  # NEW
 
         fake = FakeR2()
         N = 5
@@ -629,9 +641,9 @@ class TestSeamCasRefusalRepullRetryOnce:
             set_local_db_version(USER, PROFILE, None)
             mark_sync_pending(USER, PROFILE)  # something genuinely pending -> retry path taken
 
-            with patch("app.migrations.migrate_local_profile_db_at_seam", side_effect=_always_sync_failed):
-                with pytest.raises(MigrationBlocked):
-                    _seam_repull_and_retry_profile(USER, PROFILE, db_path)
+            with patch("app.migrations.migrate_local_profile_db_at_seam", side_effect=_always_sync_failed), \
+                 pytest.raises(MigrationBlocked):
+                _seam_repull_and_retry_profile(USER, PROFILE, db_path)
 
         assert call_count["n"] == 1, \
             f"must retry the seam primitive exactly once after re-pull, saw {call_count['n']} calls"
@@ -724,9 +736,9 @@ class TestSeamUserDbSymmetric:
             set_local_user_db_version(USER, None)
             mark_sync_pending(USER, USER_DB_SCOPE)  # something genuinely pending -> retry path taken
 
-            with patch("app.migrations.migrate_local_user_db_at_seam", side_effect=_always_sync_failed):
-                with pytest.raises(MigrationBlocked):
-                    _seam_repull_and_retry_user(USER, db_path)
+            with patch("app.migrations.migrate_local_user_db_at_seam", side_effect=_always_sync_failed), \
+                 pytest.raises(MigrationBlocked):
+                _seam_repull_and_retry_user(USER, db_path)
 
         assert call_count["n"] == 1, \
             f"must retry the seam primitive exactly once after re-pull, saw {call_count['n']} calls"
@@ -777,3 +789,108 @@ def test_sweep_and_seam_identical(tmp_path):
 
     assert fake._objects[seam_key]["metadata"]["db-version"] == fake._objects[sweep_key]["metadata"]["db-version"], \
         "seam and sweep migration must land on the same R2 sync version (both N -> N+1)"
+
+
+# ---------------------------------------------------------------------------
+# 11. Real (unmocked) runner through the real seam (2026-08-31 CI escalation GAP)
+#
+# The 19 tests above all stub PROFILE_DB_RUNNER.run/USER_DB_RUNNER.run, so
+# none of them ever ran a REAL migration.up() through the real seam call
+# site -- which is exactly why FIX 1's ordering bug (schema creation running
+# before the seam saw a genuinely below-head DB, bricking every restored
+# user.sqlite below v004 with "duplicate column name") was invisible to this
+# suite and only caught by Branch CI against test_r2_restore_retry.py. These
+# two tests close that gap: real base schema, real runner, real seam.
+# ---------------------------------------------------------------------------
+
+def test_real_runner_profile_head_minus_one_migrates_via_real_seam(tmp_path):
+    """A profile DB built via the REAL base schema (ensure_database on a
+    fresh dir, so every table/column is already at head shape) then rolled
+    back to PRAGMA user_version = HEAD-1 must reach head with NO exception
+    when it re-enters ensure_database's real (unmocked) seam. The one
+    pending migration (the highest-numbered one) must apply cleanly against
+    an already-head-shape schema -- proving the seam's real-runner path
+    works end to end, not just the mocked-runner shape the rest of this file
+    exercises. v048 (T7830) is an R2-listing sweep with no local schema
+    change; FakeR2 doesn't implement the pagination API it needs, so the
+    listing call is stubbed to 'no orphans found' -- the same result a
+    clean profile produces for real. This mirrors the live QA evidence run
+    during the original T5083 push (persistence-sync.md §T5083)."""
+    fake = FakeR2()
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+        _ctx()
+        from app.database import ensure_database, get_database_path
+        ensure_database()  # real base schema, real head stamp
+
+        db_path = get_database_path()
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(f"PRAGMA user_version = {PROFILE_HEAD - 1}")
+        conn.commit()
+        conn.close()
+
+        data = db_path.read_bytes()
+        key = _profile_r2_key(USER, PROFILE)
+        _seed_r2(fake, key, data, sync_version=5)
+
+        import app.database as db_module
+        db_module._initialized_users.discard(USER)
+        db_module._user_db_versions.pop((USER, PROFILE), None)
+
+        with patch("app.services.orphan_raw_clips.list_raw_clip_objects", return_value=[]):
+            ensure_database()  # real seam, real (unmocked) PROFILE_DB_RUNNER
+
+        final_version = sqlite3.connect(str(db_path)).execute("PRAGMA user_version").fetchone()[0]
+
+    assert final_version == PROFILE_HEAD, \
+        f"real runner must migrate HEAD-1 -> HEAD via the real seam, got {final_version}"
+
+
+def test_real_runner_user_db_missing_table_migrates_via_real_seam(tmp_path):
+    """The EXACT v004 duplicate-column repro FIX 1 closes: a user.sqlite at
+    PRAGMA user_version=1 with `user_activity` (created by v002) genuinely
+    ABSENT -- the shape a real pre-v002 DB has. If the seam ran AFTER schema
+    creation (the FIX 1 bug), `executescript(_USER_DB_SCHEMA)` would create
+    `user_activity` fresh in its FULL HEAD shape (already carrying
+    `total_usage_seconds`), and v004's bare `ALTER TABLE user_activity ADD
+    COLUMN total_usage_seconds` would then crash with 'duplicate column
+    name' on every future request. With the seam correctly running BEFORE
+    schema creation, v002 creates the table fresh (without the column) and
+    v004 adds it cleanly. This is the ONLY test in this file that would have
+    caught FIX 1's bug -- the other 20 all stub the runner."""
+    fake = FakeR2()
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         _r2_patched(fake):
+        _ctx()
+        from app.services.user_db import _get_user_db_path, ensure_user_database
+        ensure_user_database(USER)  # real base schema, real head stamp
+
+        db_path = _get_user_db_path(USER)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("DROP TABLE user_activity")
+        conn.execute("PRAGMA user_version = 1")
+        conn.commit()
+        conn.close()
+
+        data = db_path.read_bytes()
+        key = _user_r2_key(USER)
+        _seed_r2(fake, key, data, sync_version=4)
+
+        import app.database as db_module
+        import app.services.user_db as user_db_module
+        with user_db_module._init_lock:
+            user_db_module._initialized_user_dbs.discard(USER)
+        db_module._user_sqlite_versions.pop(USER, None)
+
+        ensure_user_database(USER)  # real seam, real (unmocked) USER_DB_RUNNER -- must NOT raise
+
+        conn = sqlite3.connect(str(db_path))
+        final_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(user_activity)").fetchall()}
+        conn.close()
+
+    assert final_version == USER_HEAD, \
+        f"real runner must migrate a pre-v002 (no user_activity) DB to HEAD, got {final_version}"
+    assert "total_usage_seconds" in cols, "v004's column must have been added by the real migration"
