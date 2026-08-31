@@ -144,6 +144,29 @@ def _reset_registries(monkeypatch):
 # 1. At-head no-op — zero R2 upload, serves normally (§3.6 row 1, §2.3 "ok, applied=[]")
 # ---------------------------------------------------------------------------
 
+def test_seam_skips_brand_new_profile_no_local_file_yet(tmp_path):
+    """A genuinely new profile (R2 NOT_FOUND, no prior local file) must NOT
+    hit the seam at all — CREATE TABLE stamps PRAGMA user_version to head
+    directly (existing behavior), and the seam primitive would wrongly see
+    a 'missing' file and block every brand-new signup if it fired here
+    (self-review finding: the seam is gated on db_path.exists() in addition
+    to entered_restore_branch, database.py)."""
+    fake = FakeR2()  # empty — R2 has nothing for this (user, profile)
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
+         _r2_patched(fake):
+        _ctx()
+        from app.database import ensure_database
+        ensure_database()  # must not raise MigrationBlocked for a brand-new profile
+
+        db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
+
+    assert db_path.exists()
+    assert _read_local_user_version(db_path) == PROFILE_HEAD, \
+        "a fresh DB is stamped straight to head by CREATE TABLE, no migration needed"
+
+
 def test_seam_at_head_noop(tmp_path):
     """First access on an at-head profile: the seam primitive applies nothing
     and issues NO R2 upload (§2.4 point 2 — a no-op at-head migration is zero
@@ -178,9 +201,12 @@ def test_seam_behind_head_migrates(tmp_path):
     r2_version+1, R2 verify passes, serves. Today ensure_database never
     advances user_version for a pre-existing below-head DB (design §1.1) — this
     assertion fails against CURRENT behavior even once the seam import exists,
-    proving it exercises real new behavior, not just a missing symbol."""
-    from app.migrations import migrate_local_profile_db_at_seam
+    proving it exercises real new behavior, not just a missing symbol.
 
+    The seam is wired INSIDE ensure_database (design §3.2), so a single first-
+    access call already carries the profile all the way to head — that single
+    call IS the integration test (§3.6 row 2 describes the call-site behavior,
+    not the primitive in isolation)."""
     fake = FakeR2()
     N = 5
     data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N)
@@ -192,11 +218,39 @@ def test_seam_behind_head_migrates(tmp_path):
          _r2_patched(fake):
         _ctx()
         from app.database import ensure_database
-        ensure_database()  # restore-only: swaps in the below-head bytes, sets baseline
+        ensure_database()  # single first access: restore + seam migration, in one call
 
         db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
+
+    assert fake.profile_uploads(), "behind-head migration must upload"
+    assert fake._objects[key]["metadata"]["db-version"] == str(N + 1)
+    assert _read_local_user_version(db_path) == PROFILE_HEAD
+
+
+def test_seam_primitive_migrates_an_already_local_below_head_file(tmp_path):
+    """`migrate_local_profile_db_at_seam` in ISOLATION (no ensure_database
+    involved): given a below-head file already sitting at the local path (as
+    if a restore had just swapped it in), the primitive alone migrates to
+    head and uploads r2_version+1 (design §2.3 — 'operates on the already-
+    restored local file, no download')."""
+    from app.migrations import migrate_local_profile_db_at_seam
+
+    fake = FakeR2()
+    N = 5
+    data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N)
+    key = _profile_r2_key(USER, PROFILE)
+    _seed_r2(fake, key, data, sync_version=N)
+
+    db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_bytes(data)
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
+         _r2_patched(fake):
+        _ctx()
         assert _read_local_user_version(db_path) == PROFILE_HEAD - 1, \
-            "sanity: restore alone must not have advanced schema"
+            "sanity: the seeded local file starts below head"
 
         result = migrate_local_profile_db_at_seam(USER, PROFILE)
 
@@ -231,7 +285,9 @@ def test_seam_hot_path_no_migration(tmp_path):
         # app.database once wired. This import is what makes the test RED
         # today (ImportError) rather than silently passing for the wrong
         # reason (the call site doesn't exist so it trivially "isn't called").
+        from app.migrations import MigrateResult
         with patch("app.database.migrate_local_profile_db_at_seam") as mock_seam:
+            mock_seam.return_value = MigrateResult(status="ok", applied=[])
             ensure_database()  # first access — seam should fire once
             first_call_count = mock_seam.call_count
 
@@ -298,7 +354,10 @@ def test_seam_concurrent_same_pair(tmp_path):
 
 def test_seam_wal_busy_blocks(tmp_path):
     """A live -wal sidecar present, still present after one clear attempt, must
-    raise MigrationBlocked and never add the profile to `_initialized_users`."""
+    raise MigrationBlocked and never add the profile to `_initialized_users`.
+
+    Direct-primitive proof (isolation): the primitive alone returns wal_busy
+    for a busy file, regardless of migration need."""
     from app.migrations import MigrationBlocked, migrate_local_profile_db_at_seam  # NEW symbols
 
     fake = FakeR2()
@@ -310,10 +369,11 @@ def test_seam_wal_busy_blocks(tmp_path):
          patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
          _r2_patched(fake):
         _ctx()
-        from app.database import ensure_database
-        ensure_database()
 
         db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.write_bytes(_build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=5, tag="pre"))
+
         # Leave a genuinely live connection open so a -wal sidecar persists
         # through clear_stale_wal_sidecars' single retry (mirrors
         # test_t6340's wal_sidecar_present test).
@@ -325,19 +385,40 @@ def test_seam_wal_busy_blocks(tmp_path):
             wal_path = db_path.with_name(db_path.name + "-wal")
             assert wal_path.exists(), "test setup: expected a live -wal sidecar"
 
-            with pytest.raises(MigrationBlocked):
-                # Direct primitive call proves wal_busy; the call-site test
-                # (below, via ensure_database) proves the raise propagates
-                # and blocks _initialized_users.
-                result = migrate_local_profile_db_at_seam(USER, PROFILE)
-                if result.status != "ok":
-                    raise MigrationBlocked(USER, PROFILE, result.status)
-
-            import app.database as db_module
-            assert USER not in db_module._initialized_users, \
-                "a wal_busy migration failure must not mark the profile initialized"
+            result = migrate_local_profile_db_at_seam(USER, PROFILE)
+            assert result.status == "wal_busy"
         finally:
             live.close()
+
+
+def test_seam_call_site_wal_busy_never_marks_initialized(tmp_path):
+    """Call-site proof: when the seam's own retry-once-then-raise path (§2.5)
+    exhausts against a persistently busy file DURING ensure_database's first
+    access, the profile is never added to `_initialized_users` — the caller
+    never proceeds to serve a below-head/un-migrated DB."""
+    from app.migrations import MigrationBlocked
+
+    fake = FakeR2()
+    data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD, db_version_row=5)
+    key = _profile_r2_key(USER, PROFILE)
+    _seed_r2(fake, key, data, sync_version=5)
+
+    from app.migrations import MigrateResult
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
+         patch("app.database.migrate_local_profile_db_at_seam") as mock_seam, \
+         _r2_patched(fake):
+        mock_seam.return_value = MigrateResult(status="wal_busy")
+        _ctx()
+        from app.database import ensure_database
+
+        with pytest.raises(MigrationBlocked):
+            ensure_database()
+
+        import app.database as db_module
+        assert USER not in db_module._initialized_users, \
+            "a wal_busy migration failure must not mark the profile initialized"
 
 
 # ---------------------------------------------------------------------------
@@ -347,9 +428,9 @@ def test_seam_wal_busy_blocks(tmp_path):
 def test_seam_orphan_reaches_seam_migrates(tmp_path):
     """A profile that reaches ensure_database (T7520 guard already passed) but
     is registry-thin (not returned by get_profiles) still gets migrated —
-    migrate-then-serve, no registry check inside the seam (Q5)."""
-    from app.migrations import migrate_local_profile_db_at_seam
-
+    migrate-then-serve, no registry check inside the seam (Q5). The seam is
+    wired inside ensure_database, so a single first-access call must both
+    NOT raise and land the profile at head."""
     fake = FakeR2()
     N = 3
     data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N)
@@ -362,13 +443,10 @@ def test_seam_orphan_reaches_seam_migrates(tmp_path):
          _r2_patched(fake):
         _ctx()
         from app.database import ensure_database
-        ensure_database()
+        ensure_database()  # must not raise despite the profile being registry-thin
 
-        result = migrate_local_profile_db_at_seam(USER, PROFILE)
-
-    assert result.status == "ok", "an orphan/registry-thin profile that reached the seam must still migrate"
-    assert result.applied
-    assert fake._objects[key]["metadata"]["db-version"] == str(N + 1)
+    assert fake._objects[key]["metadata"]["db-version"] == str(N + 1), \
+        "an orphan/registry-thin profile that reached the seam must still migrate"
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +456,10 @@ def test_seam_orphan_reaches_seam_migrates(tmp_path):
 class TestSeamFailLoudBlocks:
 
     def test_not_at_head_raises_blocked(self, tmp_path):
-        from app.migrations import MigrationBlocked, migrate_local_profile_db_at_seam
+        """Primitive-level proof (isolation, no ensure_database involved): a
+        below-head local file whose post-upload R2 verify still reads
+        below head makes the primitive itself return 'not_at_head'."""
+        from app.migrations import migrate_local_profile_db_at_seam
 
         fake = FakeR2()
         N = 5
@@ -386,18 +467,18 @@ class TestSeamFailLoudBlocks:
         key = _profile_r2_key(USER, PROFILE)
         _seed_r2(fake, key, data, sync_version=N)
 
+        db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.write_bytes(data)
+
         with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
              patch("app.migrations._read_r2_profile_user_version", return_value=PROFILE_HEAD - 1), \
              _r2_patched(fake):
             _ctx()
-            from app.database import ensure_database
-            ensure_database()
+            result = migrate_local_profile_db_at_seam(USER, PROFILE)
 
-            with pytest.raises(MigrationBlocked):
-                result = migrate_local_profile_db_at_seam(USER, PROFILE)
-                if result.status == "not_at_head":
-                    raise MigrationBlocked(USER, PROFILE, result.status)
+        assert result.status == "not_at_head"
 
     def test_missing_raises_blocked(self, tmp_path):
         from app.migrations import MigrationBlocked, migrate_local_profile_db_at_seam
@@ -517,36 +598,43 @@ class TestSeamCasRefusalRepullRetryOnce:
     def test_persistent_failure_after_single_retry_blocks_no_loop(self, tmp_path):
         """(c) Persistent failure after the single re-pull+retry -> raises
         MigrationBlocked/503, proving it does NOT loop (never a third
-        attempt)."""
-        from app.migrations import MigrationBlocked, _seam_repull_and_retry_profile
+        attempt). Something is genuinely pending (mark_sync_pending) so the
+        retry path (not the clean-copy short-circuit) is exercised — the
+        re-pull is a direct download (no seam-primitive call), so the mocked
+        primitive is invoked exactly once, by the single retry."""
+        from app.database import mark_sync_pending, set_local_db_version
+        from app.migrations import MigrateResult, MigrationBlocked, _seam_repull_and_retry_profile
 
         fake = FakeR2()
         N = 5
-        data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N)
+        # R2 already at head — the re-pull converges cleanly; only the
+        # (mocked) seam-primitive retry is what keeps failing.
+        head_data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD, db_version_row=N)
         key = _profile_r2_key(USER, PROFILE)
-        _seed_r2(fake, key, data, sync_version=N)
+        _seed_r2(fake, key, head_data, sync_version=N)
 
         call_count = {"n": 0}
 
         def _always_sync_failed(user_id, profile_id):
             call_count["n"] += 1
-            from app.migrations import MigrateResult
             return MigrateResult(status="sync_failed", applied=[], r2_version=N)
 
-        with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
-             patch("app.migrations.migrate_local_profile_db_at_seam", side_effect=_always_sync_failed), \
-             _r2_patched(fake):
+        with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
             _ctx()
-            from app.database import ensure_database
-            ensure_database()
-
             db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
-            with pytest.raises(MigrationBlocked):
-                _seam_repull_and_retry_profile(USER, PROFILE, db_path)
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            db_path.write_bytes(
+                _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N - 1, tag="local")
+            )
+            set_local_db_version(USER, PROFILE, None)
+            mark_sync_pending(USER, PROFILE)  # something genuinely pending -> retry path taken
 
-        assert call_count["n"] <= 2, \
-            f"must not loop past a single re-pull+retry, saw {call_count['n']} calls"
+            with patch("app.migrations.migrate_local_profile_db_at_seam", side_effect=_always_sync_failed):
+                with pytest.raises(MigrationBlocked):
+                    _seam_repull_and_retry_profile(USER, PROFILE, db_path)
+
+        assert call_count["n"] == 1, \
+            f"must retry the seam primitive exactly once after re-pull, saw {call_count['n']} calls"
 
 
 # ---------------------------------------------------------------------------
@@ -579,8 +667,8 @@ class TestSeamUserDbSymmetric:
             "at-head user.sqlite migration must not upload"
 
     def test_user_db_behind_head_migrates(self, tmp_path):
-        from app.migrations import migrate_local_user_db_at_seam
-
+        """The seam is wired inside ensure_user_database, so a single first-
+        access call already carries the user.sqlite to head."""
         fake = FakeR2()
         N = 4
         data = _build_user_bytes(tmp_path, user_version=USER_HEAD - 1)
@@ -593,36 +681,55 @@ class TestSeamUserDbSymmetric:
              _r2_patched(fake):
             _ctx()
             from app.services.user_db import ensure_user_database
-            ensure_user_database(USER)
+            ensure_user_database(USER)  # single first access: restore + seam migration
 
-            result = migrate_local_user_db_at_seam(USER)
-
-        assert result.status == "ok"
-        assert result.applied
         assert fake._objects[key]["metadata"]["db-version"] == str(N + 1)
 
     def test_user_db_fail_loud_blocks(self, tmp_path):
-        from app.migrations import MigrationBlocked, migrate_local_user_db_at_seam
+        """A persistent sync failure (CAS refusal that survives the single
+        re-pull+retry, §2.7) must raise MigrationBlocked, proven at the
+        `_seam_repull_and_retry_user` helper directly (isolation — mirrors
+        `test_persistent_failure_after_single_retry_blocks_no_loop`).
+        migrate_local_user_db_at_seam has no separate R2-verify step (mirrors
+        _migrate_user_db, code-expert notes §2b), so the reachable failure
+        mode here is a persistent sync failure, not not_at_head. Marking
+        pending must happen on an ALREADY-LOCAL file, not before a first-
+        access `ensure_user_database` call — that call's own restore-then-
+        clear would discharge the marker before the seam even runs (INV-P),
+        defeating the retry path this test targets."""
+        from app.database import USER_DB_SCOPE, mark_sync_pending, set_local_user_db_version
+        from app.migrations import MigrateResult, MigrationBlocked, _seam_repull_and_retry_user
 
         fake = FakeR2()
         N = 4
-        data = _build_user_bytes(tmp_path, user_version=USER_HEAD - 1)
+        # R2 already at head — the re-pull inside the helper converges
+        # cleanly; only the (mocked) seam-primitive retry keeps failing.
+        head_data = _build_user_bytes(tmp_path, user_version=USER_HEAD)
         key = _user_r2_key(USER)
-        _seed_r2(fake, key, data, sync_version=N)
+        _seed_r2(fake, key, head_data, sync_version=N)
+
+        call_count = {"n": 0}
+
+        def _always_sync_failed(user_id):
+            call_count["n"] += 1
+            return MigrateResult(status="sync_failed", applied=[])
 
         with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
-             patch.object(USER_DB_RUNNER, "run", side_effect=_runner_advances_user_to_head), \
-             patch("app.migrations._read_r2_profile_user_version", return_value=USER_HEAD - 1), \
              _r2_patched(fake):
             _ctx()
-            from app.services.user_db import ensure_user_database
-            ensure_user_database(USER)
+            db_path = tmp_path / USER / "user.sqlite"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            db_path.write_bytes(_build_user_bytes(tmp_path, user_version=USER_HEAD - 1, tag="local"))
+            set_local_user_db_version(USER, None)
+            mark_sync_pending(USER, USER_DB_SCOPE)  # something genuinely pending -> retry path taken
 
-            with pytest.raises(MigrationBlocked):
-                result = migrate_local_user_db_at_seam(USER)
-                if result.status != "ok":
-                    raise MigrationBlocked(USER, "user", result.status)
+            with patch("app.migrations.migrate_local_user_db_at_seam", side_effect=_always_sync_failed):
+                with pytest.raises(MigrationBlocked):
+                    _seam_repull_and_retry_user(USER, db_path)
+
+        assert call_count["n"] == 1, \
+            f"must retry the seam primitive exactly once after re-pull, saw {call_count['n']} calls"
 
 
 # ---------------------------------------------------------------------------
