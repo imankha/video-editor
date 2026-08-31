@@ -267,7 +267,27 @@ async def prepare_upload(request: PrepareUploadRequest):
             detail="Failed to initiate multipart upload"
         )
 
-    r2_abort_orphan_multipart_uploads(r2_key, keep_upload_id=upload_id)
+    orphans_aborted = r2_abort_orphan_multipart_uploads(r2_key, keep_upload_id=upload_id)
+
+    # T8160 keeper post-check: if the reclaim aborted anything, prove the keeper
+    # survived before handing out presigned URLs. R2's ListMultipartUploads
+    # returns per-call UploadId aliases, so the reclaim's keep_upload_id equality
+    # can never be trusted on its own — the pre-T8160 version silently aborted
+    # its own fresh multipart here and every part PUT 404'd (bug 47p outage).
+    # Direct use of the created id in list_parts is safe (only cross-response
+    # comparison is broken). Gated on orphans_aborted so the extra R2 round-trip
+    # is paid only when an abort actually happened.
+    if orphans_aborted and not r2_is_multipart_upload_valid(r2_key, upload_id):
+        logger.critical(
+            f"[T8160] Orphan reclaim killed the keeper multipart: key={r2_key} "
+            f"upload_id={upload_id} (aborted={orphans_aborted}) — refusing to "
+            f"return presigned URLs for a dead upload"
+        )
+        _record_upload_failure(user_id, "sync_failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initiate multipart upload"
+        )
 
     # Generate session ID
     session_id = f"upload_{uuid.uuid4().hex}"
@@ -606,7 +626,9 @@ async def list_pending_uploads():
                 'blake3_hash': row['blake3_hash'],
                 'file_size': row['file_size'],
                 'original_filename': row['original_filename'],
-                'label': row['label'] if 'label' in row.keys() else None,
+                # sqlite3.Row: `in row` tests VALUES (Row is a sequence), so
+                # `.keys()` is required here — SIM118 is a false positive.
+                'label': row['label'] if 'label' in row.keys() else None,  # noqa: SIM118
                 'completed_parts': len(completed_parts),
                 'total_parts': total_parts,
                 'progress_percent': round(len(completed_parts) / total_parts * 100) if total_parts > 0 else 0,
