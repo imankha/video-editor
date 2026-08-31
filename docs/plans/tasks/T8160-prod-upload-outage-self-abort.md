@@ -1,6 +1,14 @@
 # T8160: P0 PROD OUTAGE - prepare-upload aborts its own multipart (every fresh upload fails)
 
-**Status:** WIP
+**Status:** WAITING ON USER
+
+**2026-08-31 implementation complete (inline session).** Branch
+`feature/T8160-upload-self-abort` pushed, Branch CI GREEN (changes/frontend/backend all
+success, run 33436559421). Reviewer approved, all SHOULD-FIXes applied. Evidence: the
+unstable-alias unit test is RED on pre-fix code (reviewer re-verified independently);
+29-test relevant set green; opt-in RUN_REAL_R2 keeper-survival test PASSED against real
+R2. WAITING ON: user merge, then PROD deploy (staging auto-deploy alone does not end the
+outage), then a novel-file prod upload as the final acceptance check.
 **Impact:** 10
 **Complexity:** 3
 **Created:** 2026-08-31
