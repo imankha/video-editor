@@ -61,7 +61,7 @@ Implemented strictly in this order — each depends on the one above it.
 
 | ID | Task | Status |
 |----|------|--------|
-| T5081 | [Split clean-copy conflicts from unsynced-write conflicts](T5081-clean-copy-conflict-self-heal.md) | TODO |
+| T5081 | [Split clean-copy conflicts from unsynced-write conflicts](T5081-clean-copy-conflict-self-heal.md) | STAGING |
 | T5083 | [JIT migrate at the per-user load seam](T5083-jit-migrate-at-load-seam.md) | TODO |
 | T5085 | [Non-login writers migrate before touch](T5085-non-login-writers-migrate-before-touch.md) | TODO |
 | T5087 | [Cutover: final batch, then delete the bulk runner](T5087-cutover-delete-bulk-runner.md) | TODO |

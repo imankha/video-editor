@@ -1,6 +1,6 @@
 # T5081: Split clean-copy conflicts from unsynced-write conflicts
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-04
