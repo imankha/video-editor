@@ -2379,6 +2379,11 @@ def _adopt_live_multipart_after_ack_loss(key: str) -> str | None:
     adopted = max(uploads, key=lambda u: u.get('Initiated') or _epoch)
     adopted_id = adopted['UploadId']
 
+    # T8160: R2 UploadIds are unstable ACROSS responses, but within this single
+    # List response each entry is a distinct upload, so comparing entries of
+    # the same response against `adopted_id` (taken from this response) is
+    # exact. Never compare these ids against a stored/created id — see
+    # r2_abort_orphan_multipart_uploads.
     aborted = 0
     for u in uploads:
         if u['UploadId'] != adopted_id and r2_abort_multipart_upload(key, u['UploadId']):
@@ -2633,9 +2638,9 @@ def r2_list_multipart_uploads_by_prefix(prefix: str) -> list:
 
     Unlike r2_list_multipart_uploads (exact-key match, for one known object), this
     is a broad admin-sweep primitive (T7880): it surfaces multiparts for hashes we
-    don't already have a local record for, and lets a sweep catch the double-UploadId
-    anomaly (an object with 2+ open multiparts, one matching a stored pending_uploads
-    row and one not).
+    don't already have a local record for. NOTE (T8160): listed UploadIds are
+    per-call ALIASES on R2 — they can never be matched against stored ids, so a
+    sweep judges liveness by multipart AGE, not id membership.
 
     Returns a list of {'Key': str, 'UploadId': str, 'Initiated': datetime}.
     """
@@ -2674,21 +2679,52 @@ def r2_list_multipart_uploads_by_prefix(prefix: str) -> list:
         logger.warning(f"Error listing multipart uploads by prefix: {prefix} - {e}")
         return []
 
+# T8160: an open multipart younger than this is never treated as an orphan.
+# Presigned part URLs expire after 4 hours, so a NON-RESUMED upload older than
+# 24h cannot still be live; genuine leaks are reclaimed on the next prepare of
+# the same key once they age past this.
+ORPHAN_MULTIPART_MIN_AGE_SECONDS = 24 * 3600
+
 
 def r2_abort_orphan_multipart_uploads(key: str, keep_upload_id: str | None = None) -> int:
     """
-    Abort every open multipart upload on `key`, optionally sparing one.
+    Abort the genuinely-orphaned open multipart uploads on `key`.
 
     T7480 UploadId hygiene: `create_multipart_upload` can leak a duplicate
-    multipart when the app-level retry_r2_call fires a second CreateMultipartUpload
-    after R2 answered the first slower than read_timeout (boto3 itself does NOT
-    retry — Config(retries={"max_attempts": 0})). Called on the fresh-create path
-    (after any valid resume was already declined), so aborting open multiparts here
-    only reclaims genuine orphans. Returns the number aborted.
+    multipart when a create executes at R2 but its ack is lost. Called on the
+    fresh-create path (after any valid resume was already declined) to reclaim
+    those leaks. Returns the number aborted.
+
+    T8160 (bug 47p outage): Cloudflare R2's ListMultipartUploads returns a
+    DIFFERENT UploadId string on EVERY call — created and listed ids are
+    distinct, equally valid ALIASES of the same upload. The pre-T8160 version
+    spared the keeper via `UploadId == keep_upload_id`, which never matches on
+    R2, so every fresh prepare aborted its own just-created multipart and every
+    part PUT 404'd (NoSuchUpload). Sparing is therefore AGE-based: only uploads
+    `Initiated` more than ORPHAN_MULTIPART_MIN_AGE_SECONDS ago are reclaimable.
+    A seconds-old keeper is structurally safe. This also NARROWS (does not
+    close) the cross-user same-hash residual documented in
+    test_t7950_double_uploadid_leak: another writer's active upload is now only
+    at risk if it is a RESUMED session older than the threshold — full closure
+    needs a hash-keyed cross-machine lock (tracked via T8170's follow-ups). An
+    upload with no Initiated timestamp cannot be proven old and is left alone.
+    `keep_upload_id` remains as a belt-and-suspenders guard for S3
+    implementations with stable ids — NEVER as the sole protection.
     """
+    from datetime import UTC, datetime, timedelta
+    cutoff = datetime.now(UTC) - timedelta(seconds=ORPHAN_MULTIPART_MIN_AGE_SECONDS)
     aborted = 0
     for u in r2_list_multipart_uploads(key):
         if keep_upload_id is not None and u['UploadId'] == keep_upload_id:
+            continue
+        initiated = u.get('Initiated')
+        if initiated is not None and initiated.tzinfo is None:
+            # R2 returns tz-aware timestamps today; normalize a naive one
+            # (external-dependency boundary guard) instead of crashing prepare.
+            initiated = initiated.replace(tzinfo=UTC)
+        if initiated is None or initiated >= cutoff:
+            # Too young (or unprovable) to be declared an orphan — never
+            # abort a possibly-live upload.
             continue
         if r2_abort_multipart_upload(key, u['UploadId']):
             aborted += 1

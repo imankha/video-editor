@@ -158,12 +158,19 @@ def test_list_multipart_uploads_by_prefix_paginates():
 
 
 def test_abort_orphan_multipart_uploads_aborts_all_matching():
-    """Two open multiparts on a key (the double-UploadId leak) are both aborted."""
+    """Two PROVABLY OLD open multiparts on a key (the double-UploadId leak) are
+    both aborted. T8160: reclaim is age-scoped — only uploads Initiated beyond
+    ORPHAN_MULTIPART_MIN_AGE_SECONDS are orphans; the fixtures carry stale
+    timestamps accordingly."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.storage import ORPHAN_MULTIPART_MIN_AGE_SECONDS
+    stale = datetime.now(UTC) - timedelta(seconds=ORPHAN_MULTIPART_MIN_AGE_SECONDS * 2)
     client = MagicMock()
     client.list_multipart_uploads.return_value = {
         "Uploads": [
-            {"Key": "games/x.mp4", "UploadId": "u1"},
-            {"Key": "games/x.mp4", "UploadId": "u2"},
+            {"Key": "games/x.mp4", "UploadId": "u1", "Initiated": stale},
+            {"Key": "games/x.mp4", "UploadId": "u2", "Initiated": stale},
         ],
         "IsTruncated": False,
     }
@@ -175,12 +182,21 @@ def test_abort_orphan_multipart_uploads_aborts_all_matching():
 
 
 def test_abort_orphan_multipart_uploads_can_keep_one():
-    """keep_upload_id spares the live upload while reclaiming the orphan."""
+    """A FRESH upload is spared while the stale orphan is reclaimed. T8160:
+    the spare is age-based (a just-created keeper is seconds old), because on
+    real R2 keep_upload_id can never match a listed id (per-call aliases —
+    the bug 47p outage). keep_upload_id remains a secondary guard only."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.storage import ORPHAN_MULTIPART_MIN_AGE_SECONDS
+    stale = datetime.now(UTC) - timedelta(seconds=ORPHAN_MULTIPART_MIN_AGE_SECONDS * 2)
     client = MagicMock()
     client.list_multipart_uploads.return_value = {
         "Uploads": [
-            {"Key": "games/x.mp4", "UploadId": "keep"},
-            {"Key": "games/x.mp4", "UploadId": "orphan"},
+            # Real-R2 shape: the keeper appears under an ALIAS id that does NOT
+            # equal keep_upload_id — only its fresh age protects it.
+            {"Key": "games/x.mp4", "UploadId": "keep-alias", "Initiated": datetime.now(UTC)},
+            {"Key": "games/x.mp4", "UploadId": "orphan", "Initiated": stale},
         ],
         "IsTruncated": False,
     }
@@ -190,6 +206,8 @@ def test_abort_orphan_multipart_uploads_can_keep_one():
             "games/x.mp4", keep_upload_id="keep"
         )
     assert aborted == 1
+    aborted_ids = [c.kwargs["UploadId"] for c in client.abort_multipart_upload.call_args_list]
+    assert aborted_ids == ["orphan"]
 
 
 # ---------------------------------------------------------------------------

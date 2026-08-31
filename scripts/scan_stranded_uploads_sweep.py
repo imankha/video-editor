@@ -14,10 +14,12 @@ Games-tab load — read-only by default, real writes gated behind --apply.
 
 Widens scan_orphaned_pending_uploads.py's original target set (which only saw pending
 games with NO pending_uploads row) to also catch the two-stranded-account shape found in
-the 2026-08-27 drop-off refresh: a game WITH a pending_uploads row, whose stored
-r2_upload_id is dead OR mismatched against the object's actual open multipart (the
-"double-UploadId anomaly" — two multiparts were created for one prepare call; the DB
-remembers one, R2 has a different one open).
+the 2026-08-27 drop-off refresh: a game WITH a pending_uploads row whose upload never
+finished. T8160 NOTE: a stored r2_upload_id can NEVER be matched against listed ids —
+R2 returns per-call UploadId aliases, so "stored id not among open ids" is true for
+every upload, live or dead (that false shape was previously reported here as the
+"double-UploadId anomaly"; root cause found + fixed in T8160). Liveness is judged by
+open-multipart AGE only.
 
 Two phases, matching the data-safety rule (dry-run report -> user sign-off -> apply):
 
@@ -133,6 +135,30 @@ def email_for_user(auth_db: Path, user_id: str) -> str | None:
         conn.close()
 
 
+# T8160: R2's ListMultipartUploads returns a DIFFERENT UploadId string on every
+# call, so `stored_id in open_ids` is ALWAYS false against R2 — id membership can
+# never detect liveness or the "double-UploadId" shape (the pre-T8160 logic
+# classified every genuinely-live upload as "double_uploadid_anomaly", and its
+# upload_ids_to_abort would have killed it). Liveness is therefore judged by the
+# open multiparts' AGE: anything initiated within the recency window may be an
+# active upload and is report-only; only provably old multiparts are abort
+# candidates.
+LIVE_RECENCY_HOURS = 6
+
+
+def _initiated_recent(u: dict) -> bool:
+    iso = u.get("Initiated")
+    if not iso:
+        return True  # unprovable age: treat as possibly live, never abort
+    try:
+        ts = datetime.fromisoformat(iso)
+    except ValueError:
+        return True
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts) < timedelta(hours=LIVE_RECENCY_HOURS)
+
+
 def scan_profile(db_path: Path, cutoff_iso: str, multiparts_by_key: dict) -> list[dict]:
     """One profile's stranded-upload findings. Each finding names exactly what a
     reap needs to do: which game_id to flip, which pending_uploads row (if any) to
@@ -184,13 +210,12 @@ def scan_profile(db_path: Path, cutoff_iso: str, multiparts_by_key: dict) -> lis
             finding["classification"] = (
                 "dead_no_open_multipart" if stored_id else "dead_no_record_no_multipart"
             )
-        elif stored_id and stored_id in open_ids and len(open_ids) == 1:
-            # Exactly the recorded session is open — a genuinely live/in-progress
-            # upload, or one that could still resume. Report only, never touch.
+        elif any(_initiated_recent(u) for u in open_uploads):
+            # At least one open multipart is recent enough to be an in-flight
+            # upload. Report only, never touch.
             finding["classification"] = "possibly_live_skip"
-        elif stored_id and stored_id not in open_ids:
-            finding["classification"] = "double_uploadid_anomaly"
-        elif not stored_id and open_ids:
+            finding["upload_ids_to_abort"] = []
+        elif not stored_id:
             finding["classification"] = "orphan_multipart_no_record"
         else:
             finding["classification"] = "dead_stale_recorded_session"
@@ -258,10 +283,12 @@ def main():
                   f"open_upload_ids={f['open_upload_ids']}")
         print()
 
+    # T8160: "double_uploadid_anomaly" removed — stored-vs-listed UploadId
+    # comparison is meaningless against R2 (listed ids are per-call aliases),
+    # so that class flagged every live upload. Root cause found + fixed (T8160).
     reap_classes = {
         "dead_no_open_multipart", "dead_no_record_no_multipart",
-        "double_uploadid_anomaly", "orphan_multipart_no_record",
-        "dead_stale_recorded_session",
+        "orphan_multipart_no_record", "dead_stale_recorded_session",
     }
     to_reap = [f for f in manifest if f["classification"] in reap_classes]
     skipped = [f for f in manifest if f["classification"] not in reap_classes]
@@ -269,9 +296,6 @@ def main():
     print(f"=== Summary ===")
     print(f"  reap-eligible:  {len(to_reap)}")
     print(f"  possibly live (skipped, not in manifest for apply): {len(skipped)}")
-    anomalies = by_class.get("double_uploadid_anomaly", [])
-    print(f"  double-UploadId anomalies: {len(anomalies)}"
-          f" (input for a root-cause task per the T7880 task file)")
 
     if args.manifest_out:
         args.manifest_out.write_text(json.dumps(to_reap, indent=2))
