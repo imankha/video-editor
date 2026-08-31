@@ -27,6 +27,7 @@ The fake R2 client below models the REAL R2 behavior the T7950 fakes missed:
 list returns a fresh alias string per call; abort resolves aliases.
 """
 
+import os
 import sys
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -186,6 +187,7 @@ def teardown_module():
 
     from app.database import USER_DATA_BASE
     from app.profile_context import set_current_profile_id
+    from app.session_init import _init_cache
     from app.user_context import reset_user_id, set_current_user_id
 
     set_current_user_id(TEST_USER_ID)
@@ -193,6 +195,8 @@ def teardown_module():
     test_path = USER_DATA_BASE / TEST_USER_ID
     if test_path.exists():
         shutil.rmtree(test_path, ignore_errors=True)
+    _init_cache.pop(TEST_USER_ID, None)
+    set_current_profile_id(None)
     reset_user_id()
 
 
@@ -275,15 +279,13 @@ async def test_prepare_upload_skips_post_check_when_nothing_aborted():
 
 
 @pytest.mark.skipif(
-    __import__("os").environ.get("RUN_REAL_R2") != "1",
+    os.environ.get("RUN_REAL_R2") != "1",
     reason="real-R2 integration test; set RUN_REAL_R2=1 to run",
 )
 def test_real_r2_fresh_keeper_survives_orphan_reclaim(monkeypatch):
     # app.storage reads R2_* env at import time, before any dotenv load in a
     # bare pytest run — patch the module constants from a fresh .env read so
     # this test is self-sufficient (standard gotcha; see conftest.pg_conn).
-    import os
-
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
     monkeypatch.setattr(storage, "R2_ENABLED", True)
@@ -291,6 +293,10 @@ def test_real_r2_fresh_keeper_survives_orphan_reclaim(monkeypatch):
         value = os.getenv(const)
         assert value, f"{const} missing from .env — cannot run real-R2 test"
         monkeypatch.setattr(storage, const, value)
+    # get_r2_client is lru_cached: an earlier test in the same process may have
+    # cached None (R2 disabled at its call time). Clear before AND after so this
+    # test neither inherits nor leaks a cached client.
+    storage.get_r2_client.cache_clear()
 
     key = f"games/{uuid.uuid4().hex}{uuid.uuid4().hex}.mp4"
     created = storage.r2_create_multipart_upload(key)
@@ -303,3 +309,4 @@ def test_real_r2_fresh_keeper_survives_orphan_reclaim(monkeypatch):
         )
     finally:
         storage.r2_abort_multipart_upload(key, created)
+        storage.get_r2_client.cache_clear()

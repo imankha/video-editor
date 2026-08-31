@@ -244,6 +244,12 @@ async def prepare_upload(request: PrepareUploadRequest):
                     f"Stale upload session detected: {session_id}, upload_id: {upload_id}. "
                     f"Cleaning up and starting fresh."
                 )
+                # T8160: abort the stale multipart NOW, while its id is still
+                # recorded. The age-scoped reclaim below spares anything younger
+                # than the threshold, so without this abort a fresh-but-invalid
+                # session (e.g. part-size mismatch) would strand its multipart
+                # with no DB record left to find it by.
+                r2_abort_multipart_upload(r2_key, upload_id)
                 cursor.execute(
                     "DELETE FROM pending_uploads WHERE id = ?",
                     (session_id,)
@@ -283,6 +289,10 @@ async def prepare_upload(request: PrepareUploadRequest):
             f"upload_id={upload_id} (aborted={orphans_aborted}) — refusing to "
             f"return presigned URLs for a dead upload"
         )
+        # Best-effort abort so the failed prepare leaves no record-less orphan
+        # (if the keeper is truly dead this is a no-op; direct use of the
+        # created id is safe — only cross-response comparison is broken).
+        r2_abort_multipart_upload(r2_key, upload_id)
         _record_upload_failure(user_id, "sync_failed")
         raise HTTPException(
             status_code=500,

@@ -2638,9 +2638,9 @@ def r2_list_multipart_uploads_by_prefix(prefix: str) -> list:
 
     Unlike r2_list_multipart_uploads (exact-key match, for one known object), this
     is a broad admin-sweep primitive (T7880): it surfaces multiparts for hashes we
-    don't already have a local record for, and lets a sweep catch the double-UploadId
-    anomaly (an object with 2+ open multiparts, one matching a stored pending_uploads
-    row and one not).
+    don't already have a local record for. NOTE (T8160): listed UploadIds are
+    per-call ALIASES on R2 — they can never be matched against stored ids, so a
+    sweep judges liveness by multipart AGE, not id membership.
 
     Returns a list of {'Key': str, 'UploadId': str, 'Initiated': datetime}.
     """
@@ -2679,12 +2679,11 @@ def r2_list_multipart_uploads_by_prefix(prefix: str) -> list:
         logger.warning(f"Error listing multipart uploads by prefix: {prefix} - {e}")
         return []
 
-
-
 # T8160: an open multipart younger than this is never treated as an orphan.
-# One hour comfortably exceeds any prepare->parts window while still reclaiming
-# prior sessions' genuine leaks on the next prepare of the same key.
-ORPHAN_MULTIPART_MIN_AGE_SECONDS = 3600
+# Presigned part URLs expire after 4 hours, so a NON-RESUMED upload older than
+# 24h cannot still be live; genuine leaks are reclaimed on the next prepare of
+# the same key once they age past this.
+ORPHAN_MULTIPART_MIN_AGE_SECONDS = 24 * 3600
 
 
 def r2_abort_orphan_multipart_uploads(key: str, keep_upload_id: str | None = None) -> int:
@@ -2703,12 +2702,14 @@ def r2_abort_orphan_multipart_uploads(key: str, keep_upload_id: str | None = Non
     R2, so every fresh prepare aborted its own just-created multipart and every
     part PUT 404'd (NoSuchUpload). Sparing is therefore AGE-based: only uploads
     `Initiated` more than ORPHAN_MULTIPART_MIN_AGE_SECONDS ago are reclaimable.
-    A seconds-old keeper is structurally safe, as is any other writer's ACTIVE
-    upload on this shared content-hash key (closes the cross-user residual
-    documented in test_t7950_double_uploadid_leak). An upload with no Initiated
-    timestamp cannot be proven old and is left alone. `keep_upload_id` remains
-    as a belt-and-suspenders guard for S3 implementations with stable ids —
-    NEVER as the sole protection.
+    A seconds-old keeper is structurally safe. This also NARROWS (does not
+    close) the cross-user same-hash residual documented in
+    test_t7950_double_uploadid_leak: another writer's active upload is now only
+    at risk if it is a RESUMED session older than the threshold — full closure
+    needs a hash-keyed cross-machine lock (tracked via T8170's follow-ups). An
+    upload with no Initiated timestamp cannot be proven old and is left alone.
+    `keep_upload_id` remains as a belt-and-suspenders guard for S3
+    implementations with stable ids — NEVER as the sole protection.
     """
     from datetime import UTC, datetime, timedelta
     cutoff = datetime.now(UTC) - timedelta(seconds=ORPHAN_MULTIPART_MIN_AGE_SECONDS)
@@ -2717,6 +2718,10 @@ def r2_abort_orphan_multipart_uploads(key: str, keep_upload_id: str | None = Non
         if keep_upload_id is not None and u['UploadId'] == keep_upload_id:
             continue
         initiated = u.get('Initiated')
+        if initiated is not None and initiated.tzinfo is None:
+            # R2 returns tz-aware timestamps today; normalize a naive one
+            # (external-dependency boundary guard) instead of crashing prepare.
+            initiated = initiated.replace(tzinfo=UTC)
         if initiated is None or initiated >= cutoff:
             # Too young (or unprovable) to be declared an orphan — never
             # abort a possibly-live upload.

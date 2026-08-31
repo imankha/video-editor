@@ -41,7 +41,13 @@ A genuinely CROSS-USER / CROSS-MACHINE concurrent `prepare_upload` for the
 SAME global blake3_hash can still abort another prepare's in-use multipart:
 B2 only spares the CURRENT prepare's own id (`keep_upload_id=upload_id`),
 and the per-user write lock (`_USER_WRITE_LOCKS`, db_sync.py) is per-process
-and keyed on user_id, not on the global hash. Closing that residual needs
+and keyed on user_id, not on the global hash. T8160 NARROWS this residual
+(age-scoped reclaim: only multiparts older than ORPHAN_MULTIPART_MIN_AGE_
+SECONDS are reclaimable, so only a RESUMED session older than the threshold
+is still exposed) but does not close it. NOTE (T8160): the fakes in this
+file model an S3 with STABLE UploadIds; real R2 mints a NEW alias per
+response — see test_t8160_upload_self_abort.py for the R2-faithful fake.
+These tests pin router wiring/ordering, not R2 id semantics. Closing that residual needs
 Option A (a cross-machine idempotency/lock keyed on blake3_hash, e.g. a
 Postgres advisory lock) - deferred, filed only if a future T7880 sweep
 shows it recurring (design doc SS4/SS7). Do NOT write a two-different-users-
