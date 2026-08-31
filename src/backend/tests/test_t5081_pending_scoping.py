@@ -46,6 +46,11 @@ def _make_profile_db(base, user_id=USER, profile_id=PROFILE, marker="v0"):
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    # T5083: sentinel PRAGMA user_version far above any registered migration
+    # so the JIT load-seam (now firing on every ensure_database first
+    # access) treats this minimal marker-only fixture as already-at-head —
+    # see the identical comment in test_t6160_conflict_self_heal.py.
+    conn.execute("PRAGMA user_version = 999999")
     conn.commit()
     conn.close()
     return p
@@ -58,6 +63,7 @@ def _make_user_db(base, user_id=USER, marker="v0"):
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    conn.execute("PRAGMA user_version = 999999")
     conn.commit()
     conn.close()
     return p
