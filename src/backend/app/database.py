@@ -26,12 +26,6 @@ from pathlib import Path
 from typing import Any
 
 from . import migrations
-from .migrations import (
-    MigrationBlocked,
-    _get_migration_lock,
-    _seam_repull_and_retry_profile,
-    migrate_local_profile_db_at_seam,
-)
 from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
@@ -518,12 +512,18 @@ class SyncResult(str, Enum):
 def column_exists(cursor, table: str, column: str) -> bool:
     """True if `column` exists on `table`.
 
-    Tolerates the deploy->migrate window: versioned migrations run manually (not on
-    deploy/startup), so a hot read path must not crash on a column a not-yet-run
-    migration will add. Callers SELECT the column only when present and default it
-    otherwise (the column's own default is the correct value during the window).
-    `table`/`column` are internal constants, never user input. Mirrors T5630's
-    _has_stage_columns pattern.
+    T5085: since T5083, every REQUEST path is migrated to head by the JIT
+    seam before the handler runs (ensure_database / ensure_user_database),
+    so this is no longer "tolerate the deploy->migrate window" (that window
+    closed when the bulk admin-triggered runner was retired) -- it is now
+    defence in depth for ROLLING-DEPLOY SKEW (EPIC decision 8, additive-only
+    migrations): old code on machine A can still serve a request against a
+    DB that machine B's newer code just migrated one version ahead of what
+    A's queries expect. Permanent, not a window. Callers SELECT the column
+    only when present and default it otherwise (the column's own default is
+    the correct value on the machine that hasn't deployed the new code yet).
+    `table`/`column` are internal constants, never user input. Mirrors
+    T5630's _has_stage_columns pattern.
     """
     cursor.execute(f"PRAGMA table_info({table})")
     return any(row[1] == column for row in cursor.fetchall())
@@ -1154,34 +1154,12 @@ def ensure_database():
 
         # T5083: JIT migrate-at-load-seam, strictly AFTER the restore-then-
         # clear sequence (set_local_db_version / clear_sync_pending) has
-        # completed — never reorders INV-P (design §2.8). Operates on the
-        # already-restored local file; never serves a below-head DB (§2.6).
-        # Guarded on db_path.exists(): a genuinely NEW profile (R2 NOT_FOUND,
-        # no prior local copy) has nothing to migrate yet — CREATE TABLE below
-        # stamps it straight to head. Without this guard the seam would see a
-        # missing file and raise MigrationBlocked on every brand-new signup.
-        #
-        # T5083 fix (2026-08-31 CI escalation): gated on `_seam_verified`, NOT
-        # `entered_restore_branch` — the restore branch's own version-cache
-        # gate is set by set_local_db_version() BEFORE this block runs, so a
-        # request that raised MigrationBlocked here would otherwise make
-        # request 2 see `local_version` already non-None, skip the restore
-        # branch, and silently serve the still-below-head DB. `_seam_verified`
-        # is a separate flag, added ONLY after a real "ok" result, so a
-        # below-head DB keeps re-entering the seam on every request until it
-        # verifiably reaches head — independent of the version cache.
-        if db_path.exists() and (user_id, profile_id) not in migrations._seam_verified:
-            with _get_migration_lock(user_id, profile_id):
-                result = migrate_local_profile_db_at_seam(user_id, profile_id)
-                if result.status == "wal_busy":
-                    from .services.db_refresh import clear_stale_wal_sidecars
-                    clear_stale_wal_sidecars(db_path)
-                    result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
-                if result.status == "sync_failed":
-                    result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
-                if result.status != "ok":
-                    raise MigrationBlocked(user_id, profile_id, result.status)
-                migrations._seam_verified.add((user_id, profile_id))
+        # completed — never reorders INV-P (design §2.8). T5085 extracted the
+        # body into migrations.run_profile_seam() so every non-login opener
+        # of a profile.sqlite (share resolution, admin cross-user reads,
+        # ensure_profile_db_local / _open_profile_db) shares this exact
+        # logic instead of a second copy — see migrations/__init__.py.
+        migrations.run_profile_seam(user_id, profile_id)
 
     # If already initialized, skip table creation
     if already_initialized:

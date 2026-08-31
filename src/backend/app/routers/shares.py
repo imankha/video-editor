@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from ..analytics import record_milestone
 from ..database import get_db_connection
+from ..migrations import MigrationBlocked
 from ..profile_context import get_current_profile_id
 from ..services.auth_db import (
     get_user_by_email,
@@ -264,7 +265,17 @@ def _resolve_share_video_intro(share: dict, *, mode: str):
     from app.services.intro_egress import resolve_intro_for_reel
     from app.services.materialization import open_profile_db_readonly
 
-    conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    try:
+        conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    except MigrationBlocked as e:
+        # T5085: open_profile_db_readonly now migrates-before-touch and can
+        # raise -- this function's documented contract is "never raises",
+        # same treatment as conn is None below.
+        logger.info(
+            f"[shares] sharer profile DB blocked at migration seam ({e.reason}) "
+            f"(share_token={share.get('share_token')}) -- serving without intro"
+        )
+        return None
     if conn is None:
         logger.info(
             f"[shares] could not open sharer profile DB for intro resolution "
@@ -304,7 +315,14 @@ def _resolve_share_metadata(share: dict) -> dict | None:
     from app.services.download_metadata import build_download_metadata
     from app.services.materialization import open_profile_db_readonly
 
-    conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    try:
+        conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    except MigrationBlocked as e:
+        logger.info(
+            f"[shares] sharer profile DB blocked at migration seam ({e.reason}) "
+            f"(share_token={share.get('share_token')}) -- serving without metadata"
+        )
+        return None
     if conn is None:
         logger.info(
             f"[shares] could not open sharer profile DB for metadata "
@@ -812,14 +830,15 @@ async def claim_shared_game(
             include_annotations=body.import_annotations,
             sharer_email=sharer_email,
         )
-    except RefreshFailed:
-        # A profile DB could not be confirmed current / synced -- retryable, not a
-        # partial success. Mirrors the payments-grant 503 contract.
+    except (RefreshFailed, MigrationBlocked) as e:
+        # A profile DB could not be confirmed current / synced, or is below
+        # head and could not be migrated (T5085) -- retryable, not a partial
+        # success. Mirrors the payments-grant 503 contract.
         raise HTTPException(
             status_code=503,
             detail={"code": "sync_failed",
                     "message": "Could not import right now, please retry."},
-        )
+        ) from e
 
     return ClaimGameResponse(
         # profile_id is the profile the game ACTUALLY landed in (claim_game_link

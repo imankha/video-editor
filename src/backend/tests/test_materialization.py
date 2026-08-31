@@ -5,27 +5,24 @@ Tests the core materialization logic: clip filtering, overlap detection/merging,
 game copying, storage ref creation, and pending share CRUD.
 """
 
-import json
 import sqlite3
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from app.utils.encoding import encode_data, decode_data
 from app.services.materialization import (
-    clips_overlap,
-    merge_clips,
+    _collect_video_hashes,
+    _copy_game,
     _filter_clips_for_tag,
     _find_existing_game_by_hashes,
-    _copy_game,
     _materialize_clips,
-    _collect_video_hashes,
+    clips_overlap,
     materialize_game_share,
+    merge_clips,
     serialize_clip_data,
 )
-
+from app.utils.encoding import decode_data, encode_data
 
 # ---------------------------------------------------------------------------
 # Helpers: create in-memory SQLite databases with the right schema
@@ -123,6 +120,14 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
+    # T5085: this profile.sqlite is now reachable through the JIT seam
+    # (materialization._open_profile_db / ensure_profile_db_local both call
+    # migrations.run_profile_seam) -- a hand-built fixture with no PRAGMA
+    # user_version reads as schema version 0, which is genuinely below head,
+    # so stamp it head so the seam no-ops instead of running the full
+    # migration history against a fixture that doesn't carry it.
+    from tests.conftest import stamp_schema_head
+    stamp_schema_head(conn, "profile_db")
     conn.commit()
     return conn
 
@@ -554,7 +559,7 @@ class TestAthleteAttribution:
              "tagged_teammates": ["Sam"]},
         ]
 
-        result = _materialize_clips(conn, game_id, incoming, sharer_profile_name=None)
+        _materialize_clips(conn, game_id, incoming, sharer_profile_name=None)
         conn.commit()
 
         clips = conn.execute("SELECT * FROM raw_clips WHERE game_id = ?", (game_id,)).fetchall()
@@ -607,7 +612,7 @@ class TestAthleteAttribution:
              "end_time": 5, "video_sequence": 0, "tags": None},
         ]
 
-        result = _materialize_clips(conn, game_id, incoming, sharer_profile_name="Jake")
+        _materialize_clips(conn, game_id, incoming, sharer_profile_name="Jake")
         conn.commit()
 
         clips = conn.execute("SELECT * FROM raw_clips WHERE game_id = ?", (game_id,)).fetchall()
@@ -1225,8 +1230,10 @@ class TestPendingShareCRUD:
     def test_create_and_query_pending_share(self, pg_conn):
         from app.services.auth_db import create_user
         from app.services.sharing_db import (
-            create_game_share, create_pending_share,
-            get_pending_shares_for_email, resolve_pending_share,
+            create_game_share,
+            create_pending_share,
+            get_pending_shares_for_email,
+            resolve_pending_share,
         )
 
         create_user("sharer-user", email="sharer@test.com")
@@ -1266,11 +1273,12 @@ class TestPendingShareCRUD:
 
     def test_pending_share_cascade_on_share_delete(self, pg_conn):
         from app.services.auth_db import create_user
-        from app.services.sharing_db import (
-            create_game_share, create_pending_share,
-            get_pending_shares_for_email, revoke_share,
-        )
         from app.services.pg import get_pg
+        from app.services.sharing_db import (
+            create_game_share,
+            create_pending_share,
+            get_pending_shares_for_email,
+        )
 
         create_user("sharer-user", email="sharer2@test.com")
 

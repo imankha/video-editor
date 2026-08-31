@@ -461,7 +461,7 @@ def test_backfill_prefers_frozen_section(db):
 
     with patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}]), \
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
-         patch("app.migrations._migrate_profile_db") as mig, \
+         patch("app.migrations.migrate_local_profile_db_at_seam") as mig, \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
          patch.object(poster_mod, "_grab_and_store_poster_frame", side_effect=capture), \
          patch.object(poster_mod, "resolve_slowmo_section") as reconstruct, \
@@ -511,7 +511,7 @@ def test_backfill_reconstructs_and_heals_when_unfrozen(db):
 
     with patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}]), \
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
-         patch("app.migrations._migrate_profile_db") as mig, \
+         patch("app.migrations.migrate_local_profile_db_at_seam") as mig, \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
          patch.object(poster_mod, "_grab_and_store_poster_frame", side_effect=capture), \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):

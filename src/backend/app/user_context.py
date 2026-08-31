@@ -14,7 +14,7 @@ If get_current_user_id() is called without a user being set, it raises
 RuntimeError. This prevents silent fallback to a phantom shared user.
 """
 
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 
 # Context variable for current user ID — NO default.
 # Must be explicitly set by middleware before any route handler runs.
@@ -111,9 +111,26 @@ def get_current_user_id() -> str:
         ) from None
 
 
-def set_current_user_id(user_id: str) -> None:
-    """Set the current user ID for this request context."""
-    _current_user_id.set(user_id)
+def set_current_user_id(user_id: str) -> Token:
+    """Set the current user ID for this request context.
+
+    Returns the ContextVar Token so a caller that temporarily points the
+    context at ANOTHER user's DB (T5085: the JIT seam running for a foreign
+    profile — share resolution, admin cross-user reads) can restore the
+    prior value with reset_user_id_token() in a finally block. Existing
+    callers that set-and-forget can ignore the return value.
+    """
+    return _current_user_id.set(user_id)
+
+
+def reset_user_id_token(token: Token) -> None:
+    """Restore the user id to the value captured before set_current_user_id().
+
+    Unlike reset_user_id() (test-only, always clears to unset), this restores
+    whatever the prior value was — including "no value", which Token.reset()
+    handles correctly since ContextVar.set() was never called on this task
+    before the token's set() call."""
+    _current_user_id.reset(token)
 
 
 def reset_user_id() -> None:

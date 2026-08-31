@@ -23,6 +23,7 @@ from app.middleware.db_sync import (
     durable_sync,
     set_durable_sync_failure_response,
 )
+from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
@@ -1736,24 +1737,30 @@ async def move_reels_to_profile(
         # earlier while their media survives. Abort retryably instead.
         try:
             ensure_profile_db_local(user_id, target_profile_id, require_fresh=True)
-        except ProfileDBRefreshFailed:
+            target_conn = _open_profile_db(user_id, target_profile_id)
+            if target_conn is None:
+                # Only reachable now when R2 genuinely has NO DB for this profile
+                # (NOT_FOUND, not an error) -- i.e. the first reel ever moved here.
+                # Creating an empty schema after an R2 *error* would force-push it and
+                # wipe the whole target, which is why require_fresh must run first.
+                _ensure_empty_profile_db(target_profile_id)
+                target_conn = _open_profile_db(user_id, target_profile_id)
+        except (ProfileDBRefreshFailed, MigrationBlocked):
+            # T5085 (review fix): _open_profile_db now migrates-before-touch
+            # and can raise MigrationBlocked too -- moved inside this try
+            # (previously only ensure_profile_db_local's require_fresh was
+            # covered), since by this point Phase 0 already copied media into
+            # the target prefix and MUST be rolled back on ANY of these
+            # failure shapes, not just an R2-confirm error.
             _cleanup_target_objects(user_id, target_profile_id, copied_paths)
             logger.warning(
                 f"[MoveReels] could not confirm target profile {target_profile_id} is "
-                f"current (R2 error); aborting rather than force-pushing a stale copy "
-                f"req_id={req_id} -> 503"
+                f"current or bring it to head; aborting rather than force-pushing a "
+                f"stale/below-head copy req_id={req_id} -> 503"
             )
             raise HTTPException(
                 status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE
             ) from None
-        target_conn = _open_profile_db(user_id, target_profile_id)
-        if target_conn is None:
-            # Only reachable now when R2 genuinely has NO DB for this profile
-            # (NOT_FOUND, not an error) -- i.e. the first reel ever moved here.
-            # Creating an empty schema after an R2 *error* would force-push it and
-            # wipe the whole target, which is why require_fresh must run first.
-            _ensure_empty_profile_db(target_profile_id)
-            target_conn = _open_profile_db(user_id, target_profile_id)
         if target_conn is None:
             _cleanup_target_objects(user_id, target_profile_id, copied_paths)
             raise HTTPException(status_code=500, detail="Could not open target profile database")
@@ -1972,16 +1979,19 @@ async def finish_move_reels_to_profile(
     # this task exists to prevent). We only READ the target (no force-push). ---
     try:
         ensure_profile_db_local(user_id, target_profile_id, require_fresh=True)
-    except ProfileDBRefreshFailed:
+        target_conn = _open_profile_db(user_id, target_profile_id)
+    except (ProfileDBRefreshFailed, MigrationBlocked):
+        # T5085 (review fix): _open_profile_db now migrates-before-touch and
+        # can raise too -- moved inside this try so both failure shapes
+        # refuse (delete nothing) rather than only the require_fresh half.
         logger.warning(
             f"[MoveReels/finish] could not confirm target profile {target_profile_id} "
-            f"is current (R2 error); refusing to delete source rows user={user_id} "
-            f"req_id={req_id} -> 503"
+            f"is current or bring it to head; refusing to delete source rows "
+            f"user={user_id} req_id={req_id} -> 503"
         )
         raise HTTPException(
             status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE
         ) from None
-    target_conn = _open_profile_db(user_id, target_profile_id)
     target_filenames: set[str] = set()
     if target_conn is not None:
         try:

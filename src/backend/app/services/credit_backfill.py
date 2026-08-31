@@ -4,9 +4,17 @@ user's legacy user.sqlite credit ledger into Postgres.
 
 Deliberately NOT a versioned `user_db` migration file (design 3b): money needs a
 dry-run report a human reads before anything is written, and a migration's
-`up(conn)` gets no user context to force-download R2 with. `run_all_migrations`
-also restores from R2 only when `local_version is None`, which on a live
-machine could read a stale local copy instead of the authoritative one.
+`up(conn)` gets no user context to force-download R2 with. This tool force-
+downloads R2 itself for that reason -- it never trusts a live machine's cached
+local snapshot for money (see `_force_download_user_db` below).
+
+T5085 note: the `credits`/`credit_transactions`/`credit_reservations` tables
+this tool reads are base `_USER_DB_SCHEMA` (user_db.py), never migration-
+added, so there is no schema-version hazard here regardless of which
+migration mechanism (JIT seam or the retired bulk runner) last touched the
+DB -- this tool deliberately reads pre-migration-shape tables as part of its
+contract, tolerate-permanent. It is a one-shot T5840 cutover tool; confirm
+with the user whether it can be deleted alongside T5089.
 
 Per-user algorithm (design 3c), one Postgres transaction per user:
   1. Force-download the R2 copy of user.sqlite (never trust a cached local

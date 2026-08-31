@@ -291,12 +291,12 @@ def test_seam_hot_path_no_migration(tmp_path):
         _ctx()
         from app.database import ensure_database
 
-        # NEW symbol: the seam call site must be patchable/importable from
-        # app.database once wired. This import is what makes the test RED
-        # today (ImportError) rather than silently passing for the wrong
-        # reason (the call site doesn't exist so it trivially "isn't called").
+        # T5085: ensure_database's seam block was extracted verbatim into
+        # migrations.run_profile_seam (so every non-login opener shares one
+        # implementation) — the call site is now inside migrations, patched
+        # there rather than on app.database.
         from app.migrations import MigrateResult
-        with patch("app.database.migrate_local_profile_db_at_seam") as mock_seam:
+        with patch("app.migrations.migrate_local_profile_db_at_seam") as mock_seam:
             mock_seam.return_value = MigrateResult(status="ok", applied=[])
             ensure_database()  # first access — seam should fire once
             first_call_count = mock_seam.call_count
@@ -419,7 +419,7 @@ def test_seam_call_site_wal_busy_never_marks_initialized(tmp_path):
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
-         patch("app.database.migrate_local_profile_db_at_seam") as mock_seam, \
+         patch("app.migrations.migrate_local_profile_db_at_seam") as mock_seam, \
          _r2_patched(fake):
         mock_seam.return_value = MigrateResult(status="wal_busy")
         _ctx()

@@ -36,6 +36,14 @@ def _make_local(base, user_id, profile_id):
     p = d / "profile.sqlite"
     con = sqlite3.connect(str(p))
     con.execute("CREATE TABLE final_videos (id INTEGER PRIMARY KEY, filename TEXT)")
+    # T5085: ensure_profile_db_local now calls the JIT seam (migrations.
+    # run_profile_seam) after its restore -- a hand-built fixture with no
+    # PRAGMA user_version reads as schema version 0 (genuinely below head),
+    # so stamp it head to keep this file's assertions about R2-freshness
+    # decoupled from schema-migration behavior, which isn't what this file
+    # tests.
+    from tests.conftest import stamp_schema_head
+    stamp_schema_head(con, "profile_db")
     con.commit()
     con.close()
     return p

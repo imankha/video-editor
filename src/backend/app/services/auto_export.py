@@ -796,7 +796,7 @@ def backfill_hiq_recaps(limit: int = 25, dry_run: bool = False) -> dict:
     `limit` budget was exhausted before scanning finished).
     """
     from ..database import ensure_database
-    from ..migrations import _get_profile_ids
+    from ..migrations import MigrationBlocked, _get_profile_ids
     from ..storage import r2_head_object_global
     from .auth_db import get_all_users_for_admin
 
@@ -826,7 +826,21 @@ def backfill_hiq_recaps(limit: int = 25, dry_run: bool = False) -> dict:
                 break
             set_current_user_id(user_id)
             set_current_profile_id(profile_id)
-            ensure_database()
+            try:
+                ensure_database()
+            except MigrationBlocked as e:
+                # T5085: ensure_database() is now the JIT seam (T5083) -- a
+                # single blocked profile must not abort the whole backfill
+                # run. Skip this profile only; it re-enters the seam (and
+                # this backfill) on the next call.
+                result["failed"].append(
+                    {"profile_id": profile_id, "error": f"migration_blocked: {e.reason}"}
+                )
+                logger.error(
+                    f"[HiQBackfill] profile {user_id}/{profile_id} blocked at "
+                    f"migration seam ({e.reason}) -- skipping"
+                )
+                continue
 
             with get_db_connection() as conn:
                 games = [

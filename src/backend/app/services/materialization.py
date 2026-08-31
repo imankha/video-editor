@@ -33,10 +33,29 @@ SHARED_PROVENANCE_LOST = "lost"
 
 def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None:
     """Open a profile SQLite database directly (bypasses ContextVar).
-    Only opens locally-cached DBs -- does NOT download from R2."""
+    Only opens LOCALLY-PRESENT files -- returns None rather than downloading
+    one from scratch when the file doesn't exist locally at all.
+
+    T5085: no longer strictly "does NOT download from R2" -- `run_profile_seam`
+    below can re-download on a CAS refusal during migration
+    (`_seam_repull_and_retry_profile`, a cross-machine race where another
+    machine already advanced R2). That download only ever happens for a file
+    that already exists (the exists() check below returns None first for a
+    genuinely absent file), and only as part of migrating it, never as a
+    substitute for "fetch this profile from R2 for me".
+    """
     db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
     if not db_path.exists():
         return None
+    # T5085: this is a non-login WRITE path (share materialization, move-reels
+    # target) and a non-login foreign READ path (the sharer side of
+    # materialize_game_share, credit-reservation recovery) -- neither goes
+    # through ensure_database, so without this a below-head DB could be
+    # written to or read from directly. Migrate BEFORE the connection exists:
+    # this function sets journal_mode=WAL below, and the seam refuses to swap
+    # under a live WAL sidecar.
+    from app import migrations
+    migrations.run_profile_seam(user_id, profile_id)
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -61,11 +80,25 @@ def ensure_profile_db_local(
     """Guarantee a profile's SQLite DB is present in the local cache, downloading
     it from R2 if missing/stale, then return its path (or None if R2 has none).
 
-    READ-ONLY w.r.t. the owner's data: it only populates the local cache and the
-    local db_version bookkeeping; it never writes the owner's authoritative data
-    and never uploads / bumps the R2 sync version. Used to resolve a public
-    collection share against the SHARER's profile DB on a request that carries no
-    (or a different) profile context.
+    T5085: also migrate-before-touch. Prior to this the function was
+    READ-ONLY/never-uploads w.r.t. the owner's data -- that is no longer
+    true. This is the restore half of the JIT seam's contract (T5083) for
+    every caller that opens a profile DB WITHOUT going through
+    ensure_database (share resolution, admin cross-user reads, move-reels
+    target, the recipient/sharer sides of a teammate share) -- it downloads
+    the same way ensure_database's restore branch does, so the migration
+    slots in right after in the identical order (INV-P restore-then-clear
+    completes first). Consequence worth stating explicitly: an anonymous
+    share viewer or an admin read can now trigger an R2 upload of the
+    SHARER's/target user's profile.sqlite -- idempotent and user_version-
+    gated (only fires when a migration actually applied), the same
+    sanctioned read-triggers-write exception T5083 documented, but new on
+    this specific call path. Raises MigrationBlocked (-> HTTP 503 on a
+    request path) if the DB cannot be verified at head; never silently
+    serves/writes a below-head DB.
+
+    Used to resolve a public collection share against the SHARER's profile
+    DB on a request that carries no (or a different) profile context.
 
     The R2 helpers (sync_database_from_r2_if_newer -> download_from_r2 / r2_key)
     derive the profile from the profile_context ContextVar, so we temporarily set
@@ -135,7 +168,17 @@ def ensure_profile_db_local(
     finally:
         reset_profile_id_token(token)
 
-    return db_path if db_path.exists() else None
+    if not db_path.exists():
+        return None
+
+    # T5085: migrate-before-touch, strictly AFTER the restore-then-clear
+    # sequence above (set_local_db_version / clear_sync_pending) has fully
+    # completed, mirroring ensure_database's own INV-P ordering. Owns its own
+    # ContextVar swap (run_profile_seam) -- safe to call here even though the
+    # profile context was just reset to the caller's own value above.
+    from app import migrations
+    migrations.run_profile_seam(user_id, profile_id)
+    return db_path
 
 
 def open_profile_db_readonly(user_id: str, profile_id: str) -> sqlite3.Connection | None:
@@ -216,13 +259,19 @@ _GAME_VIDEO_COLUMNS = (
 class RecipientProfileBelowHead(RuntimeError):
     """T6780: the cross-profile game copy targets a recipient/target profile DB whose
     schema is BELOW head — a column the copy must write (`shared_by` v026,
-    `source_profile_id`/`source_game_id` v030) does not exist yet on that DB, because
-    it hasn't been migrated in the deploy->migrate window.
+    `source_profile_id`/`source_game_id` v030) does not exist yet on that DB.
 
-    Reachable: the recipient/target DB is opened raw (`_open_profile_db` /
-    `ensure_profile_db_local`), NEITHER of which migrates to head, so a below-head DB
-    can reach this write. The matching READS are already column_exists-guarded
-    (games list, quests, move-reel source projection); this is the write-side sibling.
+    T5085: `_open_profile_db` and `ensure_profile_db_local` (the two ways the
+    recipient/target DB reaches this write) both migrate-before-touch now, so
+    this guard is no longer covering the "hasn't been migrated in the
+    deploy->migrate window" gap it was written for — that gap is closed.
+    KEPT as permanent defence-in-depth against rolling-deploy skew (EPIC
+    decision 8, see `column_exists`'s docstring in database.py): a machine
+    still running old code can reach this write path against a DB a newer
+    machine already migrated ONE version past what this code's column set
+    expects, or vice versa. The matching READS are already column_exists-
+    guarded (games list, quests, move-reel source projection) for the same
+    permanent reason; this is the write-side sibling.
 
     We REFUSE rather than write a partial row: omitting these columns is NOT an option
     like `detections_data` (T6780 case A) — `shared_by` is the onboarding-blind quest
@@ -231,7 +280,7 @@ class RecipientProfileBelowHead(RuntimeError):
     Callers map this to the right shape: share paths DEFER via `create_pending_share`
     (retries post-migration through T3230 login materialization); the move-reel path
     returns HTTP 503 (retryable, no deferral channel). Never a lying `{success:true}`,
-    never a raw 500 (this is a known, time-bounded state)."""
+    never a raw 500 (this is now a rare, structural-skew state, not a routine one)."""
 
 
 def _insert_game_with_videos(
@@ -249,9 +298,11 @@ def _insert_game_with_videos(
     game_storage / Postgres game_storage_refs / game_ref_counts (EPIC decision 4).
 
     T6780: refuses (raises `RecipientProfileBelowHead`) when any column the copy must
-    write is absent on the target `games` table — a below-head recipient in the
-    deploy->migrate window — rather than 500 on an OperationalError or write a corrupt
-    partial row. Guarding the SHARED primitive covers both copiers AND any future
+    write is absent on the target `games` table — rather than 500 on an
+    OperationalError or write a corrupt partial row. T5085: the target DB is now
+    migrated-before-touch by its opener, so this is rolling-deploy-skew defence in
+    depth (see RecipientProfileBelowHead's docstring), not the routine case it used
+    to be. Guarding the SHARED primitive covers both copiers AND any future
     column added to a copy set, so a new call site cannot silently skip it. One PRAGMA
     per copy (not per row).
     """
@@ -776,11 +827,11 @@ def materialize_game_share(
     # sharer_conn -- this can do a real R2 HEAD and, for a cold recipient, a
     # full profile.sqlite download; doing it first means that network round
     # trip never holds the sharer's connection open for no reason. (Also:
-    # _open_profile_db is a raw, R2-oblivious local read ("only opens
-    # locally-cached DBs -- does NOT download from R2") reused below for a
-    # WRITE (inserts games/clips into recipient_conn, commits) -- require_fresh
-    # is the same guard move_reels uses, so an R2 error aborts loudly instead
-    # of materializing the share on top of a stale/unconfirmed snapshot.)
+    # _open_profile_db is reused below for a WRITE (inserts games/clips into
+    # recipient_conn, commits) and, since T5085, migrates-before-touch too --
+    # require_fresh here is the same freshness guard move_reels uses, so an
+    # R2 error aborts loudly instead of materializing the share on top of a
+    # stale/unconfirmed snapshot.)
     ensure_profile_db_local(recipient_user_id, recipient_profile_id, require_fresh=True)
 
     sharer_conn = _open_profile_db(sharer_user_id, sharer_profile_id)
@@ -822,7 +873,16 @@ def materialize_game_share(
     else:
         hashes = []
 
-    recipient_conn = _open_profile_db(recipient_user_id, recipient_profile_id)
+    from app.migrations import MigrationBlocked  # local: migrations imports this module (v033)
+    try:
+        recipient_conn = _open_profile_db(recipient_user_id, recipient_profile_id)
+    except MigrationBlocked:
+        # T5085 (review fix): _open_profile_db can now raise -- sharer_conn
+        # (opened above) must not leak on this path either, same as the
+        # recipient_conn-is-None branch just below.
+        if sharer_conn:
+            sharer_conn.close()
+        raise
     if recipient_conn is None:
         if sharer_conn:
             sharer_conn.close()

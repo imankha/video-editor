@@ -6,6 +6,7 @@ import threading
 from collections import defaultdict
 from datetime import UTC, datetime
 
+from app.migrations import MigrationBlocked
 from app.services.pg import get_pg
 from app.user_context import (
     get_current_impersonator_id,
@@ -100,7 +101,7 @@ class _DailyCounterBuffer:
                         f"VALUES (CURRENT_DATE, %s, {placeholders}) "
                         f"ON CONFLICT (counter_date, origin_type) "
                         f"DO UPDATE SET {set_clauses}",
-                        [origin] + counts + counts,
+                        [origin, *counts, *counts],
                     )
             logger.info("[Analytics] Flushed daily counters: %d origins", len(to_flush))
         except Exception:
@@ -522,6 +523,18 @@ def record_milestone(
                 (action, json.dumps(log_context) if log_context else None, now),
             )
             conn.commit()
+    except MigrationBlocked as e:
+        # T5085: this user.sqlite is below head on this machine and could not
+        # be migrated -- the row is NOT written. record_milestone's contract
+        # is "never raises" (webhook/background-task/admin-read callers have
+        # nothing sensible to do with a raise), so this stays non-fatal, but
+        # a dropped analytics write must be LOUD, not folded into the generic
+        # warning below (EPIC decision 6 — no silent fallback).
+        logger.critical(
+            "[Migration] ANALYTICS_WRITE_DROPPED user=%s action=%s reason=%s — "
+            "user.sqlite is below head on this machine; the row was NOT written",
+            user_id, action, e.reason,
+        )
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s action=%s", user_id, action)
 
@@ -623,6 +636,13 @@ def record_impression(kind: str, name: str, session_count: int | None = None):
                 (action, json.dumps(log_context), now),
             )
             conn.commit()
+    except MigrationBlocked as e:
+        # T5085: see record_milestone's identical handler above.
+        logger.critical(
+            "[Migration] ANALYTICS_WRITE_DROPPED user=%s action=%s reason=%s — "
+            "user.sqlite is below head on this machine; the row was NOT written",
+            user_id, action, e.reason,
+        )
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for impression user=%s action=%s", user_id, action)
 
@@ -673,6 +693,13 @@ def record_session_exit(
             )
             conn.commit()
         logger.info("[Analytics] Session-exit breadcrumb: user=%s last=%s screens=%d", user_id, clean_last, len(clean_trail))
+    except MigrationBlocked as e:
+        # T5085: see record_milestone's identical handler above.
+        logger.critical(
+            "[Migration] ANALYTICS_WRITE_DROPPED user=%s action=session_exit reason=%s — "
+            "user.sqlite is below head on this machine; the row was NOT written",
+            user_id, e.reason,
+        )
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for session-exit breadcrumb user=%s", user_id)
 
@@ -704,6 +731,15 @@ def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] 
                 tokens,
             ).fetchall()
         return {row[0]: row[1] for row in rows}
+    except MigrationBlocked as e:
+        # T5085: honest 'unknown' (same contract as the except Exception
+        # below) rather than a silent 0 that would read as "nobody watched".
+        logger.critical(
+            "[Migration] ANALYTICS_READ_BLOCKED sharer=%s reason=%s — user.sqlite "
+            "is below head on this machine; share_view_counts unavailable",
+            sharer_user_id, e.reason,
+        )
+        return None
     except Exception:
         logger.warning(
             "[Analytics] share_view_counts failed for sharer=%s", sharer_user_id,
@@ -884,6 +920,14 @@ def update_session(user_id: str, is_pwa: bool = False):
                     ("session_started", json.dumps({"is_pwa": is_pwa}), now),
                 )
                 conn.commit()
+        except MigrationBlocked as e:
+            # T5085: see record_milestone's identical handler above.
+            logger.critical(
+                "[Migration] ANALYTICS_WRITE_DROPPED user=%s action=session_started "
+                "reason=%s — user.sqlite is below head on this machine; the row "
+                "was NOT written",
+                user_id, e.reason,
+            )
         except Exception:
             logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)
 

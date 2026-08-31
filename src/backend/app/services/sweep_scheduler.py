@@ -12,6 +12,7 @@ import time
 from datetime import UTC, datetime
 
 from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
+from ..migrations import MigrationBlocked
 from ..profile_context import set_current_profile_id
 from ..storage import r2_delete_object_global
 from ..user_context import set_current_user_id
@@ -134,7 +135,20 @@ def do_sweep():
         for profile_id in _get_profile_ids(user_id):
             set_current_user_id(user_id)
             set_current_profile_id(profile_id)
-            ensure_database()
+            try:
+                ensure_database()
+            except MigrationBlocked as e:
+                # T5085: pre-T5083 this could not happen -- ensure_database()
+                # is now the JIT seam, and a SINGLE blocked profile must not
+                # abort the sweep for every remaining user (the un-wrapped
+                # call would propagate to _run_sweep_loop's except Exception
+                # and retry the WHOLE sweep in 1h). Skip this profile only;
+                # it re-enters the seam (and Phase 1) on the next sweep.
+                logger.error(
+                    f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} blocked at "
+                    f"migration seam ({e.reason}) -- skipping this profile, sweep continues"
+                )
+                continue
 
             expired_refs = get_expired_refs_for_profile()
             if not expired_refs:
