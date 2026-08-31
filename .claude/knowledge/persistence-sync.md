@@ -1,5 +1,6 @@
 ---
 domain: persistence-sync
+updated: 2026-08-31 (T5083 CI-escalation fix, same day as the section below: Branch CI caught 9 pre-existing tests broken by the initial seam commit — the expert agent root-caused two real bugs the 19-test seam suite never exercised because it stubs the migration runner. **FIX 1:** user.sqlite's seam ran AFTER schema creation, so a restored below-v002 DB got `user_activity` created in its full HEAD shape before the migration saw it, and v004's bare `ALTER TABLE ADD COLUMN` then crashed with "duplicate column name" on EVERY future request (a permanent brick) — fixed by moving the seam before schema creation, mirroring the profile seam. **FIX 4 (more serious):** the seam's fail-loud gate (`entered_restore_branch`) was only one request deep — `set_local_db_version` runs BEFORE the seam inside the SAME restore block, so a request that raised `MigrationBlocked` left `local_version` non-None, and request 2 silently skipped the seam and served the still-below-head DB. Fixed with a new `migrations._seam_verified` success cache, added only on a real "ok", decoupled from the restore branch's own gate. Also: runner exceptions now wrapped (FIX 3, no more raw 500s), test fixtures across 5 files stamp the real head version via a new `stamp_schema_head` conftest helper instead of an impossible-in-prod `user_version=0`/sentinel (FIX 2), and two new tests drive the REAL migration runner through the real seam — the class of gap that let both bugs ship. Full corrected mechanism + landmine writeup: see the "CORRECTED 2026-08-31" seam description and the CI-escalation landmine block in the T5083 section below.)
 updated: 2026-08-31 (T5083: **migrations now run JIT at the per-user DB-load seam, not only via the admin-triggered bulk sweep.** `ensure_database` (profile.sqlite, `database.py`) and `ensure_user_database` (user.sqlite, `user_db.py`) each gained a migration call INSIDE their first-access restore branch, strictly AFTER the INV-P restore-then-clear sequence (`set_local_db_version`/`clear_sync_pending`) completes and BEFORE the DB is marked initialized — the hot path (warmed `local_version`) never re-enters this block, so at-head costs one `PRAGMA user_version` read and nothing on every later request. Two new leaner primitives (`migrations.migrate_local_profile_db_at_seam`/`migrate_local_user_db_at_seam`) operate on the file the seam's OWN restore just downloaded+swapped — no second R2 download, no T6410 keep-local tree (the seam already decided swap-vs-keep) — then run the SAME `PROFILE_DB_RUNNER`/`USER_DB_RUNNER`, `sync_db_to_r2_explicit`/`sync_user_db_to_r2_explicit`, and (profile only) `_read_r2_profile_user_version` verify-at-head the bulk sweep uses, so a DB migrated by either path converges byte/version-identical (`test_sweep_and_seam_identical`). A dedicated per-(user_id, profile_id-or-`USER_DB_SCOPE`) `threading.Lock` (`migrations._get_migration_lock`, TOCTOU-guarded) serializes concurrent same-pair migrations — deliberately NOT the asyncio write lock (user-keyed, non-reentrant, never held on reads; reusing it would either skip protection on GETs or deadlock a WRITE request that already holds it). A CAS refusal on the migration path (`sync_failed`) is handled by `_seam_repull_and_retry_profile`/`_seam_repull_and_retry_user`: check `has_sync_pending_scope` FIRST (INV-P, now trustworthy per-scope since T5081) — nothing pending means a clean-copy race (another machine already carried the migration to R2), re-pull only, no retry; something pending means re-pull (via the low-level restore primitive DIRECTLY, `sync_database_from_r2_if_newer`/`sync_user_db_from_r2_if_newer` — NEVER by calling `ensure_database`/`ensure_user_database` again, which would recursively re-enter this same seam) plus exactly one retry, then raise if still failing (never loop past one retry). Any non-`ok` result (`wal_busy` after one clear+retry, `sync_failed` after the re-pull+retry, `not_at_head`, `missing`, or an exception) raises `MigrationBlocked(user_id, profile_id, reason)`, mapped by a `main.py` FastAPI exception handler to a retryable **HTTP 503** `{"code": "pending_migration"}` (the T5970/T6550 convention) — the DB is NEVER added to `_initialized_users`/`_initialized_user_dbs` on failure, so the client's retry re-enters the seam rather than serving a below-head DB. **Landmine avoided, not hit:** the profile seam is additionally gated on `db_path.exists()` (not just "entered the restore branch") — a genuinely NEW profile (R2 NOT_FOUND, no prior local file) has nothing to migrate yet; CREATE TABLE stamps it straight to head moments later, and without this guard the seam would see a "missing" file and 503 every brand-new signup forever. The out-of-band admin sweep (`_migrate_user`/`_migrate_profile_db`/`_migrate_user_db`/`run_all_migrations`) is UNCHANGED and still the bulk backstop (T5087 owns its deletion); `ensure_user_database_fresh` and `materialization.ensure_profile_db_local`/`_open_profile_db` (non-login writer paths) deliberately do NOT get the JIT trigger yet — T5085 owns that, and the sweep covers them until then. Read-triggers-write is a SANCTIONED exception to the gesture-based-persistence rule, not a violation: the post-migration R2 upload fires only when the runner actually `applied` something (a no-op at-head migration issues zero R2 writes), is idempotent/monotonic (gated by `PRAGMA user_version`, cannot re-fire against its own output — no feedback loop, the defining hazard of banned reactive persistence), and the admin sweep already performed this exact ungestured write; deferring the upload instead is strictly worse (recreates the 2026-08-04 T6402/T6340 stale-baseline CAS trap). Tests: `tests/test_t5083_jit_seam.py` (19 cases: at-head no-op, behind-head migrates, hot-path skip, concurrent-same-pair single-upload, wal_busy blocks both at the primitive and the call site, orphan/registry-thin migrate-then-serve, fail-loud for `not_at_head`/`missing`/exception, all three CAS re-pull-retry-once shapes, user.sqlite symmetric coverage, sweep/seam convergence, and a regression pinning the brand-new-profile guard). Live-verified (not just mocked): the REAL `PROFILE_DB_RUNNER` (unmocked) drove a genuine floor-v23 profile DB — built via the `test_t6030_migration_window_structural_guard.py` `POST_V023_COLUMNS`-drop technique — through the real `ensure_database()` seam to head v48, correct R2 `db-version` advance, all audited columns restored.)
 updated: 2026-08-25 (T7520: **an unregistered X-Profile-ID no longer materializes a cross-tenant profile.sqlite.** The impersonation start/stop window let the OLD page fire a request carrying the NEW session's user + the STALE impersonated `X-Profile-ID`; the middleware only FORMAT-checked the 8-hex header (`db_sync.py` ~767), so `ensure_database()` created a profile.sqlite under the WRONG user's dir (then an R2 orphan via shutdown/sweep). FIX = an OWNERSHIP guard at the two CLIENT-INPUT boundaries, never inside the shared creation path: (A) `db_sync.py` header path — after the regex, reject (404 + `logger.critical [PROFILE_GUARD]`) unless `profile_id` is in the session user's registry; keyed on the resolved/impersonated `get_current_user_id()`, NOT the auth source (applies to the `X-User-ID` admin path too — no escape hatch); peek an in-process `session_init._profile_registry_cache` (dict, no I/O) and only offload the cache-MISS load via `run_in_context` (opening user.sqlite blocks / cold R2 download). (B) `session_init._init_slow_path` hint path — validate `hint_profile_id` against the registry BEFORE `_ensure_database_with_context`; unregistered hint creates nothing, resolves to the real selected profile (dropped the T3350 parallel user+profile download for the hint, cold-path only). **DO NOT put the guard inside `ensure_database`/`set_current_profile_id`/anything downstream** — profile-create (see landmine below), background workers, and share materialization (`ensure_profile_db_local`, user != profile-owner) legitimately call the creation path with cross-context ids. Registry cache mirrors `_init_cache` staleness (machine-pinned, invalidated on create/switch/delete via `invalidate_user_cache`, which now drops BOTH caches) — plus the new-user `create_profile` inside `_init_slow_path` pops `_profile_registry_cache` so the guard doesn't 404 the user's own just-created profile. Frontend `sessionInit.clearProfileHeader()` (nulls `_currentProfileId`/`_profileId` + removes `sessionStorage.rb_profile_id`) is called in `authStore` start/stopImpersonation + logout BEFORE navigation to close the emission window client-side. **Corrected landmine (the task file had it BACKWARDS): profile-create registers the profile LAST, not first.** `routers/profiles.py POST /api/profiles` (~209-227) does `set_current_profile_id(new_id)` -> `ensure_database()` -> R2 sync -> `db_create_profile()` LAST (T5310, deliberate: a mid-op crash leaves a benign R2 orphan, never a registered-but-missing profile) — so the guard MUST live at the request boundary, never inside the creation path it would break for every user. Tests: `tests/test_t7520_profile_ownership_guard.py` (foreign header 404 + no DB + no R2 upload; admin-route guard; unregistered hint resolves-to-selected + creates nothing; new-user-hint doesn't leave a stale registry cache). Cleanup of existing orphans: `scripts/cleanup_orphan_profiles.py` (fixed: prod->production prefix alias, local+R2 sequenced delete-then-verify, per-orphan row-count evidence). See T7520 section.)
 updated: 2026-08-24 (T4360: **action-endpoint RMW atomicity is now enforced by SQLite's RESERVED lock, not by the absence of an `await`.** `framing_action` (clips.py) and `overlay_action` (overlay.py) each issue `conn.execute("BEGIN IMMEDIATE")` as the FIRST statement after opening the cursor, before the read -- a concurrent second writer's own `BEGIN IMMEDIATE` blocks on the RESERVED lock (up to `busy_timeout=30000`) until the first commits, instead of both reading stale state and the later commit silently clobbering the earlier one. Previously this was safe only because no `await` existed between read and commit inside one coroutine (a Python-scheduling accident this fix removes the dependency on). Mechanism works under Python 3.11's legacy `isolation_level=""`: issuing `BEGIN IMMEDIATE` before any DML sets `in_transaction=True`, so the module's own implicit `BEGIN DEFERRED` never fires -- no competing/stranded transaction. Lock-timeout overflow (`sqlite3.OperationalError: database is locked`) is caught and surfaced as a retryable `503 {"error": "database_locked"}`, never a silent 500. `games.py activate_game`'s bug26p multi-transaction/multi-connection ordering was deliberately NOT wrapped (would deadlock against `insert_game_storage_ref`'s nested connection) -- its invariants are pinned by tests only (restructure is T4640). Race detector + activation invariant tests: `tests/test_t4360_explicit_orderings.py`. See T4360 section.)
@@ -857,17 +858,30 @@ seam so a user's DBs migrate to head in the process about to serve them, at the 
 no post-deploy operator step. Design: `docs/plans/tasks/T5083-design.md`; epic:
 `docs/plans/tasks/jit-migration/EPIC.md`.
 
-**The seam, exactly.** `ensure_database` (`database.py`, profile.sqlite) and `ensure_user_database`
-(`services/user_db.py`, user.sqlite) each gained a migration call INSIDE their existing first-access
-restore branch (`local_version is None`) — strictly AFTER the restore-then-clear sequence
+**The seam, exactly (CORRECTED 2026-08-31 — see the CI-escalation landmine below for why).**
+`ensure_database` (`database.py`, profile.sqlite) and `ensure_user_database` (`services/user_db.py`,
+user.sqlite) each have a migration call sitting INSIDE `if R2_ENABLED:`, as a sibling of the first-access
+restore branch (`if local_version is None: ...`) — strictly AFTER the restore-then-clear sequence
 (`set_local_db_version`/`clear_sync_pending`) completes, so INV-P's ordering (§T5081 above) is never
-touched, and BEFORE the DB is marked initialized (`_initialized_users.add`/`_initialized_user_dbs.add`).
-The profile seam is additionally gated on `db_path.exists()` — a genuinely NEW profile (R2 NOT_FOUND, no
-prior local file) has nothing to migrate; CREATE TABLE stamps it straight to head moments later, and
-without this guard the seam sees a spurious "missing" file and blocks every brand-new signup. On an
-already-warmed profile (`local_version` cached) the restore branch — and therefore the seam — is never
-entered: **zero R2 or migration-runner work on the hot path**, only the one-time cold cost per
-(user,profile) per schema bump.
+touched, and (user.sqlite specifically) BEFORE schema creation (`executescript(_USER_DB_SCHEMA)`), never
+after — see the FIX 1 landmine below for why that ordering is load-bearing, not cosmetic.
+**The gate is `db_path.exists() and (user_id, profile_id_or_USER_DB_SCOPE) not in migrations._seam_verified`
+— NOT "did this request enter the restore branch."** `_seam_verified` (a module-level
+`set[tuple[str, str]]` in `migrations/__init__.py`) is added to ONLY after a real `"ok"` result, so a
+below-head DB keeps re-entering the seam on every request until it verifiably reaches head, independent
+of the restore branch's own version-cache gate (see the FIX 4 landmine below). `database.py`/`user_db.py`
+read it via `migrations._seam_verified` (module attribute access, not `from .migrations import
+_seam_verified`) specifically so a test's `monkeypatch.setattr(migrations_module, "_seam_verified",
+set())` reset actually takes effect — a bound-name import would go stale against that reset. Cleared
+alongside the existing per-user/per-profile caches in `forget_local_db_state` (database.py) and
+`invalidate_user_cache` (session_init.py) so an account purge-then-reregister can't inherit a stale
+verified flag; `forget_user_db` covers it transitively via `forget_local_db_state`. The profile seam is
+additionally gated on `db_path.exists()` — a genuinely NEW profile (R2 NOT_FOUND, no prior local file)
+has nothing to migrate; CREATE TABLE stamps it straight to head moments later, and without this guard the
+seam sees a spurious "missing" file and blocks every brand-new signup. On an already-verified pair the
+gate is an O(1) set-membership check — **zero R2 or migration-runner work on the hot path**, only the
+one-time cold cost per (user,profile) per schema bump (the same performance property `entered_restore_
+branch` gave, but correctly independent of the restore branch's own gate).
 
 **Two leaner primitives, not the bulk one.** `migrations.migrate_local_profile_db_at_seam`/
 `migrate_local_user_db_at_seam` operate on the file the seam's OWN restore just downloaded+swapped (or
@@ -902,13 +916,68 @@ needed. If something IS pending: re-pull, by calling the LOW-LEVEL restore primi
 re-enter this same machinery — then retry the seam primitive exactly once. Still failing after that one
 retry raises `MigrationBlocked` (never loop further).
 
-**Fail-loud, mapped to 503.** Any non-`ok` result (`wal_busy` surviving one `clear_stale_wal_sidecars`
-retry, `sync_failed` surviving the one re-pull+retry, `not_at_head`, `missing`, or an outright exception)
-raises `migrations.MigrationBlocked(user_id, profile_id, reason)`. A `main.py`
-`@app.exception_handler(MigrationBlocked)` maps it to a retryable **HTTP 503**
+**Fail-loud, mapped to 503 — and now genuinely retried, not just once.** Any non-`ok` result (`wal_busy`
+surviving one `clear_stale_wal_sidecars` retry, `sync_failed` surviving the one re-pull+retry,
+`not_at_head`, `missing`, or an outright exception from `migration.up()` — the runner call is wrapped in
+`try/except` per FIX 3 below, so a bad migration surfaces as a `MigrateResult(status="exception: ...")`
+the seam can act on, never a raw 500) raises `migrations.MigrationBlocked(user_id, profile_id, reason)`.
+A `main.py` `@app.exception_handler(MigrationBlocked)` maps it to a retryable **HTTP 503**
 `{"detail": "...", "code": "pending_migration"}` — the SAME convention as the T5970/T6550 guarded-write
-503s. The DB is NEVER added to `_initialized_users`/`_initialized_user_dbs` on failure, so a client retry
-genuinely re-enters the seam rather than the caller falling through to open a below-head DB.
+503s. The DB is added to `migrations._seam_verified` ONLY after a real `"ok"` result (never on failure),
+so a client retry genuinely re-enters the seam on the NEXT request too — see FIX 4 below for why
+`_initialized_users`/`_initialized_user_dbs` alone could not guarantee this.
+
+**Landmine (2026-08-31 Branch CI escalation) — the first shipped version of this seam had two real
+bugs, both invisible to the 19-test suite that shipped with it, both root-caused by the expert agent
+from a red Branch CI run and fixed same-day. Recorded here so the failure MODE, not just the fix, isn't
+re-learned the hard way:**
+
+- **FIX 1 (user.sqlite seam ran AFTER schema creation, not before).** The first shipped version placed
+  user.sqlite's seam call AFTER `executescript(_USER_DB_SCHEMA)` (mirroring the ORIGINAL profile seam's
+  physical position in the function, but profile.sqlite's schema-creation step is `CREATE TABLE IF NOT
+  EXISTS` per-statement, so it never touches an EXISTING table's columns — user.sqlite's
+  `executescript(_USER_DB_SCHEMA)` has the SAME property, but the ORDERING still matters for a table
+  that's fully ABSENT). A restored user.sqlite below v002 (pre-dating `user_activity`'s creation) hit
+  schema creation FIRST, which created `user_activity` fresh in its FULL HEAD shape (already carrying
+  v004's `total_usage_seconds`, since `_USER_DB_SCHEMA` is kept at head) — then the migration ran and
+  v004's bare `ALTER TABLE user_activity ADD COLUMN total_usage_seconds` crashed with "duplicate column
+  name" on EVERY future request for that user (a permanent brick, not a transient failure). Real bug,
+  real prod hazard — caught by `test_r2_restore_retry.py` in Branch CI, not by this file's own suite
+  (see the gap below). Fixed by moving the seam to run BEFORE schema creation, as a sibling of the
+  restore branch inside `if R2_ENABLED:` (matching the CORRECTED description above — the ORIGINAL
+  design doc's placement description was itself imprecise on this point for user.sqlite).
+- **FIX 4 (fail-loud was only one request deep — the more serious bug).** The first shipped version
+  gated the seam on `entered_restore_branch` (a per-call local boolean, True only when
+  `local_version is None`). But `set_local_db_version`/`set_local_user_db_version` run INSIDE the
+  restore block, BEFORE the seam call — so a request that raised `MigrationBlocked` still left
+  `local_version` non-`None`. Request 2 then found `entered_restore_branch` False (the restore branch
+  never re-fires once a version is cached), **skipped the seam entirely**, and silently served the
+  still-below-head DB — exactly the silent fallback this whole task exists to prevent, and worse than a
+  hard failure (a below-head DB masquerading as fine is the T5970 `no such column` hazard waiting to
+  happen on the NEXT hot-path read that names a newer column). Fixed by decoupling the seam's own
+  success-tracking (`_seam_verified`) from the restore branch's version-cache gate entirely — see "The
+  seam, exactly" above.
+- **The gap that let both ship.** 16 of the original 19 tests in `tests/test_t5083_jit_seam.py` stub
+  `PROFILE_DB_RUNNER.run`/`USER_DB_RUNNER.run` directly (a fake that unconditionally advances to head),
+  so NONE of them ever ran a real `migration.up()` through the real seam call site end to end — that is
+  precisely why FIX 1's ordering hazard was invisible locally. Two tests now close this gap:
+  `test_real_runner_profile_head_minus_one_migrates_via_real_seam` and
+  `test_real_runner_user_db_missing_table_migrates_via_real_seam` (the latter is the EXACT v004
+  reproduction — builds via the real base schema, drops `user_activity` entirely, stamps
+  `PRAGMA user_version = 1`, and asserts the real runner reaches head with no exception). **Lesson: a
+  seam/call-site test suite that only ever exercises a stubbed runner proves the WIRING, not the
+  MIGRATION — at least one test per track must drive the real runner against a genuinely below-head DB
+  built via the real base-schema path.**
+- **Minor, fixed the same pass:** `migrate_local_user_db_at_seam` never checked `wal_sidecars_present`
+  (the caller's `wal_busy` retry branch was dead code) — added, symmetric with the profile primitive.
+  **Minor, deliberately deferred (not a correctness bug, flagged for a future pass):** neither seam
+  primitive nor `_seam_repull_and_retry_profile`/`_seam_repull_and_retry_user` saves/restores the
+  `user_id`/`profile_id` ContextVar tokens around `set_current_user_id`/`set_current_profile_id` — when
+  this runs for a FOREIGN user (an admin `get_migration_status_for_user` route, or the bulk sweep's
+  `_migrate_user_db` which now also transitively calls `ensure_user_database` and therefore
+  double-migrates+double-uploads on every bulk run) it can rebind an in-flight request's ContextVars.
+  Idempotent but wasteful for the bulk-sweep case; a real (if narrow) cross-request-identity risk for
+  the admin route. Not fixed this pass — noted for whoever touches this code next.
 
 **Read-triggers-write is a SANCTIONED exception, not a gesture-based-persistence violation.** The
 post-migration R2 upload can fire on a plain GET with no user gesture. This is deliberately NOT the
@@ -928,18 +997,30 @@ JIT trigger in T5083. They reach a profile without going through the seam at all
 sweep still backstops them and T5085 (next in epic order, before T5087 deletes the sweep) wires
 "migrate-before-touch" for exactly this non-login-writer list.
 
-**Tests:** `tests/test_t5083_jit_seam.py` (19 cases — at-head no-op zero-upload; behind-head migrates
+**Tests:** `tests/test_t5083_jit_seam.py` (21 cases — at-head no-op zero-upload; behind-head migrates
 and uploads `r2_version+1`; hot path never re-invokes the seam primitive; two concurrent first-access
 requests produce exactly one upload; `wal_busy` blocks at both the primitive and the `ensure_database`
 call site, never marks `_initialized_users`; a registry-thin/orphan profile still migrates;
 `not_at_head`/`missing`/exception all raise `MigrationBlocked` with no fallthrough to a below-head open;
 all three CAS shapes — nothing-pending re-pull-only, pending re-pull-plus-retry-lands, persistent-
 failure-blocks-with-no-loop; user.sqlite symmetric coverage; sweep-vs-seam convergence; a regression
-pinning the brand-new-profile `db_path.exists()` guard). Live-verified beyond the mocked suite: the REAL
+pinning the brand-new-profile `db_path.exists()` guard; PLUS the two real-(unmocked)-runner tests the
+2026-08-31 escalation added — see the landmine above). Live-verified beyond the mocked suite: the REAL
 (unmocked) `PROFILE_DB_RUNNER` drove a genuine floor-v23 profile DB (built via
 `test_t6030_migration_window_structural_guard.py`'s `POST_V023_COLUMNS`-drop technique) through the real
 `ensure_database()` seam to head v48, with correct R2 `db-version` advance and every audited column
-restored.
+restored. **Fixture landmine (same escalation, `tests/conftest.py::stamp_schema_head`):** several
+pre-existing test files (`test_t6390_qa_evidence.py`, `test_t7010_clip_game_logging.py`,
+`test_t4315_restore_on_staleness.py`, `test_t5081_pending_scoping.py`,
+`test_t6160_conflict_self_heal.py`) build a synthetic marker-only DB (no base schema tables) with
+`PRAGMA user_version` left at SQLite's default of 0 — impossible in real production (a fresh DB is
+always stamped to head immediately; a genuinely below-head DB was created via the real base schema long
+ago and always has every base table), but now that migration fires on every first access instead of only
+an admin sweep, these fixtures tripped the SAME crash class as FIX 1/3 for a reason that has nothing to
+do with the seam being broken. Per CLAUDE.md ("no defensive fixes for internal bugs that cannot occur"),
+the fix is in the fixtures (`stamp_schema_head(conn, "profile_db"|"user_db")`, using the REAL runner's
+`latest_version` — never a magic/sentinel number, so a future migration bump can't silently leave a
+fixture claiming to be at an old head), not a new seam guard.
 
 ## T5960 / T6010 / T6020 — Alarm gated on write-attempt, classified by call-site marker
 
