@@ -1,10 +1,10 @@
 # T5083: JIT migrate at the per-user load seam
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-08-04 (carries the 2026-07-13 T5080 scope)
-**Updated:** 2026-08-04
+**Updated:** 2026-08-30
 
 Epic child 2/5 — see [EPIC.md](EPIC.md) for goal, the 8 settled design decisions, shared invariants,
 and both field-findings sections. **Architect design gate** (`docs/plans/tasks/T5083-design.md`).
