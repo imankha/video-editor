@@ -40,24 +40,34 @@ OTHER_PROFILE = "ffff5081"
 
 
 def _make_profile_db(base, user_id=USER, profile_id=PROFILE, marker="v0"):
+    from tests.conftest import stamp_schema_head
     d = base / user_id / "profiles" / profile_id
     d.mkdir(parents=True, exist_ok=True)
     p = d / "profile.sqlite"
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    # T5083 (CI escalation FIX 2): stamp the REAL head version (not a
+    # sentinel) so the JIT load-seam (now firing on every ensure_database
+    # first access) treats this minimal marker-only fixture as already-
+    # migrated — see stamp_schema_head's docstring for why a literal
+    # sentinel is wrong (a future migration bump could silently leave a
+    # fixture stuck below head).
+    stamp_schema_head(conn, "profile_db")
     conn.commit()
     conn.close()
     return p
 
 
 def _make_user_db(base, user_id=USER, marker="v0"):
+    from tests.conftest import stamp_schema_head
     d = base / user_id
     d.mkdir(parents=True, exist_ok=True)
     p = d / "user.sqlite"
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    stamp_schema_head(conn, "user_db")
     conn.commit()
     conn.close()
     return p

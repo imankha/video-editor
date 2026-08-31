@@ -36,12 +36,25 @@ PROFILE = "beef1234"
 
 
 def _write_marker_db(path, marker):
+    from tests.conftest import stamp_schema_head
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE IF NOT EXISTS marker (who TEXT)")
     conn.execute("DELETE FROM marker")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    # T5083 (CI escalation FIX 2): stamp the REAL head version (track
+    # inferred from the filename — this helper writes both profile.sqlite
+    # and user.sqlite fixtures) so the JIT load-seam (now firing on every
+    # ensure_database/ensure_user_database first access) treats this
+    # minimal marker-only fixture as already-migrated and no-ops, instead
+    # of running the full migration history against a DB that never had
+    # the real base schema (unrepresentative of any real production DB,
+    # which always gets its base schema created before it can go below-
+    # head). This file's tests are about INV-P/self-heal version-cache
+    # mechanics, not migration.
+    track = "user_db" if path.name == "user.sqlite" else "profile_db"
+    stamp_schema_head(conn, track)
     conn.commit()
     # Checkpoint + close so the file is a self-contained snapshot (no sidecars)
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")

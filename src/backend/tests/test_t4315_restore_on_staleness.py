@@ -38,24 +38,31 @@ PROFILE = "abcd1234"
 
 
 def _make_user_db(base, user_id=USER, marker="v0"):
+    from tests.conftest import stamp_schema_head
     d = base / user_id
     d.mkdir(parents=True, exist_ok=True)
     p = d / "user.sqlite"
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    # T5083: stamp head so the JIT load-seam (now firing on every
+    # ensure_user_database first access) treats this marker-only fixture as
+    # already-migrated.
+    stamp_schema_head(conn, "user_db")
     conn.commit()
     conn.close()
     return p
 
 
 def _make_profile_db(base, user_id, profile_id, marker="v0"):
+    from tests.conftest import stamp_schema_head
     d = base / user_id / "profiles" / profile_id
     d.mkdir(parents=True, exist_ok=True)
     p = d / "profile.sqlite"
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    stamp_schema_head(conn, "profile_db")
     conn.commit()
     conn.close()
     return p
@@ -106,10 +113,16 @@ class TestUserDbWritePathRestoreIfNewer:
              patch("app.services.user_db.USER_DATA_BASE", tmp_path), _r2_patched(fake):
             local_path = _make_user_db(tmp_path, marker="stale_local")
 
+            from tests.conftest import stamp_schema_head
             newer_path = tmp_path / "newer_user.sqlite"
             conn = sqlite3.connect(str(newer_path))
             conn.execute("CREATE TABLE marker (who TEXT)")
             conn.execute("INSERT INTO marker (who) VALUES ('r2_newer')")
+            # T5083: this R2-seeded copy is what ensure_user_database_fresh's
+            # leading ensure_user_database() call downloads+swaps in, which
+            # now transitively reaches the JIT seam -- stamp head so it
+            # no-ops instead of crashing on the full migration history.
+            stamp_schema_head(conn, "user_db")
             conn.commit()
             conn.close()
             key = _user_db_r2_key(USER)
@@ -161,10 +174,15 @@ class TestUserDbWritePathRestoreIfNewer:
         fake = FakeR2()
         with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.services.user_db.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+            from tests.conftest import stamp_schema_head
             seed_path = tmp_path / "seed_user.sqlite"
             conn = sqlite3.connect(str(seed_path))
             conn.execute("CREATE TABLE marker (who TEXT)")
             conn.execute("INSERT INTO marker (who) VALUES ('committed_grant')")
+            # T5083: this R2-seeded copy is what confirm_current_before_write's
+            # underlying ensure_user_database() download transitively reaches
+            # the JIT seam through -- stamp head so it no-ops.
+            stamp_schema_head(conn, "user_db")
             conn.commit()
             conn.close()
             key = _user_db_r2_key(USER)
