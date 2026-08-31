@@ -1,10 +1,10 @@
 # T5085: Non-login writers migrate before touch
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-04
-**Updated:** 2026-08-04
+**Updated:** 2026-08-31
 
 Epic child 3/5 — see [EPIC.md](EPIC.md) for goal, settled decisions, and field findings (2026-08-04
 finding #5 is this task's charter).
@@ -77,18 +77,73 @@ decision, not an accident.
 ## Implementation
 
 ### Steps
-1. [ ] Audit and enumerate every non-login path that opens a user/profile DB
-2. [ ] Assign and document a policy per path (migrate-before-touch vs tolerate + why)
-3. [ ] Implement migrate-before-touch where chosen
-4. [ ] Add/confirm column guards where "tolerate" is chosen, and note them as permanent
-5. [ ] Grep out any remaining "all users are already migrated" assumption
-6. [ ] Tests: each migrate-before-touch path migrates a behind-head DB before its first read; each
+1. [x] Audit and enumerate every non-login path that opens a user/profile DB
+2. [x] Assign and document a policy per path (migrate-before-touch vs tolerate + why)
+3. [x] Implement migrate-before-touch where chosen
+4. [x] Add/confirm column guards where "tolerate" is chosen, and note them as permanent
+5. [x] Grep out any remaining "all users are already migrated" assumption
+6. [x] Tests: each migrate-before-touch path migrates a behind-head DB before its first read; each
        tolerate path runs correctly against a behind-head DB
+
+### Definitive list of non-login writers + policy (step 1/2 deliverable)
+
+A Code Expert audit (read-only) enumerated every non-login opener; an Expert (Opus) agent then
+validated/refined it against the actual code before implementation. Full detail lives in
+`.claude/knowledge/persistence-sync.md` § T5085 — summary here:
+
+**Already migrate-before-touch via the T5083 seam** (the seam sits *inside* `ensure_database()` /
+`ensure_user_database()`, so every non-login path that reaches a DB through the normal
+`get_db_connection()`/`get_user_db_connection()` helpers inherited it for free): the expiry sweep
+(Phase 1 + Phase 2 helpers), auto-export, the export worker + Modal queue, the poster warmer,
+`record_milestone`/`record_impression`/`record_session_exit`/`update_session`/`share_view_counts`
+(analytics.py), admin cross-user `user.sqlite` reads, profile create/switch.
+
+**Genuine gaps, fixed (migrate-before-touch, code changed):**
+- `materialization.ensure_profile_db_local` + `materialization._open_profile_db` — the two raw
+  openers used by share materialization/claim, admin clip-phase inventory, admin stuck-uploads,
+  public share/collection/intro resolution, and cross-profile reel moves. Neither called the seam
+  before this task; both now do (via the extracted `migrations.run_profile_seam`).
+- `user_db.ensure_user_database_fresh` — ran the seam, then did its own restore-if-newer swap
+  AFTER it that could reintroduce a below-head file without re-triggering the seam. Now re-runs the
+  seam after any actual swap.
+- `storage.sync_database_from_r2_if_newer` / `sync_user_db_from_r2_if_newer` — the shared
+  low-level swap primitives every download-and-swap goes through. Both now clear
+  `migrations._seam_verified` for the scope they just swapped, closing the swap-hazard class
+  structurally rather than trusting every future caller to remember it.
+- `poster.backfill_posters` — was calling `_migrate_profile_db`, the bulk-runner primitive T5087
+  deletes; re-pointed to `migrate_local_profile_db_at_seam`. Its `ensure_database()` call (and the
+  equivalent unguarded calls in `sweep_scheduler.do_sweep` and `auto_export.backfill_hiq_recaps`)
+  was also unguarded — a single `MigrationBlocked` would have aborted the entire bulk pass; all
+  three now catch it per-profile and continue.
+- `credit_ledger._has_live_export_job` — reads through `_open_profile_db`, which can now raise
+  `MigrationBlocked`; caught and treated as "possibly live, do not release" (the existing
+  conservative-on-ambiguity contract).
+
+**Tolerate, permanent (documented, not migrated):**
+- `privacy.py` CCPA data export (`export-data`) — legal export must never 500 or surprise-write;
+  existing `sqlite_master` guard kept, now stated as permanent rather than a deploy window.
+- `credit_backfill.py` (T5840 cutover tool) — reads pre-migration-shape base-schema tables on
+  purpose; one-shot tool, candidate for deletion alongside T5089.
+- Graceful shutdown sync, logout `VACUUM`, WAL checkpoint, `db_version` bookkeeping — schema-
+  agnostic, open no application table.
+
+**The ~40 `column_exists`/`_has_stage_columns` request-path guards** (T5630-pattern, previously
+justified as "the deploy->migrate window"): kept, not deleted (~40 sites, and deleting them removes
+the only protection against additive-migration rolling-deploy skew — EPIC decision 8). Re-justified
+via ONE shared rewrite of `column_exists`'s docstring in `database.py` (now: permanent defence in
+depth against a machine on old code serving a DB a newer machine just migrated), with the handful of
+assertion-bearing comments that stated the now-false "ensure_database never runs versioned ALTERs"
+claim rewritten to point at it (`poster.py` x2, `materialization.py`'s `RecipientProfileBelowHead`
+x2, `credit_backfill.py`). One user-facing string (`clips.py` set_rotation 503) no longer names the
+deleted `POST /api/admin/migrate` endpoint. Two comments (`migrations/base.py`, `test_seams.py`)
+were left as-is on review — both still factually accurate today (Postgres migrations stay
+admin-triggered per EPIC decision 7; the test seam still correctly calls the still-existing bulk
+primitives) — re-pointing them is T5087's job when it actually deletes those primitives.
 
 ## Acceptance Criteria
 
-- [ ] Definitive list of non-login writers exists, each with a stated policy
-- [ ] Every migrate-before-touch path migrates before its first read of that DB
-- [ ] Every tolerate path is guarded and documented as permanently version-tolerant
-- [ ] No code path assumes accounts were pre-migrated by a sweep
+- [x] Definitive list of non-login writers exists, each with a stated policy
+- [x] Every migrate-before-touch path migrates before its first read of that DB
+- [x] Every tolerate path is guarded and documented as permanently version-tolerant
+- [x] No code path assumes accounts were pre-migrated by a sweep
 - [ ] Tests pass

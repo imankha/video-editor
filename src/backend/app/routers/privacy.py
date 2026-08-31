@@ -60,9 +60,12 @@ def _read_intro_cards(conn) -> list[dict]:
     themselves are already enumerated under `r2_objects` (whole-user-prefix walk);
     this adds the DB rows that give those keys meaning plus the free text.
 
-    Table/column guarded for the deploy→migrate window: a below-head profile.sqlite
-    may lack the `intro_cards` table entirely or the T6570 `subtitle_text` column,
-    so a missing table returns [] and a missing column is simply absent from the
+    Table/column guarded, permanently (T5085: this CCPA export deliberately
+    stays on the "tolerate" side of the JIT seam's migrate-before-touch policy
+    -- a legal export must never 500 or trigger a surprise migration write; see
+    the task's policy table). A below-head profile.sqlite may lack the
+    `intro_cards` table entirely or the T6570 `subtitle_text` column, so a
+    missing table returns [] and a missing column is simply absent from the
     row dict — never a 500 on a data-export request.
     """
     exists = conn.execute(

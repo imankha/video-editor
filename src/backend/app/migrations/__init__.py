@@ -51,6 +51,23 @@ USER_DB_SCOPE = "user"  # mirrors database.USER_DB_SCOPE — user.sqlite's lock/
 # re-entrancy deadlock. Guarded by `_migration_locks_guard` against a TOCTOU
 # race where two threads' `setdefault` could otherwise create two different
 # Lock objects for the same key.
+#
+# LANDMINE (T5085 review, not yet hit in prod): this lock is NOT reentrant,
+# and a migration's own `up(conn)` can now reach `run_profile_seam`/
+# `run_user_seam` transitively (any migration that opens ANOTHER profile —
+# `materialization.ensure_profile_db_local`/`open_profile_db_readonly`/
+# `_open_profile_db`, or `user_db.get_profiles` — inherits the seam, since
+# T5085 wired the seam into those). `run_profile_seam(u, K)` holding
+# `lock(u, K)` while its own `PROFILE_DB_RUNNER.run` calls a migration that
+# opens profile `D` and enters `run_profile_seam(u, D)` → `lock(u, D)` is
+# fine (different key) UNLESS some future migration opens a profile that
+# transitively re-enters `K` — a self-deadlock with no timeout. v033
+# (`profile_db/v033_heal_moved_reel_attribution.py`) is the first migration
+# to open a second profile from inside `up()`; it explicitly catches
+# `MigrationBlocked` from that cross-profile open and degrades rather than
+# letting it block the profile actually being migrated. Any NEW migration
+# that opens another profile/user DB must do the same — never assume the
+# cross-open is safe just because it "only reads".
 _migration_locks: dict[tuple, threading.Lock] = {}
 _migration_locks_guard = threading.Lock()
 
@@ -103,10 +120,23 @@ def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateRe
     something, and re-verifies at head. Shares `PROFILE_DB_RUNNER`,
     `sync_db_to_r2_explicit`, `_read_r2_profile_user_version`,
     `_r2_version_or_none` with the bulk sweep primitive — see
-    `test_sweep_and_seam_identical`."""
+    `test_sweep_and_seam_identical`.
+
+    T5085 (review fix): mirrors `_migrate_profile_db`'s `if client:` guard
+    (~line 807) around the sync + verify steps — this primitive is no longer
+    reachable ONLY from inside `ensure_database`'s `if R2_ENABLED:` block
+    (T5085's new non-login call sites invoke it unconditionally), so it must
+    tolerate R2 being disabled itself rather than assume its caller already
+    gated on `R2_ENABLED`. Without this, a below-head profile in local/no-R2
+    dev mode was upgraded locally by the runner but then unconditionally
+    verified against R2 -- `_read_r2_profile_user_version` returns `None`
+    when there's no client, `None != head` -> `not_at_head` -> the seam
+    raises `MigrationBlocked` on every request, permanently, for a profile
+    the runner just successfully brought to head."""
     from ..database import USER_DATA_BASE, sync_db_to_r2_explicit
     from ..profile_context import set_current_profile_id
     from ..services.db_refresh import wal_sidecars_present
+    from ..storage import get_r2_client
     from ..user_context import set_current_user_id
 
     db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
@@ -147,16 +177,18 @@ def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateRe
         # At-head cheap path — zero R2 work (design §2.4 point 2).
         return MigrateResult(status="ok", applied=[])
 
-    if not sync_db_to_r2_explicit(user_id, profile_id):
+    client = get_r2_client()
+    if client and not sync_db_to_r2_explicit(user_id, profile_id):
         return MigrateResult(
             status="sync_failed", applied=applied,
             r2_version=_r2_version_or_none(user_id, profile_id),
         )
 
-    head = PROFILE_DB_RUNNER.latest_version
-    verified = _read_r2_profile_user_version(user_id, profile_id)
-    if verified != head:
-        return MigrateResult(status="not_at_head", applied=applied, r2_version=verified)
+    if client:
+        head = PROFILE_DB_RUNNER.latest_version
+        verified = _read_r2_profile_user_version(user_id, profile_id)
+        if verified != head:
+            return MigrateResult(status="not_at_head", applied=applied, r2_version=verified)
 
     return MigrateResult(status="ok", applied=applied)
 
@@ -297,6 +329,137 @@ def _seam_repull_and_retry_user(user_id: str, db_path: Path) -> MigrateResult:
     if result.status != "ok":
         raise MigrationBlocked(user_id, None, result.status)
     return result
+
+
+def _seam_at_head(db_path: Path, runner) -> bool:
+    """Lock-free 'is this file already at head?' probe, used ONLY to decide
+    whether a BUSY DB is worth blocking on (T5085 CI-escalation fix).
+
+    Safe under a concurrent WAL writer: PRAGMA user_version is read through a
+    normal WAL read snapshot -- readers never block writers and never observe
+    a peer's uncommitted header change. Sidecars present does NOT guarantee a
+    live connection (`wal_sidecars_present`'s own docstring: a prior crash
+    can leave them with nothing holding the file) -- when nothing is live,
+    THIS probe connection can be the last one, and its own close() then
+    checkpoints and clears the sidecars. That is safe, not a hazard: a proper
+    checkpoint only COMMITS frames, it can't discard or corrupt anything, and
+    it is strictly better than the wal_busy fall-through's own unlink-based
+    clear (T5086) would have done to the same stale sidecars anyway.
+    `_read_sqlite_user_version` returns 0 on any read error, which lands on
+    the conservative side here: unreadable => "needs migration" => falls
+    through to the normal fail-loud path below, never a silent "assume at
+    head".
+
+    Exact, not approximate: `MigrationRunner.get_pending` for the sqlite
+    tracks is `version > PRAGMA user_version` (base.py), so
+    `user_version >= latest_version` is precisely the primitive's own
+    "ok, applied=[], zero R2 writes" branch -- this can only ever skip work
+    that provably has no effect.
+    """
+    return _read_sqlite_user_version(db_path) >= runner.latest_version
+
+
+def run_profile_seam(user_id: str, profile_id: str) -> None:
+    """T5085: THE migrate-at-load-seam for one profile.sqlite, extracted
+    verbatim from `ensure_database()`'s restore block so every non-login
+    caller that opens a profile DB without going through `ensure_database`
+    (share resolution, admin cross-user reads, the recipient/sharer sides of
+    a teammate share, cross-profile reel moves) gets the same guarantee:
+    migrate-before-touch, fail-loud (raises MigrationBlocked -> HTTP 503 on
+    the request path) rather than silently serving a below-head DB.
+
+    Idempotent and cheap after the first verified run this process
+    (`_seam_verified` set membership -> one dict lookup, zero I/O). A no-op
+    when no local file exists yet (a brand-new profile that was never
+    restored — the caller's own CREATE TABLE path stamps it to head).
+
+    Owns the (user_id, profile_id) ContextVar swap so it is safe to call for
+    a DB the current request context does NOT own: `set_current_user_id`/
+    `set_current_profile_id` are needed by `migrate_local_profile_db_at_seam`
+    (it reads them for R2 key construction) but must not leak into the
+    caller's context afterward — restored in a `finally` regardless of
+    outcome, including the MigrationBlocked raise.
+    """
+    from ..database import USER_DATA_BASE
+    from ..profile_context import reset_profile_id_token, set_current_profile_id
+    from ..user_context import reset_user_id_token, set_current_user_id
+
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    if not db_path.exists() or (user_id, profile_id) in _seam_verified:
+        return
+
+    # T5085 (CI escalation): the primitive refuses on a live -wal/-shm
+    # sidecar BEFORE it ever reads PRAGMA user_version -- deliberate, it must
+    # never ALTER TABLE under a live writer (test_seam_wal_busy_blocks pins
+    # this, and this check stays gated on sidecars-present so that test's
+    # below-head + live-connection scenario is untouched). At
+    # ensure_database's cold-start entry, colliding with an ALREADY-open
+    # connection on the exact same file is near-impossible (nothing else in
+    # this process has touched the profile yet). At the non-login entries
+    # this function serves (admin cross-user reads, credit-reservation
+    # recovery, cross-profile reel moves), that collision is routine -- e.g.
+    # an admin inventory read while the profile owner is actively using the
+    # app in the same worker. Blocking a request that had NOTHING to migrate
+    # is a real regression (see the T4315 WAL-safety suite this fix
+    # restores). Prove there is nothing to do with a lock-free read instead.
+    from ..services.db_refresh import wal_sidecars_present
+    if wal_sidecars_present(db_path) and _seam_at_head(db_path, PROFILE_DB_RUNNER):
+        _seam_verified.add((user_id, profile_id))
+        return
+
+    user_token = set_current_user_id(user_id)
+    profile_token = set_current_profile_id(profile_id)
+    try:
+        with _get_migration_lock(user_id, profile_id):
+            result = migrate_local_profile_db_at_seam(user_id, profile_id)
+            if result.status == "wal_busy":
+                from ..services.db_refresh import clear_stale_wal_sidecars
+                clear_stale_wal_sidecars(db_path)
+                result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
+            if result.status == "sync_failed":
+                result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
+            if result.status != "ok":
+                raise MigrationBlocked(user_id, profile_id, result.status)
+            _seam_verified.add((user_id, profile_id))
+    finally:
+        reset_profile_id_token(profile_token)
+        reset_user_id_token(user_token)
+
+
+def run_user_seam(user_id: str) -> None:
+    """user.sqlite sibling of `run_profile_seam` — same contract, scoped to
+    `USER_DB_SCOPE` instead of a profile_id, restoring only the user
+    ContextVar (user.sqlite has no profile dimension)."""
+    from ..database import USER_DB_SCOPE
+    from ..services.user_db import _get_user_db_path
+    from ..user_context import reset_user_id_token, set_current_user_id
+
+    db_path = _get_user_db_path(user_id)
+    if not db_path.exists() or (user_id, USER_DB_SCOPE) in _seam_verified:
+        return
+
+    # T5085 (CI escalation): sibling of run_profile_seam's identical guard --
+    # see that function's comment for the full rationale.
+    from ..services.db_refresh import wal_sidecars_present
+    if wal_sidecars_present(db_path) and _seam_at_head(db_path, USER_DB_RUNNER):
+        _seam_verified.add((user_id, USER_DB_SCOPE))
+        return
+
+    user_token = set_current_user_id(user_id)
+    try:
+        with _get_migration_lock(user_id, USER_DB_SCOPE):
+            result = migrate_local_user_db_at_seam(user_id)
+            if result.status == "wal_busy":
+                from ..services.db_refresh import clear_stale_wal_sidecars
+                clear_stale_wal_sidecars(db_path)
+                result = migrate_local_user_db_at_seam(user_id)  # one retry
+            if result.status == "sync_failed":
+                result = _seam_repull_and_retry_user(user_id, db_path)
+            if result.status != "ok":
+                raise MigrationBlocked(user_id, None, result.status)
+            _seam_verified.add((user_id, USER_DB_SCOPE))
+    finally:
+        reset_user_id_token(user_token)
 
 
 def get_migration_status() -> dict:

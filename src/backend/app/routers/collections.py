@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
 from app.database import get_db_connection
+from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
@@ -1339,7 +1340,14 @@ def _evaluated_share_members(share: dict) -> tuple[dict, list, Any]:
     if isinstance(definition, str):
         definition = json.loads(definition)
 
-    conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    try:
+        conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    except MigrationBlocked as e:
+        logger.warning(
+            f"[collection-share] sharer DB blocked at migration seam ({e.reason}) "
+            f"for token={share['share_token']}"
+        )
+        return definition, [], None
     if conn is None:
         logger.warning(
             f"[collection-share] sharer DB unavailable for token={share['share_token']}"

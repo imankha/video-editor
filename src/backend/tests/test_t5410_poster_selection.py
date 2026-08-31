@@ -377,7 +377,7 @@ def test_backfill_force_skips_override_sources(db):
 
     with patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}]), \
          patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
-         patch("app.migrations._migrate_profile_db") as mig, \
+         patch("app.migrations.migrate_local_profile_db_at_seam") as mig, \
          patch("app.storage.file_exists_in_r2", return_value=True), \
          patch.object(poster_mod, "_grab_and_store_poster_frame", return_value="regen.jpg") as grab, \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):

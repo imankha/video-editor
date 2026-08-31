@@ -688,13 +688,17 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 # (which only writes crop_data/segments_data).
                 if action.data is None or action.data.rotation is None:
                     raise ValueError("set_rotation requires data.rotation")
-                # T5640: the rotation column requires the v029 migration. If it hasn't run
-                # yet (deploy->migrate window), fail with a clear, actionable error rather
-                # than a raw sqlite crash.
+                # T5640: the rotation column requires the v029 migration. Under
+                # JIT (T5083) the request path is migrated to head before this
+                # handler runs, so this guard is now rolling-deploy-skew
+                # defense-in-depth (see column_exists's docstring in
+                # database.py), not the deploy->migrate window it was written
+                # for (T5085) -- fail with a clear, retryable error rather
+                # than a raw sqlite crash on the rare case it still fires.
                 if not column_exists(cursor, "working_clips", "rotation"):
                     raise HTTPException(
                         status_code=503,
-                        detail="Rotation is unavailable until the v029 migration runs (POST /api/admin/migrate).",
+                        detail="Rotation is unavailable while your data finishes upgrading — please retry.",
                     )
                 # T4330: same counter bump/skip-if-absent logic as the other
                 # write paths, applied AFTER the pre-existing v029 rotation-column
@@ -2887,7 +2891,9 @@ async def _materialize_or_pend(
     """
     import asyncio
 
+    from app.migrations import MigrationBlocked
     from app.services.auth_db import get_user_by_email
+    from app.services.db_refresh import RefreshFailed
     from app.services.materialization import (
         RecipientProfileBelowHead,
         _filter_clips_for_tag,
@@ -2923,7 +2929,32 @@ async def _materialize_or_pend(
     # foreign-user get_user_db_connection call -- round 2's structural guard
     # (MAJOR-4) makes it a possible R2 HEAD, so it needs the same
     # asyncio.to_thread offload as materialize_game_share below.
-    profiles = await asyncio.to_thread(get_profiles, recipient_user_id)
+    #
+    # T5085 (review fix, mirrors the T4315 round-5 BLOCKING-2 fix in
+    # games.py): this call must not sit outside a try -- a RefreshFailed or
+    # MigrationBlocked here previously propagated to this coroutine's own
+    # caller and could be swallowed/logged with no pending-share row, the
+    # same silently-dropped-share bug T4315 round 5 fixed in games.py.
+    try:
+        profiles = await asyncio.to_thread(get_profiles, recipient_user_id)
+    except (RefreshFailed, MigrationBlocked):
+        clip_data = _filter_clips_for_tag(conn, game_id, tag_name)
+        share_record = get_share_by_token(share["share_token"])
+        if share_record:
+            create_pending_share(
+                share_id=share_record["id"],
+                sharer_user_id=sharer_user_id,
+                sharer_profile_id=sharer_profile_id,
+                invited_email=email,
+                game_id=game_id,
+                tag_name=tag_name,
+                clip_data_bytes=serialize_clip_data(clip_data),
+            )
+            logger.info(
+                f"[share-with-teammates] Could not confirm recipient {email}'s "
+                f"profiles are current -- created pending share for retry"
+            )
+        return
 
     if len(profiles) == 1:
         share_record = get_share_by_token(share["share_token"])
@@ -2944,9 +2975,9 @@ async def _materialize_or_pend(
                     f"[share-with-teammates] Materialized for {email} "
                     f"(profile {profiles[0]['id']})"
                 )
-            except RecipientProfileBelowHead:
-                # T6780: recipient profile DB below head (v026 shared_by absent,
-                # deploy->migrate window). Defer to a pending share — the same
+            except (RecipientProfileBelowHead, MigrationBlocked):
+                # T6780/T5085: recipient profile DB below head, or blocked at
+                # the migration seam. Defer to a pending share — the same
                 # graceful "can't materialize now, retry after migration" path
                 # the non-user / multi-profile branches use — instead of letting
                 # the OperationalError surface as a failed tag.

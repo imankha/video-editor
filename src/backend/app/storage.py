@@ -1109,6 +1109,24 @@ def sync_database_from_r2_if_newer(
 
     # Download the newer version
     if download_from_r2(user_id, "profile.sqlite", local_db_path):
+        # T5085: a swap-in-place invalidates any at-head verification this
+        # process already made for this (user, profile) -- the new bytes can
+        # be sync-NEWER while schema-BELOW-head (a rolling-deploy peer
+        # machine still on old code, EPIC decision 8). Clearing HERE, at the
+        # one low-level primitive every download-and-swap goes through
+        # (ensure_database's own restore, ensure_profile_db_local,
+        # migrations' seam repull-and-retry), is what stops a FUTURE swap
+        # call site from silently reintroducing the hazard T5085's B2/B4
+        # fixes closed -- not sufficient by itself (a caller that opens the
+        # file directly still needs its own seam call, see materialization.py
+        # / user_db.py), but structurally safer than trusting every caller to
+        # remember it. get_current_profile_id() is provably the right key
+        # here: the same ContextVar just produced the R2 key this download
+        # used (get_db_version_from_r2 / download_from_r2 -> r2_key), so if
+        # it were unset this call would already have raised.
+        from .migrations import _clear_seam_verified
+        from .profile_context import get_current_profile_id
+        _clear_seam_verified(user_id, get_current_profile_id())
         logger.info(f"Downloaded DB from R2: version {r2_version} (was {local_version})")
         return True, r2_version, False
 
@@ -1562,6 +1580,13 @@ def sync_user_db_from_r2_if_newer(
             client.download_file, R2_BUCKET, key, str(local_db_path),
             operation=f"user_db_download {user_id}", **TIER_1,
         )
+        # T5085: sibling of sync_database_from_r2_if_newer's clear -- see that
+        # call site's comment for the full rationale. user.sqlite has no
+        # profile dimension, so the scope key is the fixed USER_DB_SCOPE
+        # sentinel rather than a ContextVar read.
+        from .database import USER_DB_SCOPE
+        from .migrations import _clear_seam_verified
+        _clear_seam_verified(user_id, USER_DB_SCOPE)
         logger.info(f"Downloaded user.sqlite from R2: {user_id} version {r2_version}")
         return True, r2_version, False
     except Exception as e:

@@ -147,12 +147,6 @@ def ensure_user_database(user_id: str) -> None:
         read_pending_token,
         set_local_user_db_version,
     )
-    from ..migrations import (
-        MigrationBlocked,
-        _get_migration_lock,
-        _seam_repull_and_retry_user,
-        migrate_local_user_db_at_seam,
-    )
     from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
 
     if R2_ENABLED:
@@ -238,31 +232,11 @@ def ensure_user_database(user_id: str) -> None:
         # always sees the genuinely-restored below-head bytes, before schema
         # creation can paper over missing tables/columns.
         #
-        # Guarded on db_path.exists(): a genuinely NEW user (R2 NOT_FOUND, no
-        # prior local file) has nothing to migrate yet -- the fresh-DB stamp
-        # below already puts it at head directly.
-        #
-        # T5083 fix (FIX 4): gated on `_seam_verified`, NOT "did this request
-        # enter the restore branch" -- see the identical rationale in
-        # database.py's profile seam. `set_local_user_db_version` above runs
-        # BEFORE this block, so a request that raised MigrationBlocked here
-        # would otherwise make request 2 see a cached local_version, skip the
-        # restore branch, and silently serve the still-below-head DB.
-        # Referenced via `migrations._seam_verified` (module attribute, not a
-        # bound name) so a test's `monkeypatch.setattr(migrations_module,
-        # "_seam_verified", set())` reset actually takes effect here.
-        if db_path.exists() and (user_id, USER_DB_SCOPE) not in migrations._seam_verified:
-            with _get_migration_lock(user_id, USER_DB_SCOPE):
-                result = migrate_local_user_db_at_seam(user_id)
-                if result.status == "wal_busy":
-                    from .db_refresh import clear_stale_wal_sidecars
-                    clear_stale_wal_sidecars(db_path)
-                    result = migrate_local_user_db_at_seam(user_id)  # one retry
-                if result.status == "sync_failed":
-                    result = _seam_repull_and_retry_user(user_id, db_path)
-                if result.status != "ok":
-                    raise MigrationBlocked(user_id, None, result.status)
-                migrations._seam_verified.add((user_id, USER_DB_SCOPE))
+        # T5085 extracted the body into migrations.run_user_seam() so every
+        # non-login opener of user.sqlite (admin cross-user reads, webhook
+        # fulfilment, ensure_user_database_fresh's own post-swap re-check)
+        # shares this exact logic instead of a second copy.
+        migrations.run_user_seam(user_id)
 
     is_fresh_db = not db_path.exists()
 
@@ -383,6 +357,23 @@ def ensure_user_database_fresh(user_id: str) -> None:
         # leaving CAS unable to ever upload from this scope again.
         set_local_user_db_version(user_id, new_version)
         clear_sync_pending(user_id, USER_DB_SCOPE, if_token=pending_token)
+
+    if downloaded:
+        # T5085: ensure_user_database() above already ran the seam and marked
+        # this (user, USER_DB_SCOPE) pair verified-at-head -- but the swap
+        # just replaced the FILE on disk. The new bytes can be sync-NEWER
+        # (that's why sync_user_db_from_r2_if_newer downloaded them) while
+        # schema-BELOW-head: a rolling-deploy peer machine still on old code
+        # can write sync-newer, schema-older content (EPIC decision 8).
+        # `sync_user_db_from_r2_if_newer` (storage.py) already cleared
+        # `_seam_verified` for this scope as part of the download itself --
+        # the load-bearing part here is RE-RUNNING the seam, restore-then-
+        # migrate, same ordering every other seam call site uses. Gated on
+        # `downloaded` alone (not `new_version is not None`) because the
+        # bytes changed regardless; this is what protects the caller about
+        # to open and write this exact file.
+        from .. import migrations
+        migrations.run_user_seam(user_id)
 
 
 def forget_user_db(user_id: str) -> None:

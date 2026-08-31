@@ -34,6 +34,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.migrations import MigrationBlocked
 from app.services.db_refresh import RefreshFailed
 from app.services.intro_cards import resolve_intro_card
 from app.services.intro_media import presign_intro_image
@@ -101,6 +102,15 @@ def _load_field_values(user_id: str, profile_id: str) -> dict:
     except RefreshFailed:
         logger.warning(
             f"[intro_egress] could not confirm user.sqlite is current for "
+            f"user_id={user_id}; resolving intro facts from the local copy"
+        )
+    except MigrationBlocked as e:
+        # T5085: ensure_user_database_fresh now runs (and can re-run) the JIT
+        # seam and can raise -- this function's contract is "an intro must
+        # never break a download" (epic decision 9), same degrade-to-local
+        # treatment as RefreshFailed above.
+        logger.warning(
+            f"[intro_egress] user.sqlite blocked at migration seam ({e.reason}) for "
             f"user_id={user_id}; resolving intro facts from the local copy"
         )
     facts = get_all_intro_facts(user_id).get(profile_id, {})

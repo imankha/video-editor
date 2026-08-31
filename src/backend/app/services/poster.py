@@ -601,22 +601,24 @@ def set_project_poster_marker_time(project_id: int, time: float) -> bool:
     means "no override -> window midpoint" for legacy rows and get_/select_
     fallbacks, but no write path produces one anymore.)
 
-    T6550: column-guarded for the deploy->migrate window (v032 not yet applied),
-    mirroring the guarded READ (`get_project_poster_marker_time`) -- migrations
-    do NOT auto-run on deploy, so between deploy and `POST /api/admin/migrate`
-    this write can run against a below-v032 profile whose `projects` table has no
-    `poster_marker_time` column. A bare UPDATE there raises
-    `sqlite3.OperationalError: no such column` -> 500.
+    T6550: column-guarded (v032), mirroring the guarded READ
+    (`get_project_poster_marker_time`). T5085: since T5083 this request path is
+    migrated to head before the handler runs, so the guard is no longer for
+    the (retired) deploy->migrate window -- it is rolling-deploy-skew defense
+    in depth (see `column_exists`'s docstring in database.py): old code on
+    machine A can still serve a request against a `projects` row machine B's
+    newer code hasn't migrated yet from A's perspective. A bare UPDATE there
+    raises `sqlite3.OperationalError: no such column` -> 500.
 
-    Returns True when the override was written, and False when the column is not
-    present yet (below-head profile in the deploy->migrate window). It returns
-    False rather than raising a bare OperationalError, and rather than silently
-    pretending to succeed: the caller MUST surface the False outcome distinctly
-    (`set_poster_time` maps it to a 503 "not available yet") so a user's drag is
-    never reported saved when nothing was stored (CLAUDE.md: no silent fallback
-    for internal data). This is a real, time-bounded condition, not an impossible
-    state, so it deserves an honest, retryable outcome -- not a swallowed no-op
-    and not a raw 500."""
+    Returns True when the override was written, and False when the column is
+    not present yet. It returns False rather than raising a bare
+    OperationalError, and rather than silently pretending to succeed: the
+    caller MUST surface the False outcome distinctly (`set_poster_time` maps
+    it to a 503 "not available yet") so a user's drag is never reported saved
+    when nothing was stored (CLAUDE.md: no silent fallback for internal
+    data). This is a real, time-bounded condition (the rolling-deploy
+    window), not an impossible state, so it deserves an honest, retryable
+    outcome -- not a swallowed no-op and not a raw 500."""
     from ..database import column_exists, get_db_connection
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1424,7 +1426,7 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
     manual cover choice is never clobbered by a backfill sweep.
     """
     from ..database import column_exists, ensure_database, get_db_connection, sync_db_to_r2_explicit
-    from ..migrations import _get_profile_ids, _migrate_profile_db
+    from ..migrations import MigrationBlocked, _get_profile_ids, migrate_local_profile_db_at_seam
     from ..profile_context import set_current_profile_id
     from ..storage import file_exists_in_r2
     from ..user_context import set_current_user_id
@@ -1455,20 +1457,39 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                 break
             set_current_user_id(user_id)
             set_current_profile_id(profile_id)
-            ensure_database()
-
-            # Migrate this profile to head BEFORE the poster_filename query (T5110).
-            # The backfill enumerates via unfiltered _get_profile_ids (includes
-            # orphan profiles that run_all_migrations deliberately registry-skips,
-            # T4830), while ensure_database only does CREATE TABLE IF NOT EXISTS --
-            # it never runs versioned ALTERs. So an orphan/below-head profile lacks
-            # the poster_filename column and the candidate query below would crash
-            # the ENTIRE run. Migrating each touched profile to head holds the
-            # invariant "every profile the backfill touches is at head" (and heals
-            # the orphan gap as a side effect). Best-effort: a migration failure is
-            # recorded and the profile is skipped, never aborting the sweep.
             try:
-                migrate_res = _migrate_profile_db(user_id, profile_id)
+                ensure_database()
+            except MigrationBlocked as e:
+                # T5085: ensure_database() is now the JIT seam (T5083) -- a
+                # single blocked profile must not abort the whole backfill
+                # run (the un-wrapped call would raise past this loop and
+                # the T5110 "never one crash starves the sweep" invariant
+                # below would never even be reached). Skip this profile only.
+                result["failed"].append(
+                    {"profile_id": profile_id, "error": f"migration_blocked: {e.reason}"}
+                )
+                logger.error(
+                    f"[PosterBackfill] profile {user_id}/{profile_id} blocked at "
+                    f"migration seam ({e.reason}) -- skipping"
+                )
+                continue
+
+            # T5085: re-pointed off the bulk-runner primitive (_migrate_profile_db,
+            # deleted alongside T5087) onto the JIT seam primitive T5083 built.
+            # ensure_database() above already migrated this profile when R2 is
+            # enabled; this call is the cheap at-head no-op in that case, AND
+            # the thing that actually migrates a below-head profile in local/
+            # no-R2 mode, where the seam inside ensure_database is inert
+            # (test_t5110_poster_backfill_below_head.py pins this). The
+            # backfill enumerates via unfiltered _get_profile_ids (includes
+            # orphan profiles the deleted bulk runner used to registry-skip,
+            # T4830) -- migrating each touched profile to head holds the
+            # invariant "every profile the backfill touches is at head" and
+            # heals the orphan gap as a side effect. Best-effort: a migration
+            # failure is recorded and the profile is skipped, never aborting
+            # the sweep.
+            try:
+                migrate_res = migrate_local_profile_db_at_seam(user_id, profile_id)
                 if migrate_res.status != "ok":
                     logger.warning(
                         f"[PosterBackfill] profile {user_id}/{profile_id} not verified "

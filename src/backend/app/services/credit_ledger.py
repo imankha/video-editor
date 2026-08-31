@@ -523,9 +523,24 @@ def _has_live_export_job(user_id: str, profile_id: str | None, job_id: str) -> b
     """
     if not profile_id:
         return True
+    from ..migrations import MigrationBlocked
     from .materialization import _open_profile_db
 
-    conn = _open_profile_db(user_id, profile_id)
+    try:
+        conn = _open_profile_db(user_id, profile_id)
+    except MigrationBlocked as e:
+        # T5085: conservative on ambiguity (the documented contract above) --
+        # a profile we cannot bring to head cannot be asked whether the job
+        # is live, so treat the reservation as possibly-live and do NOT
+        # release it. This is the money-path direction: the failure mode
+        # we're avoiding is releasing an ACTIVE reservation, not leaving a
+        # truly-orphaned one stuck a little longer.
+        logger.warning(
+            "[Credits] cannot confirm export-job liveness for %s/%s — profile "
+            "blocked at migration seam (%s); treating reservation as live",
+            user_id, profile_id, e.reason,
+        )
+        return True
     if conn is None:
         return True
     try:

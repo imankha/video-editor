@@ -2138,6 +2138,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
     in / game only). My-Athlete clips never cross (EPIC 1/3)."""
     import asyncio
 
+    from app.migrations import MigrationBlocked
     from app.services.auth_db import get_user_by_email, get_user_by_id
     from app.services.db_refresh import RefreshFailed
     from app.services.email import _is_existing_user, _resolve_sender_name, send_game_share_email
@@ -2325,7 +2326,14 @@ async def share_game(game_id: int, body: ShareGameRequest):
                             clip_data_bytes=serialize_clip_data(scoped_clips),
                         )
                         logger.info(f"[share-game] Created pending share for multi-profile user {email}")
-                except (RefreshFailed, RecipientProfileBelowHead):
+                except (RefreshFailed, RecipientProfileBelowHead, MigrationBlocked):
+                    # T5085: MigrationBlocked (get_profiles -> ensure_user_database,
+                    # or materialize_game_share -> ensure_profile_db_local) is the
+                    # SAME "can't materialize now, defer + retry after migration"
+                    # class T6780 added RecipientProfileBelowHead here for -- must
+                    # ride the same pending-share fallback, never the bare
+                    # except Exception below (T4315 round 5's silently-dropped-
+                    # share bug this whole try/except exists to prevent).
                     # T4315 round 4 (MINOR) + round 5 (BLOCKING-2): a
                     # refused freshness confirmation (get_profiles' foreign-
                     # user HEAD, or materialize_game_share's require_fresh /
@@ -2582,6 +2590,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     """Share all annotated clips for a game with recipients via email."""
     import asyncio
 
+    from app.migrations import MigrationBlocked
     from app.services.auth_db import get_user_by_email, get_user_by_id
     from app.services.db_refresh import RefreshFailed
     from app.services.email import _is_existing_user, _resolve_sender_name, send_playback_share_email
@@ -2783,7 +2792,14 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                             clip_data_bytes=clip_data_bytes,
                         )
                         logger.info(f"[share-playback] Created pending share for multi-profile user {email}")
-                except (RefreshFailed, RecipientProfileBelowHead):
+                except (RefreshFailed, RecipientProfileBelowHead, MigrationBlocked):
+                    # T5085: MigrationBlocked (get_profiles -> ensure_user_database,
+                    # or materialize_game_share -> ensure_profile_db_local) is the
+                    # SAME "can't materialize now, defer + retry after migration"
+                    # class T6780 added RecipientProfileBelowHead here for -- must
+                    # ride the same pending-share fallback, never the bare
+                    # except Exception below (T4315 round 5's silently-dropped-
+                    # share bug this whole try/except exists to prevent).
                     # T4315 round 4 (MINOR) + round 5 (BLOCKING-2): see
                     # share_game above -- a refused freshness confirmation
                     # (get_profiles or materialize_game_share) must not

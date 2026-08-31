@@ -148,7 +148,19 @@ The player-intro card library lives in `profile.sqlite` (epic decision 7 — a c
 - **Children's-data compliance (T5230).** An intro card is a MINOR's likeness + parent-typed facts, publicly visible when shared, so three guardrails bind the pipeline: (1) **Consent gate on CREATE** — `routers/intro_cards.create_intro_card` refuses (**403**, matching the attach-time gates in `downloads.py`/`collections.py`) unless `user_db.get_intro_consent(user_id, profile_id)` is set. The raw photo upload (`profiles.upload_intro_image`) is INTENTIONALLY not gated: per EPIC.md the risk is public EXPOSURE not storage — the photo sits in a private per-profile prefix and only becomes shareable via a created+attached card, both gated. (2) **Privacy export + purge cover intro data.** `privacy.py` `POST /export-data` now emits, per profile, the `intro_cards` rows (+ decoded free text) AND the user.sqlite KV (`intro_consent_at`, `position/class/team`, `full_name`, `intro_photo_key`) — including KV for a profile whose `profile.sqlite` isn't locally cached (glob would miss it). Account-delete purge needs NO extra code: `_purge_user_data` → `storage.delete_user_r2_data` deletes the WHOLE `{env}/users/{uid}/` prefix (subsumes `profiles/{pid}/intro/` images) + rmtree local + R2 user.sqlite (which holds the KV) — VERIFIED by `test_t5230_intro_compliance.test_purge_deletes_r2_intro_object` (T6090 lesson: prove the real R2 object, not just the row). (3) **No biometrics, ever** — no face recognition/templating anywhere in the intro pipeline (T5200 cut-out is background SEGMENTATION only); enforced by the static grep guardrail `test_no_face_recognition_in_intro_pipeline` (scans `player_intro.py`, `intro_cards.py` router+service, `intro_media.py`, `text_render.py`). **No DOB/birthdate/age field exists** — guardrail #1/#2 satisfied by ABSENCE (`INTRO_FACT_FIELDS == ('position','class','team')`, `class` = grad year free text); a future DOB feature must be app-encrypted on R2 SSE, not scaffolded now.
 
 ## Migration-window column guard audit (T5970)
-The bug class: versioned migrations do NOT auto-run on deploy (they run via `POST /api/admin/migrate` afterwards), so between deploy and that action every per-user SQLite is at the OLD schema while NEW code is live. A hot read that NAMES a column a pending migration adds -> `sqlite3.OperationalError: no such column` -> 500 for every affected user in that window (`SELECT *` is safe — only an explicitly-named column crashes).
+The bug class this audit closed: versioned migrations did NOT auto-run on deploy (they ran via
+`POST /api/admin/migrate` afterwards), so between deploy and that action every per-user SQLite was
+at the OLD schema while NEW code was live. A hot read that NAMES a column a pending migration adds
+-> `sqlite3.OperationalError: no such column` -> 500 for every affected user in that window
+(`SELECT *` is safe — only an explicitly-named column crashes). **T5083/T5085 (2026-08-31) closed
+this specific window for every path they cover** — the JIT seam now migrates a request's DB to
+head before the handler runs (T5083) and every non-login opener too (T5085, see
+persistence-sync.md § T5085) — but the GUARDS below are all kept, not deleted, and the audit's
+findings stay accurate as a map of every hot read/write that names a versioned column: they are now
+permanent defence in depth against ROLLING-DEPLOY SKEW (EPIC decision 8 — old code on machine A can
+still serve a request against a DB machine B's newer code just migrated one version past what A's
+queries expect), not the closed deploy->migrate window. See `column_exists`'s docstring in
+database.py for the canonical up-to-date rationale.
 
 **Key structural fact (why the risk is narrow):** `ensure_database()` / `_USER_DB_SCHEMA` base schema already contains EVERY audited column, so a FRESH DB is always at head. The only below-head state is a PRE-EXISTING DB that predates the column and hasn't migrated. In any deploy->migrate window only migrations NEWER than the last-run baseline can be un-run. Prod is guaranteed ≥ v18 (v017 re-migration, see Landmines). **profile_db v017-v023 add NO columns** (grep `ADD COLUMN`). So the ONLY columns that can realistically be missing on a live DB are v024-v029.
 
@@ -209,16 +221,23 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   - **Modal UX:** preview fetched from the ADD gesture (`handleEmailsChange` diffs added/removed emails), NOT a reactive `useEffect` → no reactive-persistence violation. Zero-clip tagged-only recipient is warned BEFORE send twice (inline amber row warning + send-time banner); send stays enabled (game-only is legitimate). Revoke goes through a confirm dialog (backdrop inert — no-backdrop-dismiss rule; Escape closes the confirm first, not the whole modal) → revoked state with "Create new link". Approved verbatim scope labels live in `src/constants/shareClipScope.js`: "All team clips" / "Only clips they're tagged in" / "Game only (no clips)".
 
 ## Enumeration consistency (T5110 / T4970)
-- **Poster backfill migrates each profile to head before querying (T5110).** `backfill_posters`
-  (poster.py) enumerates via UNFILTERED `_get_profile_ids` (includes orphan profiles that
-  `run_all_migrations` registry-skips, T4830), but `ensure_database()` only does CREATE TABLE
-  IF NOT EXISTS — never versioned ALTERs. A below-head/orphan profile missing
-  `final_videos.poster_filename` made the `WHERE poster_filename IS NULL` query raise
-  `no such column` and ABORT THE WHOLE RUN (prod 2026-07-13). Fix: call `_migrate_profile_db`
-  per profile after `ensure_database()` (holds "every touched profile is at head", heals the
-  orphan gap), AND wrap the candidate query in try/except so a still-below-head/corrupt profile
-  is recorded in `result["failed"]` and the sweep continues. Any admin sweep that iterates
-  `_get_profile_ids` + queries a migration-added column must do the same.
+- **Poster backfill migrates each profile to head before querying (T5110; re-pointed T5085).**
+  `backfill_posters` (poster.py) enumerates via UNFILTERED `_get_profile_ids` (includes orphan
+  profiles the retired bulk runner used to registry-skip, T4830). A below-head/orphan profile
+  missing `final_videos.poster_filename` made the `WHERE poster_filename IS NULL` query raise
+  `no such column` and ABORT THE WHOLE RUN (prod 2026-07-13). Original fix (T5110): call
+  `_migrate_profile_db` per profile after `ensure_database()`. **T5085: re-pointed at
+  `migrate_local_profile_db_at_seam`** (the JIT seam primitive T5083 built) — `_migrate_profile_db`
+  is the bulk-runner primitive T5087 deletes, kept here (not removed) only because the seam inside
+  `ensure_database()` is gated on `R2_ENABLED` and this call is what migrates a below-head profile
+  in local/no-R2 dev mode (`test_t5110_poster_backfill_below_head.py` pins it). Also: the
+  `ensure_database()` call itself is now the JIT seam and can raise `MigrationBlocked` — wrapped in
+  its own try/except so one blocked profile doesn't abort the whole backfill (a gap T5110 didn't
+  need to guard against, since `ensure_database()` couldn't raise before T5083). The candidate
+  query stays wrapped in try/except so a still-below-head/corrupt profile is recorded in
+  `result["failed"]` and the sweep continues either way. Any admin sweep that iterates
+  `_get_profile_ids` + queries a migration-added column must do the same (see
+  `sweep_scheduler.do_sweep`, `auto_export.backfill_hiq_recaps`, both similarly guarded — T5085).
 - **`get_all_users_for_admin()` has NO segment join; `list_users` uses LEFT JOIN (T4970).**
   `user_segments` rows are created ONLY in the OAuth/OTP signup flows (`create_user_segment`,
   guarded by `is_new`); test-login (auth.py:877), the test seam, and copied accounts create

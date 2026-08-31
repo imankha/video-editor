@@ -177,9 +177,29 @@ class V033HealMovedReelAttribution(BaseMigration):
 
         # --- Open the DEFAULT profile read-only (R2 download if not cached) and read
         # each needed source game + its game_videos. Never written or swapped here.
+        from ...migrations import MigrationBlocked
         from ...services.materialization import ensure_game_reference, open_profile_db_readonly
 
-        source_conn = open_profile_db_readonly(user_id, _DEFAULT_PROFILE_ID)
+        # T5085: open_profile_db_readonly now migrates-before-touch (calls
+        # migrations.run_profile_seam) and can raise MigrationBlocked. This
+        # migration's OWN caller already holds the migration lock for the
+        # profile currently being migrated (this DB, the kid profile) --
+        # opening a SECOND profile (the default profile) here through the
+        # same seam machinery would acquire a second, different lock while
+        # still holding the first, a non-reentrant nested-lock shape. Route
+        # any MigrationBlocked into the exact same "leave reels unattributed
+        # rather than guessing" degradation already used for source_conn is
+        # None below, rather than let it propagate and permanently block
+        # THIS profile's own migration over a problem in a DIFFERENT one.
+        try:
+            source_conn = open_profile_db_readonly(user_id, _DEFAULT_PROFILE_ID)
+        except MigrationBlocked as e:
+            logger.warning(
+                "[v033] default profile %s blocked at migration seam (%s) for user "
+                "%s; leaving reels unattributed rather than guessing",
+                _DEFAULT_PROFILE_ID, e.reason, user_id
+            )
+            return
         if source_conn is None:
             logger.warning(
                 "[v033] could not open default profile %s for user %s (R2 error / "

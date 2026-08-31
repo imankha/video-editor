@@ -320,6 +320,13 @@ class TestWalSafetyOnRestore:
             conn = sqlite3.connect(str(newer_path))
             conn.execute("CREATE TABLE marker (who TEXT)")
             conn.execute("INSERT INTO marker (who) VALUES ('r2_newer')")
+            # T5085: this R2-seeded copy is what ensure_user_database_fresh's
+            # own post-seam swap downloads+swaps in, which now re-triggers the
+            # JIT seam (T5085 B4 fix) -- stamp head so it no-ops instead of
+            # crashing on the full migration history (mirrors
+            # test_r2_newer_restores_before_write above).
+            from tests.conftest import stamp_schema_head
+            stamp_schema_head(conn, "user_db")
             conn.commit()
             conn.close()
             key = _user_db_r2_key(USER)

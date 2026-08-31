@@ -22,7 +22,6 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services import poster as poster_mod
 from app.services.poster import backfill_posters
 
 USER_ID = "test-user-t5110"
@@ -42,7 +41,6 @@ def _profile_path(base, profile_id):
 def _make_below_head_profile(base):
     """A profile whose final_videos table has NO poster_filename column and a
     user_version just below head (only v024 is pending)."""
-    from app.migrations.profile_db import RUNNER as PROFILE_DB_RUNNER
 
     path = _profile_path(base, OLD_PROFILE)
     conn = sqlite3.connect(str(path))
@@ -68,9 +66,9 @@ def _make_below_head_profile(base):
 def _make_head_profile(base):
     """A canonical head-schema profile (via ensure_database) with a published,
     poster-less reel -- the profile that MUST still be scanned."""
+    from app.database import ensure_database, get_database_path
     from app.profile_context import set_current_profile_id
     from app.user_context import set_current_user_id
-    from app.database import ensure_database, get_database_path
 
     set_current_user_id(USER_ID)
     set_current_profile_id(GOOD_PROFILE)
@@ -144,7 +142,7 @@ def test_backfill_records_unhealable_profile_and_continues(two_profiles):
     with patch("app.services.auth_db.get_all_users_for_admin",
                return_value=[{"user_id": USER_ID}]), \
          patch("app.migrations._get_profile_ids", return_value=PROFILE_ORDER), \
-         patch("app.migrations._migrate_profile_db", side_effect=fake_migrate), \
+         patch("app.migrations.migrate_local_profile_db_at_seam", side_effect=fake_migrate), \
          patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
          patch("app.database.sync_db_to_r2_explicit", return_value=True):
         res = backfill_posters(limit=25, dry_run=True)
