@@ -702,8 +702,8 @@ class TestSeamUserDbSymmetric:
         re-pull+retry, §2.7) must raise MigrationBlocked, proven at the
         `_seam_repull_and_retry_user` helper directly (isolation — mirrors
         `test_persistent_failure_after_single_retry_blocks_no_loop`).
-        migrate_local_user_db_at_seam has no separate R2-verify step (mirrors
-        _migrate_user_db, code-expert notes §2b), so the reachable failure
+        migrate_local_user_db_at_seam has no separate R2-verify step
+        (code-expert notes §2b), so the reachable failure
         mode here is a persistent sync failure, not not_at_head. Marking
         pending must happen on an ALREADY-LOCAL file, not before a first-
         access `ensure_user_database` call — that call's own restore-then-
@@ -742,53 +742,6 @@ class TestSeamUserDbSymmetric:
 
         assert call_count["n"] == 1, \
             f"must retry the seam primitive exactly once after re-pull, saw {call_count['n']} calls"
-
-
-# ---------------------------------------------------------------------------
-# 10. Sweep vs seam converge to identical state (§3.6 row 10, Q6)
-# ---------------------------------------------------------------------------
-
-def test_sweep_and_seam_identical(tmp_path):
-    """A profile migrated via the new seam primitive and one migrated via the
-    existing `_migrate_profile_db` (bulk sweep) end at identical `user_version`
-    + R2 `db-version` metadata (design §2.3 'Bulk runner stays working')."""
-    from app.migrations import _migrate_profile_db, migrate_local_profile_db_at_seam
-
-    seam_profile, sweep_profile = "seamprof1", "sweepprof1"
-    N = 8
-    fake = FakeR2()
-    for pid in (seam_profile, sweep_profile):
-        data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N, tag=pid)
-        _seed_r2(fake, _profile_r2_key(USER, pid), data, sync_version=N)
-
-    with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
-         _r2_patched(fake):
-        # Seam path: restore then seam-migrate.
-        from app.profile_context import set_current_profile_id
-        from app.user_context import set_current_user_id
-        set_current_user_id(USER)
-        set_current_profile_id(seam_profile)
-        from app.database import ensure_database
-        ensure_database()
-        seam_result = migrate_local_profile_db_at_seam(USER, seam_profile)
-
-        # Sweep path: full bulk migration primitive (force-download).
-        sweep_result = _migrate_profile_db(USER, sweep_profile)
-
-    assert seam_result.status == "ok"
-    assert sweep_result.status == "ok"
-
-    seam_key = _profile_r2_key(USER, seam_profile)
-    sweep_key = _profile_r2_key(USER, sweep_profile)
-
-    from app.migrations import _read_r2_profile_user_version
-    with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
-        assert _read_r2_profile_user_version(USER, seam_profile) == PROFILE_HEAD
-        assert _read_r2_profile_user_version(USER, sweep_profile) == PROFILE_HEAD
-
-    assert fake._objects[seam_key]["metadata"]["db-version"] == fake._objects[sweep_key]["metadata"]["db-version"], \
-        "seam and sweep migration must land on the same R2 sync version (both N -> N+1)"
 
 
 # ---------------------------------------------------------------------------

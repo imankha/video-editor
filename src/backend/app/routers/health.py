@@ -279,8 +279,9 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
     scope genuinely WAS just restored moments earlier by a different code path.
     INV-P reason (b) is now discharged at every site that actually performs a
     restore's download+swap (ensure_database, ensure_user_database,
-    ensure_user_database_fresh, materialization.ensure_profile_db_local,
-    migrations._migrate_profile_db — see the INV-P comment in database.py), so
+    ensure_user_database_fresh, materialization.ensure_profile_db_local — see
+    the INV-P comment in database.py; T5087 deleted a fifth site,
+    migrations._migrate_profile_db, once JIT retired the bulk sweep), so
     by the time we reach drain_pending_scopes below, has_sync_pending_scope is
     already accurate: a marker survives iff its scope's write is still
     genuinely undelivered (merely deferred, never behind R2), and the drain is

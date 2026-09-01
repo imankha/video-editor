@@ -105,7 +105,7 @@ If the diff touches any of these (new column, table, or index) or changes stored
 - [ ] The base schema (`_SCHEMA_DDL` / `ensure_database()` / `_USER_DB_SCHEMA`) is updated too, so fresh databases match migrated ones
 - [ ] Migration follows the rules in `.claude/agents/migration.md` (no `conn.commit()`, idempotent where possible, schema-only, correct param style per track)
 
-**Why this matters:** Existing databases were created with older schemas; new columns only appear for new users unless a versioned migration ALTERs them. Migrations do NOT auto-run on deploy or startup -- they must be triggered explicitly after deploy via `POST /api/admin/migrate` (admin session) or fly ssh. If schema changed, flag in your report that a post-deploy migration run is required.
+**Why this matters:** Existing databases were created with older schemas; new columns only appear for new users unless a versioned migration ALTERs them. `user_db`/`profile_db` migrate themselves JIT at the per-user seam on first access (T5083/T5085, hardened by T8190) -- no operator action needed, and no admin endpoint exists for them (T5087 deleted the old bulk sweep). `postgres` is the exception: it does NOT auto-run and must be triggered explicitly after deploy via `POST /api/admin/migrate-postgres` (admin session) or fly ssh. If the diff added a `postgres` migration, flag in your report that a post-deploy migration run is required; for `user_db`/`profile_db` migrations, no flag is needed.
 
 ### 6. Keyframe Data Model (if keyframe code changed)
 

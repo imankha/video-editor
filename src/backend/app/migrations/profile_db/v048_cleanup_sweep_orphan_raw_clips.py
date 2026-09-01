@@ -5,13 +5,20 @@ report/--apply tool for cleaning up R2 objects the pre-T7600 expiry sweep
 orphaned (the sweep used to mint a fresh random filename and re-upload on every
 retried export attempt, leaving 2-3x the storage per affected clip; T7600 fixed
 the source). This migration packages the SAME reviewed logic to run through the
-normal migration system (POST /api/admin/migrate), which already walks every
-user + every registered profile automatically — so cleanup lands wherever the
-admin triggers migrations instead of requiring a separate manual script run.
+normal migration system, applying automatically to a profile as it reaches
+schema head. **T5087 (2026-09-01): the bulk admin sweep this docstring
+originally described (`POST /api/admin/migrate`) is deleted; `user_db`/
+`profile_db` migrate ONLY just-in-time as each account is next touched (no
+"admin triggers migrations" step exists anymore).** This is a real behavior
+change for THIS migration specifically: it deletes R2 objects to reclaim
+storage cost, not to fix data correctness, so an inactive account's orphaned
+objects now stay un-reclaimed until that account is next active — see
+CLAUDE.md § Migration System, "Long-tail property" exception.
 
 The standalone script still exists and is still useful for a human-readable
-dry-run report BEFORE triggering this migration; it is not being replaced, only
-given a machine-run counterpart for execution.
+dry-run report, and is now also the way to reach accounts that JIT alone may
+leave un-swept for a long time; it is not being replaced, only given a
+JIT-triggered counterpart for the common case.
 
 Classification logic (is_sweep_orphan_name / classify_objects /
 referenced_raw_clip_filenames) is imported from app/services/orphan_raw_clips.py

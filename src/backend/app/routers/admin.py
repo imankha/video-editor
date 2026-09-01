@@ -837,17 +837,23 @@ async def cleanup_shares():
 # Migrations
 # ---------------------------------------------------------------------------
 
-@router.post("/migrate")
-async def run_migrations():
-    """Run all pending migrations for all users on this environment."""
+@router.post("/migrate-postgres")
+async def run_postgres_migration():
+    """Run pending Postgres-track migrations. Admin only.
+
+    T5087: this used to also sweep every user's SQLite DBs as a bulk backstop
+    (POST /api/admin/migrate); that sweep is deleted -- user_db/profile_db
+    migrate JIT at the per-user seam (T5083/T5085, hardened by T8190) and have
+    no bulk-sweep counterpart anymore. Postgres remains the one track that is
+    deploy/admin-triggered by design (never JIT, since it is a shared DB with
+    no per-user seam to hang the migration off of)."""
     _require_admin()
-    result = await asyncio.to_thread(_run_all_migrations)
-    return result
+    return await asyncio.to_thread(_run_migrate_postgres)
 
 
-def _run_all_migrations() -> dict:
-    from ..migrations import run_all_migrations
-    return run_all_migrations()
+def _run_migrate_postgres() -> dict:
+    from ..migrations import migrate_postgres
+    return migrate_postgres()
 
 
 @router.get("/migration-status")

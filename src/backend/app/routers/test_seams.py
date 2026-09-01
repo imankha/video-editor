@@ -65,46 +65,67 @@ async def migrate_current_profile():
     The durability self-verify spec drives a REAL overlay render, and the export
     finalize INSERT requires the head profile schema (e.g. v025's
     final_videos.slowmo_section_start/end). A /dotask container pulls the user's DB
-    from R2 at whatever version R2 holds and does NOT auto-run migrations (CLAUDE.md:
-    migrations are admin-triggered, never on startup), so a behind-head profile.sqlite
-    makes the render throw a schema error BEFORE the durable boundary — masking the very
-    thing the test checks (the render dies with a plain `error`, never a `sync_failed`).
+    from R2 at whatever version R2 holds and does not otherwise migrate on startup,
+    so a behind-head profile.sqlite makes the render throw a schema error BEFORE the
+    durable boundary — masking the very thing the test checks (the render dies with a
+    plain `error`, never a `sync_failed`).
 
-    This migrates ONLY the current user's current profile to head — reproducing, in the
-    container, exactly what an admin migrate does in prod (where DBs are at head before any
-    render runs). It reuses the same migration machinery as POST /api/admin/migrate; it is
-    NOT a schema shortcut. Non-prod only (gated three ways like every seam).
+    This migrates ONLY the current user's current profile to head by calling the SAME
+    run_user_seam/run_profile_seam a real request hits on first access (T5083/T5085,
+    hardened by T8190) — reproducing, in the container, exactly what JIT does in prod.
+    T5087 retired the bulk-sweep primitives (_migrate_user_db/_migrate_profile_db) this
+    used to call directly; run_user_seam/run_profile_seam already retry wal_busy and a
+    CAS-refused sync once, so this is a strict upgrade, not a shortcut. Non-prod only
+    (gated three ways like every seam).
+
+    A genuinely blocked migration raises MigrationBlocked, which the global exception
+    handler maps to 503 -- the same outcome a real request hitting the seam gets.
+
+    Clears `_seam_verified` for this profile FIRST (review finding): otherwise a repeat
+    call within the same process — e.g. after `/api/test/simulate-machine-cycle`, which
+    does not touch `_seam_verified` — would see the pair already marked verified and
+    return without touching the DB at all, silently reporting `ok` against whatever
+    version happens to be on disk. The response reports the ACTUAL observed schema
+    version after the call, not a hard-coded 'ok', so a caller can tell a genuine
+    no-further-work-needed result from a seam that quietly did nothing.
 
     Call with the sync fault CLEARED: this does its own durable R2 upload+verify, which a
-    forced FORCE_R2_SYNC_FAILURE would short-circuit to failure (status != 'ok')."""
+    forced FORCE_R2_SYNC_FAILURE would short-circuit to failure."""
     _require_seams_enabled()
 
     import asyncio
 
+    from ..database import USER_DATA_BASE
     from ..migrations import (
         PROFILE_DB_RUNNER,
-        _migrate_profile_db,
-        _migrate_user_db,
+        _clear_seam_verified,
+        _read_sqlite_user_version,
+        run_profile_seam,
+        run_user_seam,
     )
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
 
-    # Blocking (R2 round-trips + sqlite) — offload off the event loop, mirroring the
-    # admin migrate endpoint's asyncio.to_thread pattern.
-    user_applied = await asyncio.to_thread(_migrate_user_db, user_id)
-    result = await asyncio.to_thread(_migrate_profile_db, user_id, profile_id)
+    _clear_seam_verified(user_id)
+
+    # Blocking (R2 round-trips + sqlite) — offload off the event loop, mirroring
+    # every other seam caller.
+    await asyncio.to_thread(run_user_seam, user_id)
+    await asyncio.to_thread(run_profile_seam, user_id, profile_id)
+
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    head = PROFILE_DB_RUNNER.latest_version
+    version = await asyncio.to_thread(_read_sqlite_user_version, db_path)
 
     logger.warning(
         f"[TEST] migrate-current-profile user={user_id} profile={profile_id} "
-        f"status={result.status} profile_applied={[m.version for m in result.applied]} "
-        f"user_applied={[m.version for m in user_applied]}"
+        f"version={version} head={head}"
     )
     return {
-        "status": result.status,
-        "head_version": PROFILE_DB_RUNNER.latest_version,
-        "profile_applied": [m.version for m in result.applied],
-        "user_applied": [m.version for m in user_applied],
+        "status": "ok" if version == head else "not_at_head",
+        "profile_version": version,
+        "head_version": head,
     }
 
 

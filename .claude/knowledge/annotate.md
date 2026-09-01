@@ -123,8 +123,9 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   matters.
   **Migration v045** (`migrations/profile_db/v045_canonicalize_working_clip_segments.py`)
   rewrites pre-T4340 rows the same way (JOIN raw_clips, reuse `canonicalize_segments_data`,
-  idempotent, skips+logs orphan rows with no derivable duration rather than guessing) — run
-  manually per env via `POST /api/admin/migrate`, NOT automatic on deploy.
+  idempotent, skips+logs orphan rows with no derivable duration rather than guessing) — applies
+  automatically at the per-user JIT seam on next access (T5083/T5085, hardened by T8190; T5087
+  deleted the old manual `POST /api/admin/migrate` trigger this used to need).
   **Reader cleanup is NOT done — this is a KNOWN GAP, not finished work.** Every reader still
   defensively calls `canonicalize_segments_data` (export/framing.py:456,
   export/multi_clip.py:1925/2092, services/poster.py) and the **non-canonicalizing latent
@@ -271,8 +272,9 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   it can't be tested in SQL) OR a `clip_teammates` join row; idempotent; logs the count; positional
   row reads (tuple row factory). **Accepted consequence:** moved clips leave the My Athlete layer, so
   they leave reels/rankings/collections eligibility (`queries.py:exclude_teammate_reels_clause` keeps
-  those on `my_athlete = 1`); already-published reels are unaffected. Migrations do NOT auto-run --
-  hit `POST /api/admin/migrate` per env. Covered by `ClipDetailsEditor.teammates.test.jsx`,
+  those on `my_athlete = 1`); already-published reels are unaffected. Applies automatically at the
+  per-user JIT seam on next access (T5083/T5085, hardened by T8190; T5087 deleted the old manual
+  `POST /api/admin/migrate` trigger this used to need). Covered by `ClipDetailsEditor.teammates.test.jsx`,
   `AnnotateFullscreenOverlay.teammates.test.jsx`, `test_t5725_reclassify_teammate_clips.py`, and
   `e2e/T5725-teammates-team-only.qa.spec.js`.
 - **Save auto-commits a pending teammate tag; it must never dead-end (T7540).** The teammate

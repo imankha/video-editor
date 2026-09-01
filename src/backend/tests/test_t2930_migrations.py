@@ -4,7 +4,7 @@ Tests for T2930: Postgres Data Locality Audit migrations.
 Covers:
 - Postgres v002: game_ref_counts table creation, data population, deprecated column removal
 - Profile v002: game_storage table creation, data copy from Postgres
-- run_all_migrations() orchestration
+- migrate_postgres() orchestration (T5087: renamed from run_all_migrations)
 - GREATEST logic for latest_expiry updates
 - Ref count atomicity (new vs existing hash)
 """
@@ -331,12 +331,14 @@ class TestProfileV002:
 
 
 # ---------------------------------------------------------------------------
-# run_all_migrations orchestration
+# migrate_postgres orchestration (T5087: renamed from run_all_migrations /
+# _migrate_postgres once the bulk SQLite sweep those also drove was deleted --
+# Postgres is the only track this still runs)
 # ---------------------------------------------------------------------------
 
-class TestRunAllMigrations:
+class TestPostgresMigration:
     def test_postgres_migration_applied_via_runner(self, pg_with_seed_data, profile_db, preserve_schema_migrations):
-        """_migrate_postgres applies v002 via the MigrationRunner and records it.
+        """migrate_postgres applies v002 via the MigrationRunner and records it.
 
         T6750: this test only needs to prove v002 re-applies, so it clears
         EXACTLY v002 — not `>= 2`. The old `>= 2` wipe forced the runner to
@@ -347,7 +349,7 @@ class TestRunAllMigrations:
         additionally snapshots/restores the ledger in teardown so any failure
         can never leak a below-v003 ledger into later tests.
         """
-        from app.migrations import _migrate_postgres
+        from app.migrations import migrate_postgres
         from app.services.pg import get_pg
 
         # Clear ONLY v002 so it (and nothing below/around it) re-applies.
@@ -356,11 +358,10 @@ class TestRunAllMigrations:
             cur.execute("DELETE FROM schema_migrations WHERE version = 2")
             cur.execute("DROP TABLE IF EXISTS game_ref_counts")
 
-        results = {"postgres": {"applied": [], "error": None}}
-        _migrate_postgres(results)
+        results = migrate_postgres()
 
-        assert results["postgres"]["error"] is None
-        applied_versions = [m["version"] for m in results["postgres"]["applied"]]
+        assert results["error"] is None
+        applied_versions = [m["version"] for m in results["applied"]]
         assert 2 in applied_versions
 
         with get_pg() as conn:
@@ -371,8 +372,8 @@ class TestRunAllMigrations:
             assert "game_ref_counts" in row["description"]
 
     def test_postgres_migration_skipped_when_already_applied(self, pg_with_seed_data, profile_db):
-        """If v002 already applied, _migrate_postgres does not re-apply."""
-        from app.migrations import _migrate_postgres
+        """If v002 already applied, migrate_postgres does not re-apply."""
+        from app.migrations import migrate_postgres
         from app.services.pg import get_pg
 
         # v002 was already applied by pg_with_seed_data fixture
@@ -384,11 +385,10 @@ class TestRunAllMigrations:
                 (2, "game_ref_counts"),
             )
 
-        results = {"postgres": {"applied": [], "error": None}}
-        _migrate_postgres(results)
+        results = migrate_postgres()
 
-        assert results["postgres"]["error"] is None
-        assert results["postgres"]["applied"] == []
+        assert results["error"] is None
+        assert results["applied"] == []
 
 
 # ---------------------------------------------------------------------------

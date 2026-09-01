@@ -1,5 +1,13 @@
 ---
 domain: persistence-sync
+updated: 2026-09-01 (T8190 + T5087: T8190 fixed the JIT seam's same-thread reentrancy deadlock
+(a migration reaching `get_db_connection` from its own `up()` self-deadlocked the whole API
+process, no timeout) with a same-thread pass-through + `SEAM_LOCK_TIMEOUT_S` acquire-with-timeout,
+and fixed the two offending migrations (v017/v047) at the source. With JIT fully proven, T5087
+then deleted the bulk sweep entirely (`run_all_migrations`/`_migrate_user`/`_migrate_user_db`/
+`_migrate_profile_db`) -- the JIT seam is now the ONLY migration mechanism for `user_db`/
+`profile_db`, with no backstop. See the "T5083" section below for the updated invariant and the
+INV-P site-count correction (5 sites -> 4, the bulk primitive's own swap site is gone).)
 updated: 2026-08-31 (T5085: **the JIT seam (T5083) now covers every non-login opener of a
 profile.sqlite/user.sqlite, not just `ensure_database`/`ensure_user_database`.** A code-expert
 audit + an Expert (Opus) validation pass found the seam living inside those two functions meant
@@ -161,9 +169,16 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 - `segments_data` has two formats on disk (splits-only from gestures vs full-list from PUT); always `canonicalize_segments_data` before walking pairs — until T4340 canonicalizes at write time.
 - **T7520 — X-Profile-ID is UNTRUSTED client input; guard OWNERSHIP at the request boundary only.** The `X-Profile-ID` header (and the `hint_profile_id` init fell back to) is client-supplied and was historically only 8-hex FORMAT-checked, so an impersonation start/stop window (new session cookie + stale impersonated profile header on the still-live old page) made `ensure_database()` create a profile.sqlite under the wrong user's dir → R2 orphan. The guard rejects a profile the resolved `get_current_user_id()` does not own, at (A) `db_sync.py`'s header path and (B) `session_init._init_slow_path`'s hint path — the ONLY two places client input first sets the profile context. **NEVER guard inside `ensure_database`/`set_current_profile_id` or anything downstream:** `POST /api/profiles` registers the profile LAST (after ensure_database+sync, T5310), background workers use R2-prefix listing, and `ensure_profile_db_local` runs with user != profile-owner for share materialization — all legitimately create/open a DB for a non-current-context profile. Ownership = membership in the user.sqlite `profiles` registry, cached per-process in `session_init._profile_registry_cache` (invalidated with `_init_cache` on every registry mutation). Frontend closes the emission window with `clearProfileHeader()` on impersonate/logout. See the T7520 frontmatter entry for the full mechanism + test list.
 
-## Migration runner invariants (T4830)
+## Migration runner invariants (T4830) — HISTORICAL, mechanism deleted by T5087
 
-`run_all_migrations` (`app/migrations/__init__.py`) follows these rules:
+`run_all_migrations`/`_migrate_profile_db`/`_migrate_user_db`/`_migrate_user` no longer exist
+(T5087, 2026-09-01) — JIT (T5083/T5085, hardened by T8190) is the sole migration mechanism for
+`user_db`/`profile_db` now, and its own invariants live in the "T5083 — JIT migrate-at-load-seam"
+section below. This section is kept for the DESIGN RATIONALE behind still-live invariants the
+bulk runner originated (the sync-baseline rules in particular carried forward into
+`migrate_local_profile_db_at_seam`) — do not treat present-tense claims below as current code.
+
+`run_all_migrations` (`app/migrations/__init__.py`) followed these rules:
 
 1. **Registry is authoritative.** Only profiles listed in `user.sqlite.profiles` (`get_profiles`) are migrated. R2 profile dirs not in the registry are **orphans**: logged, collected in `results["users"]["orphans"]`, never migrated, never errored.
 2. **Always migrate the canonical R2 copy — but gate the swap on the SYNC baseline, not the schema version (T6410).** `_migrate_profile_db` force-downloads the R2 profile.sqlite each run. Two keep-local guards precede the swap: (a) if the local **schema** is ahead (`user_version > R2 user_version`) the local copy is synced up first; (b) T6410: if the local copy is NOT provably behind R2 on the confirmed **sync baseline** (`get_local_db_version` — mirrors R2's `x-amz-meta-db-version`), keep it and migrate in place, letting the post-migration sync carry both the schema migration and any unsynced writes up together. R2 overwrites local ONLY when `downloaded_sync_version > local_baseline`; a `None` or `0` baseline counts as behind (swap — preserves T6340's guarantee for the unconfirmed case). Schema "at-or-behind" is NOT the same claim as data "at-or-behind": a local write never advances the sync baseline (only a successful upload/restore does), so `baseline == R2 version` means "R2's bytes plus whatever this machine hasn't uploaded yet", not "identical copies" — swapping there would discard writes CAS would otherwise accept.
@@ -235,16 +250,20 @@ one. `set_local_db_version(downloaded_sync_version)` (INSERT OR REPLACE) overrid
 `db_version_row=None` case (never-synced object) is the minority shape; the dominant prod shape is the
 stale-by-one row, and both are pinned by tests.
 
-**Tests:** `tests/test_t6340_migration_sync_baseline.py` (real storage.py CAS against FakeR2): the
-bug pinned in BOTH shapes (swap + re-heal with no persisted row, AND the dominant prod shape with a
-stale `N-1` persisted row overridden by the recorded baseline → R2 reaches head, sync `N`→`N+1`),
-content preserved, a genuinely stale non-None writer still refused with the real `r2_version`,
-NOT_FOUND/ERROR/enum never fabricate a baseline or upload, a mid-download move refuses (never
-clobbers), a live WAL sidecar refuses the swap+upload (`wal_busy`), and an end-to-end multi-profile
-`_migrate_user` that converges and is idempotent on re-run. `test_migration_runner.py` (T4830) five
-scenarios unchanged and green (its download double now returns the real `(found, sync_version)` tuple;
-the bare-bool normalization shim in `_migrate_profile_db` was deleted — no production caller returned
-a bare bool). **Out of the container's reach (post-deploy):** staging reaching v031 in R2, and the
+**Tests (HISTORICAL — T5087 deleted both files below along with the bulk primitive they tested):**
+`tests/test_t6340_migration_sync_baseline.py` (real storage.py CAS against FakeR2) pinned the bug in
+BOTH shapes (swap + re-heal with no persisted row, AND the dominant prod shape with a stale `N-1`
+persisted row overridden by the recorded baseline → R2 reaches head, sync `N`→`N+1`), content
+preserved, a genuinely stale non-None writer still refused with the real `r2_version`, NOT_FOUND/
+ERROR/enum never fabricate a baseline or upload, a mid-download move refuses (never clobbers), a live
+WAL sidecar refuses the swap+upload (`wal_busy`), and an end-to-end multi-profile `_migrate_user` that
+converges and is idempotent on re-run; only the enum-coercion case (`_r2_version_or_none`, a kept
+function) survives, in the same file. `test_migration_runner.py` (T4830) covered five equivalent
+scenarios for the bulk primitive and is deleted in full. **The analogous invariants for the SURVIVING
+seam primitive (`migrate_local_profile_db_at_seam`) have their OWN separate coverage in
+`tests/test_t5083_jit_seam.py`** (wal_busy, CAS refusal, etc. — see the T5083 section below), so this
+deletion is not a coverage gap for current code, only for the retired bulk path. **Out of the
+container's reach (post-deploy):** staging reaching v031 in R2, and the
 prod below-head audit.
 
 ## T6350 — the generic durable-sync 503 body lies for a multi-phase handler
@@ -846,8 +865,9 @@ else:
 - **(b) a restore-if-newer that actually replaced that scope's local content with R2's copy** — the
   peer fact to recording the new baseline. Discharged at every site that performs that download+swap:
   `ensure_database` (profile, database.py), `ensure_user_database`/`ensure_user_database_fresh`
-  (user.sqlite, user_db.py), `materialization.ensure_profile_db_local`,
-  `migrations._migrate_profile_db`. Deliberately NOT at a caller (see below for why).
+  (user.sqlite, user_db.py), `materialization.ensure_profile_db_local` (T5087 deleted a fifth site,
+  `migrations._migrate_profile_db`, once JIT retired the bulk sweep — see database.py's own INV-P
+  comment). Deliberately NOT at a caller (see below for why).
 - **(c) deletion of that scope's local DB** (`clear_scope_markers`).
 
 `scope` is REQUIRED on mark/clear (`USER_DB_SCOPE` or a profile_id) — no default, `ValueError` if
@@ -905,8 +925,11 @@ for both upload and restore, swap-site clears including a concurrent-remark-surv
 `tests/test_t5870_pending_vs_failed.py::TestConflictRetryDeliversAGenuinelyDeferredScope` (drain-based
 Retry actually uploads a merely-deferred scope), `tests/test_move_reels_stale_target.py` (scope-
 identity: the clear targets the function's argument profile, not the ambient ContextVar),
-`tests/test_t6340_migration_sync_baseline.py` (migration-swap clears its own scope, leaves a different
-profile's marker untouched).
+(T5087 deleted `tests/test_t6340_migration_sync_baseline.py`'s equivalent coverage for the bulk
+primitive's own force-download+swap along with that primitive; the surviving
+`migrate_local_profile_db_at_seam` does not swap independently — it migrates the file the seam's
+OWN restore already swapped, so its scope-identity is covered by `test_t5081_pending_scoping.py`'s
+existing site-1/ensure_database coverage above, not a separate citation).
 
 ## T5083 — JIT migrate-at-load-seam (migrations relocate into the serving process)
 
@@ -947,15 +970,20 @@ branch` gave, but correctly independent of the restore branch's own gate).
 **Two leaner primitives, not the bulk one.** `migrations.migrate_local_profile_db_at_seam`/
 `migrate_local_user_db_at_seam` operate on the file the seam's OWN restore just downloaded+swapped (or
 confirmed current) — NO second R2 download and NO T6410 keep-local decision tree (the seam already
-decided swap-vs-keep before the migration call). They share `PROFILE_DB_RUNNER`/`USER_DB_RUNNER`,
-`sync_db_to_r2_explicit`/`sync_user_db_to_r2_explicit`, and (profile only) `_read_r2_profile_user_version`
-verify-at-head with the bulk sweep's `_migrate_profile_db`/`_migrate_user_db` — same runner, same
-upload, same verify — so a DB migrated by either path converges byte/version-identical
-(`test_sweep_and_seam_identical`). Calling the FULL `_migrate_profile_db` from the seam was rejected: it
+decided swap-vs-keep before the migration call). At the time these primitives were built they shared
+`PROFILE_DB_RUNNER`/`USER_DB_RUNNER`, `sync_db_to_r2_explicit`/`sync_user_db_to_r2_explicit`, and
+(profile only) `_read_r2_profile_user_version` verify-at-head with the bulk sweep's
+`_migrate_profile_db`/`_migrate_user_db` — same runner, same upload, same verify, proven
+byte/version-identical convergence (`test_sweep_and_seam_identical`, since deleted along with the bulk
+sweep it compared against). Calling the FULL `_migrate_profile_db` from the seam was rejected: it
 force-downloads the profile a SECOND time (the seam's restore already fetched it) and re-runs the
-keep-local tree against a baseline the seam just set. The bulk sweep (`_migrate_user`,
-`_migrate_profile_db`, `_migrate_user_db`, `run_all_migrations`) is UNCHANGED and still the backstop for
-non-seam paths until T5087 deletes it.
+keep-local tree against a baseline the seam just set.
+
+**T5087 (2026-09-01): the bulk sweep is DELETED, not just superseded.** `_migrate_user`,
+`_migrate_profile_db`, `_migrate_user_db`, `run_all_migrations`, and the old `POST /api/admin/migrate`
+are gone — the two leaner seam primitives above are now the ONLY way `user_db`/`profile_db` ever
+migrate. There is no bulk backstop left for a non-seam path to lean on; every writer must reach the
+seam (this is what T5085, below, made true for the non-login paths before T5087 shipped).
 
 **Concurrency: a NEW lock, not the write lock.** `migrations._get_migration_lock(user_id,
 profile_id_or_USER_DB_SCOPE)` returns a per-pair `threading.Lock` (module dict, TOCTOU-guarded by a

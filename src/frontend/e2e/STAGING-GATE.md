@@ -54,7 +54,9 @@ The authoritative machine-readable inventory is `helpers/targetEnv.js`
 #   0c. seed all 3 accounts (idempotent; resets gate-run drift and guarantees the
 #       export spec a framed draft) — commands in FIXTURE-CONTRACT.md § Seeding
 #   0d. fly machine start <id> -a reel-ballers-api-staging
-#   0e. POST /api/admin/migrate with an admin session — POSTGRES track only.
+#   0e. POST /api/admin/migrate-postgres with an admin session — POSTGRES track only
+#       (T5087 renamed this from /api/admin/migrate once the bulk SQLite sweep it
+#       used to also run was deleted).
 #       T5083/T5085: user_db/profile_db migrate JUST-IN-TIME at the per-user load
 #       seam, so the freshly seeded accounts migrate themselves on the gate's first
 #       login. Budget for it: that first dev-login pays the seam's migration cost

@@ -10,8 +10,10 @@ crop-keyframe migration is needed -- this is a pure additive column.
 Sequenced after T5630's v028 (export_jobs.stage/output_key); the two land in
 order (v028 then v029).
 
-Idempotent: only adds the column when missing. Runs MANUALLY post-deploy
-(POST /api/admin/migrate) -- versioned migrations do NOT auto-run.
+Idempotent: only adds the column when missing. Applies automatically at the
+per-user JIT seam on next access (T5083/T5085, hardened by T8190) --
+profile_db migrations no longer require a manual admin trigger (T5087
+deleted the old bulk-sweep endpoint).
 """
 
 import logging
