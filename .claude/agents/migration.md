@@ -1,6 +1,6 @@
 ---
 name: migration
-description: Writes versioned database migration files (src/backend/app/migrations/{track}/v{NNN}_{description}.py for the user_db, profile_db, or postgres track) when a task changes DB schema, so existing user databases can be updated via the admin migrate endpoint. Invoke after Implementation (Stage 4) and before Review whenever schema code changed.
+description: Writes versioned database migration files (src/backend/app/migrations/{track}/v{NNN}_{description}.py for the user_db, profile_db, or postgres track) when a task changes DB schema, so existing databases update automatically (user_db/profile_db, JIT at the per-user seam) or via the admin endpoint (postgres). Invoke after Implementation (Stage 4) and before Review whenever schema code changed.
 model: sonnet
 effort: low
 ---
@@ -9,7 +9,7 @@ effort: low
 
 ## Purpose
 
-When a task changes database schema (SQLite or Postgres), create a versioned migration file so existing user databases can be updated via the admin endpoint.
+When a task changes database schema (SQLite or Postgres), create a versioned migration file so existing databases update: automatically at the per-user JIT seam for `user_db`/`profile_db`, or via the admin endpoint for `postgres` (see Operations below).
 
 ## When to Run
 
@@ -58,22 +58,25 @@ After Implementation (Stage 4), before Review (Stage 4.5). The Implementor chang
 
 ## Operations
 
-**How your migration actually reaches accounts (T5083/T5085, 2026-08-31):** a `user_db` or
-`profile_db` migration needs NO operator action — `run_user_seam`/`run_profile_seam` apply it
-just-in-time at the per-user DB-load seam (first access after deploy, before any read; blocked
-cases return a retryable 503 `pending_migration`). A `postgres` migration is still
-deploy/admin-triggered via `POST /api/admin/migrate`. Write per-user migrations expecting them to
-run one account at a time under a request, not in a single bulk sweep.
+**How your migration actually reaches accounts (T5083/T5085, hardened by T8190; T5087 completed
+the cutover):** a `user_db` or `profile_db` migration needs NO operator action --
+`run_user_seam`/`run_profile_seam` apply it just-in-time at the per-user DB-load seam (first
+access after deploy, before any read; blocked cases return a retryable 503 `pending_migration`)
+and this is now the ONLY mechanism for those two tracks -- there is no bulk-sweep admin tool left
+to fall back on. Write per-user migrations expecting them to run one account at a time under a
+request, never in a bulk sweep. A `postgres` migration is still deploy/admin-triggered via
+`POST /api/admin/migrate-postgres` (the one track with no per-user seam to hang a JIT trigger
+off of).
 
-Fallback when the admin endpoint (`POST /api/admin/migrate`) is unavailable:
+Fallback when the admin endpoint (`POST /api/admin/migrate-postgres`) is unavailable:
 
 ```
-fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"
+fly ssh console -a <app> -C "python -c 'from app.migrations import migrate_postgres; from app.services.pg import init_pg_pool; init_pg_pool(); print(migrate_postgres())'"
 ```
 
-**`run_all_migrations()` also sweeps every user's SQLite DBs, not just Postgres.** That sweep is
-NOT harmless against a live serving machine (it can reproduce the pre-T8190 seam-reentrancy
-deadlock shape, and separately can desync R2's version cache under a live process, per the JIT
-Migration epic's 2026-08-04 incident finding) and is no longer needed now that JIT covers the
-SQLite tracks — see [deploy/SKILL.md](../skills/deploy/SKILL.md) step 6a. Use it only as a
-last-resort admin tool, restarting the machine immediately after.
+This call is Postgres-only (T5087 deleted the bulk SQLite sweep `run_all_migrations` used to
+also run -- that sweep could reproduce the pre-T8190 seam-reentrancy deadlock shape, and
+separately could desync R2's version cache under a live process; see
+[deploy/SKILL.md](../skills/deploy/SKILL.md) step 6a). A stuck individual `user_db`/`profile_db`
+account is unwedged by driving a real request through its seam (dev-login, or any ordinary
+access), never by a bulk tool.

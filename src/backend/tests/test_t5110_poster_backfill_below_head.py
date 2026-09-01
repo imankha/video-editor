@@ -1,8 +1,10 @@
 """T5110: poster backfill must not crash on a profile below head schema.
 
 `backfill_posters` enumerates profiles via the UNFILTERED `_get_profile_ids`
-(which includes orphan profiles that `run_all_migrations` deliberately
-registry-skips, T4830). `ensure_database()` only does CREATE TABLE IF NOT
+(which includes orphan profiles the registry-scoped migration path
+deliberately skips -- historically `run_all_migrations`, T4830; T5087 deleted
+that bulk sweep, but the JIT seam's registry-only scope means orphans are
+still never auto-migrated). `ensure_database()` only does CREATE TABLE IF NOT
 EXISTS -- it never runs versioned ALTERs -- so an orphan/below-head profile
 lacks `final_videos.poster_filename`. Before this fix, the `... WHERE
 poster_filename IS NULL` candidate query raised

@@ -256,25 +256,40 @@ themselves just-in-time, and an admin triggers the Postgres track after deploy.
 
 Migration files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`.
 
-**How each track runs (T5083 + T5085, 2026-08-31 — this replaced the old "nothing ever
-auto-runs; always hit the admin endpoint" rule):**
+**How each track runs (T5083 + T5085, hardened by T8190; T5087 completed the cutover, 2026-09-01
+— this replaced the old "nothing ever auto-runs; always hit the admin endpoint" rule):**
 
 | Track | Trigger | Operator action after deploy |
 |-------|---------|------------------------------|
-| `user_db`, `profile_db` | **JUST-IN-TIME at the per-user DB-load seam** — `run_user_seam`/`run_profile_seam` (`app/migrations/__init__.py`), called from `ensure_database`/`ensure_user_database` AND from every non-login opener (share materialization, admin cross-user reads, cross-profile moves, background loops). Migrates on FIRST access, before any read. | **None.** Accounts migrate themselves as they are touched. |
-| `postgres` | Deploy/admin-triggered ONLY (`init_pg_schema()` creates fresh DBs but never migrates). | `POST /api/admin/migrate` (admin session); SSH fallback in [migration.md](.claude/agents/migration.md). |
+| `user_db`, `profile_db` | **JUST-IN-TIME at the per-user DB-load seam, and ONLY there** — `run_user_seam`/`run_profile_seam` (`app/migrations/__init__.py`), called from `ensure_database`/`ensure_user_database` AND from every non-login opener (share materialization, admin cross-user reads, cross-profile moves, background loops). Migrates on FIRST access, before any read. | **None.** Accounts migrate themselves as they are touched. |
+| `postgres` | Deploy/admin-triggered ONLY (`init_pg_schema()` creates fresh DBs but never migrates); the one track with no per-user seam to hang a JIT trigger off of. | `POST /api/admin/migrate-postgres` (admin session), backed by `migrate_postgres()`; SSH fallback in [migration.md](.claude/agents/migration.md). |
 
 A blocked per-user migration (WAL-busy, CAS-refused sync, below-head R2 verify) raises
 `migrations.MigrationBlocked` → retryable HTTP 503 `{"code": "pending_migration"}` — it never
-opens a below-head DB silently. `run_all_migrations` / `POST /api/admin/migrate` still exist and
-still sweep every user's SQLite DBs, but **that sweep is NOT harmless against a live serving
-machine and is no longer required at all** (JIT Migration epic child T5087 deletes the per-user
-half once JIT has proven itself): it self-deadlocked the whole API process pre-T8190 (a migration
-reaching back into the per-(user,profile) seam lock from its own `up()` — fixed, but the sweep
-still runs migrations directly against a live process's connections), and independently it moves
-R2 forward behind a live process's in-memory version cache, causing a real CAS conflict for the
-next writer (JIT Migration epic's 2026-08-04 incident finding). Treat it as a last-resort admin
-tool only, followed immediately by a machine restart — never a routine post-deploy step.
+opens a below-head DB silently. **T5087 deleted the bulk SQLite sweep** (`run_all_migrations`,
+`_migrate_user`, `_migrate_user_db`, `_migrate_profile_db`, and the old `POST /api/admin/migrate`)
+now that JIT is the sole and fully-proven mechanism for `user_db`/`profile_db`: that sweep was not
+harmless run as a SEPARATE process alongside a live uvicorn — it self-deadlocked the whole API
+process pre-T8190 (a migration reaching back into the per-(user,profile) seam lock from its own
+`up()`), and independently it moved R2 forward behind the LIVE process's in-memory version cache,
+causing a real CAS conflict for the next writer (JIT Migration epic's 2026-08-04 incident finding).
+There is no admin tool left whose PURPOSE is bulk-migrating SQLite DBs; a stuck individual account
+is unwedged by driving a real request through its seam (dev-login, or any ordinary access), never
+by reintroducing an out-of-process sweep. (`backfill_posters`/`POST /api/admin/backfill-share-posters`
+still walks every profile in-process, migrating each one it touches via the JIT primitive directly —
+that's fine, since an in-process walk never races a separate process's stale baseline.)
+
+**Long-tail property (by design, not a gap — for data correctness):** an account only migrates when
+it next comes online. A genuinely inactive user can sit behind indefinitely — this is fine because
+(a) its data is only ever read/written through the migrated seam path, never touched out-of-band,
+and (b) T5085 made every background toucher (share materialization, admin cross-user reads,
+sweep_scheduler, etc.) either migrate first or tolerate a below-head version. There is deliberately
+no mechanism that reaches an idle account's DB ahead of its owner's next visit. **Exception: a
+migration whose purpose is STORAGE-COST reclamation, not data correctness** (e.g. v048's orphan-clip
+deletion), never reaches an idle account either — its target objects sit un-reclaimed indefinitely,
+which is a real (if usually small) ongoing storage cost, not just a data-shape non-issue. Use the
+migration's own standalone dry-run script (see its docstring, e.g. `scripts/cleanup_orphan_raw_clips.py`
+for v048) if that class of cleanup needs to run on a schedule independent of user activity.
 
 Schema changes: include the Migration agent in classification AND update `_SCHEMA_DDL` in `pg.py` for fresh deployments. Key rule: `PRAGMA user_version` = schema version; `db_version` table / R2 `x-amz-meta-db-version` = sync version. Independent. Mechanism details (locking, CAS re-pull-retry-once, fail-loud): [persistence-sync.md](.claude/knowledge/persistence-sync.md) §T5083/§T5085.
 

@@ -34,8 +34,9 @@ no-silent-fallback). Readers keep defensively canonicalizing until the
 reader-cleanup follow-up task, so an un-migrated or un-derivable row is no
 worse than today.
 
-Runs MANUALLY post-deploy (POST /api/admin/migrate) -- versioned migrations
-do NOT auto-run.
+Applies automatically at the per-user JIT seam on next access (T5083/T5085,
+hardened by T8190) -- profile_db migrations no longer require a manual admin
+trigger (T5087 deleted the old bulk-sweep endpoint).
 """
 
 import logging

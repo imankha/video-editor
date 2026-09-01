@@ -702,8 +702,8 @@ class TestSeamUserDbSymmetric:
         re-pull+retry, §2.7) must raise MigrationBlocked, proven at the
         `_seam_repull_and_retry_user` helper directly (isolation — mirrors
         `test_persistent_failure_after_single_retry_blocks_no_loop`).
-        migrate_local_user_db_at_seam has no separate R2-verify step (mirrors
-        _migrate_user_db, code-expert notes §2b), so the reachable failure
+        migrate_local_user_db_at_seam has no separate R2-verify step
+        (code-expert notes §2b), so the reachable failure
         mode here is a persistent sync failure, not not_at_head. Marking
         pending must happen on an ALREADY-LOCAL file, not before a first-
         access `ensure_user_database` call — that call's own restore-then-
@@ -742,53 +742,6 @@ class TestSeamUserDbSymmetric:
 
         assert call_count["n"] == 1, \
             f"must retry the seam primitive exactly once after re-pull, saw {call_count['n']} calls"
-
-
-# ---------------------------------------------------------------------------
-# 10. Sweep vs seam converge to identical state (§3.6 row 10, Q6)
-# ---------------------------------------------------------------------------
-
-def test_sweep_and_seam_identical(tmp_path):
-    """A profile migrated via the new seam primitive and one migrated via the
-    existing `_migrate_profile_db` (bulk sweep) end at identical `user_version`
-    + R2 `db-version` metadata (design §2.3 'Bulk runner stays working')."""
-    from app.migrations import _migrate_profile_db, migrate_local_profile_db_at_seam
-
-    seam_profile, sweep_profile = "seamprof1", "sweepprof1"
-    N = 8
-    fake = FakeR2()
-    for pid in (seam_profile, sweep_profile):
-        data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N, tag=pid)
-        _seed_r2(fake, _profile_r2_key(USER, pid), data, sync_version=N)
-
-    with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
-         _r2_patched(fake):
-        # Seam path: restore then seam-migrate.
-        from app.profile_context import set_current_profile_id
-        from app.user_context import set_current_user_id
-        set_current_user_id(USER)
-        set_current_profile_id(seam_profile)
-        from app.database import ensure_database
-        ensure_database()
-        seam_result = migrate_local_profile_db_at_seam(USER, seam_profile)
-
-        # Sweep path: full bulk migration primitive (force-download).
-        sweep_result = _migrate_profile_db(USER, sweep_profile)
-
-    assert seam_result.status == "ok"
-    assert sweep_result.status == "ok"
-
-    seam_key = _profile_r2_key(USER, seam_profile)
-    sweep_key = _profile_r2_key(USER, sweep_profile)
-
-    from app.migrations import _read_r2_profile_user_version
-    with patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
-        assert _read_r2_profile_user_version(USER, seam_profile) == PROFILE_HEAD
-        assert _read_r2_profile_user_version(USER, sweep_profile) == PROFILE_HEAD
-
-    assert fake._objects[seam_key]["metadata"]["db-version"] == fake._objects[sweep_key]["metadata"]["db-version"], \
-        "seam and sweep migration must land on the same R2 sync version (both N -> N+1)"
 
 
 # ---------------------------------------------------------------------------
@@ -894,3 +847,79 @@ def test_real_runner_user_db_missing_table_migrates_via_real_seam(tmp_path):
     assert final_version == USER_HEAD, \
         f"real runner must migrate a pre-v002 (no user_activity) DB to HEAD, got {final_version}"
     assert "total_usage_seconds" in cols, "v004's column must have been added by the real migration"
+
+
+# ---------------------------------------------------------------------------
+# 12. T5087 regression: /api/test/migrate-current-profile reports REAL state,
+#     never a hard-coded status (reviewer finding on the T5087 cutover)
+# ---------------------------------------------------------------------------
+
+def test_migrate_current_profile_seam_reports_real_state_not_hardcoded_ok(tmp_path):
+    """T5087 re-pointed this test-seam endpoint from the deleted bulk-sweep
+    primitives (`_migrate_user_db`/`_migrate_profile_db`) onto `run_user_seam`/
+    `run_profile_seam` -- the same JIT primitives a real request hits. A first
+    draft simply returned a hard-coded `{"status": "ok", ...}` regardless of
+    whether anything was actually migrated: silently vacuous the moment
+    `_seam_verified` already marks the pair (e.g. after a prior call in the
+    same process, or `/api/test/simulate-machine-cycle`, which does not touch
+    `_seam_verified`), since `run_profile_seam` then no-ops without touching
+    the DB at all.
+
+    This pins the fix: the handler must (a) clear `_seam_verified` for this
+    user FIRST so a repeat call cannot silently no-op, and (b) report the
+    ACTUAL observed schema version after the call, not a fixed value -- so a
+    stale cache can never make the endpoint claim "ok" against a profile that
+    is genuinely still behind head.
+
+    Reproduces the exact hazard: mark `(USER, PROFILE)` as already
+    `_seam_verified` (simulating a prior success) while the on-disk file is
+    actually BELOW head (simulating a rollback the cache doesn't know about,
+    e.g. after simulate-machine-cycle) -- the pre-fix hard-coded handler would
+    have reported "ok" here having done nothing.
+
+    Counterfactually verified during review: reverting the handler to
+    `run_user_seam(...); run_profile_seam(...); return {"status": "ok", ...}`
+    (no `_clear_seam_verified` call, no real version read) makes this test's
+    `_read_local_user_version(db_path) == PROFILE_HEAD` assertion fail -- the
+    stale `_seam_verified` entry makes `run_profile_seam` a no-op, so the file
+    never actually advances past `PROFILE_HEAD - 1`, while the hard-coded
+    response still claims "ok"."""
+    import asyncio
+
+    import app.migrations as migrations_module
+    from app.routers.test_seams import migrate_current_profile
+
+    fake = FakeR2()
+    N = 9
+    data = _build_profile_bytes(tmp_path, user_version=PROFILE_HEAD - 1, db_version_row=N)
+    key = _profile_r2_key(USER, PROFILE)
+    _seed_r2(fake, key, data, sync_version=N)
+
+    db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_bytes(data)
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch.object(PROFILE_DB_RUNNER, "run", side_effect=_runner_advances_profile_to_head), \
+         _r2_patched(fake):
+        _ctx()
+
+        from app.services.user_db import ensure_user_database
+        ensure_user_database(USER)  # real base schema, real head stamp -- user.sqlite side is a no-op
+
+        # Simulate the exact hazard: mark this profile as already "verified"
+        # BEFORE the actual local file is confirmed at head.
+        migrations_module._seam_verified.add((USER, PROFILE))
+
+        assert _read_local_user_version(db_path) == PROFILE_HEAD - 1, \
+            "sanity: the seeded local file starts below head, despite _seam_verified being stale-set"
+
+        result = asyncio.run(migrate_current_profile())
+
+    assert result["status"] == "ok", "the endpoint must force a real migration despite the stale cache"
+    assert result["profile_version"] == PROFILE_HEAD, \
+        "reported version must reflect the ACTUAL post-call schema, not a hard-coded value"
+    assert result["head_version"] == PROFILE_HEAD
+    assert _read_local_user_version(db_path) == PROFILE_HEAD, \
+        "the file itself must have actually been migrated, not just the response claiming so"

@@ -184,8 +184,10 @@ _PENDING_KIND = "pending"
 #         recording the baseline: database.ensure_database (site 1),
 #         services.user_db.ensure_user_database (site 2),
 #         services.user_db.ensure_user_database_fresh (site 3),
-#         services.materialization.ensure_profile_db_local (site 4),
-#         migrations._migrate_profile_db (site 5). There is deliberately no
+#         services.materialization.ensure_profile_db_local (site 4). (T5087
+#         deleted a fifth site, migrations._migrate_profile_db, once JIT
+#         retired the bulk sweep; the four above are the complete list.)
+#         There is deliberately no
 #         SINGLE call site for reason (b) — a caller like a CAS-conflict
 #         retry endpoint cannot tell whether IT performed the restore or an
 #         earlier, unrelated request already did (a conflict schedules a
@@ -240,18 +242,15 @@ _PENDING_KIND = "pending"
 #   no lock held. A write can commit and mark the SAME scope pending WHILE that
 #   download is in flight; an unconditional clear right after would discharge
 #   that brand-new write's durability record along with the stale one the
-#   restore actually addressed. Sites 1-4 download STRAIGHT INTO the live
-#   local path, so the vulnerable window is the whole download; they read
-#   `read_pending_token` immediately BEFORE calling the R2 restore helper.
-#   Site 5 (_migrate_profile_db) downloads into a TEMP file first and only
-#   touches the live path at the `shutil.move` swap — the live file is
-#   provably untouched during the download itself, so its vulnerable window
-#   is just the swap, and it reads `read_pending_token` immediately before
-#   THAT instead (a tighter bracket than sites 1-4, not a different rule).
-#   Every site then passes what it captured to
-#   `clear_sync_pending(..., if_token=...)` right after recording the new
-#   baseline — identical shape to reason (a), just triggered by a download
-#   landing instead of an upload landing.
+#   restore actually addressed. Every site downloads STRAIGHT INTO the live
+#   local path, so the vulnerable window is the whole download; each reads
+#   `read_pending_token` immediately BEFORE calling the R2 restore helper,
+#   then passes what it captured to `clear_sync_pending(..., if_token=...)`
+#   right after recording the new baseline — identical shape to reason (a),
+#   just triggered by a download landing instead of an upload landing.
+#   (The deleted fifth site, migrations._migrate_profile_db, used to download
+#   into a temp file first and read the token right before its swap instead —
+#   a tighter bracket, not a different rule. Moot now that it is gone.)
 #
 #   Reason (c) does not need this: deleting the scope's local DB entirely
 #   invalidates any pending record for it regardless of when it was marked

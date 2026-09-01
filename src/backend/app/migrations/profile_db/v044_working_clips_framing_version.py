@@ -18,8 +18,10 @@ Modeled directly on v029_working_clips_rotation.py (same guarded
 PRAGMA table_info ALTER; migration `up(conn)` rows are TUPLES under the
 migration runner's row factory -- index positionally, never by name).
 
-Idempotent: only adds the column when missing. Runs MANUALLY post-deploy
-(POST /api/admin/migrate) -- versioned migrations do NOT auto-run.
+Idempotent: only adds the column when missing. Applies automatically at the
+per-user JIT seam on next access (T5083/T5085, hardened by T8190) --
+profile_db migrations no longer require a manual admin trigger (T5087
+deleted the old bulk-sweep endpoint).
 """
 
 import logging

@@ -1,10 +1,13 @@
 """T6030 Part 1: the v025 residual.
 
 `profile_db/v025_freeze_slowmo_section.py` adds `final_videos.slowmo_section_start` /
-`slowmo_section_end`. Migrations run manually (POST /api/admin/migrate), NOT on
-deploy/startup, so between a deploy and that action every per-user profile.sqlite sits
-below v025 while new code names both columns. Two sites 500 with
-`sqlite3.OperationalError: no such column` on such a DB:
+`slowmo_section_end`. At the time this was written, migrations ran manually
+(POST /api/admin/migrate), NOT on deploy/startup, so between a deploy and that action
+every per-user profile.sqlite sat below v025 while new code named both columns.
+(T5083/T5085 + T8190/T5087 later closed this window with a JIT seam that migrates a
+profile on first access -- the T5970 column guards below are now belt-and-braces, not
+the only defense.) Two sites 500 with `sqlite3.OperationalError: no such column` on
+such a DB:
 
   1. downloads.publish_to_my_reels  -- SELECT id, filename, slowmo_section_start,
      slowmo_section_end ... (publish gesture on an existing reel)

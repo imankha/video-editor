@@ -12,8 +12,10 @@ boolean (no-redundant-state rule, EPIC decision 3).
 Both columns are nullable and default NULL, so EVERY existing (real) game keeps NULL
 source columns -- a pure additive migration, no backfill needed.
 
-Sequenced after v029 (working_clips.rotation); the two land in order. Runs MANUALLY
-post-deploy (POST /api/admin/migrate) -- versioned migrations do NOT auto-run.
+Sequenced after v029 (working_clips.rotation); the two land in order. Applies
+automatically at the per-user JIT seam on next access (T5083/T5085, hardened
+by T8190) -- profile_db migrations no longer require a manual admin trigger
+(T5087 deleted the old bulk-sweep endpoint).
 """
 
 import logging

@@ -69,32 +69,31 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    needs step 6a**, so run it immediately after a green deploy. A per-user migration that cannot
    proceed returns a retryable 503 `pending_migration` rather than silently opening a stale DB.
 
-   **6a. Migrations (schema) — Postgres track.** `POST /api/admin/migrate` (admin session), or the
-   fly-ssh fallback in [migration.md](../../agents/migration.md). **The same call also sweeps every
-   user's SQLite DBs — do NOT run that sweep against a live serving machine, it is not harmless:**
-   - It is the exact shape that self-deadlocked the whole API process pre-T8190 (a migration
-     reaching back into the per-(user,profile) seam lock from inside its own `up()`). T8190 fixed
-     the specific reentrancy, but the bulk sweep still runs migrations directly against a live
-     process's connections — don't reintroduce that exposure by relying on it routinely.
-   - Independent of T8190: the JIT Migration epic's 2026-08-04 incident finding established that
-     running the bulk sweep against a **live** machine moves R2 forward behind that process's
-     in-memory version cache, causing a real CAS conflict for the next writer — a "your edit
-     didn't save" banner for an innocent user.
-   - It is also **no longer required** — JIT (T5083/T5085, hardened by T8190) migrates every
-     per-user SQLite DB on first access, so nothing depends on this sweep running post-deploy.
-     Only reach for it as a last-resort admin tool (e.g. force-migrating one stuck account without
-     waiting for a request to hit the seam), and restart the machine immediately after, matching
-     the epic's guidance (T5087 tracks deleting this sweep entirely once JIT has proven itself).
+   **6a. Migrations (schema) — Postgres track.** `POST /api/admin/migrate-postgres` (admin
+   session), or the fly-ssh fallback in [migration.md](../../agents/migration.md):
+   ```
+   fly ssh console -a <app> -C "python -c 'from app.migrations import migrate_postgres; from app.services.pg import init_pg_pool; init_pg_pool(); print(migrate_postgres())'"
+   ```
+   A clean run reports `{"error": null, ...}` (singular `error`, not the old sweep's `errors: []`
+   list). This call is Postgres-only.
 
-   If you want to confirm per-user tracks landed **in R2**, not just on the machine — the
-   distinction that was the entire T6340 bug — use the read-only probe
-   (`get_migration_status_for_user` / `_read_r2_profile_user_version`) against the specific
-   account instead of running the bulk sweep:
+   **T5087 deleted the bulk SQLite sweep this endpoint used to also run** (`run_all_migrations`)
+   -- there is no admin tool left whose PURPOSE is bulk-migrating `user_db`/`profile_db`; they
+   migrate JIT at the per-user seam (T5083/T5085, hardened by T8190) and there is nothing to
+   trigger for them post-deploy. That sweep was never actually harmless run as a SEPARATE process
+   alongside a live uvicorn: it could reproduce the pre-T8190 seam-reentrancy deadlock shape, and
+   it moved R2 forward behind the LIVE process's in-memory version cache, causing a real CAS
+   conflict for the next writer (JIT Migration epic's 2026-08-04 incident finding) -- do not
+   reintroduce an out-of-process sweep. (Step 6b's poster backfill still walks every profile
+   in-process via the JIT primitive it touches -- that's fine, since it never races a separate
+   process's stale baseline against itself.)
+
+   To confirm a per-user track landed **in R2**, not just on the machine -- the distinction that
+   was the entire T6340 bug -- use the read-only probe against the specific account instead of
+   any migrate call:
    ```
-   fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"
+   GET /api/admin/migration-status?user_id=<id>   # all_profiles_at_head: true/false, per profile
    ```
-   A clean run reports `errors: []`. Then confirm profiles are at head with
-   `_read_r2_profile_user_version`.
 
    **6b. Poster backfill (data) — ONLY if the deploy shipped poster-selection changes.**
    Existing reels keep whatever poster they already have; nothing heals them automatically.

@@ -161,7 +161,8 @@ def confirm_current_before_write(user_id: str, profile_id: str | None = None) ->
     different code path. The clear for INV-P reason (b) now lives at every
     site that actually performs the download+swap (ensure_database,
     ensure_user_database, ensure_user_database_fresh,
-    materialization.ensure_profile_db_local, migrations._migrate_profile_db)
+    materialization.ensure_profile_db_local -- T5087 deleted a fifth site,
+    migrations._migrate_profile_db, once JIT retired the bulk sweep)
     -- see the INV-P comment in database.py. Callers here don't need to know
     which of them (if any) fired.
     """

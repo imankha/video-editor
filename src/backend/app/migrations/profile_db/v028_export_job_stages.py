@@ -22,9 +22,10 @@ positionally r[1]):
   - output_key stays NULL for every existing row -> recovery falls back to
     modal_result.output_key for pre-v028 jobs.
 
-Runs MANUALLY post-deploy (POST /api/admin/migrate) — versioned migrations do
-NOT auto-run. Idempotent: re-running only re-applies the ALTERs when absent and
-re-derives the same backfill.
+Applies automatically at the per-user JIT seam on next access (T5083/T5085,
+hardened by T8190) -- profile_db migrations no longer require a manual admin
+trigger (T5087 deleted the old bulk-sweep endpoint). Idempotent: re-running
+only re-applies the ALTERs when absent and re-derives the same backfill.
 """
 
 import logging

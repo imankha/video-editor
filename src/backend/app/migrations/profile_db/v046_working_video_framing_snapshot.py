@@ -30,8 +30,9 @@ Modeled on v044_working_clips_framing_version.py (guarded PRAGMA table_info
 ALTER, idempotent). PRAGMA table_info rows are TUPLES under the migration
 runner's row factory -- index positionally (row[1] == column name).
 
-Runs MANUALLY post-deploy (POST /api/admin/migrate) -- versioned migrations
-do NOT auto-run.
+Applies automatically at the per-user JIT seam on next access (T5083/T5085,
+hardened by T8190) -- profile_db migrations no longer require a manual admin
+trigger (T5087 deleted the old bulk-sweep endpoint).
 """
 
 import logging
