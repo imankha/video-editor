@@ -19,12 +19,13 @@ import logging
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope, get_rating_adjective
 from app.database import column_exists, ensure_directories, get_db_connection
+from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
 from app.queries import normalize_rating
 from app.services.auth_db import (
@@ -631,13 +632,25 @@ def _maybe_send_game_ready_email(game_id: int, game_name: str) -> None:
 
 
 @router.post("/{game_id:int}/activate")
-async def activate_game(game_id: int):
+async def activate_game(
+    game_id: int,
+    _durable: None = Depends(durable_sync),  # T8150: sync the pending->ready flip to R2 before 200
+):
     """
     T1540: Flip a pending game to ready after video upload completes.
 
     Validates all game_videos have their blake3_hash present in R2,
     probes FPS for any videos missing it, then sets status='ready'.
     Idempotent: returns success if game is already ready.
+
+    T8150: durable_sync — the pending->ready flip (and, via the whole-file
+    profile.sqlite upload, the create_game pending INSERT) must reach R2 BEFORE
+    the 200 that fires the "Game ready!" toast. Without it the flip rode the
+    middleware's fire-and-forget sync; a 0.5s lock-defer or a machine swap lost it,
+    and the next cold restore / CAS re-heal pulled R2's pre-flip snapshot back down,
+    reverting the game to 'pending' (filtered out of readyGames) or dropping it
+    entirely — while the credit debit (Postgres, T5840) stayed durable. That is the
+    "credits debited + game vanished" incident (ojedalucas19 T7870 shape).
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
