@@ -234,6 +234,10 @@ MILESTONE_REASONS = frozenset({
     "refused",         # server/validation rejection (quota, format, 4xx)
     "sync_failed",     # R2 CAS / durable-sync refusal
     "user_abandoned",  # reaped pending / navigated away
+    "r2_rejected",     # T8170: an R2 part PUT itself returned a non-2xx (e.g. the
+                        # T8160 self-abort's 404 NoSuchUpload) -- NOT a dropped
+                        # transport, distinct from "network" so diagnosis doesn't
+                        # get pointed at users' connections for our own bug
     "unknown",         # uncaught
 })
 

@@ -39,6 +39,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+# T8170: upload_success_rate pulse-card alarm thresholds. The T8160 outage sat
+# at 29% for ~2 days undetected -- below this rate, with a meaningful sample,
+# is a real collapse, not noise.
+UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT = 70.0
+UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS = 5
+
 DEFAULT_PAGE_SIZE = 10
 
 
@@ -724,11 +730,18 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
     cutoff_seconds = older_than_hours * 3600
     results: list[dict] = []
 
-    for profile in get_profiles(user_id):
-        profile_id = profile["id"]
-        conn = await asyncio.to_thread(open_profile_db_readonly, user_id, profile_id)
+    def _read_pending_uploads(profile_id: str) -> list | None:
+        # T8170: sqlite3.Connection defaults to check_same_thread=True, tied to
+        # whatever worker thread ran open_profile_db_readonly. A prior version
+        # opened the connection in its own to_thread call, then read/closed it
+        # back on the event-loop thread — a cross-thread violation that raised
+        # "SQLite objects created in a thread can only be used in that same
+        # thread" on EVERY call (reproduced live on bknoto's account 2026-08-31).
+        # Fix: open, read, AND close inside this ONE function, itself run via a
+        # single to_thread call, so every operation stays on the same thread.
+        conn = open_profile_db_readonly(user_id, profile_id)
         if conn is None:
-            continue
+            return None
         try:
             cur = conn.cursor()
             cur.execute(
@@ -736,12 +749,19 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
                 "r2_upload_id, parts_json, label, created_at "
                 "FROM pending_uploads ORDER BY created_at DESC"
             )
-            rows = cur.fetchall()
+            return cur.fetchall()
+        finally:
+            conn.close()
+
+    for profile in get_profiles(user_id):
+        profile_id = profile["id"]
+        try:
+            rows = await asyncio.to_thread(_read_pending_uploads, profile_id)
         except Exception as e:
             logger.warning(f"stuck-uploads: cannot read profile {profile_id}: {e}")
             continue
-        finally:
-            conn.close()
+        if rows is None:
+            continue
 
         for row in rows:
             age_seconds = None
@@ -1780,6 +1800,23 @@ def analytics_pulse(
         round(upload_succeeded_total / upload_attempts_total * 100, 1)
         if upload_attempts_total else None
     )
+    # T8170: the T8160 outage sat at 29% success for ~2 days with no alert --
+    # nobody noticed until a bug report. A real collapse with a meaningful sample
+    # size must be unmissable: mark the card + fire a greppable CRITICAL log every
+    # time an admin loads the dashboard while it's true (cheap, no new infra; a Fly
+    # log alert can hook this later per the task). MIN_ATTEMPTS guards a quiet day
+    # (e.g. 1 failed out of 1 attempt) from reading as a false collapse.
+    upload_success_alarm = (
+        upload_attempts_total >= UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS
+        and upload_success_rate is not None
+        and upload_success_rate < UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT
+    )
+    if upload_success_alarm:
+        logger.critical(
+            f"[T8170] Upload success rate collapsed: {upload_success_rate}% "
+            f"({upload_succeeded_total}/{upload_attempts_total} succeeded) -- "
+            f"below the {UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT}% alarm threshold"
+        )
     upload_success_card = {
         "today": upload_success_rate,
         "last_week_same_day": None,
@@ -1788,6 +1825,7 @@ def analytics_pulse(
         "succeeded": upload_succeeded_total,
         "failed": upload_failed_total,
         "attempts": upload_attempts_total,
+        "alarm": upload_success_alarm,
     }
 
     return {

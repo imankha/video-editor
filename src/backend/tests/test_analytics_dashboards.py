@@ -363,6 +363,104 @@ class TestPulseEndpoint:
         assert resp.json()["cards"]["viral_conversion"]["today"] == self._direct_referral_rate()
 
 
+class TestUploadSuccessRateAlarm:
+    """T8170: the T8160 outage sat at 29% upload success for ~2 days with no
+    alert -- a red banner + CRITICAL log must fire when the rate genuinely
+    collapses (>= MIN_ATTEMPTS with rate < THRESHOLD), and must NOT fire on a
+    quiet day with too few attempts to mean anything.
+
+    ISOLATION: `daily_counters` is a shared, cumulative-per-day Postgres table
+    that `pg_conn`'s fixture does NOT reset (only user_actions/segments/etc.
+    are cleaned per test) -- any other test in the SAME run touching
+    game_uploads_succeeded/failed for TODAY (this file's other tests, T7970's
+    daily-counter test, ...) leaves its contribution sitting in the row every
+    later test reads. `_reset_upload_counters` zeroes today's row explicitly
+    at the start of each test here so the rate/alarm assertions are exact and
+    order-independent (found live in CI: a prior test's leftover 1 succeeded
+    turned this class's intended 0% into an observed 50%).
+
+    KNOWN LOCAL-CLOCK CAVEAT (filed as T8250): `_reset_upload_counters` and
+    `record_milestone` both key off Postgres's `CURRENT_DATE` (UTC), but the
+    pulse endpoint under test computes its date window with Python's LOCAL
+    `date.today()`. Running this class locally in a negative-UTC-offset
+    timezone near the UTC day boundary reads `card["today"] is None` -- the
+    row this test just wrote lands under UTC-tomorrow, outside the endpoint's
+    local-today window. Not a bug in this test or the alarm logic (the
+    write side is directly verified correct) -- CI runs in UTC and never
+    crosses this boundary. If this file flakes ONLY locally near a
+    local-midnight/UTC-morning window, that is T8250, not a regression here."""
+
+    def _reset_upload_counters(self):
+        # analytics_setup buffers a game_upload_succeeded for user-a that is NOT yet
+        # flushed to Postgres when a test starts -- flush it first so the UPDATE
+        # actually zeroes it, instead of leaving it to land AFTER the reset when this
+        # test's own _counter_buffer.flush() call fires (found live: it silently added
+        # 1 succeeded on top of every test's own numbers -- 0/1 read back as 50%).
+        _counter_buffer.flush()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE daily_counters SET game_uploads_succeeded = 0, game_uploads_failed = 0 "
+                "WHERE counter_date = CURRENT_DATE"
+            )
+
+    def _record_and_flush(self, user_id: str, succeeded: int, failed: int):
+        self._reset_upload_counters()
+        for _ in range(succeeded):
+            record_milestone(user_id, "game_upload_succeeded")
+        for _ in range(failed):
+            record_milestone(user_id, "game_upload_failed", reason="r2_rejected")
+        _counter_buffer.flush()
+
+    def test_collapsed_rate_with_enough_attempts_sets_alarm_true(self, client, pg_conn, caplog):
+        # 2 succeeded / 8 failed = 20% over 10 attempts -- well past both the
+        # THRESHOLD (70%) and MIN_ATTEMPTS (5) guards, matching the real outage shape.
+        self._record_and_flush("user-a", succeeded=2, failed=8)
+
+        import logging
+        with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
+            resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["today"] == 20.0
+        assert card["alarm"] is True
+        assert any("[T8170]" in r.message and "collapsed" in r.message for r in caplog.records), (
+            "expected a CRITICAL [T8170] log line when the alarm fires"
+        )
+
+    def test_healthy_rate_never_sets_alarm(self, client, pg_conn):
+        # 9 succeeded / 1 failed = 90% over 10 attempts -- above threshold, no alarm.
+        self._record_and_flush("user-a", succeeded=9, failed=1)
+
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["today"] == 90.0
+        assert card["alarm"] is False
+
+    def test_low_sample_size_never_sets_alarm_even_at_zero_percent(self, client, pg_conn):
+        # 0 succeeded / 1 failed = 0% -- but only 1 attempt, below MIN_ATTEMPTS. A
+        # single unlucky attempt on a quiet day must not read as a fleet-wide collapse.
+        self._record_and_flush("user-a", succeeded=0, failed=1)
+
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["today"] == 0.0
+        assert card["alarm"] is False
+
+    def test_no_attempts_alarm_is_false_not_missing(self, client):
+        # The default analytics_setup fixture records no game_upload_succeeded/failed
+        # milestones for a fresh window -- today is None ("--" on the card) and alarm
+        # must still be a real boolean, never absent (the frontend indexes it directly).
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["alarm"] is False
+
+
 class TestUserActions:
     def test_record_milestone_upserts_action(self, analytics_setup, pg_conn):
         from app.services.pg import get_pg
