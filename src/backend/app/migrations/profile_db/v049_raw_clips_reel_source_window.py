@@ -69,24 +69,51 @@ class V049RawClipsReelSourceWindow(BaseMigration):
             conn.execute("ALTER TABLE raw_clips ADD COLUMN reel_source_end_time REAL")
             logger.info("[v049] added raw_clips.reel_source_end_time")
 
+        has_projects = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='projects'"
+        ).fetchone()
+        has_working_clips = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='working_clips'"
+        ).fetchone()
+
+        if not has_projects:
+            # A profile at an older/minimal schema state (e.g. a fresh share-
+            # materialization target that has raw_clips but hasn't gained the
+            # reel tables yet) has no produced-reel membership to backfill at
+            # all -- skip both statements rather than crashing the JIT seam.
+            # Neither table gains rows retroactively once created (each new
+            # project/working_clip is written post-migration, at head), so
+            # there is nothing this migration would ever need to re-run for.
+            logger.info("[v049] projects table absent, skipping backfill")
+            return
+
         # Statement 1: every clip that is a member of a produced reel, via the
         # canonical working_clips.raw_clip_id mapping (covers multi-clip + user-
-        # created reels that carry no auto_project_id).
-        cur1 = conn.execute(
-            """
-            UPDATE raw_clips
-            SET reel_source_start_time = start_time,
-                reel_source_end_time = end_time
-            WHERE start_time IS NOT NULL AND end_time IS NOT NULL
-              AND id IN (
-                SELECT DISTINCT wc.raw_clip_id
-                FROM working_clips wc
-                JOIN projects p ON p.id = wc.project_id
-                WHERE wc.raw_clip_id IS NOT NULL
-                  AND (p.working_video_id IS NOT NULL OR p.final_video_id IS NOT NULL)
-              )
-            """
-        )
+        # created reels that carry no auto_project_id). working_clips may not
+        # exist yet on a profile at an older/minimal schema state -- skip this
+        # statement rather than crashing the JIT seam; statement 2's
+        # auto_project_id backfill still runs and statement 1 will simply catch
+        # up next time a produced reel gains working_clips (idempotent re-run).
+        cur1_rowcount = 0
+        if has_working_clips:
+            cur1 = conn.execute(
+                """
+                UPDATE raw_clips
+                SET reel_source_start_time = start_time,
+                    reel_source_end_time = end_time
+                WHERE start_time IS NOT NULL AND end_time IS NOT NULL
+                  AND id IN (
+                    SELECT DISTINCT wc.raw_clip_id
+                    FROM working_clips wc
+                    JOIN projects p ON p.id = wc.project_id
+                    WHERE wc.raw_clip_id IS NOT NULL
+                      AND (p.working_video_id IS NOT NULL OR p.final_video_id IS NOT NULL)
+                  )
+                """
+            )
+            cur1_rowcount = cur1.rowcount
+        else:
+            logger.info("[v049] working_clips table absent, skipping member-clip backfill")
 
         # Statement 2: seed clips of produced auto-drafts whose working_clips were
         # pruned (published reels) -- only rows statement 1 left NULL.
@@ -105,6 +132,6 @@ class V049RawClipsReelSourceWindow(BaseMigration):
         )
 
         logger.info(
-            f"[v049] backfilled reel_source_* for {cur1.rowcount} member clips + "
+            f"[v049] backfilled reel_source_* for {cur1_rowcount} member clips + "
             f"{cur2.rowcount} pruned-reel seed clips"
         )
