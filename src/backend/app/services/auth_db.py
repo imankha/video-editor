@@ -368,26 +368,65 @@ def insert_game_storage_ref(
     game_size_bytes: int,
     storage_expires_at: str,
 ) -> None:
+    """Live request-path writer (uploads, activate_game, etc.): opens its OWN
+    SQLite connection via get_db_connection(), which re-enters ensure_database().
+    Safe here because the request path never already holds this profile's JIT
+    migration lock. NEVER call this from inside a migration's up(conn) — that
+    thread already holds the lock and re-entering deadlocks it (T8190). A
+    migration already has a connection to the DB being migrated: pair
+    `upsert_game_storage_row(conn, ...)` (using that connection) with
+    `insert_game_storage_ref_pg_only(...)` instead.
+    """
     from ..database import get_db_connection
 
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """INSERT OR IGNORE INTO game_storage
-               (blake3_hash, game_size_bytes, storage_expires_at)
-               VALUES (?, ?, ?)""",
-            (blake3_hash, game_size_bytes, storage_expires_at),
-        )
-        is_new = cursor.rowcount == 1
-        if not is_new:
-            cursor.execute(
-                """UPDATE game_storage
-                   SET game_size_bytes = ?, storage_expires_at = ?
-                   WHERE blake3_hash = ?""",
-                (game_size_bytes, storage_expires_at, blake3_hash),
-            )
+        upsert_game_storage_row(conn, blake3_hash, game_size_bytes, storage_expires_at)
         conn.commit()
 
+    insert_game_storage_ref_pg_only(user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
+
+
+def upsert_game_storage_row(
+    conn,
+    blake3_hash: str,
+    game_size_bytes: int,
+    storage_expires_at: str,
+) -> None:
+    """SQLite half of insert_game_storage_ref, using a connection the CALLER
+    already owns (T8190). `conn` accepts either a raw `sqlite3.Connection`
+    (a migration's own `up(conn)`) or a `TrackedConnection` (the request
+    path) — both expose `.cursor()`. Migrations call this with their own
+    `up(conn)` connection instead of insert_game_storage_ref/get_db_connection,
+    which would re-enter the JIT seam lock this thread already holds. Does not
+    commit — the caller controls the transaction."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR IGNORE INTO game_storage
+           (blake3_hash, game_size_bytes, storage_expires_at)
+           VALUES (?, ?, ?)""",
+        (blake3_hash, game_size_bytes, storage_expires_at),
+    )
+    is_new = cursor.rowcount == 1
+    if not is_new:
+        cursor.execute(
+            """UPDATE game_storage
+               SET game_size_bytes = ?, storage_expires_at = ?
+               WHERE blake3_hash = ?""",
+            (game_size_bytes, storage_expires_at, blake3_hash),
+        )
+
+
+def insert_game_storage_ref_pg_only(
+    user_id: str,
+    profile_id: str,
+    blake3_hash: str,
+    game_size_bytes: int,
+    storage_expires_at: str,
+) -> None:
+    """Postgres half of insert_game_storage_ref — touches no SQLite, so it is
+    safe to call from inside a migration's up(conn) without re-entering the
+    JIT seam (T8190). Pair with upsert_game_storage_row(conn, ...) for the
+    SQLite side, using the migration's own connection."""
     with get_pg() as pg_conn:
         cur = pg_conn.cursor()
         # T6770: game_storage_refs is the derived ref-set -- one row per

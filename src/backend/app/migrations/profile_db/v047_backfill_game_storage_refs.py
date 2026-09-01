@@ -20,7 +20,7 @@ class V047BackfillGameStorageRefs(BaseMigration):
     open item, since every row here is derived fresh from the real per-profile
     state rather than carried forward from a possibly-drifted counter.
 
-    Idempotent + safe to re-run: insert_game_storage_ref is an
+    Idempotent + safe to re-run: insert_game_storage_ref_pg_only is an
     ON CONFLICT (user_id, profile_id, blake3_hash) DO UPDATE upsert.
     """
 
@@ -44,19 +44,19 @@ class V047BackfillGameStorageRefs(BaseMigration):
             return
 
         from app.profile_context import get_current_profile_id
-        from app.services.auth_db import insert_game_storage_ref
+        from app.services.auth_db import insert_game_storage_ref_pg_only
         from app.user_context import get_current_user_id
 
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
 
-        # insert_game_storage_ref opens its own SQLite + Postgres connections,
-        # so flush this connection's reads before delegating (no open write
-        # txn -> no SQLite writer-lock contention, same precaution as v017).
-        conn.commit()
-
+        # T8190: this data came FROM game_storage (the query above), so the
+        # SQLite half is a pure no-op -- write Postgres only. NEVER call the
+        # full insert_game_storage_ref (or anything else that reaches
+        # get_db_connection) from inside a migration: that re-enters the JIT
+        # seam lock this thread already holds and deadlocks the process.
         for h, size, expires_str in rows:
-            insert_game_storage_ref(user_id, profile_id, h, size or 0, expires_str)
+            insert_game_storage_ref_pg_only(user_id, profile_id, h, size or 0, expires_str)
 
         logger.info(
             f"[Migration] v047 backfilled {len(rows)} game_storage_refs row(s) "

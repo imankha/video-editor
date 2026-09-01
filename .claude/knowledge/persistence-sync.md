@@ -67,6 +67,30 @@ How user data gets written and how it survives: gesture-based persistence rules,
 - `src/backend/app/storage.py` — R2 upload/download with version metadata: `sync_database_to_r2_with_version` (storage.py:829), `sync_user_db_to_r2_with_version` (storage.py:1084). R2 keys are env-prefixed: `{APP_ENV}/users/{user_id}/profiles/{profile_id}/profile.sqlite`.
   - **R2 MEDIA ARTIFACTS ARE PER-PROFILE, not per-user.** `r2_key(user_id, path)` (storage.py:266) embeds the CURRENT `profile_id` from the ContextVar: `{APP_ENV}/users/{user_id}/profiles/{profile_id}/{path}`. So `final_videos/`, `working_videos/`, `raw_clips/`, `intro/` (T5190 player-intro card images) objects all live under a specific profile prefix — a DIFFERENT profile of the SAME user cannot presign them. Any cross-profile op that references media (e.g. T4850 reel move) MUST relocate the object between profile prefixes; carrying only the DB row 404s on playback/download. (Global `games/{hash}.mp4` is the sole env-prefix-free, cross-profile namespace.) Cross-profile helpers: `profile_r2_key` / `copy_profile_object` / `delete_profile_object` / `profile_object_exists` (storage.py, T4850) build the key for an EXPLICIT profile id (no ContextVar).
   - **T8160 LANDMINE — R2 UploadIds are NOT stable identifiers across API responses.** Cloudflare R2 returns a DIFFERENT UploadId string for the same multipart upload in every response: CreateMultipartUpload and each ListMultipartUploads call all give distinct, equally-valid ALIASES (verified live 2026-08-31; any alias works in abort/list_parts/presign). **Never compare UploadIds across two responses** — `keep_upload_id` equality, stored-vs-listed anomaly detection, list-vs-list matching are all always-false on R2. Direct USE of a stored id in a later call is fine. This broke T7950's orphan reclaim (`r2_abort_orphan_multipart_uploads` aborted its own just-created keeper -> every fresh prod upload failed with part 404 NoSuchUpload from the ~2026-08-30 deploy until T8160; bug 47p). Post-T8160 rules: orphan reclaim spares by AGE (`ORPHAN_MULTIPART_MIN_AGE_SECONDS`, storage.py) never by id; prepare_upload verifies the keeper is still valid after any reclaim that aborted something (fails 500 + CRITICAL, never hands out presigned URLs for a dead upload); within ONE List response entry-vs-entry comparison is still sound (`_adopt_live_multipart_after_ack_loss`). Mocked tests with stable ids CANNOT catch regressions here, and staging re-uploads dedup to the EXISTS path (zero parts) — only a NOVEL random file against real R2 exercises the multipart path.
+  - **T8190 — the JIT migration seam (T5083/T5085) self-deadlocks if a migration's `up()` writes
+    through `get_db_connection`/`get_user_db_connection`.** Hit live on staging 2026-08-31 (the
+    T5085 review's own LANDMINE comment, "not yet hit in prod"): `run_profile_seam` holds a
+    per-(user, profile) lock while running pending migrations; `v047_backfill_game_storage_refs`
+    (and `v017_backfill_missing_storage_refs`, found by the audit — same bug, unnoticed since
+    2026-07) called `auth_db.insert_game_storage_ref`, whose SQLite half opens
+    `get_db_connection()` -> `ensure_database()` -> `run_profile_seam` AGAIN for the SAME
+    profile this thread already holds the lock for -> deadlock, no timeout, the whole process
+    wedges (even `/api/health` stops responding once the thread pool exhausts behind it) until a
+    machine restart. Fixed two ways together: (1) same-thread re-entrancy — `_seam_in_progress`
+    tracks which thread is running the seam for a key; a nested call from that SAME thread
+    returns immediately (the outer frame owns the migration), (2) genuine cross-thread
+    contention acquires with `SEAM_LOCK_TIMEOUT_S=30` and raises `MigrationBlocked` (503) on
+    timeout instead of hanging the requester forever. Root cause also fixed at the source:
+    `insert_game_storage_ref` split into `upsert_game_storage_row(conn, ...)` (SQLite, using the
+    CALLER's own connection) + `insert_game_storage_ref_pg_only(...)` (Postgres only, never
+    touches SQLite/the seam) — migrations call these two instead of the combined function. **Any
+    migration's `up(conn)` must use its OWN `conn` (or a Postgres-only helper) for all writes,
+    never a request-path opener that re-runs `ensure_database`/`ensure_user_database`** — a
+    static guard test (`test_t8190_seam_reentrancy_deadlock.py`, regex on real call syntax,
+    ignores comments/docstrings and the `_pg_only` variant) fails any NEW migration that
+    reintroduces this. Prod was dormant when this shipped (all accounts already at head, so JIT
+    had nothing to apply) — the danger is specifically the NEXT migration that ships below-head
+    accounts into the seam.
   - **T5190 — intro-card image upload + parental consent.** `POST /api/profiles/{profile_id}/intro/image` (`routers/profiles.py`, service `services/intro_media.py`) decode-verifies via cv2 (never extension/declared type; non-image → 400), re-encodes to a 1440px long edge preserving alpha (4-channel → PNG, else JPEG), and stores under the per-profile `intro/{uuid}.{ext}` prefix built from the URL `profile_id` via `profile_r2_key` + `upload_bytes_to_r2_global` (NOT the request ContextVar — so an upload for a non-current profile still lands correctly). `delete_intro_image(user_id, profile_id, key)` is a callable service (T5230 purge reuses it) that refuses a key outside this profile's `intro/` prefix.
     **Follow-up (2026-08-04): the photo key is owned at the PROFILE level, not a card row.** The
     original plan ("the key is written onto an `intro_cards` row by T5195") was a spec error —
