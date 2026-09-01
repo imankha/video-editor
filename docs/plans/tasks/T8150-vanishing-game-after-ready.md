@@ -1,6 +1,6 @@
 # T8150: Game vanishes from list after "Game ready!" (credits debited)
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-08-31
@@ -49,13 +49,29 @@ Bug-reproduction skill: reproduce FIRST, failing test before any fix.
 ## Implementation
 
 ### Steps
-1. [ ] Reproduce + failing test
-2. [ ] Root cause (expert agent if the mechanism is not obvious on first read)
-3. [ ] Fix + prod read-only sweep for existing victims
-4. [ ] Verify the second anomaly (old-game-opens) is or is not the same root cause
+1. [x] Reproduce + failing test
+2. [x] Root cause (expert agent - mechanism was not obvious on first read)
+3. [x] Fix - `activate_game` and `create_game` (games.py) were not durable_sync routes;
+       the pending->ready flip rode a fire-and-forget R2 sync that a lock-defer or CAS
+       re-heal could discard, reverting the game to `pending` (filtered from readyGames)
+       while the credit debit stayed durable in Postgres. Added `Depends(durable_sync)`.
+       No schema change. Reviewed and approved (1 blocking lint fix applied).
+4. [x] Verify the second anomaly - CONFIRMED separate root cause (create_game's
+       dedup/reuse logic returns an old game id), NOT fixed by this change. Split out as
+       [T8310](../T8310-annotate-opens-old-game-after-upload.md).
+5. [ ] Prod read-only sweep for existing victims - read-only probe script written
+       (`scripts/scan_charged_reverted_games.py`, downloads a profile.sqlite + queries
+       Postgres `credit_transactions` for a debit against a still-`pending` game); not yet
+       run (needs prod R2/Postgres access, loops over real accounts - awaiting go-ahead).
+
+### Progress Log
+
+**2026-09-01**: Fixed, tested, reviewed, pushed (`feature/T8150-vanishing-game-after-ready`),
+Branch CI green. Awaiting user test + merge. Prod victim sweep (step 5) not yet run.
 
 ## Acceptance Criteria
 
-- [ ] Reproducing test exists and passes with the fix
-- [ ] Upload success toast is never shown for a game that will not appear in the list
+- [x] Reproducing test exists and passes with the fix
+- [x] Upload success toast is never shown for a game that will not appear in the list
 - [ ] Prod checked read-only for existing victims; any found are filed for repair
+      (probe script ready, not yet executed)
