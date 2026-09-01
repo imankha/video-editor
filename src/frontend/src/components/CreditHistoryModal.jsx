@@ -23,6 +23,7 @@ const SOURCE_LABELS = {
   game_upload: 'Game upload',
   storage_extension: 'Storage extension',
   quest_reward: 'Quest reward',
+  quest_upfront: 'Welcome credits',
   admin_grant: 'Admin grant',
   signup: 'Signup bonus',
   refund: 'Refund',

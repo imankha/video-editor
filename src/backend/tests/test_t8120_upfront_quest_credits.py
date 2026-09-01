@@ -76,3 +76,27 @@ class TestUpfrontGrant:
         credit_ledger.grant_credits(USER, 8, source="new_account_bonus")
         grant_quest_chain_credits(USER)
         assert get_balance(USER) == 8 + QUEST_CHAIN_CREDIT_TOTAL
+
+
+class TestQuestPanelCollapsedPersistence:
+    """T8120: the collapse-to-Help state persists per-user in user_settings KV
+    (no schema change), so a collapse survives navigation AND reload."""
+
+    def test_collapsed_flag_round_trips(self):
+        from app.services.user_db import (
+            ensure_user_database,
+            get_quest_panel_collapsed,
+            set_quest_panel_collapsed,
+        )
+
+        uid = "quest-collapse-user"
+        ensure_user_database(uid)
+
+        # Default (no key) is expanded.
+        assert get_quest_panel_collapsed(uid) is False
+        # Collapse persists.
+        set_quest_panel_collapsed(uid, True)
+        assert get_quest_panel_collapsed(uid) is True
+        # And it can be re-expanded.
+        set_quest_panel_collapsed(uid, False)
+        assert get_quest_panel_collapsed(uid) is False
