@@ -157,4 +157,8 @@ staging gate run is blocked on this.
 - [ ] `/api/health` keeps responding while a long migration runs — not independently verified
       (the fix removes the mechanism that starved the thread pool; no dedicated test added)
 - [x] Static guard fails a newly-added migration that re-enters the seam
-- [x] Staging accounts reach head and log in cleanly (verified via the prod-copy cleanup)
+- [x] Staging accounts reach head and log in cleanly (verified via the prod-copy cleanup; also
+      independently reverified 2026-09-01 via `POST /auth/dev-login` for all 3 current gate
+      accounts -- imankh@gmail.com, e2e-gate@test.local, e2e-gate2@test.local -- each a real
+      request through the JIT seam, no bulk sweep; `GET /admin/migration-status?user_id=` then
+      confirmed `all_profiles_at_head: true` at profile_db v48 for all three)
