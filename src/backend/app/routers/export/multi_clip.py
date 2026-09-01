@@ -126,6 +126,15 @@ def _build_framing_snapshot(
             {
                 "crop_keyframes": clip.crop_keyframes_stored or [],
                 "segments_data": _segments(clip),
+                # Bug 49p follow-up considered threading clip.source_fps here, but
+                # reviewer caught a unit conflict: transform_all_regions_to_working
+                # (highlight_transform.py) uses this SAME value for both a
+                # source-fps conversion AND a working-video-frame conversion
+                # (working video is always rendered at SNAPSHOT_FRAMERATE, per the
+                # new -r <fps> this task added). Threading source_fps through here
+                # would persist keyframe.frame in the wrong unit. Left as
+                # SNAPSHOT_FRAMERATE; a real fix needs the transform split into
+                # separate source/working rate params -- filed as a follow-up.
                 "fps": SNAPSHOT_FRAMERATE,
                 "raw_duration": clip.duration,
             }
@@ -2258,6 +2267,7 @@ async def _run_multi_clip_background(
                     SELECT
                         wc.id, wc.raw_clip_id, wc.uploaded_filename,
                         wc.crop_data, wc.segments_data, wc.sort_order, {_rot},
+                        wc.fps as wc_fps, gv.fps as gv_fps,
                         rc.filename as raw_filename, rc.name as clip_name,
                         rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
                         rc.end_time as raw_end_time,
@@ -2266,7 +2276,11 @@ async def _run_multi_clip_background(
                     FROM working_clips wc
                     LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
                     LEFT JOIN games g ON rc.game_id = g.id
-                    LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
+                    -- Bug 49p: video_sequence is NULL on legacy single-video-game
+                    -- clips (see clips.py:1616,2142,995 for the same pattern) --
+                    -- without the COALESCE this join drops gv.fps for exactly
+                    -- those legacy rows, no-oping the fps fix for them.
+                    LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND COALESCE(rc.video_sequence, 1) = gv.sequence
                     WHERE wc.project_id = ?
                     AND wc.id IN ({latest_working_clips_subquery()})
                     ORDER BY wc.sort_order
@@ -2297,13 +2311,27 @@ async def _run_multi_clip_background(
                     else:
                         raise RuntimeError(f"Cannot resolve clip {i}: no matching DB clip")
 
+                    # Bug 49p: this hard-coded 30 mis-times every crop keyframe
+                    # for a non-30fps source (e.g. frame 854 on a 50fps clip
+                    # resolved to 28.5s instead of the correct 17.1s, past the
+                    # clip's own end, freezing the crop). Use the clip's own
+                    # fps, falling back to the game video's, then 30 -- mirrors
+                    # the ffprobe-based real-fps handling in framing.py.
+                    framerate = db_clip['wc_fps'] or db_clip['gv_fps']
+                    if not framerate:
+                        logger.warning(
+                            f"[Multi-Clip Export] clip {db_clip['id']}: no fps on working_clips "
+                            f"or game_videos, defaulting to 30 (may mis-time crop on a non-30fps source)"
+                        )
+                        framerate = 30
+                    clip_data['sourceFps'] = framerate
+
                     # Use DB-authoritative crop/segments data
                     # DB stores frame-based keyframes; pipeline expects time-based
                     if db_clip['crop_data']:
                         raw_kfs = decode_data(db_clip['crop_data'])
                         # T4350: keep the frame-based stored form for the framing snapshot.
                         clip_data['cropKeyframesStored'] = raw_kfs
-                        framerate = 30  # Default; matches single-clip export fallback
                         if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
                             clip_data['cropKeyframes'] = [
                                 {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
@@ -2447,6 +2475,11 @@ async def _run_multi_clip_background(
                 clip_name=cd.get('clipName') or cd.get('fileName'),
                 rotation=cd.get('rotation', 0),
                 crop_keyframes_stored=cd.get('cropKeyframesStored', cd.get('cropKeyframes', [])),  # T4350
+                # Bug 49p: real source fps, resolved for the crop-keyframe time
+                # conversion above. NOT currently consumed for the framing
+                # snapshot (see _build_framing_snapshot) -- that needs the
+                # transform's source/working fps units split first (follow-up).
+                source_fps=cd.get('sourceFps'),
             ))
 
         logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")
