@@ -1,6 +1,23 @@
 # T8190: P0 - JIT migration seam self-deadlocks (any migration writing via get_db_connection)
 
-**Status:** TODO
+**Status:** WIP
+
+**2026-08-31 fix implemented.** Root cause confirmed via bug-reproduction (failing test
+first, real deadlock reproduced with a bounded thread-join so the test fails fast instead of
+hanging): `run_profile_seam`/`run_user_seam` now track same-thread re-entrancy
+(`_seam_in_progress`) so a migration's own nested `ensure_database()` call for the profile
+already being migrated passes straight through instead of re-acquiring a lock this thread
+holds, AND acquire the lock with `SEAM_LOCK_TIMEOUT_S=30` for genuine cross-thread
+contention, raising `MigrationBlocked` (503) on timeout instead of hanging forever.
+Root-caused BOTH offending migrations (v017 was a second, previously-unnoticed instance of
+the exact same bug, found by the static guard): `auth_db.insert_game_storage_ref` split into
+`upsert_game_storage_row(conn, ...)` (SQLite, caller's own connection) +
+`insert_game_storage_ref_pg_only(...)` (Postgres, never touches SQLite/the seam); v017 and
+v047 now call these instead of the full `insert_game_storage_ref` (which re-enters
+`get_db_connection` -> `ensure_database` -> the seam). 4/4 new tests green (deadlock
+reproduction, positive-outcome version check, cross-thread timeout, static guard) + 191
+existing relevant tests green (seam, migration, storage-ref, activate, materialization,
+shared-game suites) with zero regressions.
 **Impact:** 10
 **Complexity:** 4
 **Created:** 2026-08-31
@@ -106,17 +123,20 @@ staging gate run is blocked on this.
 ## Implementation
 
 ### Steps
-1. [ ] Failing test with a hard timeout (nested `get_db_connection` inside a migration)
-2. [ ] Same-thread re-entrancy fix + timeout-instead-of-hang
-3. [ ] Audit every existing migration's `up()` for seam re-entry; fix v047 to use its own conn
-4. [ ] Static guard test for future migrations
-5. [ ] Unwedge staging: bring the seeded accounts to head, re-verify login
+1. [x] Failing test with a hard timeout (nested `get_db_connection` inside a migration)
+2. [x] Same-thread re-entrancy fix + timeout-instead-of-hang
+3. [x] Audit every existing migration's `up()` for seam re-entry; fix v047 (and v017, found by
+       the audit) to use their own conn + the new Postgres-only helper
+4. [x] Static guard test for future migrations
+5. [x] Unwedge staging: the 3 gate accounts were replaced with fresh prod-derived copies
+       (already at head) during the same session's account cleanup; re-verified login clean
 
 ## Acceptance Criteria
 
-- [ ] A migration that opens `get_db_connection` inside `up()` completes instead of deadlocking
-- [ ] A genuinely un-acquirable seam lock raises `MigrationBlocked` (503) within N seconds,
+- [x] A migration that opens `get_db_connection` inside `up()` completes instead of deadlocking
+- [x] A genuinely un-acquirable seam lock raises `MigrationBlocked` (503) within N seconds,
       never hangs the process
-- [ ] `/api/health` keeps responding while a long migration runs
-- [ ] Static guard fails a newly-added migration that re-enters the seam
-- [ ] Staging accounts reach head and log in cleanly
+- [ ] `/api/health` keeps responding while a long migration runs — not independently verified
+      (the fix removes the mechanism that starved the thread pool; no dedicated test added)
+- [x] Static guard fails a newly-added migration that re-enters the seam
+- [x] Staging accounts reach head and log in cleanly (verified via the prod-copy cleanup)

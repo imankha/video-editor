@@ -15,9 +15,9 @@ class V017BackfillMissingStorageRefs(BaseMigration):
     the affected user. Going forward, activate writes refs before the flip and
     self-heals; this migration repairs rows that already reached that bad state.
 
-    Idempotent + safe to re-run: insert_game_storage_ref uses INSERT OR IGNORE on
-    game_storage and only increments Postgres game_ref_counts when the SQLite row
-    is newly inserted, so hashes that already have a ref are skipped.
+    Idempotent + safe to re-run: upsert_game_storage_row uses INSERT OR IGNORE on
+    game_storage, and insert_game_storage_ref_pg_only's Postgres upsert is keyed
+    on (user_id, profile_id, blake3_hash) regardless of SQLite row novelty.
     """
 
     version = 17
@@ -66,12 +66,12 @@ class V017BackfillMissingStorageRefs(BaseMigration):
             h = r[0]
             size_by_hash[h] = max(size_by_hash.get(h, 0), r[1] or 0)
 
-        # Delegate to the production write path so Postgres game_ref_counts is
-        # incremented too. insert_game_storage_ref opens its OWN connection; this
-        # migration's `conn` has only issued reads so far (no open write txn), so
-        # there is no SQLite writer-lock contention.
+        # T8190: write SQLite via THIS migration's own `conn` (never
+        # insert_game_storage_ref/get_db_connection from inside up() -- that
+        # re-enters the JIT seam lock this thread already holds and deadlocks
+        # the process), then Postgres via the PG-only half.
         from app.profile_context import get_current_profile_id
-        from app.services.auth_db import insert_game_storage_ref
+        from app.services.auth_db import insert_game_storage_ref_pg_only, upsert_game_storage_row
         from app.services.storage_credits import storage_expires_at
         from app.user_context import get_current_user_id
 
@@ -79,13 +79,12 @@ class V017BackfillMissingStorageRefs(BaseMigration):
         profile_id = get_current_profile_id()
         expires_str = storage_expires_at().isoformat()
 
-        # Flush any uncommitted writes from earlier migrations in this batch before
-        # delegating: insert_game_storage_ref opens its own connection to this same
-        # DB file, so an open write transaction here would cause a writer lock.
+        for h, size in size_by_hash.items():
+            upsert_game_storage_row(conn, h, size, expires_str)
         conn.commit()
 
         for h, size in size_by_hash.items():
-            insert_game_storage_ref(user_id, profile_id, h, size, expires_str)
+            insert_game_storage_ref_pg_only(user_id, profile_id, h, size, expires_str)
 
         logger.info(
             f"[Migration] bug26p backfilled {len(size_by_hash)} missing storage ref(s) "
