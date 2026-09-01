@@ -146,6 +146,18 @@ describe('questDefinitions overlay-quest move (T5170)', () => {
   });
 });
 
+// T8120: per-quest credit rewards are RETIRED — the full chain total is granted
+// upfront (at signup / next login), so the panel no longer drips credits per quest.
+// The data mirror must stay in sync with the backend (quest_config.py), which zeroes
+// every quest reward.
+describe('questDefinitions rewards retired (T8120)', () => {
+  it('every quest reward is 0 (credits granted upfront, not dripped)', () => {
+    for (const q of QUEST_DEFINITIONS) {
+      expect(q.reward, `quest ${q.id} still drips a reward`).toBe(0);
+    }
+  });
+});
+
 // T6840: a dedicated "Watch Your Preview" step lands between the render-wait step
 // and Move to My Reels, and the preview sentence moves out of move_to_my_reels'
 // copy into the new step's description.

@@ -302,6 +302,32 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
 
     set_current_profile_id(profile_id)
 
+    # T8120: grant the quest-chain credit total upfront, retiring the per-quest
+    # drip. This runs for EVERY user on the first init of a process/session (the
+    # slow path is cached per user), not just new signups — an existing mid-quest
+    # account gets its ungranted remainder here on next login (same JIT-on-next-
+    # touch shape as migrations; no bulk sweep). Idempotent (fixed key + remainder
+    # computed from prior grants), so repeat inits are a cheap no-op. Same
+    # gate-tolerant handling as the new-account bonus above: a closed credits_ready
+    # gate must not hard-fail login; log loudly (idempotency key questbank:{user_id}
+    # is safe to retry once the gate opens).
+    try:
+        from .services.credit_ledger import (
+            CreditsUnavailable as _CU,
+        )
+        from .services.credit_ledger import (
+            grant_quest_chain_credits,
+        )
+        r = grant_quest_chain_credits(user_id)
+        if r["granted"]:
+            logger.info(f"Granted {r['granted']} upfront quest-chain credits to {user_id}")
+    except _CU:
+        logger.error(
+            f"[SessionInit] Upfront quest-chain credits NOT granted for {user_id} -- "
+            f"credits_ready gate is closed. Safe to retry (key questbank:{user_id}) "
+            f"once the gate opens."
+        )
+
     if not hint_profile_id or is_new_user:
         ensure_database()
 

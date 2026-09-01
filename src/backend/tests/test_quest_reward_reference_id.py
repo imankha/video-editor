@@ -44,31 +44,39 @@ def _all_steps_complete(monkeypatch):
     ))
 
 
-def test_claim_reward_grant_carries_reference_id(pg_conn):
+def test_claim_marks_complete_and_grants_nothing(pg_conn):
+    """T8120: per-quest rewards are retired (credits granted upfront). Claiming a
+    quest now only records it in completed_quests (for progression) and grants
+    NO credits -- no quest_reward ledger row is written."""
     from app.routers.quests import claim_reward
-    from app.services.credit_ledger import credit_key, has_key, list_transactions
+    from app.services.credit_ledger import credit_key, has_key
+    from app.services.user_db import get_completed_quest_ids
 
     quest_id = "quest_1"
     result = asyncio.run(claim_reward(quest_id))
 
     assert result["already_claimed"] is False
-    assert result["credits_granted"] > 0
-    assert has_key(USER_ID, credit_key("quest_reward", quest_id))
-
-    txns = list_transactions(USER_ID)
-    quest_txn = next(t for t in txns if t["source"] == "quest_reward")
-    assert quest_txn["reference_id"] == quest_id, (
-        "M4: reference_id must be the quest_id, not None -- otherwise "
-        "get_completed_and_claimed_quest_ids/backfill_completed_quests can "
-        "never recover this grant"
+    assert result["credits_granted"] == 0, "T8120: claim grants nothing (upfront model)"
+    assert not has_key(USER_ID, credit_key("quest_reward", quest_id)), (
+        "T8120: no per-quest quest_reward ledger row is written on claim"
     )
+    # The quest IS recorded as completed (drives panel progression to the next quest).
+    assert quest_id in get_completed_quest_ids(USER_ID)
+
+    # Idempotent: a second claim is a no-op (already in completed_quests).
+    second = asyncio.run(claim_reward(quest_id))
+    assert second["already_claimed"] is True
+    assert second["credits_granted"] == 0
 
 
-def test_quest_recovery_after_user_sqlite_reset(pg_conn):
-    """The exact scenario M4 protects: user.sqlite's completed_quests table is
-    wiped (simulating a reset/resurrected account) -- backfill_completed_quests
-    must be able to rebuild it from the Postgres ledger's reference_id."""
-    from app.routers.quests import claim_reward
+def test_legacy_quest_recovery_after_user_sqlite_reset(pg_conn):
+    """The pre-T8120 recovery mechanism still guards LEGACY data: a user who
+    claimed quests under the old per-quest model has quest_reward ledger rows;
+    if user.sqlite's completed_quests table is wiped (reset/resurrected account),
+    backfill_completed_quests must rebuild it from the Postgres ledger. Claiming
+    no longer produces these rows (T8120), so seed one directly to represent a
+    legacy account."""
+    from app.services.credit_ledger import credit_key, grant
     from app.services.user_db import (
         backfill_completed_quests,
         get_completed_and_claimed_quest_ids,
@@ -76,10 +84,10 @@ def test_quest_recovery_after_user_sqlite_reset(pg_conn):
     )
 
     quest_id = "quest_1"
-    asyncio.run(claim_reward(quest_id))
+    # Legacy per-quest grant (what the old claim path used to write).
+    grant(USER_ID, 15, "quest_reward", credit_key("quest_reward", quest_id), reference_id=quest_id)
 
-    # Simulate a user.sqlite reset: the completed_quests table is empty again,
-    # but the Postgres ledger (the source of truth) still has the grant.
+    # Simulate a user.sqlite reset: completed_quests empty, PG ledger intact.
     with get_user_db_connection(USER_ID) as conn:
         conn.execute("DELETE FROM completed_quests")
         conn.commit()
@@ -89,7 +97,7 @@ def test_quest_recovery_after_user_sqlite_reset(pg_conn):
     assert quest_id in claimed, "the PG-derived claimed set survives the reset"
 
     recovered = backfill_completed_quests(USER_ID)
-    assert recovered == 1, "M4: recovery must find the quest_reward row via reference_id"
+    assert recovered == 1, "recovery must find the legacy quest_reward row via reference_id"
 
     completed_after, _ = get_completed_and_claimed_quest_ids(USER_ID)
     assert quest_id in completed_after

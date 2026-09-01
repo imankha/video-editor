@@ -52,6 +52,30 @@ export const useQuestStore = create((set, get) => ({
 
   activeQuestId: null,
 
+  // T8120: collapsed state of the onboarding quest (Help) panel. Persisted (not
+  // ephemeral) — hydrated from /api/bootstrap (setPanelCollapsed) so a collapse
+  // survives reload, and gesture-written via collapsePanel on the collapse/expand
+  // click. Default false = expanded first-run presentation; never auto-re-expands
+  // once the user collapses (the store is the single source of truth the panel
+  // reads, replacing the old per-mount `useState(true)` that reset on navigation).
+  panelCollapsed: false,
+  setPanelCollapsed: (collapsed) => set({ panelCollapsed: !!collapsed }),
+  collapsePanel: (collapsed) => {
+    // Optimistic: flip the UI now, then persist the gesture. A failed POST logs
+    // but does not roll back — a mispersisted panel state is cosmetic, and the
+    // next bootstrap reconciles it.
+    set({ panelCollapsed: !!collapsed });
+    apiFetch(`${API_BASE}/api/quests/panel-collapsed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collapsed: !!collapsed }),
+      keepalive: true,
+      rbNonDataWrite: true,
+    }).catch(() => {
+      console.error('[Quests] Failed to persist quest panel collapsed state');
+    });
+  },
+
   // Ephemeral UI-only: per-detection assignment state for the select_players
   // step — a boolean[] in timeline order (or null). Pushed by OverlayContainer,
   // read by QuestPanel to render one checkbox per detection. Never persisted.
@@ -188,6 +212,7 @@ export const useQuestStore = create((set, get) => ({
       totalSteps: _totalSteps,
       activeQuestId: null,
       detectionAssignProgress: null,
+      panelCollapsed: false,
     });
   },
 }));

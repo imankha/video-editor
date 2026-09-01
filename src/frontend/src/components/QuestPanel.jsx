@@ -1,12 +1,55 @@
 import { useState, useEffect, useRef } from 'react';
-import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { ListChecks, Check, ChevronRight, ChevronDown, HelpCircle } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useAuthStore } from '../stores/authStore';
 import { STEP_TITLES, STEP_DESCRIPTIONS, WatchTutorialButton, TUTORIAL_STEP_QUEST } from '../config/questDefinitions.jsx';
+import { Z } from '../constants/zLayers';
 import { toast } from './shared/Toast';
 
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+
+// T8120: z-index rungs (from the Z ladder) that mark a full-screen overlay as a
+// modal-or-above surface the quest/help panel must never sit over. Read as class
+// tokens (works in jsdom, where computed z-index is unavailable) — see
+// useModalOcclusion below.
+const MODAL_Z_TOKENS = ['z-50', 'z-[60]', 'z-[70]', 'z-[80]', 'z-[90]', 'z-[100]', 'z-[9999]'];
+
+/**
+ * T8120 occlusion contract: the quest/help surface may NEVER overlap an open
+ * modal/form/dialog. This detects ANY full-screen fixed overlay (`.fixed.inset-0`)
+ * at a modal-or-above z rung anywhere in the document (excluding the panel's own
+ * subtree) and returns true while one is present, so the panel can auto-hide fully.
+ * Generic — no per-modal wiring — matching the app convention that every modal is a
+ * `fixed inset-0` overlay on the Z ladder. z-order (panel below Z.MODAL) is the
+ * defense-in-depth backstop; this is the primary "hide it entirely" mechanism.
+ * A MutationObserver re-checks on mount/unmount of any subtree, not a poll.
+ */
+function useModalOcclusion() {
+  const [modalOpen, setModalOpen] = useState(false);
+  useEffect(() => {
+    const isModalOverlay = (el) => {
+      if (el.closest('[data-quest-panel]')) return false; // our own overlays don't count
+      const cls = el.getAttribute('class') || '';
+      if (!MODAL_Z_TOKENS.some((t) => cls.split(/\s+/).includes(t))) return false;
+      // Visible? getClientRects is empty for display:none / detached nodes.
+      return el.getClientRects().length > 0;
+    };
+    const check = () => {
+      const overlays = document.querySelectorAll('.fixed.inset-0');
+      let found = false;
+      for (const el of overlays) {
+        if (isModalOverlay(el)) { found = true; break; }
+      }
+      setModalOpen(found);
+    };
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+    return () => obs.disconnect();
+  }, []);
+  return modalOpen;
+}
 
 /**
  * T1030: Per-mode position config for the quest panel.
@@ -58,8 +101,14 @@ export function QuestPanel({ inline = false }) {
   const addGameOpener = useQuestStore((s) => s.addGameOpener);
 
   const claimReward = useQuestStore((s) => s.claimReward);
+  // T8120: collapsed/expanded is a PERSISTED user preference (survives navigation
+  // + reload), gesture-written on the toggle click. The store is the single
+  // source of truth — the old per-mount `useState(true)` reset to expanded on
+  // every screen navigation (the reported "re-expands itself" bug) and could not
+  // survive reload. Never auto-re-expands once collapsed.
+  const panelCollapsed = useQuestStore((s) => s.panelCollapsed);
+  const collapsePanel = useQuestStore((s) => s.collapsePanel);
 
-  const [expanded, setExpanded] = useState(true);  // Start expanded for new users
   const [hidden, setHidden] = useState(false);       // User fully dismissed
   const [claiming, setClaiming] = useState(false);
   const [celebrating, setCelebrating] = useState(false);  // Quest complete celebration
@@ -67,9 +116,12 @@ export function QuestPanel({ inline = false }) {
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
 
+  // T8120: auto-hide fully whenever any modal/dialog is open (occlusion contract).
+  const modalOpen = useModalOcclusion();
+
   // T1030: Read editorMode for smart repositioning (replaces auto-collapse)
   const editorMode = useEditorStore((s) => s.editorMode);
-  const isExpanded = expanded;
+  const isExpanded = !panelCollapsed;
 
   const [addClipFormOpen, setAddClipFormOpen] = useState(false);
   useEffect(() => {
@@ -151,10 +203,11 @@ export function QuestPanel({ inline = false }) {
     if (currentCompleted > prevCompletedRef.current) {
       const questStepCount = questDef.step_ids.length;
       if (currentCompleted === questStepCount && !questProgress?.reward_claimed) {
-        // All steps done — fanfare + celebration animation
+        // All steps done — fanfare + celebration animation. T8120: do NOT
+        // auto-expand — a collapsed panel stays collapsed (never auto-re-expands
+        // after the user collapses it); the celebration plays only when open.
         playSound('fanfare');
         setCelebrating(true);
-        setExpanded(true);
       } else {
         // Individual step completed
         playSound('check');
@@ -173,14 +226,16 @@ export function QuestPanel({ inline = false }) {
   // On desktop the form is a left-docked sidebar — keep the quest visible and
   // reposition it (see getPositionForMode) instead of hiding it.
   const hideForAddClipForm = addClipFormOpen && window.innerWidth < 640;
-  if ((hidden || !loaded || !definitions || !questDef || hideForAddClipForm || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
+  // T8120: auto-hide fully whenever any modal/dialog is open (occlusion contract).
+  // Excludes the panel's own completion modal (showCompletionModal), which is a
+  // celebration the user just triggered and should stay up.
+  if ((hidden || !loaded || !definitions || !questDef || hideForAddClipForm || modalOpen || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
     return null;
   }
   const steps = questProgress?.steps || {};
   const completedCount = Object.values(steps).filter(Boolean).length;
   const totalCount = questDef.step_ids.length;
   const isComplete = completedCount === totalCount;
-  const progressPercent = (completedCount / totalCount) * 100;
   const currentStepId = questDef.step_ids.find(sid => !steps[sid]);
 
   const handleClaimReward = async () => {
@@ -193,14 +248,16 @@ export function QuestPanel({ inline = false }) {
         if (questDef.id === 'quest_4') {
           setShowCompletionModal(true);
         } else {
-          toast.success(`You earned ${questDef.reward} credits!`, {
+          // T8120: credits are granted upfront, not per quest — celebrate the
+          // milestone without a credit claim message.
+          toast.success('Quest complete!', {
             message: 'Keep going — more quests await!',
             duration: 6000,
           });
         }
       }
     } catch (err) {
-      toast.error('Failed to claim reward', { message: err.message });
+      toast.error('Something went wrong', { message: err.message });
     } finally {
       setClaiming(false);
     }
@@ -218,12 +275,12 @@ export function QuestPanel({ inline = false }) {
     <>
     {/* Final-quest completion modal — rendered outside quest panel to ensure centering */}
     {showCompletionModal && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
+      <div data-quest-panel className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
         <div className="bg-gray-800 border border-gray-600 rounded-2xl p-6 sm:p-12 max-w-2xl mx-4 shadow-2xl">
           <div className="text-center mb-6 sm:mb-10">
             <div className="text-4xl sm:text-6xl mb-3 sm:mb-5">🎉</div>
             <h2 className="text-2xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">Congratulations!</h2>
-            <p className="text-green-400 font-semibold text-xl sm:text-2xl">+{questDef.reward} credits earned</p>
+            <p className="text-green-400 font-semibold text-xl sm:text-2xl">You published your first reel</p>
           </div>
           <div className="space-y-3 sm:space-y-5 text-gray-300 text-base sm:text-xl leading-relaxed">
             <p>Annotate every touch so your baller can take their game to the next level.</p>
@@ -239,47 +296,61 @@ export function QuestPanel({ inline = false }) {
         </div>
       </div>
     )}
-    {!allQuestsDone && (
+    {!allQuestsDone && !isExpanded && (
+      /* T8120: collapsed presentation is a small "Help" chip — the low-profile
+         resting state. Clicking it is the gesture that re-expands the panel.
+         Sits below Z.MODAL (defense in depth) and never overlaps a modal. */
+      <div
+        ref={panelRef}
+        data-quest-panel
+        className={`quest-overlay ${inline ? 'relative mx-3' : 'fixed'} ${Z.DROPDOWN} quest-fade-in`}
+        style={positionStyle}
+      >
+        <button
+          type="button"
+          onClick={() => collapsePanel(false)}
+          aria-label="Open onboarding help"
+          className="quest-card flex items-center gap-2 rounded-full pl-2.5 pr-3 py-2 hover:bg-white/[0.04] transition-colors cursor-pointer"
+        >
+          <div className="quest-icon-badge rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+            <HelpCircle size={14} className="text-white" />
+          </div>
+          <span className="quest-title text-sm leading-none">Help</span>
+          <span className="quest-progress-text text-xs tabular-nums flex-shrink-0">
+            {completedCount}/{totalCount}
+          </span>
+        </button>
+      </div>
+    )}
+    {!allQuestsDone && isExpanded && (
     <div
       ref={panelRef}
-      className={`quest-overlay ${inline ? 'relative mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      data-quest-panel
+      className={`quest-overlay ${inline ? 'relative mx-3 pt-6 pb-6' : 'fixed'} ${Z.DROPDOWN} quest-fade-in transition-all duration-300 sm:w-[340px] sm:max-w-[calc(100vw-2rem)]`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
         {/* Accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar rounded-t-2xl" />
 
-        {/* Collapsed / Header — always visible, clickable to toggle */}
+        {/* Header — clickable to collapse back to the Help chip */}
         <button
-          onClick={() => setExpanded(!expanded)}
-          className={`w-full flex items-center text-left hover:bg-white/[0.02] transition-colors ${
-            isExpanded ? 'gap-3 px-4 pt-4 pb-3' : 'gap-2 px-3 py-2.5'
-          }`}
+          onClick={() => collapsePanel(true)}
+          aria-label="Collapse to Help button"
+          className="w-full flex items-center text-left hover:bg-white/[0.02] transition-colors gap-3 px-4 pt-4 pb-3"
         >
-          <div className={`quest-icon-badge rounded-lg flex items-center justify-center flex-shrink-0 ${
-            isExpanded ? 'w-7 h-7' : 'w-7 h-7'
-          }`}>
-            <ListChecks size={isExpanded ? 14 : 14} className="text-white" />
+          <div className="quest-icon-badge rounded-lg flex items-center justify-center flex-shrink-0 w-7 h-7">
+            <ListChecks size={14} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className={`quest-title leading-tight ${isExpanded ? 'text-sm' : 'text-sm'}`}>{questDef.title}</h3>
+              <h3 className="quest-title leading-tight text-sm">{questDef.title}</h3>
               <span className="quest-progress-text text-xs tabular-nums flex-shrink-0 ml-auto">
                 {completedCount}/{totalCount}
               </span>
-              {/* Inline reward badge */}
-              {isExpanded && !isComplete && (
-                <div className="quest-reward-badge flex items-center gap-1 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                  <Gem size={10} />
-                  <span className="text-xs font-semibold">{questDef.reward}</span>
-                </div>
-              )}
             </div>
           </div>
-          {isExpanded
-            ? <ChevronDown size={16} className="text-white/30 flex-shrink-0" />
-            : <ChevronUp size={14} className="text-white/30 flex-shrink-0" />
-          }
+          <ChevronDown size={16} className="text-white/30 flex-shrink-0" />
         </button>
 
         {/* Expanded content */}
@@ -340,10 +411,15 @@ export function QuestPanel({ inline = false }) {
                           {STEP_DESCRIPTIONS[stepId]}
                         </p>
                       )}
-                      {/* Unmissable CTA for the tutorial step the user should watch right now */}
+                      {/* T8120: tutorial videos stay REACHABLE from the expanded
+                          panel but are never a PUSHED CTA — the old pulsing
+                          `variant="primary"` button drove accidental tutorial
+                          watches (watched_annotate_tutorial 15 vs 3 who clipped).
+                          Downgraded to the low-key inline pill for the current
+                          tutorial step. */}
                       {isCurrent && !done && TUTORIAL_STEP_QUEST[stepId] && (
                         <div className="mt-2">
-                          <WatchTutorialButton questId={TUTORIAL_STEP_QUEST[stepId]} variant="primary" />
+                          <WatchTutorialButton questId={TUTORIAL_STEP_QUEST[stepId]} label="Watch tutorial" />
                         </div>
                       )}
                       {/* Tutorial steps stay relaunchable even after completion */}
@@ -381,7 +457,9 @@ export function QuestPanel({ inline = false }) {
               })}
             </div>
 
-            {/* Claim button — only shown when quest is complete */}
+            {/* Continue button — only shown when quest is complete. T8120: credits
+                are granted upfront, so this no longer claims a reward — it just
+                acknowledges the milestone and advances the panel to the next quest. */}
             {isComplete && (
               <div className="px-4 pb-4 pt-1">
                 <button
@@ -392,8 +470,8 @@ export function QuestPanel({ inline = false }) {
                     text-white font-bold text-base
                     transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <Gem size={18} />
-                  {claiming ? 'Claiming...' : `Claim ${questDef.reward} Credits`}
+                  <Check size={18} strokeWidth={3} />
+                  {claiming ? 'Saving...' : 'Continue'}
                 </button>
               </div>
             )}

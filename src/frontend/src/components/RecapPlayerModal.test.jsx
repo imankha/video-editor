@@ -710,7 +710,8 @@ describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
     // Highlights), so this collision became reachable on a core interaction
     // for exactly the new-user cohort this epic targets (active onboarding
     // quest = incomplete Annotate/Extract flow). QuestPanel's floating nudge
-    // is `fixed z-50`; this modal must out-rank it.
+    // is `fixed z-40` (T8120 lowered it below Z.MODAL); this modal (z-[100])
+    // out-ranks it.
     globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_WITH_CLIPS);
     const { container } = render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));

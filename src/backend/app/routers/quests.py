@@ -14,9 +14,12 @@ from fastapi import APIRouter, HTTPException
 
 from ..database import column_exists, get_db_connection
 from ..quest_config import QUEST_DEFINITIONS
-from ..services import credit_ledger
-from ..services.credit_ledger import CreditsUnavailable, get_credit_balance
-from ..services.user_db import get_completed_and_claimed_quest_ids, mark_quest_completed
+from ..services.credit_ledger import get_credit_balance
+from ..services.user_db import (
+    get_completed_and_claimed_quest_ids,
+    mark_quest_completed,
+    set_quest_panel_collapsed,
+)
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -393,33 +396,35 @@ async def claim_reward(quest_id: str):
         if not all_steps.get(sid, False):
             raise HTTPException(status_code=400, detail=f"Quest not complete: step '{sid}' is incomplete")
 
-    # Grant reward — UNIQUE(user_id, idempotency_key) prevents double-grant atomically;
-    # applied=False means a retry (already claimed), no exception needed (smell 6 fix).
-    try:
-        result = credit_ledger.grant(
-            user_id, qdef["reward"], "quest_reward",
-            credit_ledger.credit_key("quest_reward", quest_id),
-            reference_id=quest_id,
-        )
-    except CreditsUnavailable:
-        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
-
-    if not result["applied"]:
-        # Already claimed (race condition or retry) — still mark completed in
-        # user.sqlite in case backfill missed it.
-        mark_quest_completed(user_id, quest_id)
-        return {"credits_granted": 0, "new_balance": result["balance"], "already_claimed": True}
-
-    # T970: Mark quest as completed in user.sqlite (user-scoped, survives profile switch)
+    # T8120: per-quest credit rewards are RETIRED — the whole chain total is
+    # granted upfront (credit_ledger.grant_quest_chain_credits, at signup / next
+    # login), so "claiming" a quest now only marks it complete for progression
+    # (advances the panel to the next quest) and grants nothing. `reward` is 0 on
+    # every quest; do NOT call credit_ledger.grant here (it rejects amount<=0).
+    # Kept as an idempotent no-op grant path so the frontend claim gesture and the
+    # completed/claimed bookkeeping (mark_quest_completed) stay intact.
     mark_quest_completed(user_id, quest_id)
 
     from ..analytics import record_milestone
     record_milestone(user_id, "quest_completed", {"quest_id": quest_id, "quest_name": qdef["title"]})
 
-    new_balance = result["balance"]
-    logger.info(f"[Quests] Granted {qdef['reward']} credits for {quest_id} to {user_id}, balance={new_balance}")
+    balance = get_credit_balance(user_id)["balance"]
+    logger.info(f"[Quests] Marked {quest_id} complete for {user_id} (credits granted upfront, none on claim)")
 
-    return {"credits_granted": qdef["reward"], "new_balance": new_balance, "already_claimed": False}
+    return {"credits_granted": 0, "new_balance": balance, "already_claimed": False}
+
+
+@router.post("/panel-collapsed")
+async def set_panel_collapsed(payload: dict):
+    """Persist the collapsed state of the onboarding quest (Help) panel (T8120).
+
+    Gesture-driven: the frontend calls this from the collapse/expand click so the
+    preference survives navigation and reload. Body: {"collapsed": bool}.
+    """
+    user_id = get_current_user_id()
+    collapsed = bool(payload.get("collapsed"))
+    set_quest_panel_collapsed(user_id, collapsed)
+    return {"collapsed": collapsed}
 
 
 @router.post("/achievements/{key}")
