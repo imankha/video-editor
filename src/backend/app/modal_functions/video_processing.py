@@ -2518,19 +2518,30 @@ def _get_trim_range(segment_data: dict, duration: float) -> tuple:
     return 0, duration
 
 
-def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_audio, audio_start_time, frame_count):
+def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_audio, audio_start_time, frame_count, input_fps=None):
     """Build FFmpeg command for simple encoding (no speed changes).
 
     Args:
+        fps: TARGET output frame rate (forced via -r so duration matches the
+            source, never left to drift with however many PNG frames exist).
         audio_start_time: Absolute time in source video for audio extraction (seconds).
+        input_fps: The rate the PNG sequence was actually captured at (defaults
+            to `fps` when the frames were already sampled 1:1 at the target
+            rate). Bug 49p: a non-30fps source produced one PNG per SOURCE
+            frame, but this was always declared to ffmpeg at the TARGET rate
+            with no output -r, so a 50fps source played back at 30/50 = 0.6x
+            speed (slow motion). Mirrors the already-correct local encoder
+            (app/ai_upscaler/video_encoder.py).
     """
+    if input_fps is None:
+        input_fps = fps
     if has_audio:
         return [
             "ffmpeg", "-y",
-            "-framerate", str(fps),
+            "-framerate", str(input_fps),
             "-i", frame_pattern,
             "-ss", str(audio_start_time),
-            "-t", str(frame_count / fps),
+            "-t", str(frame_count / input_fps),
             "-i", source_path,
             "-map", "0:v",
             "-map", "1:a?",
@@ -2540,6 +2551,7 @@ def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_a
             "-crf", "23",
             "-c:a", "aac",
             "-b:a", "192k",
+            "-r", str(fps),
             "-movflags", "+faststart",
             "-shortest",
             output_path
@@ -2547,14 +2559,66 @@ def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_a
     else:
         return [
             "ffmpeg", "-y",
-            "-framerate", str(fps),
+            "-framerate", str(input_fps),
             "-i", frame_pattern,
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-preset", "fast",
             "-crf", "23",
+            "-r", str(fps),
             "-movflags", "+faststart",
             output_path
+        ]
+
+
+def _build_speed_change_ffmpeg_cmd(frame_pattern, scratch_path, clip_output_path, filter_complex, has_audio_output, original_fps, fps):
+    """Build FFmpeg command for the speed-change filtergraph path (segments with
+    per-segment speed != 1.0). Sibling of `_build_simple_ffmpeg_cmd`, extracted
+    so this branch is unit-testable (bug 49p: this had zero test coverage while
+    receiving the same input/output fps split fix as the simple-encode path).
+
+    Args:
+        filter_complex: pre-built `-filter_complex` graph string (trim/setpts/
+            atrim/concat), referencing `[outv]` and, if has_audio_output, `[outa]`.
+        has_audio_output: whether `filter_complex` produces an `[outa]` stream
+            (i.e. has_audio AND at least one segment produced an audio filter).
+        original_fps: the rate the PNG sequence was actually captured at (source
+            fps) -- see `_build_simple_ffmpeg_cmd` for why this must differ from
+            the forced output rate `fps`.
+    """
+    if has_audio_output:
+        return [
+            "ffmpeg", "-y",
+            "-framerate", str(original_fps),
+            "-i", frame_pattern,
+            "-i", scratch_path,
+            "-filter_complex", filter_complex,
+            "-map", "[outv]",
+            "-map", "[outa]",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-r", str(fps),
+            "-movflags", "+faststart",
+            clip_output_path
+        ]
+    else:
+        return [
+            "ffmpeg", "-y",
+            "-framerate", str(original_fps),
+            "-i", frame_pattern,
+            "-filter_complex", filter_complex,
+            "-map", "[outv]",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "fast",
+            "-crf", "23",
+            "-r", str(fps),
+            "-movflags", "+faststart",
+            clip_output_path
         ]
 
 
@@ -2902,7 +2966,11 @@ def process_clips_ai(
                     audio_labels = []
 
                     trim_offset = trim_start_rel
-                    output_duration = output_frame_idx / fps
+                    # Bug 49p: output_frame_idx counts SOURCE frames (one PNG
+                    # per source frame read in the loop above), so this must
+                    # divide by original_fps to get real elapsed seconds, not
+                    # the target fps.
+                    output_duration = output_frame_idx / original_fps
 
                     for seg_idx, seg in enumerate(segments):
                         seg_start = max(0, seg['start'] - trim_offset)
@@ -2941,59 +3009,35 @@ def process_clips_ai(
 
                     if output_labels:
                         v_concat = ''.join(output_labels)
+                        has_audio_output = bool(has_audio and audio_filter_parts)
 
-                        if has_audio and audio_filter_parts:
+                        if has_audio_output:
                             a_concat = ''.join(audio_labels)
                             all_filters = ';'.join(filter_parts + audio_filter_parts)
                             filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv];{a_concat}concat=n={len(audio_labels)}:v=0:a=1[outa]"
-
-                            ffmpeg_cmd = [
-                                "ffmpeg", "-y",
-                                "-framerate", str(fps),
-                                "-i", frame_pattern,
-                                "-i", scratch_path,
-                                "-filter_complex", filter_complex,
-                                "-map", "[outv]",
-                                "-map", "[outa]",
-                                "-c:v", "libx264",
-                                "-pix_fmt", "yuv420p",
-                                "-preset", "fast",
-                                "-crf", "23",
-                                "-c:a", "aac",
-                                "-b:a", "192k",
-                                "-movflags", "+faststart",
-                                clip_output_path
-                            ]
                         else:
                             all_filters = ';'.join(filter_parts)
                             filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv]"
 
-                            ffmpeg_cmd = [
-                                "ffmpeg", "-y",
-                                "-framerate", str(fps),
-                                "-i", frame_pattern,
-                                "-filter_complex", filter_complex,
-                                "-map", "[outv]",
-                                "-c:v", "libx264",
-                                "-pix_fmt", "yuv420p",
-                                "-preset", "fast",
-                                "-crf", "23",
-                                "-movflags", "+faststart",
-                                clip_output_path
-                            ]
+                        ffmpeg_cmd = _build_speed_change_ffmpeg_cmd(
+                            frame_pattern, scratch_path, clip_output_path,
+                            filter_complex, has_audio_output, original_fps, fps
+                        )
                     else:
                         # Fallback to simple encoding. absolute_start is
                         # scratch-relative (== trim_start_rel).
                         ffmpeg_cmd = _build_simple_ffmpeg_cmd(
                             frame_pattern, scratch_path, clip_output_path,
-                            fps, has_audio, absolute_start, output_frame_idx
+                            fps, has_audio, absolute_start, output_frame_idx,
+                            input_fps=original_fps
                         )
                 else:
                     # Simple encoding (no speed changes). absolute_start is
                     # scratch-relative (== trim_start_rel).
                     ffmpeg_cmd = _build_simple_ffmpeg_cmd(
                         frame_pattern, scratch_path, clip_output_path,
-                        fps, has_audio, absolute_start, output_frame_idx
+                        fps, has_audio, absolute_start, output_frame_idx,
+                        input_fps=original_fps
                     )
 
                 logger.info(f"[{job_id}] FFmpeg command: {' '.join(ffmpeg_cmd[:8])}...")
