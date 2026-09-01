@@ -1,6 +1,6 @@
 # T8110: Admin panel — hide test accounts + sort across the whole DB
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-08-31
@@ -186,19 +186,34 @@ new test accounts can be flagged without a deploy; (b) the exclusion applies to 
 funnel bar AND the analytics dashboard aggregates, not the table alone; (c) the control is a "Real"
 pill in the existing FILTER row, not a separate checkbox.
 
+**2026-09-01**: Design approved (5 open questions resolved - pulse forces the filtered path,
+share-funnel deferred, platforms+revenue-reconciliation both apply exclusion, usage sort on
+banked value). Implemented (CTE global-sort + whitelist + `_test_exclusion` helper + v026
+migration), reviewed (1 blocking schema-drift fix + 1 DRY fix applied), pushed. Branch CI
+green (`feature/T8110-admin-test-filter-sort`). QA gaps flagged honestly: no dedicated
+frontend unit test for the sort-direction-indicator toggle specifically (covered by the
+written e2e spec, which can't run in this container - no chromium/network); the query-plan
+and staging-migration criteria below are process/measurement claims from the design step,
+not independently re-verified this session. Awaiting user test + merge; migration itself
+still needs the operator's `POST /api/admin/migrate-postgres` step after deploy per the
+Migration System rules (never auto-run).
+
 ## Acceptance Criteria
 
-- [ ] With the "Real" filter pill active (the default), none of the 7 listed accounts appear in the
+- [x] With the "Real" filter pill active (the default), none of the 7 listed accounts appear in the
       user table, and they are excluded from the funnel bar and the analytics dashboard aggregates
-- [ ] "Real" combines with the other filter pills (e.g. Real + Paying = real paying users only)
-- [ ] Turning "Real" off shows the test accounts again, badged as test accounts
-- [ ] An account can be marked/unmarked as a test account from the admin UI, and the change survives
+- [x] "Real" combines with the other filter pills (e.g. Real + Paying = real paying users only)
+- [x] Turning "Real" off shows the test accounts again, badged as test accounts
+- [x] An account can be marked/unmarked as a test account from the admin UI, and the change survives
       a reload (it is a DB flag, not view state)
-- [ ] Clicking any column header sorts across the ENTIRE user set: the first row of page 1 is the
+- [x] Clicking any column header sorts across the ENTIRE user set: the first row of page 1 is the
       true max/min for that column in the database, and paging forward continues the same ordering
       with no repeats or gaps
-- [ ] Sort direction toggles on repeat click; the active column shows its direction indicator
-- [ ] An unknown `sort` value is rejected by the API (422), never interpolated into SQL
-- [ ] A user with no `user_segments` row is still listed and sorted (T4970 regression guard)
+- [x] Sort direction toggles on repeat click; the active column shows its direction indicator
+      (code-verified; no dedicated frontend unit test for this specific interaction - see log)
+- [x] An unknown `sort` value is rejected by the API (422), never interpolated into SQL
+- [x] A user with no `user_segments` row is still listed and sorted (T4970 regression guard)
 - [ ] The list endpoint's latency is unchanged or better at realistic row counts; query plan checked
-- [ ] Backend + frontend tests pass; migration verified on staging
+      (measured during design, not re-verified against live data this session)
+- [ ] Backend + frontend tests pass (yes); migration verified on staging (operator step, pending
+      deploy)
