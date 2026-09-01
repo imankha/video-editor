@@ -41,7 +41,12 @@ def _make_request(url, method="GET", data=None, session="", retries=3):
         try:
             resp = urllib.request.urlopen(req, context=ctx, timeout=15)
             return json.loads(resp.read())
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise Exception(
+                    "Auth required -- paste a fresh rb_session cookie into "
+                    ".task-manager-config.json (a user_id is not accepted)"
+                ) from e
             raise
         except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
             last_err = str(getattr(e, "reason", e))
