@@ -2,6 +2,7 @@ import { Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { PLAYHEAD_WIDTH_PX } from './TimelineBase';
 import { KeyframeMarker } from './KeyframeMarker';
+import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 import { frameToTime } from '../../utils/videoUtils';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 
@@ -69,6 +70,15 @@ export default function RegionLayer({
 }) {
   const [hoveredRegionIndex, setHoveredRegionIndex] = useState(null);
   const [draggingLever, setDraggingLever] = useState(null); // { regionId, type: 'start' | 'end', pointerId }
+  // Bug 48p: the highlight-region delete button was a single click with no
+  // confirmation and no way back -- a user deleted the auto-generated default
+  // spotlight region and had no way to restore it. Gate it behind the app's
+  // shared confirmation dialog, same as other permanent-delete actions.
+  // Keyed by region ID, not index: `regions` can be replaced out from under
+  // this component while the dialog is open (async reset/restore on export
+  // completion or project load -- see draggingLever above, same reasoning),
+  // and an index would silently target whatever now sits at that slot.
+  const [pendingDeleteRegionId, setPendingDeleteRegionId] = useState(null);
   const trackRef = useRef(null);
   // T7180: whether the CURRENT drag has moved. A ref (not a plain closure var
   // in the drag effect below) because `regions` changes identity on every
@@ -312,7 +322,7 @@ export default function RegionLayer({
         className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
         onClick={(e) => {
           e.stopPropagation();
-          onRegionAction?.(region.index, 'delete');
+          setPendingDeleteRegionId(region.id);
         }}
         title="Delete region"
       >
@@ -545,6 +555,29 @@ export default function RegionLayer({
           );
         })}
       </div>
+
+      <ConfirmationDialog
+        isOpen={pendingDeleteRegionId != null}
+        title="Delete this spotlight?"
+        message="This can't be undone. You can add a new one afterward with Add Spotlight, but any custom positioning for this part of the clip will be lost."
+        onClose={() => setPendingDeleteRegionId(null)}
+        buttons={[
+          { label: 'Cancel', onClick: () => setPendingDeleteRegionId(null), variant: 'secondary' },
+          {
+            label: 'Delete',
+            variant: 'danger',
+            onClick: () => {
+              const idx = regions.findIndex(r => r.id === pendingDeleteRegionId);
+              if (idx < 0) {
+                console.warn('[RegionLayer] pending delete region no longer exists, ignoring');
+              } else {
+                onRegionAction?.(idx, 'delete');
+              }
+              setPendingDeleteRegionId(null);
+            },
+          },
+        ]}
+      />
     </div>
   );
 }
