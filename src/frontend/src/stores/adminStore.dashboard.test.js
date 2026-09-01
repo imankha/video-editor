@@ -49,7 +49,8 @@ describe('adminStore.fetchDashboard (T8020)', () => {
 
     // Exactly one network call — the whole point of the consolidation.
     expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    expect(mockApiFetch).toHaveBeenCalledWith('/api/admin/dashboard');
+    // T8110: dashboard fetch now carries exclude_test (Real pill, default ON).
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/admin/dashboard?exclude_test=true');
 
     const s = useAdminStore.getState();
     // users section fanned out with the SAME mapping fetchUsers uses.

@@ -22,6 +22,14 @@ export const useAdminStore = create((set, get) => ({
   segmentTo: null,
   userFilter: null,
 
+  // T8110: server-side global sort + test-account exclusion. sortKey/sortDir
+  // drive GET /api/admin/users ORDER BY (the whole DB, not the page). excludeTest
+  // is the "Real" pill -- default ON so the panel opens on real users. All three
+  // are ephemeral UI state, never persisted (no-persisted-view-state rule).
+  sortKey: 'last_active_at',
+  sortDir: 'desc',
+  excludeTest: true,
+
   funnelData: null, funnelLoading: false,
   shareFunnelData: null, shareFunnelLoading: false,
   channelsData: null, channelsLoading: false,
@@ -45,6 +53,47 @@ export const useAdminStore = create((set, get) => ({
     get().fetchPulse();
   },
 
+  // T8110: header click -> server sort. Same key toggles direction; a new key
+  // starts descending (the common "who's on top" read). Refetches page 1 so the
+  // global ordering restarts from the true max/min. Single source of truth for
+  // ordering = the server (UserTable no longer sorts locally).
+  setSort: (key) => {
+    const { sortKey, sortDir } = get();
+    const nextDir = sortKey === key ? (sortDir === 'desc' ? 'asc' : 'desc') : 'desc';
+    set({ sortKey: key, sortDir: nextDir });
+    get().fetchUsers(1);
+  },
+
+  // T8110: the "Real" pill. Toggles INDEPENDENTLY of the exclusive userFilter
+  // pills (composes -- Real + Paying = real paying users). Refetches page 1 + the
+  // pulse, the same way setUserFilter does, so the funnel/aggregates track it.
+  setExcludeTest: (excludeTest) => {
+    set({ excludeTest: !!excludeTest });
+    get().fetchUsers(1);
+    get().fetchPulse();
+  },
+
+  // T8110: mark/unmark a user as an internal test account (gesture-based DB
+  // write). Patches the row's flag in place so the badge updates immediately; the
+  // change survives a reload because it is a DB column, not view state.
+  markTestAccount: async (userId, isTest) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/test-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_test: isTest }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    set(state => ({
+      users: state.users.map(u =>
+        u.user_id === userId ? { ...u, is_test_account: isTest } : u
+      ),
+    }));
+    return res.json();
+  },
+
   clearSegmentFilter: () => {
     set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null });
     get().fetchUsers(1);
@@ -63,6 +112,9 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
       if (state.userFilter) params.set('filter', state.userFilter);
+      params.set('sort', state.sortKey);
+      params.set('sort_dir', state.sortDir);
+      params.set('exclude_test', state.excludeTest);
       const res = await apiFetch(`${API_BASE}/api/admin/users?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -92,7 +144,10 @@ export const useAdminStore = create((set, get) => ({
       cohortsLoading: true, platformsLoading: true,
     });
     try {
-      const res = await apiFetch(`${API_BASE}/api/admin/dashboard`);
+      // T8110: the combined mount fetch honors the Real pill (default ON) so the
+      // dashboard opens on real users -- users list AND aggregates.
+      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const res = await apiFetch(`${API_BASE}/api/admin/dashboard?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({
@@ -274,6 +329,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
       if (state.userFilter) params.set('filter', state.userFilter);
+      params.set('exclude_test', state.excludeTest);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ pulseData: await res.json(), pulseLoading: false });

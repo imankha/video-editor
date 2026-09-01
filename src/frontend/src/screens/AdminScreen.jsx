@@ -53,6 +53,8 @@ export function AdminScreen({ onBack }) {
   const clearSegmentFilter = useAdminStore(s => s.clearSegmentFilter);
   const userFilter = useAdminStore(s => s.userFilter);
   const setUserFilter = useAdminStore(s => s.setUserFilter);
+  const excludeTest = useAdminStore(s => s.excludeTest);
+  const setExcludeTest = useAdminStore(s => s.setExcludeTest);
   const userDetailData = useAdminStore(s => s.userDetailData);
   const userDetailLoading = useAdminStore(s => s.userDetailLoading);
   const fetchUserDetail = useAdminStore(s => s.fetchUserDetail);
@@ -119,6 +121,22 @@ export function AdminScreen({ onBack }) {
           {/* User type pills */}
           <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap">
             <span className="text-gray-500 text-xs uppercase tracking-wider mr-1">Filter</span>
+            {/* T8110: "Real" hides internal/test accounts. It toggles
+                INDEPENDENTLY of the exclusive segment pills (composes -- Real +
+                Paying = real paying users), so it sits apart with a divider and
+                its own colour. Default ON. */}
+            <button
+              onClick={() => setExcludeTest(!excludeTest)}
+              title="Hide internal / test accounts"
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                excludeTest
+                  ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                  : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
+              }`}
+            >
+              Real
+            </button>
+            <span className="w-px h-4 bg-white/10 mx-1" aria-hidden="true" />
             {USER_FILTERS.map(f => (
               <button
                 key={f.key}

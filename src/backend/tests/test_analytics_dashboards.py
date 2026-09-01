@@ -420,7 +420,10 @@ class TestUploadSuccessRateAlarm:
 
         import logging
         with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
-            resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+            # T8110: exclude_test defaults ON, which forces the per-user
+            # user_actions path; this test seeds/resets daily_counters, so pin
+            # exclude_test=false to exercise the daily_counters alarm arithmetic.
+            resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
 
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
@@ -434,7 +437,9 @@ class TestUploadSuccessRateAlarm:
         # 9 succeeded / 1 failed = 90% over 10 attempts -- above threshold, no alarm.
         self._record_and_flush("user-a", succeeded=9, failed=1)
 
-        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        # T8110: pin exclude_test=false so pulse reads the seeded daily_counters
+        # (the default ON path aggregates cumulative user_actions instead).
+        resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
         assert card["today"] == 90.0
@@ -445,7 +450,9 @@ class TestUploadSuccessRateAlarm:
         # single unlucky attempt on a quiet day must not read as a fleet-wide collapse.
         self._record_and_flush("user-a", succeeded=0, failed=1)
 
-        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        # T8110: pin exclude_test=false so pulse reads the seeded daily_counters
+        # (the default ON path aggregates cumulative user_actions instead).
+        resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
         assert card["today"] == 0.0
