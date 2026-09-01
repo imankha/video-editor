@@ -1,6 +1,6 @@
 # T8190: P0 - JIT migration seam self-deadlocks (any migration writing via get_db_connection)
 
-**Status:** WIP
+**Status:** STAGING
 
 **2026-08-31 reviewer pass applied.** A fresh-context Reviewer found no blockers but 5
 SHOULD-FIX items, all applied: (1) restructured the lock's acquire/release to be the
