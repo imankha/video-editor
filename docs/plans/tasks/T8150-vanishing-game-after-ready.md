@@ -59,19 +59,26 @@ Bug-reproduction skill: reproduce FIRST, failing test before any fix.
 4. [x] Verify the second anomaly - CONFIRMED separate root cause (create_game's
        dedup/reuse logic returns an old game id), NOT fixed by this change. Split out as
        [T8310](../T8310-annotate-opens-old-game-after-upload.md).
-5. [ ] Prod read-only sweep for existing victims - read-only probe script written
-       (`scripts/scan_charged_reverted_games.py`, downloads a profile.sqlite + queries
-       Postgres `credit_transactions` for a debit against a still-`pending` game); not yet
-       run (needs prod R2/Postgres access, loops over real accounts - awaiting go-ahead).
+5. [x] Prod read-only sweep for existing victims - run 2026-09-01 by the supervisor
+       (`scripts/scan_charged_reverted_games.py` logic, driven via `edit-user-db.py`'s
+       per-user R2 download): found all 19 prod accounts with a `game_upload` debit
+       (`credit_transactions.source='game_upload' AND amount<0`) - arshia.kalantari (19
+       debits), bknoto (3), imankh (10), sarkarati (7), kristi.defelice (4), lisagee1443
+       (3), drewsoccerati (2), cschwartz78/eticatch/jautomo/jordark91330/lincdyn.j19/
+       l.piress17/mikhail.k.taylor/mostafaali452010/ojedalucas19/rikusbothainnz/
+       stephmckinnon86/trog3920 (1 each) - then checked every profile.sqlite across all
+       of each user's profiles for `status='pending'` games. **RESULT: zero pending games
+       found across all 19 accounts.** No existing charged-but-reverted victims on prod.
 
 ### Progress Log
 
 **2026-09-01**: Fixed, tested, reviewed, pushed (`feature/T8150-vanishing-game-after-ready`),
-Branch CI green. Awaiting user test + merge. Prod victim sweep (step 5) not yet run.
+Branch CI green. Prod read-only sweep run: 0 victims found (19 charged accounts checked,
+all clean). Awaiting user test + merge.
 
 ## Acceptance Criteria
 
 - [x] Reproducing test exists and passes with the fix
 - [x] Upload success toast is never shown for a game that will not appear in the list
-- [ ] Prod checked read-only for existing victims; any found are filed for repair
-      (probe script ready, not yet executed)
+- [x] Prod checked read-only for existing victims; 0 found (19 charged accounts checked,
+      all clean) - nothing to file for repair
