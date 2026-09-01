@@ -1,6 +1,13 @@
 # T5087: Cutover — final batch, then delete the bulk runner
 
-**Status:** WAITING ON USER
+**Status:** STAGING
+
+**2026-09-01 merged to master.** Added route-level test coverage for the admin endpoint rename
+(`TestMigratePostgresRoute`, proving the old path 404s and the new one returns the flat
+`migrate_postgres()` shape) and a counterfactually-verified regression test for the
+`/api/test/migrate-current-profile` reviewer fix (reverted the fix, confirmed the test goes RED
+with a `KeyError` on the now-absent `profile_version` field, then restored it green) after being
+asked to back the task with evidence rather than claims. 152 targeted tests green post-merge.
 
 **2026-09-01 implemented, branch pushed, awaiting merge approval.** Re-scoped step 1-3 at
 implementation time: did NOT run one last `run_all_migrations` across dev/staging/prod. That step
