@@ -4,7 +4,11 @@
 never touching speed controls. Root-caused via expert (Opus) investigation — full analysis
 in the escalation transcript; summarized below.
 
-**Status:** WIP — implementing fix directly (M-tier, no design gate required).
+**Status:** STAGING — merged to master (2026-08-31). Auto-deploys staging, but this bug is
+Modal-only and staging deploy does NOT touch Modal -- a manual `modal deploy` is still
+required before this fix is live, plus staging verification with a real non-30fps upload
+(see Rollout section). Not DONE until that verification + the ops follow-through (re-export
+bknoto + the 3 other affected accounts, per user decision 2026-08-31) completes.
 
 ---
 
