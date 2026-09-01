@@ -821,10 +821,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 request.state.session = session
 
         # 2. Fallback: X-User-ID header (backward compat for dev/tests)
-        # SECURITY: Only enabled in dev/staging -- never in production,
-        # except for /api/admin/ routes (which have their own admin gate).
-        is_admin_route = request.url.path.startswith("/api/admin/")
-        if not user_id and (APP_ENV != "production" or is_admin_route):
+        # SECURITY: Only enabled in dev/staging -- never in production. An admin
+        # route is not an exception: _require_admin() only checks whether the
+        # resolved user_id IS an admin, never whether the caller really IS that
+        # user_id, so trusting an unsigned header here is a full auth bypass.
+        if not user_id and APP_ENV != "production":
             raw_user_id = request.headers.get('X-User-ID')
             if raw_user_id:
                 sanitized = ''.join(c for c in raw_user_id if c.isalnum() or c in '_-')
