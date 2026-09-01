@@ -393,9 +393,11 @@ def upsert_game_storage_row(
     storage_expires_at: str,
 ) -> None:
     """SQLite half of insert_game_storage_ref, using a connection the CALLER
-    already owns (T8190). Migrations call this with their own `up(conn)`
-    connection instead of insert_game_storage_ref/get_db_connection, which
-    would re-enter the JIT seam lock this thread already holds. Does not
+    already owns (T8190). `conn` accepts either a raw `sqlite3.Connection`
+    (a migration's own `up(conn)`) or a `TrackedConnection` (the request
+    path) — both expose `.cursor()`. Migrations call this with their own
+    `up(conn)` connection instead of insert_game_storage_ref/get_db_connection,
+    which would re-enter the JIT seam lock this thread already holds. Does not
     commit — the caller controls the transaction."""
     cursor = conn.cursor()
     cursor.execute(

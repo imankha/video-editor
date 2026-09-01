@@ -64,6 +64,7 @@ def _reset_registries(monkeypatch):
     monkeypatch.setattr(db_module, "_user_sqlite_versions", {})
     monkeypatch.setattr(migrations_module, "_seam_verified", set())
     monkeypatch.setattr(migrations_module, "_migration_locks", {})
+    monkeypatch.setattr(migrations_module, "_seam_in_progress", {})
     yield
 
 
@@ -182,6 +183,53 @@ def test_migration_reentering_seam_reaches_head_with_correct_version(tmp_path):
     )
 
 
+def test_same_thread_pass_through_never_reruns_the_migration(tmp_path):
+    """Reviewer finding: the two tests above drive the FIXED v047, which no
+    longer calls get_db_connection -- so no re-entrancy actually occurs and
+    _seam_in_progress is never consulted; deleting the pass-through mechanism
+    entirely would leave both tests green. This test pins the mechanism
+    directly: fake `migrate_local_profile_db_at_seam` to call
+    `run_profile_seam` again for the SAME (user, profile) from the SAME
+    thread mid-migration (the exact shape v018/v021 still produce via
+    project_archive.archive_project/restore_project) and assert (a) the
+    outer call completes within the bound, (b) the fake migration body ran
+    exactly ONCE -- the nested call passed through instead of re-running it."""
+    import app.migrations as migrations_module
+    from app.migrations import MigrateResult
+
+    fake = FakeR2()
+    call_count = {"n": 0}
+    real_seam = migrations_module.run_profile_seam
+
+    def _fake_migrate(user_id, profile_id):
+        call_count["n"] += 1
+        # Simulate a migration whose up() reaches a helper that re-enters the
+        # seam for the SAME profile, on the SAME thread, mid-migration.
+        real_seam(user_id, profile_id)
+        return MigrateResult(status="ok", applied=[47])
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch.object(migrations_module, "migrate_local_profile_db_at_seam", _fake_migrate), \
+         _r2_patched(fake):
+        _ctx()
+        key = _profile_r2_key(USER, PROFILE)
+        data = _build_below_head_profile_with_game_storage(tmp_path)
+        _seed_r2(fake, key, data, sync_version=5)
+
+        from app.database import ensure_database
+
+        with patch("app.services.orphan_raw_clips.list_raw_clip_objects", return_value=[]):
+            finished, error = _run_seam_bounded(ensure_database)
+
+    assert finished, f"pass-through case did not complete within {SEAM_TIMEOUT_S}s -- hung"
+    assert error is None, f"unexpected error: {error!r}"
+    assert call_count["n"] == 1, (
+        f"expected the fake migration body to run exactly once (nested re-entry "
+        f"passes through without re-running it), got {call_count['n']} calls"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 2. Genuine cross-thread contention (a different request migrating the SAME
 #    profile concurrently) must fail LOUD (MigrationBlocked -> 503) within a
@@ -240,6 +288,12 @@ def test_genuine_cross_thread_contention_raises_migration_blocked_not_hang(tmp_p
     assert isinstance(error, MigrationBlocked), (
         f"expected MigrationBlocked on lock-acquire timeout, got {error!r}"
     )
+    # Reviewer finding: assert the SPECIFIC reason, not just the exception
+    # type — any other MigrationBlocked (missing/not_at_head/sync_failed)
+    # would also satisfy isinstance() without the acquire ever timing out.
+    assert error.reason == "lock_timeout", (
+        f"expected reason='lock_timeout' (the acquire genuinely timed out), got {error.reason!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -266,8 +320,21 @@ def test_no_migration_reenters_the_seam_via_connection_helpers():
     """A migration's `up(conn)` already HAS a connection for the DB being
     migrated -- it must use `conn` directly (or a Postgres-only helper) for
     ANY writes, never the request-path openers that re-run ensure_database/
-    ensure_user_database and re-enter the (now-held) seam lock. This is the
-    structural guard against a NEW v049+ reintroducing T8190.
+    ensure_user_database and re-enter the (now-held) seam lock. Structural
+    guard against a NEW v049+ reintroducing this via one of the KNOWN direct
+    symbols below.
+
+    SCOPE (reviewer finding, honest on purpose): this only catches DIRECT
+    calls to the listed symbols in a migration's own source, not the full
+    transitive closure. v018/v021 reach the identical shape one level removed
+    (`project_archive.archive_project`/`restore_project`, which themselves
+    call `get_db_connection`) and this guard does NOT flag them. They are
+    NOT deadlocking -- the general same-thread pass-through mechanism
+    (`test_same_thread_pass_through_never_reruns_the_migration`, above) is
+    generic and protects any caller shaped this way, not just direct ones --
+    but they are unaudited by THIS test. Extending v018/v021 to their own
+    connections (the v017/v047 pattern) or teaching this guard to walk
+    imports is tracked as a known residual, not silently assumed fixed here.
 
     Matches actual CALL SYNTAX only (`\\bsymbol\\(`, no space before the
     paren -- this codebase's ruff style never puts one in real code) via

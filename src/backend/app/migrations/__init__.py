@@ -437,8 +437,20 @@ def run_profile_seam(user_id: str, profile_id: str) -> None:
     # get_db_connection() -> ensure_database() -> run_profile_seam for THIS
     # SAME profile while this thread is already migrating it. The outer frame
     # owns the migration and will mark it verified — a nested call is a no-op.
+    # Logged (not silent): this is a structural violation of "migrations must
+    # use their own conn, never a request-path opener" (review finding) — the
+    # pass-through prevents the deadlock, but a caller reaching it at all is
+    # worth knowing about, and today's schema-creation block that runs after
+    # this return is idempotent-safe (CREATE TABLE/INDEX IF NOT EXISTS only,
+    # no ALTER) only because no current migration/table needs otherwise.
     with _migration_locks_guard:
         if _seam_in_progress.get(key) == current_thread_id:
+            logger.warning(
+                f"[T8190] Same-thread seam re-entry for user={user_id[:8]} "
+                f"profile={profile_id[:8]} — a migration's up() reached a "
+                f"connection helper that re-enters run_profile_seam for the "
+                f"profile it is already migrating; passed through safely"
+            )
             return
 
     lock = _get_migration_lock(user_id, profile_id)
@@ -447,26 +459,38 @@ def run_profile_seam(user_id: str, profile_id: str) -> None:
         # same profile) — fail loud instead of hanging the requester forever.
         raise MigrationBlocked(user_id, profile_id, "lock_timeout")
 
-    with _migration_locks_guard:
-        _seam_in_progress[key] = current_thread_id
-    user_token = set_current_user_id(user_id)
-    profile_token = set_current_profile_id(profile_id)
+    # T8190 review: the lock MUST release even if something between acquiring
+    # it and the migration body raises (including the ContextVar token resets,
+    # which can themselves raise) — an unreleased lock permanently wedges this
+    # (user, profile) key (30s-then-503 forever) AND leaves a stale
+    # _seam_in_progress entry whose thread id a later thread could recycle,
+    # silently passing that thread through the seam. The lock's acquire/
+    # release is therefore the OUTERMOST try/finally; everything else nests
+    # inside it.
     try:
-        result = migrate_local_profile_db_at_seam(user_id, profile_id)
-        if result.status == "wal_busy":
-            from ..services.db_refresh import clear_stale_wal_sidecars
-            clear_stale_wal_sidecars(db_path)
-            result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
-        if result.status == "sync_failed":
-            result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
-        if result.status != "ok":
-            raise MigrationBlocked(user_id, profile_id, result.status)
-        _seam_verified.add((user_id, profile_id))
-    finally:
-        reset_profile_id_token(profile_token)
-        reset_user_id_token(user_token)
         with _migration_locks_guard:
-            _seam_in_progress.pop(key, None)
+            _seam_in_progress[key] = current_thread_id
+        try:
+            user_token = set_current_user_id(user_id)
+            profile_token = set_current_profile_id(profile_id)
+            try:
+                result = migrate_local_profile_db_at_seam(user_id, profile_id)
+                if result.status == "wal_busy":
+                    from ..services.db_refresh import clear_stale_wal_sidecars
+                    clear_stale_wal_sidecars(db_path)
+                    result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
+                if result.status == "sync_failed":
+                    result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
+                if result.status != "ok":
+                    raise MigrationBlocked(user_id, profile_id, result.status)
+                _seam_verified.add((user_id, profile_id))
+            finally:
+                reset_profile_id_token(profile_token)
+                reset_user_id_token(user_token)
+        finally:
+            with _migration_locks_guard:
+                _seam_in_progress.pop(key, None)
+    finally:
         lock.release()
 
 
@@ -495,30 +519,43 @@ def run_user_seam(user_id: str) -> None:
     # T8190: same-thread re-entrancy — see run_profile_seam's identical guard.
     with _migration_locks_guard:
         if _seam_in_progress.get(key) == current_thread_id:
+            logger.warning(
+                f"[T8190] Same-thread seam re-entry for user={user_id[:8]} "
+                f"user.sqlite — a migration's up() reached a connection "
+                f"helper that re-enters run_user_seam for the DB it is "
+                f"already migrating; passed through safely"
+            )
             return
 
     lock = _get_migration_lock(user_id, USER_DB_SCOPE)
     if not lock.acquire(timeout=SEAM_LOCK_TIMEOUT_S):
         raise MigrationBlocked(user_id, None, "lock_timeout")
 
-    with _migration_locks_guard:
-        _seam_in_progress[key] = current_thread_id
-    user_token = set_current_user_id(user_id)
+    # T8190 review: see run_profile_seam's identical comment — the lock's
+    # acquire/release must be the OUTERMOST try/finally so it always releases,
+    # even if a ContextVar token reset itself raises.
     try:
-        result = migrate_local_user_db_at_seam(user_id)
-        if result.status == "wal_busy":
-            from ..services.db_refresh import clear_stale_wal_sidecars
-            clear_stale_wal_sidecars(db_path)
-            result = migrate_local_user_db_at_seam(user_id)  # one retry
-        if result.status == "sync_failed":
-            result = _seam_repull_and_retry_user(user_id, db_path)
-        if result.status != "ok":
-            raise MigrationBlocked(user_id, None, result.status)
-        _seam_verified.add((user_id, USER_DB_SCOPE))
-    finally:
-        reset_user_id_token(user_token)
         with _migration_locks_guard:
-            _seam_in_progress.pop(key, None)
+            _seam_in_progress[key] = current_thread_id
+        try:
+            user_token = set_current_user_id(user_id)
+            try:
+                result = migrate_local_user_db_at_seam(user_id)
+                if result.status == "wal_busy":
+                    from ..services.db_refresh import clear_stale_wal_sidecars
+                    clear_stale_wal_sidecars(db_path)
+                    result = migrate_local_user_db_at_seam(user_id)  # one retry
+                if result.status == "sync_failed":
+                    result = _seam_repull_and_retry_user(user_id, db_path)
+                if result.status != "ok":
+                    raise MigrationBlocked(user_id, None, result.status)
+                _seam_verified.add((user_id, USER_DB_SCOPE))
+            finally:
+                reset_user_id_token(user_token)
+        finally:
+            with _migration_locks_guard:
+                _seam_in_progress.pop(key, None)
+    finally:
         lock.release()
 
 

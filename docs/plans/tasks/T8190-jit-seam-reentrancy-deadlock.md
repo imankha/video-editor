@@ -2,6 +2,24 @@
 
 **Status:** WIP
 
+**2026-08-31 reviewer pass applied.** A fresh-context Reviewer found no blockers but 5
+SHOULD-FIX items, all applied: (1) restructured the lock's acquire/release to be the
+OUTERMOST try/finally in both `run_profile_seam`/`run_user_seam` — previously a raise from
+the ContextVar token resets could skip `lock.release()`, permanently wedging that key; (2)
+the audit step missed v018/v021 (`project_archive.archive_project`/`restore_project` call
+`get_db_connection` transitively) — the static guard's docstring now states this HONESTLY
+as a known residual (the general same-thread pass-through protects them from deadlocking,
+proven by a new direct test, but the guard itself doesn't flag indirect calls; fixing
+v018/v021 to use their own connection, like v017/v047, is deferred, not silently claimed
+done); (3) the same-thread pass-through now logs a WARNING (was silent) naming the
+user/profile so a re-entry is greppable in prod; (4) added
+`test_same_thread_pass_through_never_reruns_the_migration`, which fakes the migration body
+to directly pin the locking mechanism itself (the original two "deadlock" tests only drove
+the now-fixed v047, so deleting `_seam_in_progress` entirely would have left them green);
+(5) the cross-thread contention test now asserts `error.reason == "lock_timeout"`
+specifically, not just the exception type. 196/196 relevant tests green (5 new + 191
+existing), zero regressions.
+
 **2026-08-31 fix implemented.** Root cause confirmed via bug-reproduction (failing test
 first, real deadlock reproduced with a bounded thread-join so the test fails fast instead of
 hanging): `run_profile_seam`/`run_user_seam` now track same-thread re-entrancy
