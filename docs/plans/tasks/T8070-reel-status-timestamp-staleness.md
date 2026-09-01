@@ -1,6 +1,6 @@
 # T8070: Reel status should go stale when the clip's timestamps change
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 4
 **Complexity:** 5
 **Created:** 2026-08-30 (deferred from T8060 per user decision: "Skip for now but file task for it")
@@ -84,4 +84,44 @@ user; they chose to defer rather than pick the counter-only shortcut.
 
 Touches schema (new columns + migration) and 2+ backend export completion
 paths + frontend -- classify as L-tier per CLAUDE.md (schema change -> full
-staged workflow, Architect design gate) when picked up. Not started.
+staged workflow, Architect design gate) when picked up.
+
+## Progress Log
+
+**2026-09-01/02**: Design approved with revisions - Q1 (NULL policy) changed from
+self-heal to a BACKFILL migration (no runtime trust-produced fallback, per "migrations
+make data correct"); Q2 expanded scope to multi-clip per-clip staleness (data layer only,
+via `WorkingClipResponse`); Q3/Q4 confirmed as proposed. A new blocker (Q5) surfaced
+during the Q2 investigation - no UI surface exists today for multi-clip per-clip
+staleness (annotate only shows the seed clip) - resolved as **Option A**: ship the full
+data model + annotate seed-clip display now, file the multi-clip visual as a separate
+follow-up (see [T8320](T8320-multiclip-reel-staleness-visual.md)).
+
+Implemented: `raw_clips.reel_source_start_time/end_time` (profile_db v049) with a
+backfill for every already-produced reel clip (no unknown-snapshot cohort); 5 write
+sites (seed + Focus x2 + Overlay x2); both read surfaces (annotate region + per-clip
+`WorkingClipResponse`); frontend staleness gate in `ClipDetailsEditor`.
+
+Branch CI went red twice, both real issues, both fixed:
+1. v049's backfill crashed (`no such table: working_clips`) against a profile at an
+   older/minimal schema state (surfaced by share-materialization tests) - added a
+   table-existence guard so it degrades gracefully instead of crashing the JIT seam.
+2. `test_registry_head_is_audited` (T6030 structural guard) required bumping
+   `HEAD_VERSION_AUDITED` to 49 and confirming the new columns' hot reads are guarded -
+   done.
+
+CI green (`feature/T8070-reel-status-timestamp-staleness`). Full-browser Playwright
+drive not possible in-container (no network egress); covered instead by FastAPI
+TestClient + React Testing Library component tests exercising the real HTTP routes and
+the real Completed<->Create Reel toggle. Awaiting user test + merge.
+
+## Acceptance Criteria
+
+- [x] Reel control stops showing produced status when the clip's start/end changed after
+      the reel was produced
+- [x] Reverting timestamps to EXACTLY the producing values restores the status
+- [x] Schema tracks reality for existing reels too (backfilled, no NULL/self-heal cohort)
+- [x] Multi-clip reels: per-clip data available via `WorkingClipResponse` (visual cue is
+      the separate T8320 follow-up)
+- [x] Backend + frontend tests pass (61 + 15 green); full-browser e2e not runnable in
+      this container (documented, not claimed)
