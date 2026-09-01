@@ -4,11 +4,18 @@
 never touching speed controls. Root-caused via expert (Opus) investigation — full analysis
 in the escalation transcript; summarized below.
 
-**Status:** STAGING — merged to master (2026-08-31). Auto-deploys staging, but this bug is
-Modal-only and staging deploy does NOT touch Modal -- a manual `modal deploy` is still
-required before this fix is live, plus staging verification with a real non-30fps upload
-(see Rollout section). Not DONE until that verification + the ops follow-through (re-export
-bknoto + the 3 other affected accounts, per user decision 2026-08-31) completes.
+**Status:** Code fix DONE (deployed 2026-09-01 prod — backend via `/deploy`, Modal via the
+`deploy-modal.yml` CI workflow auto-triggered at merge). Verified on staging with hard
+evidence before the prod deploy: re-exported bknoto's actual broken clip through the fixed
+Modal function and measured the real output file's duration directly (not the rounded UI
+display) — 28.8s (buggy) -> 17.33s (fixed), matching his real 17.26s/50fps source. See
+screenshots sent to the user 2026-09-01.
+
+**Still open (ops follow-through, not code):** re-export bknoto's PRODUCTION reel (still
+showing the old 28.8s file — prod code is fixed but his existing rendered file isn't
+retroactively corrected), remediate the 3 other affected first-export accounts found in the
+blast-radius scan, and send the support emails (drafted, not yet sent) — all per user
+decisions recorded earlier in this task's history, none executed yet as of 2026-09-01.
 
 ---
 
