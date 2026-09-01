@@ -70,3 +70,10 @@ Fallback when the admin endpoint (`POST /api/admin/migrate`) is unavailable:
 ```
 fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"
 ```
+
+**`run_all_migrations()` also sweeps every user's SQLite DBs, not just Postgres.** That sweep is
+NOT harmless against a live serving machine (it can reproduce the pre-T8190 seam-reentrancy
+deadlock shape, and separately can desync R2's version cache under a live process, per the JIT
+Migration epic's 2026-08-04 incident finding) and is no longer needed now that JIT covers the
+SQLite tracks — see [deploy/SKILL.md](../skills/deploy/SKILL.md) step 6a. Use it only as a
+last-resort admin tool, restarting the machine immediately after.

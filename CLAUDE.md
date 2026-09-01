@@ -266,10 +266,15 @@ auto-runs; always hit the admin endpoint" rule):**
 
 A blocked per-user migration (WAL-busy, CAS-refused sync, below-head R2 verify) raises
 `migrations.MigrationBlocked` → retryable HTTP 503 `{"code": "pending_migration"}` — it never
-opens a below-head DB silently. `run_all_migrations` / `POST /api/admin/migrate` still exist
-and still sweep every user as a backstop (JIT Migration epic child T5087 deletes the per-user
-half once JIT has proven itself); running it is harmless and idempotent, just no longer
-required for the SQLite tracks.
+opens a below-head DB silently. `run_all_migrations` / `POST /api/admin/migrate` still exist and
+still sweep every user's SQLite DBs, but **that sweep is NOT harmless against a live serving
+machine and is no longer required at all** (JIT Migration epic child T5087 deletes the per-user
+half once JIT has proven itself): it self-deadlocked the whole API process pre-T8190 (a migration
+reaching back into the per-(user,profile) seam lock from its own `up()` — fixed, but the sweep
+still runs migrations directly against a live process's connections), and independently it moves
+R2 forward behind a live process's in-memory version cache, causing a real CAS conflict for the
+next writer (JIT Migration epic's 2026-08-04 incident finding). Treat it as a last-resort admin
+tool only, followed immediately by a machine restart — never a routine post-deploy step.
 
 Schema changes: include the Migration agent in classification AND update `_SCHEMA_DDL` in `pg.py` for fresh deployments. Key rule: `PRAGMA user_version` = schema version; `db_version` table / R2 `x-amz-meta-db-version` = sync version. Independent. Mechanism details (locking, CAS re-pull-retry-once, fail-loud): [persistence-sync.md](.claude/knowledge/persistence-sync.md) §T5083/§T5085.
 
