@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-01
 **Impact:** 10
-**Status:** TODO
+**Status:** STAGING — both children merged to master 2026-09-01 (T8300 `bc312f54`, T8290 `00a3ece9`)
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # T8290: `X-User-ID` header is a live authentication bypass for the whole admin surface on production
 
-**Status:** WIP
+**Status:** STAGING (merged to master `00a3ece9`, 2026-09-01)
 **Impact:** 10
 **Complexity:** 3
 **Created:** 2026-09-01
