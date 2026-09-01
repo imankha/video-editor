@@ -495,3 +495,37 @@ class TestAdminUpdateEmailBuilder:
         html = _build_update_email("<b>Hi</b>", body_text_to_html("body"))
         assert "<b>Hi</b>" not in html
         assert "&lt;b&gt;Hi&lt;/b&gt;" in html
+
+
+class TestMigratePostgresRoute:
+    """T5087: POST /api/admin/migrate -> POST /api/admin/migrate-postgres.
+
+    Route-level coverage the rename itself had none of -- migrate_postgres()
+    was already tested directly (test_t2930_migrations.py::TestPostgresMigration),
+    but nothing exercised the actual HTTP route until now, so a broken
+    decorator/wiring in the rename would have gone uncaught. Mocks
+    migrate_postgres() itself (its business logic is covered elsewhere) to
+    isolate what this class actually verifies: admin gating, the route path,
+    and that the response is the function's return value verbatim (the flat
+    shape, not the old sweep's {"postgres": {...}} nesting)."""
+
+    def test_non_admin_403(self, client):
+        resp = client.post("/api/admin/migrate-postgres", headers=_auth_headers("regular-user"))
+        assert resp.status_code == 403
+
+    def test_admin_gets_the_flat_migrate_postgres_result_verbatim(self, client):
+        fake_result = {"applied": [], "current_version": 25, "latest_version": 25, "error": None}
+        with patch("app.migrations.migrate_postgres", return_value=fake_result) as mock_migrate:
+            resp = client.post("/api/admin/migrate-postgres", headers=_auth_headers("admin-user"))
+        assert resp.status_code == 200
+        assert resp.json() == fake_result
+        assert "postgres" not in resp.json(), \
+            "T5087: response must be the flat migrate_postgres() dict, never the old nested " \
+            "{'postgres': {...}, 'users': {...}} sweep shape"
+        mock_migrate.assert_called_once()
+
+    def test_old_migrate_path_is_gone(self, client):
+        """T5087 deleted POST /api/admin/migrate outright -- it is not an
+        alias for the new path, it must 404, never silently still work."""
+        resp = client.post("/api/admin/migrate", headers=_auth_headers("admin-user"))
+        assert resp.status_code == 404
