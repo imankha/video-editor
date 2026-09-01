@@ -23,40 +23,73 @@ all but one were later cleaned up (deleted pending/failed rows) — the account 
 conflates "attempts" with "current inventory," and that gap gets large specifically during the
 exact failure scenarios (upload retries, cleanup sweeps) an admin would most want visibility into.
 
+**Second confirmed instance (2026-09-01), chenyh1225@gmail.com:** user asked why analytics showed
+"7 games uploaded" when the account has zero games. Investigation (read-only, prod Postgres +
+R2): signed up 2026-08-30 13:13 UTC, tried uploading a game **7 times in 20 minutes** across three
+platforms (`webapp-mobile` x1, `pwa-desktop` x2, `webapp-desktop` x4) — every single attempt failed
+(`game_upload_failed:refused` x1, `game_upload_failed:network` x6), zero `game_upload_succeeded`
+events ever fired. Squarely inside the T8160 outage window (self-aborting multipart upload, live
+~2026-08-30 build 2a906b5a until the 2026-08-31 fix). Her account is 100% correct — it has nothing
+because nothing ever durably succeeded (her `user.sqlite` doesn't even exist in R2, 404). This is
+a worse case than bknoto: 0 actual games vs. 1, so the attempts/success gap read as 100% wrong
+rather than "15 vs 1."
+
+**Second surface found, same root cause:** `PlatformBreakdown.jsx` L12 —
+`ACTION_LABELS = { game_created: 'Games Uploaded', ... }` — hardcodes the label "Games Uploaded"
+directly onto the raw `game_created` (attempt) event in the Platform Breakdown admin view. This is
+the exact same conflation as the People table's "Games" column, in a second dashboard surface that
+wasn't caught by the original T7510 attempt/outcome split (which DID fix `FunnelChart.jsx` —
+"Upload Attempted" vs "Uploaded" as distinct stages — and `UserDetailPanel.jsx`, which renders both
+`game_created` and `game_upload_succeeded` as a distinct pair). `UserTable.jsx` and
+`PlatformBreakdown.jsx` are the two surfaces T7510 missed.
+
 ## Solution
 
-This needs a decision before implementing (precedent: T7990 chose relabel-only after the founder
-judged the underlying computation acceptable) — two real options, not a foregone conclusion:
+**User directive (2026-09-01): "tries versus success is very important."** This rules out a
+relabel-only fix that just renames the column to hide the attempt count (old Option A) — the
+admin needs to see BOTH how many times a user tried and how many actually succeeded, not one
+number that silently picks a side. Revised direction:
 
-**Option A — relabel to match what it measures.** Rename the column (e.g. "Game Attempts" or
-"Uploads Started") so admins read it correctly without any new data cost. Cheapest, but doesn't
-give admins the "how many games does this account actually have" signal they clearly wanted here.
+**Chosen shape — show both, don't collapse to one metric.** Every surface currently doing
+`game_created` bare (`UserTable.jsx` "Games" column, `PlatformBreakdown.jsx` "Games Uploaded"
+label) should render an attempt/success PAIR, mirroring what `UserDetailPanel.jsx` already does for
+the per-user journey view and what `FunnelChart.jsx` already does for the funnel view. Concretely:
 
-**Option B — make it a real count.** Change the column to `SELECT COUNT(*) FROM games` per
-account. The `list_users` table currently sources ALL its per-user numbers from ONE cheap
-Postgres `user_actions` aggregate query across every user on the page — a real per-account SQLite
-`games` count means opening each account's `profile.sqlite` (a materially different cost model,
-same shape as the per-profile reads `UserDetailPanel`'s T7860 clip-phases endpoint already does,
-but that endpoint runs for ONE user on demand, not N users per page load). Needs an Architect
-look at whether this belongs in the list (cost at scale) or should stay a User Detail Panel-only
-metric, especially given T8110 (in flight) is already reworking this table's sourcing for
-server-side sort.
+- `UserTable.jsx` "Games" column becomes something like `7 tried / 0 succeeded` (or two adjacent
+  columns) instead of one bare number — sourced from BOTH `game_created` and
+  `game_upload_succeeded` counts (`admin.py list_users` already has the `game_created` count;
+  needs to add the `game_upload_succeeded` count alongside it, same query shape).
+- `PlatformBreakdown.jsx` needs the same pairing per platform cell, not just a relabeled single
+  number — likely add `game_upload_succeeded` as its own row/column next to `game_created` in the
+  matrix (see `GRID_CELLS`/`ACTION_LABELS`), not just renaming the existing `game_created` row.
 
-Recommend: bring both options to the user with T8110's sourcing rework in mind before picking,
-since doing this alongside T8110 avoids two separate passes over the same `list_users` query.
+This is cheap on the data side: `game_upload_succeeded` is already a first-class `FLOW_EVENTS` key
+with its own `user_actions` rows, no schema change, no new migration — same query shape as the
+existing `game_created` lookup, just fetch both. Real per-account `games` table counts (old
+Option B) are NOT needed to satisfy "tries vs success" — that distinction lives entirely in the
+existing attempt/outcome analytics events already used by `FunnelChart`/`UserDetailPanel`.
+
+Still sequence AFTER T8110 (in-flight TOP priority, reworking this same `list_users` query for
+server-side sort) to avoid merge conflicts on the same function.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/routers/admin.py` — `list_users` (~L198-258), the `game_created_count`/
-  `clip_created_count`/`export_completed_count` construction (L241-243)
+  `clip_created_count`/`export_completed_count` construction (L241-243); needs a
+  `game_upload_succeeded` count added alongside. `analytics_platforms` (~L1932-) — feeds
+  `PlatformBreakdown.jsx`, needs `game_upload_succeeded` surfaced per platform too.
 - `src/frontend/src/components/admin/UserTable.jsx` — column definitions (L46-48)
+- `src/frontend/src/components/admin/PlatformBreakdown.jsx` — `ACTION_LABELS` (L10-25) hardcodes
+  `game_created: 'Games Uploaded'` (L12); second surface with the identical bug, found 2026-09-01
+  while investigating chenyh1225@gmail.com
 
 ### Related Tasks
 - [[T8240]] — same root pattern, "Clips" column (adjacent, likely same fix session)
 - T8110 (in flight, TOP priority) — reworks this same `list_users` query for server-side sort;
   sequence this AFTER T8110 lands to avoid merge conflicts on the same function
-- Bug 47p / T8160 / T8170 — why bknoto's specific gap is this large
+- Bug 47p / T8160 / T8170 — why bknoto's and chenyh1225's gaps are this large (both hit the same
+  2026-08-30 self-aborting-multipart outage)
 
 ### Technical Notes
 Do not conflate this with the T8160 outage itself — that's a real, separate, already-tracked
@@ -66,13 +99,20 @@ DEFINITION being ambiguous, which the outage happened to expose vividly for this
 ## Implementation
 
 ### Steps
-1. [ ] Present Option A vs B to the user (post-T8110) with a recommendation
-2. [ ] Implement the chosen option
-3. [ ] If Option B: verify page-load cost at realistic row counts (same class of check T8110's
-       row calls out)
+1. [ ] `list_users` (admin.py): add `game_upload_succeeded` count alongside the existing
+       `game_created` count
+2. [ ] `UserTable.jsx`: render both as a pair (e.g. "7 tried / 0 succeeded"), not a bare number
+3. [ ] `analytics_platforms` (admin.py): surface `game_upload_succeeded` per platform alongside
+       `game_created`
+4. [ ] `PlatformBreakdown.jsx`: render the attempt/success pair per platform cell instead of
+       relabeling `game_created` alone as "Games Uploaded"
+5. [ ] Sequence after T8110 lands (same `list_users` function, avoid merge conflicts)
 
 ## Acceptance Criteria
 
-- [ ] The "Games" column no longer silently reads as "current games" when it means "attempts" (or
-      the column is changed to genuinely mean "current games")
-- [ ] Verified against bknoto's account: displays either an honest "15 attempts" or an accurate "1"
+- [ ] The People table "Games" column shows both tries and successes, never a bare attempt count
+      labeled as if it were successful uploads
+- [ ] Platform Breakdown shows both tries and successes per platform, never "Games Uploaded"
+      bound to the raw `game_created` attempt event
+- [ ] Verified against bknoto's account (15 tried / 1 succeeded) and chenyh1225's account
+      (7 tried / 0 succeeded)
