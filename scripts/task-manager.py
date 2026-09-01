@@ -194,17 +194,14 @@ def save_bug_config(config):
 def _make_request(url, method='GET', data=None, session_cookie='', timeout=10, retries=3):
     """Make an HTTP request with session cookie auth. Returns (parsed_json, error_string).
 
-    If session_cookie looks like a UUID (user_id), sends X-User-ID header instead
-    of a cookie -- this works for local dev/staging where the header fallback is enabled.
+    Sending a raw user_id is not an accepted form of authentication -- only a real
+    rb_session cookie works, on every environment including production.
     """
     last_err = None
     for attempt in range(retries):
         req = urllib.request.Request(url, method=method)
         if session_cookie:
-            if len(session_cookie) == 36 and session_cookie.count('-') == 4:
-                req.add_header('X-User-ID', session_cookie)
-            else:
-                req.add_header('Cookie', f'rb_session={session_cookie}')
+            req.add_header('Cookie', f'rb_session={session_cookie}')
         if data is not None:
             payload = json.dumps(data).encode()
             req.data = payload
@@ -215,7 +212,7 @@ def _make_request(url, method='GET', data=None, session_cookie='', timeout=10, r
                 return json.loads(resp.read().decode()), None
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
-                return None, "Auth required"
+                return None, "Auth required -- paste a fresh rb_session cookie in Bug Config (a user_id is not accepted)"
             return None, f"HTTP {e.code}"
         except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
             last_err = str(getattr(e, 'reason', e))
@@ -1058,6 +1055,11 @@ HTML = r"""<!DOCTYPE html>
 
 <div class="config-panel" id="config-panel">
   <h3>Bug Tracking -- Session Cookies</h3>
+  <p class="bug-log-summary">
+    Get the cookie: log into the admin panel on that environment, then devtools &gt;
+    Application &gt; Cookies &gt; copy the value of <code>rb_session</code>. It lasts 30
+    days. A raw user_id is not accepted -- only a real session cookie authenticates.
+  </p>
   <div class="config-row">
     <label>Production:</label>
     <input type="text" id="prod-session" placeholder="Paste rb_session cookie from prod">
