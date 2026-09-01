@@ -1,6 +1,6 @@
 # T8170: P0 - Upload-outage recovery: victims, comms, alerting that would have caught it
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-08-31

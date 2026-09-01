@@ -16,14 +16,14 @@ cannot set per-project env). EVERY lane gets its own account: concurrent write s
 on one account cause `stale_baseline` R2 CAS freezes, and even a light-write/read
 pairing is only provably safe when staging runs a single API machine (a second machine
 gives each session its own profile.sqlite copy, and the CAS loser freezes; staging has
-`auto_start_machines = true`, so the machine count is not guaranteed). Alias clones are
-one seed command each, so no lane shares.
+`auto_start_machines = true`, so the machine count is not guaranteed). Each alias account
+is one seed command (`copy_user_between_envs.py --to-email`), so no lane shares.
 
 | Lane | Account | Character | Members |
 |------|---------|-----------|---------|
 | `@gate-a` | `imankh@gmail.com` / `9fa7378c` | ALL heavy writes (real exports, publish, share links) | `staging-smoke`, `derisk-staging-export`, `derisk-staging-endcard-copylink` |
-| `@gate-b` | alias clone 1 (`e2e-gate@test.local`) | browsing + light writes (crop drag, share link) | `game-loading`, `annotate-game-clock`, `T4550-overlay-transform`, `T4190-my-reels-group-visibility`, `T5677-home-deeplinks`, `T7350-mobile-share-routing`, `T5642-overlay-working-video-presigned`, `T5676` (real-account describe), `bug38-autoselect-and-frame-step` |
-| `@gate-c` | alias clone 2 (`e2e-gate2@test.local`); the mocked specs need no account | public viewers + slow reads + local-only members that skip loudly on a deployed target | `collection-share`, `shared-viewer-affordance-gating`, `T5290-recap-mobile-redesign`, `T5681-games-poster-grid`, `T7100-reel-download-feedback`, `T8160-upload-transport-probe` (novel-hash multipart transport; own test-login session), `T5710-per-layer-recap` (local-only, seam), `bug38-harness` (local-only, dev harness), `T5676` dev-harness describe (local-only) |
+| `@gate-b` | `arshia+stg@test.local` / `b95eb93b` (real paying-user data copied from prod, google_id nulled) | browsing + light writes (crop drag, share link) | `game-loading`, `annotate-game-clock`, `T4550-overlay-transform`, `T4190-my-reels-group-visibility`, `T5677-home-deeplinks`, `T7350-mobile-share-routing`, `T5642-overlay-working-video-presigned`, `T5676` (real-account describe), `bug38-autoselect-and-frame-step` |
+| `@gate-c` | `bknoto+stg@test.local` / `e1e28f91` (real paying-user data copied from prod, google_id nulled); the mocked specs need no account | public viewers + slow reads + local-only members that skip loudly on a deployed target | `collection-share`, `shared-viewer-affordance-gating`, `T5290-recap-mobile-redesign`, `T5681-games-poster-grid`, `T7100-reel-download-feedback`, `T8160-upload-transport-probe` (novel-hash multipart transport; own test-login session), `T5710-per-layer-recap` (local-only, seam), `bug38-harness` (local-only, dev harness), `T5676` dev-harness describe (local-only) |
 
 A cold-machine caveat for phantom REDs: the runner warms `/health`, but if a lane's
 traffic wakes a SECOND, cold staging machine, that lane's first tests can hit the ~145s
