@@ -56,10 +56,12 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - **Failed:** reduce_log the output and report the failure; do **NOT** apply any promotions
      (nothing shipped to prod). Keep the analysis for after a fix + redeploy.
 
-6. **Post-deploy DATA steps — schema first, then data. Neither auto-runs.**
+6. **Post-deploy DATA steps — schema first, then data.**
 
-   `deploy_production.sh` does **not** migrate and does **not** backfill. Run these in order after a
-   successful deploy, and report the result of each:
+   `deploy_production.sh` itself does **not** migrate and does **not** backfill — it only ships code.
+   `user_db`/`profile_db` schema migrations then apply themselves just-in-time per account (see
+   below); Postgres migration and the poster backfill still need an explicit trigger. Run these in
+   order after a successful deploy, and report the result of each:
 
    **Migration window (T5083/T5085 changed this).** `user_db`/`profile_db` now migrate
    **just-in-time** at the per-user DB-load seam — an account migrates on its own first access
@@ -110,6 +112,12 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - Expect some `skipped_gone` (video object reclaimed) and unpublished drafts to be untouched —
      the backfill targets published reels. Neither is a failure.
    - Post-T5410 this is arithmetic + one frame grab per reel — **no Modal, no GPU**.
+
+7. **Post-deploy USER NOTIFICATION.** Once the shipped-task list exists (Plan Reconciliation
+   Step A), decide who needs to hear about this deploy. See
+   [Post-Deploy: User Notification](#post-deploy-user-notification) below. This step is
+   proposal-only until the user explicitly approves a send — never send email as a side effect
+   of a deploy completing.
 
 ## Post-Deploy: Plan Reconciliation
 
@@ -187,6 +195,48 @@ On a successful deploy (exited 0):
 - **Report the auto-promoted list** to the user so they can move any row back on the board if a promotion was wrong.
 
 Keep the reconciliation lightweight when little shipped (a couple of status promotions) and thorough when a milestone/epic landed (verify with subagents, update epic criteria).
+
+## Post-Deploy: User Notification
+
+Goal: when a deploy fixes something a user hit, or ships something a user would want, tell them — instead of hoping they notice. Uses the same shipped-task list as Plan Reconciliation Step A, so run this after that classification exists.
+
+**Hard gate: proposal only, never auto-send.** Sending real email to real users is exactly the kind of hard-to-reverse, externally-visible action the project's execution-care rules flag for confirmation every time — there is no "obviously safe, skip the ask" case here, matching the standing HARD SEND GATE precedent on outreach work (e.g. T7610). Draft, show the user segments + copy as a decision artifact, and wait for explicit approval before any send.
+
+### Step A — Classify each shipped task by notification type
+
+For every task in this deploy's shipped list:
+
+| Type | Trigger | Notification goal |
+|------|---------|--------------------|
+| **BUG-FIX** | Task closed a `bug_reports` row, or its description names a concrete broken behavior | Tell the users who hit it that it's fixed; ask them to retest |
+| **DROP-OFF-FIX** | Task fixed a funnel cliff/abandonment point (activation-cliff work, First-Clip Funnel-style tasks) | Tell the users who fell off at that point specifically; invite them back to the exact step |
+| **NEW-FEATURE** | Task shipped a new user-facing capability, not a fix | Tell the segment likely to want it |
+| **NO-NOTIFY** | Internal/infra/perf/refactor/admin-only, no user-visible change | Nothing to send |
+
+When a task is ambiguous, read its task file's Acceptance Criteria — the same read Plan Reconciliation Step B already does — rather than guessing from the PLAN.md one-liner.
+
+### Step B — Identify who to notify
+
+**BUG-FIX / DROP-OFF-FIX:** find the users who actually encountered it, not everyone:
+- Per-user event-grain data lives in each user's own `user_action_log` SQLite (not the shared aggregate stores) — query it for the specific action/error the task's acceptance criteria describe.
+- Cross-reference Postgres `user_segments`/`user_actions`/`user_usage_daily` for funnel position and last-active date, same query pattern as the win-back campaign (`fly postgres connect -a reel-ballers-db-prod -d reel_ballers_api`, read-only).
+- For per-profile specifics (which game/clip/step), use the `fly ssh console` + `app.database.get_db_connection()` pattern with `user_context`/`profile_context` set, as in the win-back send.
+- **Dedup** against anyone already notified for this exact issue (check the task file / prior outreach notes — e.g. T7610's cohort tracking) so retest asks don't repeat.
+
+**NEW-FEATURE:** find the segment likely to care, not the whole user base — infer from what the feature touches (e.g. a Focus-mode feature → users who've used Focus; a Collections feature → active reel creators) using the same segmentation approach as the win-back campaign, not a blanket send.
+
+### Step C — Draft copy
+
+- **Bug-fix / drop-off-fix copy** asks for a retest and states plainly what was broken and that it's fixed now. Apply the existing support-framing rule: lead with "we're here to help" energy, not just a status update — e.g. invite a reply if the retest still doesn't work, don't just declare victory.
+- **New-feature copy** introduces the feature and why it's relevant to that segment specifically (not generic marketing copy).
+- One draft per segment/task, not one blast for everything that shipped.
+
+### Step D — Approve, test-send, send
+
+1. Present segments + draft copy to the user as a decision artifact (recipients, task each maps to, draft text) and get explicit approval — this is the hard gate, not a formality.
+2. **Test-send to imankh@gmail.com first**, always, before any real recipient.
+3. Send via `app.services.email.send_admin_update_email` (the same function the admin bulk-email modal calls) — per-recipient sends, real Resend API.
+4. Record what was sent (recipients, task id, date) in the task file or its PLAN row, the way T8170/T7610 log outreach — this is what Step B's dedup check reads next time.
 
 ## Secrets Management
 
