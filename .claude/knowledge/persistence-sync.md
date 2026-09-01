@@ -125,7 +125,7 @@ How user data gets written and how it survives: gesture-based persistence rules,
 ## Data flow
 Request lifecycle (`db_sync.py:443 _dispatch_impl`):
 1. **Machine pinning (T1190)**: `fly_machine_id` cookie; mismatched live machine → respond with `fly-replay: instance=<id>` header (db_sync.py:447-471). Stale/dead machine → handle locally, re-pin cookie.
-2. **Auth**: `rb_session` cookie → Postgres `validate_session`; fallback `X-User-ID` header (dev/staging only, plus `/api/admin/` routes; db_sync.py:492-502). Unauthed + not allowlisted → 401.
+2. **Auth**: `rb_session` cookie → Postgres `validate_session`; fallback `X-User-ID` header (dev/staging only — db_sync.py:827; T8290 removed a prior `/api/admin/` route carve-out, admin routes are NOT an exception). Unauthed + not allowlisted → 401.
 3. **Profile context**: `X-Profile-ID` header (8-hex) or `user_session_init(user_id)` resolves it. ContextVars: `user_id`, `profile_id`, `req_id`.
 4. **Per-user write lock (T1531)**: POST/PUT/PATCH/DELETE serialize per user (db_sync.py:195-229); reads take no lock (SQLite WAL).
 5. Handler runs; every DB write through `TrackedConnection` flips a per-request "has writes" flag (separate flags for profile vs user DB).

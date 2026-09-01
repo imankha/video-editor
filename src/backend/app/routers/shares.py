@@ -168,6 +168,11 @@ class ClaimGameResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+# SECURITY (T8290): X-User-ID must never authenticate on production. /api/shared/
+# is in the middleware's auth allowlist, so an unauthenticated request reaches
+# these handlers with no user context -- these two functions are the ONLY gate,
+# there is no upstream check to fall back on.
+
 def _get_email_from_request(request: Request) -> str | None:
     session_id = request.cookies.get("rb_session")
     if session_id:
@@ -176,10 +181,11 @@ def _get_email_from_request(request: Request) -> str | None:
             return session.get("email")
         return None
 
-    user_id = request.headers.get("X-User-ID")
-    if user_id:
-        user = get_user_by_id(user_id)
-        return user["email"] if user else None
+    if APP_ENV != "production":
+        user_id = request.headers.get("X-User-ID")
+        if user_id:
+            user = get_user_by_id(user_id)
+            return user["email"] if user else None
     return None
 
 
@@ -191,7 +197,9 @@ def _get_user_id_from_request(request: Request) -> str | None:
             return session.get("user_id")
         return None
 
-    return request.headers.get("X-User-ID")
+    if APP_ENV != "production":
+        return request.headers.get("X-User-ID")
+    return None
 
 
 def _sharer_r2_prefix(share: dict) -> str:

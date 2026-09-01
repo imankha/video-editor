@@ -1,20 +1,15 @@
 # T8290: `X-User-ID` header is a live authentication bypass for the whole admin surface on production
 
-**Status:** TODO (BLOCKED)
+**Status:** WIP
 **Impact:** 10
 **Complexity:** 3
 **Created:** 2026-09-01
 **Epic:** [Admin Auth Hardening](EPIC.md) — child 2 of 2
 
-> **BLOCKED on [T8300](T8300-operator-scripts-cookie-auth.md) (user directive, 2026-09-01).**
-> Do not start this task until T8300 has landed. `scripts/task-manager.py` (the task board) and
-> `scripts/promote-bugs.py` authenticate to prod using the very bypass this task removes, so
-> shipping this first breaks the task board against production. T8300 moves them to session
-> cookies; then this is safe.
->
-> This is a P0 with a live ~3-month exposure window, so the gate is a sequencing constraint,
-> not permission to let it sit. Both children are small: target the same deploy. See
-> [EPIC.md](EPIC.md) § Sequencing directive.
+> **Unblocked 2026-09-01.** [T8300](T8300-operator-scripts-cookie-auth.md) landed on master
+> (merge `bc312f54`): both operator scripts now authenticate with `rb_session` cookies only,
+> verified live against prod and staging with real admin sessions. Safe to remove the
+> `X-User-ID` carve-out.
 
 ## Problem
 
