@@ -10,9 +10,11 @@ adds `_record_upload_failure` calls at the REAL in-flight failure sites in
   - finalize_upload: complete-multipart False -> sync_failed; head missing -> sync_failed;
     size mismatch -> network
   - cancel_upload (explicit user cancel) -> user_abandoned
-  - upload_failure_beacon, ONLY phase == "uploading" -> network (preparing/finalizing
-    are deliberately NOT recorded server-side here, to avoid double-counting the
-    server-side prepare/finalize branches that already recorded them)
+  - upload_failure_beacon, ONLY phase == "uploading" -> classified from the client's
+    own failure message (T8170: `_classify_uploading_phase_failure`) into network /
+    r2_rejected / timeout / unknown, no longer hardcoded to `network` (preparing/
+    finalizing are deliberately NOT recorded server-side here, to avoid double-counting
+    the server-side prepare/finalize branches that already recorded them)
 
 This file proves those call sites emit the right milestone end-to-end through the
 real endpoints (TestClient) against real dev Postgres (pg_conn fixture).
@@ -242,18 +244,54 @@ def test_cancel_upload_records_user_abandoned(monkeypatch):
 
 def test_beacon_phase_uploading_records_network():
     """upload-failure-beacon with phase=uploading is the one client-side failure the
-    server never otherwise sees -> HTTP 204 AND a game_upload_failed:network row."""
+    server never otherwise sees -> HTTP 204 AND a milestone row. A genuine transport
+    drop ("network error", from uploadPart's xhr.onerror) classifies as `network`."""
     before = _action_count(TEST_USER_ID, "game_upload_failed:network")
 
     with _client() as client:
         resp = client.post(
             "/api/games/upload-failure-beacon",
-            json={"phase": "uploading", "reason": "stalled"},
+            json={"phase": "uploading", "reason": "Part 1 network error"},
         )
 
     assert resp.status_code == 204
     after = _action_count(TEST_USER_ID, "game_upload_failed:network")
     assert after >= before + 1
+
+
+def test_beacon_phase_uploading_r2_rejection_records_r2_rejected_not_network():
+    """T8170: bug 47p / the T8160 outage's exact signature -- an R2 part PUT itself
+    returning a non-2xx ("Part N upload failed: 404", from uploadPart's xhr.onload
+    status branch) is NOT a dropped transport. Before T8170 this was hardcoded to
+    `network`, hiding a 2-day prod outage behind a reason that pointed diagnosis at
+    users' connections instead of our own self-abort bug."""
+    before_rejected = _action_count(TEST_USER_ID, "game_upload_failed:r2_rejected")
+    before_network = _action_count(TEST_USER_ID, "game_upload_failed:network")
+
+    with _client() as client:
+        resp = client.post(
+            "/api/games/upload-failure-beacon",
+            json={"phase": "uploading", "reason": "Part 2 upload failed: 404"},
+        )
+
+    assert resp.status_code == 204
+    assert _action_count(TEST_USER_ID, "game_upload_failed:r2_rejected") >= before_rejected + 1
+    assert _action_count(TEST_USER_ID, "game_upload_failed:network") == before_network
+
+
+def test_beacon_phase_uploading_stalled_records_timeout():
+    """'stalled'/'timed out' (uploadPart's watchdog reject reasons) classify as
+    `timeout`, distinct from both `network` and `r2_rejected`."""
+    before = _action_count(TEST_USER_ID, "game_upload_failed:timeout")
+
+    with _client() as client:
+        resp = client.post(
+            "/api/games/upload-failure-beacon",
+            json={"phase": "uploading", "reason": "Part 1 stalled (no progress for 30s)"},
+        )
+
+    assert resp.status_code == 204
+    assert _action_count(TEST_USER_ID, "game_upload_failed:timeout") >= before + 1
 
 
 def test_beacon_phase_finalizing_does_not_double_count():

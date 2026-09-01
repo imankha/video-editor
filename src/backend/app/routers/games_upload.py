@@ -78,7 +78,7 @@ def _record_upload_failure(user_id: str | None, reason: str) -> None:
     Success" denominator was success-only by construction (100% by construction).
     This records the actual failure branches (R2 error, validation rejection, size
     mismatch, explicit cancel, client-side network abort) using the existing
-    `analytics.MILESTONE_REASONS` taxonomy — never a new reason string.
+    `analytics.MILESTONE_REASONS` taxonomy.
 
     Best-effort: analytics must NEVER break the upload's own error path, so a failed
     milestone write is swallowed (and an absent user_id — anon beacon — is skipped).
@@ -91,6 +91,32 @@ def _record_upload_failure(user_id: str | None, reason: str) -> None:
         record_milestone(user_id, "game_upload_failed", reason=reason)
     except Exception:
         logger.exception("[T7970] failed to record game_upload_failed milestone")
+
+
+# T8170: an HTTP status embedded in an uploadPart rejection message (see
+# uploadManager.js's uploadPart -- "Part N upload failed: <status>"). A part
+# PUT that itself got a non-2xx from R2 is NOT a dropped transport; the T8160
+# outage's entire signature was exactly this (404 NoSuchUpload from a
+# self-aborted multipart) mislabeled as "network" for 2 days, pointing
+# diagnosis at users' connections instead of our own bug.
+_PART_HTTP_STATUS_RE = re.compile(r"upload failed: (\d{3})")
+
+
+def _classify_uploading_phase_failure(reason_text: str | None) -> str:
+    """Map the client's free-text uploadPart failure message (T7480's
+    reject reasons: 'Part N upload failed: <status>', 'stalled', 'timed out',
+    'network error', 'aborted') to a MILESTONE_REASONS entry. Prefers the
+    embedded HTTP status when present — that is server-observed fact, not a
+    client guess about why the transport failed."""
+    text = reason_text or ""
+    if _PART_HTTP_STATUS_RE.search(text):
+        return "r2_rejected"
+    lowered = text.lower()
+    if "stalled" in lowered or "timed out" in lowered:
+        return "timeout"
+    if "network error" in lowered:
+        return "network"
+    return "unknown"
 
 
 # ==============================================================================
@@ -580,16 +606,18 @@ async def upload_failure_beacon(request: Request):
 
     # T7970: a terminal client-side failure in the PART-UPLOAD phase is the one real
     # failure the server never otherwise sees — the client exhausted its part retries
-    # and gave up WITHOUT ever calling finalize (no server-side branch fired). Record
-    # it as `network` (a dropped/too-slow transport, the dominant slow-uplink failure).
-    # The 'preparing' and 'finalizing' phases are DELIBERATELY skipped here: those
-    # failures already reached the server and are recorded by prepare-upload's
-    # validation/create branches and finalize's complete/size branches respectively,
-    # so emitting again would double-count the SAME failure and inflate the denominator.
-    # `_record_upload_failure` guards a None user_id (anon beacon) and never throws, so
-    # the fire-and-forget/always-204 contract holds.
+    # and gave up WITHOUT ever calling finalize (no server-side branch fired).
+    # T8170: classify from the client's own failure message instead of hardcoding
+    # "network" — that mislabel hid the entire T8160 outage (a part PUT 404 from R2
+    # is not a dropped transport) behind a reason that pointed diagnosis at users'
+    # connections. The 'preparing' and 'finalizing' phases are DELIBERATELY skipped
+    # here: those failures already reached the server and are recorded by
+    # prepare-upload's validation/create branches and finalize's complete/size
+    # branches respectively, so emitting again would double-count the SAME failure
+    # and inflate the denominator. `_record_upload_failure` guards a None user_id
+    # (anon beacon) and never throws, so the fire-and-forget/always-204 contract holds.
     if phase == "uploading":
-        _record_upload_failure(user_id, "network")
+        _record_upload_failure(user_id, _classify_uploading_phase_failure(reason))
 
     # 204 No Content — nothing to return.
     return None

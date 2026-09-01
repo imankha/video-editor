@@ -363,6 +363,78 @@ class TestPulseEndpoint:
         assert resp.json()["cards"]["viral_conversion"]["today"] == self._direct_referral_rate()
 
 
+class TestUploadSuccessRateAlarm:
+    """T8170: the T8160 outage sat at 29% upload success for ~2 days with no
+    alert -- a red banner + CRITICAL log must fire when the rate genuinely
+    collapses (>= MIN_ATTEMPTS with rate < THRESHOLD), and must NOT fire on a
+    quiet day with too few attempts to mean anything.
+
+    KNOWN LOCAL-CLOCK CAVEAT (filed as T8250, found writing these tests): the
+    pulse endpoint computes its date window with Python's LOCAL `date.today()`
+    while `daily_counters` rows are written keyed on Postgres's UTC
+    `CURRENT_DATE`. In a negative-UTC-offset timezone, running these tests in
+    the local-evening/UTC-morning window can see today's milestone land under
+    a counter_date the query's range excludes, making `card["today"]` read
+    None/0 regardless of what was just recorded. Not a bug in this test or the
+    alarm logic (verified directly: user_actions + daily_counters both
+    increment correctly) -- CI runs in UTC and is unaffected. If this file
+    flakes ONLY near a local midnight-UTC boundary, that is T8250, not a
+    regression here."""
+
+    def _record_and_flush(self, user_id: str, succeeded: int, failed: int):
+        for _ in range(succeeded):
+            record_milestone(user_id, "game_upload_succeeded")
+        for _ in range(failed):
+            record_milestone(user_id, "game_upload_failed", reason="r2_rejected")
+        _counter_buffer.flush()
+
+    def test_collapsed_rate_with_enough_attempts_sets_alarm_true(self, client, pg_conn, caplog):
+        # 2 succeeded / 8 failed = 20% over 10 attempts -- well past both the
+        # THRESHOLD (70%) and MIN_ATTEMPTS (5) guards, matching the real outage shape.
+        self._record_and_flush("user-a", succeeded=2, failed=8)
+
+        import logging
+        with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
+            resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["alarm"] is True
+        assert card["today"] < 70.0
+        assert any("[T8170]" in r.message and "collapsed" in r.message for r in caplog.records), (
+            "expected a CRITICAL [T8170] log line when the alarm fires"
+        )
+
+    def test_healthy_rate_never_sets_alarm(self, client, pg_conn):
+        # 9 succeeded / 1 failed = 90% over 10 attempts -- above threshold, no alarm.
+        self._record_and_flush("user-a", succeeded=9, failed=1)
+
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["alarm"] is False
+
+    def test_low_sample_size_never_sets_alarm_even_at_zero_percent(self, client, pg_conn):
+        # 0 succeeded / 1 failed = 0% -- but only 1 attempt, below MIN_ATTEMPTS. A
+        # single unlucky attempt on a quiet day must not read as a fleet-wide collapse.
+        self._record_and_flush("user-a", succeeded=0, failed=1)
+
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["today"] == 0.0
+        assert card["alarm"] is False
+
+    def test_no_attempts_alarm_is_false_not_missing(self, client):
+        # The default analytics_setup fixture records no game_upload_succeeded/failed
+        # milestones for a fresh window -- today is None ("--" on the card) and alarm
+        # must still be a real boolean, never absent (the frontend indexes it directly).
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["alarm"] is False
+
+
 class TestUserActions:
     def test_record_milestone_upserts_action(self, analytics_setup, pg_conn):
         from app.services.pg import get_pg
