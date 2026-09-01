@@ -89,8 +89,8 @@ def test_quest_1_has_six_steps_with_rate_clip():
     ids = q1["step_ids"]
     assert ids.index("rate_clip") == ids.index("add_clip") + 1
     assert ids.index("annotate_brilliant") == ids.index("rate_clip") + 1
-    # Reward unchanged
-    assert q1["reward"] == 15
+    # T8120: per-quest rewards are retired; credits are granted upfront instead.
+    assert q1["reward"] == 0
 
 
 def test_clip_rated_is_known_and_stepped():
