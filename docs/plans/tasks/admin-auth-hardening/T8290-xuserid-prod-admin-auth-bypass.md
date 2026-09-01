@@ -1,9 +1,20 @@
 # T8290: `X-User-ID` header is a live authentication bypass for the whole admin surface on production
 
-**Status:** TODO
+**Status:** TODO (BLOCKED)
 **Impact:** 10
 **Complexity:** 3
 **Created:** 2026-09-01
+**Epic:** [Admin Auth Hardening](EPIC.md) — child 2 of 2
+
+> **BLOCKED on [T8300](T8300-operator-scripts-cookie-auth.md) (user directive, 2026-09-01).**
+> Do not start this task until T8300 has landed. `scripts/task-manager.py` (the task board) and
+> `scripts/promote-bugs.py` authenticate to prod using the very bypass this task removes, so
+> shipping this first breaks the task board against production. T8300 moves them to session
+> cookies; then this is safe.
+>
+> This is a P0 with a live ~3-month exposure window, so the gate is a sequencing constraint,
+> not permission to let it sit. Both children are small: target the same deploy. See
+> [EPIC.md](EPIC.md) § Sequencing directive.
 
 ## Problem
 
@@ -128,9 +139,9 @@ a **credential**.
    first (`db_sync.py:802-821`); the carve-out only ever served curl-style scripts.
 2. **`shares.py:171-194`** — wrap both header reads in `if APP_ENV != "production":`, matching
    `auth.py:432`.
-3. **Operator tooling** — `scripts/task-manager.py:203-207` already supports real cookie auth.
-   Delete the UUID branch at `:204-205`, have operators paste an `rb_session` cookie, and fix
-   the stale docstring at `:197-198`. Same for `scripts/promote-bugs.py:34`.
+3. **Operator tooling** — split out as **[T8300](T8300-operator-scripts-cookie-auth.md)** and
+   must already be done before this task starts (see the BLOCKED banner above). Nothing to do
+   here beyond confirming it landed: grep `scripts/` for `X-User-ID` and expect no hits.
 4. **Regression tests** (bug-reproduction skill, failing first): with `APP_ENV="production"`,
    assert `X-User-ID` alone yields 401/403 on an admin route AND on each `shares.py` route
    above; assert cookie auth still succeeds on both.
@@ -150,5 +161,9 @@ credit-grant history for the same window.
 Found 2026-09-01 while doing the Tbug49p production remediation for bknoto@gmail.com — the
 remediation itself depended on this bypass (the prior session's handoff had filed "why does
 `X-User-ID` work on prod?" as an unexplained curiosity). Reported to the user, who chose to file
-rather than fix immediately. **Fixing this will break `scripts/task-manager.py` and
-`scripts/promote-bugs.py` until step 3 lands — do steps 1-3 together.**
+rather than fix immediately.
+
+Originally filed as a standalone task with the operator-script migration as step 3 of its own
+solution. Restructured into the [Admin Auth Hardening](EPIC.md) epic on 2026-09-01 (user
+directive) so that migration is its own tracked, sequenced task ([T8300](T8300-operator-scripts-cookie-auth.md))
+rather than a buried sub-step that could be skipped by an agent implementing this file.
