@@ -281,6 +281,19 @@ gesture lands — no save/export.
   (CropLayer.jsx:163-167) — every crop keyframe deletable. RegionLayer (highlight) still gates
   `!isPermanent && keyframes.length > 2` (RegionLayer.jsx:302) — that stale pre-flat-list rule IS
   the "can't delete first keyframe" bug, fixed by T4450.
+- **reel_source_start_time/end_time refresh (T8070)** — every export-completion write site that
+  produces reel artifacts also refreshes a per-clip staleness snapshot on `raw_clips`, so the
+  annotate Reel control can tell whether the produced reel still reflects the clip's CURRENT
+  boundaries. Focus: `export_framing` (framing.py) and multi-clip `upsert_working_video`
+  (export_finalize.py). Overlay: both `final_videos` INSERT sites — the shared finalizer
+  `_finalize_overlay_export` (overlay.py, inside its existing transaction) and the inline
+  `export_final` path (overlay.py) — each does its own column-guarded
+  `UPDATE raw_clips SET reel_source_start_time = start_time, reel_source_end_time = end_time`
+  before commit, copying the row's own current values verbatim (no arithmetic — required for the
+  exact `===` comparison on read). `export_overlay_only` does NOT write `final_videos` (raw
+  FileResponse only) so it is NOT a refresh site. Full mechanism, invariants (INV-1..INV-6), and
+  the annotate-side comparison: `.claude/knowledge/annotate.md` § `reel_source_*` and
+  `docs/plans/tasks/T8070-design.md`.
 - **Backend RMW pattern**: `_get_clip_framing_data` → mutate → `_save_clip_framing_data`
   (clips.py:267-309), in place. Atomic only because there is no `await` between read and commit
   (audit B8 → T4360). Overlay same shape with `overlay_version+1` (overlay.py:379-393).

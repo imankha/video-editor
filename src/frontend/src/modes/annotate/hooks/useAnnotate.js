@@ -698,6 +698,11 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
         videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
         autoProjectId: annotation.autoProjectId ?? annotation.auto_project_id ?? null,
+        // T8070: the start/end window this clip's linked reel was built from.
+        // null = no produced reel; compared by value against startTime/endTime to
+        // decide whether the Reel control still reflects the current footage.
+        reelSourceStartTime: annotation.reelSourceStartTime ?? annotation.reel_source_start_time ?? null,
+        reelSourceEndTime: annotation.reelSourceEndTime ?? annotation.reel_source_end_time ?? null,
         tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
         my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
         shared_by: annotation.shared_by ?? null,

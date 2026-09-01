@@ -298,6 +298,26 @@ async def export_framing(
                 clips_updated = cursor.rowcount
                 logger.info(f"[Framing Export] Fallback: Set exported_at for {clips_updated} clips")
 
+        # T8070: refresh the reel-source window for every clip this export
+        # actually rendered, to the clip's CURRENT boundaries (INV-3: copy the
+        # stored start/end verbatim). This is the value the annotate Reel control
+        # compares against to decide "does the produced reel still reflect this
+        # clip." Column-guarded for the deploy->migrate window (v049 not applied):
+        # skip rather than 500 the export finalize.
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            cursor.execute(f"""
+                UPDATE raw_clips
+                SET reel_source_start_time = start_time,
+                    reel_source_end_time = end_time
+                WHERE id IN (
+                    SELECT raw_clip_id FROM working_clips
+                    WHERE project_id = ?
+                    AND id IN ({latest_working_clips_subquery()})
+                    AND raw_clip_id IS NOT NULL
+                )
+            """, (project_id, project_id))
+            logger.info(f"[Framing Export] Refreshed reel_source window for {cursor.rowcount} clips in project {project_id}")
+
         conn.commit()
 
         logger.info(f"[Framing Export] Created working video {working_video_id} for project {project_id}")

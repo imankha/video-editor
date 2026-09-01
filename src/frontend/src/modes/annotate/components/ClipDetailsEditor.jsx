@@ -122,6 +122,22 @@ export function ClipDetailsEditor({
   const projects = useProjectsList();
   const linkedProject = hasReel ? projects.find(p => p.id === region.autoProjectId) : null;
 
+  // T8070: the reel's produced working_video/final_video were rendered from a
+  // specific start/end window, snapshotted onto the raw_clip
+  // (reelSourceStartTime/EndTime) at export completion. Only surface the produced
+  // stage while the clip's CURRENT boundaries still match that window EXACTLY
+  // (exact equality, no epsilon — a genuine nudge is a real drift). Editing the
+  // clip's start/end after producing the reel drops the control back to
+  // "Create Reel"; reverting to the exact producing values restores the produced
+  // status (the snapshot is frozen until the NEXT export, so this is a pure value
+  // comparison). Display-level only — region.autoProjectId is never mutated by it.
+  const reelReflectsClip =
+    hasReel &&
+    region.reelSourceStartTime != null &&
+    region.reelSourceEndTime != null &&
+    region.startTime === region.reelSourceStartTime &&
+    region.endTime === region.reelSourceEndTime;
+
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
   // (`my_athlete ?? true` => My Athlete) — never read region.my_athlete bare.
   const isTeamLayer = (region.my_athlete ?? true) === false;
@@ -350,19 +366,20 @@ export function ClipDetailsEditor({
             there's nothing left to open from here. While the create-reel
             request is in flight (reelRequested but no autoProjectId yet),
             it stays disabled/"Reel Created" as before.
-            T8070 (filed, not yet built): none of this accounts for the
-            clip's start/end time changing after the reel was produced —
-            the linked reel's stage is shown even if it no longer reflects
-            the clip's current footage window. */}
+            T8070: the produced-stage branches are gated on reelReflectsClip —
+            if the clip's start/end changed since the reel was produced, the
+            stage is hidden and the control drops to "Create Reel" until the
+            boundaries are reverted to the exact producing window (or the reel
+            is re-exported). */}
         {!isMobile && (
           <div className="flex items-center justify-between">
             <label className="text-gray-400 text-xs">Reel</label>
-            {hasReel && linkedProject?.has_final_video ? (
+            {reelReflectsClip && linkedProject?.has_final_video ? (
               <span className="text-xs text-green-400 flex items-center gap-1.5">
                 <Check size={14} />
                 {linkedProject.is_published ? 'Published' : 'Completed'}
               </span>
-            ) : hasReel && linkedProject?.has_working_video ? (
+            ) : reelReflectsClip && linkedProject?.has_working_video ? (
               <Button
                 variant="cyan"
                 size="sm"
@@ -371,7 +388,7 @@ export function ClipDetailsEditor({
               >
                 Overlay
               </Button>
-            ) : hasReel ? (
+            ) : reelReflectsClip ? (
               <Button
                 variant="cyan"
                 size="sm"
