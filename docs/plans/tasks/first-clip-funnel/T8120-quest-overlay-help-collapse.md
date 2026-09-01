@@ -1,6 +1,6 @@
 # T8120: Quest overlay yields: collapse to Help button + upfront credits
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-31
@@ -72,7 +72,16 @@ would have awarded upfront.
 
 ## Acceptance Criteria
 
-- [ ] No viewport (320px+) where quest/help UI occludes a tappable control while any modal is open
-- [ ] Collapsed stays collapsed across navigations and reloads
-- [ ] New signup balance = full quest-chain total; mid-quest account gets exact remainder once
+- [x] No viewport (320px+) where quest/help UI occludes a tappable control while any modal is open
+- [x] Collapsed stays collapsed across navigations and reloads
+- [x] New signup balance = full quest-chain total; mid-quest account gets exact remainder once
 - [ ] Metrics to watch post-ship: `upload_file_selected/add_game_opened` (mobile, baseline 2/6); `watched_annotate_tutorial` should FALL; zero-clip `payment_started` should stop
+
+### Progress Log
+
+**2026-09-01**: Implemented, reviewed. Branch CI initially red - `test_rate_clip_step.py`/
+`test_return_home_step.py` asserted the old per-step reward values (15/25) this task
+intentionally zeroed out; fixed and re-pushed. CI now green
+(`feature/T8120-quest-overlay-help-collapse`). QA note: full-browser e2e occlusion drive
+not runnable in the container (no chromium/network); covered by jsdom-based occlusion
+tests + a written e2e spec instead. Awaiting user test + merge.
