@@ -40,8 +40,8 @@ HASH = "a" * 64
 
 
 def _ctx():
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
     set_current_user_id(USER_ID)
     set_current_profile_id(PROFILE_ID)
 
@@ -63,11 +63,13 @@ def dur_env(tmp_path, monkeypatch):
         import app.routers.games as games_mod
         monkeypatch.setattr(games_mod, "record_milestone", lambda *a, **k: None)
 
-        from app.main import app
         from app.database import (
-            ensure_database, set_local_db_version, get_db_connection,
+            ensure_database,
+            get_db_connection,
+            set_local_db_version,
             sync_db_to_r2_explicit,
         )
+        from app.main import app
         from app.services.user_db import ensure_user_database
 
         _ctx()
@@ -113,7 +115,7 @@ def _profile_db_path(base):
 def _simulate_machine_replacement(base):
     """Wipe every machine-local surface: profile + user version caches and the
     on-disk sqlite files (+ WAL sidecars). Only the fake R2 store survives."""
-    from app.database import set_local_db_version, set_local_user_db_version, reset_initialized_flag
+    from app.database import reset_initialized_flag, set_local_db_version, set_local_user_db_version
     from app.services.user_db import _init_lock, _initialized_user_dbs
     set_local_db_version(USER_ID, PROFILE_ID, None)
     set_local_user_db_version(USER_ID, None)
@@ -165,7 +167,7 @@ def _activate_stubs():
 
 @pytest.mark.asyncio
 async def test_activated_game_survives_machine_replacement(dur_env):
-    app, fake, base, game_id = dur_env
+    app, _fake, base, game_id = dur_env
 
     stubs = _activate_stubs()
     for s in stubs:
@@ -196,7 +198,7 @@ async def test_activated_game_survives_machine_replacement(dur_env):
 
 @pytest.mark.asyncio
 async def test_activate_forced_sync_failure_returns_503(dur_env):
-    app, fake, base, game_id = dur_env
+    app, fake, _base, game_id = dur_env
     fake.fail_profile_upload = True
 
     stubs = _activate_stubs()

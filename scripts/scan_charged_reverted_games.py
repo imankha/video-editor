@@ -129,7 +129,7 @@ def main():
     )
     for gid, name, blake3, created in victims:
         print(f"  [VICTIM] id={gid} name={name!r} hash={(blake3 or '')[:12]} created_at={created}")
-    for gid, name, blake3, created in pending:
+    for gid, name, _blake3, created in pending:
         if str(gid) not in charged:
             print(f"  [uncharged-pending] id={gid} name={name!r} created_at={created}")
 
