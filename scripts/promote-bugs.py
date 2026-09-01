@@ -26,14 +26,14 @@ BUG_REF_PATTERN = re.compile(r"(?:bug\s+#?|#)(\d+)(p|s)", re.IGNORECASE)
 
 
 def _make_request(url, method="GET", data=None, session="", retries=3):
+    """Make an HTTP request with session cookie auth. A raw user_id is not accepted --
+    only a real rb_session cookie authenticates, on every environment including
+    production."""
     last_err = None
     for attempt in range(retries):
         req = urllib.request.Request(url, method=method)
         if session:
-            if len(session) == 36 and session.count("-") == 4:
-                req.add_header("X-User-ID", session)
-            else:
-                req.add_header("Cookie", f"rb_session={session}")
+            req.add_header("Cookie", f"rb_session={session}")
         if data is not None:
             req.data = json.dumps(data).encode()
             req.add_header("Content-Type", "application/json")
@@ -41,7 +41,12 @@ def _make_request(url, method="GET", data=None, session="", retries=3):
         try:
             resp = urllib.request.urlopen(req, context=ctx, timeout=15)
             return json.loads(resp.read())
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise Exception(
+                    "Auth required -- paste a fresh rb_session cookie into "
+                    ".task-manager-config.json (a user_id is not accepted)"
+                ) from e
             raise
         except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
             last_err = str(getattr(e, "reason", e))
