@@ -6,27 +6,32 @@
 # E2E_REAL_PROFILE at import time, so per-PROCESS env is the account seam —
 # Playwright projects cannot set per-project env):
 #
-#   lane A (@gate-a)  account 1 (imankh, unaliased)          — ALL heavy writes (export pipeline, publish, shares)
-#   lane B (@gate-b)  account 2 (arshia+stg, prod alias)     — browsing + light writes
-#   lane C (@gate-c)  account 3 (bknoto+stg, prod alias)     — mocked public viewers + slow reads
+#   lane A (@gate-a)  account 1 (imankh) — ALL heavy writes (export pipeline, publish, shares)
+#   lane B (@gate-b)  account 2 (alias)  — browsing + light writes
+#   lane C (@gate-c)  account 3 (alias)  — mocked public viewers + slow reads
 #
 # EVERY lane gets its OWN account: concurrent write sessions on one account cause
 # stale_baseline R2 CAS freezes, and even the B/C pairing (light writes + server
 # compose) is only provably safe when staging runs a single machine — a second
 # machine gives each session its own profile.sqlite copy and the CAS loser
-# freezes. Each account is one seed command (--to-email), so no lane shares.
+# freezes. Three alias clones cost nothing extra (--to-email), so no lane shares.
 # See src/frontend/e2e/STAGING-GATE.md.
+#
+# 2026-09-01: briefly tried real paying-user prod accounts (arshia+stg, bknoto+stg)
+# for lanes B/C instead of imankh clones -- RED, not a phantom-CI issue: real
+# accounts don't satisfy FIXTURE-CONTRACT.md's guarantees (unfinalized reel draft,
+# recap_video_url present, specific My-Reels group state, ...) that several gate
+# specs assume. Reverted to imankh-clone aliases. Keep arshia+stg/bknoto+stg as
+# separate prod-derived test fixtures for support/investigation use — do not point
+# the gate at them again without first checking whether their spec set still needs
+# FIXTURE-CONTRACT guarantees.
 #
 # PRE-REQ (runbook step 0, idempotent — see FIXTURE-CONTRACT.md § Seeding):
 #   all three fixture accounts seeded, which also resets drift from prior gate
-#   runs and guarantees the export spec a framed draft (its fast 2-6 min path).
-#   2026-08-31: lanes B/C moved off imankh-clone aliases onto real paying-user
-#   accounts copied down from PROD (google_id nulled so they can't OAuth-login as
-#   the real user) — copy each straight from prod, not re-derived from dev:
+#   runs and guarantees the export spec a framed draft (its fast 2-6 min path):
 #     cd src/backend && .venv/Scripts/python.exe ../../scripts/copy_user_between_envs.py \
 #         --email imankh@gmail.com --from dev --to staging --dest-machines-stopped
-#     ... and for lanes B/C, copy the SOURCE prod account with --to-email "$GATE2_EMAIL" /
-#         "$GATE3_EMAIL" respectively (see copy_user_between_envs.py --from prod usage)
+#     ... and again with:  --to-email "$GATE2_EMAIL"   and   --to-email "$GATE3_EMAIL"
 #   (then restart the staging machines — see memory: restart staging after reset)
 #
 # Usage: bash scripts/staging-gate.sh
@@ -38,13 +43,13 @@ BASE_URL="${E2E_BASE_URL:-https://reel-ballers-staging.pages.dev}"
 API_BASE="${E2E_API_BASE:-https://reel-ballers-api-staging.fly.dev/api}"
 GATE1_EMAIL="${GATE1_EMAIL:-imankh@gmail.com}"
 GATE1_PROFILE="${GATE1_PROFILE:-9fa7378c}"
-# 2026-08-31: e2e-gate@test.local / e2e-gate2@test.local were deleted as stale/duplicate
-# dev+staging accounts; lanes B/C now use real paying-user data copied down from prod
-# (google_id nulled, each aliased under its own +stg address) instead of imankh clones.
-GATE2_EMAIL="${GATE2_EMAIL:-arshia+stg@test.local}"
-GATE2_PROFILE="${GATE2_PROFILE:-b95eb93b}"
-GATE3_EMAIL="${GATE3_EMAIL:-bknoto+stg@test.local}"
-GATE3_PROFILE="${GATE3_PROFILE:-e1e28f91}"
+# The alias clones mirror imankh's data, so their profile GUID is the same.
+# Re-seeded 2026-09-01 after e2e-gate@test.local/e2e-gate2@test.local were deleted
+# during an earlier account cleanup this session.
+GATE2_EMAIL="${GATE2_EMAIL:-e2e-gate@test.local}"
+GATE2_PROFILE="${GATE2_PROFILE:-9fa7378c}"
+GATE3_EMAIL="${GATE3_EMAIL:-e2e-gate2@test.local}"
+GATE3_PROFILE="${GATE3_PROFILE:-9fa7378c}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND="$REPO_ROOT/src/frontend"
