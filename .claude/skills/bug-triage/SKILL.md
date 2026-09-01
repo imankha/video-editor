@@ -66,7 +66,7 @@ url = config[f'{env}_url']
 session = config[f'{env}_session']
 
 req = urllib.request.Request(f'{url}/api/admin/bugs/{id}')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
 print(resp.read().decode())
 "
@@ -91,7 +91,7 @@ url = config[f'{env}_url']
 session = config[f'{env}_session']
 
 req = urllib.request.Request(f'{url}/api/admin/bugs/{id}', method='PATCH')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 req.add_header('Content-Type', 'application/json')
 req.data = json.dumps({'status': '{status}'}).encode()
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
@@ -121,13 +121,13 @@ session = config[f'{env}_session']
 
 # Fetch the bug being marked as duplicate
 req = urllib.request.Request(f'{url}/api/admin/bugs/{id}')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
 source = json.loads(resp.read().decode())
 
 # Fetch the target's correlated cluster
 req = urllib.request.Request(f'{url}/api/admin/bugs/{target_id}/correlated')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
 cluster = json.loads(resp.read().decode())
 
@@ -161,7 +161,7 @@ session = config[f'{env}_session']
 
 # Get current primary admin_notes
 req = urllib.request.Request(f'{url}/api/admin/bugs/{target_id}')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
 target = json.loads(resp.read().decode())
 
@@ -173,7 +173,7 @@ new_notes = existing_notes.rstrip() + '''
 {contributions}'''
 
 req = urllib.request.Request(f'{url}/api/admin/bugs/{target_id}', method='PATCH')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 req.add_header('Content-Type', 'application/json')
 req.data = json.dumps({'admin_notes': new_notes}).encode()
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
@@ -208,7 +208,7 @@ url = config[f'{env}_url']
 session = config[f'{env}_session']
 
 req = urllib.request.Request(f'{url}/api/admin/bugs/{id}', method='PATCH')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 req.add_header('Content-Type', 'application/json')
 req.data = json.dumps({'duplicate_of': {target_id}}).encode()
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
@@ -360,7 +360,7 @@ url = config[f'{env}_url']
 session = config[f'{env}_session']
 
 req = urllib.request.Request(f'{url}/api/admin/bugs/{id}/correlated')
-req.add_header('X-User-ID', session)
+req.add_header('Cookie', f'rb_session={session}')
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
 data = json.loads(resp.read().decode())
 print(json.dumps(data, indent=2))
