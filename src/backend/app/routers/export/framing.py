@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from ...constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from ...database import column_exists, get_db_connection
-from ...highlight_transform import canonicalize_segments_data, get_output_duration
+from ...highlight_transform import canonicalize_segments_data, compute_export_credits, get_output_duration
 from ...interpolation import generate_crop_filter
 from ...models import CropKeyframe
 from ...profile_context import get_current_profile_id
@@ -490,7 +490,7 @@ async def render_project(request: RenderRequest, http_request: Request):
         except Exception:
             pass
     video_seconds = get_output_duration(segments_raw, source_duration) if source_duration else source_duration
-    credits_required = math.ceil(video_seconds) if video_seconds > 0 else 0
+    credits_required = compute_export_credits(video_seconds, request.target_fps)
     credits_deducted = 0
 
     if credits_required > 0:

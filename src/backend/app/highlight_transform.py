@@ -21,6 +21,7 @@ TRANSFORMATION FLOW:
 """
 
 import logging
+import math
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -164,6 +165,31 @@ def to_splits_only(segments_data: dict | None) -> dict | None:
     result = dict(segments_data)
     result['boundaries'] = splits
     return result
+
+
+# T8280: a single named constant shared by frontend/backend for the "surface a
+# 30fps cost-saving choice" note. 31 strictly excludes 29.97 (the fleet
+# majority) while catching genuine high-fps sources (50/60fps). Design doc Q3.
+HIGH_FPS_THRESHOLD = 31
+
+
+def compute_export_credits(video_seconds: float, output_fps: int = 30) -> int:
+    """Credit cost for an export (T8280 Stage 2): shared pure helper replacing
+    the duplicated inline `math.ceil(video_seconds)` at framing.py and
+    multi_clip.py's credit-reservation call sites.
+
+    `output_fps` parameterizes the ratio the design doc's Q1 resolution
+    describes as `max(1, output_fps/30)` -- i.e. "the fps this render actually
+    costs GPU-time as if it were". Both live call sites always pass
+    target_fps=30 for the whole of Option B's scope, which is exactly
+    `compute_export_credits(seconds, 30) == ceil(seconds)` -- the
+    identity/regression case. The max(1, ...) clamp means a sub-30 output_fps
+    never produces a price below the flat ceil(seconds) -- no GPU-cost
+    discount for sub-30 sources (you cannot skip frames you do not have).
+    """
+    if video_seconds <= 0:
+        return 0
+    return math.ceil(video_seconds * max(1, output_fps / 30))
 
 
 def get_output_duration(segments_data: dict | None, source_duration: float = None) -> float:

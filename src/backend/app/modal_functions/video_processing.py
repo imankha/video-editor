@@ -2518,6 +2518,25 @@ def _get_trim_range(segment_data: dict, duration: float) -> tuple:
     return 0, duration
 
 
+def _should_emit_downsampled_frame(frame_num_rel: int, original_fps: float,
+                                    target_fps: float, last_emitted_grid_idx: int) -> tuple[bool, int]:
+    """Integer-cadence resampler (T8280): decides whether a just-decoded SOURCE
+    frame lands on the TARGET fps grid, so the caller can skip enhance()+imwrite()
+    for frames that would be discarded by ffmpeg's -r anyway -- paying the GPU
+    cost only for frames that survive the down-sample.
+
+    frame_num_rel is 0-based within the clip's own trim window (start_frame
+    already subtracted). Gated single path: when target_fps >= original_fps
+    (native / no-op / sub-30-source case), the grid index advances by >= 1
+    every source frame, so every frame is emitted -- this is a no-op gate, not
+    a parallel code path.
+    """
+    grid_idx = int(frame_num_rel * target_fps / original_fps)
+    if grid_idx > last_emitted_grid_idx:
+        return True, grid_idx
+    return False, last_emitted_grid_idx
+
+
 def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_audio, audio_start_time, frame_count, input_fps=None):
     """Build FFmpeg command for simple encoding (no speed changes).
 
@@ -2805,7 +2824,14 @@ def process_clips_ai(
                 if not cap.isOpened():
                     raise ValueError(f"Could not open scratch video: {scratch_path}")
 
-                original_fps = cap.get(cv2.CAP_PROP_FPS) or fps
+                _probed_fps = cap.get(cv2.CAP_PROP_FPS)
+                if not _probed_fps:
+                    logger.warning(
+                        f"[{job_id}] Clip {clip_idx+1}: cv2.CAP_PROP_FPS returned "
+                        f"falsy ({_probed_fps!r}) for scratch video; falling back "
+                        f"to target fps ({fps}) as original_fps"
+                    )
+                original_fps = _probed_fps or fps
                 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -2841,11 +2867,23 @@ def process_clips_ai(
                 output_frame_idx = 0
                 last_yield_frame = 0
                 clip_loop_start = time.time()
+                # T8280: integer-cadence resampler state -- when fps (target) <
+                # original_fps (source), only frames landing on the target grid
+                # get enhanced+written (GPU-cost win). Native/no-op case (target
+                # >= source) emits every frame -- see _should_emit_downsampled_frame.
+                last_grid_idx = -1
 
                 for frame_num in range(start_frame, end_frame):
                     ret, frame = cap.read()
                     if not ret or frame is None:
                         logger.warning(f"[{job_id}] Could not read frame {frame_num}")
+                        continue
+
+                    frame_num_rel = frame_num - start_frame
+                    should_emit, last_grid_idx = _should_emit_downsampled_frame(
+                        frame_num_rel, original_fps, fps, last_grid_idx
+                    )
+                    if not should_emit:
                         continue
 
                     # Keyframe time is relative to clip start; scratch frame 0 IS clip start.
@@ -2936,6 +2974,14 @@ def process_clips_ai(
                     f"in {clip_elapsed:.1f}s ({clip_rate:.2f}fps avg)"
                 )
 
+                # T8280: once frames are down-sampled (fps < original_fps),
+                # output_frame_idx counts EMITTED frames at TARGET cadence, not
+                # source frames -- everything downstream that turns frame counts
+                # into real elapsed seconds must divide by the PNGs' actual
+                # cadence, not always original_fps. Native/no-op case (fps >=
+                # original_fps) keeps today's behavior byte-identical.
+                png_cadence_fps = fps if fps < original_fps else original_fps
+
                 # === Encode this clip ===
                 yield {
                     "progress": int(clip_progress_end - 2),
@@ -2969,8 +3015,11 @@ def process_clips_ai(
                     # Bug 49p: output_frame_idx counts SOURCE frames (one PNG
                     # per source frame read in the loop above), so this must
                     # divide by original_fps to get real elapsed seconds, not
-                    # the target fps.
-                    output_duration = output_frame_idx / original_fps
+                    # the target fps. T8280: in the down-sample case
+                    # output_frame_idx instead counts TARGET-cadence frames, so
+                    # png_cadence_fps (== fps when down-sampling, == original_fps
+                    # otherwise) is the correct divisor in both cases.
+                    output_duration = output_frame_idx / png_cadence_fps
 
                     for seg_idx, seg in enumerate(segments):
                         seg_start = max(0, seg['start'] - trim_offset)
@@ -3021,7 +3070,7 @@ def process_clips_ai(
 
                         ffmpeg_cmd = _build_speed_change_ffmpeg_cmd(
                             frame_pattern, scratch_path, clip_output_path,
-                            filter_complex, has_audio_output, original_fps, fps
+                            filter_complex, has_audio_output, png_cadence_fps, fps
                         )
                     else:
                         # Fallback to simple encoding. absolute_start is
@@ -3029,7 +3078,7 @@ def process_clips_ai(
                         ffmpeg_cmd = _build_simple_ffmpeg_cmd(
                             frame_pattern, scratch_path, clip_output_path,
                             fps, has_audio, absolute_start, output_frame_idx,
-                            input_fps=original_fps
+                            input_fps=png_cadence_fps
                         )
                 else:
                     # Simple encoding (no speed changes). absolute_start is
@@ -3037,7 +3086,7 @@ def process_clips_ai(
                     ffmpeg_cmd = _build_simple_ffmpeg_cmd(
                         frame_pattern, scratch_path, clip_output_path,
                         fps, has_audio, absolute_start, output_frame_idx,
-                        input_fps=original_fps
+                        input_fps=png_cadence_fps
                     )
 
                 logger.info(f"[{job_id}] FFmpeg command: {' '.join(ffmpeg_cmd[:8])}...")

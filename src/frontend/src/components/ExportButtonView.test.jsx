@@ -78,6 +78,77 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
   });
 });
 
+describe('ExportButtonView — T8280 high-fps 30fps-choice note (Option B-simple)', () => {
+  // Design doc docs/plans/tasks/T8280-design.md Q4/Q4a: when a clip's surfaced
+  // fps >= HIGH_FPS_THRESHOLD (31), render a one-line note ADJACENT to the
+  // existing credit-estimate line. The credit ESTIMATE VALUE itself is
+  // UNCHANGED (still ceil(seconds), no discount, no toggle) -- B-simple ships
+  // ONE price + ONE note, zero dead controls (no segmented control, no second
+  // "native" price). `sourceFps` is the prop name this test expects the
+  // Implementor to add to ExportButtonView; update here if a different name
+  // is chosen, but the BEHAVIOR (note visibility gated on the threshold,
+  // estimate value unchanged) is the load-bearing assertion.
+
+  it('renders a high-fps note adjacent to the credit estimate when sourceFps >= 31', () => {
+    render(
+      <ExportButtonView
+        {...baseProps}
+        estimatedCredits={9}
+        insufficientForEstimate={false}
+        creditBalance={42}
+        sourceFps={50}
+      />
+    );
+    const estimateLine = screen.getByTestId('export-credit-estimate');
+    // The estimate VALUE is unchanged -- still ceil(seconds), no native-price
+    // discount/premium baked into this number for Option B.
+    expect(estimateLine.textContent).toContain('~9 credit');
+
+    const note = screen.getByTestId('export-high-fps-note');
+    expect(note.textContent).toMatch(/50\s*fps/i);
+    expect(note.textContent).toMatch(/30\s*fps/i);
+  });
+
+  it('does NOT render the high-fps note when sourceFps is below the threshold', () => {
+    render(
+      <ExportButtonView
+        {...baseProps}
+        estimatedCredits={9}
+        insufficientForEstimate={false}
+        creditBalance={42}
+        sourceFps={29.97}
+      />
+    );
+    expect(screen.queryByTestId('export-high-fps-note')).toBeNull();
+  });
+
+  it('does NOT render the high-fps note when sourceFps is unknown (null -- fail safe to today\'s behavior)', () => {
+    render(
+      <ExportButtonView
+        {...baseProps}
+        estimatedCredits={9}
+        insufficientForEstimate={false}
+        creditBalance={42}
+        sourceFps={null}
+      />
+    );
+    expect(screen.queryByTestId('export-high-fps-note')).toBeNull();
+  });
+
+  it('does NOT render the high-fps note while an export is in progress (matches estimate-line visibility)', () => {
+    render(
+      <ExportButtonView
+        {...baseProps}
+        isCurrentlyExporting={true}
+        estimatedCredits={9}
+        creditBalance={42}
+        sourceFps={50}
+      />
+    );
+    expect(screen.queryByTestId('export-high-fps-note')).toBeNull();
+  });
+});
+
 describe('ExportButtonView — T7580 reel vocabulary', () => {
   it('Focus primary CTA reads "Export Focused Video" (T7700)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);

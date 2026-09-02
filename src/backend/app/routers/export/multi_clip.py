@@ -2138,7 +2138,7 @@ async def export_multi_clip(
     captured_profile_id = get_current_profile_id()
 
     # T890: Credit reservation — calculate total duration from clips_data
-    from ...highlight_transform import get_output_duration
+    from ...highlight_transform import compute_export_credits, get_output_duration
     from ...services.credit_ledger import (
         CreditsUnavailable,
         confirm_reservation,
@@ -2152,7 +2152,7 @@ async def export_multi_clip(
         segments = clip_cfg.get('segments')
         total_video_seconds += get_output_duration(segments, clip_duration)
 
-    credits_required = math.ceil(total_video_seconds) if total_video_seconds > 0 else 0
+    credits_required = compute_export_credits(total_video_seconds, target_fps)
     credits_deducted = 0
 
     # T890: Reserve credits (atomic in Postgres), confirm after export_jobs created

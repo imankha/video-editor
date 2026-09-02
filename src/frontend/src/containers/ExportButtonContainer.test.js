@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { buildClipMetadata, calculateEffectiveDuration } from '../utils/effectiveDuration';
-import { estimateExportCredits } from './ExportButtonContainer';
+import { estimateExportCredits, EXPORT_CONFIG } from './ExportButtonContainer';
 import { useCreditStore } from '../stores/creditStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 
@@ -310,5 +310,22 @@ describe('T70: Multi-clip Overlay After Framing Edit', () => {
       expect(clipMetadata.source_clips[2].start_time).toBe(25);
       expect(clipMetadata.source_clips[2].end_time).toBe(45);
     });
+  });
+});
+
+describe('T8280: EXPORT_CONFIG.targetFps stays 30 for Option B scope', () => {
+  // Design doc docs/plans/tasks/T8280-design.md Stage 4 (Option B-simple): no
+  // native-fps delivery ships in this task. Both dispatch sites in
+  // ExportButtonContainer.jsx (formData.append('target_fps', ...) ~line 605,
+  // and the render request body 'target_fps' ~line 644) read EXPORT_CONFIG.targetFps
+  // -- this pins that the constant itself (the single source both dispatch
+  // sites read) is unconditionally 30, i.e. there is no toggle/store slice
+  // that can change it in this task's scope. If the Implementor adds an
+  // fps-choice toggle for a later native-delivery task, EXPORT_CONFIG.targetFps
+  // must NOT become a live/dynamic value read from a toggle for Option B --
+  // it stays the fixed default; the two-price segmented control (Option A
+  // shape) is explicitly NOT part of this task.
+  it('EXPORT_CONFIG.targetFps is exactly 30, regardless of any high-fps source', () => {
+    expect(EXPORT_CONFIG.targetFps).toBe(30);
   });
 });

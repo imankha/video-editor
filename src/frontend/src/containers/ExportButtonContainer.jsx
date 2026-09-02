@@ -15,6 +15,10 @@ import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { calculateEffectiveDuration, sumEffectiveDurations, buildClipMetadata } from '../utils/effectiveDuration';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
+import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
+
+// Re-exported for existing importers (T8280: single source of truth in constants/exportFps.js)
+export { HIGH_FPS_THRESHOLD };
 
 // Re-exported for existing importers (T5780: definitions moved to utils/effectiveDuration.js)
 export { calculateEffectiveDuration, buildClipMetadata };
@@ -1025,6 +1029,20 @@ export function ExportButtonContainer({
   // only — the click still runs the authoritative refresh-balance → 402 → buy-credits flow.
   const insufficientForEstimate = estimatedCredits != null && estimatedCredits > creditBalance;
 
+  // T8280 (Option B-simple): surface the source fps so the View can show a
+  // static "recorded at Xfps, exported at 30fps" note for high-fps sources.
+  // Pure render-time derivation from the SAME `clips` list the credit estimate
+  // already reads (Focus is single-clip-at-a-time for the export panel, but a
+  // multi-clip project should surface the note if ANY clip is high-fps, so we
+  // take the max). No store write, no fetch — never null-coalesced to 30 (a
+  // clip with unknown fps must not trigger the note).
+  const sourceFps = useMemo(() => {
+    if (!clips || clips.length === 0) return null;
+    const fpsValues = clips.map(c => c.fps).filter(v => v != null && !Number.isNaN(v));
+    if (fpsValues.length === 0) return null;
+    return Math.max(...fpsValues);
+  }, [clips]);
+
   // T740: Extraction check removed — framing reads game video directly
 
   // Check if any clips haven't been worked on (no crop or meaningful segment edits)
@@ -1105,6 +1123,8 @@ export function ExportButtonContainer({
     // T5790: pre-flight credit-cost estimate (Framing only, derived — no new state)
     estimatedCredits,
     insufficientForEstimate,
+    // T8280: source fps for the high-fps 30fps-choice note (Option B-simple)
+    sourceFps,
     // T525/T526: Stripe purchase
     showBuyCredits,
     onOpenBuyCredits: () => { console.log('[ExportButtonContainer] Opening BuyCreditsModal'); setShowBuyCredits(true); },

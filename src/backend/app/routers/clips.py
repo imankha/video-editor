@@ -1640,6 +1640,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 g.blake3_hash as game_blake3_hash,
                 g.video_filename as game_video_filename,
                 gv.blake3_hash as gv_blake3_hash,
+                gv.fps as gv_fps,
                 COALESCE(gv.duration, g.video_duration) AS video_duration,
                 COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
@@ -1719,7 +1720,11 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 rating=rating,
                 width=clip['wc_width'],
                 height=clip['wc_height'],
-                fps=clip['wc_fps'],
+                # T8280: legacy clips have NULL working_clips.fps -- fall back to
+                # game_videos.fps, mirroring the multi_clip.py:2320 DB-resolve
+                # fallback Tbug49p established. No fabricated fallback to 30:
+                # None stays None when both sources are absent.
+                fps=clip['wc_fps'] or clip['gv_fps'],
                 # sqlite3.Row has no .get(), and `in row` checks VALUES not column
                 # names (unlike a dict) -- `in row.keys()` is the only correct
                 # membership check here.

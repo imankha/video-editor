@@ -1,6 +1,10 @@
 ---
 domain: modal-gpu
-updated: 2026-08-19 (T7210: fixed modal_call_id recovery capture, dead since ~forever - see Recovery section); 2026-07-11 (T4240 recovery bugs fixed; T3950 branded outro - NOT in Modal)
+updated: 2026-09-02 (T8280: process_clips_ai read loop now SKIPS enhance()+imwrite() for source
+frames off the target-fps grid when down-sampling, ~40% fewer GPU-upscale calls on a 50fps source
+- see Landmines/Active-work below); 2026-08-19 (T7210: fixed modal_call_id recovery capture, dead
+since ~forever - see Recovery section); 2026-07-11 (T4240 recovery bugs fixed; T3950 branded outro
+- NOT in Modal)
 ---
 # Modal GPU / Local Render — Domain Knowledge
 
@@ -116,6 +120,35 @@ graph LR
 - **Overlay-render GPU cost is UNMEASURED (T4940 Step 0, OPERATOR follow-up).** The 2nd Modal pass (`render_overlay`, ffmpeg compositing not GAN) is FREE to users by product decision — no credit deduction in `overlay.py`. Its real GPU-s/video-s was never benchmarked (Modal is unavailable in the /dotask container, so T4940 couldn't run it). Measure it the same way as the E6 framing benchmark when convenient; until then "free" is a decision, not a known number. Expected well under 0.1c/s.
 
 ## Active/upcoming work
+- **T8280** (impl 2026-09-02, Option B - 30fps cost-saving choice only, NOT native-fps delivery):
+  `process_clips_ai`'s read loop (`video_processing.py`) still `cap.read()`s every source frame
+  (sequential decode, no cheap seek) but now gates `upsampler.enhance()` + `cv2.imwrite()` +
+  `output_frame_idx` increment behind a new pure helper `_should_emit_downsampled_frame`
+  (integer-cadence grid resampler, `int(frame_num_rel * target_fps / original_fps)` advancing,
+  `last_grid_idx` reset to -1 PER CLIP) - skips the expensive GAN upscale for source frames that
+  would be discarded by ffmpeg's `-r <target_fps>` anyway, instead of paying for them and
+  discarding at encode time. ~40% fewer `enhance()` calls on a 50fps source (863->~518 frames).
+  A new `png_cadence_fps` (= target `fps` when down-sampling, else `original_fps`, computed once
+  after the loop) replaces `original_fps` at ALL FOUR downstream consumers so the change is
+  internally consistent: `output_duration` in the speed-change branch, and the `input_fps`/
+  `original_fps` args at all three `_build_simple_ffmpeg_cmd`/`_build_speed_change_ffmpeg_cmd`
+  call sites. When NOT down-sampling (`fps >= original_fps` - sub-30fps sources, or any future
+  native-fps choice) `png_cadence_fps` reduces to exactly `original_fps` and the loop emits every
+  frame - byte-identical to pre-T8280 behavior, a gated single path not a parallel one. The
+  `original_fps = cap.get(CAP_PROP_FPS) or fps` fallback (silent before) now logs loudly first.
+  **This is inert until `modal deploy` of `video_processing.py`** (same rollout gate as Tbug49p/
+  T4420/T7090). Credit formula gained a `compute_export_credits(video_seconds, output_fps=30)`
+  helper + `HIGH_FPS_THRESHOLD=31` constant (`highlight_transform.py`) but BOTH live call sites
+  (`framing.py`, `multi_clip.py`) still pass `target_fps=30` - Option B ships no native price, so
+  this is a byte-identical no-op vs today's `ceil(video_seconds)` (verified by test, not just
+  reasoning). **Real Modal GPU-seconds verification of the frame-savings claim is an EXPLICIT
+  POST-MERGE STAGING GATE** (Modal is off in /dotask containers, T4180) - structural proof
+  (emitted-frame-count < source-frame-count) is covered by `tests/test_t8280_fps_export_choice_repro.py`;
+  actual billed-GPU-seconds measurement was NOT and could not be run in-container. True native-fps
+  delivery (Option A) remains BLOCKED on `Tbug49p-followup-highlight-transform-fps-units.md`
+  landing first (unstarted, deliberately untouched by this task - see export-pipeline.md and
+  keyframes-framing.md). New: `tests/test_t8280_fps_export_choice.py`,
+  `tests/test_t8280_fps_export_choice_repro.py`.
 - ~~**T3950**~~ IMPLEMENTED 2026-07-11: "Made with Reel Ballers" branded outro (~1.75s). NOT in `video_processing.py` — `app/services/branded_outro.py` wired into `overlay.py`'s `final_videos` producers (router layer, both engines, no Modal edit/redeploy). Programmatic `color`+`drawtext` card (bundled font, `fontfile=`), matched to reel res/fps/SAR/pixfmt/audio, concat `-c copy` (re-encode fallback). Flag `BRANDED_OUTRO_ENABLED` (default true). Non-fatal on failure. Render-time only, no persistence. Tests: `test_t3950_branded_outro.py`. See lines 3/42 and export-pipeline.md invariant.
 - ~~**T4240**~~ DONE 2026-07-11 (all four recovery bugs fixed — see Landmines above).
 - **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); delete `_optimized.py`. Requires Modal redeploy (ask user).
