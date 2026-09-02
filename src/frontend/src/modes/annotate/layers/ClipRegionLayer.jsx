@@ -89,7 +89,7 @@ const layerNameFor = (region) => (region.my_athlete === false ? 'Team' : 'My Ath
  * - Shows rating notation: ?? (1), ? (2), !? (3), ! (4), !! (5)
  *
  * Clips are added via:
- * - "Add Clip" button in controls bar (non-fullscreen)
+ * - "Add Play" button (primary CTA under the video, or in the controls bar)
  * - Pausing in fullscreen mode
  */
 export default function ClipRegionLayer({
@@ -99,7 +99,7 @@ export default function ClipRegionLayer({
   onSelectRegion,
   onDeleteRegion,
   edgePadding = 20,
-  emptyMessage = 'Use "Add Clip" button or pause in fullscreen to add clips',
+  emptyMessage = 'No clips yet',
 }) {
   const trackRef = useRef(null);
   const [hoveredRegionId, setHoveredRegionId] = useState(null);

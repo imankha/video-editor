@@ -36,7 +36,7 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more, then you can rank your clips head-to-head to find your best.</>)
-          : (<>You have enough clips &mdash; reopen My Reels to start ranking.</>),
+          : (<>You have enough clips &mdash; reopen Highlight Reels to start ranking.</>),
       };
     case LOCKED_KINDS.SMART:
       return {
@@ -48,7 +48,7 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then <span className="font-semibold text-white">{name}</span> plays as one highlight reel.</>)
-          : (<>This collection has enough content &mdash; reopen My Reels to play it.</>),
+          : (<>This collection has enough content &mdash; reopen Highlight Reels to play it.</>),
       };
     case LOCKED_KINDS.GAME:
       return {
@@ -60,7 +60,7 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} reels from this game, then its highlights play as one reel.</>)
-          : (<>This game has enough content &mdash; reopen My Reels to play its highlights.</>),
+          : (<>This game has enough content &mdash; reopen Highlight Reels to play its highlights.</>),
       };
     case LOCKED_KINDS.MIXES:
       return {
@@ -72,7 +72,7 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then your mixes play as one reel.</>)
-          : (<>You have enough content &mdash; reopen My Reels to play your mixes.</>),
+          : (<>You have enough content &mdash; reopen Highlight Reels to play your mixes.</>),
       };
     default:
       return {
@@ -83,7 +83,7 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then you can play and share <span className="font-semibold text-white">{name}</span> as one highlight reel.</>)
-          : (<>This collection has enough content &mdash; reopen My Reels to play it.</>),
+          : (<>This collection has enough content &mdash; reopen Highlight Reels to play it.</>),
       };
   }
 }

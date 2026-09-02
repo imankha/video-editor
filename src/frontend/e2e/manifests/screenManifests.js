@@ -65,7 +65,7 @@ export const SCREENS = [
     actions: [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
       { label: 'Reel Drafts tab', locator: (p) => p.getByRole('button', { name: 'Reel Drafts' }).first() },
-      { label: 'My Reels tab', locator: (p) => p.getByRole('button', { name: /My Reels/i }).first() },
+      { label: 'Highlight Reels tab', locator: (p) => p.getByRole('button', { name: /Highlight Reels/i }).first() },
     ],
   },
   {
@@ -165,10 +165,10 @@ export const SCREENS = [
   },
   {
     id: 'my-reels',
-    name: 'Gallery / My Reels',
+    name: 'Gallery / Highlight Reels',
     setup: async (page) => {
       await reachHome(page);
-      const myReels = page.getByRole('button', { name: /My Reels/i }).first();
+      const myReels = page.getByRole('button', { name: /Highlight Reels/i }).first();
       await myReels.click();
       // T5673: reels render as poster tiles INSIDE collapsed game/mix groups, so the
       // drawer shows no reel-card until a group is expanded. Expand the first group
@@ -191,7 +191,7 @@ export const SCREENS = [
             .waitFor({ state: 'visible', timeout: 4000 }).then(() => true).catch(() => false);
         }
       }
-      if (!appeared) return { ready: false, reason: 'no published reels on this account (My Reels drawer empty)' };
+      if (!appeared) return { ready: false, reason: 'no published reels on this account (Highlight Reels drawer empty)' };
       return { ready: true };
     },
     actions: [

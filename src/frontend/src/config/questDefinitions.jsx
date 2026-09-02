@@ -141,7 +141,7 @@ export const STEP_TITLES = {
   export_overlay: 'Add the Spotlight',
   wait_for_overlay: 'Render the Spotlight',
   preview_draft: 'Watch Your Preview',
-  move_to_my_reels: 'Move to My Reels',
+  move_to_my_reels: `Move to ${SECTION_NAMES.LIBRARY}`,
   view_gallery_video: 'Watch Your Reel',
 };
 
@@ -154,7 +154,7 @@ export const STEP_DESCRIPTIONS = {
   watch_publish_tutorial: 'Watch how to publish your finished reel.',
   // Quest 1 — Get Started
   upload_game: 'Add a game to start clipping highlights',
-  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> to start a highlight.</>,
+  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Play</MiniButton> to start a highlight.</>,
   rate_clip: <>Set start time and end time precisely to isolate the action. Rate the play <span className="whitespace-nowrap"><FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></span> and tag it, maybe add a note.</>,
   annotate_brilliant: <>Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,

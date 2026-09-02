@@ -122,7 +122,7 @@ export function useMoveReels(onMoved, onPartial) {
       track('reels_moved', { count: data.moved_ids?.length || videoIds.length });
       toast.success(
         videoIds.length > 1 ? `Moved ${videoIds.length} reels` : 'Reel moved',
-        { message: 'Find them in the other profile’s My Reels.' },
+        { message: 'Find them in the other profile’s Highlight Reels.' },
       );
       onMoved?.(data.moved_ids || videoIds, targetProfileId);
       return true;

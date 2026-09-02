@@ -126,7 +126,7 @@ test('capture annotate tutorial footage @tutorial-capture', async ({ browser }) 
     step('card click did not navigate — falling back to direct annotate open');
     await openGameInAnnotate(page, GAME_ID);
   }
-  const addClip = page.getByRole('button', { name: 'Add Clip', exact: true }).first();
+  const addClip = page.getByRole('button', { name: 'Add Play', exact: true }).first();
   await addClip.waitFor({ timeout: 45000 });
   await videosReady(1, 25000);
   await dwell(1.5);

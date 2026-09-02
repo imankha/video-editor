@@ -60,7 +60,7 @@ export async function openAddClipForm(page, { candidates = DEFAULT_GAP_CANDIDATE
   // Desktop renders a labeled "Add Clip" button (hidden sm:flex); below the `sm`
   // breakpoint AnnotateControls swaps in an icon-only twin with the same title
   // (flex sm:hidden) — match on title + :visible so either width works.
-  const addBtn = page.locator('button[title="Add clip ending at current time (A)"]:visible').first();
+  const addBtn = page.locator('button[title="Add play ending at current time (A)"]:visible').first();
   for (const t of candidates) {
     const landed = await page.locator('video').first().evaluate((v, tt) => {
       v.currentTime = tt;

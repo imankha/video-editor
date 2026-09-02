@@ -8,7 +8,7 @@ import AnnotateTimeline from './AnnotateTimeline';
  * This component only renders the timeline for managing clip regions.
  *
  * Clips are added via:
- * - "Add Clip" button in the controls bar (non-fullscreen)
+ * - "Add Play" button (primary CTA under the video, or in the controls bar)
  * - Pausing in fullscreen mode
  * Both methods use current playhead position as the clip END time.
  */

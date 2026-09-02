@@ -323,7 +323,7 @@ export function AnnotateFullscreenOverlay({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className={`${layout === 'inline' ? 'text-sm' : 'text-lg'} font-semibold text-white`}>
-            {isEditMode ? 'Edit Clip' : 'Add Clip'}
+            {isEditMode ? 'Edit Play' : 'Add Play'}
           </h3>
           <div className="flex items-center gap-2">
             {layout === 'overlay' && (
