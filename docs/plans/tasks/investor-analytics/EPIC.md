@@ -97,8 +97,9 @@ Tracked in their own dashboard (T7460): goal + our number + green/yellow/red per
 | T7455 | [Editor-open event coverage: per-open Focus/Overlay/Annotate entries with clip context](T7455-editor-open-event-coverage.md) | TODO |
 | T7460 | [Success-criteria scorecard (goal vs actual, green/yellow/red)](T7460-success-criteria-scorecard.md) | TODO |
 | T7465 | [Journey Flow graph replaces the admin bar funnel](T7465-journey-flow-graph.md) | TODO |
+| T7466 | [Deploy-comparison view (segment any metric by deploy, before vs after)](T7466-deploy-comparison-view.md) | TODO |
 
-Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level views; T7410 unlocks T7440's visit→signup conversion; T7420 needs nothing new (reads existing `first_at`) and can run in parallel with T7400/T7410. T7450 is independent and small. T7460 is the capstone — it composes the query functions the other tasks build, so it goes last. T7465 (filed 2026-09-02) is pure-read like T7420 and can start anytime; it coordinates with T7455 on future node coverage but does not depend on it.
+Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level views; T7410 unlocks T7440's visit→signup conversion; T7420 needs nothing new (reads existing `first_at`) and can run in parallel with T7400/T7410. T7450 is independent and small. T7460 is the capstone — it composes the query functions the other tasks build, so it goes last. T7465 (filed 2026-09-02) is pure-read like T7420 and can start anytime; it coordinates with T7455 on future node coverage but does not depend on it. T7466 (deploy log + before/after comparison, also filed 2026-09-02) depends on T7400's store and layers onto the report endpoints/components T7410-T7465 build, so it is sequenced last to avoid merge churn on files still being actively shaped.
 
 ## Completion Criteria
 
