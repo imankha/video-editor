@@ -168,13 +168,21 @@ test.beforeAll(() => {
   console.log(`[T7922] guest user id: ${TEST_USER_ID}`);
 });
 
-test('mobile inline sport picker: no_sport → tags without leaving the form (320 + 375)', async ({ page }) => {
+// T8140 SUPERSEDES T7922 on the annotate mobile path: the in-form inline sport
+// picker was REMOVED from the mobile Add Clip form (kept on desktop + in
+// UploadClipModal/ClipDetailsEditor). The mobile first-clip form is now a clean
+// one-tap surface with NO amber wall; the sport question moved to a single
+// full-screen "What sport is this?" step fired at first save. This test asserts
+// the new mobile flow. (Not runnable inside the /dotask container — no browser;
+// run in a stack-up container per the header.)
+test('T8140 mobile first clip: clean one-tap form + full-screen sport question at save (320 + 375)', async ({ page }) => {
   await setupAuthedGuest(page);
   await page.setViewportSize({ width: 375, height: 667 });
   await uploadGameAndEnterAnnotate(page);
 
   const savedClipIds = [];
   let gameId;
+  let askedOnce = false;
 
   for (const vp of PORTRAIT_VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
@@ -184,38 +192,17 @@ test('mobile inline sport picker: no_sport → tags without leaving the form (32
 
     const form = await openMobileAddClipForm(page, SEEK_BY_VIEWPORT[vp.name]);
 
-    // --- AC1a: the inline sport picker renders in the Tags block (not dead prose) ---
+    // --- AC: the mobile no_sport form is CLEAN — no in-form picker, no amber wall ---
     await assertNoHorizontalOverflow(page);
-    const picker = form.getByRole('combobox', { name: /change sport/i });
-    await expect(picker, `inline sport picker present at ${vp.name}`).toBeVisible();
-    await expect(form.getByText('Pick your sport to tag this clip')).toBeVisible();
-    // The old dead-end prose must be gone from the full portrait variant.
-    await expect(form.getByText('Tap the sport icon in the top bar to pick your sport.')).toHaveCount(0);
-    // No sport TagSelector yet (still no_sport).
-    await expect(form.getByRole('button', { name: 'Goal' })).toHaveCount(0);
-    await saveEvidence(page, `criterion-1a-inline-picker-${vp.name}`);
-
-    // Set a DISTINCTIVE rating BEFORE picking a sport — the survival probe. A
-    // fresh form defaults to rating 4 ("!"); rating 5 renders "!!". If the form
-    // remounted on the sport change, this would reset to 4.
-    await form.locator('button[title="5 stars"]').click();
-    await expect(form.getByText('!!')).toBeVisible();
-
-    // --- AC1b: pick a sport inline → TagSelector swaps in (tags reachable) ---
-    await picker.selectOption('soccer');
-    // The picker is replaced by the sport TagSelector in place (no remount).
-    await expect(form.getByRole('combobox', { name: /change sport/i })).toHaveCount(0, { timeout: 8000 });
-    await expect(form.getByRole('button', { name: 'Goal' }), `soccer tags reachable at ${vp.name}`).toBeVisible();
-
-    // --- AC1c: the in-progress clip survived the swap (rating still 5 = no remount) ---
-    await expect(form.getByText('!!'), `rating preserved across sport pick at ${vp.name}`).toBeVisible();
-    await assertNoHorizontalOverflow(page);
-    await saveEvidence(page, `criterion-1bc-tags-appeared-${vp.name}`);
-
-    // --- AC1d: tag the clip and Save → real raw_clips row ---
-    await form.getByRole('button', { name: 'Goal' }).click();
+    await expect(form.getByRole('combobox', { name: /change sport/i })).toHaveCount(0);
+    await expect(form.getByText('Pick your sport to tag this clip')).toHaveCount(0);
+    // Reassurance line present; Save reachable without scrolling (sticky footer).
+    await expect(form.getByText('You can change all of this later.')).toBeVisible();
     const saveBtn = form.locator('button.bg-green-600:has-text("Save")');
-    await saveBtn.scrollIntoViewIfNeeded();
+    await expect(saveBtn, `Save visible without scroll at ${vp.name}`).toBeInViewport();
+    await saveEvidence(page, `t8140-clean-form-${vp.name}`);
+
+    // --- AC: one-tap Save creates a real raw_clips row with defaults ---
     const [saveResp] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes('/api/clips/raw/save') && r.request().method() === 'POST',
@@ -229,12 +216,25 @@ test('mobile inline sport picker: no_sport → tags without leaving the form (32
     savedClipIds.push(body.raw_clip_id);
     const sent = saveResp.request().postDataJSON();
     if (gameId === undefined) gameId = sent.game_id;
-    // The saved clip carries the tag we could only reach via the inline picker.
-    expect(sent.tags, `tag persisted at ${vp.name}`).toContain('Goal');
-    await saveEvidence(page, `criterion-1d-saved-${vp.name}`);
+    expect(sent.rating, `default rating persisted at ${vp.name}`).toBe(4);
+    expect(String(sent.name || ''), `Play-N default name at ${vp.name}`).toMatch(/^Play \d+$/);
+
+    // --- AC: the full-screen sport question fires ONCE at the first save ---
+    const question = page.getByRole('dialog', { name: 'What sport is this?' });
+    if (!askedOnce) {
+      await expect(question, `full-screen sport question at ${vp.name}`).toBeVisible({ timeout: 8000 });
+      await saveEvidence(page, `t8140-sport-question-${vp.name}`);
+      // Answer persists via the existing profile-sport gesture.
+      await question.getByRole('button', { name: /Soccer/ }).click();
+      await expect(question).toBeHidden({ timeout: 8000 });
+      askedOnce = true;
+    } else {
+      // Once asked (and skipped/answered) it does not re-ask this session.
+      await expect(question).toHaveCount(0);
+    }
   }
 
-  // --- AC1d durable proof: the raw_clips rows really exist -----------------
+  // --- durable proof: the raw_clips rows really exist ----------------------
   const loadRes = await page.request.get(`${apiBase}/games/${gameId}/load`);
   expect(loadRes.ok()).toBeTruthy();
   const loaded = await loadRes.json();
@@ -243,7 +243,7 @@ test('mobile inline sport picker: no_sport → tags without leaving the form (32
   for (const id of savedClipIds) {
     expect([...rawIds].map(String), 'saved clip present in /load annotations').toContain(String(id));
   }
-  console.log(`[T7922] saved raw_clip ids: ${savedClipIds.join(', ')}; /load annotations: ${annotations.length}`);
+  console.log(`[T8140] saved raw_clip ids: ${savedClipIds.join(', ')}; /load annotations: ${annotations.length}`);
 
   // --- Changed-screen responsive sweep (375 + desktop): no horizontal overflow ---
   await responsiveSweep(page);
