@@ -1,6 +1,6 @@
 # T7620: Architect design: guided-tour engine + essential-path step definitions
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-24
