@@ -54,7 +54,8 @@ async def grant(request: GrantRequest):
     NOT REACHABLE IN PRODUCTION (hard 404, mirroring auth.py's dev-login gate).
     The original docstring claimed "used by quest system (T540) and admin panel
     (T550)", but both grant server-side today and never call this endpoint:
-      - quests    -> quests.py grant_credits(user_id, qdef["reward"], ...)  (server picks the amount)
+      - quests    -> T8120: no longer per-quest; session_init.py grant_quest_chain_credits(user_id)
+                     grants the whole chain total upfront at signup/next login (server picks the amount)
       - admin     -> admin.py  admin_grant_credits / admin_bulk_grant_credits (admin-gated)
       - Stripe    -> payments.py grant_credits(..., "stripe_purchase", pi_id)
       - signup    -> session_init.py new_account_bonus

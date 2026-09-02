@@ -5,6 +5,7 @@ import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { Z } from '../constants/zLayers';
 
 export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -57,7 +58,7 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white truncate pr-4">

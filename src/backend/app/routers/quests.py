@@ -363,8 +363,10 @@ async def get_progress():
 @router.post("/{quest_id}/claim-reward")
 async def claim_reward(quest_id: str):
     """
-    Claim credits for completing a quest. Idempotent — returns current balance
-    if already claimed.
+    Mark a completed quest as claimed to advance the panel to the next quest.
+    T8120: credits are no longer granted per-quest here — the whole chain total
+    is granted upfront at signup/next login (credit_ledger.grant_quest_chain_credits).
+    Idempotent — returns current balance (unchanged by this call) if already claimed.
     """
     user_id = get_current_user_id()
 

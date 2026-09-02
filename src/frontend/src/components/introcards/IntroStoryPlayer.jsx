@@ -83,7 +83,7 @@ export function IntroStoryPlayer({
   // Fullscreen fixed players stack above the panel (Z.PLAYER); mirrors
   // IntroPreRoll's own positionClassName contract (BrandedEndCard pattern).
   // Defaults to the owner in-app player's z-layer (the only caller today).
-  introPositionClassName = 'fixed inset-0 z-[85]',
+  introPositionClassName = `fixed inset-0 ${Z.INTRO}`,
   ...collectionPlayerProps
 }) {
   const [region, setRegion] = useState(intro ? REGION.INTRO : REGION.REELS);

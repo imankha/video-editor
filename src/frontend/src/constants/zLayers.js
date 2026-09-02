@@ -48,10 +48,20 @@
  *                             the rung that fixes T6600 — the intro-card modal is
  *                             portaled to document.body at this layer so no tile
  *                             portal (z-[60]/z-[70]) can paint over it.
+ *   INTRO              z-[85] the intro-card full-screen preroll's own default
+ *                             overlay position (IntroPreRoll, IntroStoryPlayer) —
+ *                             above MODAL_ELEVATED so a nested intro-card modal's
+ *                             preview still wins, below ALERT so CompositeScrubber
+ *                             (wrapped at ALERT) can paint its scrub bar over it.
  *   ALERT             z-[90]  alerts that must sit above everything modal/player:
  *                             LockedReasonModal over the player, hero intros.
  *   TOAST             z-[100] toasts, quest popovers, editor-mode chrome, the recap
  *                             player.
+ *   SHARE             z-[200] the share-playback dialog (SharePlaybackDialog) —
+ *                             opened as a nested overlay from within the recap
+ *                             player (TOAST) as well as standalone from
+ *                             AnnotateScreen, so it needs its own rung above TOAST
+ *                             rather than relying on inherited stacking context.
  *   SYSTEM            z-[9999] app-wide system banners: impersonation, the blocking
  *                             PWA update gate.
  *
@@ -74,8 +84,10 @@ export const Z = {
   OVERLAY_BACKDROP: 'z-[60]',
   PLAYER: 'z-[70]',
   MODAL_ELEVATED: 'z-[80]',
+  INTRO: 'z-[85]',
   ALERT: 'z-[90]',
   TOAST: 'z-[100]',
+  SHARE: 'z-[200]',
   SYSTEM: 'z-[9999]',
 };
 

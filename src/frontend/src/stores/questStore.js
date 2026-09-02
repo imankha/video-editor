@@ -70,7 +70,6 @@ export const useQuestStore = create((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ collapsed: !!collapsed }),
       keepalive: true,
-      rbNonDataWrite: true,
     }).catch(() => {
       console.error('[Quests] Failed to persist quest panel collapsed state');
     });

@@ -144,14 +144,11 @@ describe('QuestPanel — collapse to Help button + persistence (T8120)', () => {
     expect(collapse).toHaveBeenCalledWith(false);
   });
 
-  it('never pushes a pulsing tutorial CTA (no variant="primary") — tutorials stay reachable but not pushed', () => {
+  it('tutorial CTA stays reachable from the expanded panel', () => {
     // Make the tutorial step current so its (downgraded) CTA renders.
     questState.quests = [
       { id: 'quest_1', steps: { upload_game: true, watch_annotate_tutorial: false }, reward_claimed: false },
     ];
-    // Real WatchTutorialButton import is mocked to a plain button, so assert the
-    // component no longer requests the pushed variant by checking the wrapper the
-    // primary CTA used to add. The inline label is present instead.
     render(<QuestPanel inline />);
     // The tutorial button still renders (reachable), from the expanded panel.
     expect(screen.getAllByText('Watch tutorial').length).toBeGreaterThan(0);

@@ -10,10 +10,13 @@ import { toast } from './shared/Toast';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 // T8120: z-index rungs (from the Z ladder) that mark a full-screen overlay as a
-// modal-or-above surface the quest/help panel must never sit over. Read as class
-// tokens (works in jsdom, where computed z-index is unavailable) — see
-// useModalOcclusion below.
-const MODAL_Z_TOKENS = ['z-50', 'z-[60]', 'z-[70]', 'z-[80]', 'z-[90]', 'z-[100]', 'z-[9999]'];
+// modal-or-above surface the quest/help panel must never sit over. Derived from
+// the Z ladder itself (everything at Z.MODAL or above) so a new rung added to
+// zLayers.js is automatically covered here instead of needing a second,
+// independently-maintained copy. Read as class tokens (works in jsdom, where
+// computed z-index is unavailable) — see useModalOcclusion below.
+const Z_VALUES = Object.values(Z);
+const MODAL_Z_TOKENS = Z_VALUES.slice(Z_VALUES.indexOf(Z.MODAL));
 
 /**
  * T8120 occlusion contract: the quest/help surface may NEVER overlap an open
@@ -43,10 +46,26 @@ function useModalOcclusion() {
       }
       setModalOpen(found);
     };
+    // T8120 perf: MutationObserver fires on every class/style mutation anywhere
+    // in the body (e.g. TimelineBase's scrub-thumb style updates during playback,
+    // up to ~60x/sec), and check() forces layout via getClientRects(). Coalesce
+    // bursts of mutations behind rAF so at most one layout-forcing check runs
+    // per animation frame instead of one per mutation.
+    let rafId = null;
+    const scheduleCheck = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        check();
+      });
+    };
     check();
-    const obs = new MutationObserver(check);
+    const obs = new MutationObserver(scheduleCheck);
     obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
-    return () => obs.disconnect();
+    return () => {
+      obs.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, []);
   return modalOpen;
 }
