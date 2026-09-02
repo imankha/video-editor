@@ -30,8 +30,8 @@ const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
 async function gotoDrafts(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  const draftsTab = page.locator('button:has-text("Reel Drafts")');
-  await expect(draftsTab, 'Reel Drafts tab renders').toBeVisible({ timeout: 30000 });
+  const draftsTab = page.locator('button:has-text("Clips")');
+  await expect(draftsTab, 'Clips tab renders').toBeVisible({ timeout: 30000 });
   await draftsTab.click();
   await page.waitForTimeout(800); // let carousels + posters settle
 }

@@ -29,7 +29,7 @@ const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 const TILE = '[data-testid="project-card"]';
 const ACTIONS = '[data-testid="tile-actions"]';
 
-/** Navigate to the Reel Drafts tab and return the first draft tile locator. */
+/** Navigate to the Clips tab and return the first draft tile locator. */
 async function firstDraftTile(page) {
   await page.goto('/home/reels');
   await page.waitForLoadState('domcontentloaded');

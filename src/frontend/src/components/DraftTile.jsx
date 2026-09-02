@@ -24,7 +24,7 @@ import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect } from '../utils/draftStage';
 
 /**
- * DraftTile - a reel draft as a poster tile (T5672). Shell aspect follows the
+ * DraftTile - a draft (single-clip or multi-clip) as a poster tile (T5672). Shell aspect follows the
  * draft's target ratio (portrait 9:16 or landscape 16:9, T5673) except for
  * drafts not yet framed, which render landscape at SOURCE aspect: Not-Started
  * (T6800) and In-Framing-but-uncropped (T6900) drafts alike.

@@ -8,7 +8,7 @@ import { waitForAppReady } from './helpers/appReady.js';
  * Drives the REAL app as the SEEDED FIXTURE account (imankh@gmail.com / profile
  * 9fa7378c, per e2e/FIXTURE-CONTRACT.md — env-overridable via E2E_REAL_EMAIL /
  * E2E_REAL_PROFILE):
- *   login -> Reel Drafts -> open a DISCOVERED draft -> Export -> wait for the
+ *   login -> Clips -> open a DISCOVERED draft -> Export -> wait for the
  *   pipeline (framing render -> overlay render -> final video) -> publish
  *   ("Move to Highlight Reels") -> Highlight Reels lists the reel.
  *
@@ -98,11 +98,11 @@ async function probeWorkingVideo(context, projectId) {
   };
 }
 
-/** Open the Reel Drafts tab, then open a draft card by its (discovered) name. */
+/** Open the Clips tab, then open a draft card by its (discovered) name. */
 async function openDraftCard(page, name) {
   await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Reel Drafts' }) });
-  await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Clips' }) });
+  await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 30000 });
   const card = page.locator('[data-testid="project-card"]').filter({ hasText: name }).first();
   await card.waitFor({ timeout: 30000 });
   await card.click();
@@ -252,8 +252,8 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate @gate
 
   // --- PUBLISH: the ready-to-publish card shows "Move to Highlight Reels" ---
   await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Reel Drafts' }) });
-  await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Clips' }) });
+  await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 30000 });
   const moveBtn = page.getByRole('button', { name: /Move to Highlight Reels/i }).first();
   await moveBtn.waitFor({ timeout: 60000 });
   await page.screenshot({ path: `${EVID}/05-ready-to-publish.png` });

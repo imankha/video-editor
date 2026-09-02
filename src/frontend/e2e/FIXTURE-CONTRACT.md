@@ -36,7 +36,7 @@ When seeded, the account is guaranteed to have, on profile `9fa7378c`:
    expired). "Annotate mode" is detected by the `/annotate` URL + a `<video>`/`.clip-marker`,
    NOT the old `.text-green-400` badge (that selector is stale).
 2. **>= 1 framed project (reel draft)** — a draft that opens into Framing mode with a
-   crop overlay + at least one crop keyframe. Reached via the **Reel Drafts** tab ->
+   crop overlay + at least one crop keyframe. Reached via the **Clips** tab ->
    the first framing chip.
    Consumed by `T4550-overlay-transform.qa.spec.js` (crop overlay placement + drag).
    **Chip-title gotcha (T7750):** the framing chip title format is NOT uniformly

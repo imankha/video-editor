@@ -925,7 +925,7 @@ function App() {
           {/* T1550: Unified header */}
           <UnifiedHeader
             onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
-            breadcrumbType={SECTION_NAMES.DRAFTS}
+            breadcrumbType={SECTION_NAMES.CLIPS}
             breadcrumbItemName={getProjectDisplayName(selectedProject)}
             editorMode={editorMode}
             onModeChange={handleModeChange}

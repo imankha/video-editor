@@ -81,7 +81,7 @@ function MiniStrip() {
   );
 }
 
-/** Status chip — mirrors the green "Done" badge on a finished Reel Draft card */
+/** Status chip — mirrors the green "Done" badge on a finished Clip card */
 function DoneBadge() {
   return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium align-text-bottom mx-0.5 bg-green-600/20 text-green-400 border border-green-500/50">
@@ -160,20 +160,20 @@ export const STEP_DESCRIPTIONS = {
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   return_home: <>Nice reel! Now head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
-  open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.DRAFTS}</MiniButton> and tap your reel's card to start framing.</>,
+  open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your reel's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a clip's start or end also lets you trim it.</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll render your close-up in crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p -- this takes a minute. Sit tight; next you will add a spotlight to your player on this same reel.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Focus complete (green) and Overlay not yet started (blue).</>,
+  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Focus complete (green) and Overlay not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
   // Quest 4 — Publish Your Reel
   export_overlay: <>Click <MiniButton>Add Spotlight</MiniButton> to render your highlight with the spotlight on your player.</>,
   wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
-  preview_draft: <>Press play on the <DoneBadge /> Reel Draft to preview your finished reel. Watch it back for a moment to make sure it looks just how you want.</>,
+  preview_draft: <>Press play on the <DoneBadge /> Clip to preview your finished reel. Watch it back for a moment to make sure it looks just how you want.</>,
   move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished reel. Once it's perfect, you can download and share it.</>,
 };

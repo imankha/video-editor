@@ -39,7 +39,7 @@ async function openDrawer(page) {
 async function expandFirstGroup(page) {
   const alreadyShown = await page.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (alreadyShown) return true;
-  // Scope to the drawer panel: the home "Reel Drafts" section renders its OWN
+  // Scope to the drawer panel: the home "Clips" section renders its OWN
   // CollapsibleGroups behind the backdrop, and those are not clickable (covered).
   const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
   // Wait for the collections summary to render at least one group header before

@@ -68,7 +68,7 @@ async function connectionBannerVisible(page) {
 async function gotoDrafts(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  await page.getByRole('button', { name: 'Clips' }).click();
 }
 
 /** Open the first Framing-ready reel draft; resolves once the crop editor is present. */

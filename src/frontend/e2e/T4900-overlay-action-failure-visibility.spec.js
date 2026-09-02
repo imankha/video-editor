@@ -70,10 +70,10 @@ test.describe('T4900 overlay action failure visibility', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Navigate to overlay: open "Reel Drafts" and pick any "In Overlay" draft.
+    // Navigate to overlay: open "Clips" and pick any "In Overlay" draft.
     // If none exists, we fall back to the store-based injection path (criterion B
     // is still verified by the absence of error toasts on initial load).
-    await page.getByRole('button', { name: 'Reel Drafts' }).click().catch(() => {});
+    await page.getByRole('button', { name: 'Clips' }).click().catch(() => {});
     await page.waitForTimeout(1000);
 
     // Try to find and open an overlay project

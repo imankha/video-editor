@@ -11,7 +11,7 @@
  *   A "Exported Draft A" — auto-reel draft + source clip (id 1) + UNPUBLISHED final video
  *   C "Published Reel C" — auto-reel + source clip (id 2) + PUBLISHED final video
  *
- * Asserts on the RENDERED Reel Drafts UI + downloads API:
+ * Asserts on the RENDERED Clips UI + downloads API:
  *   criterion-a: deleting A's clip DELETES its exported draft (not orphaned) — gone from feed.
  *   criterion-2: deleting C's clip PRESERVES the published reel in Highlight Reels (downloads).
  */
@@ -41,7 +41,7 @@ async function authenticate(page) {
   await page.waitForLoadState('domcontentloaded');
 }
 
-/** Names of the project cards currently rendered in Reel Drafts. */
+/** Names of the project cards currently rendered in Clips. */
 async function renderedDraftNames(page) {
   await page.waitForTimeout(500); // let the drafts feed settle after (re)fetch
   const cards = page.locator('[data-testid="project-card"]');

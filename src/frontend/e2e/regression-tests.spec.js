@@ -516,10 +516,12 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
 }
 
 async function navigateToProjectManager(page) {
-  // Check if we're already on the project manager (Projects tab)
+  // T8360: "Build Highlight Reel" no longer lives on the Clips Home tab -- it
+  // moved to the Highlight Reels drawer (DownloadsPanel). Open that drawer to
+  // reach it instead of the Reel Drafts/Clips tab.
   const newProjectButton = page.locator('button:has-text("Build Highlight Reel")');
   if (await newProjectButton.isVisible().catch(() => false)) {
-    return; // Already on project manager Projects tab
+    return; // Already have the Highlight Reels drawer open
   }
 
   // Look for Home button (exists in both annotate and framing/overlay modes)
@@ -529,16 +531,16 @@ async function navigateToProjectManager(page) {
     await page.waitForTimeout(500);
   }
 
-  // Switch to Projects tab (default might be Games tab)
-  const projectsTab = page.locator('button:has-text("Reel Drafts")').first();
-  if (await projectsTab.isVisible().catch(() => false)) {
-    await projectsTab.click();
+  // Open the Highlight Reels drawer, which now hosts the Build button.
+  const highlightReelsButton = page.getByRole('button', { name: /Highlight Reels/i }).first();
+  if (await highlightReelsButton.isVisible().catch(() => false)) {
+    await highlightReelsButton.click();
     await page.waitForTimeout(500);
   }
 
   // Wait for New Project button to appear
   await expect(newProjectButton).toBeVisible({ timeout: 10000 });
-  console.log('[Test] Navigated to project manager (Projects tab)');
+  console.log('[Test] Navigated to project manager (Highlight Reels drawer)');
 }
 
 /**
@@ -644,7 +646,7 @@ async function ensureAnnotateModeWithClips(page) {
   if (!clipsSaved) {
     // T7790: fail FAST and accurately here instead of continuing. Previously this
     // only warned, so a downstream step (e.g. clicking a "Build Highlight Reel" button that
-    // reelDraftsDisabled correctly disables when 0 clips exist) hung until the hard
+    // clipsTabDisabled correctly disables when 0 clips exist) hung until the hard
     // 5-minute cap. The clip-save race this guarded is now fixed at the source
     // (importAnnotationsWithRawClips waits for the in-flight upload's game id), so a
     // 0-clip result here is a real regression, not flakiness — surface it immediately.
@@ -671,13 +673,13 @@ async function navigateToProjectFromHome(page) {
   // T7790b: 2000ms was FLAKY (~1/3 failures here). The `Promise.race` above can
   // resolve on `domcontentloaded` BEFORE React has hydrated and painted the nav bar,
   // and this stack's session-init + first /api/games can take 1-3s (see [REQ_TIMING]
-  // logs), so the "Reel Drafts" tab legitimately appears a beat later. T7780's
+  // logs), so the "Clips" tab legitimately appears a beat later. T7780's
   // conversion turned the old no-op `isVisible({timeout:2000})` (which never actually
   // waited) into a HARD 2s requirement it never had to meet before. Bounded at 5000ms
   // to match this helper's own sibling waits (projectCard 3000 / clipSegment 5000) and
   // to comfortably cover post-navigation hydration — still fails fast if the tab
   // genuinely never renders.
-  const projectsTab = page.locator('button:has-text("Reel Drafts")');
+  const projectsTab = page.locator('button:has-text("Clips")');
   await projectsTab.waitFor({ state: 'visible', timeout: 5000 });
   await projectsTab.click();
   await page.waitForTimeout(500);
@@ -862,7 +864,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       // Go to project manager first
       await page.goto('/');
       await page.waitForLoadState('domcontentloaded');
-      await page.locator('button:has-text("Reel Drafts")').click();
+      await page.locator('button:has-text("Clips")').click();
       await page.waitForTimeout(500);
 
       // Click the first clip link that says "click to open" in its title/aria-label
@@ -904,10 +906,12 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await waitForUploadComplete(page);
   console.log('[Test] Clips created and auto-saved to library');
 
-  // Navigate to project manager and create project from clips
+  // Navigate to the Highlight Reels drawer and create project from clips.
+  // T8360: "Build Highlight Reel" moved off the Clips Home tab into the
+  // Highlight Reels drawer (DownloadsPanel), so open that drawer instead.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2000);
-  await page.locator('button:has-text("Reel Drafts")').click();
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
   await page.waitForTimeout(500);
 
   // Click New Project to open the modal
@@ -1243,8 +1247,9 @@ test.describe('Smoke Tests @smoke', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Switch to Projects tab
-    await page.locator('button:has-text("Reel Drafts")').click();
+    // Open the Highlight Reels drawer (T8360: Build Highlight Reel moved here
+    // from the Clips Home tab).
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(500);
 
     // Create project from clips
@@ -1298,8 +1303,9 @@ test.describe('Smoke Tests @smoke', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Switch to Projects tab
-    await page.locator('button:has-text("Reel Drafts")').click();
+    // Open the Highlight Reels drawer (T8360: Build Highlight Reel moved here
+    // from the Clips Home tab).
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(500);
 
     // Create project from clips
@@ -1342,8 +1348,9 @@ test.describe('Smoke Tests @smoke', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Switch to Projects tab
-    await page.locator('button:has-text("Reel Drafts")').click();
+    // Open the Highlight Reels drawer (T8360: Build Highlight Reel moved here
+    // from the Clips Home tab).
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(500);
 
     // Create project from clips
@@ -1479,11 +1486,12 @@ test.describe('Full Coverage Tests @full', () => {
     await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 10000 });
     console.log('[Full] Clips created and auto-saved to library');
 
-    // STEP 2: Navigate to project manager and create project from clips
+    // STEP 2: Navigate to the Highlight Reels drawer and create project from clips
+    // (T8360: Build Highlight Reel moved here from the Clips Home tab).
     console.log('[Full] Step 2: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
@@ -2149,10 +2157,11 @@ test.describe('Full Coverage Tests @full', () => {
     }
 
     // STEP 3: Create project from library clips via New Project modal
+    // (T8360: Build Highlight Reel moved to the Highlight Reels drawer).
     console.log('[Full Pipeline] Step 3: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal

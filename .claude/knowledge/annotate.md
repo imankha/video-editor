@@ -1,5 +1,17 @@
 ---
 domain: annotate
+updated: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
+tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
+and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).
+The "Build Highlight Reel" assembly button and the multi-clip drafts it produces (`is_auto_created
+=== false`) moved OFF this tab entirely onto the Highlight Reels surface (`DownloadsPanel.jsx`)
+as a new "Highlights (in-progress)" section above the published list. This SUPERSEDES the
+T8130 entry below, which said the rename/relocation was deliberately deferred pending this
+task — T8360 is now that task, and it shipped both. Design: `docs/plans/tasks/T8360-design.md`.
+Also: renaming a project no longer clears `raw_clips.auto_project_id`/`is_auto_created`
+(`projects.py update_project`, `projectsStore.js renameProject`) — the old clear was dead
+code (superseded by commit `73291399`) that was silently breaking T4800 cleanup for renamed
+auto-drafts; see the design doc Sec 0.)
 updated: 2026-09-02 (T8130 Annotate primary CTA: `AnnotateModeView.jsx`'s new full-width
 "Add Play" button (`data-testid="annotate-primary-cta"`) calls the SAME `onAddClip` handler
 as the transport-bar button (`AnnotateControls.jsx`), so it MUST mirror that button's
@@ -12,8 +24,10 @@ its `button[title=...]` locator never collides with the transport-bar button's o
 in Playwright strict mode (both buttons render simultaneously in non-fullscreen,
 non-edit-mode - a real regression caught by post-hoc review, not by CI, since the
 CTA-hierarchy unit tests mock every sibling surface). Reel Drafts tab intentionally NOT
-renamed by this task (would misrepresent its mixed single/multi-clip content - see T8360)
-nor is the assembly button relocated off it (no valid destination surface pre-T8360);
+renamed by this (T8130) task (would misrepresent its mixed single/multi-clip content - see
+T8360) nor was the assembly button relocated off it by T8130 (no valid destination surface
+pre-T8360). **T8360 has since shipped the rename + relocation** (see the entry above) -
+this note describes T8130-era state, not current state.
 "Highlight Reels"/"Build Highlight Reel" renames elsewhere are UI-string-only, zero
 identifier/event-name changes (see Landmines "Add Play CTA must gate on isEditMode
 (T8130)")

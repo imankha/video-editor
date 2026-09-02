@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Image } from 'lucide-react';
+import { X, Image, Plus } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { Z } from '../constants/zLayers';
 import { CollectionShareModal } from './CollectionShareModal';
@@ -7,6 +7,10 @@ import { MoveToProfileModal } from './MoveToProfileModal';
 import { Button } from './shared/Button';
 import { CollectionsTab } from './collections/CollectionsTab';
 import { ReelTile } from './collections/ReelTile';
+import { DraftTile } from './DraftTile';
+import { CardCarousel } from './shared/CardCarousel';
+import { useProjectsStore } from '../stores/projectsStore';
+import { useReadyGames } from '../stores/gamesDataStore';
 import { IntroStoryPlayer } from './introcards/IntroStoryPlayer';
 import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
@@ -50,10 +54,27 @@ import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
  */
 export function DownloadsPanel({
   onOpenProject,  // (projectId) => void - Navigate to project
+  // T8360: in-progress "Highlights" section + relocated assembly button (moved
+  // here from ProjectManager's Clips tab). The GameClipSelectorModal itself
+  // stays owned by ProjectManager (design doc Sec 8 ownership note, option b) --
+  // this panel only triggers it via onOpenAssembly.
+  onOpenAssembly, // () => void - open the Build Highlight Reel modal (owned by ProjectManager)
+  onSelectProject, // (projectId) => void - open a Highlights draft
+  onSelectProjectWithMode, // (projectId, options) => void
+  onDeleteProject, // (projectId) => void
+  exportingProject,
+  pendingGameIds = new Set(),
 }) {
   // Gallery state from store
   const isOpen = useGalleryStore((state) => state.isOpen);
   const close = useGalleryStore((state) => state.close);
+  // T8360: Highlights = in-progress multi-clip drafts (is_auto_created === false).
+  // Same `projects` array the Clips tab reads, partitioned client-side -- no
+  // separate fetch, no migration (see design doc Sec 5.1).
+  const projects = useProjectsStore((state) => state.projects);
+  const highlightDrafts = projects.filter((p) => !p.is_auto_created);
+  const readyGames = useReadyGames();
+  const hasClips = readyGames.some((g) => g.clip_count > 0);
   // Header chip = NEW (unwatched) reels, matching the home "My Reels" badge so the
   // same number appears in both places. galleryStore is the source of truth (the
   // full reel list is not fetched on open); the count derives from watched_at and
@@ -739,6 +760,52 @@ export function DownloadsPanel({
 
         {/* Content — single My Reels view (T3610 §0B.1) */}
         <div className="flex-1 overflow-y-auto p-4">
+          {/* T8360: relocated assembly button (was ProjectManager's Clips-tab
+              "Build Highlight Reel" button) + the Highlights (in-progress)
+              section, both above the published Highlight Reels list -- moved,
+              not rewritten (design doc Sec 4.2). */}
+          <div className="mb-4">
+            <Button
+              variant="cyan"
+              size="lg"
+              icon={Plus}
+              disabled={!hasClips}
+              title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
+              onClick={onOpenAssembly}
+              className="w-full"
+            >
+              Build Highlight Reel
+            </Button>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center gap-2 px-3 py-2 min-h-11">
+              <span className="text-sm font-medium text-gray-200 flex-1">{SECTION_NAMES.HIGHLIGHTS}</span>
+              <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                {highlightDrafts.length}
+              </span>
+            </div>
+            {highlightDrafts.length === 0 ? (
+              <p className="px-3 text-sm text-gray-500">
+                No highlights in progress. Tap Build Highlight Reel to assemble one.
+              </p>
+            ) : (
+              <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`}>
+                {highlightDrafts.map((project) => (
+                  <DraftTile
+                    key={project.id}
+                    project={project}
+                    onSelect={() => onSelectProject?.(project.id)}
+                    onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                    onDelete={() => onDeleteProject?.(project.id)}
+                    exportingProject={exportingProject}
+                    pendingGameIds={pendingGameIds}
+                  />
+                ))}
+              </CardCarousel>
+            )}
+          </div>
+
           <ConfidenceBanner
             onRank={() => setShowRankingGame(true)}
             refreshKey={rankRefreshKey}

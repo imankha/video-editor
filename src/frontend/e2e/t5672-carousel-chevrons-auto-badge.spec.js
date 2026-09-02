@@ -205,7 +205,7 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     // (helpers/appReady.js), which hung this test to the 60s deployed-target timeout.
     await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-    // T8080: the Reel Drafts screen now defaults to By-Phase classification, which
+    // T8080: the Clips screen now defaults to By-Phase classification, which
     // does NOT render the game-group stage rows this test pins (T6810). Switch to
     // By Game explicitly so the assertions below exercise what they're named for.
     await page.getByRole('button', { name: 'By Game' }).click();

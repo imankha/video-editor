@@ -92,7 +92,7 @@ function updatePath(mode) {
  * - Single source of truth for screen metadata
  */
 export const SCREENS = {
-  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: SECTION_NAMES.DRAFTS },
+  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: SECTION_NAMES.CLIPS },
   FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Focus' },
   OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Overlay' },
   ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },

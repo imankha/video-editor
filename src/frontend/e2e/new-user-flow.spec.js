@@ -542,7 +542,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.locator('button:has-text("Clips")').click();
     await page.waitForTimeout(1000);
 
     // Click the auto-generated project from the 5-star clip
@@ -576,7 +576,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.locator('button:has-text("Clips")').click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -601,7 +601,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload page to ensure framing export result is reflected in UI
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.locator('button:has-text("Clips")').click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -702,7 +702,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Navigate to project and trigger export
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.locator('button:has-text("Clips")').click();
     await page.waitForTimeout(1000);
 
     const q3ProjectCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
@@ -835,9 +835,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // --- Q4 Step 3: Create a Custom Multi-Game Project ---
     console.log('[Q4.3] Create custom project');
 
+    // T8360: "Build Highlight Reel" moved off the Clips Home tab into the
+    // Highlight Reels drawer (DownloadsPanel) -- open that drawer instead.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(1000);
 
     const newProjectBtn = page.locator('button:has-text("Build Highlight Reel")');
@@ -878,10 +880,13 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     const reelFramed = await frameAllClipsInProject(page, customProject.id);
     console.log(`[Q4.4] Framed ${reelFramed} clip(s) in custom project`);
 
-    // Navigate to the custom project and click Frame Video
+    // Navigate to the custom (multi-clip) project and click Frame Video. T8360:
+    // multi-clip "Highlights" drafts (is_auto_created===false) no longer render on
+    // the Clips Home tab -- they live in the Highlight Reels drawer's Highlights
+    // (in-progress) section.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Reel Drafts")').click();
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
     await page.waitForTimeout(1000);
 
     const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');

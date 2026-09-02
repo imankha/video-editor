@@ -52,7 +52,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   // --- line 0: intro over the drafts list --------------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  await page.getByRole('button', { name: 'Clips' }).click();
   await page.mouse.move(960, 400);
   await mark(0);
   await dwell(4);
