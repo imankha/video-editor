@@ -1,6 +1,6 @@
 # T8240: Admin People table: "Clips" column should say "Published" — needs a metric decision, not just a relabel
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 3
 **Created:** 2026-08-31

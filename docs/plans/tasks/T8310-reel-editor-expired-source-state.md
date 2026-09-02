@@ -1,6 +1,6 @@
 # T8310: Reel editor shows a deliberate "source expired" state instead of "Video format not supported" (bug 50p)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-01
