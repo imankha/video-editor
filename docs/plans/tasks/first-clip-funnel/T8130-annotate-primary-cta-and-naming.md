@@ -1,6 +1,6 @@
 # T8130: Annotate primary CTA + Plays/Clips/Reels naming
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-31
@@ -90,16 +90,35 @@ Hierarchy rescue (both platforms):
 ## Implementation
 
 ### Steps
-1. [ ] Rename pass (table above) + update string-asserting tests
-2. [ ] CTA hierarchy: full-width Add Play, demotions, empty-state-as-button
-3. [ ] First-use hint line (clip_count == 0 only)
-4. [ ] Mobile 390x844 + desktop screenshots for the diff; real-browser tap check
+1. [x] Rename pass (table above) + update string-asserting tests - EXCEPT the Reel
+       Drafts tab itself: mid-flight IA guard confirmed it holds a genuine mix of
+       single-clip and multi-clip content, not cleanly per-clip, so renaming it to
+       "Clips" (and relocating the assembly button off it) was deferred - split out as
+       [T8360](../T8360-split-single-vs-multiclip-drafts.md) per user decision
+       2026-09-02, rather than force a misleading name or a half-finished relocation.
+2. [x] CTA hierarchy: full-width Add Play, demotions, empty-state-as-button
+3. [x] First-use hint line (clip_count == 0 only)
+4. [ ] Mobile 390x844 + desktop screenshots for the diff - browser live-drive not
+       possible in the container (no chromium/network); CTA hierarchy asserted
+       structurally by unit tests instead, documented rather than claimed
+
+### Progress Log
+
+**2026-09-02**: Implemented, CI green. Post-hoc review (the L-tier review step was
+accidentally skipped during implementation) found 2 BLOCKING issues, both fixed before
+merge: (1) the new CTA didn't gate on edit-mode, so selecting a clip made the loudest
+button on screen say "Add Play" while its handler actually edited the selected clip
+(and skipped recording `add_clip_opened`) - now mirrors `AnnotateControls`' label/icon
+flip; (2) ~40 e2e spec files, including 4 mandatory staging-gate specs, still asserted
+on the old "My Reels"/"New Reel" strings - swept in full. Merged to master.
 
 ## Acceptance Criteria
 
-- [ ] "Add Play" is the single loudest element on Annotate on both platforms; no
+- [x] "Add Play" is the single loudest element on Annotate on both platforms; no
       alternate instruction copy remains
-- [ ] Every surface uses the approved vocabulary; no UI string says "Reel Draft" or
-      "Add Clip" anywhere
-- [ ] Analytics event names and code identifiers unchanged (grep-proof in review)
+- [x] Every surface uses the approved vocabulary EXCEPT the Reel Drafts tab (deferred to
+      T8360, see Implementation step 1); no UI string says "Add Clip" anywhere
+- [x] Analytics event names and code identifiers unchanged (grep-proof independently
+      re-verified by review)
 - [ ] Metric to watch: `add_clip_opened / annotation_completed` (baseline ~1/2, last-30d 5/11)
+      - post-ship metric, not verifiable pre-deploy
