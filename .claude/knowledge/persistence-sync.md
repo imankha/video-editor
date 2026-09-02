@@ -1086,6 +1086,33 @@ JIT trigger in T5083. They reach a profile without going through the seam at all
 sweep still backstops them and T5085 (next in epic order, before T5087 deletes the sweep) wires
 "migrate-before-touch" for exactly this non-login-writer list.
 
+**T5086 — the seam's `wal_busy` retry must NEVER blind-unlink a LIVE connection's WAL.** The retry in
+`run_profile_seam`/`run_user_seam` used to call `clear_stale_wal_sidecars(db_path)` (a blind
+`sidecar.unlink()`). That is safe only when the sidecars are genuinely stale (crash leftover, nothing
+holding the file). When a connection is genuinely LIVE the OSes diverge: **Windows** (dev/CI)
+`unlink()` on an open file raises `PermissionError` → the retry falls through to `wal_busy` →
+`MigrationBlocked` (why CI never caught it); **Linux** (prod, Fly.io) POSIX `unlink()` on an open file
+SUCCEEDS SILENTLY — the live connection keeps writing to the now-unlinked inode while the retry creates
+a fresh `-wal` next to the main file, the exact cross-DB page-mixing corruption `clear_stale_wal_sidecars`
+exists to prevent, inverted. Fix: a seam-only sibling `db_refresh.clear_wal_sidecars_if_unheld(db_path)
+-> bool` probes for a live holder before touching anything — `sqlite3.connect(timeout=0.2)` →
+`PRAGMA locking_mode=EXCLUSIVE` → `BEGIN IMMEDIATE`. Acquiring the exclusive lock needs sole ownership
+of the WAL shared-memory index, so a live WRITER **or a live idle READER** (verified empirically on
+Linux, T5086) raises `OperationalError: database is locked` → return `False` (REFUSE, nothing unlinked)
+→ the caller leaves `result` as `wal_busy` → `MigrationBlocked` (retryable 503), exactly as designed —
+no new exception type, no raw 500. No live holder → the clean EXCLUSIVE close checkpoints and the
+function then calls `clear_stale_wal_sidecars` to GUARANTEE removal → return `True` → retry migrates.
+An unexpected probe error (e.g. corrupt file) logs CRITICAL and REFUSES (fail-loud, never a silent
+unlink). **Why a seam-only sibling and not a guard inside `clear_stale_wal_sidecars` for ALL callers:**
+the other six callers run only AFTER a restore-if-newer download that already proved
+(`before_download=not wal_sidecars_present`) no sidecars were present going in — their sidecar is a
+narrow-window artifact of a JUST-SWAPPED main file, so opening a probe CONNECTION there could replay a
+stale WAL onto the fresh main file (the very hazard). The probe is safe ONLY where the WAL is consistent
+with the current main file — i.e. the seam's in-place `wal_busy` retry, where no swap happened. Tests:
+`tests/test_t5086_wal_sidecar_live_guard.py` (7: refuse-preserves-live-WAL, clear-stale, fail-loud on
+corrupt, no-leaked-lock, profile+user seam call-site block-without-unlink, stale-still-migrates
+regression — all OS-independent, asserting the discriminator not the unlink outcome).
+
 **Tests:** `tests/test_t5083_jit_seam.py` (21 cases — at-head no-op zero-upload; behind-head migrates
 and uploads `r2_version+1`; hot path never re-invokes the seam primitive; two concurrent first-access
 requests produce exactly one upload; `wal_busy` blocks at both the primitive and the `ensure_database`
