@@ -12,7 +12,7 @@ import { saveEvidence } from './helpers/qa.js';
  * effect flipped the tab to "projects" as soon as projects finished loading.
  *
  * Acceptance-criterion map (task doc T5677):
- *   AC1 cold /home/games shows Games; cold /home/reels shows Reel Drafts -> test 1, test 2
+ *   AC1 cold /home/games shows Games; cold /home/reels shows Clips -> test 1, test 2
  *   AC2 refresh + back/forward preserve the visible tab                  -> test 3
  *   AC3 unknown route (/gallery) lands on /home                          -> test 4
  *   AC4 editor route (/framing) with no loaded project lands home        -> test 5
@@ -25,7 +25,7 @@ const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE_ID = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
 const gamesTab = (page) => page.getByRole('button', { name: /^Games\b/ });
-const draftsTab = (page) => page.getByRole('button', { name: /^Reel Drafts\b/ });
+const draftsTab = (page) => page.getByRole('button', { name: /^Clips\b/ });
 
 // The active tab carries `text-white` (colored pill); the inactive one is
 // `text-gray-400`. Asserting BOTH pins which tab is showing unambiguously.
@@ -37,13 +37,13 @@ async function expectActiveTab(page, which) {
 }
 
 // Wait until the ProjectManager has both tabs mounted AND the projects list has
-// loaded (Reel Drafts count chip present), then give the mount effect a beat to
+// loaded (Clips count chip present), then give the mount effect a beat to
 // run — that effect is exactly what used to bounce the tab, so the tab must NOT
 // have moved after it fires.
 async function waitForTabsSettled(page) {
   await waitForAppReady(page, { ready: gamesTab(page) });
   await expect(draftsTab(page)).toBeVisible();
-  // The count chip on Reel Drafts only renders once projects.length > 0.
+  // The count chip on Clips only renders once projects.length > 0.
   await expect(draftsTab(page).locator('span', { hasText: /^\d+$/ })).toBeVisible();
   await page.waitForTimeout(750); // let the projects-count mount effect run
 }
@@ -52,7 +52,7 @@ test.beforeEach(async ({ context }) => {
   await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 });
 
-test('AC1: cold-load /home/games shows the Games tab (no bounce to Reel Drafts) @staging-gate @gate-b', async ({ page }) => {
+test('AC1: cold-load /home/games shows the Games tab (no bounce to Clips) @staging-gate @gate-b', async ({ page }) => {
   await page.goto('/home/games');
   await waitForTabsSettled(page);
 
@@ -61,7 +61,7 @@ test('AC1: cold-load /home/games shows the Games tab (no bounce to Reel Drafts) 
   await saveEvidence(page, 'criterion-1-home-games-shows-games-tab');
 });
 
-test('AC1: cold-load /home/reels shows the Reel Drafts tab @staging-gate @gate-b', async ({ page }) => {
+test('AC1: cold-load /home/reels shows the Clips tab @staging-gate @gate-b', async ({ page }) => {
   await page.goto('/home/reels');
   await waitForTabsSettled(page);
 

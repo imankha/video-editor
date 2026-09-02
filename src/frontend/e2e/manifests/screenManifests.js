@@ -35,7 +35,7 @@ async function reachHome(page) {
 /** Open the first Framing-ready reel draft; ready once the crop editor loaded. */
 async function reachFocus(page) {
   await reachHome(page);
-  const drafts = page.getByRole('button', { name: 'Reel Drafts' }).first();
+  const drafts = page.getByRole('button', { name: 'Clips' }).first();
   await drafts.waitFor({ state: 'visible', timeout: 15000 });
   await drafts.click();
   const framingChip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
@@ -64,7 +64,7 @@ export const SCREENS = [
     setup: reachHome,
     actions: [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
-      { label: 'Reel Drafts tab', locator: (p) => p.getByRole('button', { name: 'Reel Drafts' }).first() },
+      { label: 'Clips tab', locator: (p) => p.getByRole('button', { name: 'Clips' }).first() },
       { label: 'Highlight Reels tab', locator: (p) => p.getByRole('button', { name: /Highlight Reels/i }).first() },
     ],
   },
@@ -102,7 +102,7 @@ export const SCREENS = [
       { label: 'Export button', locator: (p) => p.getByRole('button', { name: /^Export( \(\d+\/\d+\))?$/ }) },
       { label: 'Overlay mode tab', locator: (p) => p.getByTestId('mode-overlay'), reachOnly: true },
       // The "go home" affordance in UnifiedHeader: desktop renders a Home button +
-      // "Reel Drafts" breadcrumb; mobile collapses to a single "Back" arrow. Match
+      // "Clips" breadcrumb; mobile collapses to a single "Back" arrow. Match
       // either so this asserts reachability cross-viewport, not desktop-only chrome.
       { label: 'Home / Back nav', locator: (p) => p.getByRole('button', { name: /^(Home|Back)$/ }).first() },
       // T7130 (prod bugs 41p/42p): the reel aspect-ratio toggle was `hidden lg:flex`, so
@@ -177,7 +177,7 @@ export const SCREENS = [
       let appeared = await page.getByTestId('reel-card').first()
         .waitFor({ state: 'visible', timeout: 6000 }).then(() => true).catch(() => false);
       if (!appeared) {
-        // Scope to the drawer panel: the home Reel Drafts section renders its own
+        // Scope to the drawer panel: the home Clips section renders its own
         // CollapsibleGroups behind the backdrop, which are covered (not clickable).
         const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
         // Wait for the summary to render group headers before iterating (the drawer

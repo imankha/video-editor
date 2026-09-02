@@ -1,12 +1,17 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
-// T6830: home-screen tab defaults + dead-end Reel Drafts guard. These tests render
+// T6830: home-screen tab defaults + dead-end Clips-tab guard. These tests render
 // the FULL ProjectManager to exercise the real tab-selection paths (initial tab,
-// /home/reels deep link) and the derived `reelDraftsDisabled` gate on the tab
+// /home/reels deep link) and the derived `clipsTabDisabled` gate on the tab
 // button. Heavy presentational children (header chrome, tiles) are stubbed so the
 // test stays focused on tab logic, not their internal store wiring.
+//
+// T8360: the tab was renamed "Reel Drafts" -> "Clips" and now shows only
+// single-clip auto-drafts (`clipDrafts = projects.filter(is_auto_created)`).
+// The "Build Highlight Reel" button moved off this tab entirely (to
+// DownloadsPanel), so it is no longer asserted here as a Clips-tab action.
 
 // jsdom lacks IntersectionObserver (used by the games-grid cache-warming effect).
 class MockIntersectionObserver {
@@ -88,22 +93,28 @@ function renderManager(props = {}, path = '/home') {
   );
 }
 
-const draftsTab = () => screen.getByRole('button', { name: /Reel Drafts/i });
+// Prefix match: a loose /Clips/i regex also catches the unrelated "Recent"
+// quick-access card's "N clips annotated" caption (accessible name includes
+// all descendant text), which isn't the tab. The tab's own accessible name is
+// "Clips" with the count chip digit appended directly (no separating space,
+// e.g. "Clips1"), so don't require a trailing word boundary.
+const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
 
 describe('ProjectManager home tab defaults (T6830)', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
   });
 
-  it('fresh account (no games, no drafts): lands on Games, Reel Drafts tab disabled with tooltip', async () => {
+  it('fresh account (no games, no drafts): lands on Games, Clips tab disabled with tooltip', async () => {
     renderManager();
 
     // Games tab is active -> its action button (Add Game) is shown.
     expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
-    // New Reel action is NOT shown (that's the Reel Drafts tab's action).
+    // Build Highlight Reel is NOT shown here (T8360: it moved off Home entirely,
+    // to DownloadsPanel's Highlight Reels surface).
     expect(screen.queryByRole('button', { name: 'Build Highlight Reel' })).toBeNull();
 
-    const tab = draftsTab();
+    const tab = clipsTab();
     expect(tab.disabled).toBe(true);
     expect(tab.getAttribute('title')).toMatch(/Extract clips from a game first/i);
   });
@@ -116,32 +127,45 @@ describe('ProjectManager home tab defaults (T6830)', () => {
       expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
     });
     expect(window.location.pathname).toBe('/home/games');
-    expect(draftsTab().disabled).toBe(true);
+    expect(clipsTab().disabled).toBe(true);
   });
 
-  it('user with extracted clips but no drafts: Reel Drafts tab is ENABLED (asymmetry)', () => {
+  it('user with extracted clips but no drafts: Clips tab is ENABLED (asymmetry)', () => {
     renderManager({ games: [{ id: 1, clip_count: 3, created_at: '2026-08-01T00:00:00Z' }] });
 
-    expect(draftsTab().disabled).toBe(false);
+    expect(clipsTab().disabled).toBe(false);
   });
 
-  it('user with drafts: unchanged default (T5677) — lands on Reel Drafts, tab enabled', async () => {
-    renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [] }] });
+  it('user with drafts: unchanged default (T5677) — lands on Clips, tab enabled', async () => {
+    // T8360: clipDrafts (the Clips tab's count/default driver) is auto-drafts
+    // only -- is_auto_created: true is required for this fixture to land there.
+    renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }] });
 
-    const tab = draftsTab();
+    const tab = clipsTab();
     expect(tab.disabled).toBe(false);
-    // Projects-count default flips the active tab to Reel Drafts once projects load,
-    // so the New Reel action button appears.
+    // Projects-count default flips the active tab to Clips once projects load,
+    // so its count chip appears. The Build Highlight Reel action no longer lives
+    // on this tab (T8360 relocated it to DownloadsPanel).
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Build Highlight Reel' })).toBeTruthy();
+      expect(within(tab).getByText('1')).toBeTruthy();
     });
+    expect(screen.queryByRole('button', { name: 'Build Highlight Reel' })).toBeNull();
   });
 
-  it('mid-load (games still loading): Reel Drafts NOT disabled — no disabled->enabled flash', () => {
+  it('user with only multi-clip (Highlights) drafts: Clips tab stays on the dead-end guard (T8360)', async () => {
+    // A multi-clip draft (is_auto_created: false) does NOT count toward clipDrafts
+    // -- it belongs to the Highlights section in DownloadsPanel, not the Clips tab.
+    renderManager({ projects: [{ id: 8, name: 'A Highlight', game_ids: [], is_auto_created: false }] });
+
+    const tab = clipsTab();
+    expect(tab.disabled).toBe(true);
+  });
+
+  it('mid-load (games still loading): Clips NOT disabled — no disabled->enabled flash', () => {
     renderManager({ gamesLoading: true });
 
     // A user who actually has clips would render disabled for a frame if we didn't
     // gate on load settling; keep it enabled until both lists settle.
-    expect(draftsTab().disabled).toBe(false);
+    expect(clipsTab().disabled).toBe(false);
   });
 });

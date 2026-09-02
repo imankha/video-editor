@@ -231,11 +231,13 @@ export const useProjectsStore = create((set, get) => ({
     });
     if (!response.ok) throw new Error('Failed to rename project');
 
-    // Update local state — clear is_auto_created so getProjectDisplayName
-    // returns the user-chosen name instead of the auto-generated clip name
+    // T8360: rename only ever touches `name`. is_auto_created must survive a
+    // rename unchanged -- it is the Clips/Highlights routing key, and flipping
+    // it here would teleport a renamed single-clip draft to the Highlights
+    // surface. See T8360-design.md Sec 0.
     set(state => ({
       projects: state.projects.map(p =>
-        p.id === projectId ? { ...p, name: newName, is_auto_created: false } : p
+        p.id === projectId ? { ...p, name: newName } : p
       ),
     }));
   },

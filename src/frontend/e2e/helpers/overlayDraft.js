@@ -91,7 +91,7 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
 
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  await page.getByRole('button', { name: 'Clips' }).click();
   const overlayFilter = page.getByText(/^In Overlay \(\d+\)$/);
   if ((await overlayFilter.count()) === 0) {
     return {
@@ -152,7 +152,7 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
     skipped.push(`project ${targetId}: probed streamable (R2 206) yet overlay never hydrated: ${verdict.reason}`);
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: 'Reel Drafts' }).click();
+    await page.getByRole('button', { name: 'Clips' }).click();
     if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
   }
 

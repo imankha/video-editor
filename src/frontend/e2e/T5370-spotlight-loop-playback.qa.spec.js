@@ -38,7 +38,7 @@ const VID = '.video-container video';
 async function tryReachOverlay(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  const draftsBtn = page.getByRole('button', { name: 'Reel Drafts' });
+  const draftsBtn = page.getByRole('button', { name: 'Clips' });
   if (await draftsBtn.count()) {
     await draftsBtn.click().catch(() => {});
     const chip = page.getByTitle(FRAMING_CHIP_TITLE_RE).first();

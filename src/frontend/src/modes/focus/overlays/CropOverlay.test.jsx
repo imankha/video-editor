@@ -29,7 +29,7 @@ import CropOverlay from './CropOverlay';
  * NOTE (skip context): the live regression proof is e2e/T4550-overlay-transform.qa.spec.js
  * with its warm-up prime removed — but that spec HONEST-SKIPS in the /dotask container
  * because this env has no framing-ready reel draft (openFramingDraft times out on the
- * "Reel Drafts" chip). This component test is the standing guard in that environment.
+ * "Clips" chip). This component test is the standing guard in that environment.
  * Per this project's real-browser-for-pointer-fixes rule, jsdom does not simulate true
  * pointer-capture event REROUTING — these tests dispatch events on the same element
  * pointerdown captured, which is sufficient to prove the synchronous-arming and

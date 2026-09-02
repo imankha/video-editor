@@ -979,15 +979,15 @@ async def update_project(project_id: int, project: ProjectRename):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # T8360: renaming does NOT clear the auto_project_id link. A single-clip
+        # auto-draft stays routed to the Clips surface after rename (is_auto_created
+        # must not flip on rename) and keeps dying with its source clip per T4800 --
+        # both depend on this link surviving a rename. See T8360-design.md Sec 0 for
+        # the investigation (the old clearing served no live purpose and silently
+        # broke T4800 cleanup for renamed drafts).
         cursor.execute("""
             UPDATE projects SET name = ? WHERE id = ?
         """, (project.name, project_id))
-
-        # Clear auto_project_id link so the project is no longer treated as auto-created.
-        # The fetch query computes is_auto_created dynamically via this link.
-        cursor.execute("""
-            UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?
-        """, (project_id,))
 
         conn.commit()
 

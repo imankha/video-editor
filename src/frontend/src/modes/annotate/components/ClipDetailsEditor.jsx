@@ -118,7 +118,7 @@ export function ClipDetailsEditor({
   // T8060: once a reel exists, the Reel control tracks it through Focus ->
   // Overlay -> Completed/Published, using the same has_working_video/
   // has_final_video/is_published fields DraftTile already reads for the
-  // Reel Drafts list — no separate stage computation to keep in sync.
+  // Clips list — no separate stage computation to keep in sync.
   const projects = useProjectsList();
   const linkedProject = hasReel ? projects.find(p => p.id === region.autoProjectId) : null;
 

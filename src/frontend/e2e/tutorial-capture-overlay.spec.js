@@ -40,7 +40,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
   step('pre-roll: set shape to Body');
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  await page.getByRole('button', { name: 'Clips' }).click();
   const overlayChip = page.getByTitle(/^Overlay: .*\(click to open\)/).first();
   const openBtn = page.getByTitle('Open in Overlay').first();
   let target = overlayChip;
@@ -54,7 +54,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
     await bodyBtn.click();
     await dwell(0.8);
   } catch { step('pre-roll Body click failed'); }
-  await page.getByText('Reel Drafts', { exact: true }).first().click();  // breadcrumb home
+  await page.getByText('Clips', { exact: true }).first().click();  // breadcrumb home
   await page.getByRole('button', { name: /^In Overlay \(|^All \(/ }).first()
     .waitFor({ timeout: 15000 }).catch(() => {});
   await dwell(1);

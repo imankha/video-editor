@@ -293,7 +293,7 @@ export function ClipsSidePanel({
               </div>
             ) : (
               // Sort by in-match start time so the list matches the timeline and
-              // the in-game-time ordering of Reel Drafts / My Reels (T4080).
+              // the in-game-time ordering of Clips / My Reels (T4080).
               [...filteredRegions].sort((a, b) => {
                 const seqA = a.videoSequence ?? 1;
                 const seqB = b.videoSequence ?? 1;

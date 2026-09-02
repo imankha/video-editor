@@ -25,7 +25,7 @@ const DEFAULT_SETTINGS = {
     statusFilter: 'all',
     aspectFilter: 'all',
     creationFilter: 'all',
-    // T8080: primary classification of the Reel Drafts list — 'phase' (pipeline
+    // T8080: primary classification of the Clips list — 'phase' (pipeline
     // stage, sub-grouped by game) or 'game' (today's grouping). Session-only,
     // same as the other projectFilters fields.
     classification: 'phase',

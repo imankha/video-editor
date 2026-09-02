@@ -48,7 +48,7 @@ export async function openFramingDraft(
 ) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  await page.getByRole('button', { name: 'Clips' }).click();
   const chip = page.getByTitle(titleRe).first();
   await chip.waitFor({ timeout: chipTimeout });
   await chip.click();

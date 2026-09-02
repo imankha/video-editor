@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // T4080: ClipsSidePanel must show each clip's in-match soccer time and order rows
-// by in-match start (the reference order Reel Drafts / My Reels match). Mock the
+// by in-match start (the reference order Clips / My Reels match). Mock the
 // heavy children and capture what ClipListItem receives.
 vi.mock('./ClipListItem', () => ({
   default: ({ region, index, gameClock }) => (

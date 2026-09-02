@@ -145,6 +145,12 @@ export function ProjectsScreen({
 
   // Local UI state
   const [loadingProjectId, setLoadingProjectId] = useState(null);
+  // T8360: the Build Highlight Reel button now lives on DownloadsPanel, but the
+  // GameClipSelectorModal it opens stays owned by ProjectManager (design doc
+  // Sec 8 ownership note, option b -- smaller diff, modal already sits in
+  // ProjectManager's tree). Lifted to this common parent so both siblings can
+  // read/trigger it without duplicating the flag.
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
 
   // Export store for global export state (uses new activeExports system)
   // Note: useExportRecovery in App.jsx handles syncing with server on startup
@@ -461,6 +467,10 @@ export function ProjectsScreen({
           onCancelActiveUpload={cancelUpload}
           // Pending game IDs for blocking project cards
           pendingGameIds={pendingGameIds}
+          // T8360: the assembly modal's open state is lifted here so DownloadsPanel's
+          // relocated Build button can trigger it
+          showNewProjectModal={showAssemblyModal}
+          onCloseNewProjectModal={() => setShowAssemblyModal(false)}
         />
 
         {/* Downloads Panel */}
@@ -468,6 +478,12 @@ export function ProjectsScreen({
           onOpenProject={(projectId) => {
             handleSelectProjectWithMode(projectId, { mode: 'framing' });
           }}
+          onOpenAssembly={() => setShowAssemblyModal(true)}
+          onSelectProject={handleSelectProject}
+          onSelectProjectWithMode={handleSelectProjectWithMode}
+          onDeleteProject={deleteProject}
+          exportingProject={activeExportingProject}
+          pendingGameIds={pendingGameIds}
         />
 
         {/* T1580: Insufficient credits for game upload */}

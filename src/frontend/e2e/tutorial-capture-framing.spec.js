@@ -37,7 +37,7 @@ test('capture framing tutorial footage @tutorial-capture', async ({ browser }) =
   // --- lines 0-2: intro over the drafts list -----------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  await page.getByRole('button', { name: 'Clips' }).click();
   await page.mouse.move(960, 420);
   await mark(0);                               // "Your best clips are now reel drafts."
   await dwell(2.5);
@@ -197,7 +197,7 @@ test('capture framing tutorial footage @tutorial-capture', async ({ browser }) =
 
   // --- line 14: upscales while you frame another ----------------------------------------------------
   await mark(14);
-  try { await act(page.getByText('Reel Drafts', { exact: true }).first()); } catch {}
+  try { await act(page.getByText('Clips', { exact: true }).first()); } catch {}
   await dwell(3.5);
 
   await finishCapture(context, page, kit, QUEST_DIR, { width: W, height: H });

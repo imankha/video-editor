@@ -58,7 +58,7 @@ async function routeSamples(page) {
  * specs share ONE contract for "pick a loadable draft + gate on hydration".
  *
  * TWO fixes fold into that helper (T6100 measured why the old `.first()` open hung
- * 240s here): (1) the "Reel Drafts" default view shows only Framing-incomplete
+ * 240s here): (1) the "Clips" default view shows only Framing-incomplete
  * drafts, so an Overlay draft is reached via the "In Overlay (N)" status filter and
  * its per-tile "Open in Overlay" button; (2) crucially, several of imankh's In-Overlay
  * drafts carry DANGLING working_video refs (playback-url 200 but the R2 GET 404s), so

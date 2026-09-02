@@ -9,12 +9,13 @@ import { QUEST_DEFINITIONS } from '../data/questDefinitions.js';
 // past the real "Reel Drafts" tab instead of learning where it is. Replaced
 // with a static visual replica of that tab (icon + label, non-clickable) so
 // the copy points at the actual on-screen button.
+// T8360: the tab itself was renamed "Reel Drafts" -> "Clips" (SECTION_NAMES.CLIPS).
 
 describe('questDefinitions copy (T3780)', () => {
   describe('open_framing wayfinding', () => {
-    it('visually references the Reel Drafts tab by icon + label, not a deep link', () => {
+    it('visually references the Clips tab by icon + label, not a deep link', () => {
       const { container, queryByRole } = render(<>{STEP_DESCRIPTIONS.open_framing}</>);
-      expect(container.textContent).toMatch(/Reel Drafts/i);
+      expect(container.textContent).toMatch(/Clips/i);
       expect(queryByRole('button')).toBeNull();
     });
 

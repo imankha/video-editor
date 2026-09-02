@@ -207,17 +207,17 @@ test.describe('Full Workflow Tests', () => {
 
     // Should see Project Manager tabs
     await expect(page.locator('button:has-text("Games")')).toBeVisible();
-    await expect(page.locator('button:has-text("Reel Drafts")')).toBeVisible();
+    await expect(page.locator('button:has-text("Clips")')).toBeVisible();
 
     // Games tab is the default for fresh users - verify it loads first
     await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
 
-    // T6830: for a fresh zero-clip account the Reel Drafts tab is a deliberate
-    // dead end (clicking in can only show an empty list with a disabled Build Highlight Reel),
-    // so it renders DISABLED until a clip is extracted. The enabled-tab default is
+    // T6830: for a fresh zero-clip account the Clips tab is a deliberate
+    // dead end (clicking in can only show an empty list), so it renders
+    // DISABLED until a clip is extracted. The enabled-tab default is
     // pinned by ProjectManager.homeTabDefaults.test.jsx; here we just assert the
     // fresh-user state matches the shipped product change.
-    await expect(page.locator('button:has-text("Reel Drafts")')).toBeDisabled();
+    await expect(page.locator('button:has-text("Clips")')).toBeDisabled();
   });
 
   // Test 2 removed: "Annotate Mode - Upload video and import TSV" is fully covered

@@ -3,7 +3,7 @@ import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 /**
- * T5672 — Reel Drafts as poster-tile carousels QA.
+ * T5672 — Clips as poster-tile carousels QA.
  *
  * Real-browser evidence for the acceptance criteria:
  *   (1) drafts render as poster tiles in one horizontal carousel per game (mobile+desktop)
@@ -22,8 +22,8 @@ const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
 async function gotoDrafts(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  const draftsTab = page.locator('button:has-text("Reel Drafts")');
-  await expect(draftsTab, 'Reel Drafts tab renders').toBeVisible({ timeout: 30000 });
+  const draftsTab = page.locator('button:has-text("Clips")');
+  await expect(draftsTab, 'Clips tab renders').toBeVisible({ timeout: 30000 });
   await draftsTab.click();
   await page.waitForTimeout(600); // let carousels + posters settle
 }

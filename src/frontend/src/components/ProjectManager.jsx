@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Share2, Trophy } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Share2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -358,7 +358,7 @@ export function gamesGridColumns(groups) {
   return Math.min(4, Math.max(2, biggest));
 }
 
-// The active tab is URL state (/home/games -> Games, /home/reels -> Reel Drafts),
+// The active tab is URL state (/home/games -> Games, /home/reels -> Clips),
 // never persisted. Map a pathname to its tab, or null when the URL names no tab
 // (bare /home) so callers can fall back to a default. (T5677)
 function tabFromPath(pathname) {
@@ -409,6 +409,11 @@ export function ProjectManager({
   onCancelActiveUpload, // Cancel one upload by id
   // Pending game IDs - projects referencing these are blocked
   pendingGameIds = new Set(),
+  // T8360: the Build Highlight Reel modal's open state, lifted to the common
+  // parent (ProjectsScreen) so DownloadsPanel's relocated Build button can
+  // trigger it. The modal itself stays here (design doc Sec 8 ownership note).
+  showNewProjectModal = false,
+  onCloseNewProjectModal,
 }) {
   // Get downloads and export state from context
   const { unseenReelsCount: contextUnseenReelsCount, exportingProject: contextExportingProject } = useAppState();
@@ -417,18 +422,23 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
-  // T6830: the Reel Drafts tab is a dead end when there are no drafts AND New Reel
-  // is disabled (no game has extracted clips) — clicking in can only show an empty
-  // list with a disabled action. Disable the tab in exactly that case. Purely
-  // derived, no persisted view state. Gated on both loads settling so it can't
-  // flash disabled->enabled while games/projects stream in (a user WITH clips would
-  // otherwise render disabled for one frame, then enable).
-  const reelDraftsDisabled =
-    !loading && !gamesLoading && projects.length === 0 && !hasClips;
+  // T8360: the Clips tab shows single-clip auto-drafts ONLY. is_auto_created (the
+  // raw_clips.auto_project_id link) is the routing key, not clip_count -- see
+  // T8360-design.md "The signal we can trust". Multi-clip drafts (is_auto_created
+  // === false) live on the Highlight Reels surface's Highlights section instead.
+  const clipDrafts = useMemo(() => projects.filter(p => p.is_auto_created), [projects]);
+  // T6830: the Clips tab is a dead end when there are no clip drafts AND Create
+  // Reel is unreachable (no game has extracted clips) — clicking in can only show
+  // an empty list with no way to add one. Disable the tab in exactly that case.
+  // Purely derived, no persisted view state. Gated on both loads settling so it
+  // can't flash disabled->enabled while games/projects stream in (a user WITH
+  // clips would otherwise render disabled for one frame, then enable).
+  const clipsTabDisabled =
+    !loading && !gamesLoading && clipDrafts.length === 0 && !hasClips;
   // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
-  // tab. Bare /home falls back to the projects-count default. (T5677)
+  // tab. Bare /home falls back to the clip-drafts-count default. (T5677)
   const initialTab = tabFromPath(window.location.pathname)
-    ?? (projects.length === 0 ? 'games' : 'projects');
+    ?? (clipDrafts.length === 0 ? 'games' : 'projects');
   const [activeTab, setActiveTabRaw] = useState(initialTab);
   const setActiveTab = useCallback((tab) => {
     setActiveTabRaw(tab);
@@ -437,7 +447,6 @@ export function ProjectManager({
       window.history.replaceState(null, '', path);
     }
   }, []);
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
@@ -460,11 +469,10 @@ export function ProjectManager({
     settings,
     setStatusFilter,
     setAspectFilter,
-    setCreationFilter,
     setClassification,
   } = useSettingsStore();
 
-  const { statusFilter, aspectFilter, creationFilter, classification } = settings.projectFilters;
+  const { statusFilter, aspectFilter, classification } = settings.projectFilters;
 
   // Viewport-aware cache warming: promote visible game videos in the warm queue
   useEffect(() => {
@@ -497,9 +505,10 @@ export function ProjectManager({
     return () => observer.disconnect();
   }, [games]);
 
-  // Filter projects based on selected filters
+  // Filter clip drafts based on selected filters. Base set is clipDrafts (T8360:
+  // this tab shows single-clip auto-drafts only), not the full projects array.
   const filteredProjects = useMemo(() => {
-    return projects.filter(project => {
+    return clipDrafts.filter(project => {
       // Status filter - matches counting logic
       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
       if (statusFilter !== 'all') {
@@ -519,31 +528,23 @@ export function ProjectManager({
         return false;
       }
 
-      // Creation type filter
-      if (creationFilter !== 'all') {
-        if (creationFilter === 'auto' && !project.is_auto_created) return false;
-        if (creationFilter === 'custom' && project.is_auto_created) return false;
-      }
-
       return true;
     });
-  }, [projects, statusFilter, aspectFilter, creationFilter]);
+  }, [clipDrafts, statusFilter, aspectFilter]);
 
   // Get counts for filter badges and determine which filters are useful
   const filterCounts = useMemo(() => {
     const counts = {
-      all: projects.length,
+      all: clipDrafts.length,
       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
       overlay: 0,
       editing: 0,
       exported: 0,
       not_started: 0,
       aspects: {},
-      auto: 0,
-      custom: 0
     };
 
-    projects.forEach(project => {
+    clipDrafts.forEach(project => {
       // Status counts - matches ProjectCard display logic
       // T66: All projects in DB are uncompleted (completed ones are archived)
       if (project.has_working_video) {
@@ -559,36 +560,26 @@ export function ProjectManager({
       // Aspect ratio counts
       const ratio = project.aspect_ratio || '9:16';
       counts.aspects[ratio] = (counts.aspects[ratio] || 0) + 1;
-
-      // Creation type counts
-      if (project.is_auto_created) {
-        counts.auto++;
-      } else {
-        counts.custom++;
-      }
     });
 
     // Determine which filters are useful (have more than one distinct value)
     const statusValuesWithProjects = [counts.overlay, counts.editing, counts.exported, counts.not_started].filter(v => v > 0).length;
     counts.showStatusFilter = statusValuesWithProjects > 1;
     counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
-    counts.showCreationFilter = counts.auto > 0 && counts.custom > 0;
 
     // A filter panel is also "useful" whenever its filter is ACTIVE (non-default):
     // hiding the panel for a zero-match active filter leaves the user with an
     // invisible filter they cannot see or clear (staging bug 2026-07-04).
     counts.showStatusFilter = counts.showStatusFilter || statusFilter !== 'all';
     counts.showAspectFilter = counts.showAspectFilter || aspectFilter !== 'all';
-    counts.showCreationFilter = counts.showCreationFilter || creationFilter !== 'all';
 
     return counts;
-  }, [projects, statusFilter, aspectFilter, creationFilter]);
+  }, [clipDrafts, statusFilter, aspectFilter]);
 
-  // Only show filters if we have more than 1 project and at least one filter is useful
-  const showFilters = projects.length > 1 && (
+  // Only show filters if we have more than 1 clip draft and at least one filter is useful
+  const showFilters = clipDrafts.length > 1 && (
     filterCounts.showStatusFilter ||
-    filterCounts.showAspectFilter ||
-    filterCounts.showCreationFilter
+    filterCounts.showAspectFilter
   );
 
   // Helper to compute status counts for a list of projects
@@ -686,9 +677,9 @@ export function ProjectManager({
 
     // Compute status counts and most recent game date for each group
     Object.keys(groups).forEach(key => {
-      // Order drafts within a game by their in-game time so Reel Drafts matches
+      // Order drafts within a game by their in-game time so Clips matches
       // the annotation clip-list and My Reels order (T4080). Single-clip drafts
-      // carry clip_game_start_time (backend-derived); multi-clip drafts sort last.
+      // carry clip_game_start_time (backend-derived).
       groups[key].projects.sort((a, b) =>
         compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
       groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
@@ -865,28 +856,28 @@ export function ProjectManager({
       hasSetInitialTab.current = true;
       return;
     }
-    // A URL-named tab is authoritative — don't let the projects-count default
-    // flip a cold /home/games deep link over to Reel Drafts. (T5677)
+    // A URL-named tab is authoritative — don't let the clip-drafts-count default
+    // flip a cold /home/games deep link over to Clips. (T5677)
     if (tabFromPath(window.location.pathname)) {
       hasSetInitialTab.current = true;
       return;
     }
-    if (!hasSetInitialTab.current && !loading && projects.length > 0) {
+    if (!hasSetInitialTab.current && !loading && clipDrafts.length > 0) {
       setActiveTab('projects');
       hasSetInitialTab.current = true;
     }
-  }, [projects, loading]);
+  }, [clipDrafts, loading]);
 
-  // T6830: never leave the user parked on a dead-end Reel Drafts tab. A /home/reels
+  // T6830: never leave the user parked on a dead-end Clips tab. A /home/reels
   // deep link (or a stale tab hint) lands on 'projects' before data loads; once the
-  // loads settle and the tab is disabled, fall back to Games. reelDraftsDisabled is
+  // loads settle and the tab is disabled, fall back to Games. clipsTabDisabled is
   // false mid-load, so this can't fight the initial-tab logic above; and it never
-  // fires for a user with drafts or extracted clips (the asymmetric enabled cases).
+  // fires for a user with clip drafts or extracted clips (the asymmetric enabled cases).
   useEffect(() => {
-    if (reelDraftsDisabled && activeTab === 'projects') {
+    if (clipsTabDisabled && activeTab === 'projects') {
       setActiveTab('games');
     }
-  }, [reelDraftsDisabled, activeTab, setActiveTab]);
+  }, [clipsTabDisabled, activeTab, setActiveTab]);
 
   // Refetch games when opening "new project" modal (needs fresh game list)
   useEffect(() => {
@@ -991,7 +982,7 @@ export function ProjectManager({
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
     // Close modal first
-    setShowNewProjectModal(false);
+    onCloseNewProjectModal?.();
 
     // Refresh projects list to show the new project
     // The modal already created the project via API
@@ -1000,7 +991,7 @@ export function ProjectManager({
     if (onRefreshProjects) {
       await onRefreshProjects();
     }
-  }, [onRefreshProjects]);
+  }, [onRefreshProjects, onCloseNewProjectModal]);
 
   return (
     <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
@@ -1168,10 +1159,10 @@ export function ProjectManager({
         </button>
         <button
           onClick={() => setActiveTab('projects')}
-          disabled={reelDraftsDisabled}
-          title={reelDraftsDisabled ? 'Extract clips from a game first using Annotate mode' : undefined}
+          disabled={clipsTabDisabled}
+          title={clipsTabDisabled ? 'Extract clips from a game first using Annotate mode' : undefined}
           className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
-            reelDraftsDisabled
+            clipsTabDisabled
               ? 'text-gray-600 opacity-50 cursor-not-allowed'
               : activeTab === 'projects'
                 ? `${REEL.bg} text-white shadow-lg`
@@ -1179,20 +1170,21 @@ export function ProjectManager({
           }`}
         >
           <FolderOpen size={16} />
-          {SECTION_NAMES.DRAFTS}
-          {projects.length > 0 && (
+          {SECTION_NAMES.CLIPS}
+          {clipDrafts.length > 0 && (
             <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
               activeTab === 'projects' ? REEL.bgDark : 'bg-gray-700'
             }`}>
-              {projects.length}
+              {clipDrafts.length}
             </span>
           )}
         </button>
       </div>
 
-      {/* Action Button */}
-      <div className="mb-4 sm:mb-5">
-        {activeTab === 'games' ? (
+      {/* Action Button — T8360: Clips tab has no create action here anymore;
+          "Build Highlight Reel" moved to the Highlight Reels surface (DownloadsPanel). */}
+      {activeTab === 'games' && (
+        <div className="mb-4 sm:mb-5">
           <Button
             variant="success"
             size="lg"
@@ -1201,19 +1193,8 @@ export function ProjectManager({
           >
             Add Game
           </Button>
-        ) : (
-          <Button
-            variant="cyan"
-            size="lg"
-            icon={Plus}
-            disabled={!hasClips}
-            title={!hasClips ? "Extract clips from a game first using Annotate mode" : undefined}
-            onClick={() => setShowNewProjectModal(true)}
-          >
-            Build Highlight Reel
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* T5820: degraded cross-profile link notice — the owning game was deleted
           after the move, so the reference could not resolve to a real game. Shown
@@ -1410,14 +1391,14 @@ export function ProjectManager({
           </div>
         )
       ) : (
-        /* Projects List */
+        /* Clips List */
         loading ? (
-          <div className="text-gray-400">{`Loading ${SECTION_NAMES.DRAFTS_LOWER}...`}</div>
+          <div className="text-gray-400">{`Loading ${SECTION_NAMES.CLIPS_LOWER}...`}</div>
         ) : error ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">{`Failed to load ${SECTION_NAMES.DRAFTS_LOWER}`}</span>
+              <span className="font-medium">{`Failed to load ${SECTION_NAMES.CLIPS_LOWER}`}</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
               {error.includes('fetch') || error.includes('network')
@@ -1425,10 +1406,10 @@ export function ProjectManager({
                 : error}
             </p>
           </div>
-        ) : projects.length === 0 ? (
+        ) : clipDrafts.length === 0 ? (
           <div className="text-gray-500 text-center">
-            <p className="mb-2">{`No ${SECTION_NAMES.DRAFTS_LOWER} yet`}</p>
-            <p className="text-sm">Create a new reel or add a game to get started</p>
+            <p className="mb-2">No clips yet</p>
+            <p className="text-sm">Tap &apos;Create Reel&apos; on a clip in Annotate to start one.</p>
           </div>
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
@@ -1505,55 +1486,14 @@ export function ProjectManager({
                     ))}
                   </div>
                 )}
-
-                {/* Creation Type Filter */}
-                {filterCounts.showCreationFilter && (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Created By</span>
-                    <button
-                      onClick={() => setCreationFilter('all')}
-                      className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
-                        creationFilter === 'all'
-                          ? `${REEL.bg} text-white`
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setCreationFilter('auto')}
-                      className={`flex items-center gap-1 px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
-                        creationFilter === 'auto'
-                          ? 'bg-yellow-600 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                      title="Auto-created from 5-star clips"
-                    >
-                      <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
-                      Auto ({filterCounts.auto})
-                    </button>
-                    <button
-                      onClick={() => setCreationFilter('custom')}
-                      className={`flex items-center gap-1 px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
-                        creationFilter === 'custom'
-                          ? `${REEL.bg} text-white`
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                      title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
-                    >
-                      <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : REEL.accent} />
-                      Custom ({filterCounts.custom})
-                    </button>
-                  </div>
-                )}
               </div>
             )}
 
             <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
-                {filteredProjects.length === projects.length
-                  ? `Your ${SECTION_NAMES.DRAFTS}`
-                  : `Showing ${filteredProjects.length} of ${projects.length} ${SECTION_NAMES.DRAFTS}`}
+                {filteredProjects.length === clipDrafts.length
+                  ? `Your ${SECTION_NAMES.CLIPS}`
+                  : `Showing ${filteredProjects.length} of ${clipDrafts.length} ${SECTION_NAMES.CLIPS}`}
               </h2>
               {/* T8080: primary classification toggle, session-only (never persisted,
                   same as the other project filters), default By Phase. Deliberately NOT
@@ -1588,16 +1528,15 @@ export function ProjectManager({
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
                 <div className="text-gray-500 text-center py-4">
-                  <p>{`No ${SECTION_NAMES.DRAFTS_LOWER} match the current filters`}</p>
+                  <p>{`No ${SECTION_NAMES.CLIPS_LOWER} match the current filters`}</p>
                   <button
                     onClick={() => {
                       setStatusFilter('all');
                       setAspectFilter('all');
-                      setCreationFilter('all');
                     }}
                     className="mt-2 px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
                   >
-                    {`Clear filters (show all ${projects.length})`}
+                    {`Clear filters (show all ${clipDrafts.length})`}
                   </button>
                 </div>
               ) : classification === 'phase' ? (
@@ -1697,10 +1636,11 @@ export function ProjectManager({
         )
       )}
 
-      {/* New Project Modal - Game/Clip selector */}
+      {/* Build Highlight Reel Modal - Game/Clip selector (opened from the
+          Highlight Reels surface; see onOpenAssembly/showNewProjectModal) */}
       <GameClipSelectorModal
         isOpen={showNewProjectModal}
-        onClose={() => setShowNewProjectModal(false)}
+        onClose={onCloseNewProjectModal}
         onCreate={handleProjectCreated}
         games={games}
         existingProjectNames={projects?.map(p => p.name) || []}

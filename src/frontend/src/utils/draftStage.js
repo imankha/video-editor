@@ -1,4 +1,4 @@
-// Canonical pipeline stage of a reel draft, derived from the same persistent
+// Canonical pipeline stage of a clip draft, derived from the same persistent
 // fields ProjectManager's status counts and DraftTile's status chip already
 // read (T6800). ONE derivation shared by tile sizing, stage-row grouping,
 // group status counts, and tests — never re-derive these buckets inline.

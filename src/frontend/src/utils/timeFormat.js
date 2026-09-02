@@ -112,7 +112,7 @@ export function clipGameClock(clip, boundaryOffsets) {
 /**
  * Comparator for sorting clips/reels by their in-match start time in seconds,
  * with unknown (null) starts sorted last (T4080). Keeps reels under a game in
- * Reel Drafts and My Reels in the same order as the annotation clip list.
+ * Clips and My Reels in the same order as the annotation clip list.
  *
  * @param {number|null|undefined} a - in-match start seconds (e.g. clip_game_start_time)
  * @param {number|null|undefined} b - in-match start seconds
