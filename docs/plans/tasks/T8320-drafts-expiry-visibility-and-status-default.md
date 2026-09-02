@@ -1,6 +1,6 @@
 # T8320: Reel Drafts show source-expiry, and reclaimed games stop reporting 'active' (bug 50p follow-up)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-01

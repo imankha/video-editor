@@ -1,6 +1,6 @@
 # T8230: Admin People table: split "Exports" into Focus / Overlay / other
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-08-31
