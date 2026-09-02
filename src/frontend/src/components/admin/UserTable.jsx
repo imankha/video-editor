@@ -357,7 +357,14 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   {user.acquired_at || '—'}
                 </td>
 
-                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.game_created_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
+                  {/* T8220: game_created is an upload ATTEMPT (pending insert, no
+                      R2 bytes yet); game_upload_succeeded is the durable, R2-
+                      verified outcome. Never collapse to one bare number -- an
+                      admin needs both to see attempt/success gaps (e.g. an
+                      outage retry storm) at a glance. */}
+                  {user.game_created_count ?? 0} tried / {user.game_upload_succeeded_count ?? 0} succeeded
+                </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.clip_created_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.export_completed_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.share_completed_count ?? 0}</td>

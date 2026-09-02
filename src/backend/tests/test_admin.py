@@ -70,6 +70,7 @@ def milestones_data(pg_conn):
         """)
         actions = [
             ("admin-user", "game_created", 10),
+            ("admin-user", "game_upload_succeeded", 1),
             ("admin-user", "clip_created", 25),
             ("admin-user", "export_completed", 5),
             ("admin-user", "export_failed", 1),
@@ -222,6 +223,7 @@ class TestAdminUsers:
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
         assert admin["origin"] == "organic"
         assert admin["game_created_count"] == 10
+        assert admin["game_upload_succeeded_count"] == 1
         assert admin["clip_created_count"] == 25
         assert admin["export_completed_count"] == 5
         assert admin["session_count"] == 20
@@ -229,6 +231,35 @@ class TestAdminUsers:
         regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
         assert regular["origin"] == "organic"
         assert regular["acquired_at"] == "2026-03-10"
+        # regular-user has 3 game_created (attempts) and NO game_upload_succeeded
+        # rows seeded -- the counts must stay independent, never collapsed.
+        assert regular["game_created_count"] == 3
+        assert regular["game_upload_succeeded_count"] == 0
+
+    def test_games_tried_vs_succeeded_never_conflated(self, client_with_milestones):
+        """T8220: regression for the bknoto/chenyh1225 prod findings -- the
+        People table's game count must show BOTH the attempt (game_created) and
+        the durable outcome (game_upload_succeeded) as independent numbers, never
+        one bare count standing in for the other. admin-user here mirrors
+        bknoto's shape (attempts >> successes, but not zero); regular-user
+        mirrors chenyh1225's shape (attempts with ZERO successes)."""
+        resp = client_with_milestones.get(
+            "/api/admin/users", headers=_auth_headers("admin-user")
+        )
+        data = resp.json()
+        admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
+        regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
+
+        # Attempts and successes are NOT the same field/value.
+        assert admin["game_created_count"] != admin["game_upload_succeeded_count"]
+        assert admin["game_created_count"] == 10
+        assert admin["game_upload_succeeded_count"] == 1
+
+        # A user with attempts and zero successes must show 0, not fall back to
+        # the attempt count or omit the field entirely.
+        assert regular["game_created_count"] == 3
+        assert "game_upload_succeeded_count" in regular
+        assert regular["game_upload_succeeded_count"] == 0
 
     def test_users_with_segments_but_no_actions(self, client):
         """T3460: the panel INNER JOINs user_segments, so users appear once a
@@ -241,6 +272,7 @@ class TestAdminUsers:
         assert "admin-user" in user_ids
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
         assert admin["game_created_count"] == 0
+        assert admin["game_upload_succeeded_count"] == 0
         assert admin["origin"] == "organic"
 
     def test_pagination(self, client_with_milestones):
