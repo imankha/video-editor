@@ -7,7 +7,7 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  *
  * Acceptance criteria (task file):
  *   (1) "Ready" is a NON-interactive badge; the primary action reads as an action and
- *       names the verb ("Move to My Reels").
+ *       names the verb ("Move to Highlight Reels").
  *   (2) Play is a visible secondary action; the remaining actions live in a kebab and
  *       all still work.
  *   (3) A tile click in the ready state PREVIEWS (the inert-tile behaviour is gone).
@@ -36,10 +36,10 @@ async function gotoDrafts(page) {
   await page.waitForTimeout(800); // let carousels + posters settle
 }
 
-// A ready tile = a project-card that contains the primary "Move to My Reels" button.
+// A ready tile = a project-card that contains the primary "Move to Highlight Reels" button.
 const readyTile = (page) =>
   page.locator('[data-testid="project-card"]', {
-    has: page.getByRole('button', { name: 'Move to My Reels' }),
+    has: page.getByRole('button', { name: 'Move to Highlight Reels' }),
   });
 
 // Guarantee a ready tile exists. Prefer a live one; otherwise flip the first real
@@ -86,7 +86,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
     await tile.getByRole('button', { name: /^ready$/i }).count(),
     '"Ready" is NOT a button anymore'
   ).toBe(0);
-  const primary = tile.getByRole('button', { name: 'Move to My Reels' });
+  const primary = tile.getByRole('button', { name: 'Move to Highlight Reels' });
   await expect(primary, 'primary action names the verb').toBeVisible();
   await expect(primary).toBeEnabled();
   await saveEvidence(page, 'criterion-1-ready-badge-and-primary');
@@ -129,8 +129,8 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await responsiveSweep(page);
   await page.setViewportSize({ width: 1280, height: 800 });
 
-  // Published state unregressed: My Reels tiles still render.
-  const myReelsTab = page.locator('button:has-text("My Reels")');
+  // Published state unregressed: Highlight Reels tiles still render.
+  const myReelsTab = page.locator('button:has-text("Highlight Reels")');
   if (await myReelsTab.count()) {
     await myReelsTab.first().click();
     await page.waitForTimeout(1000);

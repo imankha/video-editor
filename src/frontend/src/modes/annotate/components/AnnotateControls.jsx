@@ -65,7 +65,7 @@ function SpeedControl({ speed, onSpeedChange }) {
  * - Play/pause, step forward/backward, restart
  * - Time display
  * - Playback speed control (YouTube style)
- * - Add Clip button (visible when not in fullscreen, or when paused in fullscreen)
+ * - Add Play button (visible when not in fullscreen, or when paused in fullscreen)
  * - Fullscreen toggle button
  */
 export function AnnotateControls({
@@ -180,10 +180,10 @@ export function AnnotateControls({
             size="sm"
             icon={isEditMode ? Pencil : Plus}
             onClick={onAddClip}
-            title={isEditMode ? 'Edit selected clip (A)' : 'Add clip ending at current time (A)'}
+            title={isEditMode ? 'Edit selected play (A)' : 'Add play ending at current time (A)'}
             className="hidden sm:flex"
           >
-            {isEditMode ? 'Edit Clip' : 'Add Clip'}
+            {isEditMode ? 'Edit Play' : 'Add Play'}
           </Button>
         )}
         {/* Mobile: icon-only Add/Edit Clip */}
@@ -198,7 +198,7 @@ export function AnnotateControls({
             icon={isEditMode ? Pencil : Plus}
             iconOnly
             onClick={onAddClip}
-            title={isEditMode ? 'Edit selected clip (A)' : 'Add clip ending at current time (A)'}
+            title={isEditMode ? 'Edit selected play (A)' : 'Add play ending at current time (A)'}
             className="flex sm:hidden"
           />
         )}

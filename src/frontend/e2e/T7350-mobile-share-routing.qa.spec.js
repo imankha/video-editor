@@ -48,7 +48,7 @@ async function stubNavigatorShare(context) {
 async function openMyReelsAndFirstReel(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
   const panel = page.locator('.animate-slide-in-right');
   const shown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (!shown) {

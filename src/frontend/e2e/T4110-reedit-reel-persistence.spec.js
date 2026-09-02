@@ -7,8 +7,8 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *
  * Drives the app AS THE REAL USER (imankh@gmail.com, prod-copied into dev) to
  * confirm the exact break point of the prod data-loss bug:
- *   My Reels -> Re-edit a published game-6 reel -> reframe -> export ->
- *   "Move to My Reels" -> reload -> is the edited reel present & no phantom card?
+ *   Highlight Reels -> Re-edit a published game-6 reel -> reframe -> export ->
+ *   "Move to Highlight Reels" -> reload -> is the edited reel present & no phantom card?
  *
  * This is an INVESTIGATION spec, not a guardrail: every check is soft and the
  * test ends by dumping a structured CAPTURE block (network statuses, [ReExport]/
@@ -44,7 +44,7 @@ const WATCH = [
   '/api/collections/summary',
 ];
 
-test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload', async ({ context, page }) => {
+test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, reload', async ({ context, page }) => {
   // T5420: explicitly a DEV INVESTIGATION spec (not a guardrail) — it drives a full
   // re-edit -> reframe -> overlay-export -> publish -> reload pipeline whose overlay-export
   // panel does not mount on staging (see derisk-staging-export + FIXTURE-CONTRACT), and
@@ -105,9 +105,9 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-  // --- open My Reels --------------------------------------------------------
-  const myReelsBtn = page.getByRole('button', { name: /My Reels/i }).first();
-  await myReelsBtn.click({ timeout: 30000 }).catch(() => note('My Reels button not clickable'));
+  // --- open Highlight Reels --------------------------------------------------------
+  const myReelsBtn = page.getByRole('button', { name: /Highlight Reels/i }).first();
+  await myReelsBtn.click({ timeout: 30000 }).catch(() => note('Highlight Reels button not clickable'));
   // The collections tab / game groups render inside the slide-out panel.
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('no Game Highlights card rendered'));
 
@@ -145,7 +145,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
   }
   await summarizeGame6('after-restore');
 
-  // --- make a reframe edit + export + Move to My Reels (best effort) --------
+  // --- make a reframe edit + export + Move to Highlight Reels (best effort) --------
   // The editor selectors aren't all locked down for headless; this stage is
   // defensive. We record what fires. A reframe to a non-9:16 ratio is what would
   // add a 2nd eligible ratio (the phantom card); we try a ratio toggle if shown.
@@ -163,7 +163,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
       await exportBtn.click({ timeout: 10000 }).catch(() => note('export click failed'));
       note('clicked export; waiting up to 120s for completion / Move-to-My-Reels');
       // Wait for either an export-complete signal or a publish button to appear.
-      const moveBtn = page.getByRole('button', { name: /Move to My Reels/i }).first();
+      const moveBtn = page.getByRole('button', { name: /Move to Highlight Reels/i }).first();
       const completeMsg = page.getByText(/Reel ready/i).first();
       await Promise.race([
         moveBtn.waitFor({ timeout: 120000 }).catch(() => {}),
@@ -171,10 +171,10 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
       ]);
       if (await moveBtn.count()) {
         await moveBtn.click({ timeout: 10000 }).catch(() => note('Move-to-My-Reels click failed'));
-        note('clicked "Move to My Reels"');
+        note('clicked "Move to Highlight Reels"');
         await page.waitForTimeout(5000);
       } else {
-        note('no "Move to My Reels" button appeared (export likely did not finalize live)');
+        note('no "Move to Highlight Reels" button appeared (export likely did not finalize live)');
       }
     } else {
       note('no Export button found in editor view');
@@ -186,7 +186,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
   // --- reload and re-check --------------------------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.getByRole('button', { name: /My Reels/i }).first().click({ timeout: 30000 }).catch(() => {});
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click({ timeout: 30000 }).catch(() => {});
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('post-reload: no Game Highlights card'));
   await countGameHighlightsCards('after-reload');
   await summarizeGame6('after-reload');

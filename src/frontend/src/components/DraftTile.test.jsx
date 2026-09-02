@@ -160,16 +160,16 @@ describe('DraftTile (T5672)', () => {
   // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
   // corner <button> labelled "Ready" that published. New contract: "Ready" is a
   // NON-interactive status badge, and a DISTINCT emphasized primary button names the
-  // verb ("Move to My Reels") and publishes on click.
+  // verb ("Move to Highlight Reels") and publishes on click.
   it('makes "Ready" a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     // "Ready" is a status, not a control — no button carries that accessible name.
     expect(screen.queryByRole('button', { name: /^ready$/i })).toBeNull();
     expect(screen.getByText('Ready')).toBeTruthy();
     // The primary action reads as an action and names the destination verb.
-    const primary = screen.getByRole('button', { name: 'Move to My Reels' });
+    const primary = screen.getByRole('button', { name: 'Move to Highlight Reels' });
     expect(primary).toBeTruthy();
-    expect(primary.textContent).toMatch(/move to my reels/i);
+    expect(primary.textContent).toMatch(/move to highlight reels/i);
   });
 
   it('publishes via the primary button click (records the moved_to_my_reels quest step)', async () => {
@@ -182,7 +182,7 @@ describe('DraftTile (T5672)', () => {
     const { useQuestStore } = await import('../stores/questStore');
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Move to My Reels' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Move to Highlight Reels' }));
     });
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
@@ -191,7 +191,7 @@ describe('DraftTile (T5672)', () => {
     expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('moved_to_my_reels');
   });
 
-  it('has no primary "Move to My Reels" action once the reel is published', () => {
+  it('has no primary "Move to Highlight Reels" action once the reel is published', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: true });
     expect(screen.queryByRole('button', { name: /move to my reels/i })).toBeNull();
   });

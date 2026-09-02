@@ -1210,7 +1210,7 @@ export function ProjectManager({
             title={!hasClips ? "Extract clips from a game first using Annotate mode" : undefined}
             onClick={() => setShowNewProjectModal(true)}
           >
-            New Reel
+            Build Highlight Reel
           </Button>
         )}
       </div>

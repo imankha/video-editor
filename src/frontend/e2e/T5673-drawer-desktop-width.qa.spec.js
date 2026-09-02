@@ -5,7 +5,7 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 /**
  * T5673 (drawer desktop width) — live QA on the REAL account.
  *
- * The My Reels drawer holds poster tiles now, so max-w-md (448px) is cramped on
+ * The Highlight Reels drawer holds poster tiles now, so max-w-md (448px) is cramped on
  * desktop. This change widens it at lg+ (lg:max-w-2xl 672px, xl:max-w-3xl 768px)
  * while leaving mobile (w-full, capped at 448) untouched. The tile carousels are
  * flex overflow-x rows of fixed-width tiles, so a wider panel shows MORE tiles
@@ -26,8 +26,8 @@ const PANEL = '.animate-slide-in-right';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
   // The panel is the stable width anchor.
   await expect(page.locator(PANEL)).toBeVisible({ timeout: 15000 });
@@ -70,7 +70,7 @@ async function tilesInFirstRow(page) {
   return visible;
 }
 
-test.describe('T5673 — My Reels drawer desktop width (real account)', () => {
+test.describe('T5673 — Highlight Reels drawer desktop width (real account)', () => {
   test('width-c1: 1315px desktop widens the drawer well past 448px, more tiles per row', async ({ page }) => {
     await page.setViewportSize({ width: 1315, height: 900 });
     await openDrawer(page);

@@ -123,7 +123,7 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
 
   it('success state announces the reel is ready and points at My Reels', () => {
     render(<ExportButtonView {...baseProps} displayProgress={100} isCurrentlyExporting={false} />);
-    expect(screen.getByText('Reel ready! Find it in My Reels.')).toBeTruthy();
+    expect(screen.getByText('Reel ready! Find it in Highlight Reels.')).toBeTruthy();
   });
 
   it('Focus Settings names the follow-your-athlete crop feature', () => {

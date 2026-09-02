@@ -13,7 +13,7 @@
  *
  * Asserts on the RENDERED Reel Drafts UI + downloads API:
  *   criterion-a: deleting A's clip DELETES its exported draft (not orphaned) — gone from feed.
- *   criterion-2: deleting C's clip PRESERVES the published reel in My Reels (downloads).
+ *   criterion-2: deleting C's clip PRESERVES the published reel in Highlight Reels (downloads).
  */
 import { test, expect } from '@playwright/test';
 import { saveEvidence } from './helpers/qa.js';
@@ -97,7 +97,7 @@ test('clip-delete drops the exported auto-reel draft (root cause) and keeps publ
   const delC = await page.request.delete(`${API}/clips/raw/2`, { headers: HEADERS });
   expect(delC.ok(), `delete clip C: ${delC.status()}`).toBe(true);
 
-  // Published reel survives in My Reels (downloads), independent of its source clip.
+  // Published reel survives in Highlight Reels (downloads), independent of its source clip.
   const dl = await page.request.get(`${API}/downloads`, { headers: HEADERS });
   expect(dl.ok(), `downloads: ${dl.status()}`).toBe(true);
   const downloads = await dl.json();

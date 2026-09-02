@@ -39,8 +39,8 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -256,9 +256,9 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
     // Reload so the "Play all" button we press next reads freshly-attached state.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
-    await page.getByRole('button', { name: /My Reels/i }).first().click();
-    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+    await expect(page.getByRole('button', { name: /Highlight Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
       .toBeVisible({ timeout: 15000 });
     const headersAfter = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
     await headersAfter.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});

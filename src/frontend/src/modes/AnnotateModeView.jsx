@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Share2, ArrowLeft, Minimize, Clock } from 'lucide-react';
+import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -773,47 +773,112 @@ export function AnnotateModeView({
           </div>
         )}
 
-        {/* Playback + Share buttons (hidden when mobile inline form is open) */}
+        {/* Primary "Add Play" CTA + secondary actions (hidden when mobile inline
+            form is open). T8130: the Add Play button is the single loudest element
+            on the screen; Playback Annotations + Share are demoted to text-level
+            prominence until the first clip exists. */}
         {!annotateFullscreen && !mobileInlineForm && (
           <div className="mt-3 sm:mt-6">
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => playback?.enterPlaybackMode()}
-                  disabled={!hasAnnotateClips || isSourceExpired}
-                  title={isSourceExpired ? 'Source video expired — playback unavailable' : undefined}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                    !hasAnnotateClips || isSourceExpired
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 text-white'
-                  }`}
-                >
-                  <Play size={18} />
-                  <span>Playback Annotations</span>
-                </button>
-                {onShare && (
-                  <button
-                    onClick={onShare}
-                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      hasUnsentShares
-                        ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    }`}
-                  >
-                    <Share2 size={18} />
-                    <span className="hidden sm:inline">
-                      {hasUnsentShares ? 'Share w/ Tagged Teammates' : 'Shared w/ Tagged Teammates'}
-                    </span>
-                    <span className="sm:hidden">
-                      {hasUnsentShares ? 'Share' : 'Shared'}
-                    </span>
-                  </button>
-                )}
-              </div>
+            <div className="space-y-3">
+              {/* PRIMARY CTA — full-width, high-contrast, >=44pt tap target.
+                  Flips to "Edit Play" when a clip is selected, mirroring
+                  AnnotateControls' isEditMode handling (T8130 review finding:
+                  the button must reflect what onAddClip is about to do -
+                  editClip vs startCreating - or it silently misroutes the
+                  gesture it exists to teach). */}
+              <button
+                onClick={onAddClip}
+                disabled={isSourceExpired}
+                data-testid="annotate-primary-cta"
+                title={
+                  isSourceExpired
+                    ? 'Source video expired — cannot add plays'
+                    : isEditMode
+                    ? 'Edit the selected play'
+                    : 'Add a play ending at the current time'
+                }
+                className={`w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                  isSourceExpired
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
+                    : isEditMode
+                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
+                    : 'bg-green-500 hover:bg-green-400 text-white shadow-green-900/40'
+                }`}
+              >
+                {isEditMode ? <Pencil size={22} /> : <Plus size={22} />}
+                {isEditMode ? 'Edit Play' : 'Add Play'}
+              </button>
 
-              <p className="text-xs text-gray-500 text-center">
-                Clips are automatically saved to your library as you annotate
-              </p>
+              {/* First-use teaching hint — shown only before the first clip exists.
+                  One static sentence, not a coach-mark system (tutorial-redesign
+                  owns the full guided flow). */}
+              {!hasAnnotateClips && (
+                <p className="text-sm text-gray-300 text-center px-2">
+                  When something great happens, tap &mdash; we grab the last few seconds.
+                </p>
+              )}
+
+              {hasAnnotateClips ? (
+                <>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => playback?.enterPlaybackMode()}
+                      disabled={isSourceExpired}
+                      title={isSourceExpired ? 'Source video expired — playback unavailable' : undefined}
+                      className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                        isSourceExpired
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      <Play size={18} />
+                      <span>Playback Annotations</span>
+                    </button>
+                    {onShare && (
+                      <button
+                        onClick={onShare}
+                        className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                          hasUnsentShares
+                            ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                        }`}
+                      >
+                        <Share2 size={18} />
+                        <span className="hidden sm:inline">
+                          {hasUnsentShares ? 'Share w/ Tagged Teammates' : 'Shared w/ Tagged Teammates'}
+                        </span>
+                        <span className="sm:hidden">
+                          {hasUnsentShares ? 'Share' : 'Shared'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-500 text-center">
+                    Clips are automatically saved to your library as you annotate
+                  </p>
+                </>
+              ) : (
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => playback?.enterPlaybackMode()}
+                    disabled
+                    className="text-xs text-gray-600 cursor-not-allowed flex items-center gap-1"
+                  >
+                    <Play size={12} />
+                    <span>Playback Annotations</span>
+                  </button>
+                  {onShare && (
+                    <button
+                      onClick={onShare}
+                      className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1"
+                    >
+                      <Share2 size={12} />
+                      <span>{hasUnsentShares ? 'Share' : 'Shared'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

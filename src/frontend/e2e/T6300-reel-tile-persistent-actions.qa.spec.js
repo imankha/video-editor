@@ -1,5 +1,5 @@
 /**
- * T6300 QA — ReelTile persistent actions (My Reels drawer).
+ * T6300 QA — ReelTile persistent actions (Highlight Reels drawer).
  *
  * The bug (user report): every action on a published-reel tile — including the
  * kebab — was invisible until hover (`opacity-0 pointer-events-none` at rest),
@@ -41,8 +41,8 @@ const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openMyReelsAndExpand(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
   const panel = page.locator('.animate-slide-in-right');
   const alreadyShown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
@@ -346,7 +346,7 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     await context.close();
   });
 
-  test('responsive sweep: My Reels drawer has no horizontal overflow at 375px + desktop', async ({ browser }) => {
+  test('responsive sweep: Highlight Reels drawer has no horizontal overflow at 375px + desktop', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext();
     await loginAsRealUser(context, EMAIL, PROFILE);

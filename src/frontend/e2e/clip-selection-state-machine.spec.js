@@ -131,7 +131,7 @@ async function createClip(page, seekTime) {
   await seekVideoDirect(page, seekTime);
 
   // Click "Add Clip" button to open the overlay
-  const addClipBtn = page.locator('button:has-text("Add Clip")');
+  const addClipBtn = page.locator('button[title="Add play ending at current time (A)"]');
   await expect(addClipBtn).toBeVisible({ timeout: 5000 });
   await addClipBtn.click();
   await page.waitForTimeout(1000);
@@ -238,10 +238,19 @@ test.describe('T690: Clip Selection State Machine', () => {
     console.log(`[Test] STABILITY: Detail panel: ${detailVisible}, highlight: ${highlightVisible}`);
 
     // Also verify Add Clip button is hidden (clip is selected in non-FS)
-    const addBtnAfterStable = page.locator('button:has-text("Add Clip")').first();
+    const addBtnAfterStable = page.locator('button[title="Add play ending at current time (A)"]').first();
     const addHiddenStable = !(await addBtnAfterStable.isVisible().catch(() => false));
     console.log(`[Test] STABILITY: Add Clip hidden while selected: ${addHiddenStable} (expect true)`);
     expect(addHiddenStable).toBe(true);
+
+    // T8130: the full-width primary CTA must reflect the same selection state
+    // as the transport-bar Add button - it flips to "Edit Play" rather than
+    // silently staying "Add Play" while its click handler actually edits the
+    // selected clip (regression guard for a review finding: a mislabeled CTA
+    // both misleads the user and undercounts add_clip_opened).
+    const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
+    await expect(primaryCta).toHaveText(/Edit Play/);
+    await expect(primaryCta).toHaveAttribute('title', 'Edit the selected play');
 
     // ========================================================================
     // REQ 2: Playhead leaving clip → auto-deselect
@@ -273,7 +282,7 @@ test.describe('T690: Clip Selection State Machine', () => {
     await seekVideoDirect(page, 2);
     await page.waitForTimeout(300);
 
-    const addBtn = page.locator('button:has-text("Add Clip")').first();
+    const addBtn = page.locator('button[title="Add play ending at current time (A)"]').first();
     const addVisNone = await addBtn.isVisible().catch(() => false);
     console.log(`[Test] REQ 4: "Add Clip" when NONE: ${addVisNone} (expect true)`);
 
@@ -281,7 +290,7 @@ test.describe('T690: Clip Selection State Machine', () => {
     await page.waitForTimeout(500);
 
     const addVisSel = await addBtn.isVisible().catch(() => false);
-    const editVisSel = await page.locator('button:has-text("Edit Clip")').isVisible().catch(() => false);
+    const editVisSel = await page.locator('button:has-text("Edit Play")').isVisible().catch(() => false);
     console.log(`[Test] REQ 4: SELECTED — Add: ${addVisSel}, Edit: ${editVisSel} (expect both false)`);
 
     // ========================================================================
@@ -318,8 +327,8 @@ test.describe('T690: Clip Selection State Machine', () => {
 
       // --- REQ 7: Buttons hidden during overlay ---
       console.log('\n  --- REQ 7: Buttons hidden during overlay ---');
-      const addOv = await page.locator('button:has-text("Add Clip")').isVisible().catch(() => false);
-      const editOv = await page.locator('button:has-text("Edit Clip")').isVisible().catch(() => false);
+      const addOv = await page.locator('button[title="Add play ending at current time (A)"]').isVisible().catch(() => false);
+      const editOv = await page.locator('button:has-text("Edit Play")').isVisible().catch(() => false);
       console.log(`  REQ 7: Add: ${addOv}, Edit: ${editOv} (expect both false)`);
 
       // --- REQ 12: Close overlay keeps selection ---
@@ -341,9 +350,9 @@ test.describe('T690: Clip Selection State Machine', () => {
 
       // --- REQ 5: Edit Clip visible in FS + SELECTED ---
       console.log('\n  --- REQ 5: Edit Clip in FS + SELECTED ---');
-      const editBtnFS = page.locator('button:has-text("Edit Clip")').first();
+      const editBtnFS = page.locator('button:has-text("Edit Play")').first();
       const editVisFS = await editBtnFS.isVisible().catch(() => false);
-      const addBtnFSHidden = !(await page.locator('button:has-text("Add Clip")').isVisible().catch(() => false));
+      const addBtnFSHidden = !(await page.locator('button[title="Add play ending at current time (A)"]').isVisible().catch(() => false));
       console.log(`  REQ 5: "Edit Clip" visible: ${editVisFS}, "Add Clip" hidden: ${addBtnFSHidden}`);
       expect(editVisFS).toBe(true);
       expect(addBtnFSHidden).toBe(true);
@@ -419,7 +428,7 @@ test.describe('T690: Clip Selection State Machine', () => {
 
             const overlayGone = !(await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
               .isVisible().catch(() => false));
-            const addAppears = await page.locator('button:has-text("Add Clip")').first()
+            const addAppears = await page.locator('button[title="Add play ending at current time (A)"]').first()
               .isVisible().catch(() => false);
             console.log(`[Test] TIMELINE: Overlay closed: ${overlayGone}, Add Clip: ${addAppears}`);
           }

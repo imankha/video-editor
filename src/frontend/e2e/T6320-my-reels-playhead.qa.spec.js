@@ -4,11 +4,11 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 
 /**
  * T6320 — REAL BROWSER, real account proof that the T5130 sport-ball playhead
- * finally reaches My Reels' CollectionPlayer, and that the mechanical move to
+ * finally reaches Highlight Reels' CollectionPlayer, and that the mechanical move to
  * the shared ProgressTrack/PlayheadHandle primitives changed nothing else.
  *
  * Criteria evidenced here:
- *   c1  My Reels shows the sport-ball playhead on the active segment (multi-reel
+ *   c1  Highlight Reels shows the sport-ball playhead on the active segment (multi-reel
  *       collection AND single-reel play — both go through CollectionPlayer)
  *   c2  the ball reflects the active profile's actual sport (read live from the
  *       header's ProfileSportButton, not hardcoded)
@@ -35,8 +35,8 @@ const HANDLE_GLYPH = '[data-testid="scrub-handle-glyph"]';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -63,7 +63,7 @@ async function expandFirstGroup(page) {
   return false;
 }
 
-test.describe('T6320 — My Reels playhead handle (real account)', () => {
+test.describe('T6320 — Highlight Reels playhead handle (real account)', () => {
   test('c1/c2: multi-reel "Play all" shows the correct sport ball on the active segment', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openDrawer(page);
@@ -134,7 +134,7 @@ test.describe('T6320 — My Reels playhead handle (real account)', () => {
   test('c4: responsive sweep, 375px + desktop, no horizontal overflow', async ({ page }) => {
     await openDrawer(page);
     await responsiveSweep(page, async () => {
-      // My Reels drawer itself must not introduce horizontal scroll at either size.
+      // Highlight Reels drawer itself must not introduce horizontal scroll at either size.
     });
   });
 });

@@ -1,7 +1,7 @@
 /**
  * T4080 verification: every annotation-mode clip row shows the clip's in-match
  * time in soccer notation (MM'SS"), right-aligned, and the rows are ordered by
- * in-match start time (the reference order that Reel Drafts / My Reels match).
+ * in-match start time (the reference order that Reel Drafts / Highlight Reels match).
  *
  * Drives the app AS A REAL USER with real data (see e2e/helpers/realAuth.js +
  * .claude/skills/drive-app-as-user/SKILL.md). Needs the dev backend (APP_ENV=dev)
@@ -10,7 +10,7 @@
  *     npx playwright test e2e/annotate-soccer-times.spec.js --reporter=line
  * Params: E2E_REAL_EMAIL (default imankh@gmail.com), E2E_DEBUG_GAME (default 5).
  *
- * The cross-view ordering match (Reel Drafts / My Reels share this in-game-time
+ * The cross-view ordering match (Reel Drafts / Highlight Reels share this in-game-time
  * key) is also covered deterministically by unit/component tests:
  *   src/utils/timeFormat.test.js (compareGameTime),
  *   src/components/collections/GameCollectionGroup.order.test.jsx.

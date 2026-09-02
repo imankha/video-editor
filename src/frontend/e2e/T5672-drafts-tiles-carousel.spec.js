@@ -87,7 +87,7 @@ test('T5672 drafts render as per-game poster-tile carousels', async ({ context, 
   }
 
   // (6) primary tap opens a draft. Since T6180 a ready-to-publish tile's body tap
-  // PREVIEWS (it publishes via the primary "Move to My Reels" button and edits via the
+  // PREVIEWS (it publishes via the primary "Move to Highlight Reels" button and edits via the
   // kebab), so it does not navigate to the editor — pick an editable tile (one without
   // the Move-to-My-Reels action) to exercise the open-into-editor navigation.
   const openable = tiles.filter({ hasNot: page.getByRole('button', { name: /move to/i }) });

@@ -149,10 +149,10 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
   const summary = await apiGet(context, '/collections/summary');
   const pick = firstNonEmptyGameCollection(summary);
   if (!pick) {
-    console.log('[T5400][SKIP] fixture has no reel group in My Reels; seed imankh per FIXTURE-CONTRACT');
+    console.log('[T5400][SKIP] fixture has no reel group in Highlight Reels; seed imankh per FIXTURE-CONTRACT');
   }
-  test.skip(!pick, '[T5400] fixture has no reel group in My Reels; seed imankh per FIXTURE-CONTRACT');
-  console.log(`[derisk] expanding My Reels group: ${JSON.stringify(pick.game.game_name)}`);
+  test.skip(!pick, '[T5400] fixture has no reel group in Highlight Reels; seed imankh per FIXTURE-CONTRACT');
+  console.log(`[derisk] expanding Highlight Reels group: ${JSON.stringify(pick.game.game_name)}`);
 
   const sharePosts = [];
   page.on('request', (req) => {
@@ -162,11 +162,11 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
   });
 
   await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /My Reels/ }) });
-  await page.getByRole('button', { name: /My Reels/ }).first().click({ timeout: 30000 });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /Highlight Reels/ }) });
+  await page.getByRole('button', { name: /Highlight Reels/ }).first().click({ timeout: 30000 });
   // Expand the DISCOVERED game group so its reel cards render. There are TWO buttons
-  // whose name contains the game name (the Games-tab group + the My Reels group); the
-  // My Reels CollapsibleGroup header is the LAST one, and its reel cards load LAZILY on
+  // whose name contains the game name (the Games-tab group + the Highlight Reels group); the
+  // Highlight Reels CollapsibleGroup header is the LAST one, and its reel cards load LAZILY on
   // toggle-open (T5420 verified). A single force-click is brittle — it can land while the
   // group is mid-render, or the group may already be open — so TOGGLE UNTIL a reel card
   // actually appears rather than assuming one click expands it.

@@ -1,7 +1,7 @@
 /**
- * T6420 QA — TilePreviewVideo primitive + desktop hover preview (My Reels).
+ * T6420 QA — TilePreviewVideo primitive + desktop hover preview (Highlight Reels).
  *
- * Drives the REAL account (dev-login) against My Reels, which reliably has
+ * Drives the REAL account (dev-login) against Highlight Reels, which reliably has
  * published reel tiles, and proves the acceptance criteria with NETWORK-TAB
  * evidence (a request counter over /api/downloads/{id}/stream) for the
  * request-count / timing claims the task file names as required evidence:
@@ -44,8 +44,8 @@ function trackStreamRequests(page) {
 async function openMyReels(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
   const panel = page.locator('.animate-slide-in-right');
   const shown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);

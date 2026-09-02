@@ -101,7 +101,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // Games tab is active -> its action button (Add Game) is shown.
     expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
     // New Reel action is NOT shown (that's the Reel Drafts tab's action).
-    expect(screen.queryByRole('button', { name: 'New Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Build Highlight Reel' })).toBeNull();
 
     const tab = draftsTab();
     expect(tab.disabled).toBe(true);
@@ -133,7 +133,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // Projects-count default flips the active tab to Reel Drafts once projects load,
     // so the New Reel action button appears.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'New Reel' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Build Highlight Reel' })).toBeTruthy();
     });
   });
 

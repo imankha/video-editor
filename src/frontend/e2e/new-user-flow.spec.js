@@ -840,7 +840,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
-    const newProjectBtn = page.locator('button:has-text("New Reel")');
+    const newProjectBtn = page.locator('button:has-text("Build Highlight Reel")');
     await expect(newProjectBtn).toBeVisible();
     await newProjectBtn.click();
     await page.waitForTimeout(1500);

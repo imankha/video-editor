@@ -178,7 +178,6 @@ export function ClipsSidePanel({
               <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Clips</h2>
               <span className="ml-auto text-xs text-gray-500">{clipCount}</span>
             </div>
-            <p className="text-xs text-gray-500 mb-2">Click timeline to add clip</p>
 
             {/* T6400 removed the "New clips go to" mode toggle to save sidebar
                 space; T8030 dropped the inherit-last-layer default it was

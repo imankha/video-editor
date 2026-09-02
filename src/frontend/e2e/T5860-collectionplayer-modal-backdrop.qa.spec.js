@@ -10,7 +10,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *
  * Driven through a dev-only harness (/collectionplayerdiag.html) that mounts the
  * REAL CollectionPlayer over a field of REAL interactive tiles (hover + click
- * handlers), mimicking the My Reels tiles/carousel behind the player. On desktop
+ * handlers), mimicking the Highlight Reels tiles/carousel behind the player. On desktop
  * the panel's `md:inset-12` leaves a ~48px gutter ring around the player.
  *
  * Proven here:
