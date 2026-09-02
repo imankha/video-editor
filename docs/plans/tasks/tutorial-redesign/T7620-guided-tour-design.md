@@ -1,6 +1,6 @@
 # T7620: Architect design: guided-tour engine + essential-path step definitions
 
-**Status:** WIP (design REVISION 2026-09-02 per user feedback: per-screen intent analysis + main data source as the spine, pervasive branching intent capture, forceful push-to-publish posture, design-change recommendations allowed; D1c/D3/D4a/D5a/D6a accepted, D2 re-derived under the push directive)
+**Status:** WAITING ON USER (design gate round 2, 2026-09-02: REVISED doc at docs/plans/tasks/T7620-design.md - GUIDANCE_MAP spine, 48 rules, per-screen intent analysis; D1c/D3/D4a/D5a/D6a accepted, D2 re-derived to push-at-every-rung. Open: Q1 app design changes R1-R4 (R3 recommended first), Q2 second-reel stop, Q3 source-question timing, Q4 guide-during-upload)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-24
