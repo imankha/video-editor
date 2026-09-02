@@ -46,6 +46,11 @@ const COLUMNS = [
   { key: 'game_created_count', label: 'Games', align: 'right' },
   { key: 'clip_created_count', label: 'Clips', align: 'right' },
   { key: 'export_completed_count', label: 'Exports', align: 'right' },
+  // T8230: per-type breakdown of the Exports total. Exports stays as the honest
+  // grand total (framing + overlay + "other"/recovered), so the residual is never
+  // silently dropped -- it reads as Exports - Focus - Overlay.
+  { key: 'framing_exported_count', label: 'Focus', align: 'right' },
+  { key: 'overlay_exported_count', label: 'Overlay', align: 'right' },
   { key: 'share_completed_count', label: 'Shares', align: 'right' },
   { key: 'credits', label: 'Credits', align: 'right' },
   { key: 'total_spent_cents', label: '$ Spent', align: 'right' },
@@ -367,6 +372,9 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.clip_created_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.export_completed_count ?? 0}</td>
+                {/* T8230: Focus (framing) / Overlay export breakdown of the Exports total. */}
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.framing_exported_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.overlay_exported_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.share_completed_count ?? 0}</td>
 
                 <td className="px-3 py-2.5 text-right">

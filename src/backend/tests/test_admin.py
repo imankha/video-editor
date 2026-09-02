@@ -73,6 +73,11 @@ def milestones_data(pg_conn):
             ("admin-user", "game_upload_succeeded", 1),
             ("admin-user", "clip_created", 25),
             ("admin-user", "export_completed", 5),
+            # T8230: per-type export events. export_completed (5) is the generic
+            # total; framing (2) + overlay (1) sum to 3, leaving a residual of 2
+            # "other"/recovered exports that the total must still surface.
+            ("admin-user", "framing_exported", 2),
+            ("admin-user", "overlay_exported", 1),
             ("admin-user", "export_failed", 1),
             ("admin-user", "share_completed", 2),
             ("admin-user", "credit_purchased", 3),
@@ -260,6 +265,51 @@ class TestAdminUsers:
         assert regular["game_created_count"] == 3
         assert "game_upload_succeeded_count" in regular
         assert regular["game_upload_succeeded_count"] == 0
+
+    def test_export_types_split_focus_overlay(self, client_with_milestones):
+        """T8230: the Exports total must be surfaced split into its per-type
+        events. admin-user has 5 export_completed (the generic total), 2
+        framing_exported (Focus) and 1 overlay_exported (Overlay); the remaining
+        2 are "other"/recovered exports that only ever fire the generic event.
+        Both per-type counts appear as their own fields AND the total stays, so
+        the residual (5 - 2 - 1 = 2) is accounted for, never silently dropped."""
+        resp = client_with_milestones.get(
+            "/api/admin/users", headers=_auth_headers("admin-user")
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
+        assert admin["export_completed_count"] == 5
+        assert admin["framing_exported_count"] == 2
+        assert admin["overlay_exported_count"] == 1
+        # The total is never less than the parts, so the residual is well-defined
+        # and non-negative -- nothing is dropped from the sum.
+        residual = (
+            admin["export_completed_count"]
+            - admin["framing_exported_count"]
+            - admin["overlay_exported_count"]
+        )
+        assert residual == 2
+
+        # A user with exports but no per-type rows shows 0 for each split, not the
+        # total and not a missing field.
+        regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
+        assert regular["export_completed_count"] == 1
+        assert regular["framing_exported_count"] == 0
+        assert regular["overlay_exported_count"] == 0
+
+    def test_new_export_split_columns_are_sortable(self, client_with_milestones):
+        """T8230: every UserTable header triggers a server-side sort, so the new
+        Focus/Overlay columns must be in the sort whitelist -- clicking them must
+        return 200, not the 422 an un-whitelisted sort key raises."""
+        for key in ("framing_exported_count", "overlay_exported_count"):
+            resp = client_with_milestones.get(
+                f"/api/admin/users?sort={key}&sort_dir=desc",
+                headers=_auth_headers("admin-user"),
+            )
+            assert resp.status_code == 200, key
+            # admin-user (framing=2/overlay=1) outranks regular-user (0/0).
+            assert resp.json()["users"][0]["user_id"] == "admin-user"
 
     def test_users_with_segments_but_no_actions(self, client):
         """T3460: the panel INNER JOINs user_segments, so users appear once a

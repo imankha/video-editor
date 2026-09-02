@@ -45,3 +45,51 @@ describe('UserTable Games column (T8220 tries vs succeeded)', () => {
     expect(screen.getByText('7 tried / 0 succeeded')).toBeTruthy();
   });
 });
+
+describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
+  it('renders Focus and Overlay columns alongside the retained Exports total', () => {
+    const users = [
+      {
+        ...BASE_USER,
+        user_id: 'bknoto',
+        email: 'bknoto@gmail.com',
+        game_created_count: 0,
+        game_upload_succeeded_count: 0,
+        export_completed_count: 9,   // total (Focus + Overlay + other/recovered)
+        framing_exported_count: 4,   // Focus
+        overlay_exported_count: 3,   // Overlay
+      },
+    ];
+    render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
+
+    // The header still carries the grand total plus the two new per-type columns.
+    expect(screen.getByText('Exports')).toBeTruthy();
+    expect(screen.getByText('Focus')).toBeTruthy();
+    expect(screen.getByText('Overlay')).toBeTruthy();
+
+    // Total is retained (so the 2 "other"/recovered exports are never dropped)
+    // and each per-type count renders as its own cell.
+    expect(screen.getByText('9')).toBeTruthy();
+    expect(screen.getByText('4')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy();
+  });
+
+  it('renders 0 for the split when a user has exports but no per-type rows', () => {
+    const users = [
+      {
+        ...BASE_USER,
+        user_id: 'u1',
+        game_created_count: 0,
+        game_upload_succeeded_count: 0,
+        export_completed_count: 1,
+        framing_exported_count: 0,
+        overlay_exported_count: 0,
+      },
+    ];
+    render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
+
+    // Focus/Overlay show explicit zeros, not a blank or the total.
+    const zeros = screen.getAllByText('0');
+    expect(zeros.length).toBeGreaterThanOrEqual(2);
+  });
+});
