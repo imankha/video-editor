@@ -1,5 +1,6 @@
 """Tests for analytics dashboard endpoints and daily_counters."""
 
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -379,16 +380,14 @@ class TestUploadSuccessRateAlarm:
     order-independent (found live in CI: a prior test's leftover 1 succeeded
     turned this class's intended 0% into an observed 50%).
 
-    KNOWN LOCAL-CLOCK CAVEAT (filed as T8250): `_reset_upload_counters` and
-    `record_milestone` both key off Postgres's `CURRENT_DATE` (UTC), but the
-    pulse endpoint under test computes its date window with Python's LOCAL
-    `date.today()`. Running this class locally in a negative-UTC-offset
-    timezone near the UTC day boundary reads `card["today"] is None` -- the
-    row this test just wrote lands under UTC-tomorrow, outside the endpoint's
-    local-today window. Not a bug in this test or the alarm logic (the
-    write side is directly verified correct) -- CI runs in UTC and never
-    crosses this boundary. If this file flakes ONLY locally near a
-    local-midnight/UTC-morning window, that is T8250, not a regression here."""
+    FIXED LOCAL-CLOCK CAVEAT (T8250, resolved): the pulse endpoint used to compute
+    its date window with Python's LOCAL `date.today()` while `_reset_upload_counters`/
+    `record_milestone` key off Postgres's `CURRENT_DATE` (UTC) -- running this class
+    near the UTC day boundary in a negative-UTC-offset timezone used to read
+    `card["today"] is None` even though the write side was correct. Fixed by switching
+    the pulse window to `datetime.now(UTC).date()`; see TestPulseUtcDateWindow below
+    for the regression test (mocks the local clock directly, so it reproduces
+    deterministically regardless of the host's real timezone)."""
 
     def _reset_upload_counters(self):
         # analytics_setup buffers a game_upload_succeeded for user-a that is NOT yet
@@ -466,6 +465,91 @@ class TestUploadSuccessRateAlarm:
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
         assert card["alarm"] is False
+
+
+class TestPulseUtcDateWindow:
+    """T8250: `daily_counters` rows are keyed on Postgres's `CURRENT_DATE` (UTC,
+    analytics.py `_DailyCounterBuffer.flush`). The pulse endpoint's `today`/`start`
+    window must match that UTC convention, not Python's naive local-time
+    `date.today()` -- a mismatch silently excludes today's rows for any admin in a
+    negative-UTC-offset timezone for a ~7-8h window after local midnight.
+
+    Reproduced by patching `app.routers.admin.date` to a `date` subclass whose
+    `today()` returns "yesterday" relative to the REAL current UTC date -- this
+    simulates the local-lags-UTC scenario deterministically, independent of the
+    host's actual timezone (so it fails reliably pre-fix and passes post-fix in CI,
+    which runs in UTC and would never otherwise hit this boundary).
+    """
+
+    def _reset_upload_counters(self):
+        # See TestUploadSuccessRateAlarm._reset_upload_counters -- same isolation need.
+        _counter_buffer.flush()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE daily_counters SET game_uploads_succeeded = 0, game_uploads_failed = 0 "
+                "WHERE counter_date = CURRENT_DATE"
+            )
+
+    def test_daily_counters_row_visible_when_local_clock_lags_utc(self, client, pg_conn):
+        self._reset_upload_counters()
+        record_milestone("user-a", "game_upload_succeeded")
+        record_milestone("user-a", "game_upload_succeeded")
+        _counter_buffer.flush()
+
+        class LocalDateLagsUtc(date):
+            @classmethod
+            def today(cls):
+                return datetime.now(UTC).date() - timedelta(days=1)
+
+        # T8110: pin exclude_test=false so pulse reads the seeded daily_counters
+        # (the default ON path aggregates cumulative user_actions instead).
+        with patch("app.routers.admin.date", LocalDateLagsUtc):
+            resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
+
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        # Pre-fix: today's row falls outside the mocked local-lagging window ->
+        # attempts=0 -> today=None. Post-fix: datetime.now(UTC).date() ignores the
+        # mocked local date.today(), so the window still ends on the real UTC day.
+        assert card["succeeded"] == 2
+        assert card["failed"] == 0
+        assert card["attempts"] == 2
+        assert card["today"] == 100.0
+
+    def test_signup_card_visible_when_local_clock_lags_utc(self, client, pg_conn):
+        # Same boundary bug, different card: daily_counters.signups instead of
+        # game_uploads_* -- confirms the fix isn't upload-metric-specific (every
+        # sparkline/card shares the same today/start window). daily_counters is a
+        # shared cumulative table (not reset per test -- see TestUploadSuccessRateAlarm
+        # docstring), so read the real expected value directly instead of hardcoding
+        # a count that would be order-dependent on other tests in this run.
+        _counter_buffer.flush()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT signups FROM daily_counters WHERE counter_date = CURRENT_DATE AND origin_type = 'all'"
+            )
+            row = cur.fetchone()
+        expected_today_signups = row["signups"] if row else 0
+        # Sanity: analytics_setup's create_user_segment calls landed a real row today.
+        assert expected_today_signups > 0
+
+        class LocalDateLagsUtc(date):
+            @classmethod
+            def today(cls):
+                return datetime.now(UTC).date() - timedelta(days=1)
+
+        with patch("app.routers.admin.date", LocalDateLagsUtc):
+            resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
+
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["signups"]
+        # Pre-fix: the mocked local-lagging window never covers real CURRENT_DATE (no
+        # daily_counters row exists for the mocked, older date range) -> today reads 0.
+        assert card["today"] == expected_today_signups
 
 
 class TestUserActions:
