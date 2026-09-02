@@ -1,6 +1,6 @@
 # T8360: Split single-clip vs multi-clip drafts into separate views
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-09-02
