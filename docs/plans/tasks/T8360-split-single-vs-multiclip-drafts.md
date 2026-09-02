@@ -1,6 +1,6 @@
 # T8360: Split single-clip vs multi-clip drafts into separate views
 
-**Status:** WIP
+**Status:** WAITING ON USER (design gate 2026-09-02: ui-designer spec at T8360-design.md on the worker branch; OQ-1 Highlights placement + rename-clears-auto_project_id ruling)
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-09-02
