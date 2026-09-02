@@ -1,6 +1,6 @@
 # T7620: Architect design: guided-tour engine + essential-path step definitions
 
-**Status:** WIP
+**Status:** WAITING ON USER (design gate 2026-09-02: docs/plans/tasks/T7620-design.md awaiting approval; decisions D1-D6)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-24
