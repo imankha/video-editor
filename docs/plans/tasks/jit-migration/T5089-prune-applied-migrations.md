@@ -95,18 +95,51 @@ match the pruned reality rather than deleting the assertions.
 - Keep the deleted history findable: note the pruned range and the commit in CLAUDE.md § Migration
   System, so "where did v001-v030 go" has an answer that is not `git log`.
 
-## Implementation
+## Measured Floors
+
+### DEV (2026-09-02, `scripts/measure_migration_floor.py`, orphan-inclusive R2 walk)
+
+| Track | Floor | Head seen | Notes |
+|-------|-------|-----------|-------|
+| `user_db` | **v006** | v007 | 14 objects at v006 (ALL `e2e_*`/`probe_*`/`test`/`t48xx` artifacts); 355 at v007 |
+| `profile_db` | **v000** | v048 | ONE object at v000: `dev/users/e2e_t7790_1787783178970_0fjrr2/profiles/4600738b/profile.sqlite` (a broken/unstamped E2E leftover). Next tiers: v016(2), v019(4), v022(1), v023(46), … v048(10). Registry head is v049; no dev profile has reached it yet |
+| `postgres` | head v026, contiguous 1..26 | v026 | single shared DB, at head (exempt from the floor gate — see below) |
+
+**Conclusion: the prune CANNOT proceed.** Two independent blockers:
+1. **staging + prod are unmeasurable in-container** (this container carries only DEV credentials in
+   `/workspace/.env`: `APP_ENV=dev`, dev `DATABASE_URL`, dev R2). The floor is `min` across dev **and
+   staging AND prod** — an unmeasured env could hide a lower floor. See the BLOCKED line.
+2. **Even DEV has below-floor outliers that are test artifacts**, not real accounts: a v000
+   profile.sqlite and 14 v006 user.sqlite objects (all `e2e_*`/`probe_*`/`test`). A single v000
+   profile pins the profile_db floor at 0 → nothing is prunable there until the supervisor/user
+   decides whether to (a) clean up these dev test leftovers, or (b) exclude non-real accounts from
+   the floor. This is a data/product judgment, not a code decision — do NOT guess it.
+
+**What DID land this session (code that does not depend on the measured floor):**
+- The **DDL-vs-migrated schema equivalence tests** (Step 1) — `tests/test_t5089_prune_floor.py`. Both
+  SQLite tracks proven equivalent to the fresh DDL; **no drift** (one benign normalized diff:
+  `projects.poster_marker_time` DDL `DEFAULT NULL` vs v032 no-default — semantically identical).
+- The **floor-enforcement mechanism** (Step 3), shipped **INERT** (`floor=0` on every track). A DB
+  below a configured floor raises `BelowMigrationFloor` (CRITICAL log, non-retryable HTTP 500
+  `schema_below_floor` — deliberately NOT the retryable 503 `pending_migration`). Postgres is
+  exempt by construction (fresh pg has an empty ledger → current=0; a nonzero pg floor would refuse
+  every fresh deploy). Wire the real floor by setting `MigrationRunner(MIGRATIONS, floor=F)` in the
+  track's `__init__.py` **and deleting `v001..vF` in the same commit**, once the cross-env sweep +
+  the artifact-cleanup decision above are settled.
+- A **read-only cross-env floor-sweep script** for the blocked probe: `scripts/measure_migration_floor.py`.
 
 ### Steps
-1. [ ] Add the fresh-DDL-vs-migrated-from-floor schema equivalence test; fix any drift it finds
-2. [ ] Sweep every reachable DB on dev/staging/prod (registered + orphan + fixtures) and record the
-       measured floor per track, with the date
-3. [ ] Implement floor enforcement: `user_version < FLOOR` refuses loudly, never partially upgrades
-4. [ ] Prune the contiguous prefix for ONE track; update the count/HEAD test locks
-5. [ ] Verify: fresh account creation, an at-head account, and a synthetic below-floor DB (must fail
-       loud, not corrupt)
-6. [ ] Repeat per remaining track, one at a time
-7. [ ] Document the pruned range + floor in CLAUDE.md § Migration System
+1. [x] Add the fresh-DDL-vs-migrated-from-floor schema equivalence test; fix any drift it finds
+       (no drift found; one benign normalized default-representation diff)
+2. [~] Sweep every reachable DB and record the floor per track — DEV done (above); **staging/prod
+       BLOCKED on supervisor credentials** (exact commands in `.dotask-status`)
+3. [x] Implement floor enforcement (shipped inert, `floor=0`; `BelowMigrationFloor` → loud 500)
+4. [ ] Prune the contiguous prefix for ONE track — **BLOCKED** on Step 2 (floor unproven) + the dev
+       artifact-cleanup decision
+5. [ ] Verify: fresh account creation, an at-head account, and a synthetic below-floor DB (synthetic
+       below-floor refusal IS tested; fresh/at-head unaffected proven by regression corner)
+6. [ ] Repeat per remaining track, one at a time — **BLOCKED**
+7. [ ] Document the pruned range + floor in CLAUDE.md § Migration System — pending the actual prune
 
 ## Acceptance Criteria
 
