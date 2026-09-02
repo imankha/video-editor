@@ -1,4 +1,4 @@
-# T7466: Deploy-comparison view (segment any metric by deploy, before vs after)
+# T7467: Deploy-comparison view (segment any metric by deploy, before vs after)
 
 **Status:** TODO
 **Impact:** 7
