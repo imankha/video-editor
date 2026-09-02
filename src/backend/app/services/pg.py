@@ -61,7 +61,12 @@ CREATE TABLE IF NOT EXISTS users (
     picture_url TEXT,
     terms_accepted_at TIMESTAMPTZ,
     terms_version TEXT,
-    invite_code VARCHAR(8)
+    invite_code VARCHAR(8),
+    -- T8110: internal/test-account flag. Marks our own accounts (dev, admin,
+    -- seed) so the admin panel + population aggregates can exclude them from
+    -- "how are real users doing" reads. Data, not config: set from the admin UI
+    -- (POST /users/{id}/test-account), seeded for the known emails by v026.
+    is_test_account BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -271,6 +276,13 @@ CREATE TABLE IF NOT EXISTS user_actions (
 CREATE INDEX IF NOT EXISTS idx_actions_action ON user_actions(action);
 CREATE INDEX IF NOT EXISTS idx_actions_action_user ON user_actions(action, user_id);
 CREATE INDEX IF NOT EXISTS idx_actions_platform ON user_actions(platform);
+-- T8110 note: the admin list_users global-sort CTE aggregates ALL of
+-- user_actions per-user (SUM(count) FILTER by action). A (user_id, action)
+-- INCLUDE (count) covering index was evaluated and DELIBERATELY NOT added: the
+-- planner picks a plain seq scan for an UNFILTERED whole-table GROUP BY (an
+-- index-only scan of the entire index is not cheaper than the heap scan), so the
+-- index would only add write amplification. Measured: ~7ms for 40k rows / 5k
+-- users. If a future change filters this aggregate (WHERE), revisit then.
 
 CREATE TABLE IF NOT EXISTS daily_counters (
     counter_date DATE NOT NULL DEFAULT CURRENT_DATE,

@@ -86,6 +86,100 @@ def _compute_last_step(actions: set[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# T8110: test-account exclusion + whitelisted global sort for list_users
+# ---------------------------------------------------------------------------
+
+def _test_exclusion(exclude_test: bool) -> str:
+    """WHERE fragment excluding internal/test accounts, or '' when off.
+
+    The SINGLE place the literal `NOT u.is_test_account` lives (DRY). Returns a
+    static, param-free string so it composes into any where_parts list by append.
+    It is INDEPENDENT of _build_segment_filter's single-value userFilter -- the
+    "Real" pill never joins the exclusive segment set, so Real + Paying = real
+    paying users. Every consumer must have (or JOIN) a `users u` alias.
+    """
+    return "NOT u.is_test_account" if exclude_test else ""
+
+
+# Sort key (the 16 UserTable columns) -> a FIXED ORDER BY value fragment. Hard
+# whitelist: a client `sort` not in this dict is a 422, never interpolated into
+# SQL. Every fragment is an output-column alias or a qualified table column from
+# the list_users CTE (see below). Direction + NULLS + tiebreaker are appended by
+# _order_by so equal-metric rows can't repeat/skip across page boundaries.
+_SORT_COLUMNS = {
+    "email":                  "u.email",
+    "origin":                 "s.origin",
+    "last_step":              "last_step_rank",
+    "acquired_at":            "s.acquired_at",
+    "game_created_count":     "game_created_count",
+    "clip_created_count":     "clip_created_count",
+    "export_completed_count": "export_completed_count",
+    "share_completed_count":  "share_completed_count",
+    "credits":                "credits",
+    "total_spent_cents":      "s.total_spent_cents",
+    "action_count":           "action_count",
+    "session_count":          "session_count",
+    "total_usage_seconds":    "usage_sort_seconds",   # banked usage (design §7A)
+    "avg_weekly_seconds":     "avg_weekly_sort",       # SQL banked-derived (§7A)
+    "last_7d_seconds":        "last_7d_seconds",
+    "last_active_at":         "s.last_active_at",
+}
+
+
+def _order_by(sort: str, sort_dir: str) -> str:
+    """Map a whitelisted sort key + direction to an ORDER BY fragment, or 422.
+
+    DESC -> NULLS LAST, ASC -> NULLS FIRST (absent/zero metric always at the far
+    end). `u.user_id ASC` is appended as a total-order tiebreaker so LIMIT/OFFSET
+    paging over equal values never repeats or drops a row (acceptance criterion).
+    """
+    frag = _SORT_COLUMNS.get(sort)
+    if frag is None or sort_dir not in ("asc", "desc"):
+        raise HTTPException(status_code=422, detail="invalid sort")
+    nulls = "NULLS LAST" if sort_dir == "desc" else "NULLS FIRST"
+    return f"{frag} {sort_dir.upper()} {nulls}, u.user_id ASC"
+
+
+# Lazily-built (analytics is imported lazily to avoid a circular import at module
+# load) SQL CASE + rank->label map for the sortable `last_step` column. The rank
+# is the position in analytics.FUNNEL_STEPS; MAX(rank) over a user's actions =
+# the furthest funnel step reached = exactly what _compute_last_step's
+# reversed()-first-match returns. Generated FROM FUNNEL_STEPS so a future step
+# insertion can't desync the sort from _compute_last_step.
+_LAST_STEP_RANK_SQL: str | None = None
+_RANK_TO_LABEL: dict[int, str] | None = None
+
+
+def _build_last_step_rank():
+    global _LAST_STEP_RANK_SQL, _RANK_TO_LABEL
+    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+    arms = []
+    rank_to_label: dict[int, str] = {}
+    for i, step in enumerate(FUNNEL_STEPS):
+        rank = i + 1
+        # step names are internal module constants (FUNNEL_STEPS), never client
+        # input -- safe to inline into the CASE.
+        arms.append(f"WHEN '{step}' THEN {rank}")
+        rank_to_label[rank] = FLOW_EVENTS[step]["label"]
+    _LAST_STEP_RANK_SQL = "MAX(CASE action " + " ".join(arms) + " END)"
+    _RANK_TO_LABEL = rank_to_label
+
+
+def _last_step_rank_sql() -> str:
+    if _LAST_STEP_RANK_SQL is None:
+        _build_last_step_rank()
+    return _LAST_STEP_RANK_SQL  # type: ignore[return-value]
+
+
+def _rank_to_label(rank) -> str:
+    if _RANK_TO_LABEL is None:
+        _build_last_step_rank()
+    if rank is None:
+        return "Signed Up"
+    return _RANK_TO_LABEL.get(rank, "Signed Up")  # type: ignore[union-attr]
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -105,15 +199,30 @@ def list_users(
     acquired_from: str = Query(None),
     acquired_to: str = Query(None),
     filter: str = Query(None),
+    sort: str = "last_active_at",
+    sort_dir: str = "desc",
+    exclude_test: bool = True,
 ):
-    """List users with milestone stats from Postgres. Paginated by user count. Admin only."""
+    """List users with milestone stats from Postgres. Paginated by user count. Admin only.
+
+    T8110: the sort now applies over the WHOLE user set (not the page) via a
+    single CTE that computes every sortable metric in Postgres, then ORDER BY the
+    whitelisted fragment, then LIMIT/OFFSET -- so page-1-row-1 is the true DB
+    max/min. `exclude_test` (default ON) hides internal accounts from the list AND
+    the funnel totals, via the shared _test_exclusion predicate.
+    """
     _require_admin()
 
-    where_parts, params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
+    # unknown key 422s and never reaches SQL.
+    order_fragment = _order_by(sort, sort_dir)
 
-    where_clause = ""
-    if where_parts:
-        where_clause = "WHERE " + " AND ".join(where_parts)
+    seg_parts, params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    excl = _test_exclusion(exclude_test)
+    where_parts = [*seg_parts]
+    if excl:
+        where_parts.append(excl)
+    where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -136,61 +245,90 @@ def list_users(
 
         offset = (page - 1) * page_size
 
+        # T8110: one CTE computing every sortable metric across the WHOLE table so
+        # the global ORDER BY ranks the entire user set before LIMIT/OFFSET. The
+        # per-page action/last_7d/credits follow-up queries are folded in here.
+        # Anchored on `users u LEFT JOIN user_segments s` (preserves T4970); every
+        # metric CTE is LEFT-JOINed so a segment-less / action-less user still
+        # lists. `last_step_rank` mirrors _compute_last_step (design §6).
         cur.execute(f"""
+            WITH act AS (
+                SELECT user_id,
+                       SUM(count)                                            AS action_count,
+                       SUM(count) FILTER (WHERE action = 'game_created')     AS game_created_count,
+                       SUM(count) FILTER (WHERE action = 'clip_created')     AS clip_created_count,
+                       SUM(count) FILTER (WHERE action = 'export_completed') AS export_completed_count,
+                       SUM(count) FILTER (WHERE action = 'export_failed')    AS export_failed_count,
+                       SUM(count) FILTER (WHERE action = 'share_completed')  AS share_completed_count,
+                       SUM(count) FILTER (WHERE action = 'credit_purchased') AS credit_purchase_count,
+                       SUM(count) FILTER (WHERE action = 'session_started')  AS session_count,
+                       {_last_step_rank_sql()}                               AS last_step_rank
+                FROM user_actions
+                GROUP BY user_id
+            ),
+            u7 AS (
+                SELECT user_id, COALESCE(SUM(seconds), 0) AS last_7d_seconds
+                FROM user_usage_daily
+                WHERE day >= CURRENT_DATE - INTERVAL '6 days'
+                GROUP BY user_id
+            ),
+            bal AS (SELECT user_id, balance FROM credits)
             SELECT
-                u.user_id, u.email, u.created_at,
-                s.origin, s.acquired_at,
-                s.total_spent_cents, s.last_active_at,
-                s.total_usage_seconds, s.current_session_start
+                u.user_id, u.email, u.created_at, u.is_test_account,
+                s.origin, s.acquired_at, s.total_spent_cents, s.last_active_at,
+                s.total_usage_seconds, s.current_session_start,
+                COALESCE(act.action_count, 0)           AS action_count,
+                COALESCE(act.game_created_count, 0)     AS game_created_count,
+                COALESCE(act.clip_created_count, 0)     AS clip_created_count,
+                COALESCE(act.export_completed_count, 0) AS export_completed_count,
+                COALESCE(act.export_failed_count, 0)    AS export_failed_count,
+                COALESCE(act.share_completed_count, 0)  AS share_completed_count,
+                COALESCE(act.credit_purchase_count, 0)  AS credit_purchase_count,
+                COALESCE(act.session_count, 0)          AS session_count,
+                act.last_step_rank,
+                COALESCE(u7.last_7d_seconds, 0)         AS last_7d_seconds,
+                bal.balance                             AS credits,
+                -- banked usage only, for a STABLE sort key (the displayed Usage
+                -- adds a live open-session tail in Python -- design §7A, so an
+                -- online user's shown value can exceed its rank value by <=30min).
+                COALESCE(s.total_usage_seconds, 0)      AS usage_sort_seconds,
+                (COALESCE(s.total_usage_seconds, 0)::float
+                    / GREATEST(1.0, EXTRACT(EPOCH FROM (now() - COALESCE(s.acquired_at, u.created_at))) / 604800.0)
+                )                                       AS avg_weekly_sort
             FROM users u
             LEFT JOIN user_segments s ON u.user_id = s.user_id
+            LEFT JOIN act ON act.user_id = u.user_id
+            LEFT JOIN u7  ON u7.user_id  = u.user_id
+            LEFT JOIN bal ON bal.user_id = u.user_id
             {where_clause}
-            ORDER BY s.last_active_at DESC NULLS LAST
+            ORDER BY {order_fragment}
             LIMIT %s OFFSET %s
         """, [*params, page_size, offset])
 
         rows = cur.fetchall()
         page_user_ids = [row["user_id"] for row in rows]
 
-        if page_user_ids:
-            cur.execute("""
-                SELECT user_id, action, SUM(count) AS count
-                FROM user_actions
-                WHERE user_id = ANY(%s)
-                GROUP BY user_id, action
-            """, (page_user_ids,))
-            action_rows = cur.fetchall()
-
-            # T5770: trailing-7-day engaged usage per user — ONE grouped query
-            # keyed by the page's user ids (no per-user N+1). day >= CURRENT_DATE
-            # - 6 covers today..today-6 = 7 distinct days. Shows real recorded
-            # buckets only (history is never backfilled).
-            cur.execute("""
-                SELECT user_id, COALESCE(SUM(seconds), 0) AS last_7d
-                FROM user_usage_daily
-                WHERE user_id = ANY(%s)
-                  AND day >= CURRENT_DATE - INTERVAL '6 days'
-                GROUP BY user_id
-            """, (page_user_ids,))
-            last_7d_by_user = {r["user_id"]: r["last_7d"] for r in cur.fetchall()}
-        else:
-            action_rows = []
-            last_7d_by_user = {}
-
-        actions_by_user: dict[str, dict[str, int]] = {}
-        for ar in action_rows:
-            actions_by_user.setdefault(ar["user_id"], {})[ar["action"]] = ar["count"]
-
         from ..analytics import FLOW_EVENTS, FUNNEL_STEPS, session_engaged_seconds
 
-        funnel_join = f"JOIN user_segments s ON a.user_id = s.user_id {where_clause}" if where_parts else ""
-        funnel_params = list(params) if where_parts else []
+        # Funnel totals must honor BOTH the segment filter (needs user_segments s)
+        # and the test-account exclusion (needs users u) -- thread the SAME
+        # predicates, joining only the tables the active predicates reference.
+        funnel_joins = ""
+        if seg_parts:
+            funnel_joins += " JOIN user_segments s ON a.user_id = s.user_id"
+        if excl:
+            funnel_joins += " JOIN users u ON a.user_id = u.user_id"
+        funnel_where_parts = [*seg_parts]
+        if excl:
+            funnel_where_parts.append(excl)
+        funnel_where = ("WHERE " + " AND ".join(funnel_where_parts)) if funnel_where_parts else ""
         cur.execute(f"""
             SELECT a.action, COUNT(DISTINCT a.user_id) AS users
             FROM user_actions a
-            {funnel_join}
+            {funnel_joins}
+            {funnel_where}
             GROUP BY a.action
-        """, funnel_params)
+        """, list(params))
         action_totals = {r["action"]: r["users"] for r in cur.fetchall()}
 
         funnel_totals = {"signed_up": total_users}
@@ -206,15 +344,14 @@ def list_users(
         user_id = row["user_id"]
         user_credit = credit_stats.get(user_id)
 
-        user_actions = actions_by_user.get(user_id, {})
-        last_step = _compute_last_step(set(user_actions.keys()))
-        session_count = user_actions.get("session_started", 0)
-        action_count = sum(user_actions.values())
+        # last_step: map the SQL-computed funnel rank back to its label (design §6).
+        last_step = _rank_to_label(row["last_step_rank"])
 
         # T5660: add the still-open session using the SAME accounting as the
         # write side (analytics.session_engaged_seconds) — confirmed span
         # (uncapped, so heavy continuous users aren't clamped) plus a capped idle
         # tail (so an abandoned open tab isn't counted). Symmetric with banking.
+        # This is DISPLAY only; the sort ranks on banked usage_sort_seconds (§7A).
         effective_usage = row["total_usage_seconds"] or 0
         if row["current_session_start"] and row["last_active_at"]:
             effective_usage += session_engaged_seconds(
@@ -227,8 +364,8 @@ def list_users(
         # since signup use the segment signup date (acquired_at), falling back to
         # users.created_at when there is no segment row (LEFT JOIN NULL); clamped
         # to a minimum of 1 week so a brand-new signup neither divides by zero nor
-        # yields an absurd average. (The task named user_segments.signup_completed_at,
-        # which does not exist on that table; acquired_at is its signup-date column.)
+        # yields an absurd average. (Displayed value; the sort ranks on the SQL
+        # banked-derived avg_weekly_sort -- §7A.)
         signup_date = row["acquired_at"]
         if signup_date is None and row["created_at"] is not None:
             signup_date = row["created_at"].date()
@@ -242,25 +379,26 @@ def list_users(
         users.append({
             "user_id": user_id,
             "email": row["email"],
+            "is_test_account": row["is_test_account"],
             "origin": row["origin"],
             "acquired_at": str(row["acquired_at"]) if row["acquired_at"] else None,
-            "game_created_count": user_actions.get("game_created", 0),
-            "clip_created_count": user_actions.get("clip_created", 0),
-            "export_completed_count": user_actions.get("export_completed", 0),
-            "export_failed_count": user_actions.get("export_failed", 0),
-            "share_completed_count": user_actions.get("share_completed", 0),
-            "credit_purchase_count": user_actions.get("credit_purchased", 0),
+            "game_created_count": row["game_created_count"],
+            "clip_created_count": row["clip_created_count"],
+            "export_completed_count": row["export_completed_count"],
+            "export_failed_count": row["export_failed_count"],
+            "share_completed_count": row["share_completed_count"],
+            "credit_purchase_count": row["credit_purchase_count"],
             "credits": user_credit["credits_balance"] if user_credit else None,
             "credits_spent": user_credit["credits_spent"] if user_credit else 0,
             "credits_purchased": user_credit["credits_purchased"] if user_credit else 0,
             "total_spent_cents": row["total_spent_cents"] or 0,
             "last_active_at": row["last_active_at"].isoformat() if row["last_active_at"] else None,
-            "session_count": session_count,
+            "session_count": row["session_count"],
             "last_step": last_step,
-            "action_count": action_count,
+            "action_count": row["action_count"],
             "total_usage_seconds": effective_usage,
             "avg_weekly_seconds": avg_weekly_seconds,
-            "last_7d_seconds": last_7d_by_user.get(user_id, 0),
+            "last_7d_seconds": row["last_7d_seconds"],
         })
 
     return {
@@ -456,6 +594,39 @@ async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
     return {"balance": result["balance"], "applied": result["applied"]}
 
 
+class TestAccountRequest(BaseModel):
+    is_test: bool
+
+
+@router.post("/users/{user_id}/test-account")
+# Plain sync def -> threadpool, off the event loop (concurrency model). Registered
+# in the /users/{user_id}/* group, AFTER /users/bulk/* (FastAPI definition-order
+# matching -- see the bulk-route landmine in backend-services.md).
+def admin_mark_test_account(user_id: str, request: TestAccountRequest):
+    """Mark/unmark a user as an internal test account. Admin only, gesture-based.
+
+    T8110: a single surgical UPDATE -- the only write path for is_test_account
+    outside the v026 seed. The list + population aggregates read this flag to
+    exclude internal accounts. Survives reload (a DB column, not view state), so
+    a new test account is flagged from the UI without a migration.
+    """
+    _require_admin()
+    admin_id = get_current_user_id()
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET is_test_account = %s WHERE user_id = %s",
+            (request.is_test, user_id),
+        )
+        # T7500: a zero-row UPDATE-by-id is a 404, not a silent success.
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    logger.info(
+        "[ADMIN] %s set is_test_account=%s for user %s", admin_id, request.is_test, user_id
+    )
+    return {"user_id": user_id, "is_test_account": request.is_test}
+
+
 class SetCreditsRequest(BaseModel):
     amount: int
     request_id: str
@@ -499,11 +670,14 @@ def _load_local_spent_positive() -> dict:
     """user_id -> {email, local_cents} for every user whose local spend is > 0."""
     with get_pg() as conn:
         cur = conn.cursor()
-        cur.execute("""
+        # T8110 (user decision 2026-09-01): revenue reconciliation excludes
+        # internal/test accounts, consistent with the other population aggregates.
+        excl = _test_exclusion(True)
+        cur.execute(f"""
             SELECT u.user_id, u.email, s.total_spent_cents AS cents
             FROM user_segments s
             JOIN users u ON u.user_id = s.user_id
-            WHERE s.total_spent_cents > 0
+            WHERE s.total_spent_cents > 0 AND {excl}
         """)
         return {
             r["user_id"]: {"email": r["email"], "local_cents": r["cents"] or 0}
@@ -1010,12 +1184,19 @@ def analytics_funnel(
     origin: str = Query("all"),
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
+    exclude_test: bool = True,
 ):
     _require_admin()
     d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
     d_to = date.fromisoformat(date_to) if date_to else date.today()
 
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+
+    # T8110: exclude internal accounts from the population funnel. These queries
+    # key on user_segments s, so join users u to reach the flag.
+    excl = _test_exclusion(exclude_test)
+    excl_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_and = f" AND {excl}" if excl else ""
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -1030,7 +1211,8 @@ def analytics_funnel(
             SELECT s.origin,
                    COUNT(DISTINCT s.user_id) AS signed_up
             FROM user_segments s
-            WHERE s.acquired_at BETWEEN %s AND %s {origin_filter}
+            {excl_join}
+            WHERE s.acquired_at BETWEEN %s AND %s {origin_filter}{excl_and}
             GROUP BY s.origin
         """, params)
         signup_rows = {r["origin"]: r["signed_up"] for r in cur.fetchall()}
@@ -1040,7 +1222,8 @@ def analytics_funnel(
                    COUNT(DISTINCT a.user_id) AS users
             FROM user_actions a
             JOIN user_segments s ON a.user_id = s.user_id
-            WHERE s.acquired_at BETWEEN %s AND %s {origin_filter}
+            {excl_join}
+            WHERE s.acquired_at BETWEEN %s AND %s {origin_filter}{excl_and}
             GROUP BY s.origin, a.action
         """, params)
         action_rows = cur.fetchall()
@@ -1080,10 +1263,16 @@ def analytics_funnel(
 def analytics_channels(
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
+    exclude_test: bool = True,
 ):
     _require_admin()
     d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
     d_to = date.fromisoformat(date_to) if date_to else date.today()
+
+    # T8110: exclude internal accounts from this population channel breakdown.
+    excl = _test_exclusion(exclude_test)
+    excl_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_and = f" AND {excl}" if excl else ""
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -1095,7 +1284,7 @@ def analytics_channels(
         # and their export SUM by purchase_rows -- inflating avg_exports, revenue_cents, AND
         # the ORDER BY revenue ranking. Collapsing each action to a per-user subquery first
         # makes each user contribute exactly one row, eliminating the cartesian fan-out.
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 s.origin,
                 COUNT(*) AS users,
@@ -1117,7 +1306,8 @@ def analytics_channels(
                 FROM user_actions
                 WHERE action = 'credit_purchased'
             ) pur ON pur.user_id = s.user_id
-            WHERE s.acquired_at BETWEEN %s AND %s
+            {excl_join}
+            WHERE s.acquired_at BETWEEN %s AND %s{excl_and}
             GROUP BY s.origin
             ORDER BY revenue_cents DESC NULLS LAST
         """, (d_from, d_to))
@@ -1229,6 +1419,7 @@ def analytics_cohorts(
     origin: str = Query("all"),
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
+    exclude_test: bool = True,
 ):
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
 
@@ -1245,6 +1436,13 @@ def analytics_cohorts(
     if origin != "all":
         where_parts.append("s.origin = %s")
         where_params.append(origin)
+    # T8110: exclude internal accounts from all four cohort aggregations. The
+    # predicate rides the shared where_clause; each query's FROM adds the users u
+    # join (excl_join) so `u` resolves.
+    excl = _test_exclusion(exclude_test)
+    excl_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    if excl:
+        where_parts.append(excl)
     where_clause = "WHERE " + " AND ".join(where_parts)
 
     with get_pg() as conn:
@@ -1256,6 +1454,7 @@ def analytics_cohorts(
                 COUNT(*) AS signups,
                 COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
             FROM user_segments s
+            {excl_join}
             {where_clause}
             GROUP BY cohort_period
             ORDER BY cohort_period DESC
@@ -1272,6 +1471,7 @@ def analytics_cohorts(
                 COUNT(DISTINCT a.user_id) AS users
             FROM user_actions a
             JOIN user_segments s ON a.user_id = s.user_id
+            {excl_join}
             {where_clause}
             GROUP BY cohort_period, a.action
             ORDER BY cohort_period DESC
@@ -1286,6 +1486,7 @@ def analytics_cohorts(
                 ) AS median_days_to_export
             FROM user_segments s
             JOIN user_actions a ON s.user_id = a.user_id AND a.action = 'export_completed'
+            {excl_join}
             {where_clause}
             GROUP BY cohort_period
         """, [trunc, *where_params])
@@ -1298,6 +1499,7 @@ def analytics_cohorts(
                     WHERE s.last_active_at >= s.created_at + INTERVAL '7 days'
                 ) AS returned
             FROM user_segments s
+            {excl_join}
             {where_clause}
             GROUP BY cohort_period
         """, [trunc, *where_params])
@@ -1630,6 +1832,7 @@ def analytics_pulse(
     acquired_from: str = Query(None),
     acquired_to: str = Query(None),
     filter: str = Query(None),
+    exclude_test: bool = True,
 ):
     _require_admin()
     # T7990: "today" is the UTC calendar day. This is DELIBERATE, not an accident: the
@@ -1644,6 +1847,16 @@ def analytics_pulse(
     start = today - timedelta(days=days - 1)
 
     filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    # T8110 (design §7B): the pre-aggregated daily_counters path (the `else`
+    # branch below) has no per-user dimension, so it CANNOT exclude test accounts.
+    # When exclude_test is on we force the segment/user_actions path by appending
+    # the exclusion predicate to filter_parts (making has_filter true) and joining
+    # users u into each segment query. This is the accepted default cost of a
+    # test-account-free pulse (user decision 2026-09-01).
+    excl = _test_exclusion(exclude_test)
+    if excl:
+        filter_parts = [*filter_parts, excl]
+    seg_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
     has_filter = bool(filter_parts)
 
     with get_pg() as conn:
@@ -1654,7 +1867,7 @@ def analytics_pulse(
 
             cur.execute(f"""
                 SELECT s.acquired_at::date AS d, COUNT(*) AS cnt
-                FROM user_segments s
+                FROM user_segments s{seg_join}
                 {seg_where} AND s.acquired_at::date BETWEEN %s AND %s
                 GROUP BY d ORDER BY d
             """, [*filter_params, start, today])
@@ -1663,7 +1876,7 @@ def analytics_pulse(
             cur.execute(f"""
                 SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt
                 FROM user_actions a
-                JOIN user_segments s ON a.user_id = s.user_id
+                JOIN user_segments s ON a.user_id = s.user_id{seg_join}
                 {seg_where} AND a.action = 'export_completed' AND a.first_at::date BETWEEN %s AND %s
                 GROUP BY d ORDER BY d
             """, [*filter_params, start, today])
@@ -1677,13 +1890,15 @@ def analytics_pulse(
                     COALESCE(SUM(CASE WHEN a.action = 'game_upload_succeeded' THEN a.count END), 0) AS succeeded,
                     COALESCE(SUM(CASE WHEN a.action LIKE 'game_upload_failed:%%' THEN a.count END), 0) AS failed
                 FROM user_actions a
-                JOIN user_segments s ON a.user_id = s.user_id
+                JOIN user_segments s ON a.user_id = s.user_id{seg_join}
                 {seg_where} AND (a.action = 'game_upload_succeeded' OR a.action LIKE 'game_upload_failed:%%')
             """, filter_params)
             ur = cur.fetchone()
             upload_succeeded_total, upload_failed_total = ur["succeeded"], ur["failed"]
 
-            if origin and not acquired_from and not acquired_to and not filter:
+            # The origin-only daily_counters shortcut can't honor a per-user
+            # exclusion, so skip it when excluding test accounts (T8110).
+            if origin and not acquired_from and not acquired_to and not filter and not excl:
                 cur.execute("""
                     SELECT counter_date AS d, sessions_started AS cnt
                     FROM daily_counters
@@ -1694,7 +1909,7 @@ def analytics_pulse(
             else:
                 cur.execute(f"""
                     SELECT s.last_active_at::date AS d, COUNT(*) AS cnt
-                    FROM user_segments s
+                    FROM user_segments s{seg_join}
                     {seg_where} AND s.last_active_at::date BETWEEN %s AND %s
                     GROUP BY d ORDER BY d
                 """, [*filter_params, start, today])
@@ -1702,7 +1917,7 @@ def analytics_pulse(
 
             cur.execute(f"""
                 SELECT COALESCE(SUM(s.total_spent_cents), 0) AS total
-                FROM user_segments s
+                FROM user_segments s{seg_join}
                 {seg_where}
             """, filter_params)
             revenue_total = cur.fetchone()["total"]
@@ -1710,7 +1925,7 @@ def analytics_pulse(
             cur.execute(f"""
                 SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt
                 FROM user_actions a
-                JOIN user_segments s ON a.user_id = s.user_id
+                JOIN user_segments s ON a.user_id = s.user_id{seg_join}
                 {seg_where} AND a.action = 'credit_purchased'
                     AND a.first_at::date BETWEEN %s AND %s
                 GROUP BY d ORDER BY d
@@ -1767,13 +1982,13 @@ def analytics_pulse(
         cur.execute(f"""
             SELECT COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE s.referrer_id IS NOT NULL) AS referred
-            FROM user_segments s
+            FROM user_segments s{seg_join}
             {viral_where} AND s.acquired_at::date BETWEEN %s AND %s
         """, [*filter_params, start, today])
         vr = cur.fetchone()
         cur.execute(f"""
             SELECT s.acquired_at::date AS d, COUNT(*) AS cnt
-            FROM user_segments s
+            FROM user_segments s{seg_join}
             {viral_where} AND s.referrer_id IS NOT NULL
                 AND s.acquired_at::date BETWEEN %s AND %s
             GROUP BY d ORDER BY d
@@ -1933,24 +2148,38 @@ async def referral_tree(user_id: str):
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_platforms(
     action: str | None = Query(None),
+    exclude_test: bool = True,
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
     _require_admin()
     from ..services.pg import get_pg
 
+    # T8110: this is a real population aggregate ("% of users/actions on
+    # mobile/desktop/pwa") and the heavy test accounts skew it. user_actions has
+    # no user join today, so alias it `ua` and join users u to reach the flag.
+    excl = _test_exclusion(exclude_test)
+    excl_join = " JOIN users u ON u.user_id = ua.user_id" if excl else ""
+
     with get_pg() as conn:
         cur = conn.cursor()
 
-        action_filter = "WHERE action = %s" if action else ""
-        action_params = [action] if action else []
+        where_conds = []
+        action_params: list = []
+        if action:
+            where_conds.append("ua.action = %s")
+            action_params.append(action)
+        if excl:
+            where_conds.append(excl)
+        where_sql = ("WHERE " + " AND ".join(where_conds)) if where_conds else ""
 
         cur.execute(f"""
-            SELECT platform,
-                   COUNT(DISTINCT user_id) AS users,
-                   SUM(count) AS total_actions
-            FROM user_actions
-            {action_filter}
-            GROUP BY platform
+            SELECT ua.platform,
+                   COUNT(DISTINCT ua.user_id) AS users,
+                   SUM(ua.count) AS total_actions
+            FROM user_actions ua
+            {excl_join}
+            {where_sql}
+            GROUP BY ua.platform
             ORDER BY total_actions DESC
         """, action_params)
         rows = cur.fetchall()
@@ -1970,13 +2199,16 @@ def analytics_platforms(
 
         by_action = []
         if not action:
-            cur.execute("""
-                SELECT action, platform,
-                       COUNT(DISTINCT user_id) AS users,
-                       SUM(count) AS total
-                FROM user_actions
-                GROUP BY action, platform
-                ORDER BY action, total DESC
+            excl_where = ("WHERE " + excl) if excl else ""
+            cur.execute(f"""
+                SELECT ua.action, ua.platform,
+                       COUNT(DISTINCT ua.user_id) AS users,
+                       SUM(ua.count) AS total
+                FROM user_actions ua
+                {excl_join}
+                {excl_where}
+                GROUP BY ua.action, ua.platform
+                ORDER BY ua.action, total DESC
             """)
             action_platform_rows = cur.fetchall()
             action_totals: dict[str, int] = {}
@@ -2008,7 +2240,7 @@ def analytics_platforms(
 # /api/bootstrap. Every callee is now a plain sync def (list_users joined that set in T8020),
 # so this stays sync all the way down -- do NOT make it `async def` and call these inline,
 # which would re-block the single event loop (the exact bug T8000/T8010/T8020 just fixed).
-def get_admin_dashboard():
+def get_admin_dashboard(exclude_test: bool = True):
     """Combined admin-dashboard read: users + pulse + channels + cohorts + platforms in one
     response, so AdminScreen fires ONE request on mount instead of five (T8020).
 
@@ -2025,15 +2257,18 @@ def get_admin_dashboard():
     partial-data response -- if any callee raises, it propagates to a full 500.
     """
     _require_admin()
+    # T8110: thread exclude_test through every callee explicitly (Query-sentinel
+    # discipline). Default ON -> the combined dashboard opens on real users.
     return {
         "users": list_users(page=1, page_size=DEFAULT_PAGE_SIZE, origin=None,
-                            acquired_from=None, acquired_to=None, filter=None),
+                            acquired_from=None, acquired_to=None, filter=None,
+                            sort="last_active_at", sort_dir="desc", exclude_test=exclude_test),
         "pulse": analytics_pulse(days=30, origin=None, acquired_from=None,
-                                 acquired_to=None, filter=None),
-        "channels": analytics_channels(date_from=None, date_to=None),
+                                 acquired_to=None, filter=None, exclude_test=exclude_test),
+        "channels": analytics_channels(date_from=None, date_to=None, exclude_test=exclude_test),
         "cohorts": analytics_cohorts(granularity="week", origin="all",
-                                     date_from=None, date_to=None),
-        "platforms": analytics_platforms(action=None),
+                                     date_from=None, date_to=None, exclude_test=exclude_test),
+        "platforms": analytics_platforms(action=None, exclude_test=exclude_test),
     }
 
 

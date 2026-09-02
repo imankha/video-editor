@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity, CheckSquare, Square } from 'lucide-react';
+import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity, CheckSquare, Square, FlaskConical } from 'lucide-react';
 import { CreditGrantModal } from './CreditGrantModal';
 import { BulkEmailModal } from './BulkEmailModal';
 import { BulkActionBar } from './BulkActionBar';
@@ -82,13 +82,6 @@ function StepBadge({ step }) {
   );
 }
 
-function getSortValue(user, key) {
-  const v = user[key];
-  if (v == null) return -Infinity;
-  if (typeof v === 'string') return v.toLowerCase();
-  return v;
-}
-
 const FUNNEL_STEPS = [
   { key: 'signed_up', label: 'Signed Up' },
   { key: 'uploaded', label: 'Uploaded' },
@@ -134,42 +127,30 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
   const totalUsers = useAdminStore(s => s.totalUsers);
   const nextPage = useAdminStore(s => s.nextPage);
   const prevPage = useAdminStore(s => s.prevPage);
+  // T8110: sort now lives in the store and drives a server refetch (global
+  // ordering over the whole DB), not a local useMemo over the current page.
+  const sortKey = useAdminStore(s => s.sortKey);
+  const sortDir = useAdminStore(s => s.sortDir);
+  const setSort = useAdminStore(s => s.setSort);
+  const markTestAccount = useAdminStore(s => s.markTestAccount);
 
   const [grantUsers, setGrantUsers] = useState(null);
   const [emailUsers, setEmailUsers] = useState(null);
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState('last_active_at');
-  const [sortDir, setSortDir] = useState('desc');
 
   // T4860: selection is ephemeral view state — local useState only, never
   // persisted (no-redundant-state / no persisted view state).
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
+  // T8110: the server returns rows already globally sorted; this useMemo only
+  // applies the local email search ("filters this page"). No client re-sort --
+  // single source of truth for ordering is the server.
   const matchedUsers = useMemo(() => {
     if (!search) return users;
     const q = search.toLowerCase();
     return users.filter(u => (u.email || '').toLowerCase().includes(q));
   }, [users, search]);
-
-  const sorted = useMemo(() => {
-    return [...matchedUsers].sort((a, b) => {
-      const av = getSortValue(a, sortKey);
-      const bv = getSortValue(b, sortKey);
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [matchedUsers, sortKey, sortDir]);
-
-  function handleSort(key) {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('desc');
-    }
-  }
 
   // Selected user objects derived from the full page (not just the filtered
   // view), so a search filter never drops an already-selected user.
@@ -178,7 +159,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
     [users, selectedIds],
   );
 
-  const allFilteredSelected = sorted.length > 0 && sorted.every(u => selectedIds.has(u.user_id));
+  const allFilteredSelected = matchedUsers.length > 0 && matchedUsers.every(u => selectedIds.has(u.user_id));
 
   function toggleRow(userId) {
     setSelectedIds(prev => {
@@ -193,9 +174,9 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (allFilteredSelected) {
-        for (const u of sorted) next.delete(u.user_id);
+        for (const u of matchedUsers) next.delete(u.user_id);
       } else {
-        for (const u of sorted) next.add(u.user_id);
+        for (const u of matchedUsers) next.add(u.user_id);
       }
       return next;
     });
@@ -256,7 +237,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
           </button>
 
           <span className="text-gray-500 text-xs">
-            {sorted.length} of {users.length} on page
+            {matchedUsers.length} of {users.length} on page
             {totalUsers > 0 && ` · ${totalUsers} users total`}
           </span>
         </div>
@@ -301,7 +282,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 <th
                   key={col.key}
                   className={`text-${col.align} px-3 py-2.5 cursor-pointer hover:text-gray-200 transition-colors select-none`}
-                  onClick={() => handleSort(col.key)}
+                  onClick={() => setSort(col.key)}
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
@@ -312,7 +293,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map(user => {
+            {matchedUsers.map(user => {
               const isSelected = selectedIds.has(user.user_id);
               return (
               <tr
@@ -351,6 +332,16 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                     </button>
                   ) : (
                     <span className="text-gray-500 italic">guest</span>
+                  )}
+                  {/* T8110: internal/test-account badge -- visible when the Real
+                      pill is off (test accounts shown), so they read as ours. */}
+                  {user.is_test_account && (
+                    <span
+                      className="ml-1.5 inline-block px-1 py-0.5 text-[9px] rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 align-middle"
+                      title="Internal / test account"
+                    >
+                      TEST
+                    </span>
                   )}
                 </td>
 
@@ -397,6 +388,25 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
                   <div className="flex items-center justify-end gap-1.5">
                     <span>{user.last_active_at ? user.last_active_at.slice(0, 10) : '—'}</span>
+                    {/* T8110: per-row mark/unmark as a test account (gesture DB
+                        write). Amber when flagged; toggles the badge in place. */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          await markTestAccount(user.user_id, !user.is_test_account);
+                        } catch (e) {
+                          window.alert(e.message || 'Failed to update test flag');
+                        }
+                      }}
+                      className={`transition-colors ${
+                        user.is_test_account
+                          ? 'text-amber-400 hover:text-amber-300'
+                          : 'text-gray-600 hover:text-amber-400'
+                      }`}
+                      title={user.is_test_account ? 'Unmark as test account' : 'Mark as test account'}
+                    >
+                      <FlaskConical size={12} />
+                    </button>
                     {onUserClick && (
                       <button
                         onClick={() => onUserClick(user.user_id)}

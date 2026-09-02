@@ -51,7 +51,8 @@ describe('AdminScreen mount fetch consolidation (T8020)', () => {
     await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
 
     expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    expect(mockApiFetch).toHaveBeenCalledWith('/api/admin/dashboard');
+    // T8110: dashboard fetch now carries exclude_test (Real pill, default ON).
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/admin/dashboard?exclude_test=true');
 
     // And specifically NOT any of the 5 individual endpoints the old effect hit.
     const urls = mockApiFetch.mock.calls.map(c => c[0]);
