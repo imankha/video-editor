@@ -1,297 +1,447 @@
-# T8360 — UI/IA Design Spec: Split single-clip vs multi-clip drafts into separate views
+# T8360 — Design: Split single-clip vs multi-clip drafts into separate views
 
-**Status:** DESIGN — USER-APPROVAL-GATED (no source code written in this phase)
-**Author:** ui-designer pass, 2026-09-02
-**Feeds implementation of:** T8360 (this task); forward-compat landing spot for T8350
-**Consistent with:** T8130 approved naming (Plays → Clips → Highlight Reels), T8070 per-clip `reel_source_*` staleness data
-
----
-
-## 0. TL;DR (the decisions this spec makes)
-
-1. **Surface shape:** THREE tabs in the existing Home tab bar — **Games | Clips | Highlights**. The published surface **Highlight Reels** stays exactly where it is today (the top-right Gallery button opening `DownloadsPanel`), i.e. it is NOT a fourth tab.
-2. **Single-clip auto-drafts** live on the new **Clips** tab (`SECTION_NAMES.CLIPS = 'Clips'`). It is the existing Reel-Drafts list machinery, scoped to single-clip drafts (`clip_count <= 1`).
-3. **Multi-clip assembled drafts** move to the new **Highlights** tab (`SECTION_NAMES.HIGHLIGHTS = 'Highlights'`) = in-progress multi-clip assemblies. This is the surface that houses the **Build Highlight Reel** button (satisfying T8130's "assembly button moves to the Highlight Reels surface" by placing it on the in-progress sibling of Highlight Reels, on-tab, where its output lands).
-4. **No surface says "Reel Drafts" after the split.** `SECTION_NAMES.DRAFTS` / `DRAFTS_LOWER` are retired from live UI (kept only if a test needs a transitional alias; recommend deletion).
-5. **T8350 landing spot (do NOT build here):** the per-clip staleness cue lives on the **Clips** tab tile (single-clip: on the `DraftTile` status-chip region) and, for multi-clip, as a stated future carrier on the **Highlights** tile — a persistent post-production band that survives the `SegmentedProgressStrip` collapse. Stated, not designed.
+**Status:** APPROVED — implementation in progress. 2026-09-02.
+**Author:** UI Designer agent, 2026-09-02
+**Depends on / consistent with:** T8130 approved naming table (Plays / Clips / Highlight Reels),
+T8070 `auto_project_id` + `reel_source_*`, T8350 (queued next — this doc only reserves its landing spot).
 
 ---
 
-## 1. Current State
+## 0. Decisions Taken (user ruling, 2026-09-02)
 
-### 1.1 Home IA today (`ProjectManager.jsx`)
+**Design APPROVED.**
 
-```
-ProjectManager (Home)
-├── top-right controls (fixed, z-30)          L1032-1051
-│     └── [Highlight Reels] Gallery button  → onOpenDownloads → DownloadsPanel (modal/drawer)
-│                                             (SECTION_NAMES.LIBRARY, ProjectsScreen.openGallery)
-├── Tab bar (two tabs)                         L1149-1191
-│     ├── Games        activeTab='games'       (Gamepad2 icon, GAME color, count badge)
-│     └── Reel Drafts  activeTab='projects'    (FolderOpen, REEL color, SECTION_NAMES.DRAFTS, L1182)
-│           └── disabled when reelDraftsDisabled (L426): no drafts AND no extractable clips
-├── Action row                                 L1193-1216
-│     ├── games:    [+ Add Game]  (success)
-│     └── projects: [+ Build Highlight Reel]  (cyan, disabled unless hasClips, L1209-1213)
-│                     → setShowNewProjectModal → GameClipSelectorModal (multi-select)
-│                     → handleProjectCreated (L992): closes modal + onRefreshProjects, NO navigation
-└── Content
-      ├── games:    GamesListSkeleton / GameTile grouped grid
-      └── projects: filter row + list  (THE COMMINGLED SURFACE)
-            ├── Classification toggle: By Phase | By Game   (L1565, session-only)
-            ├── Created By: All | Auto | Custom             (L1510-1547, session-only)
-            ├── Status / Aspect filters                     (L1490 area)
-            ├── groupedByPhase / groupedProjects (game grouping)
-            └── DraftTile per project
-                  ├── single-clip auto-draft  (T8070 auto_project_id)
-                  └── multi-clip assembled draft
-                        └── "Contains N clips" Layers badge  (DraftTile.jsx:537, only disambiguator)
-                        └── multi-clip drafts sort last within a game group (L691-693)
-```
+**OQ-1 (§10) = Option A (recommended).** In-progress "Highlights" live as a section on the
+Highlight Reels panel (`DownloadsPanel`), with the "Build Highlight Reel" button relocated
+there, exactly as §3.1 Q3 / §4.2 specify. Home stays two tabs (Games | Clips).
 
-Key facts:
-- `activeTab` is `useState` seeded from the URL (`tabFromPath`, L364-366) — `/home/games` → `'games'`, `/home/reels` → `'projects'`. It is **session/URL state, never persisted to the DB** (`feedback_no_persisted_view_state`).
-- `reelDraftsDisabled` (L426) disables the projects tab in the dead-end case; effect L885-889 falls back to Games if the active tab becomes disabled.
-- **Highlight Reels (published) is already a separate surface** — a `DownloadsPanel` overlay, not a tab. The tab bar today is only Games | Reel Drafts.
-- `creationFilter='auto'` (L1524) already isolates auto-created drafts, but auto vs custom is **not the same axis as single vs multi-clip** (a user CAN manually build a single-clip reel; an auto-draft is always single-clip but the reverse isn't guaranteed). The clean structural axis is `clip_count`, the same axis `DraftTile.jsx:537` and the L691 sort already use.
+**Rename ruling — STOP the `auto_project_id` clearing on rename.** The user required renaming
+a single-clip draft to NEVER move it between surfaces (no teleport Clips → Highlights). Investigated
+whether `UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?` in
+`update_project` (`projects.py:988-990`) serves either candidate live purpose before removing it:
 
-### 1.2 The problem (from the task)
+1. **"Freezes a user-chosen name against auto-naming regeneration"? NO — dead since
+   commit `73291399` (2026-05-06), pre-dates this task.** That commit deleted the
+   `is_auto_created` branch from `getProjectDisplayName` (`clipDisplayName.js`) specifically
+   because it was overriding a user's rename by re-deriving "Brilliant Interception" from
+   clip rating+tags on every render. `project.name` is now the unconditional single source of
+   truth for display, auto-created or not. The comment left on `projectsStore.js:234-236`
+   ("clear is_auto_created so getProjectDisplayName returns the user-chosen name") describes
+   behavior that no longer exists — stale by omission, not by intent. This purpose is gone;
+   nothing to decouple.
+2. **T4800 draft-dies-with-clip lifecycle? NO — the clearing actively BREAKS it, it does not
+   serve it.** `delete_raw_clip` (`clips.py:1521-1531`) reads `raw_clips.auto_project_id`
+   FRESH from the DB at delete time and only calls `_delete_auto_project` (T4800's cleanup)
+   when that link is still set. Once rename clears the link, deleting the draft's last source
+   clip no longer invokes cleanup AT ALL — the renamed draft survives forever as a **0-clip
+   orphan**, which is exactly the bug class T4800 exists to eliminate. So today, renaming an
+   auto-draft silently disables its own T4800 cleanup; it is a live bug, not a feature to
+   preserve.
 
-One list holds two conceptually different objects: per-clip work (single-clip auto-drafts) and assembled highlight videos (multi-clip). They are told apart only by a small "Contains N clips" badge and a sort-last rule. T8130 could not rename the tab to "Clips" (misrepresents multi-clip entries) or to "Highlight Reel Drafts" (misrepresents single-clip entries), so the split was deferred here.
+**Conclusion: no decoupling needed — there is no live purpose to keep.** Both backend
+(`projects.py:986-990`) and the mirrored frontend clear in `projectsStore.js:234-238`
+(`renameProject`, which also sets `is_auto_created: false` locally) are removed outright.
+Renaming now only updates `name`; `is_auto_created` / `raw_clips.auto_project_id` are untouched
+by rename, so routing (by `is_auto_created`, per §3 "The signal we can trust") never flips on
+rename.
+
+**Bonus fix (side effect of the same root cause):** `update_raw_clip`'s create-reel dedup
+(`clips.py:1427-1436`) also reads live `raw_clips.auto_project_id` to decide whether "Create
+Reel" on an already-drafted clip should reuse the existing auto-project or mint a new one. With
+the clearing removed, re-tapping Create Reel on a renamed clip now correctly reuses its existing
+draft instead of silently minting a duplicate second draft (previously masked by the same stale
+link this task removes).
+
+**Accepted consequence (explicit, per user instruction):** with the clearing removed, a renamed
+single-clip draft **still dies with its source clip per T4800** — `is_auto_created` and the
+`raw_clips.auto_project_id` link persist for the draft's whole lifetime regardless of rename, so
+deleting its one source clip deletes the draft same as before. This is consistent with a renamed
+single-clip draft staying a **Clip** (never promoted to a standalone multi-clip Highlight by the
+act of renaming) and is fine by default — no user-facing change to when a Clip disappears, only
+a fix to where it lives while it's alive.
+
+**Implementation scope added by this ruling:**
+- `src/backend/app/routers/projects.py` — delete the `UPDATE raw_clips SET auto_project_id = NULL ...` block from `update_project` (~L986-990).
+- `src/frontend/src/stores/projectsStore.js` — `renameProject` (~L218-239): stop setting `is_auto_created: false`; only `name` changes in the optimistic local update.
+- No migration needed (no schema change, behavior-only).
 
 ---
 
-## 2. Target State
+## 1. One-line recommendation
 
-### 2.1 Surface shape decision — THREE tabs: Games | Clips | Highlights
+**Rename the existing single Home tab in place: `Reel Drafts` → `Clips`, keep it as the
+single-clip surface, and MOVE the multi-clip world (the "Build Highlight Reel" assembly button
++ its resulting multi-clip drafts) onto the existing Highlight Reels surface (`DownloadsPanel`) as
+an in-progress "Highlights" section above the published reels — so Home stays a two-tab structure
+(Games | Clips) and the "Highlights → Highlight Reels" lifecycle lives together on one surface.**
 
-**Recommendation:** split the single commingled projects tab into two sibling tabs on the SAME existing tab bar, giving **Games | Clips | Highlights**. Keep **Highlight Reels** (published) exactly where it is: the top-right Gallery button → `DownloadsPanel`.
+---
 
-**Why tabs, not "one tab / two sections" and not "a filter within one list":**
+## 2. Current state
 
-| Option | Verdict | Reason against existing structure |
-|--------|---------|-----------------------------------|
-| **A. Two tabs (Clips, Highlights) + existing Games** ✅ | **CHOSEN** | The tab bar is already the app's top-level IA lever (Games ↔ projects). Adding a third peer tab is the smallest conceptual delta and reuses every existing mechanism: URL routing (`tabFromPath`), count badges, the dead-end guard, and the per-tab action row. Two genuinely different nouns get two genuinely different homes — exactly the user's stated intent (split, don't rename). |
-| B. One tab, two labeled sections | Rejected | Re-creates the commingling problem one level down: the assembly button (Build Highlight Reel) has no unambiguous home on a two-section tab, and the By-Phase/By-Game classification toggle would have to run inside each section separately or span both (both are worse than today). A section header is weaker signal than a tab; the user explicitly wanted separate VIEWS. |
-| C. A filter within one list (extend Created-By) | Rejected | This is essentially today's state. `creationFilter` already exists and did not resolve the ambiguity — a filter is session-ephemeral and defaults to "All", so the default view is STILL commingled. It also conflates the auto/custom axis with the single/multi axis (see §1.1). A user who lands on the projects tab must not see a mixed list by default. |
+### Home IA today (verified in `ProjectManager.jsx`)
+- Home has exactly TWO tabs, styled like `ModeSwitcher` (`ProjectManager.jsx:1150-1191`):
+  - **Games** — `/home/games`, id `games`.
+  - **Reel Drafts** — `/home/reels`, id `projects`, label `SECTION_NAMES.DRAFTS` (`displayNames.js:2`).
+- Tab is URL/session state only, never persisted (`tabFromPath`, `:361-368`; `setActiveTab`
+  `replaceState`, `:433-439`). No persisted-view-state migration exists to worry about.
+- **Highlight Reels** is NOT a Home tab. It is the published surface = `DownloadsPanel`, opened via
+  the fixed top-right `onOpenDownloads` button (`:1035-1051`), header `SECTION_NAMES.LIBRARY`
+  (`DownloadsPanel.jsx:722`).
 
-**Where Highlight Reels (published) sits relative to the tabs:** unchanged. It remains the top-right Gallery button opening `DownloadsPanel` (`SECTION_NAMES.LIBRARY`). Rationale: it is a celebration/output surface (published, per-profile, `ReelTile` idiom, no draft chrome) and is already visually separated as an overlay. Promoting it to a fourth tab is out of scope for T8360 and would crowd the tab bar to four items on mobile. The naming pair the user chose is honored across the split: **Highlights** (in-progress multi-clip, a tab) → **Highlight Reels** (published, the Gallery overlay).
+### The Reel Drafts tab is genuinely two content types in one list
+- **Single-clip auto-drafts:** created by tapping "Create Reel" on one clip (T8070
+  `auto_project_id`). Backend flags them `is_auto_created = true` — computed as
+  `EXISTS(SELECT 1 FROM raw_clips rc WHERE rc.auto_project_id = p.id)` (`projects.py:361-364`).
+- **Multi-clip assembled drafts:** created by the "Build Highlight Reel" button (`:1205-1215`,
+  renamed from "New Reel" by T8130) → `GameClipSelectorModal` multi-select → `POST /projects/from-clips`,
+  which lands back on this SAME tab (`handleProjectCreated`, `:992-1003`; `is_auto_created = false`).
+- Today disambiguated only by a `Layers` "Contains N clips" badge when `clip_count > 1`
+  (`DraftTile.jsx:534-548`), a "sort last" comment (`ProjectManager.jsx:689-693`), and the
+  **Created By: Auto / Custom** filter chips (`:1523-1546`, backed by `is_auto_created`,
+  `filteredProjects` `:522-526`).
+- Dead-end guard: `reelDraftsDisabled = !loading && !gamesLoading && projects.length===0 && !hasClips`
+  (`:426-427`); disables the tab (`:1171-1172`) and bounces `activeTab` back to Games (`:885-889`).
 
-**Resulting tab bar:**
+### The signal we can trust
+`is_auto_created` (auto_project_id link) is the authoritative "this is a single-clip auto-draft"
+flag and is ALREADY computed on every project row and shipped to the client. It is the clean
+routing key for the split — NOT `clip_count > 1` alone (an auto-draft is conceptually single-clip
+even in the T4800 window before its last source clip is deleted; and a `from-clips` project with
+one selected clip is conceptually a Highlight, not an auto-draft). **Route by `is_auto_created`,
+not by `clip_count`.** `clip_count` remains the display badge only.
+
+### Naming state after T8130 (binding)
+| Concept | String today | Source of truth |
+|---|---|---|
+| Per-clip work | (n/a as tab) | approved vocabulary: **"Clips"** |
+| In-progress multi-clip assembly | "Reel Drafts" (mixed) | user 2026-09-02: **"Highlights"** |
+| Published multi-clip video | "Highlight Reels" | `SECTION_NAMES.LIBRARY` |
+| Assembly button | "Build Highlight Reel" | `ProjectManager.jsx:1213` |
+
+---
+
+## 3. Target state
+
+### 3.1 Resolved open questions
+
+**Q1 — IA shape: rename the existing tab in place; do NOT add a third Home tab.**
+Home stays **Games | Clips** (two tabs). The multi-clip surface is not a third Home tab — it moves
+to the already-existing Highlight Reels surface (`DownloadsPanel`). Justification:
+- A third Home tab (Games | Clips | Highlights) breaks the deliberate two-tab `ModeSwitcher`
+  symmetry, adds a second dead-end-tab problem to solve (`reelDraftsDisabled` currently guards one
+  tab), and splits the "Highlights → Highlight Reels" lifecycle across two surfaces (a Home tab AND
+  the Downloads panel) — the exact commingling smell this task exists to remove, relocated one level
+  up. The user's naming decision ("Highlights" pairs with published "Highlight Reels") is itself the
+  argument for co-locating them: in-progress and published multi-clip reels belong on ONE surface.
+- Home tab id stays `projects` and URL stays `/home/reels` (avoids touching `tabFromPath`,
+  `initialTab`, the tab-hint path, and every e2e deep-link) — **only the LABEL changes** to `Clips`.
+
+**Q2 — single-clip auto-drafts stay a drafts-style surface, renamed "Clips", NOT a new per-clip
+Focus/Overlay stage editor.** They keep the exact `DraftTile` + stage-carousel rendering they have
+today (poster tile, `SegmentedProgressStrip` deep-link into Focus/Overlay, By Phase / By Game
+toggle). Justification: the tiles ALREADY expose per-clip Focus/Overlay stage progress via the
+segmented strip and stage rows (`DraftStageRows` / `groupedByPhase`); building a parallel
+`ClipDetailsEditor`-style control would duplicate that pipeline surface for no new capability and is
+out of scope. The change here is subtractive (remove the multi-clip entries + the now-redundant
+Created-By filter) + a rename, not a new editor.
+
+**Q3 — the assembly flow AND multi-clip "Highlights" drafts both move to the Highlight Reels
+surface.** "Build Highlight Reel" (the `GameClipSelectorModal` entry) relocates from the Clips tab
+onto `DownloadsPanel` (matching T8130's approved table row "Assembly button location → moves to the
+Highlight Reels surface"). The multi-clip drafts it produces render on that SAME surface, in a new
+**"Highlights" (in-progress)** section that sits ABOVE the published Highlight Reels list.
+- **"Highlights" vs "Highlight Reels" boundary (settled):** *Highlights* = in-progress multi-clip
+  assemblies (`is_auto_created = false`, unpublished). *Highlight Reels* = published (`is_published`).
+  They live on one surface (`DownloadsPanel`) as two stacked sections of the same lifecycle. The word
+  "Highlights" is a SECTION HEADING on that surface, not a new Home tab and not a rename of the
+  published `SECTION_NAMES.LIBRARY`.
+- **Assembly-flow copy scope:** the button KEEPS "Build Highlight Reel" (approved, unchanged). The
+  `GameClipSelectorModal` internal copy ("Create a project from library clips", "Select games")
+  is out of scope for the string sweep except where it literally says "project"/"reel draft" in
+  user-facing headings — see §6 sweep list. "Highlights" does NOT extend into the modal's field
+  labels (avoids churn; the modal already reads as reel assembly).
+
+**Q4 — transition + empty states:** existing mixed drafts self-route by `is_auto_created` with zero
+migration (both surfaces read the same `projects` array, already client-side). See §5.
+
+**Q5 — T8350 landing spot:** reserved on the Clips-tile scrim and on the new Highlights tile. See §7.
+
+### 3.2 Surface map (target)
 
 ```
-Home tab bar (L1149-1191 area)
-┌────────────┬────────────┬──────────────┐
-│  Games     │  Clips     │  Highlights  │
-│  Gamepad2  │  Film/Clap │  Layers      │
-│  GAME      │  REEL      │  REEL        │        top-right: [Highlight Reels] → DownloadsPanel
-└────────────┴────────────┴──────────────┘
-   activeTab:  'games'      'clips'        'highlights'
-   URL:        /home/games  /home/clips    /home/highlights
+HOME (two tabs, unchanged structure)
+├── Games            /home/games   id=games
+└── Clips            /home/reels   id=projects   ← was "Reel Drafts"
+        renders ONLY projects where is_auto_created === true
+        (single-clip auto-drafts; DraftTile + stage rows, unchanged tile chrome)
+        NO "Build Highlight Reel" button here anymore
+        NO "Created By: Auto/Custom" filter here anymore (all rows are Auto now)
+
+HIGHLIGHT REELS SURFACE  (DownloadsPanel, opened by top-right button — unchanged entry)
+├── [Build Highlight Reel]  ← relocated assembly button (opens GameClipSelectorModal)
+├── Highlights (in-progress)      ← NEW section: projects where is_auto_created === false
+│       renders DraftTile (multi-clip), same stage strip + By Phase/By Game affordances
+└── Highlight Reels (published)   ← existing DownloadsPanel content, unchanged
 ```
 
-Icon guidance (Lucide, per style guide §Icons):
-- **Clips** — `Film` (or `Clapperboard`); a per-clip work item. Distinct from Games' `Gamepad2` and from Highlights.
-- **Highlights** — `Layers` (already the multi-clip semantic in `DraftTile.jsx:545`) — the multi-clip stack idiom the user already reads as "multiple clips assembled".
-- Keep the existing REEL color token for both Clips and Highlights (they are the two halves of the old projects tab); Games keeps GAME. Count badge pattern (L1161-1167) reused verbatim per tab.
+---
 
-### 2.2 What each surface contains
+## 4. Concrete layouts
 
-| Surface | Content | Populated from | Empty when |
-|---------|---------|----------------|------------|
-| **Games** | game footage tiles (unchanged) | `games` | no games |
-| **Clips** (`SECTION_NAMES.CLIPS`) | single-clip drafts (`clip_count <= 1`), incl. all T8070 auto-drafts | `projects.filter(clip_count <= 1)` | no single-clip drafts |
-| **Highlights** (`SECTION_NAMES.HIGHLIGHTS`) | multi-clip assembled drafts (`clip_count > 1`), in progress toward publish | `projects.filter(clip_count > 1)` | no multi-clip drafts |
-| **Highlight Reels** (`SECTION_NAMES.LIBRARY`, unchanged) | PUBLISHED reels | `DownloadsPanel` (`/api/downloads`) | no published reels |
+Reuse existing components verbatim; the split is a routing/label change, not new chrome.
 
-**Split axis = `clip_count`**, the exact same field `DraftTile.jsx:537` badges on and the L691 sort keys on. This is a pure client-side partition of the already-fetched `projects` array; **no new backend field is required** (`clip_count` is already on the project list response). The "Contains N clips" badge (`DraftTile.jsx:537`) becomes redundant on the Highlights tab (every tile there is multi-clip by definition) — see §2.5.
+### 4.1 Home — Clips tab (desktop ≥ sm and mobile 375px)
 
-### 2.3 Does the multi-clip assembly flow move? — YES, onto the Highlights tab
+Tab bar (`ProjectManager.jsx:1150-1191`) — only the label token changes:
 
-- **Build Highlight Reel button** moves from the (retired) Reel-Drafts action row to the **Highlights** tab action row. On the **Clips** tab, the action row shows **no assembly button** — creating a single-clip draft is not a Home gesture (it originates in Annotate via "Create Reel" on a clip, T8070). If a Clips-tab action is wanted, the recommended default is **none** (keep the row empty / omit it), because the Clips-populating gesture lives in Annotate; see Open Question Q2.
-- **`handleProjectCreated` (L992)** currently closes the modal + refreshes and does NOT navigate. Recommended change: after a successful multi-clip build, **switch to the Highlights tab** (`setActiveTab('highlights')`) so the freshly-built draft is visible where it now lives, instead of silently landing on a tab the user may not be viewing. This is a navigation-on-explicit-gesture (the Build submit), not reactive persistence — allowed.
-- **Residual "New Reel" / "Reel Drafts" copy:** all retired. The button already reads "Build Highlight Reel" (T8130). `SECTION_NAMES.DRAFTS`/`DRAFTS_LOWER` are removed from live UI; the `creationFilter` "Custom" title string that interpolates `SECTION_NAMES.DRAFTS_LOWER` (L1542) is re-worded (see §2.4).
+```
+┌───────────────────────────────────────────────┐
+│  [🎮 Games  12]   [📂 Clips  7]                 │   ← REEL.bg pill on active
+└───────────────────────────────────────────────┘
+```
+- Active tab keeps `REEL.bg text-white shadow-lg`; label = `SECTION_NAMES.CLIPS` (new token, §6).
+- Count pill unchanged (`:1183-1189`) — now counts only auto-drafts (see §5 count note).
+- **No action button row** under the tab for Clips (the `Build Highlight Reel` `<Button variant="cyan">`
+  block `:1204-1215` is REMOVED from this tab; the `activeTab === 'games'` Add Game branch is
+  untouched). This removes the awkward "create a multi-clip thing from the single-clip surface".
 
-**Why Highlights is the assembly home and not "under Highlight Reels":** T8130's table says the assembly button "moves to the Highlight Reels surface." The literal Highlight Reels surface is the published `DownloadsPanel` — but you cannot assemble an in-progress draft INTO a published-only surface (drafts have Focus/Overlay pipeline chrome; `ReelTile` deliberately has none, per style guide §Published-reel tile). The faithful realization of T8130's intent is: the in-progress multi-clip drafts get their own surface named **Highlights** that pairs with **Highlight Reels**, and that Highlights surface hosts the Build button. A finished Highlights draft, once published, graduates into Highlight Reels — the same draft→published relationship that already exists, now with names that read as a progression.
+Body: identical to today's drafts body (`:1433-1696`) minus the Created-By filter group
+(`:1509-1548`, now vacuous — every row is Auto) and minus the multi-clip sort-last special case
+(`:689-693`, now moot — no multi-clip rows here). Filters that remain useful: **Phase**
+(`:1446-1477`) and **Aspect Ratio** (`:1479-1507`); **By Phase / By Game** toggle unchanged
+(`:1565-1586`).
 
-### 2.4 `SECTION_NAMES` changes (extend, do not duplicate strings)
+Mobile 375px: unchanged — tabs already wrap/compact (`px-3 py-2 sm:px-4`), tiles are `40vw` posters
+in snap carousels (`DraftTile` / `CardCarousel`), 44px coarse-pointer floors already in place.
+
+### 4.2 Highlight Reels surface — DownloadsPanel (`DownloadsPanel.jsx`, header `:722`)
+
+```
+┌─ Highlight Reels ──────────────────────────────── [X] ┐
+│                                                        │
+│   [ + Build Highlight Reel ]   ← relocated assembly    │  cyan Button, icon={Plus}
+│                                                         │
+│   HIGHLIGHTS (IN PROGRESS)          3                   │  section heading + count pill
+│   ┌────┐ ┌────┐ ┌────┐                                  │  DraftTile row (CardCarousel)
+│   │▓▓▓▓│ │▓▓▓▓│ │▓▓▓▓│   ← multi-clip DraftTiles        │  Layers "N clips" badge stays
+│   └────┘ └────┘ └────┘      (is_auto_created===false)   │
+│                                                         │
+│   HIGHLIGHT REELS                                       │  existing published content
+│   ┌────┐ ┌────┐ …           (unchanged ReelTile rows)   │
+│   └────┘ └────┘                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+Tailwind, following existing conventions:
+- **Build button** (relocated, top of panel body):
+  ```jsx
+  <Button variant="cyan" size="lg" icon={Plus}
+          disabled={!hasClips}
+          title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
+          onClick={() => setShowNewProjectModal(true)}>
+    Build Highlight Reel
+  </Button>
+  ```
+  Same props as the current `ProjectManager.jsx:1205-1215` block — moved, not rewritten.
+  `GameClipSelectorModal` + `handleProjectCreated` move with it (or stay in `ProjectManager` and are
+  passed a callback that opens the panel — see §8 risk on component ownership).
+- **Section heading** (borderless label row, matches the style-guide "borderless inline filter rows"
+  / phase-section heading pattern `ProjectManager.jsx:1616-1623`):
+  ```jsx
+  <div className="flex items-center gap-2 px-3 py-2 min-h-11">
+    <span className="text-sm font-medium text-gray-200 flex-1">Highlights</span>
+    <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">{count}</span>
+  </div>
+  ```
+- **Highlights tiles:** reuse `DraftTile` exactly as the Clips tab does (poster, `Layers` "N clips"
+  badge `:534-548`, `SegmentedProgressStrip` deep-link into Focus/Overlay). Wrapped in `CardCarousel`
+  to match the poster-row idiom of both DraftTile and ReelTile surfaces.
+- **Published `Highlight Reels`** list below: byte-for-byte unchanged.
+
+Mobile 375px: `DownloadsPanel` is already a full-height panel; the new section stacks above the
+published list with the same `CardCarousel` horizontal snap behavior. Build button is full-width
+(`size="lg"`), ≥44px.
+
+---
+
+## 5. Empty states + transition
+
+### 5.1 Transition (existing user, mixed drafts, first load after ship)
+No migration, no persisted-state concern. Both surfaces read the same in-memory `projects` array and
+partition it client-side by `is_auto_created`:
+- `is_auto_created === true`  → Clips tab.
+- `is_auto_created === false` → Highlights section on the Highlight Reels surface.
+Every existing item lands on exactly one correct surface by that flag on the first render. A user who
+had 4 auto-drafts + 3 assembled drafts sees 4 tiles on Clips and 3 under Highlights — nothing is lost
+or duplicated.
+
+**Count semantics (must move together):** the Clips tab count pill (`:1183-1189`) and the
+`reelDraftsDisabled` guard must count **auto-drafts only** now, or the tab shows "7" but renders 4.
+Introduce a derived `clipDrafts = projects.filter(p => p.is_auto_created)` and drive the tab count,
+the "Your Clips / Showing N of M" heading (`:1553-1556`), and the dead-end guard off it. The
+Highlights section counts `projects.filter(p => !p.is_auto_created)`.
+
+### 5.2 Empty states
+
+| Surface | Condition | Copy / behavior |
+|---|---|---|
+| **Clips tab (populated → empty)** | no auto-drafts but user has extracted clips | Keep today's structure at `:1428-1432` but re-copy: heading **"No clips yet"**, sub **"Tap 'Create Reel' on a clip in Annotate to start one."** (points at the real single-clip gesture, not the assembly button which no longer lives here). |
+| **Clips tab (dead-end)** | `clipDrafts.length===0 && !hasClips` | Tab stays disabled with tooltip **"Extract clips from a game first using Annotate mode"** (existing `:1172` copy) and bounces to Games — see §5.3. |
+| **Highlights section** | no in-progress multi-clip drafts | Section renders a one-line placeholder under the Build button: **"No highlights in progress. Tap Build Highlight Reel to assemble one."** (Do NOT hide the Build button — it is the surface's entry point.) The published Highlight Reels list below shows its own existing empty/loading states, unchanged. |
+| **Highlight Reels surface (fully empty)** | no highlights AND no published reels | Build button + the "No highlights in progress" line + DownloadsPanel's existing empty published state. No dead-end here (the panel is opened deliberately, not a persistent tab that can trap the user). |
+
+### 5.3 Dead-end-tab logic under the new shape (`reelDraftsDisabled`, `:426-427`, `:885-889`)
+- The guard's PURPOSE is preserved but its subject narrows from "any draft" to "any single-clip
+  draft": `clipsTabDisabled = !loading && !gamesLoading && clipDrafts.length===0 && !hasClips`.
+  (Renaming the identifier is optional per greppability; if kept as `reelDraftsDisabled`, add a
+  comment. Recommend renaming to `clipsTabDisabled` since the surface it guards is now "Clips".)
+- The Games-bounce effect (`:885-889`) and the disabled-tab tooltip (`:1171-1172`) are unchanged in
+  behavior; they just key off the narrowed condition. A user with only multi-clip Highlights but no
+  auto-drafts now correctly sees the Clips tab as a dead end (there ARE no clips) and their Highlights
+  live on the always-reachable Downloads surface — which is strictly better than today, where those
+  multi-clip drafts were the only thing keeping an otherwise-empty per-clip tab alive.
+
+---
+
+## 6. Exact `displayNames.js` / string changes + full stale-string sweep
+
+### 6.1 `src/frontend/src/config/displayNames.js`
+Extend, do not duplicate. `DRAFTS`/`DRAFTS_LOWER` become **obsolete as a tab label** but are still
+referenced by quest copy and breadcrumbs (see sweep). Target:
 
 ```js
-// src/frontend/src/config/displayNames.js  (TARGET)
 export const SECTION_NAMES = {
-  // NEW — single-clip work items (formerly the single-clip half of Reel Drafts)
+  // Single-clip auto-draft surface (Home tab). Was DRAFTS = 'Reel Drafts' (T8360).
   CLIPS: 'Clips',
   CLIPS_LOWER: 'clips',
 
-  // NEW — in-progress multi-clip assemblies (formerly the multi-clip half of Reel Drafts)
+  // In-progress multi-clip assemblies, shown on the Highlight Reels surface (T8360).
   HIGHLIGHTS: 'Highlights',
   HIGHLIGHTS_LOWER: 'highlights',
 
-  // UNCHANGED — the published surface (Gallery / DownloadsPanel), renamed by T8130
+  // Published multi-clip reels (DownloadsPanel header). Unchanged.
   LIBRARY: 'Highlight Reels',
-
-  // REMOVED — no surface says "Reel Drafts" after the split:
-  //   DRAFTS: 'Reel Drafts',
-  //   DRAFTS_LOWER: 'reel drafts',
 };
 ```
+- **Remove `DRAFTS` / `DRAFTS_LOWER`** once every consumer is swept (below). No surface may be left
+  rendering "Reel Drafts".
 
-- Every current `SECTION_NAMES.DRAFTS` read site must be re-pointed to `CLIPS` or `HIGHLIGHTS` per which surface the string now describes (13 hits in `ProjectManager.jsx`; others in `questDefinitions`, `ClipsSidePanel`, `ClipDetailsEditor`, `Breadcrumb` — see §3).
-- The "Custom" creation-filter title (L1542, `Manually created ${SECTION_NAMES.DRAFTS_LOWER}`) becomes `Manually created ${SECTION_NAMES.HIGHLIGHTS_LOWER}` if the Created-By filter survives on the Highlights tab (it likely does — a user can still auto vs manually distinguish multi-clip origins), or is dropped on the Clips tab (all Clips entries are auto-origin single-clip; the auto/custom axis is meaningless there — see Q3).
+### 6.2 Stale-string sweep (every surface that must change or be re-pointed)
 
-### 2.5 Component-level target (what changes, how)
-
-```
-ProjectManager (Home)
-├── tab bar: THREE buttons  Games | Clips | Highlights
-│     - add 'clips' + 'highlights' to the activeTab union; retire 'projects'
-│     - tabFromPath: /home/games→games, /home/clips→clips, /home/highlights→highlights
-│     - HOME_TAB_PATHS (editorStore.js:48) gains /home/clips, /home/highlights
-│     - reelDraftsDisabled logic splits into clipsDisabled / highlightsDisabled (see §2.6)
-├── action row (per tab)
-│     - games:      [+ Add Game]                       (unchanged)
-│     - clips:      (no assembly button; empty/omitted — Q2)
-│     - highlights: [+ Build Highlight Reel]           (moved here, unchanged label/behavior)
-├── content: shared list renderer, fed a pre-partitioned projects subset
-│     - clipsProjects      = projects.filter(p => (p.clip_count ?? 1) <= 1)
-│     - highlightsProjects = projects.filter(p => (p.clip_count ?? 1)  > 1)
-│     - the existing groupedByPhase / groupedProjects / filter row / classification
-│       toggle all run UNCHANGED over whichever subset the active tab supplies
-├── DraftTile
-│     - Clips tab: single-clip tiles; the "Contains N clips" badge NEVER shows (clip_count<=1) — no change needed
-│     - Highlights tab: multi-clip tiles; the "Contains N clips" badge (L537) is now REDUNDANT
-│       (every tile is multi-clip). Recommendation: KEEP the badge (it still conveys the exact N,
-│       which varies per Highlights tile and is useful) but it is no longer load-bearing for
-│       disambiguation. Do not remove in this task unless the user prefers a cleaner tile (Q4).
-└── DownloadsPanel (Highlight Reels): UNCHANGED
-```
-
-The heavy list machinery (By Phase/By Game, phase sections, game grouping, status/aspect filters, `CardCarousel` rows, `SegmentedProgressStrip`) is **reused verbatim** — the only new thing is the `clip_count` partition that decides which subset feeds it, plus the third tab plumbing. This keeps the reviewable diff small and avoids reinventing draft-list code (per the task's "reuse, don't reinvent" note).
-
-### 2.6 Dead-end guard, split in two
-
-Today `reelDraftsDisabled` (L426) covers one tab. After the split:
-- **Clips tab disabled** when `!loading && !gamesLoading && clipsProjects.length === 0 && !hasClips` — i.e. no single-clip drafts AND no extractable clips to make one. (Same shape as today.)
-- **Highlights tab disabled** when `!loading && !gamesLoading && highlightsProjects.length === 0 && !hasClips` — no multi-clip drafts AND nothing to build one from.
-- The L885 fallback effect generalizes: if the active tab becomes disabled, fall back to the first enabled tab in order **Games → Clips → Highlights** (Games is always enabled once a game exists; a brand-new user with zero games lands on Games, which shows the Add-Game empty state — unchanged behavior).
+| File:line | Today | Action |
+|---|---|---|
+| `config/displayNames.js:2-3` | `DRAFTS`/`DRAFTS_LOWER = 'Reel Drafts'` | Replace with `CLIPS`/`HIGHLIGHTS` tokens above. |
+| `components/ProjectManager.jsx:1182` | tab label `SECTION_NAMES.DRAFTS` | → `SECTION_NAMES.CLIPS`. |
+| `ProjectManager.jsx:1415,1420,1430` | Loading/error/empty "reel drafts" | → `CLIPS_LOWER` + re-copy per §5.2. |
+| `ProjectManager.jsx:1553-1556` | "Your Reel Drafts" / "Showing N of M Reel Drafts" | → `CLIPS` and count `clipDrafts`. |
+| `ProjectManager.jsx:1204-1215` | Build Highlight Reel button block | **Relocate** to DownloadsPanel (§4.2). |
+| `ProjectManager.jsx:1509-1548` | Created By: Auto/Custom filter + `:1542` "Manually created reel drafts" title | **Remove** the filter group from the Clips tab (vacuous — all Auto). Drop `creationFilter` from `filteredProjects` for this surface. |
+| `ProjectManager.jsx:689-693` | multi-clip "sort last" special case | Remove/simplify (no multi-clip rows on Clips). |
+| `stores/editorStore.js:95` | `PROJECT_MANAGER.label = SECTION_NAMES.DRAFTS` (breadcrumb/mode label) | → `SECTION_NAMES.CLIPS`. |
+| `App.jsx:928` | `breadcrumbType={SECTION_NAMES.DRAFTS}` | → `SECTION_NAMES.CLIPS`. |
+| `components/shared/Breadcrumb.jsx:9` | doc comment "'Games' or 'Reel Drafts'" | → "'Games' or 'Clips'". |
+| `config/questDefinitions.jsx:163,169` | "Switch to [Reel Drafts]…" / "under Reel Drafts" | → `SECTION_NAMES.CLIPS`. **Coordinate with T7620 tutorial copy** (CLAUDE/T8130 note: guided path must say the same words). |
+| `questDefinitions.jsx:84,176` | comments/"Reel Draft card" preview copy | Re-word to "Clip" (single-clip context) — verify the quest still points at the right surface. |
+| `DownloadsPanel.jsx` (new) | — | Add Build button + Highlights section (§4.2). |
+| **Tests** `ProjectManager.homeTabDefaults.test.jsx:91,98,103-104,122,128-140` | assert on `/Reel Drafts/i`, "Build Highlight Reel" on the drafts tab | Update to `Clips` tab + assert Build button is NOT on Home (moved). |
+| **Tests** `config/questDefinitions.test.jsx:9,15-17` | expects `/Reel Drafts/` | → `/Clips/`. |
+| Comments only (no UI): `ProjectManager.jsx:361,420,689,869,880`; `DraftTile.jsx:27`; `utils/draftStage.js:1`; `settingsStore.js:28`; `utils/timeFormat.js:115`; `ClipsSidePanel.jsx:296`; `ClipDetailsEditor.jsx:121`; `constants/aspectRatios.test.js:9`; `CropOverlay.test.jsx:31-32`; `*.gameClock.test.jsx:5` | "Reel Drafts" in comments | Update opportunistically for accuracy; non-blocking (not user-visible). |
+| **e2e** (grep `Reel Drafts` / `New Reel` in `src/frontend/e2e/`) | nav-tab locators | Sweep in full (T8130 already swept "My Reels"/"New Reel" specs; mirror that for the tab label). |
 
 ---
 
-## 3. Implementation Plan (file-by-file — decision-oriented, not code)
+## 7. T8350 landing spot (reserve only — do NOT design the cue)
 
-Anchors below are verified against the current tree.
+T8350 is the per-clip staleness visual for multi-clip reels (`reel_source_*` mismatch). Known trap:
+`SegmentedProgressStrip.jsx:43` collapses per-clip segments once `has_working_video || has_final_video`,
+and `DraftTile.jsx:630` suppresses the strip entirely in the ready-to-publish state — so a PRODUCED
+multi-clip tile has no per-clip carrier for a staleness cue.
 
-1. **`src/frontend/src/config/displayNames.js`** — add `CLIPS`/`CLIPS_LOWER`, `HIGHLIGHTS`/`HIGHLIGHTS_LOWER`; remove `DRAFTS`/`DRAFTS_LOWER` (or keep a transitional alias only if a test blocks — recommend clean removal).
-
-2. **`src/frontend/src/stores/editorStore.js:48`** — `HOME_TAB_PATHS` gains `/home/clips`, `/home/highlights`. `modeFromPath` (L383 area) must map all three to `PROJECT_MANAGER`. `editorStore.test.js:103-119` asserts these paths — update in the same commit.
-
-3. **`src/frontend/src/components/ProjectManager.jsx`** (the bulk):
-   - `tabFromPath` (L364-366): map `/home/clips`→`'clips'`, `/home/highlights`→`'highlights'`; retire `/home/reels`→`'projects'`. Decide the redirect for a legacy `/home/reels` deep link (recommend → `/home/clips`, the higher-traffic single-clip surface; see Q1).
-   - `initialTab` / `setActiveTab` (L430-439): three-way path mapping; default when bare `/home` → `clips` if `clipsProjects.length` else `games` (recommend, mirrors today's projects-first default; Q1).
-   - `reelDraftsDisabled` (L426) → `clipsDisabled` + `highlightsDisabled` (§2.6). Fallback effect (L885-889) generalized to first-enabled-tab order.
-   - Tab bar (L1149-1191): add the third `<button>`; three count badges. Icons per §2.1.
-   - Action row (L1193-1216): move Build Highlight Reel to the `highlights` branch; `clips` branch has no assembly button (Q2).
-   - Content partition: derive `clipsProjects` / `highlightsProjects` from `projects` by `clip_count`; feed the existing grouping/filter/list block by active tab. The L691-693 "multi-clip sort last" rule becomes moot within each subset (kept harmless).
-   - `handleProjectCreated` (L992): after build, `setActiveTab('highlights')` (Q2/navigation).
-   - Re-point all 13 `SECTION_NAMES.DRAFTS`/`DRAFTS_LOWER` hits (headings L1553-1556, creation-filter title L1542, etc.) to `CLIPS`/`HIGHLIGHTS` per surface.
-
-4. **`src/frontend/src/components/DraftTile.jsx:537`** — no functional change required (badge already gated on `clip_count > 1`, which is only ever true on the Highlights tab). Optional cleanup deferred to Q4.
-
-5. **`src/frontend/src/config/questDefinitions.jsx` + `src/frontend/src/data/questDefinitions.js`** — 2-3 `SECTION_NAMES.DRAFTS` references in quest copy; re-point to the surface the quest step actually lands on (a "build your first reel" quest → Highlights; a "your clip is ready" quest → Clips). Confirm each per quest step. `questDefinitions.test.jsx` asserts these strings — update together.
-
-6. **`src/frontend/src/modes/annotate/components/ClipsSidePanel.jsx` and `ClipDetailsEditor.jsx`** — one `SECTION_NAMES.DRAFTS` reference each (Annotate copy referring to where a created reel goes). A single-clip "Create Reel" from Annotate lands in **Clips** → re-point to `SECTION_NAMES.CLIPS`. `ClipsSidePanel.gameClock.test.jsx` may assert this.
-
-7. **`src/frontend/src/components/shared/Breadcrumb.jsx`** — one `SECTION_NAMES.DRAFTS` reference; re-point to the surface the breadcrumb targets (likely Clips, confirm at implementation).
-
-8. **E2E / spec string sweep (large, mechanical, unavoidable):** `Reel Drafts` / `New Reel` / `SECTION_NAMES.DRAFTS` appear **67 times across 25 e2e files** (`src/frontend/e2e/`) and **38 times across 15 files under `src/frontend/src/`** (13 of those in `ProjectManager.jsx` itself). The task's "~228 stale hits" figure is the broad grep; the load-bearing subset is these ~105 occurrences plus route strings `/home/reels`. Every nav helper that clicks the "Reel Drafts" tab or waits on `/home/reels` must move to "Clips" or "Highlights" + the new routes. High-traffic offenders to expect: `helpers/*` (framingDraft.js, overlayDraft.js), `T5677-home-deeplinks-route-fallback.spec.js` (6 hits, route-fallback logic — must cover the new three-tab routing AND the legacy `/home/reels` redirect), `regression-tests.spec.js` (10), `new-user-flow.spec.js` / `T4770` (funnel), `derisk-staging-export.qa.spec.js` (6, a staging-gate spec). Mandatory staging-gate specs must be swept in full (this is the same class of miss called out in T8130's progress log).
-
-9. **`ProjectManager.homeTabDefaults.test.jsx`** (9 hits) — the tab-default + dead-end fallback unit tests; rewrite for three tabs, `clipsDisabled`/`highlightsDisabled`, and first-enabled-tab fallback order.
-
-**Tier note for the implementing agent:** this is frontend-only, no schema change, but it touches the top-level Home IA + a large spec sweep and adds a new pattern (three-tab partition). Classify **L** (per CLAUDE.md: new pattern + 6+ files + design-gated) so the Reviewer runs on the diff; the spec sweep alone warrants a careful review pass.
+**Reserved landing spot:** the **Highlights-section `DraftTile` bottom scrim / badge cluster**
+(`DraftTile.jsx:534-574`, the same top corners that host the `Layers` "N clips" and "Ready" badges).
+A per-clip-stale indicator on a multi-clip Highlights tile should live as a **tile-level badge in
+that cluster** (e.g. a top-corner "N stale" chip beside the `Layers` count), NOT inside the
+segmented strip — because the strip is exactly the surface that collapses/suppresses when produced.
+This surface exists on BOTH the Clips tab and the Highlights section, but T8350 targets multi-clip
+reels, so its home is the **Highlights section tile**. (Single-clip auto-drafts already surface
+staleness in `ClipDetailsEditor` per T8070; no new Clips-tab cue is required by T8350.) This doc
+only NAMES the spot; the cue's visual is T8350's to design.
 
 ---
 
-## 4. Naming vocabulary table (final, consistent with T8130)
+## 8. Files-affected map (short — no implementation/test plan)
 
-| Concept | Object | Surface / control | Name (final) | `SECTION_NAMES` key |
-|---------|--------|-------------------|--------------|---------------------|
-| A moment in a game | annotation / `raw_clip` | Annotate create action | **Play** ("Add Play") | — (T8130) |
-| Game footage | game | Home tab 1 | **Games** | — |
-| One clip's reel-in-progress (single-clip draft, incl. T8070 auto-drafts) | project, `clip_count<=1` | Home tab 2 | **Clips** | `CLIPS` / `CLIPS_LOWER` |
-| A multi-clip assembly in progress | project, `clip_count>1` | Home tab 3 | **Highlights** | `HIGHLIGHTS` / `HIGHLIGHTS_LOWER` |
-| The assembly gesture | — | action button on Highlights tab | **Build Highlight Reel** | — (T8130) |
-| A published, shareable reel | `final_video` (published) | Gallery overlay (`DownloadsPanel`) | **Highlight Reels** | `LIBRARY` (T8130) |
-| RETIRED | — | (was Home tab 2) | ~~Reel Drafts~~ / ~~New Reel~~ | ~~`DRAFTS`~~ / ~~`DRAFTS_LOWER`~~ |
+| File | Change |
+|---|---|
+| `src/frontend/src/config/displayNames.js` | New `CLIPS`/`HIGHLIGHTS` tokens; remove `DRAFTS`/`DRAFTS_LOWER`. |
+| `src/frontend/src/components/ProjectManager.jsx` | Tab label → Clips; partition `projects` by `is_auto_created`; count/guard off `clipDrafts`; remove Build button + Created-By filter + multi-clip sort-last from this tab; empty-state copy. |
+| `src/frontend/src/components/DownloadsPanel.jsx` | Add relocated **Build Highlight Reel** button + **Highlights (in-progress)** section (DraftTile rows via CardCarousel) above the published list. |
+| `src/frontend/src/components/GameClipSelectorModal.jsx` | No API change; ensure it can be opened from the Downloads surface (ownership question below). |
+| `src/frontend/src/config/questDefinitions.jsx` (+`.test.jsx`) | Re-point Reel-Drafts references to Clips; coordinate T7620. |
+| `src/frontend/src/stores/editorStore.js`, `App.jsx`, `components/shared/Breadcrumb.jsx` | Breadcrumb/mode label `DRAFTS` → `CLIPS`. |
+| `src/frontend/src/components/ProjectManager.homeTabDefaults.test.jsx` | Update tab label + Build-button-location assertions. |
+| e2e specs referencing `Reel Drafts` / the drafts-tab Build button | Sweep. |
 
-Reads as a progression: **Play → Clip → Highlight → Highlight Reel** (capture a play, that clip becomes a single-clip reel, assemble several into a Highlight, publish it into your Highlight Reels).
-
----
-
-## 5. Empty states + the transition (existing user, first load after ship)
-
-Tab/filter selection is **session-only, never persisted** (`feedback_no_persisted_view_state`), so there is no stored "last tab" to migrate — every user gets the default-tab logic below on first load after the split ships.
-
-### 5.1 Which tab is default on first load
-
-- Bare `/home` (no tab in URL): default to **Clips** if the user has any single-clip drafts, else **Games** (mirrors today's "projects if any else games", biased to the higher-traffic single-clip surface). See Q1 for the exact tie-break.
-- A saved/bookmarked `/home/reels` (the retired route) **redirects to `/home/clips`** (recommend) so old links/bookmarks don't 404 into a dead tab. See Q1.
-- `/home/games` unchanged.
-
-### 5.2 How each surface populates for a mixed-draft user
-
-An existing user whose old Reel-Drafts tab held, say, 4 single-clip auto-drafts + 2 multi-clip assemblies sees, with zero data migration (pure client partition on `clip_count`):
-- **Clips** tab: the 4 single-clip drafts, in the existing By-Phase default grouping.
-- **Highlights** tab: the 2 multi-clip assemblies, By-Phase default.
-- **Highlight Reels** (Gallery): whatever they had published — unchanged.
-- The "Contains N clips" badge no longer carries meaning across two lists (each list is now homogeneous by count) — the split IS the disambiguation the badge used to provide.
-
-### 5.3 Empty-state copy per surface
-
-Match the borderless/minimal Home idiom (style guide §Home / Card Patterns). Keep copy a launchpad, not a paragraph (the T8130 "empty state as button" principle).
-
-| Surface | Empty condition | Copy + primary affordance |
-|---------|-----------------|---------------------------|
-| **Clips** | no single-clip drafts | Headline: **"No clips yet"**. Sub: "Tag a great play in a game, then tap Create Reel to start a clip." Primary: a link/button into **Games** (or Annotate for the most recent game). If `!hasClips`, the tab is disabled per §2.6 and the user never reaches this empty state (they're on Games). |
-| **Highlights** | no multi-clip drafts (but `hasClips`) | Headline: **"No highlights yet"**. Sub: "Combine your best clips into one highlight video." Primary: the **Build Highlight Reel** button (already in the action row) — the empty state points straight at it. |
-| **Highlight Reels** (Gallery) | no published reels | UNCHANGED (`DownloadsPanel` existing empty state). |
-| **Games** | no games | UNCHANGED (existing Add-Game empty state). |
-
-Empty-state visual: reuse the existing muted, centered empty pattern already present in the projects content block (`text-center py-8`, gray text, a single primary `Button`) — do not introduce a new card/panel treatment.
+**Ownership note (implementation decision, not a user question):** the assembly modal +
+`handleProjectCreated` currently live in `ProjectManager`. Two clean options — (a) lift
+`GameClipSelectorModal` state into whatever renders `DownloadsPanel` so the Build button owns it
+there; or (b) keep the modal in `ProjectManager` and have the DownloadsPanel Build button invoke a
+passed-in `onOpenAssembly` callback. Recommend (b) for a smaller diff (no state migration; the modal
+already sits in `ProjectManager`'s tree and `handleProjectCreated` just refreshes `projects`). Flag
+for the Architect at implementation; backend (`/projects/from-clips`) is untouched either way.
 
 ---
 
-## 6. Forward-compat: T8350 staleness cue landing spot (STATED ONLY — do not build here)
+## 9. Risks
 
-T8350 will add a per-clip staleness cue when a produced reel no longer reflects a clip's current `start_time`/`end_time` (T8070 `reel_source_*`). This spec reserves WHERE it renders on each surface; it does not design the cue.
-
-- **Clips tab (single-clip drafts):** the cue lands on the single-clip `DraftTile`, in/near the **status-chip region** (top corner, the `bg-black/60` chip area). A single-clip tile already surfaces its produced stage there; a "stale — source edited" state is a variant of that same chip. This is the natural home because a single-clip draft maps 1:1 to one clip, and `ClipDetailsEditor` already computes `reelReflectsClip` for the seed clip (annotate.md, T8070) — the same per-clip datum is available on the tile via the project's clip.
-
-- **Highlights tab (multi-clip drafts) — the known trap:** the multi-clip `DraftTile` has **no carrier today** for a per-clip staleness cue that only matters AFTER a reel is produced:
-  - `SegmentedProgressStrip.jsx:43-48` collapses the per-clip segments once `has_working_video || has_final_video` — so the per-clip strip that could host per-clip badges is gone exactly when staleness becomes relevant (post-production).
-  - `DraftTile.jsx:630` suppresses the strip entirely when ready-to-publish.
-  - **Stated landing spot for T8350:** a NEW persistent, post-production affordance on the multi-clip Highlights tile that does NOT depend on the collapsed/ suppressed segment strip — e.g. a small "N of M clips out of date" band or chip in the tile's bottom scrim / action region, shown only when the reel is produced (`has_working_video || has_final_video`) AND at least one member clip's `reel_source_*` mismatches its current boundaries (per-clip data already available via `WorkingClipResponse`, T8070). T8350 owns the exact shape, interaction, and thresholds. This spec only guarantees the Highlights tile is where it goes and that it must be a carrier independent of `SegmentedProgressStrip`.
+1. **`is_auto_created` is the ONLY routing key.** It is computed per-fetch from the `auto_project_id`
+   link (`projects.py:361-364`) and already on the wire — but if a project ever loses its
+   `auto_project_id` (e.g. all source clips deleted in the T4800 window before the draft itself is
+   deleted), it would flip from Clips to Highlights for its remaining lifetime. Per T4800 an auto-draft
+   dies with its last source clip, so this window is momentary; acceptable, but note it. Do NOT
+   secondarily route by `clip_count` (reintroduces the ambiguity this task removes).
+2. **Count/guard drift.** If the tab count or `reelDraftsDisabled` is left counting ALL `projects`
+   while the body renders only `clipDrafts`, the pill lies and the dead-end guard mis-fires. §5.1
+   makes moving them together mandatory — call it out in review.
+3. **Discoverability of Highlights.** Moving in-progress multi-clip drafts off Home and into the
+   Downloads panel means a user mid-assembly must reopen the panel to find their draft. Mitigated by
+   co-locating with the published reels they're headed toward and by the Build button living there;
+   but it IS a behavior change from "draft appears on Home". This is the main UX tradeoff of the
+   recommended IA vs the third-tab alternative (see §10).
+4. **DownloadsPanel scope creep.** The panel was a pure "published reels" surface; adding an
+   in-progress section + a create button makes it the multi-clip hub. Intended per T8130's table, but
+   verify the panel's poster endpoints don't get confused (Highlights use the DRAFT poster endpoint
+   `/api/projects/{id}/poster.jpg` via `DraftTile`, published use `/api/downloads/{id}/poster.jpg` via
+   `ReelTile` — keep the two tile components, don't unify).
+5. **Quest/tutorial coupling (T7620).** Onboarding copy names the "Reel Drafts" tab and walks the user
+   there to frame. Renaming to "Clips" AND moving multi-clip assembly off Home must be reflected in the
+   guided path or the tutorial dead-ends. Coordinate before ship.
 
 ---
 
-## 7. Risks
+## 10. Open questions for the user (minimal, opinionated)
 
-1. **Large mechanical spec sweep (~105 load-bearing hits + routes).** The biggest risk is an incomplete sweep leaving a staging-gate e2e asserting on "Reel Drafts"/`/home/reels`. Mitigation: grep-driven checklist in §3.8; run the full frontend e2e job (layer-scoped Branch CI, not file-selected) before merge; the T8130 progress log shows this exact class of miss already bit once.
-2. **Legacy `/home/reels` deep links / bookmarks.** Must redirect, not 404 into a removed tab. Covered by Q1 + the `T5677-home-deeplinks-route-fallback` spec rewrite.
-3. **`clip_count` partition edge cases.** A draft with `clip_count == 0` (the T4800-guarded orphan signal — annotate.md invariant: a 0-clip draft is a deliberate visible bug signal, not to be hidden) must land SOMEWHERE, not vanish. Recommend: `clip_count <= 1` (including 0 and null) → **Clips**, so a 0-clip orphan still shows (preserving the T4800 "visible signal" invariant) rather than being filtered out of both tabs. Do NOT add a `clip_count == 0` filter (annotate.md explicitly bans it).
-4. **Tie-break / default-tab churn.** Session-only tab state means every reload re-derives the default; a user mid-task who reloads could land on a different tab than before. This already happens today (projects vs games); the three-tab version just has one more option. Accepted, consistent with `feedback_no_persisted_view_state`.
-5. **Mobile tab-bar width.** Three tabs + count badges must fit the mobile tab bar (currently two). The existing buttons use `px-3 py-2 sm:px-4` and short labels; "Games/Clips/Highlights" are short, and badges are optional-when-zero — should fit 375px, but verify at 320px (the T7590-class narrow viewport). If tight, drop the count badge on the narrowest breakpoint before shortening labels.
-6. **Icon collision / meaning.** `Layers` for Highlights is already the multi-clip semantic; `Film`/`Clapperboard` for Clips must be visually distinct from Games' `Gamepad2` at 16px. Confirm at implementation.
+**OQ-1 — Where do in-progress multi-clip "Highlights" drafts live? (the one real IA fork)**
+- **Recommended:** on the **Highlight Reels surface (`DownloadsPanel`)** as an in-progress
+  "Highlights" section above the published reels, with the Build button relocated there (§3.1 Q3).
+  Keeps Home two tabs, co-locates the Highlights → Highlight Reels lifecycle, matches T8130's approved
+  "assembly button moves to the Highlight Reels surface" row.
+- **Alternative:** a **third Home tab "Highlights"** (Games | Clips | Highlights). More discoverable
+  for a user mid-assembly (stays on Home), but breaks the two-tab symmetry, needs a second dead-end
+  guard, and splits the lifecycle from the published surface. Only pick this if keeping in-progress
+  drafts on Home outweighs the split-lifecycle cost.
+
+*(Everything else — rename Reel Drafts→Clips in place, route by `is_auto_created`, keep DraftTile
+chrome, drop the Created-By filter, T8350 landing on the Highlights tile badge cluster — is settled by
+the binding decisions and needs no user pick.)*
 
 ---
 
-## 8. Open Questions for the user (each with a recommended default)
+## 11. Recommendation summary
 
-1. **Default tab + legacy `/home/reels` redirect.** Recommend: bare `/home` defaults to **Clips** when the user has single-clip drafts, else **Games**; a legacy `/home/reels` link **redirects to `/home/clips`**. Alternative if you consider Highlights the more important surface: default/redirect to `/home/highlights`. **Default: Clips.**
-
-2. **Clips-tab action button.** The Clips-populating gesture lives in Annotate ("Create Reel" on a clip), not on Home. Recommend the Clips tab action row has **no button** (an empty row, or omit it). Alternative: a secondary link "Tag plays in a game →" that routes to Games/Annotate. **Default: no button** (keeps the surface honest — you don't build single-clip drafts from Home). Related: after a multi-clip build, should Home auto-switch to the Highlights tab? **Recommend yes** (navigate-on-gesture so the new draft is visible).
-
-3. **Created-By (auto/custom) filter fate.** On **Clips**, the auto/custom axis is nearly meaningless (essentially all single-clip drafts are auto-origin) — recommend **hiding the Created-By filter on the Clips tab**. On **Highlights**, it still distinguishes origins — recommend **keeping it there** (re-worded to `${HIGHLIGHTS_LOWER}`). **Default: hide on Clips, keep on Highlights.**
-
-4. **Keep or drop the "Contains N clips" `Layers` badge on Highlights tiles.** It's redundant for disambiguation post-split but still tells you the exact N. Recommend **keep** (cheap, informative, no code change). Alternative: drop for a cleaner tile. **Default: keep.**
-
-5. **Should "Highlights" copy extend into the assembly flow itself** (e.g. `GameClipSelectorModal` header/CTA copy referring to "highlight" rather than "reel/project")? T8130 already set the button to "Build Highlight Reel"; the modal internals were out of that scope. Recommend a **light touch**: keep the modal's internal mechanics/labels as-is for T8360 (avoid scope creep) and file any modal-copy alignment as a fast-follow. **Default: modal copy unchanged in T8360.**
+Rename Home's `Reel Drafts` tab to **Clips** in place (single-clip auto-drafts only, routed by
+`is_auto_created`), and move the **Build Highlight Reel** button plus its multi-clip **Highlights**
+drafts onto the existing **Highlight Reels** (`DownloadsPanel`) surface as an in-progress section
+above the published reels — keeping Home two tabs and the Highlights→Highlight Reels lifecycle on one
+surface.
