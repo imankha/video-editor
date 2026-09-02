@@ -1,6 +1,6 @@
 # T8280: Offer a 30fps export option for high-fps sources (cheaper, same perceived quality)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 7
 **Created:** 2026-09-01

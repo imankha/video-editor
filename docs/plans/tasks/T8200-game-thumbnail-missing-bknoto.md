@@ -1,6 +1,6 @@
 # T8200: Game thumbnail missing (found investigating bknoto@gmail.com)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-31
