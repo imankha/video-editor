@@ -65,7 +65,10 @@ POST_V023_COLUMNS = {
     #   test_clips_lists below), games.py get_game's load_annotations_from_db path
     #   (test_game_detail below), export/overlay.py, export/framing.py, export_worker.py,
     #   export_finalize.py (all seed/refresh writes on export completion -- write-side,
-    #   not driven by this read-only fixture; covered by test_t8070_export_refresh.py).
+    #   not driven by this read-only fixture; covered by test_t8070_export_refresh.py),
+    #   and projects.py _read_projects_list (T8350 multi-clip staleness cue -- the
+    #   ClipSummary clip-list SELECT projecting reel_source_* for the tile badge/segment
+    #   tint; exercised by test_projects_list below).
     # v047 (T6770 backfill game_storage_refs from game_storage) adds NO column -> nothing to
     #   guard. It only writes to Postgres game_storage_refs via insert_game_storage_ref; no
     #   profile_db read names a new column.

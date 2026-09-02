@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Z } from '../constants/zLayers';
-import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film, AlertTriangle } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
@@ -22,6 +22,7 @@ import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect } from '../utils/draftStage';
+import { staleClipCount } from '../utils/reelStaleness';
 
 /**
  * DraftTile - a draft (single-clip or multi-clip) as a poster tile (T5672). Shell aspect follows the
@@ -354,6 +355,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const isComplete = project.has_final_video;
   const isReadyToPublish = isComplete && !project.is_published;
 
+  // T8350: multi-clip staleness cue -- badge-only carrier for the produced/ready
+  // states, where the strip below is collapsed or suppressed (see reelStaleness.js).
+  // Scoped to multi-clip tiles (decision 3a) so it never duplicates Annotate's
+  // single-clip staleness signal (T8070).
+  const staleCount = project.clip_count > 1 ? staleClipCount(project.clips) : 0;
+
   // T7940: append the owner's profile_id so a URL-keyed cache (CDN/proxy/browser)
   // can never serve one account's poster bytes for another account's same-numbered
   // draft. project.id is a per-profile AUTOINCREMENT (not globally unique); the
@@ -570,6 +577,23 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isComplete && project.is_published && (
         <span className="absolute top-9 right-1.5 z-20 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-black/60 backdrop-blur-sm text-cyan-300" title={`In ${SECTION_NAMES.LIBRARY}`}>
           <CheckCircle size={11} />
+        </span>
+      )}
+
+      {/* T8350: multi-clip staleness badge — the PRIMARY cue, since it's the only
+          one visible in the produced/ready states where the strip below is
+          collapsed or suppressed. Stacks under the count/Ready pill (left column
+          is the only slot free in every tile state). */}
+      {staleCount > 0 && (
+        <span
+          className="absolute top-9 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/90 text-gray-950 shadow backdrop-blur-sm"
+          title={staleCount === 1
+            ? '1 clip changed since this reel was made — re-export to update it'
+            : `${staleCount} clips changed since this reel was made — re-export to update them`}
+          aria-label={`${staleCount} ${staleCount === 1 ? 'clip' : 'clips'} changed since this reel was made`}
+        >
+          <AlertTriangle size={11} />
+          {staleCount} outdated
         </span>
       )}
 

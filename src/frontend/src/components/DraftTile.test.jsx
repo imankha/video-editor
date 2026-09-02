@@ -283,6 +283,48 @@ describe('DraftTile (T5672)', () => {
     expect(screen.queryByTitle(/Contains \d+ clips/)).toBeNull();
   });
 
+  // T8350: multi-clip staleness badge (PRIMARY cue — visible in every tile
+  // state, including produced/ready where the strip is collapsed/suppressed).
+  describe('staleness badge (T8350)', () => {
+    const stale = (overrides = {}) => ({
+      id: 1, start_time: 5, end_time: 10, reel_source_start_time: 5, reel_source_end_time: 10, ...overrides,
+    });
+
+    it('shows "N outdated" when a multi-clip reel has drifted clips', () => {
+      renderTile({
+        clip_count: 2,
+        clips: [stale(), stale({ id: 2, start_time: 20 })],
+      });
+      expect(screen.getByText('1 outdated')).toBeTruthy();
+    });
+
+    it('shows no badge when no clip has drifted', () => {
+      renderTile({
+        clip_count: 2,
+        clips: [stale(), stale({ id: 2 })],
+      });
+      expect(screen.queryByText(/outdated/)).toBeNull();
+    });
+
+    it('is scoped to multi-clip tiles — a drifted single-clip draft shows no badge (avoids duplicating the Annotate cue)', () => {
+      renderTile({
+        clip_count: 1,
+        clips: [stale({ start_time: 99 })],
+      });
+      expect(screen.queryByText(/outdated/)).toBeNull();
+    });
+
+    it('carries the causal tooltip and aria-label, not just the count', () => {
+      renderTile({
+        clip_count: 2,
+        clips: [stale({ start_time: 99 }), stale({ id: 2 })],
+      });
+      const badge = screen.getByText('1 outdated').closest('span');
+      expect(badge.getAttribute('title')).toBe('1 clip changed since this reel was made — re-export to update it');
+      expect(badge.getAttribute('aria-label')).toBe('1 clip changed since this reel was made');
+    });
+  });
+
   it('renders a portrait 9:16 tile shape once real framing (crop keyframes) exists', () => {
     // baseProject is In Framing (clips_in_progress: 1); the portrait shell only
     // applies once a crop has actually been committed (has_crop_keyframes) — an

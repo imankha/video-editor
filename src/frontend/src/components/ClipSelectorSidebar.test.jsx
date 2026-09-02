@@ -56,4 +56,28 @@ describe('ClipSelectorSidebar', () => {
     const clipItem = screen.getByTestId('clip-item');
     expect(clipItem.className).not.toContain('opacity-60');
   });
+
+  // T8350: TERTIARY staleness cue — a per-clip amber dot beside the framing
+  // status indicator, for the screen where boundaries are actually edited.
+  describe('staleness dot (T8350)', () => {
+    it('shows the amber dot for a clip whose live boundaries drifted from its reel snapshot', () => {
+      const clip = makeClip({ start_time: 11, end_time: 20, reel_source_start_time: 10, reel_source_end_time: 20 });
+      render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
+      const dot = screen.getByLabelText('Edited since this reel was made');
+      expect(dot).toBeTruthy();
+      expect(dot.getAttribute('title')).toBe('Edited since this reel was made — re-export to update');
+    });
+
+    it('shows no dot for a clip whose boundaries match its reel snapshot', () => {
+      const clip = makeClip({ start_time: 10, end_time: 20, reel_source_start_time: 10, reel_source_end_time: 20 });
+      render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
+      expect(screen.queryByLabelText('Edited since this reel was made')).toBeNull();
+    });
+
+    it('shows no dot for a clip that was never produced (NULL snapshot)', () => {
+      const clip = makeClip({ start_time: 10, end_time: 20, reel_source_start_time: null, reel_source_end_time: null });
+      render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
+      expect(screen.queryByLabelText('Edited since this reel was made')).toBeNull();
+    });
+  });
 });
