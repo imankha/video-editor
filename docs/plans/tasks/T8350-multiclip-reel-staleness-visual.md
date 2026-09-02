@@ -1,6 +1,6 @@
 # T8350: Multi-clip reel staleness - visual cue on Reel Drafts / Focus clip list
 
-**Status:** WAITING ON USER (pushed, CI GREEN run 33676986665, reviewer APPROVE, QA evidenced with screenshots - awaiting user test + merge)
+**Status:** STAGING (merged to master 2026-09-02, commit 20e3d034; reviewer APPROVE, CI green, live QA evidence for badge+segment-tint+revert, Focus dot unit-tested only - worth a manual look)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-01
