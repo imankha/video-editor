@@ -97,4 +97,8 @@ MIGRATIONS = [
     V049RawClipsReelSourceWindow(),
 ]
 
-RUNNER = MigrationRunner(MIGRATIONS)
+# T5089: floor=0 is INERT (gate never fires). When the cross-env floor sweep
+# proves the min reachable profile.sqlite schema version, set floor=F HERE and
+# delete the now-unreachable v001..vF migration files in the SAME commit. Head
+# (latest_version) is unchanged by a bottom prune.
+RUNNER = MigrationRunner(MIGRATIONS, floor=0)

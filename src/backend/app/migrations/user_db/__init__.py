@@ -17,4 +17,7 @@ MIGRATIONS = [
     V007ClearStaleStripeCustomers(),
 ]
 
-RUNNER = MigrationRunner(MIGRATIONS)
+# T5089: floor=0 is INERT (gate never fires). Set floor=F + delete v001..vF in
+# one commit once the cross-env floor sweep proves the min reachable user.sqlite
+# schema version. Head (latest_version) unchanged by a bottom prune.
+RUNNER = MigrationRunner(MIGRATIONS, floor=0)

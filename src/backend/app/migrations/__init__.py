@@ -4,6 +4,7 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .base import BelowMigrationFloor
 from .postgres import RUNNER as PG_RUNNER
 from .profile_db import RUNNER as PROFILE_DB_RUNNER
 from .user_db import RUNNER as USER_DB_RUNNER
@@ -184,6 +185,13 @@ def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateRe
     try:
         try:
             applied = PROFILE_DB_RUNNER.run(conn, "sqlite")
+        except BelowMigrationFloor:
+            # T5089: a below-floor DB is UNRECOVERABLE (its lifting migrations
+            # were pruned). It must NOT become a `MigrateResult(exception=...)`
+            # -> MigrationBlocked -> retryable 503 (that loops forever). Re-raise
+            # un-transformed so it reaches the dedicated 500 `schema_below_floor`
+            # handler instead.
+            raise
         except Exception as e:
             # A migration.up() failure (a bad ALTER, a data-shape assumption
             # that doesn't hold) must surface as a MigrateResult the seam can
@@ -244,6 +252,11 @@ def migrate_local_user_db_at_seam(user_id: str) -> MigrateResult:
     try:
         try:
             applied = USER_DB_RUNNER.run(conn, "sqlite")
+        except BelowMigrationFloor:
+            # T5089: unrecoverable below-floor DB — re-raise un-transformed (see
+            # the profile-seam sibling above) so it reaches the 500
+            # `schema_below_floor` handler, never the retryable 503 path.
+            raise
         except Exception as e:
             logger.error(
                 f"[Migration] seam migration raised for user={user_id} "

@@ -36,7 +36,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.migrations import MigrationBlocked
+from app.migrations import BelowMigrationFloor, MigrationBlocked
 from app.version import APP_BUILD, APP_VERSION
 
 _project_root = Path(__file__).parent.parent.parent.parent
@@ -579,6 +579,29 @@ async def migration_blocked_handler(request, exc):
     return JSONResponse(
         status_code=503,
         content={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+    )
+
+
+@app.exception_handler(BelowMigrationFloor)
+async def below_migration_floor_handler(request, exc):
+    """T5089: a DB below the hard migration floor is UNRECOVERABLE — the
+    migrations that would lift it were pruned. Unlike MigrationBlocked (503,
+    "retry, it'll resolve"), retrying can NEVER resolve this, so we return a
+    non-retryable 500 with a distinct `code` (stops the client's retry loop)
+    and log CRITICAL as the operator's signal to hand-recover the account
+    (restore from backup / bespoke migrate). Fail visibly, never self-repair
+    (CLAUDE.md no-silent-fallback)."""
+    logger.critical(
+        "[Migration] REFUSED below-floor DB: track=%s v%03d < floor v%03d path=%s",
+        exc.db_type, exc.current, exc.floor, request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "This account's data is on an unsupported schema version and "
+            "cannot be loaded. Support has been notified.",
+            "code": "schema_below_floor",
+        },
     )
 
 
