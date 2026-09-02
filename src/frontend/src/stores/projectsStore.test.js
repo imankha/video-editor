@@ -117,4 +117,17 @@ describe('projectsStore.renameProject (T4230)', () => {
     expect(body).toEqual({ name: 'New Name' });
     expect(body).not.toHaveProperty('aspect_ratio');
   });
+
+  it('T8360: is_auto_created survives a rename unchanged (rename never re-routes Clips <-> Highlights)', async () => {
+    useProjectsStore.setState({
+      projects: [{ id: 7, name: 'Old Name', aspect_ratio: '9:16', is_auto_created: true }],
+    });
+    vi.mocked(apiFetch).mockResolvedValue({ ok: true });
+
+    await useProjectsStore.getState().renameProject(7, 'New Name');
+
+    const project = useProjectsStore.getState().projects[0];
+    expect(project.name).toBe('New Name');
+    expect(project.is_auto_created).toBe(true);
+  });
 });
