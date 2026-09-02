@@ -114,6 +114,8 @@ _SORT_COLUMNS = {
     "game_created_count":     "game_created_count",
     "clip_created_count":     "clip_created_count",
     "export_completed_count": "export_completed_count",
+    "framing_exported_count": "framing_exported_count",
+    "overlay_exported_count": "overlay_exported_count",
     "share_completed_count":  "share_completed_count",
     "credits":                "credits",
     "total_spent_cents":      "s.total_spent_cents",
@@ -259,6 +261,15 @@ def list_users(
                        SUM(count) FILTER (WHERE action = 'game_upload_succeeded') AS game_upload_succeeded_count,
                        SUM(count) FILTER (WHERE action = 'clip_created')     AS clip_created_count,
                        SUM(count) FILTER (WHERE action = 'export_completed') AS export_completed_count,
+                       -- T8230: split the generic Exports total into its per-type
+                       -- events. export_completed >= framing_exported + overlay_exported
+                       -- always (each per-type success fires the generic event at the
+                       -- SAME call site); the remainder is "other" exports (recovered
+                       -- jobs -- exports.py finalize -- which re-fire only the generic
+                       -- event). Surfaced as detail columns; the total stays so that
+                       -- remainder is never silently dropped.
+                       SUM(count) FILTER (WHERE action = 'framing_exported')  AS framing_exported_count,
+                       SUM(count) FILTER (WHERE action = 'overlay_exported')  AS overlay_exported_count,
                        SUM(count) FILTER (WHERE action = 'export_failed')    AS export_failed_count,
                        SUM(count) FILTER (WHERE action = 'share_completed')  AS share_completed_count,
                        SUM(count) FILTER (WHERE action = 'credit_purchased') AS credit_purchase_count,
@@ -283,6 +294,8 @@ def list_users(
                 COALESCE(act.game_upload_succeeded_count, 0) AS game_upload_succeeded_count,
                 COALESCE(act.clip_created_count, 0)     AS clip_created_count,
                 COALESCE(act.export_completed_count, 0) AS export_completed_count,
+                COALESCE(act.framing_exported_count, 0) AS framing_exported_count,
+                COALESCE(act.overlay_exported_count, 0) AS overlay_exported_count,
                 COALESCE(act.export_failed_count, 0)    AS export_failed_count,
                 COALESCE(act.share_completed_count, 0)  AS share_completed_count,
                 COALESCE(act.credit_purchase_count, 0)  AS credit_purchase_count,
@@ -388,6 +401,8 @@ def list_users(
             "game_upload_succeeded_count": row["game_upload_succeeded_count"],
             "clip_created_count": row["clip_created_count"],
             "export_completed_count": row["export_completed_count"],
+            "framing_exported_count": row["framing_exported_count"],
+            "overlay_exported_count": row["overlay_exported_count"],
             "export_failed_count": row["export_failed_count"],
             "share_completed_count": row["share_completed_count"],
             "credit_purchase_count": row["credit_purchase_count"],
