@@ -1,6 +1,6 @@
 # T8120: Quest overlay yields: collapse to Help button + upfront credits
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-31
@@ -79,9 +79,22 @@ would have awarded upfront.
 
 ### Progress Log
 
-**2026-09-01**: Implemented, reviewed. Branch CI initially red - `test_rate_clip_step.py`/
+**2026-09-01**: Implemented. Branch CI initially red - `test_rate_clip_step.py`/
 `test_return_home_step.py` asserted the old per-step reward values (15/25) this task
-intentionally zeroed out; fixed and re-pushed. CI now green
-(`feature/T8120-quest-overlay-help-collapse`). QA note: full-browser e2e occlusion drive
-not runnable in the container (no chromium/network); covered by jsdom-based occlusion
-tests + a written e2e spec instead. Awaiting user test + merge.
+intentionally zeroed out; fixed and re-pushed, CI green. QA note: full-browser e2e
+occlusion drive not runnable in the container (no chromium/network); covered by
+jsdom-based occlusion tests + a written e2e spec instead.
+
+**2026-09-02**: The M-tier review step was accidentally skipped during implementation -
+run post-hoc before merge. No blocking issues; 3 MAJOR findings fixed: (1) a real
+persistence-safety bug - the panel-collapse write (a genuine user.sqlite write) was
+flagged `rbNonDataWrite: true`, which would have silently suppressed a legitimate
+sync-conflict alarm on that write; (2) a per-frame perf regression - the occlusion
+MutationObserver's forced-layout check ran on every timeline scrub/mousemove for all
+desktop users, even when the panel wasn't rendered; now coalesced to once per frame;
+(3) a duplicated Z-index ladder missing two live z-index values (`z-[85]`, `z-[200]`) -
+now derived from the single source with the missing rungs added. CI green after the
+fix. Also live-verified in a real browser (dev-login + Playwright against the branch's
+own stack): the quest panel fully disappears when the Add Game modal opens at 390x844
+and the dropzone is confirmed reachable (accessibility tree + screenshot). Merged to
+master.
