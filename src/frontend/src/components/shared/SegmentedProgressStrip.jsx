@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { getClipDisplayName } from '../../utils/clipDisplayName';
+import { isClipStale } from '../../utils/reelStaleness';
 
 /**
  * SegmentedProgressStrip - Visual progress indicator with segments
@@ -60,11 +61,14 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
       const clipInfo = clips[i];
       const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
       const clipTags = clipInfo?.tags || [];
+      // T8350: SECONDARY staleness cue -- only meaningful here, before framing
+      // collapses per-clip segments into one "Focus" segment (see reelStaleness.js).
+      const clipStale = clipInfo ? isClipStale(clipInfo) : false;
 
       if (clips_in_progress > 0 && i < clips_in_progress) {
-        clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags });
+        clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags, stale: clipStale });
       } else {
-        clipSegments.push({ status: 'pending', label: clipName, tags: clipTags });
+        clipSegments.push({ status: 'pending', label: clipName, tags: clipTags, stale: clipStale });
       }
     }
   }
@@ -179,7 +183,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               onClick={handleClick}
               className={`${statusColors[segment.status]} ${isInProgress ? 'relative overflow-hidden' : ''} transition-all cursor-pointer hover:brightness-110 ${
                 isLast ? 'rounded-r' : ''
-              } ${index === 0 ? 'rounded-l' : ''}`}
+              } ${index === 0 ? 'rounded-l' : ''} ${segment.stale ? 'ring-1 ring-inset ring-amber-400' : ''}`}
               style={{
                 flex: isLast ? '0 0 20%' : '1 1 0',
                 minWidth: `${minWidth}px`
@@ -191,7 +195,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export Focus to complete') :
                 segment.status === 'ready' ? 'Ready' :
                 'Not Started'
-              } (click to open)`}
+              } (click to open)${segment.stale ? ' — clip edited since this reel was made' : ''}`}
             >
               {isInProgress && (
                 <div className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500 pointer-events-none" />

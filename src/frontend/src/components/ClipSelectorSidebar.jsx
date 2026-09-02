@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Crop } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Crop, AlertTriangle } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
@@ -7,6 +7,7 @@ import { getRatingDisplay, formatDuration } from './shared/clipConstants';
 import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
+import { isClipStale } from '../utils/reelStaleness';
 
 /** Check if clip has real user segment edits (speed changes, trims, or splits) */
 function hasUserSegmentEdits(clip) {
@@ -210,6 +211,7 @@ export function ClipSelectorSidebar({
           const hasCrop = clipCropKeyframes(clip)?.length > 0;
           const isFramed = hasCrop || hasUserSegmentEdits(clip);
           const meta = clipMetadataCache[clip.id];
+          const isStale = isClipStale(clip);
 
           return (
             <div
@@ -293,6 +295,18 @@ export function ClipSelectorSidebar({
                     );
                   })()}
                 </div>
+
+                {/* T8350: TERTIARY staleness cue — this clip's live boundaries have
+                    drifted from the window its reel was produced from. */}
+                {isStale && (
+                  <span
+                    className="ml-2 flex-shrink-0 inline-flex items-center"
+                    title="Edited since this reel was made — re-export to update"
+                    aria-label="Edited since this reel was made"
+                  >
+                    <AlertTriangle size={13} className="text-amber-400" />
+                  </span>
+                )}
 
                 {/* Framing status indicator */}
                 <div

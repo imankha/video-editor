@@ -101,6 +101,51 @@ describe('SegmentedProgressStrip (T3540)', () => {
     expect(getHalfFill(readySeg)).toBeNull();
   });
 
+  // T8350: SECONDARY staleness cue — amber ring + appended tooltip clause on a
+  // per-clip segment whose live boundaries drifted from its reel's snapshot.
+  // Only reachable pre-produce (has_working_video/has_final_video false), by
+  // construction: framing-complete collapses per-clip segments into one "Focus".
+  it('rings a stale pending clip segment amber and appends the tooltip clause', () => {
+    const { container } = render(
+      <SegmentedProgressStrip
+        project={makeProject({
+          clip_count: 1,
+          clips: [{ id: 1, start_time: 11, end_time: 20, reel_source_start_time: 10, reel_source_end_time: 20 }],
+        })}
+      />
+    );
+    const segment = getSegmentByTitle(container, 'Clip 1');
+    expect(segment.className).toContain('ring-amber-400');
+    expect(segment.getAttribute('title')).toContain('— clip edited since this reel was made');
+  });
+
+  it('does not ring a non-stale clip segment', () => {
+    const { container } = render(
+      <SegmentedProgressStrip
+        project={makeProject({
+          clip_count: 1,
+          clips: [{ id: 1, start_time: 10, end_time: 20, reel_source_start_time: 10, reel_source_end_time: 20 }],
+        })}
+      />
+    );
+    const segment = getSegmentByTitle(container, 'Clip 1');
+    expect(segment.className).not.toContain('ring-amber-400');
+    expect(segment.getAttribute('title')).not.toContain('clip edited since this reel was made');
+  });
+
+  it('never rings the collapsed "Focus" segment once framing is complete (strip cannot carry the produced-state cue)', () => {
+    const { container } = render(
+      <SegmentedProgressStrip
+        project={makeProject({
+          has_working_video: true,
+          clips: [{ id: 1, start_time: 11, end_time: 20, reel_source_start_time: 10, reel_source_end_time: 20 }],
+        })}
+      />
+    );
+    const framing = getSegmentByTitle(container, 'Focus');
+    expect(framing.className).not.toContain('ring-amber-400');
+  });
+
   it('uses "Started" tooltip wording for in_progress segments instead of "Editing"', () => {
     const { container } = render(
       <SegmentedProgressStrip

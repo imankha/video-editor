@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
-from app.database import get_db_connection
+from app.database import column_exists, get_db_connection
 from app.queries import derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
 from app.storage import (
@@ -241,6 +241,14 @@ class ClipSummary(BaseModel):
     stream_clip_id: int | None = None
     source_start_time: float | None = None
     source_end_time: float | None = None
+    # T8350: live clip boundaries + the reel-source snapshot (T8070 v049) each clip's
+    # linked reel was last produced from, for the multi-clip staleness cue. NULL
+    # reel_source_* = never snapshotted (or below-v049 DB) -> not stale. Compared by
+    # exact value, never arithmetic (T8070 Sec 4 rule, reused byte-identically).
+    start_time: float | None = None
+    end_time: float | None = None
+    reel_source_start_time: float | None = None
+    reel_source_end_time: float | None = None
 
 
 class ProjectListItem(BaseModel):
@@ -446,13 +454,24 @@ def _read_projects_list():
                 project_games[project_id]['game_names'].append(display_name)
                 project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
+        # T8350: reel-source window (v049) alongside the live end_time, for the
+        # multi-clip staleness cue. Column-guarded for the deploy->migrate window,
+        # same pattern as games.py load_annotations_from_db: project NULL when
+        # absent (below-head DB) rather than 500 the whole projects list.
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            _reel_src_select = "rc.reel_source_start_time, rc.reel_source_end_time"
+        else:
+            _reel_src_select = "NULL AS reel_source_start_time, NULL AS reel_source_end_time"
+
         # Fetch clip details for each project (names, tags, rating)
-        cursor.execute("""
-            SELECT project_id, clip_id, name, tags, rating, sort_order, start_time
+        cursor.execute(f"""
+            SELECT project_id, clip_id, name, tags, rating, sort_order, start_time,
+                   end_time, reel_source_start_time, reel_source_end_time
             FROM (
                 SELECT rc.auto_project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
-                    0 as sort_order, rc.start_time
+                    0 as sort_order, rc.start_time, rc.end_time,
+                    {_reel_src_select}
                 FROM raw_clips rc
                 WHERE rc.auto_project_id IS NOT NULL
 
@@ -460,7 +479,8 @@ def _read_projects_list():
 
                 SELECT wc.project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
-                    wc.sort_order, rc.start_time
+                    wc.sort_order, rc.start_time, rc.end_time,
+                    {_reel_src_select}
                 FROM working_clips wc
                 JOIN raw_clips rc ON rc.id = wc.raw_clip_id
             ) combined
@@ -483,7 +503,11 @@ def _read_projects_list():
                 id=clip_row['clip_id'],
                 name=clip_row['name'],
                 tags=tags,
-                rating=clip_row['rating']
+                rating=clip_row['rating'],
+                start_time=clip_row['start_time'],
+                end_time=clip_row['end_time'],
+                reel_source_start_time=clip_row['reel_source_start_time'],
+                reel_source_end_time=clip_row['reel_source_end_time']
             ))
             project_clip_starts[project_id].setdefault(
                 clip_row['clip_id'], clip_row['start_time'])
