@@ -1917,10 +1917,19 @@ def load_annotations_from_db(game_id: int) -> list:
     """Load annotations from raw_clips table for a game."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # T8070: surface the reel-source window (v049) so the annotate Reel control
+        # can compare the clip's live start/end against what its reel was built
+        # from. Column-guarded for the deploy->migrate window: project NULL when
+        # absent (below-head DB) rather than 500 the whole game load.
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            _reel_src_select = "rc.reel_source_start_time, rc.reel_source_end_time"
+        else:
+            _reel_src_select = "NULL AS reel_source_start_time, NULL AS reel_source_end_time"
         # Query raw_clips as the single source of truth for clip annotations
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT rc.id, rc.start_time, rc.end_time, rc.name, rc.rating, rc.tags, rc.notes, rc.video_sequence,
                    rc.tagged_teammates, rc.my_athlete, rc.shared_by,
+                   {_reel_src_select},
                    CASE WHEN p.id IS NOT NULL AND p.archived_at IS NULL THEN rc.auto_project_id ELSE NULL END AS auto_project_id
             FROM raw_clips rc
             LEFT JOIN projects p ON p.id = rc.auto_project_id
@@ -1953,6 +1962,8 @@ def load_annotations_from_db(game_id: int) -> list:
                 'notes': row['notes'] or '',
                 'video_sequence': row['video_sequence'],  # T82: which video (null = single-video)
                 'auto_project_id': row['auto_project_id'],
+                'reel_source_start_time': row['reel_source_start_time'],  # T8070
+                'reel_source_end_time': row['reel_source_end_time'],  # T8070
                 'tagged_teammates': tagged_teammates,
                 'my_athlete': my_athlete,
                 'shared_by': row['shared_by'],

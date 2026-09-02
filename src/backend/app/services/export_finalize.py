@@ -302,6 +302,26 @@ def upsert_working_video(
             (project_id, project_id),
         )
 
+        # T8070: refresh the per-clip reel-source window to each clip's CURRENT
+        # boundaries for every clip this (multi-clip) export rendered. Mirrors the
+        # single-clip framing.py refresh; keeps a multi-clip reel from going
+        # permanently stale. Column-guarded for the deploy->migrate window (v049).
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            cursor.execute(
+                f"""
+                UPDATE raw_clips
+                SET reel_source_start_time = start_time,
+                    reel_source_end_time = end_time
+                WHERE id IN (
+                    SELECT raw_clip_id FROM working_clips
+                    WHERE project_id = ?
+                    AND id IN ({latest_working_clips_subquery()})
+                    AND raw_clip_id IS NOT NULL
+                )
+                """,
+                (project_id, project_id),
+            )
+
         conn.commit()
 
     logger.info(f"[Finalize] upsert_working_video: job={job_id} project={project_id} working_video_id={wv_id}")

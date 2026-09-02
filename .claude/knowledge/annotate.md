@@ -100,6 +100,26 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `save_raw_clip` on start_time change (clips.py:958-975) and `update_raw_clip` on duration change
   (L1158-1161); `update_working_clip` snapshots it into `working_clips.raw_clip_version`
   (L2059-2062) so framing can detect stale boundaries.
+- **reel_source_start_time/reel_source_end_time (T8070)** is a SECOND, independent staleness
+  mechanism on `raw_clips` — a **value snapshot**, not a counter. `boundaries_version` can only
+  detect "changed since"; it can never express "changed back," so it can't satisfy T8070's
+  requirement that reverting to the EXACT producing values restores validity. `reel_source_*`
+  instead stores the literal `start_time`/`end_time` the clip's reel was last produced from,
+  written ONLY by: seed at `_create_auto_project_for_clip` (clips.py), and export-completion
+  refreshes in `export_framing`/framing.py, `upsert_working_video`/export_finalize.py (multi-clip),
+  and both Overlay finalize paths (`_finalize_overlay_export` + inline `export_final`,
+  overlay.py) — see `.claude/knowledge/keyframes-framing.md` for the Overlay write sites.
+  `update_raw_clip`'s boundary-edit path (clips.py:1420-1464) NEVER writes these columns (INV-1);
+  the comparison is a pure `===` value equality, computed on read in `ClipDetailsEditor.jsx`
+  (`reelReflectsClip`), display-only — no gesture in the editor writes `reel_source_*`. Backfilled
+  for pre-T8070 produced reels by migration v049 (profile_db) via the `working_clips.raw_clip_id`
+  join, not the narrower `auto_project_id`-only form (reaches multi-clip/user-created reels too).
+  Per-clip (not project-level): surfaced via `WorkingClipResponse` (`GET /projects/{id}/clips`,
+  every clip of a reel) and via the annotate load region (`GET /games/{id}/load`, seed clip only —
+  `ClipDetailsEditor` gates its Reel control on `region.autoProjectId`, so added/non-seed clips of
+  a multi-clip reel have no staleness display surface today; that visual cue is an unimplemented
+  follow-up, see the T8070 design doc § 7 Q5). The two mechanisms serve different purposes and are
+  NOT meant to converge — `boundaries_version` stays framing's own invalidation signal.
 - Playhead: `POST /{game_id}/playhead` (direct overwrite) on tab-hide/pagehide with `keepalive`
   (AnnotateContainer:1206-1222); `POST /{game_id}/finish-annotation` sets
   `viewed_duration = MAX(...)` high-water.

@@ -17,7 +17,8 @@ import os
 
 from ..analytics import record_milestone
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ..database import get_db_connection, get_working_videos_path
+from ..database import column_exists, get_db_connection, get_working_videos_path
+from ..queries import latest_working_clips_subquery
 from ..routers.exports import get_export_job, update_job_complete, update_job_error, update_job_started
 from ..utils.encoding import decode_data
 from ..websocket import export_progress, manager
@@ -344,6 +345,22 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
             SET working_video_id = ?
             WHERE id = ?
         """, (working_video_id, project_id))
+
+        # T8070: refresh the reel-source window for every clip this export
+        # actually rendered (INV-2/INV-3), mirroring routers/export/framing.py.
+        # Column-guarded for the deploy->migrate window.
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            cursor.execute(f"""
+                UPDATE raw_clips
+                SET reel_source_start_time = start_time,
+                    reel_source_end_time = end_time
+                WHERE id IN (
+                    SELECT raw_clip_id FROM working_clips
+                    WHERE project_id = ?
+                    AND id IN ({latest_working_clips_subquery()})
+                    AND raw_clip_id IS NOT NULL
+                )
+            """, (project_id, project_id))
 
         conn.commit()
 

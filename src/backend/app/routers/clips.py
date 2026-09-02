@@ -199,6 +199,14 @@ class WorkingClipResponse(BaseModel):
     start_time: float | None = None
     end_time: float | None = None
     duration: float | None = None
+    # T8070: per-clip snapshot of the start/end window this clip's linked reel's
+    # most recent successful export rendered from. NULL = no produced reel (or a
+    # below-v049 DB). Compared by value against start_time/end_time to detect a
+    # clip that has drifted from its producing window (per-clip staleness, incl.
+    # multi-clip reels). The multi-clip VISUAL cue that consumes these is a
+    # separate follow-up; the data lands here now.
+    reel_source_start_time: float | None = None
+    reel_source_end_time: float | None = None
     game_video_url: str | None = None  # Presigned URL for source game video (for framing preview)
     # T1460: needed client-side for pushClipRanges proportional byte estimation
     video_duration: float | None = None
@@ -1026,9 +1034,10 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     """Create a 9:16 project for a 5-star clip and return the project ID."""
     logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}")
 
-    # Fetch tags and rating from the raw clip to generate a name if needed
+    # Fetch tags and rating from the raw clip to generate a name if needed.
+    # T8070: also read the current start/end so we can seed the reel-source window.
     cursor.execute("""
-        SELECT rating, tags, notes FROM raw_clips WHERE id = ?
+        SELECT rating, tags, notes, start_time, end_time FROM raw_clips WHERE id = ?
     """, (raw_clip_id,))
     clip_data = cursor.fetchone()
 
@@ -1062,10 +1071,24 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     # Add the raw clip as a working clip in this project (T1500: copies dims from game_video)
     _insert_working_clip_with_dims(cursor, project_id=project_id, raw_clip_id=raw_clip_id, sort_order=0)
 
-    # Update the raw clip with the auto_project_id
-    cursor.execute("""
-        UPDATE raw_clips SET auto_project_id = ? WHERE id = ?
-    """, (project_id, raw_clip_id))
+    # Update the raw clip with the auto_project_id. T8070: seed the reel-source
+    # window from the clip's CURRENT boundaries (INV-3: copy the stored value
+    # verbatim, no arithmetic) so a freshly-created reel is "valid" the moment it
+    # exists, even before its first export; every real export re-freezes it.
+    # Column-guarded for the deploy->migrate window (v049 not yet applied): omit
+    # the two columns when absent rather than 500 the create-reel gesture.
+    if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+        cursor.execute("""
+            UPDATE raw_clips
+            SET auto_project_id = ?,
+                reel_source_start_time = ?,
+                reel_source_end_time = ?
+            WHERE id = ?
+        """, (project_id, clip_data['start_time'], clip_data['end_time'], raw_clip_id))
+    else:
+        cursor.execute("""
+            UPDATE raw_clips SET auto_project_id = ? WHERE id = ?
+        """, (project_id, raw_clip_id))
 
     logger.info(f"Created auto-project {project_id} for 5-star clip {raw_clip_id}")
     return project_id
@@ -1576,6 +1599,19 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
             if column_exists(cursor, "working_clips", "framing_version")
             else "0 as wc_framing_version"
         )
+        # T8070: reel-source window (v049) — same deploy->migrate tolerance. A
+        # below-head DB has no snapshot yet; project NULL so the per-clip
+        # staleness comparison simply can't assert freshness (never a crash).
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            _reel_src_select = (
+                "rc.reel_source_start_time as raw_reel_source_start_time, "
+                "rc.reel_source_end_time as raw_reel_source_end_time"
+            )
+        else:
+            _reel_src_select = (
+                "NULL as raw_reel_source_start_time, "
+                "NULL as raw_reel_source_end_time"
+            )
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -1600,6 +1636,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 rc.game_id as raw_game_id,
                 rc.start_time as raw_start_time,
                 rc.end_time as raw_end_time,
+                {_reel_src_select},
                 g.blake3_hash as game_blake3_hash,
                 g.video_filename as game_video_filename,
                 gv.blake3_hash as gv_blake3_hash,
@@ -1673,6 +1710,8 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 start_time=clip['raw_start_time'],
                 end_time=clip['raw_end_time'],
                 duration=(clip['raw_end_time'] - clip['raw_start_time']) if clip['raw_start_time'] is not None and clip['raw_end_time'] is not None else None,
+                reel_source_start_time=clip['raw_reel_source_start_time'],
+                reel_source_end_time=clip['raw_reel_source_end_time'],
                 game_video_url=game_video_url,
                 video_duration=clip['video_duration'],
                 video_size=clip['video_size'],

@@ -269,6 +269,23 @@ def _finalize_overlay_export(
             WHERE id = ?
         """, (final_video_id, output_filename, gpu_seconds, modal_function, export_id))
 
+        # T8070: refresh the per-clip reel-source window to each clip's CURRENT
+        # boundaries for every clip of this project (via working_clips.raw_clip_id,
+        # so multi-clip and user-created reels are covered too). A final (Overlay)
+        # export is a successful export against the current window, so it re-freezes
+        # the snapshot the annotate Reel control compares against. Column-guarded
+        # for the deploy->migrate window (v049 not applied).
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            cursor.execute("""
+                UPDATE raw_clips
+                SET reel_source_start_time = start_time,
+                    reel_source_end_time = end_time
+                WHERE id IN (
+                    SELECT raw_clip_id FROM working_clips
+                    WHERE project_id = ? AND raw_clip_id IS NOT NULL
+                )
+            """, (project_id,))
+
         conn.commit()
 
     # T4010: only after the swap is committed, best-effort delete the prior object.
@@ -1980,6 +1997,20 @@ async def export_final(
             """, (final_video_id, wc['raw_clip_id'], source_path, start_frame, end_frame, idx))
 
         logger.info(f"[Final Export] Tracked {len(working_clips)} source clips for before/after")
+
+        # T8070: refresh the per-clip reel-source window (see _finalize_overlay_export
+        # for rationale). This inline finalizer does NOT call the shared helper, so it
+        # needs its own identical refresh. Column-guarded for the deploy->migrate window.
+        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
+            cursor.execute("""
+                UPDATE raw_clips
+                SET reel_source_start_time = start_time,
+                    reel_source_end_time = end_time
+                WHERE id IN (
+                    SELECT raw_clip_id FROM working_clips
+                    WHERE project_id = ? AND raw_clip_id IS NOT NULL
+                )
+            """, (project_id,))
 
         conn.commit()
 

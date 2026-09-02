@@ -57,6 +57,15 @@ POST_V023_COLUMNS = {
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
+    "raw_clips": ["reel_source_start_time", "reel_source_end_time"],                  # v049
+    # v048 (T7830) delete-only R2 cleanup, adds no columns.
+    # v049 (T8070 reel status timestamp staleness) adds raw_clips.reel_source_start_time/
+    #   reel_source_end_time (above). Every hot read/write is column_exists-guarded:
+    #   clips.py (update_raw_clip write, list_project_clips read -- exercised by
+    #   test_clips_lists below), games.py get_game's load_annotations_from_db path
+    #   (test_game_detail below), export/overlay.py, export/framing.py, export_worker.py,
+    #   export_finalize.py (all seed/refresh writes on export completion -- write-side,
+    #   not driven by this read-only fixture; covered by test_t8070_export_refresh.py).
     # v047 (T6770 backfill game_storage_refs from game_storage) adds NO column -> nothing to
     #   guard. It only writes to Postgres game_storage_refs via insert_game_storage_ref; no
     #   profile_db read names a new column.
@@ -139,7 +148,7 @@ POST_V023_COLUMNS = {
     #   cross-profile copy, which REFUSES (RecipientProfileBelowHead) rather than
     #   column-omit -- test_game_copy_below_head_refuses below.
 }
-HEAD_VERSION_AUDITED = 48  # v048 (T7830): delete-only R2 cleanup, adds no columns
+HEAD_VERSION_AUDITED = 49  # v049 (T8070): raw_clips.reel_source_start_time/end_time, column_exists-guarded
 
 
 def _cleanup(user_id: str) -> None:
@@ -270,6 +279,14 @@ def test_games_list(below_head):
 
     _run(list_games_metadata())
     _run(list_games())
+
+
+def test_game_detail(below_head):
+    # v049: get_game's annotation load (load_annotations_from_db) reads
+    # raw_clips.reel_source_start_time/end_time -- must not 500 below head.
+    from app.routers.games import get_game
+
+    _run(get_game(below_head["game_id"]))
 
 
 def test_projects_list(below_head):

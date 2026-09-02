@@ -1194,6 +1194,13 @@ def ensure_database():
                 shared_by TEXT DEFAULT NULL,
                 boundaries_version INTEGER DEFAULT 1,
                 boundaries_updated_at TIMESTAMP,
+                -- T8070: the start/end window the clip's currently-linked reel's
+                -- most recent successful export actually rendered from. Written
+                -- ONLY at reel creation (seed) + export completion (refresh);
+                -- NEVER by the boundary-change path, so revert-to-exact restores
+                -- the produced status. NULL = no produced reel. See migration v049.
+                reel_source_start_time REAL,
+                reel_source_end_time REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
                 FOREIGN KEY (auto_project_id) REFERENCES projects(id) ON DELETE SET NULL
