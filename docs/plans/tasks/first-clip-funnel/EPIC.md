@@ -1,6 +1,7 @@
 # First-Clip Funnel: get uploaders to their first clip
 
-**Status:** TODO
+**Status:** STAGING (all 3 tasks implemented, reviewed, CI green, merged to master;
+completion criteria are post-ship metrics, not yet measurable)
 **Started:** filed 2026-08-31
 **Impact:** 8 | **Complexity:** 5 | **Priority:** 1.6
 
@@ -31,9 +32,15 @@ User decisions recorded 2026-08-31:
 
 | ID | Task | Status |
 |----|------|--------|
-| T8120 | [Quest overlay yields: collapse to Help button + upfront credits](T8120-quest-overlay-help-collapse.md) | TODO |
-| T8130 | [Annotate primary CTA + Plays/Clips/Reels naming](T8130-annotate-primary-cta-and-naming.md) | TODO |
-| T8140 | [One-tap first clip (form defaults + sticky Save)](T8140-one-tap-first-clip.md) | TODO |
+| T8120 | [Quest overlay yields: collapse to Help button + upfront credits](T8120-quest-overlay-help-collapse.md) | STAGING |
+| T8130 | [Annotate primary CTA + Plays/Clips/Reels naming](T8130-annotate-primary-cta-and-naming.md) | STAGING |
+| T8140 | [One-tap first clip (form defaults + sticky Save)](T8140-one-tap-first-clip.md) | STAGING |
+
+**2026-09-02**: All 3 tasks merged to master. T8130's mid-flight IA guard split the Reel
+Drafts tab rename + assembly-button relocation into a separate follow-up
+([T8360](../T8360-split-single-vs-multiclip-drafts.md), needs a ui-designer pass) rather
+than force a naming decision the implementation revealed was wrong. Completion criteria
+below are post-deploy metrics - review after the next prod deploy.
 
 ## Shared leap-of-faith assumption
 

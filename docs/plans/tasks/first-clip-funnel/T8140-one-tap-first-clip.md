@@ -1,6 +1,6 @@
 # T8140: One-tap first clip (form defaults + sticky Save)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-31
@@ -62,15 +62,28 @@ softened the sport wall.
 ## Implementation
 
 ### Steps
-1. [ ] Beacon first (measure current abandonment for 1-2 weeks if timing allows)
-2. [ ] Sticky Save + defaults + platform-aware copy
-3. [ ] Full-screen sport question at first save (no_sport only)
-4. [ ] Mobile keyboard-open check (input focus must not hide Save)
+1. [x] Beacon added alongside the ship (timing didn't allow a separate 1-2 week
+       baseline-only period; `add_clip_opened_no_save` will still show the before/after
+       trend post-ship)
+2. [x] Sticky Save + defaults + platform-aware copy
+3. [x] Full-screen sport question at first save (no_sport only) - coexists cleanly with
+       T7922's inline picker, no double-prompt
+4. [x] Mobile keyboard-open check - structural/component-test verified (fixed bottom
+       sheet outside scroll); full real-browser keyboard-open check not runnable in the
+       container (no chromium/network), documented rather than claimed
+
+### Progress Log
+
+**2026-09-02**: Implemented, reviewed (a real Reviewer stage this time, explicitly made
+mandatory in the kickoff - APPROVED, 0 blocking/major, one cosmetic fix applied), CI
+green. 65/65 relevant unit tests green, T7540 regression preserved. Merged to master -
+**this completes the First-Clip Funnel epic (T8120/T8130/T8140, all 3 merged)**.
 
 ## Acceptance Criteria
 
-- [ ] A new user's first clip saves with one tap after opening the form
-- [ ] Save visible without scrolling at 390x844, keyboard open or closed
-- [ ] No amber warning state in the default first-clip path
+- [x] A new user's first clip saves with one tap after opening the form
+- [x] Save visible without scrolling at 390x844, keyboard open or closed (structural
+      verification; full-browser check not runnable in this container)
+- [x] No amber warning state in the default first-clip path
 - [ ] Metric to watch: `clip_created / add_clip_opened` + time-to-first-clip;
-      `add_clip_opened_no_save` impressions trend down after ship
+      `add_clip_opened_no_save` impressions trend down after ship - post-ship metric
