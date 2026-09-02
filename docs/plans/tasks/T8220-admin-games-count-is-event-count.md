@@ -1,6 +1,6 @@
 # T8220: Admin People table "Games" column is a raw event count, not real games
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-08-31
@@ -99,20 +99,27 @@ DEFINITION being ambiguous, which the outage happened to expose vividly for this
 ## Implementation
 
 ### Steps
-1. [ ] `list_users` (admin.py): add `game_upload_succeeded` count alongside the existing
+1. [x] `list_users` (admin.py): add `game_upload_succeeded` count alongside the existing
        `game_created` count
-2. [ ] `UserTable.jsx`: render both as a pair (e.g. "7 tried / 0 succeeded"), not a bare number
-3. [ ] `analytics_platforms` (admin.py): surface `game_upload_succeeded` per platform alongside
-       `game_created`
-4. [ ] `PlatformBreakdown.jsx`: render the attempt/success pair per platform cell instead of
+2. [x] `UserTable.jsx`: render both as a pair (e.g. "7 tried / 0 succeeded"), not a bare number
+3. [x] `analytics_platforms` (admin.py): needed NO change - `by_action` already GROUPs BY
+       every action with no allowlist, so `game_upload_succeeded` rows were already present
+4. [x] `PlatformBreakdown.jsx`: render the attempt/success pair per platform cell instead of
        relabeling `game_created` alone as "Games Uploaded"
-5. [ ] Sequence after T8110 lands (same `list_users` function, avoid merge conflicts)
+5. [x] Sequenced after T8110 (merged 2026-09-02)
+
+### Progress Log
+
+**2026-09-02**: Implemented, reviewed (approved with nits, all explicitly non-blocking),
+verified via a real ASGI TestClient against synthetic accounts seeded with the exact
+documented event counts from both real incidents (bknoto 15/1, chenyh1225 7/0). CI
+green. Merged to master.
 
 ## Acceptance Criteria
 
-- [ ] The People table "Games" column shows both tries and successes, never a bare attempt count
+- [x] The People table "Games" column shows both tries and successes, never a bare attempt count
       labeled as if it were successful uploads
-- [ ] Platform Breakdown shows both tries and successes per platform, never "Games Uploaded"
+- [x] Platform Breakdown shows both tries and successes per platform, never "Games Uploaded"
       bound to the raw `game_created` attempt event
-- [ ] Verified against bknoto's account (15 tried / 1 succeeded) and chenyh1225's account
+- [x] Verified against bknoto's account (15 tried / 1 succeeded) and chenyh1225's account
       (7 tried / 0 succeeded)
