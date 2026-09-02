@@ -18,6 +18,8 @@ Tests mock R2 + the DB row + ensure_recap_poster (no network, no real encode).
 """
 
 import asyncio
+import shutil
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -391,7 +393,8 @@ def test_ensure_game_source_poster_cache_hit():
 
 
 def test_ensure_game_source_poster_no_clips_uses_offset():
-    """No clips -> seek the primary video at the fixed 60s offset."""
+    """No clips + UNKNOWN duration -> seek the primary video at the fixed 60s
+    offset (the mocked cursor returns no duration row, so the clamp is a no-op)."""
     from app.services import poster
     from app import storage, database
 
@@ -403,6 +406,7 @@ def test_ensure_game_source_poster_no_clips_uses_offset():
          patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
          patch.object(poster, "_choose_game_poster_frame", return_value=None), \
          patch.object(poster, "_primary_game_video_hash", return_value="ghash"), \
+         patch.object(poster, "_primary_game_video_duration", return_value=None), \
          patch.object(storage, "generate_presigned_url_global", return_value="https://r2/g.mp4?sig"), \
          patch.object(poster, "extract_first_frame_jpeg", _extract_capture(captured)), \
          patch.object(poster, "_jpeg_dimensions", return_value=(1280, 720)), \
@@ -411,6 +415,81 @@ def test_ensure_game_source_poster_no_clips_uses_offset():
 
     assert captured["seek"] == GAME_POSTER_FALLBACK_OFFSET_SEC
     assert upload.called
+
+
+# --- T8200: short-game fallback-offset clamp (bknoto game 12, 11.9s, no clips) ---
+
+def test_clamp_fallback_seek_keeps_offset_for_long_video():
+    """A video longer than the offset seeks at the offset verbatim."""
+    from app.services.poster import _clamp_fallback_seek
+    assert _clamp_fallback_seek(60.0, 300.0) == 60.0
+
+
+def test_clamp_fallback_seek_keeps_offset_when_duration_unknown():
+    """Unknown duration (None) -> offset used verbatim (best-effort)."""
+    from app.services.poster import _clamp_fallback_seek
+    assert _clamp_fallback_seek(60.0, None) == 60.0
+    assert _clamp_fallback_seek(60.0, 0.0) == 60.0
+
+
+def test_clamp_fallback_seek_clamps_short_video_to_midpoint():
+    """T8200 root cause: a 11.9s game must NOT seek at the 60s offset (past EOF).
+    It samples the video midpoint instead, guaranteed inside the source."""
+    from app.services.poster import _clamp_fallback_seek
+    assert _clamp_fallback_seek(60.0, 11.9) == 11.9 * 0.5
+    # Exactly-equal is still unsafe (seek AT EOF extracts nothing) -> clamp.
+    assert _clamp_fallback_seek(60.0, 60.0) == 30.0
+
+
+def test_ensure_game_source_poster_short_game_clamps_seek():
+    """No clips + a SHORT game (duration < offset) seeks INSIDE the video, so the
+    poster is produced instead of 404ing forever (T8200, bknoto game 12)."""
+    from app import database, storage
+    from app.services import poster
+
+    captured = {}
+    head = MagicMock(side_effect=[None, {"ContentLength": 1}])
+
+    with patch.object(storage, "r2_head_object_global", head), \
+         patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
+         patch.object(poster, "_choose_game_poster_frame", return_value=None), \
+         patch.object(poster, "_primary_game_video_hash", return_value="ghash"), \
+         patch.object(poster, "_primary_game_video_duration", return_value=11.9), \
+         patch.object(storage, "generate_presigned_url_global", return_value="https://r2/g.mp4?sig"), \
+         patch.object(poster, "extract_first_frame_jpeg", _extract_capture(captured)), \
+         patch.object(poster, "_jpeg_dimensions", return_value=(320, 240)), \
+         patch.object(storage, "upload_bytes_to_r2_global", return_value=True) as upload:
+        assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is True
+
+    assert captured["seek"] == 11.9 * 0.5  # midpoint, NOT the 60s offset
+    assert captured["seek"] < 11.9
+    assert upload.called
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_extract_past_eof_fails_but_clamped_seek_succeeds(tmp_path):
+    """End-to-end ground truth for T8200: on a real 12s video, the OLD 60s
+    fallback seek extracts NO frame (the observed prod 404), while the clamped
+    midpoint seek produces a real JPEG."""
+    from app.services.poster import _clamp_fallback_seek, extract_first_frame_jpeg
+
+    video = tmp_path / "short12.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "lavfi",
+         "-i", "testsrc=duration=12:size=320x240:rate=30",
+         "-pix_fmt", "yuv420p", str(video)],
+        capture_output=True, check=True,
+    )
+
+    # OLD behavior: seek at the raw 60s offset -> extraction fails (past EOF).
+    past_eof = tmp_path / "eof.jpg"
+    assert extract_first_frame_jpeg(str(video), str(past_eof), seek=60.0) is False
+
+    # NEW behavior: clamped seek lands inside the video -> a real frame.
+    seek = _clamp_fallback_seek(60.0, 12.0)
+    good = tmp_path / "good.jpg"
+    assert extract_first_frame_jpeg(str(video), str(good), seek=seek) is True
+    assert good.stat().st_size > 0
 
 
 def test_ensure_game_source_poster_uses_highest_rated_timestamp():

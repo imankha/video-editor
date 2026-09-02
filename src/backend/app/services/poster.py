@@ -1135,6 +1135,40 @@ def _primary_game_video_hash(cursor, game_id: int) -> str | None:
     return row["video_hash"] if row else None
 
 
+def _primary_game_video_duration(cursor, game_id: int) -> float | None:
+    """Duration (seconds) of the game's PRIMARY source video (sequence 1's
+    `game_videos.duration`, else legacy `games.video_duration`), or None when
+    unknown. Used to clamp the no-clips fallback seek so it never lands past a
+    short video's end (T8200)."""
+    cursor.execute(
+        """
+        SELECT COALESCE(gv.duration, g.video_duration) AS video_duration
+        FROM games g
+        LEFT JOIN game_videos gv ON gv.game_id = g.id AND gv.sequence = 1
+        WHERE g.id = ?
+        """,
+        (game_id,),
+    )
+    row = cursor.fetchone()
+    if not row or row["video_duration"] is None:
+        return None
+    return float(row["video_duration"])
+
+
+def _clamp_fallback_seek(offset: float, duration: float | None) -> float:
+    """The no-clips fallback seek, guaranteed to land inside the source video.
+
+    T8200: `GAME_POSTER_FALLBACK_OFFSET_SEC` (60s) exceeds the duration of any
+    short game, and an ffmpeg seek at/past EOF extracts NO frame -> the poster
+    404s forever (never self-heals, since every retry seeks the same dead
+    offset). When the duration is known and shorter than the offset, sample the
+    video's midpoint instead; the offset is used verbatim when it already fits or
+    the duration is unknown."""
+    if duration and duration > 0 and offset >= duration:
+        return duration * 0.5
+    return offset
+
+
 def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bool:
     """Cache-first poster for an ACTIVE game with NO recap, from its live source
     video (T5681). Generate-on-miss; caches at the CARD-SIZE recap poster key
@@ -1184,7 +1218,12 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
                 video_hash, timestamp = choice
             else:
                 video_hash = _primary_game_video_hash(cursor, game_id)
-                timestamp = GAME_POSTER_FALLBACK_OFFSET_SEC
+                # T8200: clamp the fixed offset into the video -- a game shorter
+                # than the offset would otherwise seek past EOF and 404 forever.
+                timestamp = _clamp_fallback_seek(
+                    GAME_POSTER_FALLBACK_OFFSET_SEC,
+                    _primary_game_video_duration(cursor, game_id),
+                )
 
         if not video_hash:
             logger.info(f"[GamePoster] game {game_id} has no source video hash -> no poster")
@@ -1208,8 +1247,13 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
                 source_url, out_path, seek=timestamp,
                 resize_width=480, jpeg_quality=3,
             ):
-                logger.info(
-                    f"[GamePoster] extraction failed for game {game_id} @ {timestamp:.3f}s"
+                # T8200: the source object is CONFIRMED present (HEAD passed
+                # above), so a failed extraction is a real infra/encoding anomaly,
+                # not the expected expired-source 404 -- log at WARNING so it does
+                # not hide at INFO the way this bug did.
+                logger.warning(
+                    f"[GamePoster] extraction failed for game {game_id} @ {timestamp:.3f}s "
+                    f"(source {game_key} present)"
                 )
                 return False
             data = Path(out_path).read_bytes()
