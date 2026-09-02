@@ -1,6 +1,6 @@
 # T8390: Focus gets a publish exit (guided-path R3)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-02
