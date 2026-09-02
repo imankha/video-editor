@@ -1,4 +1,4 @@
-# T8320: Multi-clip reel staleness - visual cue on Reel Drafts / Focus clip list
+# T8350: Multi-clip reel staleness - visual cue on Reel Drafts / Focus clip list
 
 **Status:** TODO
 **Impact:** 4

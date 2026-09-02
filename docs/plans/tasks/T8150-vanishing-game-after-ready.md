@@ -58,7 +58,7 @@ Bug-reproduction skill: reproduce FIRST, failing test before any fix.
        No schema change. Reviewed and approved (1 blocking lint fix applied).
 4. [x] Verify the second anomaly - CONFIRMED separate root cause (create_game's
        dedup/reuse logic returns an old game id), NOT fixed by this change. Split out as
-       [T8310](../T8310-annotate-opens-old-game-after-upload.md).
+       [T8340](../T8340-annotate-opens-old-game-after-upload.md).
 5. [x] Prod read-only sweep for existing victims - run 2026-09-01 by the supervisor
        (`scripts/scan_charged_reverted_games.py` logic, driven via `edit-user-db.py`'s
        per-user R2 download): found all 19 prod accounts with a `game_upload` debit
