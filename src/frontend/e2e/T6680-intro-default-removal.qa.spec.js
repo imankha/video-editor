@@ -40,8 +40,8 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -194,7 +194,7 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     // round trip through the resolver, not a client echo.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /Highlight Reels/i }).first()).toBeVisible({ timeout: 20000 });
     const dl = await page.request.get('/api/downloads');
     expect(dl.ok()).toBe(true);
     const { downloads } = await dl.json();

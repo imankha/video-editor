@@ -5,7 +5,7 @@ import { skipOnDeployedTarget, assertSeamAvailable, IS_DEPLOYED_TARGET } from '.
 /**
  * T4850 — Transfer reels between profiles (multi-athlete accounts).
  *
- * Drives the REAL My Reels UI + API against the live stack (R2 ENABLED in the
+ * Drives the REAL Highlight Reels UI + API against the live stack (R2 ENABLED in the
  * container .env), using POST /api/test/seed-final-video which uploads a real tiny
  * MP4 under the current profile's per-profile R2 prefix. This proves the fix for
  * the production bug: R2 media is PER-PROFILE, so a move must server-side copy the

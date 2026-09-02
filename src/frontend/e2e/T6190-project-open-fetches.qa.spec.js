@@ -331,7 +331,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
   });
 
   // ---- Downloads "re-edit reel" -> Framing (the path the removed mount fetch served) ----
-  test('re-edit reel from My Reels opens Framing with a populated clip list', async ({ browser }) => {
+  test('re-edit reel from Highlight Reels opens Framing with a populated clip list', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     await loginAsRealUser(context, EMAIL, PROFILE);
     const page = await context.newPage();
@@ -339,11 +339,11 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    // Open My Reels; find a reel with an editable project and open its "More actions" menu.
+    // Open Highlight Reels; find a reel with an editable project and open its "More actions" menu.
     // ReelTile.jsx: canOpenSource(download) gates a "Open as Draft" menu item (FolderOpen icon)
     // that shares the same useReEditReel/onOpenProject path as the in-player Re-edit button
     // (e2e/reedit-reel.spec.js covers that path's public-viewer gating, not this menu).
-    await page.getByRole('button', { name: /My Reels/ }).click().catch(() => {});
+    await page.getByRole('button', { name: /Highlight Reels/ }).click().catch(() => {});
     // Scope everything to the open slide-over panel itself (DownloadsPanel.jsx renders a
     // separate bg-black/50 backdrop div + the animate-slide-in-right panel). An unscoped
     // page-wide locator can match a same-testid header still mounted behind the panel
@@ -351,19 +351,19 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     // intercepts pointer events forever — hence the prior 180s click timeout.
     const panel = page.locator('div.animate-slide-in-right');
     await panel.waitFor({ timeout: 15000 }).catch(() => {});
-    // The My Reels panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
+    // The Highlight Reels panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
     // individual ReelTile cards (and their "More actions" kebab) only render once a game
     // group is expanded. Expand the first one.
     const groupHeader = panel.locator('[data-testid="collapsible-group-header"]').first();
     const hasGroup = await groupHeader.count();
-    test.skip(!hasGroup, 'no game group in My Reels on this account data — seed a published reel');
+    test.skip(!hasGroup, 'no game group in Highlight Reels on this account data — seed a published reel');
     await groupHeader.click();
 
     // Scope to the panel so the click can't hit an unrelated same-page element.
     const moreActions = panel.getByRole('button', { name: 'More actions' }).first();
     await moreActions.waitFor({ timeout: 15000 }).catch(() => {});
     const hasMoreActions = await moreActions.count();
-    console.log(`[T6190] My Reels "More actions" buttons found (after group expand) = ${hasMoreActions}`);
+    console.log(`[T6190] Highlight Reels "More actions" buttons found (after group expand) = ${hasMoreActions}`);
     test.skip(!hasMoreActions, 'no reel card in the expanded group on this account data — seed a published reel with an editable project');
     await moreActions.scrollIntoViewIfNeeded();
     await moreActions.click();
@@ -371,7 +371,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     const reEdit = page.getByText('Open as Draft', { exact: true }).first();
     const hasReEdit = await reEdit.count();
     console.log(`[T6190] "Open as Draft" menu items found = ${hasReEdit}`);
-    test.skip(!hasReEdit, 'no re-editable reel (no reel with an attached project_id) in My Reels on this account data');
+    test.skip(!hasReEdit, 'no re-editable reel (no reel with an attached project_id) in Highlight Reels on this account data');
 
     // After navigation, Framing must open with clips (the onOpenProject invalidateClips fix).
     const clickAt = Date.now();

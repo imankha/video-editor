@@ -193,7 +193,7 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
 
-    // Open the REAL DownloadsPanel (My Reels) — it opens even with zero reels.
+    // Open the REAL DownloadsPanel (Highlight Reels) — it opens even with zero reels.
     await page.getByRole('button', { name: /my reels/i }).first().click();
     const drawer = page.locator('.animate-slide-in-right').first();
     await drawer.waitFor({ timeout: 15000 });

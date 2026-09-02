@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 
 /**
- * T5672: My Reels drawer (GameCollectionGroup) aspect-split rows.
+ * T5672: Highlight Reels drawer (GameCollectionGroup) aspect-split rows.
  *
  * The real account's game/mixes buckets are all single-aspect today (checked
  * live via GET /api/collections/summary -- every game reports only '9:16' in
@@ -66,7 +66,7 @@ test('T5672 drawer aspect split at 1280px: two rows, portrait first, legible chi
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: 'My Reels', exact: true }).click();
+  await page.getByRole('button', { name: 'Highlight Reels', exact: true }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -103,7 +103,7 @@ test('T5672 drawer aspect split at 390px: two rows still legible on mobile', asy
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: 'My Reels', exact: true }).click();
+  await page.getByRole('button', { name: 'Highlight Reels', exact: true }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -126,10 +126,10 @@ test('T5672 drawer: single-aspect game shows no aspect chip (unchanged look)', a
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: 'My Reels', exact: true }).click();
+  await page.getByRole('button', { name: 'Highlight Reels', exact: true }).click();
   await page.waitForTimeout(800);
 
-  // Scope to the My Reels drawer panel. The Reel Drafts screen BEHIND the drawer can
+  // Scope to the Highlight Reels drawer panel. The Reel Drafts screen BEHIND the drawer can
   // also render [data-testid="collapsible-group-header"] game groups (full-width,
   // x~64) when its own classification is switched to "By Game" (T8080 -- the screen
   // now defaults to "By Phase", which renders no such elements), so an unscoped
@@ -139,7 +139,7 @@ test('T5672 drawer: single-aspect game shows no aspect chip (unchanged look)', a
   // header INSIDE the panel (pinned right, above the backdrop), which is what a
   // user actually clicks.
   const drawer = page.locator('.max-w-md.bg-gray-800', {
-    has: page.getByRole('heading', { name: 'My Reels', exact: true }),
+    has: page.getByRole('heading', { name: 'Highlight Reels', exact: true }),
   });
 
   // The real account's games are single-aspect today -- expand the first

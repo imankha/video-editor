@@ -2,7 +2,7 @@
  * T5673 QA — Drawer polish: kebab menu redesign, leading collection posters,
  * Top Play rank badge (T5679).
  *
- * Drives the REAL My Reels drawer as the real account (dev-login,
+ * Drives the REAL Highlight Reels drawer as the real account (dev-login,
  * imankh@gmail.com / profile 9fa7378c — 6 published single-clip reels, 4 of
  * which are actually ranked via the Glicko game; see season_rank fix below).
  *

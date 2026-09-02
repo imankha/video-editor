@@ -61,8 +61,8 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   // target the staged 'Brilliant Pass' card specifically (other Done drafts may exist)
   const card = page.locator('[data-testid="project-card"]')
     .filter({ hasText: 'Brilliant Pass' })
-    .filter({ has: page.getByRole('button', { name: 'Move to My Reels' }) }).first();
-  const moveBtn = card.getByRole('button', { name: 'Move to My Reels' });
+    .filter({ has: page.getByRole('button', { name: 'Move to Highlight Reels' }) }).first();
+  const moveBtn = card.getByRole('button', { name: 'Move to Highlight Reels' });
   await moveBtn.waitFor({ timeout: 20000 });
   await card.scrollIntoViewIfNeeded();
   await card.hover();
@@ -83,7 +83,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   await page.keyboard.press('Escape');
   await dwell(1.5);
 
-  // --- line 3: click Move to My Reels ----------------------------------------------
+  // --- line 3: click Move to Highlight Reels ----------------------------------------------
   await ring(moveBtn, 8);
   await dwell(1);
   await mark(3, 'Move');
@@ -91,14 +91,14 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   await clearRing();
   await dwell(3.5);
 
-  // --- line 4: in My Reels under the game name ---------------------------------------
+  // --- line 4: in Highlight Reels under the game name ---------------------------------------
   await mark(4);
-  step('My Reels drawer (auto-opens on publish)');
-  const drawerHeading = page.getByRole('heading', { name: 'My Reels', exact: true }).first();
+  step('Highlight Reels drawer (auto-opens on publish)');
+  const drawerHeading = page.getByRole('heading', { name: 'Highlight Reels', exact: true }).first();
   try {
     await drawerHeading.waitFor({ timeout: 5000 });
   } catch {
-    await page.getByRole('button', { name: /^My Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Highlight Reels/ }).first().click();
     await drawerHeading.waitFor();
   }
   await dwell(1.2);

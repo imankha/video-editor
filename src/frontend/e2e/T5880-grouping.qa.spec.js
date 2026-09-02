@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
- * T5880 QA - derived tournament/month grouping in My Reels, in a REAL browser
+ * T5880 QA - derived tournament/month grouping in Highlight Reels, in a REAL browser
  * at 390px and 1280px.
  *
  * The grouping/eligibility LOGIC (which games form which group, no fabricated
@@ -59,8 +59,8 @@ async function setupAndAuth(page) {
   });
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'My Reels' }).click();
-  await expect(page.getByRole('heading', { name: 'My Reels' })).toBeVisible();
+  await page.getByRole('button', { name: 'Highlight Reels' }).click();
+  await expect(page.getByRole('heading', { name: 'Highlight Reels' })).toBeVisible();
 }
 
 test.afterEach(async ({ request }) => {

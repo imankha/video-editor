@@ -213,7 +213,7 @@ test.describe('Full Workflow Tests', () => {
     await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
 
     // T6830: for a fresh zero-clip account the Reel Drafts tab is a deliberate
-    // dead end (clicking in can only show an empty list with a disabled New Reel),
+    // dead end (clicking in can only show an empty list with a disabled Build Highlight Reel),
     // so it renders DISABLED until a clip is extracted. The enabled-tab default is
     // pinned by ProjectManager.homeTabDefaults.test.jsx; here we just assert the
     // fresh-user state matches the shipped product change.

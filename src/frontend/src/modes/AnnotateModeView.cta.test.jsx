@@ -107,6 +107,14 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(onAddClip).toHaveBeenCalledTimes(1);
   });
 
+  it('flips to "Edit Play" when a clip is selected, since onAddClip edits it instead of creating a new one', () => {
+    renderView({ isEditMode: true });
+    expect(screen.queryByRole('button', { name: /^add play$/i })).toBeNull();
+    const cta = screen.getByRole('button', { name: /edit play/i });
+    expect(cta).toBeTruthy();
+    expect(cta).toHaveAttribute('title', 'Edit the selected play');
+  });
+
   it('shows the one-line first-use hint only while there are no clips', () => {
     renderView({ hasAnnotateClips: false });
     expect(screen.getByText(/we grab the last few seconds/i)).toBeTruthy();

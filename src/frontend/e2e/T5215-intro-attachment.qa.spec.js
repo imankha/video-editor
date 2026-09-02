@@ -35,8 +35,8 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -219,7 +219,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // RELOAD -- the exact path the user took ("left"), not a same-session reopen.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /Highlight Reels/i }).first()).toBeVisible({ timeout: 20000 });
 
     // Confirm the VALUE side independently (same as criterion b) before
     // touching the UI, so a failure below is unambiguously presentation-only.
@@ -228,9 +228,9 @@ test.describe('T5215 intro attachment (real account)', () => {
     const persistedReel = dlBody.downloads.find((d) => d.intro_card_id === targetCard.id);
     expect(persistedReel, 'PERSISTENCE: the value must round-trip after reload').toBeTruthy();
 
-    // Navigate back into My Reels and reopen the SAME reel's picker.
-    await page.getByRole('button', { name: /My Reels/i }).first().click();
-    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+    // Navigate back into Highlight Reels and reopen the SAME reel's picker.
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
       .toBeVisible({ timeout: 15000 });
     await expandFirstGroup(page);
     const tileAfterReload = page.getByTestId('reel-card').first();
@@ -283,7 +283,7 @@ test.describe('T5215 intro attachment (real account)', () => {
 
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /Highlight Reels/i }).first()).toBeVisible({ timeout: 20000 });
     // Same rationale as criterion b: hit the real endpoint directly rather than
     // sniffing an incidental frontend fetch that isn't guaranteed to fire here.
     const dl = await page.request.get('/api/downloads');
@@ -347,7 +347,7 @@ test.describe('T5215 intro attachment (real account)', () => {
   // tests, which assert the same share modal + embedded intro carousel + "No
   // intro" option AND the freeze semantics + far more (T7770, survey item 11).
 
-  test('responsive sweep: My Reels carousel view + collection share dialog', async ({ page }) => {
+  test('responsive sweep: Highlight Reels carousel view + collection share dialog', async ({ page }) => {
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
     test.skip(!hasReels, 'no published reels on this account/profile');
@@ -457,7 +457,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // RELOAD (not same-session) -- the exact verification path required.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /My Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /Highlight Reels/i }).first()).toBeVisible({ timeout: 20000 });
 
     // Confirm the VALUE round-trips via the real endpoint with the SAME query
     // params the UI used (unambiguous persistence check, independent of UI).
@@ -469,8 +469,8 @@ test.describe('T5215 intro attachment (real account)', () => {
     // Navigate back in and reopen the SAME collection's picker -- the
     // PRESENTATION half: the DOM must mark the persisted selection, exactly
     // the property the round-2 bug fix established for reels.
-    await page.getByRole('button', { name: /My Reels/i }).first().click();
-    await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
       .toBeVisible({ timeout: 15000 });
     const headersAfter = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
     await headersAfter.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});

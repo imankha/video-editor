@@ -243,6 +243,15 @@ test.describe('T690: Clip Selection State Machine', () => {
     console.log(`[Test] STABILITY: Add Clip hidden while selected: ${addHiddenStable} (expect true)`);
     expect(addHiddenStable).toBe(true);
 
+    // T8130: the full-width primary CTA must reflect the same selection state
+    // as the transport-bar Add button - it flips to "Edit Play" rather than
+    // silently staying "Add Play" while its click handler actually edits the
+    // selected clip (regression guard for a review finding: a mislabeled CTA
+    // both misleads the user and undercounts add_clip_opened).
+    const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
+    await expect(primaryCta).toHaveText(/Edit Play/);
+    await expect(primaryCta).toHaveAttribute('title', 'Edit the selected play');
+
     // ========================================================================
     // REQ 2: Playhead leaving clip → auto-deselect
     // ========================================================================

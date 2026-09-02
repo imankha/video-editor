@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Plus, Share2, ArrowLeft, Minimize, Clock } from 'lucide-react';
+import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -780,19 +780,33 @@ export function AnnotateModeView({
         {!annotateFullscreen && !mobileInlineForm && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-3">
-              {/* PRIMARY CTA — full-width, high-contrast, >=44pt tap target. */}
+              {/* PRIMARY CTA — full-width, high-contrast, >=44pt tap target.
+                  Flips to "Edit Play" when a clip is selected, mirroring
+                  AnnotateControls' isEditMode handling (T8130 review finding:
+                  the button must reflect what onAddClip is about to do -
+                  editClip vs startCreating - or it silently misroutes the
+                  gesture it exists to teach). */}
               <button
                 onClick={onAddClip}
                 disabled={isSourceExpired}
-                title={isSourceExpired ? 'Source video expired — cannot add plays' : undefined}
+                data-testid="annotate-primary-cta"
+                title={
+                  isSourceExpired
+                    ? 'Source video expired — cannot add plays'
+                    : isEditMode
+                    ? 'Edit the selected play'
+                    : 'Add a play ending at the current time'
+                }
                 className={`w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
                   isSourceExpired
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
+                    : isEditMode
+                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
                     : 'bg-green-500 hover:bg-green-400 text-white shadow-green-900/40'
                 }`}
               >
-                <Plus size={22} />
-                Add Play
+                {isEditMode ? <Pencil size={22} /> : <Plus size={22} />}
+                {isEditMode ? 'Edit Play' : 'Add Play'}
               </button>
 
               {/* First-use teaching hint — shown only before the first clip exists.

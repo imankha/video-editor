@@ -98,7 +98,7 @@ async function setupRankingMocks(page) {
   );
 }
 
-/** Login, mock routes, navigate home, open My Reels, click the ConfidenceBanner. */
+/** Login, mock routes, navigate home, open Highlight Reels, click the ConfidenceBanner. */
 async function openRankingGame(context, page) {
   await loginAsRealUser(context, REAL_EMAIL);
   await setupRankingMocks(page);
@@ -106,8 +106,8 @@ async function openRankingGame(context, page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-  // GalleryButton has title="My Reels" (SECTION_NAMES.LIBRARY)
-  await page.getByTitle('My Reels').first().click({ timeout: 15000 });
+  // GalleryButton has title="Highlight Reels" (SECTION_NAMES.LIBRARY)
+  await page.getByTitle('Highlight Reels').first().click({ timeout: 15000 });
 
   // ConfidenceBanner shows "Rank reels" when kind === 'active' (eligible: true)
   const rankLink = page.getByText('Rank reels').first();

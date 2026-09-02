@@ -10,7 +10,7 @@ import { waitForAppReady } from './helpers/appReady.js';
  * E2E_REAL_PROFILE):
  *   login -> Reel Drafts -> open a DISCOVERED draft -> Export -> wait for the
  *   pipeline (framing render -> overlay render -> final video) -> publish
- *   ("Move to My Reels") -> My Reels lists the reel.
+ *   ("Move to Highlight Reels") -> Highlight Reels lists the reel.
  *
  * T5400: the target draft is DISCOVERED from /api/projects (a non-finalized reel
  * draft), NOT hardcoded to project id 1 / a "Wonder Goal" chip. If the fixture has
@@ -250,20 +250,20 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate @gate
   }
   expect(proj?.has_final_video, 'pipeline produced a final video').toBeTruthy();
 
-  // --- PUBLISH: the ready-to-publish card shows "Move to My Reels" ---
+  // --- PUBLISH: the ready-to-publish card shows "Move to Highlight Reels" ---
   await page.goto('/');
   await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Reel Drafts' }) });
   await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
-  const moveBtn = page.getByRole('button', { name: /Move to My Reels/i }).first();
+  const moveBtn = page.getByRole('button', { name: /Move to Highlight Reels/i }).first();
   await moveBtn.waitFor({ timeout: 60000 });
   await page.screenshot({ path: `${EVID}/05-ready-to-publish.png` });
   await moveBtn.click();
-  console.log('[derisk] Move to My Reels clicked');
+  console.log('[derisk] Move to Highlight Reels clicked');
 
   // publish opens the gallery; the reel count must become >= 1
   await page.waitForTimeout(4000);
   const count = await apiGet(context, '/downloads/count');
   console.log('[derisk] downloads/count:', JSON.stringify(count));
   await page.screenshot({ path: `${EVID}/06-after-publish.png` });
-  expect(count.count, 'published reel visible in My Reels').toBeGreaterThanOrEqual(1);
+  expect(count.count, 'published reel visible in Highlight Reels').toBeGreaterThanOrEqual(1);
 });

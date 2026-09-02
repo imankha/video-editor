@@ -5,10 +5,10 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 /**
  * T5673 (visual tiles) + T5678 (no batch Select) — live QA on the REAL account.
  *
- * Drives the My Reels drawer as imankh@gmail.com (dev-login) at 390 (mobile) and
+ * Drives the Highlight Reels drawer as imankh@gmail.com (dev-login) at 390 (mobile) and
  * 1280+ (desktop) and evidences the acceptance criteria of BOTH bundled tasks:
  *
- *   T5678-c1  no Select button / selection mode anywhere in My Reels
+ *   T5678-c1  no Select button / selection mode anywhere in Highlight Reels
  *   T5678-c2  each reel EXPOSES "Move to profile…" (the picker->confirm->commit WALK
  *             is owned by T4850-move-reels; T7770 dropped the duplicated uncommitted walk)
  *   T5673-c1  collection/game groups show poster imagery (tiles, not text rows)
@@ -28,9 +28,9 @@ const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
   // The drawer header is the stable anchor (reels themselves live in collapsed groups).
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -56,7 +56,7 @@ async function expandFirstGroup(page) {
   return false;
 }
 
-test.describe('T5673 + T5678 — My Reels visual tiles (real account)', () => {
+test.describe('T5673 + T5678 — Highlight Reels visual tiles (real account)', () => {
   test('c1: NO Select button anywhere in the drawer', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openDrawer(page);

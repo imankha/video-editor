@@ -10,7 +10,7 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 //
 // Author-side resolution (DraftTile preview -> MediaPlayer) + the exact soccer/
 // football glyph mapping + the unknown-sport plain-dot fallback are covered by
-// the unit specs (VideoControls.test.jsx, MediaPlayer.test.jsx); My Reels /
+// the unit specs (VideoControls.test.jsx, MediaPlayer.test.jsx); Highlight Reels /
 // RankingGame use CollectionPlayer (a segmented bar, no scrub-dot handle), so
 // they are out of scope for the handle swap.
 

@@ -177,7 +177,7 @@ export const STAGING_GATE_SPECS = [
   {
     file: 'T4190-my-reels-group-visibility.spec.js',
     lane: 'b',
-    covers: 'My Reels group headers show real game names + collapsed-group "N new" chip',
+    covers: 'Highlight Reels group headers show real game names + collapsed-group "N new" chip',
   },
   {
     file: 'T5677-home-deeplinks-route-fallback.spec.js',

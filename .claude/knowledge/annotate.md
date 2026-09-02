@@ -1,5 +1,22 @@
 ---
 domain: annotate
+updated: 2026-09-02 (T8130 Annotate primary CTA: `AnnotateModeView.jsx`'s new full-width
+"Add Play" button (`data-testid="annotate-primary-cta"`) calls the SAME `onAddClip` handler
+as the transport-bar button (`AnnotateControls.jsx`), so it MUST mirror that button's
+`isEditMode` gating or it silently misroutes - `onAddClip` (`handleAddClipFromButton`,
+AnnotateContainer.jsx) edits the selected clip when `selectionState.type === 'SELECTED'`,
+not create one. Flips label/icon/color (`Add Play`/`Plus`/green -> `Edit Play`/`Pencil`
+/yellow) exactly like `AnnotateControls` does, with DELIBERATELY DIFFERENT title text
+("Add a play ending at the current time" / "Edit the selected play", no "(A)" suffix) so
+its `button[title=...]` locator never collides with the transport-bar button's own title
+in Playwright strict mode (both buttons render simultaneously in non-fullscreen,
+non-edit-mode - a real regression caught by post-hoc review, not by CI, since the
+CTA-hierarchy unit tests mock every sibling surface). Reel Drafts tab intentionally NOT
+renamed by this task (would misrepresent its mixed single/multi-clip content - see T8360)
+nor is the assembly button relocated off it (no valid destination surface pre-T8360);
+"Highlight Reels"/"Build Highlight Reel" renames elsewhere are UI-string-only, zero
+identifier/event-name changes (see Landmines "Add Play CTA must gate on isEditMode
+(T8130)")
 updated: 2026-08-31 (T8180 ghost annotate session: the T7470 only_if_empty cleanup was necessary but
 NOT sufficient — an annotate-during-upload session has committed nothing yet, so a failed upload's
 only_if_empty DELETE deleted the game UNDER the live session (bug 47p: 26 min annotating a deleted game,
@@ -405,6 +422,19 @@ The full checklist for an 11th→Nth sport:
   Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
+- **Add Play CTA must gate on `isEditMode` (T8130, 2026-09-02).** Any new button that calls
+  `onAddClip`/`handleAddClipFromButton` (AnnotateContainer.jsx) MUST mirror `AnnotateControls`'
+  `isEditMode` label/icon flip (`Add Play`/`Plus` vs `Edit Play`/`Pencil`) — that handler branches
+  on `selectionState.type === 'SELECTED'` to EDIT the selected clip instead of creating a new one,
+  so an ungated button silently misroutes the moment a clip is selected (says "add", actually
+  edits) and undercounts `add_clip_opened`. Caught post-hoc by review, not CI — the CTA-hierarchy
+  unit tests (`AnnotateModeView.cta.test.jsx`) mock every sibling surface, so a missing-gate bug is
+  invisible there; only a real render with `isEditMode: true` catches it. **Do not reuse
+  `AnnotateControls`' exact title text** (`"Add play ending at current time (A)"` /
+  `"Edit selected play (A)"`) on a second, simultaneously-rendered button — both the transport-bar
+  button and the full-width CTA are visible at once in non-fullscreen mode, so an identical
+  `title` creates a Playwright strict-mode multi-match on `button[title="..."]` locators (see
+  `clip-selection-state-machine.spec.js`). Use distinct title text per button instance instead.
 - **`annotation_completed` fires on WATCHED VIDEO, not a clip created — its label is display-only (T7930, 2026-08-28).**
   `POST /{game_id}/finish-annotation` (games.py, fired from `AnnotateScreen` mode-change/unmount via
   `gamesDataStore.finishAnnotation`) emits `record_milestone("annotation_completed")` purely on

@@ -7,7 +7,7 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  * the user SEES, not the null default from before they reached the picker.
  *
  * Drives the REAL CollectionShareModal as imankh@gmail.com / profile 9fa7378c
- * (dev-login, real R2/Postgres data), opened from the My Reels collection kebab.
+ * (dev-login, real R2/Postgres data), opened from the Highlight Reels collection kebab.
  * The POST /api/collections/share is intercepted so the flow is deterministic
  * and does NOT mutate real share rows: the handler records each request body and
  * returns a fixed token, so the test can assert BOTH what the user sees (the
@@ -54,8 +54,8 @@ async function stubShareCreate(page, shareCalls) {
 async function openCollectionShareModal(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /My Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /My Reels|Library/i }).first())
+  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
     .toBeVisible({ timeout: 20000 });
 
   const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
@@ -71,7 +71,7 @@ async function openCollectionShareModal(page) {
   await expect(page.getByText(/^Share "/).or(page.getByText('Share highlights'))).toBeVisible({ timeout: 10000 });
 }
 
-// Scope every assertion to the share-modal card itself -- the My Reels drawer
+// Scope every assertion to the share-modal card itself -- the Highlight Reels drawer
 // behind the overlay also has Copy-link buttons and readonly inputs on its reel
 // tiles, so page-level lookups hit those too.
 const shareModal = (page) =>

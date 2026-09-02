@@ -67,7 +67,7 @@ async function mockCollection(page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        title: 'My Reels',
+        title: 'Highlight Reels',
         context_line: 'This link always shows the current reels for this game.',
         aspect_ratio: '16:9',
         members: MEMBERS,
