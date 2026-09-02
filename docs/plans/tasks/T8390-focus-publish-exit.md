@@ -1,6 +1,6 @@
 # T8390: Focus gets a publish exit (guided-path R3)
 
-**Status:** WIP
+**Status:** TODO (spawned briefly 2026-09-02, zero real progress before a quota gap; container reaped. Held per user order: Tutorial Redesign group waits for Next Up's UI-visible tasks to clear first — see PLAN.md's Tutorial Redesign section note)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-02
