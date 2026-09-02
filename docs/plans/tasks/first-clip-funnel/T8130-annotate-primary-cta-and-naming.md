@@ -1,6 +1,6 @@
 # T8130: Annotate primary CTA + Plays/Clips/Reels naming
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-31
