@@ -97,7 +97,10 @@ match the pruned reality rather than deleting the assertions.
 
 ## Measured Floors
 
-### DEV (2026-09-02, `scripts/measure_migration_floor.py`, orphan-inclusive R2 walk)
+All three envs measured (dev in-container; staging + prod swept by the supervisor on the host with
+each env's R2 credentials loaded). `scripts/measure_migration_floor.py`, orphan-inclusive R2 walk.
+
+### DEV (2026-09-02)
 
 | Track | Floor | Head seen | Notes |
 |-------|-------|-----------|-------|
@@ -105,15 +108,48 @@ match the pruned reality rather than deleting the assertions.
 | `profile_db` | **v000** | v048 | ONE object at v000: `dev/users/e2e_t7790_1787783178970_0fjrr2/profiles/4600738b/profile.sqlite` (a broken/unstamped E2E leftover). Next tiers: v016(2), v019(4), v022(1), v023(46), … v048(10). Registry head is v049; no dev profile has reached it yet |
 | `postgres` | head v026, contiguous 1..26 | v026 | single shared DB, at head (exempt from the floor gate — see below) |
 
-**Conclusion: the prune CANNOT proceed.** Two independent blockers:
-1. **staging + prod are unmeasurable in-container** (this container carries only DEV credentials in
-   `/workspace/.env`: `APP_ENV=dev`, dev `DATABASE_URL`, dev R2). The floor is `min` across dev **and
-   staging AND prod** — an unmeasured env could hide a lower floor. See the BLOCKED line.
-2. **Even DEV has below-floor outliers that are test artifacts**, not real accounts: a v000
-   profile.sqlite and 14 v006 user.sqlite objects (all `e2e_*`/`probe_*`/`test`). A single v000
-   profile pins the profile_db floor at 0 → nothing is prunable there until the supervisor/user
-   decides whether to (a) clean up these dev test leftovers, or (b) exclude non-real accounts from
-   the floor. This is a data/product judgment, not a code decision — do NOT guess it.
+### STAGING (2026-09-02, 105 objects, 0 unreadable)
+
+| Track | Floor | Head seen | Notes |
+|-------|-------|-----------|-------|
+| `user_db` | **v006** | v007 | 25 objects at v006 (mostly `e2e_*` + derisk-probe artifacts); 12 at v007 |
+| `profile_db` | **v010** | v049 | floor held by 9 objects at v010, incl. real-looking staging accounts AND `e2e_smoke` users. Histogram tail: v026(14), v029(7), v042(1), v048(1), v049(17) |
+| `postgres` | NOT measured | — | needs staging `DATABASE_URL` via fly (deferred — see below) |
+
+### PRODUCTION (2026-09-02, 146 objects, 0 unreadable)
+
+Swept under the `production/` prefix. (First prod attempt reported an empty sweep because `--env prod`
+mapped verbatim to a non-existent `prod/` prefix — that script bug is fixed this commit: `prod` now maps
+to `production/`, and an empty sweep HALTS loudly instead of reporting a false "no objects" all-clear.)
+
+| Track | Floor | Head seen | Notes |
+|-------|-------|-----------|-------|
+| `user_db` | **v000** | v007 | v000: 2 REAL accounts (`ce66c8c0…`, `cfa0f6d9…`); v002: 1; v007: 65 |
+| `profile_db` | **v000** | v048 | v000: 1; v002: 1; v003: 2; v006: 1; v023: 1; v024: 1; v048: 71 |
+| `postgres` | NOT measured | — | needs prod `DATABASE_URL` via fly (deferred — see below) |
+
+**Conclusion: the prune is DEFERRED (not failed).** No SQLite prefix can be pruned now:
+
+1. **Real production accounts sit far below head** — prod `user_db` and `profile_db` both floor at
+   **v000**, held by REAL accounts (not test artifacts): the JIT long-tail property working exactly as
+   designed (an account only migrates when it next comes online; a genuinely inactive user can sit
+   behind indefinitely — CLAUDE.md § Migration System "Long-tail property"). A contiguous-prefix prune
+   would strand these accounts below a nonzero floor and turn them UNRECOVERABLE (`BelowMigrationFloor`
+   → 500). Nothing is safely prunable while any reachable real DB is below the proposed floor.
+2. **profile_db floor <= 23 would trip the widen-first alarm regardless** — even ignoring prod, the
+   reviewer follow-up gate (`test_prune_floor_within_verified_window`, Step 4) fails structurally for
+   any profile_db floor <= 23 until the equivalence test is widened to replay the full pruned range.
+   Staging's profile_db floor is v010 and prod's is v000, so this gate would block a profile_db prune
+   independently.
+3. **Postgres staging/prod floors were NOT measured** — that needs each env's `DATABASE_URL` via fly,
+   deferred this session. Dev postgres is v026 contiguous at head. Postgres is exempt from the floor
+   gate by construction anyway (fresh pg = empty `schema_migrations` ledger → current=0; a nonzero pg
+   floor would refuse every fresh deploy), and the task says never prune postgres the same day as the
+   SQLite tracks — so a postgres prune is not on the table this session either.
+
+The prune waits for the long tail to drain (or an explicit product decision to force-migrate / exclude
+specific below-floor accounts). This branch lands as the **INERT increment**: mechanism + tests + the
+fixed sweep script + these recorded floors. No floor is set nonzero; nothing is deleted.
 
 **What DID land this session (code that does not depend on the measured floor):**
 - The **DDL-vs-migrated schema equivalence tests** (Step 1) — `tests/test_t5089_prune_floor.py`. Both
@@ -131,11 +167,14 @@ match the pruned reality rather than deleting the assertions.
 ### Steps
 1. [x] Add the fresh-DDL-vs-migrated-from-floor schema equivalence test; fix any drift it finds
        (no drift found; one benign normalized default-representation diff)
-2. [~] Sweep every reachable DB and record the floor per track — DEV done (above); **staging/prod
-       BLOCKED on supervisor credentials** (exact commands in `.dotask-status`)
+2. [x] Sweep every reachable DB and record the floor per track — dev + staging + prod SQLite floors
+       measured & recorded above (2026-09-02). Postgres staging/prod floors deferred (need per-env
+       `DATABASE_URL` via fly); dev postgres is v026 contiguous at head
 3. [x] Implement floor enforcement (shipped inert, `floor=0`; `BelowMigrationFloor` → loud 500)
-4. [ ] Prune the contiguous prefix for ONE track — **BLOCKED** on Step 2 (floor unproven) + the dev
-       artifact-cleanup decision. **REVIEWER FOLLOW-UP GATE (2026-09-02):** the profile_db
+4. [ ] Prune the contiguous prefix for ONE track — **DEFERRED**: cross-env sweep now proves REAL prod
+       accounts sit at v000 on both SQLite tracks (JIT long-tail, by design), so no prefix is safely
+       prunable until the tail drains or a product decision force-migrates/excludes those accounts.
+       **REVIEWER FOLLOW-UP GATE (2026-09-02):** the profile_db
        equivalence test independently reconstructs ONLY the v024+ tail (below-v23 migrations are
        side-effecting, can't run headless). If the proven floor F <= 23, WIDEN
        `test_fresh_ddl_equals_migrated_from_floor` to drop+replay the full pruned range (incl. the

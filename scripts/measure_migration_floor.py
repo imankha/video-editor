@@ -26,9 +26,12 @@ Usage (run once per environment, with THAT env's credentials loaded in .env):
     # Postgres floor for one env (uses that env's DATABASE_URL):
     .venv/Scripts/python.exe ../../scripts/measure_migration_floor.py --env prod --postgres
 
-R2 uses a single shared bucket keyed by ``{env}/users/...``, so one credential
-set can sweep dev/staging/prod prefixes; postgres needs each env's own
-DATABASE_URL. Record the per-track floors + date back in the T5089 task file.
+R2 uses a single shared bucket keyed by ``{env-prefix}/users/...`` (the prefix is
+``dev``/``staging``/``production`` — note ``--env prod`` maps to ``production/``,
+NOT ``prod/``; see ``_R2_PREFIX_FOR_ENV``), so one credential set can sweep all
+three prefixes; postgres needs each env's own DATABASE_URL. A sweep that finds
+zero objects HALTS loudly (never reports an empty floor). Record the per-track
+floors + date back in the T5089 task file.
 """
 
 import argparse
@@ -45,6 +48,13 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 from app.storage import R2_BUCKET, R2_ENABLED, get_r2_client  # noqa: E402
+
+# T5089: the R2 key PREFIX is not always identical to the --env name. Production
+# lives under `production/`, NOT `prod/`. Mapping --env verbatim into the prefix
+# (the original bug) made `--env prod` sweep an EMPTY, non-existent `prod/` prefix
+# and calmly report "no objects" — a false all-clear that would have let the prune
+# proceed as if prod had no below-floor accounts. Map every env explicitly here.
+_R2_PREFIX_FOR_ENV = {"dev": "dev", "staging": "staging", "prod": "production"}
 
 
 def _read_user_version_from_r2(client, key: str) -> int | None:
@@ -78,7 +88,7 @@ def _iter_db_keys(client, env: str):
     """Yield every user.sqlite and profile.sqlite key under {env}/users/, listing
     R2 directly so ORPHAN (unregistered) profile objects are included."""
     paginator = client.get_paginator("list_objects_v2")
-    prefix = f"{env}/users/"
+    prefix = f"{_R2_PREFIX_FOR_ENV[env]}/users/"
     for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
@@ -112,6 +122,20 @@ def sweep_sqlite(env: str) -> None:
             user_db_versions[key] = v
         else:
             profile_db_versions[key] = v
+
+    if total == 0:
+        # A sweep that finds ZERO objects is never a valid "all clear". Either the
+        # prefix is wrong (the prod/production bug), the credentials point at the
+        # wrong bucket, or R2 is empty — all of which must HALT the operator, not be
+        # mistaken for "nothing below the floor, safe to prune". Fail loud.
+        raise SystemExit(
+            f"[{env}] ANOMALY: swept 0 objects under prefix "
+            f"'{_R2_PREFIX_FOR_ENV[env]}/users/'. This is NOT a floor of 'no "
+            "constraints' — it means the prefix/bucket/credentials are wrong for "
+            "this env (e.g. the historical prod->prod vs production/ bug). Verify "
+            "R2_BUCKET and this env's credentials, then rerun. Refusing to report "
+            "a floor from an empty sweep."
+        )
 
     print(f"\n[{env}] swept {total} SQLite object(s); {unreadable} unreadable.")
     for track, versions in (("user_db", user_db_versions), ("profile_db", profile_db_versions)):
