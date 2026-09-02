@@ -9,7 +9,13 @@ const GRID_CELLS = [
 
 const ACTION_LABELS = {
   session_started: 'Sessions',
-  game_created: 'Games Uploaded',
+  // T8220: game_created fires on the pending insert (an ATTEMPT, no R2 bytes
+  // yet); game_upload_succeeded is the durable, R2-verified outcome. Rendered
+  // as a distinct pair (tries vs succeeded) rather than one bare "Games
+  // Uploaded" label bound to the attempt count -- see UserDetailPanel.jsx's
+  // UPLOAD_ATTEMPT/UPLOAD_SUCCESS pairing for the same taxonomy.
+  game_created: 'Games Tried',
+  game_upload_succeeded: 'Games Succeeded',
   clip_created: 'Clips Created',
   annotation_completed: 'Watched Annotate Video', // T7930: watched-video, not a clip created
   framing_opened: 'Focus Opened',
