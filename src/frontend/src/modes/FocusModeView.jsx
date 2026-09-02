@@ -112,6 +112,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         estimatedCredits={container.estimatedCredits}
         insufficientForEstimate={container.insufficientForEstimate}
         creditBalance={container.creditBalance}
+        sourceFps={container.sourceFps}
         showBuyCredits={container.showBuyCredits}
         onOpenBuyCredits={container.onOpenBuyCredits}
         onCloseBuyCredits={container.onCloseBuyCredits}

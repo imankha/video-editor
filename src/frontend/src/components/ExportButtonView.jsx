@@ -4,6 +4,7 @@ import { Button, Toggle } from './shared';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { SECTION_NAMES } from '../config/displayNames';
+import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -58,6 +59,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   estimatedCredits = null,
   insufficientForEstimate = false,
   creditBalance = 0,
+  // T8280: source fps, for the high-fps 30fps-choice note (Option B-simple)
+  sourceFps = null,
   // T525/T526: Stripe purchase
   showBuyCredits,
   onOpenBuyCredits,
@@ -165,6 +168,21 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           <span>
             {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
             {insufficientForEstimate ? ' — add credits to export' : ''}
+          </span>
+        </div>
+      )}
+
+      {/* T8280 (Option B-simple): static note when the source is high-fps —
+          the export is still 30fps (cheaper, smaller file), no toggle, no
+          second "native" price. The credit estimate ABOVE is unchanged. */}
+      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null &&
+        sourceFps != null && sourceFps >= HIGH_FPS_THRESHOLD && (
+        <div
+          data-testid="export-high-fps-note"
+          className="flex items-center justify-center gap-1.5 text-xs text-gray-400"
+        >
+          <span>
+            {`Recorded at ${sourceFps}fps — exported at 30fps for a smaller, cheaper file.`}
           </span>
         </div>
       )}
