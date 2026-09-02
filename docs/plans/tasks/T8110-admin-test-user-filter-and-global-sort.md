@@ -1,6 +1,6 @@
 # T8110: Admin panel — hide test accounts + sort across the whole DB
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-08-31

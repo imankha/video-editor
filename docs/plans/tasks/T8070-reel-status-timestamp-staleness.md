@@ -1,6 +1,6 @@
 # T8070: Reel status should go stale when the clip's timestamps change
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 5
 **Created:** 2026-08-30 (deferred from T8060 per user decision: "Skip for now but file task for it")

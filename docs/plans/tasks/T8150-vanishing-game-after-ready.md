@@ -1,6 +1,6 @@
 # T8150: Game vanishes from list after "Game ready!" (credits debited)
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-08-31
