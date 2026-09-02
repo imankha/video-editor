@@ -1,6 +1,6 @@
 # T8350: Multi-clip reel staleness - visual cue on Reel Drafts / Focus clip list
 
-**Status:** WIP (design APPROVED by user 2026-09-02: 1a "outdated" wording, 2a all three cue layers, 3a multi-clip tiles only via clip_count>1)
+**Status:** WAITING ON USER (pushed, CI GREEN run 33676986665, reviewer APPROVE, QA evidenced with screenshots - awaiting user test + merge)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-01
