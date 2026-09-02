@@ -1132,7 +1132,7 @@ async def _list_games_impl(skip_presigned_urls=False):
             can_extend = False
         else:
             expires_at_val = expiry_by_hash.get(blake3)
-            storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'])
+            storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'], bool(blake3))
             can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
 
         stats = athlete_stats.get(row['id'], _EMPTY_ATHLETE_STATS)
@@ -2030,12 +2030,23 @@ async def save_playhead(game_id: int, body: PlayheadRequest):
     return {"success": True}
 
 
-def _compute_storage_status(expires_at_val, auto_export_status) -> str:
+def _compute_storage_status(expires_at_val, auto_export_status, has_hash: bool = True) -> str:
     """Storage status of a game's source video: 'expired' or 'active'.
 
     Single source of truth shared by list_games and load_game so the two can't
     diverge. Expired when the game_storage expiry has passed, OR when there is no
-    storage ref but the game was auto-exported (source deleted post-grace).
+    storage ref but the game was auto-exported (source deleted post-grace), OR
+    (T8320) when the game HAS a blake3 hash but no game_storage row at all.
+
+    T8320: a hash-backed game uses the global `games/{hash}.mp4` storage that
+    delete_ref DELETES the game_storage row for at reclaim (auth_db.py). So "no
+    row + has_hash" means the source was reclaimed (or its ref is otherwise
+    unknown) -- report 'expired', the safe direction (matching T4280 below),
+    instead of the old trailing default that presented a possibly-gone video as
+    'active' unless auto_export_status happened to be set. Genuinely storage-less
+    LEGACY games (video_filename-only, no blake3 hash) are NOT reclaimable this
+    way, so `has_hash=False` keeps them 'active'. References carry no storage
+    semantics (T5800) and are excluded by the caller before reaching here.
 
     T4280: an UNPARSEABLE expiry is treated as EXPIRED (the safe direction: it blocks
     share/re-export of a possibly-gone video, matching T3970), and logged -- not
@@ -2049,6 +2060,9 @@ def _compute_storage_status(expires_at_val, auto_export_status) -> str:
             logger.error(f"[games] Unparseable storage_expires_at {expires_at_val!r}: {e}. Treating as EXPIRED.")
             return 'expired'
     if auto_export_status:
+        return 'expired'
+    if has_hash:
+        # No game_storage row for a hash-backed game = reclaimed/unknown source.
         return 'expired'
     return 'active'
 
@@ -2933,6 +2947,7 @@ async def load_game(game_id: int):
         storage_status = _compute_storage_status(
             storage_row['storage_expires_at'] if storage_row else None,
             row['auto_export_status'],
+            bool(row['blake3_hash']),
         )
 
         cursor.execute_local(

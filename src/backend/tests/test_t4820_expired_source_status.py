@@ -55,9 +55,9 @@ def _future() -> str:
 class TestComputeStorageStatus:
     """Tests for games.py:_compute_storage_status — the single source of truth."""
 
-    def _fn(self, expires_at_val, auto_export_status):
+    def _fn(self, expires_at_val, auto_export_status, has_hash=True):
         from app.routers.games import _compute_storage_status
-        return _compute_storage_status(expires_at_val, auto_export_status)
+        return _compute_storage_status(expires_at_val, auto_export_status, has_hash)
 
     def test_future_expiry_no_auto_export_is_active(self):
         assert self._fn(_future(), None) == "active"
@@ -65,9 +65,17 @@ class TestComputeStorageStatus:
     def test_past_expiry_is_expired(self):
         assert self._fn(_past(), None) == "expired"
 
-    def test_no_ref_no_auto_export_is_active(self):
-        """The bug case: no ref + no auto_export_status → wrongly active."""
-        assert self._fn(None, None) == "active"
+    def test_no_row_with_hash_is_expired(self):
+        """T8320: a hash-backed game with no game_storage row is RECLAIMED
+        (delete_ref DELETES the row at reclaim) -> 'expired', regardless of
+        auto_export_status. The old default wrongly reported 'active' unless
+        auto_export happened to be set (bug 50p follow-up)."""
+        assert self._fn(None, None, has_hash=True) == "expired"
+
+    def test_no_row_no_hash_legacy_is_active(self):
+        """Carve-out: a legacy game with no blake3 hash uses per-user
+        (non-reclaimable) storage, so no row + no hash stays 'active'."""
+        assert self._fn(None, None, has_hash=False) == "active"
 
     def test_no_ref_with_auto_export_is_expired(self):
         assert self._fn(None, "complete") == "expired"

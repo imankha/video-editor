@@ -91,9 +91,31 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   → importAnnotations → clipRegions (each carries rawClipId)
 ```
 - **`/load` carries `game.storage_status`** (`'active'|'expired'`, bug 27p): computed by
-  `games.py:_compute_storage_status(expires_at_val, auto_export_status)` — the single source of
-  truth shared with `list_games` (game_storage expiry passed, OR no ref but `auto_export_status`
-  set = source deleted post-grace). `applyGameData` maps it to `annotateSourceExpired`.
+  `games.py:_compute_storage_status(expires_at_val, auto_export_status, has_hash)` — the single
+  source of truth shared with `list_games` (game_storage expiry passed, OR no ref but
+  `auto_export_status` set = source deleted post-grace). `applyGameData` maps it to
+  `annotateSourceExpired`. **T8320 default-direction invariant (do NOT reintroduce the
+  'active'-by-default bug):** when there is NO `game_storage` row (falsy `expires_at_val`) and
+  no `auto_export_status`, the result depends on `has_hash` — a HASH-BACKED game
+  (`has_hash=True`) reports `'expired'` because `delete_ref` DELETES the row at reclaim
+  (auth_db.py), so "no row + has hash" means the global `games/{hash}.mp4` source was
+  reclaimed/is unknown (the SAFE direction, matching T4280's unparseable→expired). Only a
+  genuinely storage-less LEGACY game (`video_filename`-only, no blake3 hash → `has_hash=False`)
+  stays `'active'`. Both call sites MUST pass `bool(blake3_hash)` and stay in lockstep
+  (`list_games` ~L1135, `load_game` ~L2947). The pre-T8320 trailing `return 'active'` presented
+  a reclaimed source as fine unless auto-export happened to be set (bug 50p). References (T5800)
+  never reach this — the caller sets their `storage_status=None`. (`v023`'s local mirror
+  `_compute_status` is deliberately pinned to the pre-T8320 semantics — a migration must not
+  drift with later logic; do not "fix" it.)
+- **Reel Drafts surface source expiry too (T8320).** `DraftTile` renders a source-expiry chip
+  matching GameTile's (yellow Clock chip, `<14d` countdown / "Source expired"), driven by a
+  PURE render-time join `utils/draftSourceExpiry.js:deriveDraftSourceExpiry(project, gamesById)`
+  that `ProjectManager` computes from the games list it already holds (a `gamesById` Map memo)
+  and passes down as the `sourceExpiry` prop through `DraftStageRows`/`DraftPhaseAspectRows`.
+  Read-only: NO store write, NO useEffect, NO persisted field (no-redundant-state). Any source
+  game `storage_status==='expired'` → expired chip; else min days-left `<14` → countdown; an
+  absent/deleted game row is skipped (no chip, no crash — data-always-ready); a reference-only
+  draft yields no chip.
 - **One annotation = one `raw_clips` row** (per-user SQLite, not Postgres). Region shape:
   `{id, rawClipId, startTime, endTime, name, tags, notes(≤280), rating(1-5, default 4),
   videoSequence, tagged_teammates, my_athlete, autoProjectId}` (useAnnotate.js:10-30, constants

@@ -193,10 +193,13 @@ class TestGameLoad:
         assert body["teammate_shares"] == []
         assert body["game"]["annotations"] == []
 
-    def test_load_storage_status_active_when_no_ref(self, game_minimal):
-        """bug 27p: a game with a live source (no game_storage ref, no
-        auto-export) reports storage_status 'active' so Annotate plays normally."""
-        game_id = game_minimal
+    def test_load_storage_status_expired_when_hash_backed_no_ref(self, game_minimal):
+        """T8320 (bug 50p follow-up): a HASH-BACKED game with no game_storage
+        ref and no auto-export is RECLAIMED (delete_ref DELETES the row), so
+        /load must report 'expired' -- the old code wrongly reported 'active',
+        presenting a reclaimed source as fine. This is the load_game half of the
+        fix; list_games shares the same _compute_storage_status helper."""
+        game_id = game_minimal  # game_minimal has a blake3_hash, no game_storage row
 
         with patch(
             "app.routers.games.get_game_video_url",
@@ -205,7 +208,71 @@ class TestGameLoad:
             r = client.get(f"/api/games/{game_id}/load")
 
         assert r.status_code == 200
-        assert r.json()["game"]["storage_status"] == "active"
+        assert r.json()["game"]["storage_status"] == "expired"
+
+    def test_load_storage_status_active_when_ref_future(self, game_minimal):
+        """A genuinely live source (game_storage ref with a future expiry)
+        reports 'active' so Annotate plays normally."""
+        from datetime import datetime, timedelta
+
+        game_id = game_minimal
+        future = (datetime.utcnow() + timedelta(days=30)).isoformat()
+
+        set_current_user_id(TEST_USER_ID)
+        set_current_profile_id(TEST_PROFILE_ID)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+                "VALUES ('min123hash', 500000, ?)",
+                (future,),
+            )
+            conn.commit()
+
+        try:
+            with patch(
+                "app.routers.games.get_game_video_url",
+                return_value="https://r2.example.com/games/min123hash.mp4?sig=test",
+            ):
+                r = client.get(f"/api/games/{game_id}/load")
+
+            assert r.status_code == 200
+            assert r.json()["game"]["storage_status"] == "active"
+        finally:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM game_storage WHERE blake3_hash = 'min123hash'")
+                conn.commit()
+
+    def test_load_storage_status_active_when_legacy_no_hash(self):
+        """T8320 carve-out: a LEGACY game with no blake3_hash uses per-user
+        (non-reclaimable) storage, so no ref stays 'active' -- has_hash=False."""
+        set_current_user_id(TEST_USER_ID)
+        set_current_profile_id(TEST_PROFILE_ID)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO games (name, blake3_hash, video_filename, video_duration, "
+                "video_size, video_width, video_height) "
+                "VALUES ('Legacy Game', NULL, 'legacy.mp4', 300.0, 500000, 1280, 720)"
+            )
+            game_id = cursor.lastrowid
+            conn.commit()
+
+        try:
+            with patch(
+                "app.routers.games.get_game_video_url",
+                return_value="https://r2.example.com/legacy.mp4?sig=test",
+            ):
+                r = client.get(f"/api/games/{game_id}/load")
+
+            assert r.status_code == 200
+            assert r.json()["game"]["storage_status"] == "active"
+        finally:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+                conn.commit()
 
     def test_load_storage_status_expired(self, game_minimal):
         """bug 27p: when the game's game_storage ref has a past expiry, /load
