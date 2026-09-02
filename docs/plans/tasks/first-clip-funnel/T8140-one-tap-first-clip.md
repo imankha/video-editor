@@ -1,6 +1,6 @@
 # T8140: One-tap first clip (form defaults + sticky Save)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-08-31
