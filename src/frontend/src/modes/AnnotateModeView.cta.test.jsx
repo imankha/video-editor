@@ -112,7 +112,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(screen.queryByRole('button', { name: /^add play$/i })).toBeNull();
     const cta = screen.getByRole('button', { name: /edit play/i });
     expect(cta).toBeTruthy();
-    expect(cta).toHaveAttribute('title', 'Edit the selected play');
+    expect(cta.getAttribute('title')).toBe('Edit the selected play');
   });
 
   it('shows the one-line first-use hint only while there are no clips', () => {
