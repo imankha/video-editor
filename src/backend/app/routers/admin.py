@@ -1187,8 +1187,10 @@ def analytics_funnel(
     exclude_test: bool = True,
 ):
     _require_admin()
-    d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
-    d_to = date.fromisoformat(date_to) if date_to else date.today()
+    # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
+    # datetime.now(UTC).date(), not local date.today().
+    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
 
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
 
@@ -1266,8 +1268,10 @@ def analytics_channels(
     exclude_test: bool = True,
 ):
     _require_admin()
-    d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
-    d_to = date.fromisoformat(date_to) if date_to else date.today()
+    # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
+    # datetime.now(UTC).date(), not local date.today().
+    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
 
     # T8110: exclude internal accounts from this population channel breakdown.
     excl = _test_exclusion(exclude_test)
@@ -1429,8 +1433,10 @@ def analytics_cohorts(
     # T8000: default to a 12-month window so these four full-history aggregations don't scan
     # the ever-growing signup history on every admin page load (idx_segments_acquired drives a
     # bounded segment set instead). Overridable via the from/to params for deeper look-backs.
-    d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
-    d_to = date.fromisoformat(date_to) if date_to else date.today()
+    # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
+    # datetime.now(UTC).date(), not local date.today().
+    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
     where_parts = ["s.acquired_at BETWEEN %s AND %s"]
     where_params: list = [d_from, d_to]
     if origin != "all":
@@ -1843,7 +1849,9 @@ def analytics_pulse(
     # (no per-viewer timezone shift) rather than misalign the tiles from their own counters.
     # The cohort table's Monday-start week grouping (date_trunc('week', ...)) is likewise UTC
     # and independent -- documented so the two boundaries staying UTC is a choice, not drift.
-    today = date.today()
+    # T8250: date.today() reads the LOCAL calendar day, which regresses the comment above --
+    # datetime.now(UTC).date() is the only call that actually is the UTC calendar day.
+    today = datetime.now(UTC).date()
     start = today - timedelta(days=days - 1)
 
     filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
