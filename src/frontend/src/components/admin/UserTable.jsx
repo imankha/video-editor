@@ -44,7 +44,10 @@ const COLUMNS = [
   { key: 'last_step', label: 'Last Step', align: 'center' },
   { key: 'acquired_at', label: 'Joined', align: 'right' },
   { key: 'game_created_count', label: 'Games', align: 'right' },
-  { key: 'clip_created_count', label: 'Clips', align: 'right' },
+  // T8240: label is "Clips Saved" (clip_created analytics events = raw annotation
+  // clips the user saved), NOT "Published" -- publishing is a different concept
+  // (final_videos.published_at) with no cheap Postgres source. Metric/key unchanged.
+  { key: 'clip_created_count', label: 'Clips Saved', align: 'right' },
   { key: 'export_completed_count', label: 'Exports', align: 'right' },
   // T8230: per-type breakdown of the Exports total. Exports stays as the honest
   // grand total (framing + overlay + "other"/recovered), so the residual is never

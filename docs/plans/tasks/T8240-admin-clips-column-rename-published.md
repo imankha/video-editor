@@ -68,7 +68,24 @@ activity as an engagement signal) and add a distinct `published_count`, matching
 3. [ ] Verify against bknoto and at least one account where clip-creation and publish counts
        actually diverge, to prove the fix isn't accidentally validated by a coincidental match
 
+## Resolution (2026-09-02): Option A — relabel only
+
+User chose **Option A**: relabel the header only, keep the metric exactly as today
+(`clip_created_count` = `clip_created` analytics events). No metric change, no migration,
+no new Postgres milestone, no per-profile R2 reads. Option B (real published count) was
+ruled out because publishing (`final_videos.published_at`) has no cheap Postgres source —
+it would require per-profile SQLite/R2 reads (an N+1) with no analytics event to aggregate.
+
+Label chosen is **"Clips Saved"**, NOT "Annotations" — that word is reserved for [[T8260]]
+(a different metric: per-game `raw_clips` row count, not this per-account `clip_created`
+event count). Using the same word for two different metrics would be confusing.
+
 ## Acceptance Criteria
 
-- [ ] "Published" (or whatever label is chosen) accurately describes what the column counts
-- [ ] Verified on an account where raw clip-creation count and real published-reel count differ
+- [x] The label "Clips Saved" accurately describes what `clip_created_count` counts
+      (activity / clip-save events) and does NOT claim to be published output.
+- [x] Metric unchanged: the column still renders `clip_created_count`, sort key unchanged
+      (already in `_SORT_COLUMNS`), no backend change.
+- ~~Verified on an account where raw clip-creation count and real published-reel count
+  differ~~ — no longer applies: the metric was NOT changed (Option A), so there is no
+  published-count divergence to demonstrate.
