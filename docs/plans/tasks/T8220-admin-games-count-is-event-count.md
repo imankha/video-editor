@@ -1,6 +1,6 @@
 # T8220: Admin People table "Games" column is a raw event count, not real games
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-08-31

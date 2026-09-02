@@ -1,6 +1,6 @@
 # T8340: Annotate opens the OLD game while the upload-success toast announces the NEW one
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-01
