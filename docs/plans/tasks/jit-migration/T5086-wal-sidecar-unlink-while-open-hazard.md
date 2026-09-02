@@ -1,6 +1,6 @@
 # T5086: `clear_stale_wal_sidecars` can unlink a live connection's WAL on Linux
 
-**Status:** WIP
+**Status:** STAGING (merged to master 2026-09-02, commit 8ad2686e; reviewer APPROVED 0 blocking, 51/51 relevant tests green)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-08-31

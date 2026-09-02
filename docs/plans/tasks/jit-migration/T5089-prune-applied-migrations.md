@@ -1,6 +1,6 @@
 # T5089: Prune migrations that have run on every account
 
-**Status:** WIP
+**Status:** STAGING (merged to master 2026-09-02, commit 38dde7d9, as an INERT increment - floor mechanism dormant at 0, actual prune DEFERRED per the Measured Floors section below; reviewer APPROVED, 109 relevant tests green)
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-04 (user direction, added when T5080 became an epic)

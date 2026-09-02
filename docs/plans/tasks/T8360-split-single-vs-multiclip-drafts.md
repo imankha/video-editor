@@ -1,6 +1,6 @@
 # T8360: Split single-clip vs multi-clip drafts into separate views
 
-**Status:** WIP (design APPROVED by user 2026-09-02: OQ-1 = Option A, Highlights section on the Highlight Reels panel; rename ruling = renaming must NOT move a draft between surfaces, i.e. stop clearing auto_project_id on rename unless investigation shows the clearing serves another live purpose - then decouple routing from that purpose)
+**Status:** STAGING (merged to master 2026-09-02, commit 2c13e54e; reviewer APPROVE WITH NITS, 111 unit + 2 live e2e tests green, QA screenshot evidence)
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-09-02
