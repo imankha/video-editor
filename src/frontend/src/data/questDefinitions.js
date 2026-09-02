@@ -2,7 +2,8 @@ export const QUEST_DEFINITIONS = [
   {
     id: 'quest_1',
     title: 'Get Started',
-    reward: 15,
+    // T8120: per-quest rewards retired — the full chain total is granted upfront.
+    reward: 0,
     step_ids: [
       'watch_annotate_tutorial',
       'upload_game',
@@ -15,7 +16,7 @@ export const QUEST_DEFINITIONS = [
   {
     id: 'quest_2',
     title: 'Frame Your Highlight',
-    reward: 25,
+    reward: 0,  // T8120: retired — granted upfront
     step_ids: [
       // T5195: Return Home is quest_2's first step (kept in sync with quest_config.py)
       'return_home',
@@ -30,7 +31,7 @@ export const QUEST_DEFINITIONS = [
   {
     id: 'quest_3',
     title: 'Configure Your Spotlight',
-    reward: 25,
+    reward: 0,  // T8120: retired — granted upfront
     step_ids: [
       'watch_overlay_tutorial',
       'open_overlay',
@@ -45,7 +46,7 @@ export const QUEST_DEFINITIONS = [
   {
     id: 'quest_4',
     title: 'Publish Your Reel',
-    reward: 15,
+    reward: 0,  // T8120: retired — granted upfront
     step_ids: [
       'watch_publish_tutorial',
       // T6840: preview the finished draft before publishing (kept in sync with quest_config.py)

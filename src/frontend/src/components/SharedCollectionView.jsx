@@ -4,6 +4,7 @@ import { Button } from './shared/Button';
 import { BrandedEndCard } from './BrandedEndCard';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { IntroPreRoll } from './introcards/IntroPreRoll';
+import { Z } from '../constants/zLayers';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
@@ -123,7 +124,7 @@ export function SharedCollectionView({ token }) {
             intro={data.intro}
             aspect={data.aspect_ratio}
             onDone={() => setIntroShowing(false)}
-            positionClassName="fixed inset-0 z-[85]"
+            positionClassName={`fixed inset-0 ${Z.INTRO}`}
           />
         ) : (
           <CollectionPlayer

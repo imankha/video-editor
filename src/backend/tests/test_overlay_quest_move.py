@@ -101,7 +101,7 @@ def test_quest_3_has_render_steps_appended():
     ]
     # Appended at the END, after choose_shape, in order.
     assert q3["step_ids"][-2:] == RENDER_STEPS
-    assert q3["reward"] == 25  # unchanged
+    assert q3["reward"] == 0  # T8120: per-quest rewards retired (credits granted upfront)
 
 
 def test_quest_4_has_no_render_steps():
@@ -115,7 +115,7 @@ def test_quest_4_has_no_render_steps():
     ]
     for s in RENDER_STEPS:
         assert s not in q4["step_ids"]
-    assert q4["reward"] == 15  # unchanged
+    assert q4["reward"] == 0  # T8120: per-quest rewards retired (credits granted upfront)
 
 
 def test_render_steps_appear_exactly_once_across_all_quests():

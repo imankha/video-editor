@@ -29,7 +29,15 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
+from app.quest_config import QUEST_CHAIN_CREDIT_TOTAL
 from app.services.storage_credits import NEW_ACCOUNT_CREDITS
+
+# T8120: a fresh signup now receives BOTH the base new-account bonus AND the full
+# quest-chain total upfront (the per-quest drip is retired). session_init grants
+# the quest-chain remainder on every first-of-process init — for a brand-new user
+# that is the whole total; for an existing account it is whatever they haven't
+# been granted yet.
+FRESH_SIGNUP_BALANCE = NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
 
 
 def _uid(prefix: str) -> str:
@@ -165,19 +173,22 @@ def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     _make_account(uid, old_pid)
     set_balance(uid, 0, f"test:{uid}:reset")  # spent-down account: 0 credits
 
-    # Pre-purge: session init sees a RETURNING user -> not new -> not seeded (bug-33 precondition).
+    # Pre-purge: session init sees a RETURNING user -> not new -> no signup bonus.
+    # T8120: it DOES receive the ungranted upfront quest-chain total (this account
+    # never claimed a quest, so the full total lands on this next login).
     _init_cache.pop(uid, None)
     before = user_session_init(uid)
     assert before["is_new_user"] is False
-    assert get_credit_balance(uid)["balance"] == 0
+    assert get_credit_balance(uid)["balance"] == QUEST_CHAIN_CREDIT_TOTAL
 
     # Complete deletion.
     _purge_user_data(uid)
 
-    # Reregister: genuinely fresh new user, seeded, clean quest slate.
+    # Reregister: genuinely fresh new user, seeded (signup bonus + upfront quest
+    # total), clean quest slate.
     after = user_session_init(uid)
     assert after["is_new_user"] is True
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS
+    assert get_credit_balance(uid)["balance"] == FRESH_SIGNUP_BALANCE
     assert get_completed_quest_ids(uid) == set()
 
 
@@ -203,7 +214,7 @@ def test_purge_then_reregister_re_grants_signup_bonus_under_same_key(hermetic):
     _init_cache.pop(uid, None)
     first = user_session_init(uid)
     assert first["is_new_user"] is True
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS
+    assert get_credit_balance(uid)["balance"] == FRESH_SIGNUP_BALANCE
     assert has_key(uid, f"signup:{uid}") is True
 
     _purge_user_data(uid)
@@ -217,14 +228,17 @@ def test_purge_then_reregister_re_grants_signup_bonus_under_same_key(hermetic):
     _init_cache.pop(uid, None)
     second = user_session_init(uid)
     assert second["is_new_user"] is True
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS, (
+    assert get_credit_balance(uid)["balance"] == FRESH_SIGNUP_BALANCE, (
         "re-grant under the same signup:{uid} key must actually apply -- "
         "a stale PG row here means a re-registered user gets NO signup bonus"
     )
 
 
 def test_returning_user_not_reseeded(hermetic):
-    """Regression: a normal returning user (no delete) keeps their balance — never re-seeded."""
+    """Regression: a normal returning user (no delete) is never re-granted the
+    SIGNUP bonus. T8120: the returning user does receive the one-time upfront
+    quest-chain total on this login (never claimed a quest -> full total), and a
+    repeat login does not grant it again (idempotent)."""
     from app.session_init import user_session_init, _init_cache
     from app.services.credit_ledger import get_credit_balance, set_balance
 
@@ -236,7 +250,13 @@ def test_returning_user_not_reseeded(hermetic):
     _init_cache.pop(uid, None)
     result = user_session_init(uid)
     assert result["is_new_user"] is False
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS  # unchanged (not doubled)
+    # Base bonus untouched (not re-granted) + one-time upfront quest total.
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+
+    # A second login must NOT double-grant the upfront quest credits.
+    _init_cache.pop(uid, None)
+    user_session_init(uid)
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
 
 
 def test_returning_user_keeps_quest_progress(hermetic):
@@ -287,7 +307,7 @@ def test_reregister_with_different_email_is_an_independent_fresh_account(hermeti
     result = user_session_init(new_uid)
 
     assert result["is_new_user"] is True
-    assert get_credit_balance(new_uid)["balance"] == NEW_ACCOUNT_CREDITS
+    assert get_credit_balance(new_uid)["balance"] == FRESH_SIGNUP_BALANCE
     # The old identity's purge left no trace that could leak into the new one.
     assert new_uid != old_uid
     assert old_uid not in _init_cache

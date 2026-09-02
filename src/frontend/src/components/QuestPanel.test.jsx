@@ -21,6 +21,9 @@ const { questState } = vi.hoisted(() => ({
     detectionAssignProgress: null,
     claimReward: vi.fn(),
     addGameOpener: null,
+    // T8120: persisted collapse preference + gesture.
+    panelCollapsed: false,
+    collapsePanel: vi.fn(),
   },
 }));
 
@@ -62,6 +65,8 @@ function resetState() {
   ];
   questState.addGameOpener = null;
   questState.detectionAssignProgress = null;
+  questState.panelCollapsed = false;
+  questState.collapsePanel = vi.fn();
 }
 
 describe('QuestPanel — actionable upload_game step (T7840)', () => {
@@ -106,5 +111,63 @@ describe('QuestPanel — actionable upload_game step (T7840)', () => {
     const title = screen.getByText('Watch the Annotate Tutorial');
     expect(title.closest('button')).toBeNull();
     expect(container.querySelector('.quest-chevron')).toBeNull();
+  });
+});
+
+// T8120: collapse-to-Help-button + persistence + occlusion contract.
+describe('QuestPanel — collapse to Help button + persistence (T8120)', () => {
+  beforeEach(resetState);
+
+  it('expanded: collapsing calls collapsePanel(true) — the persisted gesture', () => {
+    const collapse = vi.fn();
+    questState.collapsePanel = collapse;
+    questState.panelCollapsed = false;
+
+    render(<QuestPanel inline />);
+    // The header (with the quest title) collapses the panel back to the chip.
+    const header = screen.getByLabelText('Collapse to Help button');
+    fireEvent.click(header);
+    expect(collapse).toHaveBeenCalledWith(true);
+  });
+
+  it('collapsed: renders a small "Help" chip, not the step list; expanding calls collapsePanel(false)', () => {
+    const collapse = vi.fn();
+    questState.collapsePanel = collapse;
+    questState.panelCollapsed = true;
+
+    render(<QuestPanel inline />);
+    // The step list is gone; a Help chip is shown.
+    expect(screen.queryByText('Add Your First Game')).toBeNull();
+    const chip = screen.getByLabelText('Open onboarding help');
+    expect(chip.textContent).toMatch(/Help/);
+    fireEvent.click(chip);
+    expect(collapse).toHaveBeenCalledWith(false);
+  });
+
+  it('tutorial CTA stays reachable from the expanded panel', () => {
+    // Make the tutorial step current so its (downgraded) CTA renders.
+    questState.quests = [
+      { id: 'quest_1', steps: { upload_game: true, watch_annotate_tutorial: false }, reward_claimed: false },
+    ];
+    render(<QuestPanel inline />);
+    // The tutorial button still renders (reachable), from the expanded panel.
+    expect(screen.getAllByText('Watch tutorial').length).toBeGreaterThan(0);
+  });
+
+  it('auto-hides fully when a modal overlay is open (occlusion contract)', () => {
+    questState.panelCollapsed = false;
+    // Inject a modal-signature overlay into the DOM before render.
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-50';
+    // jsdom returns 0-size rects by default; stub getClientRects so the overlay
+    // counts as visible for the detector.
+    modal.getClientRects = () => [{ width: 100, height: 100 }];
+    document.body.appendChild(modal);
+
+    const { queryByText } = render(<QuestPanel inline />);
+    // Panel is fully hidden — the quest title is not in the document.
+    expect(queryByText('Get Started')).toBeNull();
+
+    document.body.removeChild(modal);
   });
 });

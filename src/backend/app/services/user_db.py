@@ -648,6 +648,34 @@ def set_notification_email_optout(user_id: str, opted_out: bool) -> None:
         conn.commit()
 
 
+# T8120: collapsed/expanded state of the onboarding quest (Help) panel. A
+# user-level UI preference persisted in the existing user_settings KV (no
+# schema/migration) so a collapse survives navigation AND reload — the collapse
+# click is the gesture. Absent key = expanded (the default first-run
+# presentation); the panel never auto-re-expands once this is "1".
+_QUEST_PANEL_COLLAPSED_KEY = "quest_panel_collapsed"
+
+
+def get_quest_panel_collapsed(user_id: str) -> bool:
+    """True if the user has collapsed the quest/help panel (default False)."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = ?",
+            (_QUEST_PANEL_COLLAPSED_KEY,),
+        ).fetchone()
+        return bool(row) and row["value"] == "1"
+
+
+def set_quest_panel_collapsed(user_id: str, collapsed: bool) -> None:
+    """Persist the collapsed state of the quest/help panel (gesture-driven)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (_QUEST_PANEL_COLLAPSED_KEY, "1" if collapsed else "0"),
+        )
+        conn.commit()
+
+
 # Parental-consent attestation for player-intro cards (T5190). Stored per
 # profile in the user.sqlite settings KV (keyed by profile id) rather than a
 # profiles column: consent must appear on the GET /api/profiles payload, which

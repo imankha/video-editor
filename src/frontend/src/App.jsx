@@ -249,6 +249,7 @@ function App() {
           useProjectsStore.getState().setFromBootstrap(data.projects);
           useGamesDataStore.getState().setFromBootstrap(data.games);
           useQuestStore.getState().setFromBootstrap(data.quests_progress);
+          useQuestStore.getState().setPanelCollapsed(data.quest_panel_collapsed);
           useGalleryStore.getState().setFromBootstrap(data.downloads);
           // Publish export data for useExportRecovery to consume (avoids separate fetch)
           if (data.exports) {

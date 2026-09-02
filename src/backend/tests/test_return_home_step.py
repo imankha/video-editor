@@ -85,8 +85,8 @@ def test_quest_2_has_seven_steps_with_return_home_first():
     assert q2["step_ids"] == QUEST_2_EXPECTED_STEPS
     assert q2["step_ids"][0] == "return_home"
     assert q2["step_ids"][1] == "watch_framing_tutorial"
-    # Reward unchanged (per-quest, not per-step)
-    assert q2["reward"] == 25
+    # T8120: per-quest rewards are retired; credits are granted upfront instead.
+    assert q2["reward"] == 0
 
 
 def test_returned_home_is_known_and_stepped():

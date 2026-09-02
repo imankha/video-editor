@@ -23,6 +23,7 @@ from ..services.user_db import (
     get_all_intro_full_names,
     get_all_intro_photo_keys,
     get_profiles,
+    get_quest_panel_collapsed,
     get_selected_profile_id,
 )
 from ..storage import generate_presigned_url_global
@@ -111,11 +112,17 @@ def _read_user_scoped(user_id: str) -> dict:
                 "reward_claimed": quest_id in claimed_quest_ids,
             })
 
+    # T8120: collapsed state of the onboarding quest (Help) panel, so the panel
+    # renders in its persisted state on first paint (no expand-flash before a
+    # follow-up fetch).
+    quest_panel_collapsed = get_quest_panel_collapsed(user_id)
+
     return {
         "profiles": profiles,
         "credits": credits,
         "settings": settings,
         "quests_progress": quests_progress,
+        "quest_panel_collapsed": quest_panel_collapsed,
         "_ms": int((time.perf_counter() - t0) * 1000),
     }
 
@@ -249,6 +256,7 @@ async def bootstrap():
         "credits": user_scoped["credits"],
         "settings": user_scoped["settings"],
         "quests_progress": user_scoped["quests_progress"],
+        "quest_panel_collapsed": user_scoped["quest_panel_collapsed"],
         "projects": projects_response,
         "games": games_response,
         "downloads": misc["downloads"],

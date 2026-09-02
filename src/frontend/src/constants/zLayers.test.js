@@ -18,8 +18,10 @@ const LADDER = [
   'OVERLAY_BACKDROP',
   'PLAYER',
   'MODAL_ELEVATED',
+  'INTRO',
   'ALERT',
   'TOAST',
+  'SHARE',
   'SYSTEM',
 ];
 
@@ -47,11 +49,16 @@ describe('zLayers scale (T6600)', () => {
     expect(num(Z.OVERLAY_BACKDROP)).toBeLessThan(num(Z.PLAYER));
     // The intro-card (nested) modal outranks the tile-portal layer — the T6600 fix.
     expect(num(Z.MODAL_ELEVATED)).toBeGreaterThan(num(Z.PLAYER));
+    // The intro-card preroll outranks a nested modal but not an alert.
+    expect(num(Z.INTRO)).toBeGreaterThan(num(Z.MODAL_ELEVATED));
     // LockedReasonModal / confirmations stay above the player and nested modals.
     expect(num(Z.ALERT)).toBeGreaterThan(num(Z.PLAYER));
     expect(num(Z.ALERT)).toBeGreaterThan(num(Z.MODAL_ELEVATED));
+    expect(num(Z.ALERT)).toBeGreaterThan(num(Z.INTRO));
     // Toasts and system banners are top-most.
     expect(num(Z.TOAST)).toBeGreaterThan(num(Z.ALERT));
-    expect(num(Z.SYSTEM)).toBeGreaterThan(num(Z.TOAST));
+    // The share-playback dialog outranks the recap player (TOAST) it nests inside.
+    expect(num(Z.SHARE)).toBeGreaterThan(num(Z.TOAST));
+    expect(num(Z.SYSTEM)).toBeGreaterThan(num(Z.SHARE));
   });
 });
