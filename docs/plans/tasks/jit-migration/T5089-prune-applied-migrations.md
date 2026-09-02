@@ -1,6 +1,6 @@
 # T5089: Prune migrations that have run on every account
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-08-04 (user direction, added when T5080 became an epic)
