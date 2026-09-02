@@ -1,6 +1,6 @@
 # T8360: Split single-clip vs multi-clip drafts into separate views
 
-**Status:** WAITING ON USER (design gate 2026-09-02: ui-designer spec at T8360-design.md on the worker branch; OQ-1 Highlights placement + rename-clears-auto_project_id ruling)
+**Status:** WIP (design APPROVED by user 2026-09-02: OQ-1 = Option A, Highlights section on the Highlight Reels panel; rename ruling = renaming must NOT move a draft between surfaces, i.e. stop clearing auto_project_id on rename unless investigation shows the clearing serves another live purpose - then decouple routing from that purpose)
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-09-02
