@@ -1,6 +1,6 @@
 # T8350: Multi-clip reel staleness - visual cue on Reel Drafts / Focus clip list
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-01
