@@ -354,6 +354,7 @@ export function ClipsSidePanel({
               layout="inline"
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
+              nextClipNumber={(clipRegions?.length || 0) + 1}
             />
           )}
         </>

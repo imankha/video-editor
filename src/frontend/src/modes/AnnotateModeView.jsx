@@ -4,6 +4,9 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
+import { NO_SPORT } from './annotate/constants/tagRegistry';
+import { useCurrentProfile, useProfileStore } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
 import { clipGameClock } from '../utils/timeFormat';
@@ -133,6 +136,27 @@ export function AnnotateModeView({
 
   // Mobile inline add/edit form: replaces timeline + buttons below video
   const mobileInlineForm = isMobile && showAnnotateOverlay && !annotateFullscreen;
+
+  // T8140: one-tap first clip helpers.
+  // "Play N" default name for a new clip = existing clip count + 1.
+  const nextClipNumber = (clipRegions?.length || 0) + 1;
+  // Full-screen "What sport is this?" question, shown once per session at a
+  // MOBILE user's first clip save while their profile is still no_sport. Desktop
+  // keeps the in-form picker (it also has the top-bar sport control), so the
+  // question is mobile-only — no double prompt. The answer persists through the
+  // existing profile-sport gesture (updateProfile), never a new write path.
+  const currentProfile = useCurrentProfile();
+  const currentSport = currentProfile?.sport || NO_SPORT;
+  const updateProfile = useProfileStore(state => state.updateProfile);
+  const [sportQuestionOpen, setSportQuestionOpen] = useState(false);
+  const sportAskedRef = useRef(false);
+  const handleCreateClipWithSportPrompt = useCallback((clipData) => {
+    onFullscreenCreateClip(clipData);
+    if (isMobile && currentSport === NO_SPORT && !sportAskedRef.current) {
+      sportAskedRef.current = true;
+      setSportQuestionOpen(true);
+    }
+  }, [onFullscreenCreateClip, isMobile, currentSport]);
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -583,7 +607,7 @@ export function AnnotateModeView({
                 currentTime={currentTime}
                 videoDuration={duration || annotateVideoMetadata?.duration || 0}
                 existingClip={existingClip}
-                onCreateClip={onFullscreenCreateClip}
+                onCreateClip={handleCreateClipWithSportPrompt}
                 onUpdateClip={onFullscreenUpdateClip}
                 onResume={onOverlayResume}
                 onClose={onOverlayClose}
@@ -593,6 +617,7 @@ export function AnnotateModeView({
                 teammateSuggestions={teammateSuggestions}
                 onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
                 newClipLayerIsMine={newClipLayerIsMine}
+                nextClipNumber={nextClipNumber}
               />
             )}
 
@@ -644,7 +669,7 @@ export function AnnotateModeView({
             <>
               {showAnnotateOverlay ? (
                 <div
-                  className="absolute inset-x-0 bottom-0 z-20 overflow-y-auto bg-gray-900/95"
+                  className="absolute inset-x-0 bottom-0 z-20 flex flex-col bg-gray-900/95"
                   style={{ maxHeight: isLandscape ? '50vh' : '70vh' }}
                   onClick={e => e.stopPropagation()}
                 >
@@ -653,7 +678,7 @@ export function AnnotateModeView({
                     currentTime={currentTime}
                     videoDuration={duration || annotateVideoMetadata?.duration || 0}
                     existingClip={existingClip}
-                    onCreateClip={onFullscreenCreateClip}
+                    onCreateClip={handleCreateClipWithSportPrompt}
                     onUpdateClip={onFullscreenUpdateClip}
                     onResume={onOverlayResume}
                     onClose={onOverlayClose}
@@ -664,6 +689,7 @@ export function AnnotateModeView({
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
                     newClipLayerIsMine={newClipLayerIsMine}
+                    nextClipNumber={nextClipNumber}
                   />
                 </div>
               ) : (
@@ -751,15 +777,18 @@ export function AnnotateModeView({
           )}
         </div>
 
-        {/* Mobile inline add/edit clip form — replaces timeline + buttons */}
+        {/* Mobile inline add/edit clip form. T8140: a fixed, viewport-anchored
+            bottom sheet (max-h-[85vh], flex column) so the pinned Save footer
+            inside the inline overlay is ALWAYS visible without scrolling at
+            390x844 — an in-flow form would let Save fall below the page fold. */}
         {mobileInlineForm && (
-          <div className="mt-4">
+          <div className="fixed inset-x-0 bottom-0 z-40 flex flex-col max-h-[85vh] bg-gray-900/95 rounded-t-2xl shadow-2xl overflow-hidden">
             <AnnotateFullscreenOverlay
               isVisible={showAnnotateOverlay}
               currentTime={currentTime}
               videoDuration={duration || annotateVideoMetadata?.duration || 0}
               existingClip={existingClip}
-              onCreateClip={onFullscreenCreateClip}
+              onCreateClip={handleCreateClipWithSportPrompt}
               onUpdateClip={onFullscreenUpdateClip}
               onResume={onOverlayResume}
               onClose={onOverlayClose}
@@ -769,8 +798,22 @@ export function AnnotateModeView({
               layout="inline"
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
+              nextClipNumber={nextClipNumber}
             />
           </div>
+        )}
+
+        {/* T8140: full-screen "What sport is this?" question at a mobile first
+            save. Answer persists via the existing profile-sport gesture; Skip
+            proceeds (the clip is already saved) so it can't dead-end. */}
+        {sportQuestionOpen && (
+          <SportQuestionOverlay
+            onPick={(s) => {
+              if (currentProfile?.id) updateProfile(currentProfile.id, { sport: s }).catch(() => {});
+              setSportQuestionOpen(false);
+            }}
+            onSkip={() => setSportQuestionOpen(false)}
+          />
         )}
 
         {/* Primary "Add Play" CTA + secondary actions (hidden when mobile inline

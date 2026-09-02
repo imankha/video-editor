@@ -8,6 +8,7 @@ import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning'
 import { TeammateTagInput, commitPendingTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
+import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
@@ -111,9 +112,14 @@ export function AnnotateFullscreenOverlay({
   teammateSuggestions = [],
   onScrubDragChange,
   newClipLayerIsMine = true,
+  nextClipNumber = 1,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
+  // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
+  // user can save without typing a name. Display-and-persist default (memory-only
+  // until the Save gesture); never applied in edit mode.
+  const defaultClipName = isEditMode ? '' : `Play ${nextClipNumber}`;
   const currentProfile = useCurrentProfile();
   const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
@@ -163,6 +169,10 @@ export function AnnotateFullscreenOverlay({
   const notesRef = useRef(null);
   const handleSaveRef = useRef(null);
   const handleRatingChangeRef = useRef(null);
+  // T8140: fires the `add_clip_opened_no_save` impression exactly once per
+  // create-mode open that ends without a save (see effect below). Set true by
+  // handleSave so a saved open never beacons.
+  const savedThisOpenRef = useRef(false);
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
@@ -200,9 +210,11 @@ export function AnnotateFullscreenOverlay({
   useEffect(() => {
     if (!isNameManuallyEdited && !existingClip?.name) {
       const generatedName = generateClipName(rating, selectedTags, notes);
-      setClipName(generatedName);
+      // T8140: fall back to the "Play N" default when nothing else derives a name
+      // (create mode only — defaultClipName is '' when editing).
+      setClipName(generatedName || defaultClipName);
     }
-  }, [rating, selectedTags, notes, isNameManuallyEdited, existingClip?.name]);
+  }, [rating, selectedTags, notes, isNameManuallyEdited, existingClip?.name, defaultClipName]);
 
   // Focus notes input when overlay appears
   useEffect(() => {
@@ -210,6 +222,21 @@ export function AnnotateFullscreenOverlay({
       notesRef.current.focus();
     }
   }, [isVisible]);
+
+  // T8140: measure in-form abandonment. When the Add Clip form is opened in
+  // CREATE mode, fire a single `add_clip_opened_no_save` dialog impression on
+  // close/unmount if no save happened. Keyed on the open (isVisible/isEditMode),
+  // NOT on renders or keystrokes, so it beacons at most once per open. Edit opens
+  // never arm it. Uses the existing T7515 `dialog` vocabulary (no schema change).
+  useEffect(() => {
+    if (!isVisible || isEditMode) return;
+    savedThisOpenRef.current = false;
+    return () => {
+      if (!savedThisOpenRef.current) {
+        recordUiImpression('dialog', 'add_clip_opened_no_save');
+      }
+    };
+  }, [isVisible, isEditMode]);
 
   // Handle keyboard shortcuts — uses handleSaveRef to avoid stale closures
   // (taggedTeammates, myAthlete, createProject would be stale without the ref)
@@ -263,6 +290,8 @@ export function AnnotateFullscreenOverlay({
   };
 
   const handleSave = () => {
+    // T8140: this open ended in a save — suppress the abandonment beacon.
+    savedThisOpenRef.current = true;
     // T7540: auto-commit any teammate text typed but not Enter-committed (same
     // effect as pressing Enter) so a pending tag never dead-ends Save. Teammates
     // are Team-layer only, so only commit when the clip is on the Team layer.
@@ -274,6 +303,11 @@ export function AnnotateFullscreenOverlay({
     if (finalTeammates !== taggedTeammates) {
       setTaggedTeammates(finalTeammates);
     }
+    // T8140: persist the typed name if edited; otherwise let the backend derive
+    // from tags/notes (name '') — except a truly nameless new clip keeps the
+    // "Play N" default so a one-tap save still lands a friendly name.
+    const autoGenName = generateClipName(rating, selectedTags, notes);
+    const nameToSave = isNameManuallyEdited ? clipName : (autoGenName ? '' : defaultClipName);
     const clipDuration = scrubEndTime - scrubStartTime;
     if (isEditMode) {
       onUpdateClip(existingClip.id, {
@@ -281,7 +315,7 @@ export function AnnotateFullscreenOverlay({
         endTime: scrubEndTime,
         rating,
         tags: selectedTags,
-        name: isNameManuallyEdited ? clipName : '',
+        name: nameToSave,
         notes,
         tagged_teammates: finalTeammates,
         my_athlete: myAthlete,
@@ -293,7 +327,7 @@ export function AnnotateFullscreenOverlay({
         duration: clipDuration,
         rating,
         tags: selectedTags,
-        name: isNameManuallyEdited ? clipName : '',
+        name: nameToSave,
         notes,
         tagged_teammates: finalTeammates,
         my_athlete: myAthlete,
@@ -318,7 +352,7 @@ export function AnnotateFullscreenOverlay({
 
   if (!isVisible) return null;
 
-  const formContent = (
+  const formBody = (
     <>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -339,6 +373,12 @@ export function AnnotateFullscreenOverlay({
           </div>
         </div>
 
+        {/* T8140: reassurance so a first-time user knows the defaults aren't
+            permanent — lowers the perceived cost of a one-tap save. Create only. */}
+        {!isEditMode && (
+          <p className="text-xs text-gray-400 mb-3 -mt-2">You can change all of this later.</p>
+        )}
+
         {/* Clip scrub region - visual timeline for selecting start/end */}
         <ClipScrubRegion
           currentTime={currentTime}
@@ -356,7 +396,7 @@ export function AnnotateFullscreenOverlay({
 
         {/* Star Rating */}
         <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Rating (press 1-5)</label>
+          <label className="block text-gray-400 text-sm mb-2">Rating{isMobile ? '' : ' (press 1-5)'}</label>
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
         </div>
 
@@ -372,7 +412,12 @@ export function AnnotateFullscreenOverlay({
               size="lg"
             />
           </div>
-        ) : sport === NO_SPORT ? (
+        ) : (!isMobile && sport === NO_SPORT) ? (
+          // T8140: the amber no_sport prompt is kept ONLY on desktop (which also
+          // has the top-bar sport control). On mobile the first-clip path is kept
+          // clean — no amber wall in the form — and a full-screen "What sport is
+          // this?" question fires at first save instead (AnnotateModeView),
+          // replacing T7922's in-form picker for the mobile case.
           <div className="mb-4">
             <label className="block text-gray-400 text-sm mb-2">Tags</label>
             <NoSportTagWarning onChange={handleSetSport} />
@@ -483,22 +528,27 @@ export function AnnotateFullscreenOverlay({
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={handleSave}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-          >
-            {isEditMode ? 'Update' : 'Save'}
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
     </>
+  );
+
+  // T8140: Save/Cancel live in a pinned footer OUTSIDE the scroll area so Save is
+  // always visible without scrolling (390x844 mobile) — the body scrolls, the
+  // footer does not. Shared by the inline and overlay layouts.
+  const actionsFooter = (
+    <div className="flex gap-3">
+      <button
+        onClick={handleSave}
+        className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+      >
+        {isEditMode ? 'Update' : 'Save'}
+      </button>
+      <button
+        onClick={onClose}
+        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+      >
+        Cancel
+      </button>
+    </div>
   );
 
   if (layout === 'landscape-inline') {
@@ -556,13 +606,14 @@ export function AnnotateFullscreenOverlay({
   }
 
   if (layout === 'inline') {
-    // min-h-0 lets this pane shrink inside a flex column (the ClipsSidePanel
-    // sidebar) so its own overflow-y-auto actually scrolls and the Save/Cancel
-    // controls stay reachable on a short landscape-phone sidebar (T4933). It is a
-    // no-op where the inline form is not a flex child (mobile inline / fullscreen).
+    // T8140: flex column = scrolling body (min-h-0 lets it shrink inside a bounded
+    // flex parent — the ClipsSidePanel sidebar, the mobileFs sheet, the mobile
+    // bottom sheet) + a pinned footer that stays reachable without scrolling
+    // (T4933 short-sidebar case AND the 390x844 mobile Save-below-the-fold case).
     return (
-      <div data-add-clip-form className="border-t border-gray-700 p-3 min-h-0 overflow-y-auto">
-        {formContent}
+      <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
+        <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
+        <div className="p-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
       </div>
     );
   }
@@ -572,11 +623,12 @@ export function AnnotateFullscreenOverlay({
   return (
     <div className={`absolute ${isRight ? 'right-0' : 'left-0'} top-0 bottom-0 z-50 flex items-stretch`}>
       <div
-        className={`bg-gray-900/95 p-5 shadow-2xl border-gray-700 pointer-events-auto w-[400px] overflow-y-auto ${isRight ? 'border-l' : 'border-r'}`}
+        className={`bg-gray-900/95 shadow-2xl border-gray-700 pointer-events-auto w-[400px] flex flex-col ${isRight ? 'border-l' : 'border-r'}`}
         onMouseDown={(e) => e.stopPropagation()}
         onWheel={(e) => e.stopPropagation()}
       >
-        {formContent}
+        <div className="p-5 overflow-y-auto min-h-0 flex-1">{formBody}</div>
+        <div className="px-5 py-4 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
       </div>
     </div>
   );
