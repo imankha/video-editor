@@ -578,4 +578,51 @@ describe('DraftTile (T5672)', () => {
       expect(document.querySelector('.fixed.inset-4')).toBeNull();
     });
   });
+
+  // T8320: Reel Drafts surface the source game's expiry the way the Games tab
+  // does, via a computed `sourceExpiry` prop ({ expired, daysLeft } | null) that
+  // ProjectManager joins at render time from the games list.
+  describe('source-expiry chip (T8320)', () => {
+    function renderWithExpiry(sourceExpiry, projectOverrides = {}) {
+      return render(
+        <DraftTile
+          project={{ ...baseProject, ...projectOverrides }}
+          onSelect={vi.fn()}
+          onSelectWithMode={vi.fn()}
+          onDelete={vi.fn()}
+          sourceExpiry={sourceExpiry}
+        />
+      );
+    }
+
+    it('renders a "Source expired" chip when a source game is expired/reclaimed', () => {
+      renderWithExpiry({ expired: true, daysLeft: null });
+      const chip = screen.getByTestId('source-expiry-chip');
+      expect(chip.textContent).toMatch(/source expired/i);
+    });
+
+    it('renders a countdown chip when the nearest source expiry is under 14 days', () => {
+      renderWithExpiry({ expired: false, daysLeft: 5 });
+      const chip = screen.getByTestId('source-expiry-chip');
+      expect(chip.textContent).toMatch(/5d/);
+      expect(chip.textContent).not.toMatch(/source expired/i);
+    });
+
+    it('renders NO chip when the source is healthy (>= 14 days out)', () => {
+      renderWithExpiry({ expired: false, daysLeft: 30 });
+      expect(screen.queryByTestId('source-expiry-chip')).toBeNull();
+    });
+
+    it('renders NO chip when there is no source-expiry info (deleted/absent game)', () => {
+      renderWithExpiry(null);
+      expect(screen.queryByTestId('source-expiry-chip')).toBeNull();
+    });
+
+    it('prefers the expired chip over a countdown when both could apply', () => {
+      renderWithExpiry({ expired: true, daysLeft: 3 });
+      const chip = screen.getByTestId('source-expiry-chip');
+      expect(chip.textContent).toMatch(/source expired/i);
+      expect(chip.textContent).not.toMatch(/3d/);
+    });
+  });
 });

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Z } from '../constants/zLayers';
-import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film, AlertTriangle } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film, AlertTriangle, Clock } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
@@ -42,7 +42,7 @@ import { staleClipCount } from '../utils/reelStaleness';
  *   remaining actions (Rename/Framing/Overlay/Hide/Delete) live in a kebab menu.
  *   The progress strip and the "Done" status chip are suppressed in this one state.
  */
-export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
+export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set(), sourceExpiry = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -361,6 +361,22 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // single-clip staleness signal (T8070).
   const staleCount = project.clip_count > 1 ? staleClipCount(project.clips) : 0;
 
+  // T8320: source-video expiry chip, mirroring the Games tab (GameTile) so a
+  // draft whose source game is expired/reclaimed or expiring soon is not
+  // indistinguishable from a healthy one in Reel Drafts. `sourceExpiry` is a
+  // pure render-time join computed by ProjectManager from the games list
+  // ({ expired, daysLeft } | null) — no persisted state, no store write here.
+  const sourceExpired = sourceExpiry?.expired === true;
+  const sourceDaysLeft = sourceExpiry?.daysLeft ?? null;
+  const sourceNearExpiry = !sourceExpired && sourceDaysLeft !== null && sourceDaysLeft < 14;
+  const showSourceExpiryChip = sourceExpired || sourceNearExpiry;
+  // Left-column stacking so the chip never lands on the count/Ready badge
+  // (top-1.5) or the staleness badge (top-9). staleCount > 0 implies
+  // clip_count > 1, so those two are the only cases that occupy the slots above.
+  const sourceExpiryTop = staleCount > 0
+    ? 'top-[68px]'
+    : (isReadyToPublish || project.clip_count > 1) ? 'top-9' : 'top-1.5';
+
   // T7940: append the owner's profile_id so a URL-keyed cache (CDN/proxy/browser)
   // can never serve one account's poster bytes for another account's same-numbered
   // draft. project.id is a per-profile AUTOINCREMENT (not globally unique); the
@@ -595,6 +611,24 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           <AlertTriangle size={11} />
           {staleCount} outdated
         </span>
+      )}
+
+      {/* T8320: source-video expiry chip — matches GameTile's yellow expiry chip
+          (Clock + "Expired"/"Nd") so the same signal reads identically on both
+          surfaces. Shown when a source game is expired/reclaimed, or the nearest
+          source expiry is under 14 days. Stacked in the left column below any
+          count/Ready/staleness badge. */}
+      {showSourceExpiryChip && (
+        <div
+          data-testid="source-expiry-chip"
+          className={`absolute ${sourceExpiryTop} left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-900/70 text-yellow-300`}
+          title={sourceExpired
+            ? 'Source video expired'
+            : `Source video expires in ${sourceDaysLeft} day${sourceDaysLeft === 1 ? '' : 's'}`}
+        >
+          <Clock size={10} />
+          {sourceExpired ? 'Source expired' : `${sourceDaysLeft}d`}
+        </div>
       )}
 
       {/* Bottom scrim: name, game-time, one tag (>=sm). In the ready state the

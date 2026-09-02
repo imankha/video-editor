@@ -530,11 +530,12 @@ class TestStorageStatusDerivation:
         reset_profile_id_token(prof_token)
 
     @staticmethod
-    def _derive_status(expires_at_val, auto_export_status=None):
+    def _derive_status(expires_at_val, auto_export_status=None, has_hash=True):
         # Exercise the real shared helper so this test and the endpoints can't
-        # diverge (games.py list_games + load_game both use it).
+        # diverge (games.py list_games + load_game both use it). Shared games are
+        # hash-backed, so has_hash defaults True (T8320).
         from app.routers.games import _compute_storage_status
-        return _compute_storage_status(expires_at_val, auto_export_status)
+        return _compute_storage_status(expires_at_val, auto_export_status, has_hash)
 
     def test_active_ref_shows_active(self, pg_conn):
         future = (datetime.utcnow() + timedelta(days=10)).isoformat()
@@ -554,9 +555,13 @@ class TestStorageStatusDerivation:
         status = self._derive_status(expiry_by_hash.get("status_expired"))
         assert status == 'expired'
 
-    def test_no_ref_no_auto_export_shows_active(self):
-        status = self._derive_status(None, auto_export_status=None)
-        assert status == 'active'
+    def test_no_ref_no_auto_export_hash_backed_shows_expired(self):
+        # T8320: a hash-backed shared game with no game_storage row is reclaimed
+        # (delete_ref removed the row) -> 'expired', the safe direction. The old
+        # trailing 'active' default hid a reclaimed source. Legacy no-hash games
+        # (has_hash=False) still show 'active'.
+        assert self._derive_status(None, auto_export_status=None, has_hash=True) == 'expired'
+        assert self._derive_status(None, auto_export_status=None, has_hash=False) == 'active'
 
     def test_no_ref_with_auto_export_shows_expired(self):
         status = self._derive_status(None, auto_export_status='completed')

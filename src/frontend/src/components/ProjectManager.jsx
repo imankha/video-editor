@@ -46,6 +46,7 @@ import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
 import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
+import { deriveDraftSourceExpiry } from '../utils/draftSourceExpiry';
 
 // Shared layout class strings for the Games tab poster grid (T5681/T6310). The
 // loaded games grid AND its loading skeleton both consume these so the skeleton
@@ -83,6 +84,7 @@ function DraftStageRows({
   onDeleteProject,
   exportingProject,
   pendingGameIds,
+  gamesById,
 }) {
   return byStage.map(({ stage, byAspect }) => {
     const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
@@ -115,6 +117,7 @@ function DraftStageRows({
                   onDelete={() => onDeleteProject(project.id)}
                   exportingProject={exportingProject}
                   pendingGameIds={pendingGameIds}
+                  sourceExpiry={deriveDraftSourceExpiry(project, gamesById)}
                 />
               ))}
             </CardCarousel>
@@ -148,6 +151,7 @@ function DraftPhaseAspectRows({
   onDeleteProject,
   exportingProject,
   pendingGameIds,
+  gamesById,
 }) {
   return byAspect.map(({ ratio, byGame }) => (
     <div key={ratio ?? 'source'}>
@@ -179,6 +183,7 @@ function DraftPhaseAspectRows({
                   onDelete={() => onDeleteProject(project.id)}
                   exportingProject={exportingProject}
                   pendingGameIds={pendingGameIds}
+                  sourceExpiry={deriveDraftSourceExpiry(project, gamesById)}
                 />
               ))}
             </CardCarousel>
@@ -422,6 +427,10 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
+  // T8320: game_id -> game lookup for the read-only source-expiry join that Reel
+  // Drafts (DraftTile) use to surface expired/expiring source videos. Built from
+  // the games list ProjectManager already holds — a pure computed map, not state.
+  const gamesById = useMemo(() => new Map(games.map(g => [g.id, g])), [games]);
   // T8360: the Clips tab shows single-clip auto-drafts ONLY. is_auto_created (the
   // raw_clips.auto_project_id link) is the routing key, not clip_count -- see
   // T8360-design.md "The signal we can trust". Multi-clip drafts (is_auto_created
@@ -1568,6 +1577,7 @@ export function ProjectManager({
                         onDeleteProject={onDeleteProject}
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
+                        gamesById={gamesById}
                       />
                     </div>
                   ))}
@@ -1594,6 +1604,7 @@ export function ProjectManager({
                         onDeleteProject={onDeleteProject}
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
+                        gamesById={gamesById}
                       />
                     </div>
                   )}
@@ -1625,6 +1636,7 @@ export function ProjectManager({
                         onDeleteProject={onDeleteProject}
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
+                        gamesById={gamesById}
                       />
                     </CollapsibleGroup>
                     );
