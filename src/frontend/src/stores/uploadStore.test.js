@@ -234,6 +234,24 @@ describe('uploadStore — failure surfacing (bug26p, per-entry)', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
+  // T8340: dedup — the backend returned an EXISTING game (already_owned), so Annotate
+  // opened the OLD game. The completion toast must NOT announce a fresh "Game ready!"
+  // upload; it must honestly say the game was already in the library.
+  it('announces dedup honestly (no "Game ready!") when the upload was already_owned', async () => {
+    uploadGame.mockResolvedValueOnce({
+      game_id: 42, name: 'a', status: 'already_owned', deduplicated: true,
+    });
+    startFile('a.mp4');
+
+    await vi.waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
+    expect(toast.success).not.toHaveBeenCalled();
+    const [title, opts] = toast.info.mock.calls[0];
+    expect(title).toBe('Already in your library');
+    expect(opts.message).toMatch(/already in your account/i);
+    expect(uploads()).toHaveLength(0);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('uses the credits modal (no toast, no lingering entry) on insufficient credits', async () => {
     const err = new Error('Insufficient credits');
     err.insufficientCredits = true;
