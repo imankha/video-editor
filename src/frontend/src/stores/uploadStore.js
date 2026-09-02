@@ -5,6 +5,7 @@ import { captureVideoFrame } from '../utils/captureVideoFrame';
 import { toast } from '../components/shared';
 import { useQuestStore } from './questStore';
 import { useCreditStore } from './creditStore';
+import { GameCreateStatus } from '../constants/gameConstants';
 
 /**
  * Upload Store — manages game video uploads that persist across page navigation.
@@ -94,9 +95,20 @@ export const useUploadStore = create((set, get) => {
     });
     const gameName = entry.gameName;
     retireEntry(id);
-    toast.success('Game ready!', {
-      message: `${gameName || 'Video'} uploaded successfully`,
-    });
+    if (result?.status === GameCreateStatus.ALREADY_OWNED) {
+      // T8340: the file's content matched a game already in the library, so the
+      // backend deduped and returned the EXISTING game — Annotate opened THAT game,
+      // not a fresh upload. A "Game ready! ... uploaded successfully" toast here lied
+      // about what happened (announced a new game while the old one opened). Say so
+      // honestly instead, so the toast matches the game the user is now looking at.
+      toast.info('Already in your library', {
+        message: `${gameName || 'This video'} is already in your account — opened your existing game.`,
+      });
+    } else {
+      toast.success('Game ready!', {
+        message: `${gameName || 'Video'} uploaded successfully`,
+      });
+    }
     // T540: refresh quest progress after upload. T1580: refresh credits (deducted at activation).
     useQuestStore.getState().fetchProgress({ force: true });
     useCreditStore.getState().fetchCredits();
