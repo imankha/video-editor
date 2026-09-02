@@ -34,6 +34,14 @@ types into separate views/surfaces.
 
 ## Solution (needs a design pass before implementation - NOT scoped in depth here)
 
+**User naming decision (2026-09-02): call the multi-clip surface/content "Highlights".**
+Pairs naturally with the already-approved "Highlight Reels" for the published surface -
+"Highlights" for the in-progress multi-clip assemblies, "Highlight Reels" once
+published. Confirm at design time whether this means renaming the multi-clip DRAFT
+items themselves (e.g. a "Highlights" section/tab distinct from "Clips"), and whether it
+extends to the assembly flow's copy ("New Reel" -> something highlights-consistent) -
+settle the exact scope of "Highlights" vs "Highlight Reels" in the ui-designer pass.
+
 This is a real IA decision, not just a rename. Open questions to resolve at pickup:
 - What does each split surface look like - two tabs, one tab with two sections, or a
   filter within one list?

@@ -1,6 +1,6 @@
 # T8250: Admin pulse/funnel `date.today()` uses local time, daily_counters uses UTC — daily blind window
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-01
