@@ -65,8 +65,13 @@ def _read_user_version_from_r2(client, key: str) -> int | None:
         print(f"  !! could not read {key}: {type(e).__name__}: {e}")
         return None
     finally:
-        if tmp and os.path.exists(tmp):
-            os.unlink(tmp)
+        # Delete the temp file and any -wal/-shm sidecars a WAL-mode object may
+        # have left (local hygiene; never touches R2 or any real DB).
+        if tmp:
+            for suffix in ("", "-wal", "-shm"):
+                p = tmp + suffix
+                if os.path.exists(p):
+                    os.unlink(p)
 
 
 def _iter_db_keys(client, env: str):

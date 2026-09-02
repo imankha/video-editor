@@ -313,7 +313,38 @@ def _fresh_profile_db(user_id: str):
 class TestProfileDbEquivalence:
     """profile_db: build the migrated DB by dropping the audited post-floor column
     set (T6030's POST_V023_COLUMNS) off a head DDL, stamping to the floor, and
-    letting the runner re-add them; assert it matches a pristine head DDL."""
+    letting the runner re-add them; assert it matches a pristine head DDL.
+
+    SCOPE LIMITATION (reviewer MAJOR, 2026-09-02) — the FUTURE prune session must
+    heed this: this test independently reconstructs ONLY the v024+ tail. Objects
+    at or below v{FLOOR_VERSION} (e.g. v002 game_storage, v007 collection
+    metadata, v009 season_rank TABLES) are trusted from the head DDL and NEVER
+    replayed from the chain, because the below-23 profile_db migrations are
+    side-effecting (pg/context/R2) and can't run headless. So this proves DDL ==
+    chain for the TAIL only. If the proven prune floor F turns out to be <=
+    {FLOOR_VERSION}, the pruned range includes table-creating migrations this test
+    never verified — `test_prune_floor_within_verified_window` below FAILS in that
+    case to force widening the reconstruction window first (mirror the user_db
+    full-chain test). Unlike side-effect-free user_db, profile_db has no cheap way
+    to close this until F is known.
+    """
+
+    def test_prune_floor_within_verified_window(self):
+        # Structural alarm (greppable, T6030-style): the equivalence test above
+        # only independently verifies v(FLOOR_VERSION+1)..head. A profile_db prune
+        # floor at/below that window would delete table-creating migrations this
+        # test never replays — false safety. This RED-lights that before the prune.
+        from app.migrations.profile_db import RUNNER
+        from tests.test_t6030_migration_window_structural_guard import FLOOR_VERSION
+
+        assert RUNNER.floor == 0 or RUNNER.floor > FLOOR_VERSION, (
+            f"profile_db floor is set to v{RUNNER.floor:03d}, at/below the equivalence "
+            f"test's independently-verified window (v{FLOOR_VERSION:03d}). Before pruning "
+            f"v001..v{RUNNER.floor:03d}, WIDEN test_fresh_ddl_equals_migrated_from_floor to "
+            f"drop+replay the FULL pruned range — including the table-creating migrations "
+            f"below v{FLOOR_VERSION + 1:03d} (v002 game_storage, v007, v009) — mirroring the "
+            f"user_db full-chain test. Pruning on the current tail-only proof would be unsafe."
+        )
 
     def _cleanup(self, user_id):
         import shutil

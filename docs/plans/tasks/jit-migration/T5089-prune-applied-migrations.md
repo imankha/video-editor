@@ -135,7 +135,13 @@ match the pruned reality rather than deleting the assertions.
        BLOCKED on supervisor credentials** (exact commands in `.dotask-status`)
 3. [x] Implement floor enforcement (shipped inert, `floor=0`; `BelowMigrationFloor` → loud 500)
 4. [ ] Prune the contiguous prefix for ONE track — **BLOCKED** on Step 2 (floor unproven) + the dev
-       artifact-cleanup decision
+       artifact-cleanup decision. **REVIEWER FOLLOW-UP GATE (2026-09-02):** the profile_db
+       equivalence test independently reconstructs ONLY the v024+ tail (below-v23 migrations are
+       side-effecting, can't run headless). If the proven floor F <= 23, WIDEN
+       `test_fresh_ddl_equals_migrated_from_floor` to drop+replay the full pruned range (incl. the
+       table-creating v002/v007/v009) before deleting anything — mirror the user_db full-chain test.
+       `test_prune_floor_within_verified_window` fails structurally if a profile_db floor <= 23 is set
+       without this, so the gate can't be skipped.
 5. [ ] Verify: fresh account creation, an at-head account, and a synthetic below-floor DB (synthetic
        below-floor refusal IS tested; fresh/at-head unaffected proven by regression corner)
 6. [ ] Repeat per remaining track, one at a time — **BLOCKED**
