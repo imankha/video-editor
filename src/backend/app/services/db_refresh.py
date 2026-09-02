@@ -13,6 +13,7 @@ closes the loop -- see docs/plans/tasks/durability-sync/T4310-T4315-design.md.
 """
 
 import logging
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -133,6 +134,86 @@ def clear_stale_wal_sidecars(db_path: Path) -> None:
             # sidecar we couldn't remove is a hygiene issue, not a reason to
             # fail the write that already completed its (safety-checked) swap.
             logger.warning(f"[T4315] Could not remove stale sidecar {sidecar}: {e}")
+
+
+def clear_wal_sidecars_if_unheld(db_path: Path) -> bool:
+    """Migration-seam-only sibling of `clear_stale_wal_sidecars`: clear the
+    sidecars ONLY after proving no live connection holds db_path open, so the
+    seam's `wal_busy` retry never unlinks a LIVE connection's WAL.
+
+    Why the seam needs this and the other callers do NOT (T5086):
+    `clear_stale_wal_sidecars`'s six other callers only run AFTER a
+    restore-if-newer download that already proved (`before_download=lambda:
+    not wal_sidecars_present`) no sidecars were present going in — the sidecar
+    they clear is a narrow-window artifact of a JUST-SWAPPED main file, and
+    opening a probe CONNECTION there could replay a stale WAL onto the fresh
+    main file (the very cross-DB page-mixing hazard). The seam's `wal_busy`
+    retry is the opposite situation: NO swap happened, `wal_sidecars_present`
+    was True usually because a connection is genuinely LIVE on the CURRENT
+    file, and the old blind `unlink()` — a POSIX no-op-that-succeeds on an
+    open file on Linux (prod), silently destroying the live connection's WAL —
+    is exactly the bug. Here the WAL is consistent with the current main file,
+    so a probe connection is safe.
+
+    Discriminator (verified empirically on Linux, T5086; the T5085
+    investigation first found it on Windows): open with a short busy timeout,
+    force `locking_mode=EXCLUSIVE`, then `BEGIN IMMEDIATE`. Acquiring the
+    exclusive lock needs sole ownership of the WAL's shared-memory index, so a
+    live WRITER *or* a live idle READER makes it raise
+    `OperationalError: database is locked` — no live holder lets it succeed.
+
+    Returns:
+      True  — no live holder; sidecars were cleared (safe to migrate/retry).
+      False — a live connection holds the file (REFUSED, nothing unlinked) OR
+              the probe hit an unexpected error. Either way the caller must
+              leave its result as `wal_busy` so the seam raises
+              MigrationBlocked (-> retryable HTTP 503), never a raw 500 and
+              never a silent unlink. Fail-loud: the unexpected-error branch
+              logs at CRITICAL rather than swallowing.
+    """
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=0.2)
+    except sqlite3.Error as e:
+        logger.critical(
+            f"[T5086] WAL-holder probe could not open {db_path}: {e} — "
+            f"refusing to clear sidecars (seam surfaces wal_busy)"
+        )
+        return False
+
+    try:
+        conn.execute("PRAGMA locking_mode=EXCLUSIVE")
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("COMMIT")
+    except sqlite3.OperationalError as e:
+        if "locked" in str(e).lower():
+            # A live connection genuinely holds the file — the designed refuse
+            # path. Nothing is unlinked; the seam's result stays wal_busy.
+            logger.info(
+                f"[T5086] {db_path} is held by a live connection — refusing "
+                f"to clear WAL sidecars, seam will surface wal_busy"
+            )
+        else:
+            logger.critical(
+                f"[T5086] Unexpected OperationalError probing {db_path}: {e} — "
+                f"refusing to clear sidecars (fail-loud, seam surfaces wal_busy)"
+            )
+        return False
+    except sqlite3.Error as e:
+        logger.critical(
+            f"[T5086] Unexpected error probing {db_path}: {e} — refusing to "
+            f"clear sidecars (fail-loud, seam surfaces wal_busy)"
+        )
+        return False
+    finally:
+        # Always release the EXCLUSIVE lock — a leaked probe connection would
+        # itself become the live holder that blocks every later retry.
+        conn.close()
+
+    # No live holder. The clean EXCLUSIVE close above already checkpoints and
+    # usually removes the sidecars; clear explicitly to GUARANTEE removal
+    # (proven-safe now: we just held the file exclusively and let go).
+    clear_stale_wal_sidecars(db_path)
+    return True
 
 
 def confirm_current_before_write(user_id: str, profile_id: str | None = None) -> None:

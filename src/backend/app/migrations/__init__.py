@@ -477,9 +477,14 @@ def run_profile_seam(user_id: str, profile_id: str) -> None:
             try:
                 result = migrate_local_profile_db_at_seam(user_id, profile_id)
                 if result.status == "wal_busy":
-                    from ..services.db_refresh import clear_stale_wal_sidecars
-                    clear_stale_wal_sidecars(db_path)
-                    result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
+                    # T5086: probe for a LIVE holder before clearing. On Linux
+                    # (prod) a blind unlink of a live connection's -wal SUCCEEDS
+                    # silently and corrupts it; the sibling refuses in that case
+                    # (returns False -> result stays wal_busy -> MigrationBlocked
+                    # below). Only retry when we proved the sidecars were stale.
+                    from ..services.db_refresh import clear_wal_sidecars_if_unheld
+                    if clear_wal_sidecars_if_unheld(db_path):
+                        result = migrate_local_profile_db_at_seam(user_id, profile_id)  # one retry
                 if result.status == "sync_failed":
                     result = _seam_repull_and_retry_profile(user_id, profile_id, db_path)
                 if result.status != "ok":
@@ -543,9 +548,12 @@ def run_user_seam(user_id: str) -> None:
             try:
                 result = migrate_local_user_db_at_seam(user_id)
                 if result.status == "wal_busy":
-                    from ..services.db_refresh import clear_stale_wal_sidecars
-                    clear_stale_wal_sidecars(db_path)
-                    result = migrate_local_user_db_at_seam(user_id)  # one retry
+                    # T5086: sibling of run_profile_seam's guard — probe for a
+                    # live holder before clearing; refuse (leave wal_busy) if one
+                    # holds the file so a live WAL is never unlinked on Linux.
+                    from ..services.db_refresh import clear_wal_sidecars_if_unheld
+                    if clear_wal_sidecars_if_unheld(db_path):
+                        result = migrate_local_user_db_at_seam(user_id)  # one retry
                 if result.status == "sync_failed":
                     result = _seam_repull_and_retry_user(user_id, db_path)
                 if result.status != "ok":
