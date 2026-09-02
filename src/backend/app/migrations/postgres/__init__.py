@@ -57,4 +57,9 @@ MIGRATIONS = [
     V026TestAccountFlag(),
 ]
 
-RUNNER = MigrationRunner(MIGRATIONS)
+# T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL
+# (head) but leaves schema_migrations EMPTY (current=0), so any nonzero floor
+# would refuse every fresh deploy; and postgres is one shared deploy-migrated DB
+# per env with no lazy per-user long tail, so there is no below-floor population
+# to guard. _check_floor also hard-skips db_type=="postgres" (belt-and-suspenders).
+RUNNER = MigrationRunner(MIGRATIONS, floor=0)

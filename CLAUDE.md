@@ -266,7 +266,17 @@ Migration files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`.
 
 A blocked per-user migration (WAL-busy, CAS-refused sync, below-head R2 verify) raises
 `migrations.MigrationBlocked` → retryable HTTP 503 `{"code": "pending_migration"}` — it never
-opens a below-head DB silently. **T5087 deleted the bulk SQLite sweep** (`run_all_migrations`,
+opens a below-head DB silently. **Distinct from that (T5089): a DB BELOW the pruned-migration
+`floor`** (the migrations that would lift it were deleted, so it is UNRECOVERABLE) raises
+`migrations.BelowMigrationFloor` → **non-retryable HTTP 500 `{"code": "schema_below_floor"}`** +
+CRITICAL log, checked once at the top of `MigrationRunner.run` (the single bypass-proof choke point;
+postgres is exempt — its fresh-DDL DB has an empty `schema_migrations` ledger, so any nonzero pg
+floor would refuse every deploy). The mechanism ships **INERT** (`floor=0` on all three RUNNERs);
+**no migration files have been pruned yet** — that awaits the cross-env floor sweep
+(`scripts/measure_migration_floor.py`, orphan-inclusive) proving `min(user_version)` on dev+staging+prod.
+To prune: set `MigrationRunner(MIGRATIONS, floor=F)` in the track's `migrations/{track}/__init__.py`
+AND delete the contiguous `v001..vF` prefix in the SAME commit (`latest_version` unchanged — pruning
+is from the bottom). **T5087 deleted the bulk SQLite sweep** (`run_all_migrations`,
 `_migrate_user`, `_migrate_user_db`, `_migrate_profile_db`, and the old `POST /api/admin/migrate`)
 now that JIT is the sole and fully-proven mechanism for `user_db`/`profile_db`: that sweep was not
 harmless run as a SEPARATE process alongside a live uvicorn — it self-deadlocked the whole API
