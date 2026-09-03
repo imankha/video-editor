@@ -1,9 +1,31 @@
 # T7690: Share-back attribution: audit surfaces beyond the reel tail card
 
-**Status:** TODO (growth scope - per priority policy sits behind Milestone TOP)
+**Status:** DECIDED 2026-09-03 — audit delivered, all 5 proposals approved, split into child
+tasks below. This task itself is closed (research + decision only).
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-24
+
+## Decision (2026-09-03)
+
+Audit delivered as a decision artifact (surface inventory table + 5 ranked proposals):
+https://claude.ai/code/artifact/3e8c3067-2381-4d61-85c9-990ef69bce4e
+
+Core finding: the "make your own reel" viral CTA (`BrandedEndCard`, with UTM tracking)
+already exists and fires on the reel and collection share pages — but is missing from the
+teammate-tag share page, which is exactly the same-team-parent audience this task's growth
+thesis names. That page was a bare "Sign in to watch" gate with zero brand story.
+
+User approved all 5 ranked proposals for implementation. **Implementation split into 5 child
+tasks** in the new [Share-Back Attribution epic](share-back-attribution/EPIC.md), in ranked
+order (impact vs. effort):
+- [T8410](share-back-attribution/T8410-teammate-tag-share-cta.md) — teammate-tag share page CTA (highest impact, lowest effort)
+- [T8420](share-back-attribution/T8420-game-link-share-cta.md) — game-link share page CTA
+- [T8430](share-back-attribution/T8430-share-page-wordmark-link.md) — link the dead wordmark header
+- [T8440](share-back-attribution/T8440-branded-download-filename.md) — brand the download filename
+- [T8450](share-back-attribution/T8450-unfurl-description-cta.md) — unfurl description CTA (ranked last — genuine truncation risk)
+
+No code from this task itself — see the epic and its 5 children.
 
 ## Problem / Opportunity
 
