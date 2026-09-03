@@ -11,6 +11,7 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
+import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 
@@ -178,6 +179,10 @@ export function AnnotateFullscreenOverlay({
   // naturally; re-seeding on a clip switch leaves the panel open, which is
   // harmless and avoids a second reset path.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // T8600 §2.8: strip-only — Focus mid-edit must never silently discard the
+  // open form, so the Focus button opens this confirm-then-save-then-navigate
+  // prompt instead of navigating directly.
+  const [focusConfirmOpen, setFocusConfirmOpen] = useState(false);
   const [createProject, setCreateProject] = useState(false);
   const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
   const notesRef = useRef(null);
@@ -336,8 +341,11 @@ export function AnnotateFullscreenOverlay({
     const autoGenName = generateClipName(rating, selectedTags, notes);
     const nameToSave = isNameManuallyEdited ? clipName : (autoGenName ? '' : defaultClipName);
     const clipDuration = scrubEndTime - scrubStartTime;
+    // T8600 §2.8: capture the create/update promise so the Focus mid-edit
+    // prompt's "Save & open Focus" can await it before navigating.
+    let savePromise;
     if (isEditMode) {
-      onUpdateClip(existingClip.id, {
+      savePromise = onUpdateClip(existingClip.id, {
         startTime: scrubStartTime,
         endTime: scrubEndTime,
         rating,
@@ -360,7 +368,7 @@ export function AnnotateFullscreenOverlay({
         my_athlete: myAthlete,
         createProject,
       };
-      onCreateClip(clipData);
+      savePromise = onCreateClip(clipData);
     }
     setRating(DEFAULT_RATING);
     setSelectedTags([]);
@@ -374,6 +382,7 @@ export function AnnotateFullscreenOverlay({
     setCreateProject(DEFAULT_RATING === 5 && newClipLayerIsMine);
     setCreateProjectManuallySet(false);
     onResume();
+    return savePromise;
   };
   handleSaveRef.current = handleSave;
 
@@ -786,12 +795,34 @@ export function AnnotateFullscreenOverlay({
               size="sm"
               icon={Crop}
               title="Open in Focus mode"
-              onClick={() => onOpenInFocus?.(existingClip.autoProjectId)}
+              onClick={() => setFocusConfirmOpen(true)}
             >
               Focus
             </Button>
           )}
         </div>
+
+        {/* T8600 §2.8: Focus mid-edit — never a silent discard. Save & open
+            Focus awaits the same save handleSave/Enter/1-5 already use. */}
+        <ConfirmationDialog
+          isOpen={focusConfirmOpen}
+          title="Save this play first?"
+          message="Opening Focus closes the play editor."
+          onClose={() => setFocusConfirmOpen(false)}
+          impressionKey="focus_while_editing_play"
+          buttons={[
+            { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
+            {
+              label: 'Save & open Focus',
+              variant: 'primary',
+              onClick: async () => {
+                setFocusConfirmOpen(false);
+                await handleSave();
+                onOpenInFocus?.(existingClip.autoProjectId);
+              },
+            },
+          ]}
+        />
       </>
     );
   }
