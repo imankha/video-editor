@@ -150,6 +150,52 @@ test.describe('T8480 - Focus unlocks the moment a reel exists (desktop)', () => 
   });
 });
 
+test.describe('T8470 - one status story for a fresh draft (desktop)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('save with reel ON -> Home continue card, Clips tab chip, and Highlight Reels drawer all say Draft', async ({ page }, testInfo) => {
+    test.setTimeout(180000);
+    const userId = makeUserId('t8470');
+    testInfo.annotations.push({ type: 'userId', description: userId });
+    await setupAnnotateWithGame(page, userId);
+
+    const form = await openAddClipForm(page);
+    const reelSwitch = form.getByRole('switch').last();
+    await expect(form.getByText("Don't Create Reel")).toBeVisible({ timeout: 5000 });
+    await reelSwitch.click();
+    await expect(form.getByText('Create Reel', { exact: true })).toBeVisible();
+
+    const result = await saveClip(page, form);
+    expect(result.project_created).toBeTruthy();
+    await expect(page.getByText(TOAST_COPY)).toBeVisible({ timeout: 10000 });
+
+    // Home: the continue card describes the fresh reel as a Draft, never
+    // "Not Started" - one status vocabulary (T8470 Part A/B).
+    await page.getByRole('button', { name: 'Home' }).click();
+    const continueCard = page.getByRole('button', { name: /clip.*Draft/ });
+    await expect(continueCard).toBeVisible({ timeout: 10000 });
+    await expect(continueCard).not.toContainText('Not Started');
+
+    // Clips tab: the chip counts the same single-clip draft.
+    await page.getByRole('button', { name: /Clips/ }).click();
+    await expect(page.getByTestId('project-card').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('project-card').getByText('Draft', { exact: true })).toBeVisible();
+
+    // Highlight Reels drawer: published-reels list is empty, but the empty state
+    // is count-aware - it must never claim "No reels yet" while the draft exists
+    // (T8470 Part C), and its link switches to the Clips tab.
+    await page.getByRole('button', { name: /Highlight Reels/ }).click();
+    await expect(page.getByText('No reels yet')).toBeVisible({ timeout: 10000 });
+    const draftLink = page.getByRole('button', { name: /draft clip.*in progress.*Clips tab/ });
+    await expect(draftLink).toBeVisible();
+    await draftLink.click();
+
+    // The drawer closed and the Clips tab is now active.
+    await expect(page.getByText('No reels yet')).toHaveCount(0);
+    await expect(page.getByTestId('project-card').first()).toBeVisible({ timeout: 10000 });
+  });
+});
+
 test.describe('T8480 - touch-visible explanations + unlock (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

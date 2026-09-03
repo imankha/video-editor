@@ -1,6 +1,9 @@
 ---
 domain: annotate
-updated: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
+updated: 2026-09-03 (T8470+T8480: reel creation now selects the new project so the Focus tab
+unlocks immediately + one Draft/Ready-to-share status vocabulary; see the four new entries at the
+top of Invariants & rules. Prior:)
+prior_update: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
 tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
 and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).
 The "Build Highlight Reel" assembly button and the multi-clip drafts it produces (`is_auto_created
@@ -191,6 +194,38 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
+- **Reel creation SELECTS the new project so Focus unlocks immediately (T8480).** All three
+  `result.project_created` sites in `AnnotateContainer.jsx` funnel through `announceReelCreated`
+  (module-scope, exported for unit test), which calls
+  `useProjectsStore.getState().selectProject(project_id)` + one toast (`'Reel started, click Focus
+  to complete'`, tappable -> `onOpenReelInFocus` = `AnnotateScreen.openClipInFocus`) +
+  `fetchProjects({force:true})`. The selection is what flips `ModeSwitcher`'s `hasProject`, enabling
+  the Focus tab. **Annotate is inert to `selectedProjectId` changing** — App.jsx's selectedProjectId
+  effects are all FRAMING/OVERLAY-mode-gated (the redirect one only fires when a project is MISSING),
+  so auto-select never navigates away or reloads the annotate video. ModeSwitcher's locked tabs are
+  `aria-disabled` (not natively `disabled`) so a tap reaches onClick and fires a visible info toast
+  carrying the old hover-only `title` text.
+- **One status vocabulary: a created reel is a Draft (T8470).** `DRAFT_STAGE_LABELS`
+  (`utils/draftStage.js`) read Draft / Draft - in Focus / Draft - in Overlay / Ready to share (the
+  stage KEYS + derivation are unchanged — tile sizing / row grouping depend on them); a published
+  reel is Shared and lives past draftStage. Nouns stay Plays/Clips/Highlight Reels (epic-binding).
+  Renderers that hardcoded the old 'Not Started'/'Ready' words (DraftTile chip + badge, continue-card
+  subtitle, phase filter, CollapsibleGroup legend, SegmentedProgressStrip tooltip, RecapPlayerModal
+  create toast) were all aligned — 'Not Started'/bare 'Ready' render nowhere for reels.
+- **ClipDetailsEditor's Reel control is a live link for a fresh draft (T8470 Part D).** A reel exists
+  the moment `region.autoProjectId` lands, but a fresh draft has null `reel_source_*` and no produced
+  video, so `reelReflectsClip` is false. The new `reelIsFreshDraft` branch (hasReel && reel_source_*
+  null && linked project has no working/final video) renders **"Open reel (Draft)"** -> Focus instead
+  of the old actionable "Create Reel" dead-end. Below-migration reels (produced video, null snapshot)
+  and drifted reels (non-null snapshot) still show "Create Reel" — pinned by the T8070 tests.
+- **The drawer can never claim "No reels yet" while drafts exist (T8470 Part C).** `CollectionsTab`'s
+  empty published-reels state gains a count-aware line linking to the Clips tab; `DownloadsPanel`
+  computes `draftClipCount` with the SAME predicate as ProjectManager's `clipDrafts`
+  (`projects.filter(p => p.is_auto_created)`). The tab switch is a lifted nonce
+  (ProjectsScreen -> ProjectManager, mirroring `onOpenAssembly`); the global editor-context drawer
+  (App.jsx) uses the existing `sessionStorage 'projectManagerTab'` hint. T8360's is_auto_created
+  partition (single-clip auto-drafts on Clips, multi-clip drafts in the drawer) is respected, not
+  reverted.
 - **segments_data is write-time-canonical as of T4340** (working_clips.segments_data, msgpack).
   The on-disk `boundaries` format is now **always full-list** `[0, ...splits, duration]` for
   every NEW write, from BOTH paths: the gesture path (`POST /actions` -> `split_segment` etc.)
