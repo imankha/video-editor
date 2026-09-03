@@ -1,6 +1,6 @@
 # T8460: Silent app update, no blocking interstitial
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-03
