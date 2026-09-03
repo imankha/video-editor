@@ -436,6 +436,49 @@ events (mouse events don't fire during a touch drag). Coarse pointers get a >=44
 transparent hit box around the visible handle (`useIsCoarsePointer()` → `leverHitWidth`,
 or the `coarse-pointer:` variant). See `RegionLayer.jsx:98-132, 411-452`.
 
+### Mode-swap editor strip (Annotate, desktop non-fullscreen, T8600)
+
+An in-place editor that temporarily REPLACES a screen region (rather than opening
+in a sidebar or modal) uses a tinted, bordered card so the mode change is loud —
+first shipped as the Annotate under-canvas "Add/Edit Play" strip
+(`AnnotateFullscreenOverlay.jsx`, `layout="strip"`), which swaps out the timeline
++ primary CTA block while open.
+
+**Tint tokens** — green for "add/create", yellow for "edit", lifted verbatim from
+the existing amber "source expired" panel pattern (`AnnotateModeView.jsx`), not a
+new color:
+
+```
+container : bg-{color}-950/20  border border-{color}-800/40
+inner rule: border-{color}-800/30   (one step lighter than the outer border)
+icon/text : text-{color}-400
+```
+
+| Mode | color | Icon |
+|---|---|---|
+| Add / Create | `green` | `Plus` |
+| Edit | `yellow` | `Pencil` |
+
+**Structure:** header (mode icon + label + secondary `X` close, `border-b`) →
+primary content (scrub/edit controls) → controls row (`flex-wrap`, primary action
+cluster pinned `ml-auto`: disclosure toggle, Save, Cancel) → an optional
+in-place "details" panel (`detailsOpen`, own `max-h-64 overflow-y-auto`, dismissed
+by re-clicking the disclosure — no separate Done/X since it never covers
+anything else). A related always-visible button row (e.g. Layer + Focus) can live
+OUTSIDE the tinted card, as a sibling, when it's driven by the same component's
+state — don't lift state to a parent just to move a button row.
+
+**On a narrower surface** (e.g. a bottom sheet), the same disclosure pattern
+becomes a full-screen takeover instead of expanding in place — see
+`AddDetailsPopup.jsx`: `fixed inset-0 Z.MODAL`, explicit Done/X only (no
+backdrop-close), portaled to `document.body` if the sheet it lives in creates its
+own stacking context (a z-index cannot escape an ancestor's stacking context —
+same landmine as the T5700 clip-marker tooltip, `.claude/knowledge/annotate.md`).
+
+`flex-wrap` on the controls row is load-bearing at narrow widths — never suppress
+wrapping with `flex-nowrap` + `overflow-x-auto` on an action row; a second line
+reads better than horizontal scroll.
+
 ### Discoverable (never hover-only) affordances
 
 Shipped-twice bug (T5910, T6300): an affordance that only appears on hover is invisible on
@@ -531,3 +574,4 @@ duration-300         /* panel animations */
 | 2026-07-23 | Published-reel tile (`ReelTile`) for the My Reels drawer: DraftTile idiom minus draft chrome, per-reel aspect (9:16/16:9), owner poster endpoint `/api/downloads/{id}/poster.jpg`, tiles laid out in `CardCarousel`; batch Select removed, per-reel Move-to-profile with confirm (T5673/T5678) | user |
 | 2026-07-24 | Games tab poster grid (`GameTile`, 16:9 landscape, chronological grid 2-up mobile / 3-up tablet / 6-up desktop, month grouping with game-count badges, minimal overlay date+clip-count, top-right expiry chip, grayscale expired variant, poster endpoint `/api/games/{id}/poster.jpg`) (T5681) | user |
 | 2026-08-02 | Timeline marker vocabulary (playhead / region levers / keyframe diamonds / poster cover-frame marker), shared EDGE_PADDING positioning + Pointer-Events drag pattern, and the "discoverable never hover-only" rule (T5910/T6300 guard). Poster marker: cyan `Image`-pin on the video-track top rail, `z-30` (T5410) | user |
+| 2026-09-03 | Mode-swap editor strip pattern (tinted green/add / yellow/edit card that replaces a screen region in place, disclosure panel with `max-h-64` in-place expansion, full-screen popup takeover variant for narrower surfaces) - Annotate under-canvas Add/Edit Play strip (T8600) | user |
