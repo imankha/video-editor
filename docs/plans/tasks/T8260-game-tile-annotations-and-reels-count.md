@@ -1,6 +1,6 @@
 # T8260: Game tile says "N annotations" (not "N clips") and adds "M reels"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-08-31
