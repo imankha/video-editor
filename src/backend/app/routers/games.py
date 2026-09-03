@@ -957,6 +957,41 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
     return result
 
 
+def _compute_reel_counts(cursor, game_ids: list) -> dict:
+    """Published reels attributable to each game (T8260).
+
+    A reel counts for a game when its FROZEN game_ids decodes to exactly that
+    one game id (route_game_ids), regardless of clip_count. NOT route_collection:
+    that also demands clip_count == 1 (the T3630 single-clip Collections pool),
+    which would report 0 reels for a multi-clip highlight reel built from one
+    game. So this count can exceed the game's Collections bucket count by design.
+    Multi-game mixes and game-less reels count for NO game.
+
+    Same three filters GET /api/collections/summary uses (collections.py): latest
+    version per source, published only, teammate-only single-clip reels excluded.
+    ONE query for the whole list, decoded in Python (no N+1).
+    """
+    from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+    from app.services.collection_metadata import route_game_ids
+
+    if not game_ids:
+        return {}
+    wanted = set(game_ids)
+    cursor.execute(f"""
+        SELECT fv.game_ids
+        FROM final_videos fv
+        WHERE fv.id IN ({latest_final_videos_subquery()})
+          AND fv.published_at IS NOT NULL
+          {exclude_teammate_reels_clause()}
+    """)
+    counts: dict = {}
+    for row in cursor.fetchall():
+        gid = route_game_ids(row["game_ids"])
+        if gid in wanted:
+            counts[gid] = counts.get(gid, 0) + 1
+    return counts
+
+
 async def list_games_metadata():
     """Return game metadata without presigned URLs (used by bootstrap endpoint)."""
     ensure_directories()
@@ -1052,6 +1087,8 @@ def _read_games_for_list():
         # Compute my_athlete-filtered stats and tag badges per game
         game_ids = [row['id'] for row in rows]
         athlete_stats = _compute_athlete_stats(cursor, game_ids) if game_ids else {}
+        # T8260: published reels attributable to each game (same cursor, no N+1).
+        reel_counts = _compute_reel_counts(cursor, game_ids)
 
     # T5800: resolve owning-profile display names for reference cards. ONE user.sqlite
     # read regardless of reference count (no per-row lookup -> no N+1); skipped
@@ -1069,7 +1106,7 @@ def _read_games_for_list():
     grace_hashes = get_grace_deletion_hashes()
     return (
         rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes,
-        source_profile_names,
+        source_profile_names, reel_counts,
     )
 
 
@@ -1088,7 +1125,7 @@ async def _list_games_impl(skip_presigned_urls=False):
     # thread. The presign warm below already offloads via to_thread; list-building
     # then reads the warmed presigned-URL cache (no blocking) on the loop.
     (rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes,
-     source_profile_names) = await run_in_context(_read_games_for_list)
+     source_profile_names, reel_counts) = await run_in_context(_read_games_for_list)
 
     # T2880: Pre-generate presigned URLs for all games concurrently.
     # T3380: Skip when called from bootstrap (URLs loaded lazily on demand).
@@ -1148,6 +1185,7 @@ async def _list_games_impl(skip_presigned_urls=False):
             'blake3_hash': blake3,
             'video_url': video_url,
             'clip_count': stats['clip_count'],  # derived live from raw_clips, not the stale stored column
+            'reel_count': reel_counts.get(row['id'], 0),  # T8260: published reels for this game, derived live
             'brilliant_count': stats['brilliant_count'],
             'good_count': stats['good_count'],
             'interesting_count': stats['interesting_count'],
