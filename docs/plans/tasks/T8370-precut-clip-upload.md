@@ -49,6 +49,13 @@ refs + expiry semantics, batch upload (multiple clips in one gesture), and what 
 shows for such clips (there is nothing to annotate - they skip straight to the Clips
 surface / Focus).
 
+**Consequence warning (2026-09-03, user directive).** When a user uploads a clip
+directly, warn them BEFORE processing proceeds: because this path is not associated with
+a game and does not come through annotation, the clip will not be in the database for
+future highlights to be created (no game footage to re-cut from, no game grouping, no
+future game-based highlight assembly). One-time-per-flow informative warning with a
+clear "continue" - it must inform, not gate; T8380 owns where it renders.
+
 ## Analytics + naming (already-reserved hooks to honor)
 
 - **`clip_uploaded` event**: T7860 (STAGING) reserved the name + funnel position in

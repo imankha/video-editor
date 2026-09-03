@@ -43,6 +43,11 @@ different tile region.
   first - the phone camera roll is the primary source).
 - File picker accepting one-or-many videos; hands off to T8370's upload flow; progress
   + failure UX reusing the existing upload components (Retry cards, T7880 class).
+- **Consequence warning before processing (2026-09-03, user directive):** the flow warns
+  that a directly uploaded clip is not associated with a game and does not come through
+  annotation, so it will not be in the database for future highlights to be created.
+  Informative with a clear continue, shown once per flow, never a hard gate. Exact copy
+  via the ui-designer pass; the requirement is recorded in T8370 as well.
 - Uploaded clips land on the Clips surface as tiles ready for Create Reel / Focus.
 - Empty-state + dead-end-guard rework per above.
 - Naming: reconcile with T8130's reserved "New Clip" vocabulary - the user said "Add

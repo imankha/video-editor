@@ -35,6 +35,21 @@ Value → UX → architecture → task, one line each:
 
 ## Captured requirements (not yet assigned a task)
 
+- **Single-owner multi-feed: "Add a video" to MY OWN game, no pool required (2026-09-03,
+  user directive).** The user's stated design: a game owner can add additional overlapping
+  videos to an existing game (e.g. a full Veo recording plus several iPhone captures of
+  the same match); the app figures out the timestamp and lays each video over the
+  Veo/Trace reference in a SEPARATE LAYER; when annotating a clip where multiple feeds
+  cover the moment, the user chooses which feed. The mechanics are already this epic's
+  core (T5530 alignment, T5540 lanes, T5550 per-clip picker) - the DELTA this directive
+  adds is scope: none of it may require pool sharing. Today T5510 scopes the entry
+  "ONLY inside the Share game modal"; amend at design time so a plain "Add Video" on the
+  owner's own game tile/Annotate surface creates additional feeds on a private,
+  never-shared game (feeds decouple from "contributors"; a single member owning N feeds
+  is the base case, the pool is the multiplayer extension). Fold into T5495/T5510's
+  design pass rather than filing a separate task; UX-SPEC needs a section for the
+  owner-only entry. Related: the First Reel Funnel epic's T8500 reorders the SAME Add
+  Game modal earlier and must stay rebase-friendly with this.
 - **Explicit, visible single-clip-vs-full-game choice at upload time (2026-08-20, user
   decision).** T7280 ships as originally scoped — silent duration-based fast path +
   post-hoc inline notice in Framing ("jumped to framing · Treat as full game") — but the
