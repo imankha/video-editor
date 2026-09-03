@@ -2167,7 +2167,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
     the playback-gating request from the HAR — keeping it off the loop lets it
     overlap the sibling list requests instead of queueing behind them.
     """
-    from app.routers.games import get_game_video_url, log_game_video_failure
+    from app.routers.games import assert_clip_source_available, get_game_video_url, log_game_video_failure
     from app.storage import VideoServeOutcome, log_video_resolution
 
     with get_db_connection() as conn:
@@ -2176,7 +2176,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
             SELECT
                 rc.start_time, rc.end_time, rc.game_id,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                g.video_filename,
+                g.video_filename, g.auto_export_status,
                 COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
@@ -2202,6 +2202,16 @@ def get_clip_playback_url(project_id: int, clip_id: int):
                 reason="no_blake3_hash",
             )
             raise HTTPException(422, "Game video missing blake3 hash")
+
+        # T8310: refuse a reclaimed source with a structured 410 instead of
+        # presigning a deleted object (the presign succeeds, then the <video>
+        # gets an R2 404 and reports "format not supported" -- bug 50p).
+        assert_clip_source_available(
+            cursor,
+            game_id=row['game_id'],
+            blake3_hash=row['blake3_hash'],
+            auto_export_status=row['auto_export_status'],
+        )
 
         url = get_game_video_url(row['blake3_hash'], row['video_filename'])
         if not url:
@@ -2284,8 +2294,9 @@ async def stream_working_clip_bounded(
             SELECT
                 rc.start_time,
                 rc.end_time,
+                rc.game_id,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                g.video_filename,
+                g.video_filename, g.auto_export_status,
                 COALESCE(gv.duration, g.video_duration) AS video_duration,
                 COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
@@ -2298,8 +2309,18 @@ async def stream_working_clip_bounded(
         """, (clip_id, project_id))
         row = cursor.fetchone()
 
-    if not row:
-        raise HTTPException(status_code=404, detail="Clip not found or has no game source")
+        if not row:
+            raise HTTPException(status_code=404, detail="Clip not found or has no game source")
+        # T8310: same gate as get_clip_playback_url -- refuse a reclaimed source up
+        # front rather than proxying an R2 404 the browser reports as a format error.
+        from app.routers.games import assert_clip_source_available
+        assert_clip_source_available(
+            cursor,
+            game_id=row['game_id'],
+            blake3_hash=row['blake3_hash'],
+            auto_export_status=row['auto_export_status'],
+        )
+
     if not row['video_duration'] or not row['video_size']:
         raise HTTPException(status_code=422, detail="Game video missing duration/size metadata")
 

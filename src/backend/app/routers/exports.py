@@ -490,6 +490,30 @@ async def start_framing_export(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # T8310: refuse up front if any source game for this project's clips has
+        # been reclaimed, rather than staging/reserving credits and failing
+        # mid-pipeline. Reuses the same gate as the clip playback seams.
+        from app.routers.games import assert_clip_source_available
+        cursor.execute("""
+            SELECT DISTINCT g.id AS game_id,
+                   COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
+                   g.auto_export_status
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv
+                ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
+            WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
+        """, (project_id,))
+        for src in cursor.fetchall():
+            assert_clip_source_available(
+                cursor,
+                game_id=src['game_id'],
+                blake3_hash=src['blake3_hash'],
+                auto_export_status=src['auto_export_status'],
+            )
+
     # Parse keyframes
     try:
         keyframes = json.loads(keyframes_json)

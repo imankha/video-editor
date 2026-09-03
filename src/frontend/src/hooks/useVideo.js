@@ -1048,18 +1048,41 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   // Handle video load error
   // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
-  const handleError = useCallback(() => {
+  const handleError = useCallback(async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
     const mediaError = video.error;
     const errorCode = mediaError?.code;
     const errorMessage = mediaError?.message || 'Unknown error';
 
+    // T8310: MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) on a non-blob URL can mean the
+    // source object is GONE (storage expired/reclaimed), not a bad codec — a
+    // <video> cannot distinguish the two. Probe the URL once BEFORE classifying:
+    // a confirmed 404 (R2 object gone) or 410 (our source_expired gate) routes to
+    // VIDEO_UNAVAILABLE, which skips the format-error retry loop (neither heals in
+    // 6 seconds) and surfaces an honest message instead of the "Video format not
+    // supported" banner (bug 50p). Any other status, or a probe failure, falls
+    // through to the existing handling. Scoped to non-blob code-4 so blob-URL
+    // recovery below is never delayed.
+    let probeStatus = null;
+    if (errorCode === 4 && video.src && !video.src.startsWith('blob:')) {
+      try {
+        const resp = await fetch(video.src, {
+          method: 'GET',
+          headers: { Range: 'bytes=0-0' },
+          credentials: 'include',
+        });
+        probeStatus = resp.status;
+        resp.body?.cancel?.();
+      } catch { /* probe failure is non-actionable — fall through to format-error */ }
+      if (!videoRef.current) return; // unmounted during the await
+    }
+
     // T1360: classify before deciding whether to surface the error to the user.
     // A revoked blob URL surfaces as MEDIA_ERR_SRC_NOT_SUPPORTED but is NOT a
     // real format failure — recover in-memory by swapping to the stashed
     // streaming URL.
-    const kind = classifyVideoError({ code: errorCode, videoSrc: video.src });
+    const kind = classifyVideoError({ code: errorCode, videoSrc: video.src, probeStatus });
 
     if (kind === VideoErrorKind.STALE_BLOB && streamingFallbackUrlRef.current) {
       const resumeAt = video.currentTime;
@@ -1181,6 +1204,20 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
             );
           })
           .catch(() => { /* diag probe failed */ });
+      }
+    } else if (kind === VideoErrorKind.VIDEO_UNAVAILABLE) {
+      // T8310: probe-confirmed 404 — the source object is gone (storage expired/
+      // reclaimed). Tell the truth and do NOT enter the format-error retry loop:
+      // a 404 does not heal in 6 seconds, so retrying only stalls the user on a
+      // "format not supported" banner (bug 50p). The Focus backend gate normally
+      // short-circuits before a <video> ever mounts a dead URL; this net catches
+      // any other path (e.g. a reclaimed overlay working_video) that still does.
+      userMessage = 'This video is no longer available. Its source storage may have expired.';
+      console.warn(
+        `[VIDEO_LOAD] video_unavailable id=${loadIdRef.current} status=404 url=${(video.src || '').substring(0, 80)}`
+      );
+      if (videoUrl && !videoUrl.startsWith('blob:')) {
+        invalidateUrl(videoUrl);
       }
     } else if (kind === VideoErrorKind.FORMAT_ERROR) {
       // T5620/T5641: a streaming (non-blob) format error is usually a transient

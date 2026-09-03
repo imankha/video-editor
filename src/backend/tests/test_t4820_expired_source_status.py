@@ -860,3 +860,107 @@ class TestHealPathSkipsMissingSource:
         assert result == 1
 
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# T8310: clip-seam source-expiry gate (bug 50p)
+# ---------------------------------------------------------------------------
+
+def _clip_seam_conn():
+    """In-memory profile DB with game_storage, Row factory (matches get_db_connection)."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript("""
+        CREATE TABLE game_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blake3_hash TEXT NOT NULL UNIQUE,
+            storage_expires_at TEXT
+        );
+    """)
+    return conn
+
+
+class TestResolveGameSourceStatus:
+    """games.resolve_game_source_status — the shared clip-seam gate logic (T8310).
+
+    Must stay in lockstep with _compute_storage_status (no third fork) and mirror
+    list_games' can_extend (ref survives OR in grace window).
+    """
+
+    def _resolve(self, conn, blake3_hash, auto_export_status, grace=frozenset()):
+        from app.routers import games
+        with patch.object(games, "get_grace_deletion_hashes", return_value=set(grace)):
+            return games.resolve_game_source_status(conn.cursor(), blake3_hash, auto_export_status)
+
+    def test_active_future_expiry(self):
+        conn = _clip_seam_conn()
+        conn.execute("INSERT INTO game_storage (blake3_hash, storage_expires_at) VALUES (?, ?)", ("h1", _future()))
+        assert self._resolve(conn, "h1", None) == ("active", False)
+
+    def test_expired_past_expiry_ref_present_is_extendable(self):
+        conn = _clip_seam_conn()
+        conn.execute("INSERT INTO game_storage (blake3_hash, storage_expires_at) VALUES (?, ?)", ("h1", _past()))
+        status, can_extend = self._resolve(conn, "h1", None)
+        assert status == "expired"
+        assert can_extend is True  # storage row still present
+
+    def test_reclaimed_no_row_has_hash_is_expired_not_extendable(self):
+        # bug 50p: delete_ref removed the game_storage row at reclaim, past grace.
+        conn = _clip_seam_conn()
+        status, can_extend = self._resolve(conn, "h_gone", None)
+        assert status == "expired"
+        assert can_extend is False
+
+    def test_reclaimed_no_row_in_grace_is_extendable(self):
+        conn = _clip_seam_conn()
+        status, can_extend = self._resolve(conn, "h_grace", None, grace={"h_grace"})
+        assert status == "expired"
+        assert can_extend is True
+
+    def test_legacy_no_hash_is_active(self):
+        conn = _clip_seam_conn()
+        assert self._resolve(conn, None, None) == ("active", False)
+
+
+class TestAssertClipSourceAvailable:
+    """games.assert_clip_source_available raises a structured 410 when reclaimed."""
+
+    def test_expired_raises_source_expired_410(self):
+        from app.routers import games
+        conn = _clip_seam_conn()
+        conn.execute("INSERT INTO game_storage (blake3_hash, storage_expires_at) VALUES (?, ?)", ("h1", _past()))
+        with patch.object(games, "get_grace_deletion_hashes", return_value=set()):
+            with pytest.raises(games.GameSourceExpired) as exc:
+                games.assert_clip_source_available(
+                    conn.cursor(), game_id=7, blake3_hash="h1", auto_export_status=None
+                )
+        assert exc.value.status_code == 410
+        assert exc.value.detail["code"] == "source_expired"
+        assert exc.value.detail["game_id"] == 7
+        assert exc.value.detail["can_extend"] is True
+
+    def test_reclaimed_no_row_raises_not_extendable(self):
+        from app.routers import games
+        conn = _clip_seam_conn()
+        with patch.object(games, "get_grace_deletion_hashes", return_value=set()):
+            with pytest.raises(games.GameSourceExpired) as exc:
+                games.assert_clip_source_available(
+                    conn.cursor(), game_id=9, blake3_hash="h_gone", auto_export_status=None
+                )
+        assert exc.value.detail["can_extend"] is False
+
+    def test_active_does_not_raise(self):
+        from app.routers import games
+        conn = _clip_seam_conn()
+        conn.execute("INSERT INTO game_storage (blake3_hash, storage_expires_at) VALUES (?, ?)", ("h1", _future()))
+        # Should not raise.
+        games.assert_clip_source_available(
+            conn.cursor(), game_id=1, blake3_hash="h1", auto_export_status=None
+        )
+
+    def test_legacy_no_hash_does_not_raise(self):
+        from app.routers import games
+        conn = _clip_seam_conn()
+        games.assert_clip_source_available(
+            conn.cursor(), game_id=1, blake3_hash=None, auto_export_status=None
+        )
