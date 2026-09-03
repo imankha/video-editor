@@ -199,6 +199,67 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
     });
   });
 
+  // T8470 (Part D): a reel exists the moment project_created lands, but a fresh
+  // draft has no reel-source snapshot and no produced video. That state must be a
+  // live "Open reel (Draft)" link, never an actionable "Create Reel" dead-end.
+  describe('fresh draft reel — Open reel (Draft) (T8470 Part D)', () => {
+    afterEach(() => {
+      useProjectsStore.setState({ projects: [] });
+    });
+
+    it('shows "Open reel (Draft)" (not "Create Reel") right after creation, before the projects list refreshes', () => {
+      // linkedProject not yet in the store (fetchProjects still in flight)
+      render(
+        <ClipDetailsEditor
+          region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
+          onUpdate={() => {}}
+          onDelete={() => {}}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Open reel (Draft)' })).toBeTruthy();
+    });
+
+    it('shows "Open reel (Draft)" for a linked draft with no produced video yet', () => {
+      useProjectsStore.setState({ projects: [{ id: 42, has_working_video: false, has_final_video: false, is_published: false }] });
+      render(
+        <ClipDetailsEditor
+          region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
+          onUpdate={() => {}}
+          onDelete={() => {}}
+        />
+      );
+      expect(screen.getByRole('button', { name: 'Open reel (Draft)' })).toBeTruthy();
+    });
+
+    it('clicking "Open reel (Draft)" opens Focus for the reel via onOpenInFocus', () => {
+      const onOpenInFocus = vi.fn();
+      render(
+        <ClipDetailsEditor
+          region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
+          onUpdate={() => {}}
+          onDelete={() => {}}
+          onOpenInFocus={onOpenInFocus}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open reel (Draft)' }));
+      expect(onOpenInFocus).toHaveBeenCalledWith(42);
+    });
+
+    it('a below-migration reel WITH a produced video but null snapshot still shows "Create Reel", not the draft link', () => {
+      useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: true, is_published: false }] });
+      render(
+        <ClipDetailsEditor
+          region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
+          onUpdate={() => {}}
+          onDelete={() => {}}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Open reel (Draft)' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+    });
+  });
+
   describe('on mobile', () => {
     beforeEach(() => {
       window.matchMedia = (query) => ({

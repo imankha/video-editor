@@ -20,11 +20,16 @@ export const DRAFT_STAGE_ORDER = [
   DRAFT_STAGE.READY,
 ];
 
+// T8470: one status vocabulary. A record that EXISTS is a Draft the moment it is
+// created; the qualifier tells you how far it has moved through the pipeline. The
+// stage KEYS and derivation are unchanged (tile sizing / row grouping depend on
+// them) - only the human labels moved off the ambiguous "Not Started" / bare
+// "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
-  [DRAFT_STAGE.NOT_STARTED]: 'Not Started',
-  [DRAFT_STAGE.IN_FRAMING]: 'In Focus',
-  [DRAFT_STAGE.IN_OVERLAY]: 'In Overlay',
-  [DRAFT_STAGE.READY]: 'Ready',
+  [DRAFT_STAGE.NOT_STARTED]: 'Draft',
+  [DRAFT_STAGE.IN_FRAMING]: 'Draft - in Focus',
+  [DRAFT_STAGE.IN_OVERLAY]: 'Draft - in Overlay',
+  [DRAFT_STAGE.READY]: 'Ready to share',
 };
 
 // Text tint per stage — matches the CollapsibleGroup legend colors so the row

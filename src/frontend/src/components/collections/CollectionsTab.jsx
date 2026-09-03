@@ -44,6 +44,11 @@ export function CollectionsTab({
   onIntroCollection,
   onDownloadCollection,
   introBadgesByKey = {},
+  // T8470 (Part C): the empty published-reels state must never claim "No reels
+  // yet" while draft clips exist on the Clips tab. Count + navigate come from the
+  // panel so this stays a pure view.
+  draftClipCount = 0,
+  onViewDraftClips,
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
@@ -131,6 +136,15 @@ export function CollectionsTab({
         <p className="text-sm text-gray-500 mt-1">
           Publish reels to see them grouped by game here
         </p>
+        {draftClipCount > 0 && (
+          <button
+            type="button"
+            onClick={onViewDraftClips}
+            className={`text-sm ${REEL.accent} hover:underline mt-3`}
+          >
+            You have {draftClipCount} draft clip{draftClipCount === 1 ? '' : 's'} in progress - find {draftClipCount === 1 ? 'it' : 'them'} on the Clips tab.
+          </button>
+        )}
       </div>
     );
   }

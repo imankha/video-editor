@@ -158,14 +158,15 @@ describe('DraftTile (T5672)', () => {
   });
 
   // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
-  // corner <button> labelled "Ready" that published. New contract: "Ready" is a
-  // NON-interactive status badge, and a DISTINCT emphasized primary button names the
-  // verb ("Move to Highlight Reels") and publishes on click.
-  it('makes "Ready" a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
+  // corner <button> labelled "Ready" that published. New contract: "Ready to share"
+  // (T8470 qualified the bare "Ready") is a NON-interactive status badge, and a
+  // DISTINCT emphasized primary button names the verb ("Move to Highlight Reels")
+  // and publishes on click.
+  it('makes "Ready to share" a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
-    // "Ready" is a status, not a control — no button carries that accessible name.
-    expect(screen.queryByRole('button', { name: /^ready$/i })).toBeNull();
-    expect(screen.getByText('Ready')).toBeTruthy();
+    // "Ready to share" is a status, not a control — no button carries that accessible name.
+    expect(screen.queryByRole('button', { name: /^ready to share$/i })).toBeNull();
+    expect(screen.getByText('Ready to share')).toBeTruthy();
     // The primary action reads as an action and names the destination verb.
     const primary = screen.getByRole('button', { name: 'Move to Highlight Reels' });
     expect(primary).toBeTruthy();
