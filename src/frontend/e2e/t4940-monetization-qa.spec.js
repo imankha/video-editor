@@ -107,7 +107,7 @@ test('desktop: upload preview shows cost + 30 days before activation', async ({ 
     buffer: Buffer.alloc(2 * 1024 * 1024), // 2 MB dummy
   });
 
-  await expect(page.getByText(/for 30 days of storage/)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/keeps your video for 30 days/)).toBeVisible({ timeout: 10000 });
   await page.screenshot({ path: `${EVID}/upload-preview-desktop.png` });
 });
 
@@ -129,6 +129,6 @@ test('mobile 375: buy-credits + upload preview render', async ({ context, page }
     mimeType: 'video/mp4',
     buffer: Buffer.alloc(2 * 1024 * 1024),
   });
-  await expect(page.getByText(/for 30 days of storage/)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/keeps your video for 30 days/)).toBeVisible({ timeout: 10000 });
   await page.screenshot({ path: `${EVID}/upload-preview-mobile-375.png` });
 });

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -97,6 +98,7 @@ async function uploadGameAndEnterAnnotate(page) {
   await page.waitForTimeout(300);
   step('click Add Game');
   await page.locator('button:has-text("Add Game")').first().click();
+  await openGameDetailsDisclosure(page);
   await expect(page.getByPlaceholder('e.g., Carlsbad SC')).toBeVisible({ timeout: 8000 });
 
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('T7922 Audit');

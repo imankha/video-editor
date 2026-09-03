@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
@@ -62,6 +63,7 @@ async function enterAnnotateMode(page) {
   await page.waitForTimeout(500);
 
   console.log('[Setup] Filling Add Game modal...');
+  await openGameDetailsDisclosure(page);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
   await page.locator('input[type="date"]').fill('2026-03-21');
   await page.getByRole('button', { name: 'Home' }).click({ force: true });

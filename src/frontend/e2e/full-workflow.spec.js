@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -88,6 +89,7 @@ async function enterAnnotateModeWithClips(page) {
   console.log('[Setup] Filling Add Game modal...');
 
   // Fill opponent team name
+  await openGameDetailsDisclosure(page);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('Test Opponent');
 
   // Fill game date (use today's date)
