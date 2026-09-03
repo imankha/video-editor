@@ -30,6 +30,7 @@ const baseProps = {
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
+  surface: 'dock_fullscreen',
 };
 
 describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
@@ -114,5 +115,28 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
       fireEvent.click(screen.getByRole('radio', { name: 'Team layer' }));
       expect(screen.getByText("Don't Create Reel")).toBeTruthy();
     });
+  });
+});
+
+// T8600: the desktop strip (layout="strip") renders the Layer control as a
+// sibling row OUTSIDE the tinted card, separate markup from formBody (used by
+// the overlay/inline layouts above) — needs its own strip-scoped coverage.
+describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T8600)', () => {
+  it('the strip button row shows the Layer control, defaulted from newClipLayerIsMine', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={false} />);
+    expect(screen.getByRole('radio', { name: 'Team layer' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('locks both radios for an imported clip (shared_by set) in the strip', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        surface="inline_desktop"
+        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, shared_by: 'Dana Smith' }}
+      />
+    );
+    expect(screen.getByRole('radio', { name: /^My Athlete layer/ }).disabled).toBe(true);
+    expect(screen.getByRole('radio', { name: /^Team layer/ }).disabled).toBe(true);
   });
 });

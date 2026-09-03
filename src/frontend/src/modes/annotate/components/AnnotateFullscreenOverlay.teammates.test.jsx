@@ -33,6 +33,7 @@ const baseProps = {
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
+  surface: 'dock_fullscreen',
 };
 
 const TEAMMATES_LABEL = 'Teammates';
@@ -151,5 +152,51 @@ describe('AnnotateFullscreenOverlay — auto-commit pending teammate tag on Save
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ tagged_teammates: ['Jake', 'Alex'] });
     expect(screen.queryByText('Tag not submitted')).toBeNull();
+  });
+});
+
+// T8600: the desktop strip (layout="strip") re-implements the controls row as
+// separate markup from formBody (used by the overlay/inline layouts above),
+// including its own clear-on-switch closure — so the T5725 invariant needs
+// its own strip-scoped coverage rather than relying on the overlay-layout
+// tests above to transitively exercise it.
+describe('AnnotateFullscreenOverlay — Teammates in the desktop strip (T8600)', () => {
+  // The strip's controls row places TeammateTagInput directly (no "Teammates"
+  // label, per the ui spec's compact single-row layout) — assert via the
+  // input's own placeholder and existing chips, not the formBody label text.
+  it('SHOWS the teammate input + existing chips inline in the strip for a Team clip', () => {
+    const { container } = render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        surface="inline_desktop"
+        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, tagged_teammates: ['Alex'] }}
+      />
+    );
+    // The input's placeholder is empty once a chip exists (see the T7540 tests
+    // above) — assert its presence via the same unique class those tests use.
+    expect(container.querySelector('input.bg-transparent')).toBeTruthy();
+    expect(screen.getByText('Alex')).toBeTruthy();
+  });
+
+  it('switching the strip button-row Layer control to My Athlete hides teammates and clears tags on save', () => {
+    const onUpdateClip = vi.fn();
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        surface="inline_desktop"
+        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, tagged_teammates: ['Alex'] }}
+        onUpdateClip={onUpdateClip}
+      />
+    );
+    expect(screen.getByText('Alex')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'My Athlete layer' }));
+    expect(screen.queryByPlaceholderText('Tag a teammate...')).toBeNull();
+    expect(screen.queryByText('Alex')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ my_athlete: true, tagged_teammates: [] });
   });
 });
