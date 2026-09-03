@@ -80,6 +80,21 @@ are discoverable in aggregate rather than only via manual account investigation 
 
 ## Acceptance Criteria
 
-- [ ] bknoto's published reel (final_video id=3) has a real poster image
-- [ ] Root cause documented; if a genuine bug, fixed with a regression test
-- [ ] Considered (not necessarily built) a discoverability signal for future silent poster misses
+- [x] bknoto's published reel (final_video id=3) has a real poster image
+- [x] Root cause documented; if a genuine bug, fixed with a regression test
+- [x] Considered (not necessarily built) a discoverability signal for future silent poster misses
+
+## Post-merge remediation (2026-09-03)
+
+Ran the existing `backfill_posters` sweep against **production** via
+`fly ssh console -a reel-ballers-api` (direct function call, bypassing the HTTP admin
+layer, same pattern as `scripts/apply_stranded_uploads_sweep.py`):
+
+1. Dry run (`dry_run=True`) confirmed the entire candidate set was exactly one row:
+   `scanned: 1, generated: [3]` &mdash; final_video id=3 (bknoto), nothing else in prod
+   currently missing a poster.
+2. Real run (`dry_run=False`) executed: `generated: [3], failed: []`.
+3. Verification: re-ran the dry run &mdash; `scanned: 0, generated: []`, confirming the
+   row fell out of the candidate set (poster_filename is no longer NULL).
+
+bknoto's reel now has a real cover image. No other account was touched.
