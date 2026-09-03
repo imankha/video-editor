@@ -345,6 +345,7 @@ export function ClipsSidePanel({
               isVisible={true}
               currentTime={currentTime}
               videoDuration={videoDuration}
+              existingClip={selectedRegion || null}
               onCreateClip={onCreateClip}
               onUpdateClip={onUpdateClip}
               onResume={onOverlayResume}

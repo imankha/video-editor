@@ -151,6 +151,28 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         }
       </Button>
 
+      {/* T8510: inline reason the export button is disabled (Option A guard, reverses
+          T3700 P0). The amber banner above can sit far off-screen on tall panels, so the
+          reason also renders right under the button, styled like the credit-estimate row.
+          The per-clip "Needs focus" chip in the clip list stays the wayfinding to WHICH
+          clip. */}
+      {isFramingMode && hasUnframedClips && !isCurrentlyExporting && (
+        <div
+          data-testid="export-unframed-caption"
+          className="flex items-center justify-center gap-1.5 text-xs text-amber-400 text-center"
+        >
+          <AlertCircle size={12} className="shrink-0" />
+          <span>
+            {(isMultiClipMode && totalExtractedClips > 1
+              ? 'Set at least one focus point on every clip to export'
+              : 'Set at least one focus point to export')
+              + (estimatedCredits != null
+                ? ` — ~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'}`
+                : '')}
+          </span>
+        </div>
+      )}
+
       {/* T5790: pre-flight credit-cost estimate — Framing only. Derived from the SAME
           effectiveDuration + Math.ceil the click-time credit check uses, so this number
           matches the insufficient-credits modal. Hidden while exporting and when the

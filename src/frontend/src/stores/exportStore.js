@@ -97,8 +97,11 @@ export const useExportStore = create((set, get) => ({
    * @param {string} exportId - Unique export identifier
    * @param {number|object} projectIdOrOptions - Project ID, or { gameId, gameName } for annotate
    * @param {string} type - Export type ('framing', 'overlay', 'annotate')
+   * @param {string|null} projectName - Reel name from the click context (T8510), so the
+   *   indicator label is right from the first frame instead of waiting for the first
+   *   WebSocket message to fill it in
    */
-  startExport: (exportId, projectIdOrOptions, type) => {
+  startExport: (exportId, projectIdOrOptions, type, projectName = null) => {
     track('export_started', { type });
     set((state) => {
       // Guard against duplicate adds (e.g., React StrictMode double-render)
@@ -136,6 +139,7 @@ export const useExportStore = create((set, get) => ({
           [exportId]: {
             exportId,
             projectId,
+            projectName: projectName || null,
             type,
             status: 'pending',
             progress: { current: 0, total: 100, percent: 0, message: 'Starting export...' },

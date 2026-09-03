@@ -1,6 +1,6 @@
 # T8480: Focus unlocks the moment a reel exists (bug)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-03
