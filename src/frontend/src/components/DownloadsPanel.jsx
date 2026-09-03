@@ -658,6 +658,37 @@ export function DownloadsPanel({
     }
   };
 
+  // T8540: the player's primary Share button. Coarse pointers get the SAME
+  // native-share-sheet call the kebab's Share item uses (webShare); fine
+  // pointers copy the link with a toast, mirroring GlobalExportIndicator's
+  // post-export share action -- not webShareReel's desktop ShareModal
+  // fallback (the toolbar has no room for a second share surface, and
+  // useWebShare's own mobile/desktop split already covers this exactly).
+  const sharePlayerReel = async (reel) => {
+    try {
+      if (isMobile) {
+        const filename = `${reel.name || 'highlight'}-highlight.mp4`;
+        const method = await webShare({
+          downloadId: reel.id,
+          title: reel.name || 'Highlight Reel',
+          text: `Check out ${reel.name || 'this highlight reel'}!`,
+          filename,
+        });
+        track('share_initiated', { method, source: 'player' });
+        if (method === 'clipboard') {
+          toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+        }
+      } else {
+        await copyLink({ downloadId: reel.id });
+        track('share_initiated', { method: 'clipboard', source: 'player' });
+        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      toast.error('Share failed', { message: err.message });
+    }
+  };
+
   // Rename gesture -> surgical PATCH + keep the cached member list honest.
   const renameReel = (id, name) => {
     renameDownload(id, name);
@@ -918,6 +949,7 @@ export function DownloadsPanel({
           title={storyPlayer.title}
           onReelChange={handleReelWatched}
           onClose={closeStoryPlayer}
+          onShare={sharePlayerReel}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId).catch((err) => {
             console.error('[DownloadsPanel] story-player download failed:', err);
             toast.error('Could not download reel');

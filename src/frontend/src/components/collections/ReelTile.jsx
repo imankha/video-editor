@@ -57,6 +57,14 @@ function formatBytesShort(bytes) {
  * longer needed and was dropped, along with DownloadsPanel's now-dead
  * `useWebShare().isMobile` read that only fed it.
  *
+ * T8540: prod cliff 4 showed zero real users ever completed a share of a
+ * self-made reel -- an overflow menu was too much friction for the product's
+ * core verb. Share is promoted back OUT of the kebab-only shell onto the card
+ * face, next to Play, as its own always-mounted labeled button (same
+ * `onWebShare` handler, not a new share path). It stays listed in the kebab
+ * too (both pointer variants) so muscle memory from the T6300/T6180 shell
+ * above still works -- this is an added surface, not a reversal of it.
+ *
  * Kebab menu (T5673 redesign): rendered via createPortal to document.body, fixed-
  * position anchored to button rect, flips upward when near viewport bottom. Desktop
  * renders w-48 right-aligned popover with icons + full labels, groups + separators.
@@ -331,18 +339,34 @@ export function ReelTile({
         )}
       </div>
 
-      {/* Persistent primary — Play. Always visible, never hover-gated (T6300):
-          discovering that a reel HAS actions must not require hovering it. */}
+      {/* Persistent primary — Play, plus (T8540) Share as the card face's visible
+          secondary action right beside it. Both always visible, never hover-gated
+          (T6300 rule extended to Share: the product's verb must not hide behind
+          the kebab). Share ALSO stays in the kebab below (both pointer variants)
+          for muscle memory -- this is an additional surface, not a move. */}
       {!isRenaming && (
-        <button
-          type="button"
-          onClick={(e) => { preview.stop(); onPlay(e, download); }}
-          title="Play video"
-          aria-label="Play video"
-          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 ${actionBtnClass}`}
-        >
-          <Play size={16} className={REEL.accent} />
-        </button>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => { preview.stop(); onPlay(e, download); }}
+            title="Play video"
+            aria-label="Play video"
+            className={actionBtnClass}
+          >
+            <Play size={16} className={REEL.accent} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onWebShare(e, download); }}
+            title="Share"
+            aria-label="Share"
+            data-testid="reel-card-share"
+            className={`${actionBtnClass} gap-1.5 px-3`}
+          >
+            <Share2 size={16} className="text-white" />
+            <span className="text-xs font-medium">Share</span>
+          </button>
+        </div>
       )}
 
       {/* Overflow kebab — corner-anchored, always mounted. Copies DraftTile's
@@ -375,7 +399,7 @@ export function ReelTile({
               <div className="flex items-center justify-center pt-2 pb-1">
                 <div className="h-1 w-10 bg-gray-600 rounded-full" />
               </div>
-              <div className="space-y-1 px-4 py-3">
+              <div data-testid="reel-tile-menu" className="space-y-1 px-4 py-3">
                 <button onClick={(e) => { onDownload(e, download); setMenuOpen(false); }} disabled={downloadingId === download.id} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
                   {downloadingId === download.id
                     ? <Loader size={20} className="text-gray-400 animate-spin flex-shrink-0" />
@@ -435,6 +459,7 @@ export function ReelTile({
           createPortal(
             <div
               ref={menuRef}
+              data-testid="reel-tile-menu"
               className="fixed bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 w-48 py-1"
               style={{
                 top: `${menuPos.top}px`,

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { X, Download, Loader, Pencil, Scale } from 'lucide-react';
+import { X, Download, Loader, Pencil, Scale, Share2 } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
@@ -26,6 +26,11 @@ const SWIPE_THRESHOLD_PX = 48;
  * @param {Function} onClose        - REQUIRED. X button only.
  * @param {Function=} onReelChange  - (index, reel) — T3620 hooks watched/analytics
  * @param {Function=} onEnded       - all reels finished
+ * @param {Function=} onShare       - (activeReel) => void; T8540: shows the PRIMARY Share
+ *                                     button when set. Renders for every reel (no gating,
+ *                                     unlike Re-rank/Re-edit) -- the caller owns the actual
+ *                                     share/copy split (see DownloadsPanel's `useWebShare`
+ *                                     usage), this component only surfaces the gesture.
  * @param {Function=} onDownload    - (activeReel) => void; shows a Download button when set
  * @param {boolean=}  downloadLoading
  * @param {Function=} onReEdit      - (activeReel) => void; shows a "Re-edit" button when set
@@ -84,6 +89,7 @@ export function CollectionPlayer({
   onClose,
   onReelChange,
   onEnded,
+  onShare,
   onDownload,
   downloadLoading,
   onReEdit,
@@ -314,9 +320,38 @@ export function CollectionPlayer({
           ) : title}
         </h3>
         <div className="flex items-center gap-2 shrink-0">
+          {/* T8540: Share is the player's PRIMARY action -- one tap, no overflow
+              menu (prod cliff 4: zero real users ever completed a share from
+              here). Renders for every reel, unlike Re-rank -- the caller (not
+              this component) owns the coarse/fine Web-Share-vs-Copy-Link split. */}
+          {onShare && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Share2}
+              onClick={() => onShare(activeReel)}
+              title="Share"
+            >
+              Share
+            </Button>
+          )}
+          {/* T8540: demoted from primary to secondary now that Share leads. */}
+          {onDownload && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={downloadLoading ? Loader : Download}
+              disabled={downloadLoading}
+              onClick={() => onDownload(activeReel)}
+              className={downloadLoading ? '[&_svg]:animate-spin' : ''}
+            >
+              {downloadLoading ? 'Downloading...' : 'Download'}
+            </Button>
+          )}
           {/* T3940: jump straight into THIS reel's editor (acts on the active reel).
               Gated on the prop (public viewer omits it) AND an editable project
-              (project_id null/0 -> non-editable export, button hidden). */}
+              (project_id null/0 -> non-editable export, button hidden). T8540:
+              demoted to the toolbar's tertiary/icon-only end, behind Share+Download. */}
           {onReEdit && activeReel.project_id ? (
             <Button
               variant="ghost"
@@ -331,7 +366,8 @@ export function CollectionPlayer({
           ) : null}
           {/* T4030: re-open THIS reel for ranking (rd reset, progress drops).
               Author-only (public viewer omits onReRank) AND single-clip with an
-              editable project -- Mixes/multi-clip never rank, so the control hides. */}
+              editable project -- Mixes/multi-clip never rank, so the control hides.
+              T8540: demoted to the toolbar's tertiary/icon-only end (gating unchanged). */}
           {onReRank && activeReel.project_id && activeReel.clip_count === 1 ? (
             <Button
               variant="ghost"
@@ -344,18 +380,6 @@ export function CollectionPlayer({
               className={reRankLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />
           ) : null}
-          {onDownload && (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={downloadLoading ? Loader : Download}
-              disabled={downloadLoading}
-              onClick={() => onDownload(activeReel)}
-              className={downloadLoading ? '[&_svg]:animate-spin' : ''}
-            >
-              {downloadLoading ? 'Downloading...' : 'Download'}
-            </Button>
-          )}
           {/* T7730: icon-only close button had no text/aria-label, so it had no
               accessible name at all (screen readers + role-based selectors could
               not find it). */}

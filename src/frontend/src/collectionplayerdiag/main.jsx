@@ -16,6 +16,12 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset/z classes 
  * served at /collectionplayerdiag-sample.mp4 (not committed). NOT shipped:
  * Vite's default build entry is index.html only and collectionplayerdiag.html is
  * not added to rollupOptions.input, so it never enters the production bundle.
+ *
+ * T8540: also wired with onShare/onDownload (recorded into the SAME `status`
+ * readout as hover/click) so the toolbar-primacy/ordering assertions can run
+ * against the REAL Button component's real layout (jsdom never lays out
+ * flex/DOM order the way a real browser paints it) without needing a logged-in
+ * account or real reel data.
  */
 
 const REELS = [
@@ -65,6 +71,8 @@ function CollectionPlayerDiagHarness() {
           reels={REELS}
           title="Diag"
           onClose={() => setOpen(false)}
+          onShare={() => setLastClick('share')}
+          onDownload={() => setLastClick('download')}
         />
       )}
     </div>
