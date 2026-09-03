@@ -134,8 +134,9 @@ if (!renderDebugRichTextRouteIfRequested() && !renderDebugIntroCardRouteIfReques
     <React.StrictMode>
       <App />
       <AuthGateModal />
-      {/* T5070: mounted AFTER AuthGateModal so its z-[60] paints above the
-          auth/login surface -- an un-updated client can't log in either. */}
+      {/* T8460: no longer a blocking gate -- a passive corner card that never
+          overlaps AuthGateModal or anything else (no backdrop, no fixed
+          inset-0). Mount order no longer matters for z-stacking. */}
       <UpdateGateModal />
       <AuthErrorBanner />
       {/* Single global mount — renders toasts on every screen, incl. sign-in and shared views */}

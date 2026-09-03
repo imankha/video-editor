@@ -93,9 +93,18 @@ export async function checkServerVersion(serverBuild) {
   if (!Number.isFinite(server)) return; // header absent / unparseable → ignore
   if (server <= clientBuild) return; // up-to-date, or an older straggler → NEVER gate
 
-  // Already gated — the modal is up and the first fire won. Skip the probe rather
-  // than re-running a network check behind a blocking modal.
-  if (useUpdateGateStore.getState().isUpdateRequired) return;
+  // Already gated — the first fire won, so skip the probe rather than re-running
+  // a network check. T8460: still re-test quiescence on every subsequent call
+  // (this fires on the existing re-check cadence: API responses,
+  // visibilitychange) — requireUpdate() is a no-op on the flag but auto-runs
+  // once the app clears an export/upload/open modal. Without this, a gate
+  // raised while non-quiescent would never retry (checkServerVersion is the
+  // only caller of requireUpdate) and the client would sit un-updated
+  // indefinitely.
+  if (useUpdateGateStore.getState().isUpdateRequired) {
+    useUpdateGateStore.getState().requireUpdate({ needsMigration: false });
+    return;
+  }
 
   // Tbug41s: the server moved, but is there actually a newer bundle to load?
   if (!(await hasNewerBundle())) return;

@@ -1,20 +1,50 @@
 import { create } from 'zustand';
 import { flushDurableState } from '../utils/updateFlush';
 import { useAuthStore } from './authStore';
+import { isAnyModalOpen } from '../utils/modalOcclusion';
+
+// T8460: exportStore/uploadStore are resolved via dynamic import, NOT a static
+// top-level one. updateGateStore.js is reached very early in the app's load
+// order (appVersion.js pulls it in at session-init, before the rest of the app
+// boots), while exportStore/uploadStore sit at the head of a much heavier,
+// later-loading module graph (uploadManager -> gamesDataStore -> projectsStore
+// -> authStore, per Vite's own dynamic/static import-split warnings on that
+// chain). A static import here folds that whole graph into the early path and
+// produces a circular-init crash in the PRODUCTION bundle only ("Cannot access
+// 'x' before initialization" -- a Rollup module-eval-order TDZ the dev
+// server's on-demand ESM loading never exposes; found via T6230's real-build
+// fixture). Kicked off once; isQuiescent() stays a synchronous plain-state
+// read -- if the modules haven't resolved yet, those subsystems can't
+// possibly be mid-export/mid-upload either, so "not yet loaded" correctly
+// reads as "not confirmed clear" (non-quiescent).
+let exportStoreModule = null;
+let uploadStoreModule = null;
+import('./exportStore').then((m) => { exportStoreModule = m; });
+import('./uploadStore').then((m) => { uploadStoreModule = m; });
 
 /**
- * T5070 / Tbug40p / Tbug41s — owns the blocking update-gate's state.
- * UpdateGateModal is a pure View reading this store; the gate is raised by
+ * T5070 / Tbug40p / Tbug41s / T8460 — owns the update-gate's state.
+ * UpdateGateModal is a pure View reading this store (a passive progress card,
+ * not a blocking gate as of T8460); the gate is raised by
  * appVersion.checkServerVersion, observed via sessionInit.js's header check and
  * pwaUpdate.js's resume poll. Tbug41s: that check now requires BOTH
  * serverBuild > clientBuild AND a confirmed waiting bundle — a newer server alone
  * can be true forever when the backend deploys without the frontend, which made
- * this "never auto-closes" modal unescapable.
+ * the old "never auto-closes" modal unescapable.
  *
- * The gate never auto-closes once required -- the only exit is a successful
- * reload onto the new bundle (a fresh bundle boots with a higher __APP_BUILD__,
- * so checkServerVersion no longer fires).
+ * The update itself never auto-cancels once required -- the only exit is a
+ * successful reload onto the new bundle (a fresh bundle boots with a higher
+ * __APP_BUILD__, so checkServerVersion no longer fires).
  */
+
+// T8460 first-session guard: never auto-run within the first 30s of a cold,
+// unauthenticated boot. The dangerous window (Add Game modal about to open,
+// an upload about to start) is otherwise already covered by isQuiescent's
+// modalOpen/uploading checks below -- this is a deliberately dumb extra
+// margin for the brand-new-user moment, not a general debounce.
+const COLD_BOOT_AT = Date.now();
+const FIRST_SESSION_GUARD_MS = 30_000;
+
 export const useUpdateGateStore = create((set, get) => ({
   isUpdateRequired: false,
   // Tbug40p decision #3 (seam only): true would route runUpdate through the heavy
@@ -32,15 +62,36 @@ export const useUpdateGateStore = create((set, get) => ({
   _swReloader: null,
   setSwReloader: (fn) => set({ _swReloader: fn }),
 
+  // T8460: an update may only auto-run while the app is quiescent. Checked at
+  // trigger time (plain state reads, NOT a reactive effect).
+  isQuiescent: () => {
+    if (!exportStoreModule || !uploadStoreModule) return false;
+    const exporting = Object.keys(exportStoreModule.useExportStore.getState().activeExports || {}).length > 0;
+    const uploading = uploadStoreModule.useUploadStore.getState().isUploading();
+    const modalOpen = isAnyModalOpen();
+    const coldBoot = !useAuthStore.getState().isAuthenticated &&
+      (Date.now() - COLD_BOOT_AT) < FIRST_SESSION_GUARD_MS;
+    return !exporting && !uploading && !modalOpen && !coldBoot;
+  },
+
   requireUpdate: ({ needsMigration = false } = {}) => {
-    const { isUpdateRequired, needsMigration: current } = get();
+    const { isUpdateRequired, needsMigration: current, phase } = get();
     if (isUpdateRequired) {
-      // The gate is a blocking modal; the first fire wins. Only escalate if a
-      // later signal upgrades an app-code reload into a data migration.
+      // First fire wins the flag; only escalate if a later signal upgrades an
+      // app-code reload into a data migration.
       if (needsMigration && !current) set({ needsMigration: true });
+      // T8460: no click to wait on -- every subsequent requireUpdate() call
+      // (fired by the existing re-check cadence: API responses, visibilitychange)
+      // re-tests quiescence and runs once conditions clear.
+      if (phase === 'idle' && get().isQuiescent()) {
+        get().runUpdate();
+      }
       return;
     }
     set({ isUpdateRequired: true, needsMigration });
+    if (get().isQuiescent()) {
+      get().runUpdate();
+    }
   },
 
   /**
