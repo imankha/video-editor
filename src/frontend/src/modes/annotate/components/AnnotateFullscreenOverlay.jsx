@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, X, Plus, Pencil, Crop, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
@@ -114,6 +114,9 @@ export function AnnotateFullscreenOverlay({
   onScrubDragChange,
   newClipLayerIsMine = true,
   nextClipNumber = 1,
+  // T8600: desktop strip only — opens the clip's reel in Focus mode. Same
+  // prop name/semantics ClipDetailsEditor already uses.
+  onOpenInFocus,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
@@ -589,6 +592,199 @@ export function AnnotateFullscreenOverlay({
       </button>
     </div>
   );
+
+  if (layout === 'strip') {
+    // T8600 C2: the desktop under-canvas editor. Entirely separate markup
+    // from formBody (like landscape-inline below) — full canvas width, tinted
+    // by mode, header + scrub row + controls row + in-place details panel,
+    // with the Layer/Focus row rendered OUTSIDE the tinted card as its own
+    // sibling (this component owns myAthlete state, so the button row lives
+    // here rather than being lifted to a state-less parent).
+    const clipDisplayName = existingClip
+      ? (existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play')
+      : '';
+    return (
+      <>
+        <div
+          data-testid="annotate-editor-strip"
+          className={`rounded-lg border ${isEditMode ? 'bg-yellow-950/20 border-yellow-800/40' : 'bg-green-950/20 border-green-800/40'}`}
+        >
+          {/* Header row */}
+          <div className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              {isEditMode
+                ? <Pencil size={16} className="text-yellow-400 shrink-0" />
+                : <Plus size={16} className="text-green-400 shrink-0" />}
+              <span className="text-sm font-semibold text-white truncate">
+                {isEditMode ? `Editing: ${clipDisplayName}` : 'Adding new play'}
+              </span>
+            </div>
+            <button onClick={onClose} title="Cancel (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
+              <X size={18} className="text-gray-400" />
+            </button>
+          </div>
+
+          {/* Scrub row — non-compact, full strip width */}
+          <div className="px-4 pt-3">
+            <ClipScrubRegion
+              currentTime={currentTime}
+              videoDuration={videoDuration}
+              existingClip={existingClip}
+              startTime={scrubStartTime}
+              endTime={scrubEndTime}
+              onStartTimeChange={setScrubStartTime}
+              onEndTimeChange={setScrubEndTime}
+              onSeek={onSeek}
+              onDragStart={() => onScrubDragChange?.(true)}
+              onDragEnd={() => onScrubDragChange?.(false)}
+              videoController={videoController}
+            />
+          </div>
+
+          {/* Controls row */}
+          <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
+            <StarRating rating={rating} onRatingChange={handleRatingChange} size={22} />
+
+            {/* Create Reel — next to Rating (its state auto-flips with rating) */}
+            {isEditMode ? (
+              existingClip?.autoProjectId ? (
+                <span className="text-xs text-green-400 shrink-0">Reel created</span>
+              ) : (
+                <Button
+                  variant="cyan"
+                  size="sm"
+                  icon={Plus}
+                  onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
+                >
+                  Create Reel
+                </Button>
+              )
+            ) : (
+              <div className="flex items-center gap-1.5 shrink-0" title="Auto-create a reel from this play">
+                <span className={`text-xs font-medium ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>Reel</span>
+                <Toggle
+                  checked={createProject}
+                  onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
+                  size="sm"
+                  accent="cyan"
+                />
+              </div>
+            )}
+
+            <div className="hidden sm:block h-6 w-px bg-gray-700/50 shrink-0" />
+
+            <input
+              type="text"
+              value={clipName}
+              onChange={handleNameChange}
+              aria-label="Clip name"
+              placeholder={defaultClipName || 'Clip name'}
+              className="w-36 lg:w-44 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white
+                         placeholder-gray-500 focus:border-green-500 focus:outline-none shrink-0"
+            />
+
+            {!myAthlete && (
+              <div className="min-w-[180px] max-w-xs flex-1">
+                <TeammateTagInput teammates={taggedTeammates} onChange={setTaggedTeammates} suggestions={teammateSuggestions} />
+              </div>
+            )}
+
+            {/* Q3: no_sport promotes into the controls row (always visible),
+                rather than hiding behind the details disclosure. */}
+            {!tagSet && sport === NO_SPORT && (
+              <div className="min-w-[220px]">
+                <NoSportTagWarning onChange={handleSetSport} />
+              </div>
+            )}
+
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(o => !o)}
+                aria-expanded={detailsOpen}
+                data-testid="add-details-button"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700
+                           rounded text-sm text-gray-300 transition-colors"
+              >
+                {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {detailsLabel}
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+              >
+                {isEditMode ? 'Update' : 'Save'}
+              </button>
+              <button
+                onClick={onClose}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {/* Details panel — desktop expand-in-place, own max-height scroll.
+              Dismissal is the toggle button itself; no separate Done/X. */}
+          {detailsOpen && (
+            <div className={`border-t px-4 py-3 max-h-64 overflow-y-auto ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+              {tagSet && (
+                <div className="mb-4">
+                  <label className="block text-gray-400 text-sm mb-2">Tags</label>
+                  <TagSelector
+                    positions={getPositions(sport)}
+                    tagsByPosition={tagSet.tags}
+                    selectedTags={selectedTags}
+                    onTagToggle={handleTagToggle}
+                    size="lg"
+                  />
+                </div>
+              )}
+              <div>
+                <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+                <textarea
+                  id="clip-notes"
+                  ref={notesRef}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add a note about this clip..."
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Button row (outside the card): Layer + Focus (edit mode only) */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <LayerSegmentedControl
+            size="sm"
+            value={myAthlete}
+            onChange={(mine) => {
+              setMyAthlete(mine);
+              // T5725: switching TO My Athlete clears teammate tags.
+              if (mine) setTaggedTeammates([]);
+              if (!createProjectManuallySet) setCreateProject(rating === 5 && mine);
+            }}
+            disabled={!!existingClip?.shared_by}
+            disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+          />
+          {isEditMode && existingClip?.autoProjectId && (
+            <Button
+              variant="cyan"
+              size="sm"
+              icon={Crop}
+              title="Open in Focus mode"
+              onClick={() => onOpenInFocus?.(existingClip.autoProjectId)}
+            >
+              Focus
+            </Button>
+          )}
+        </div>
+      </>
+    );
+  }
 
   if (layout === 'landscape-inline') {
     return (
