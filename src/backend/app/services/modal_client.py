@@ -328,8 +328,41 @@ def _translate_modal_error(error: Exception) -> str:
 # Modal is available if MODAL_ENABLED=true
 _modal_enabled = os.environ.get("MODAL_ENABLED", "false").lower() == "true"
 
-# Modal app name (must match the name in video_processing.py)
-MODAL_APP_NAME = "reel-ballers-video-v2"
+
+def resolve_modal_app_name(app_env: str) -> str:
+    """Resolve the Modal app name for an environment (T8270).
+
+    Staging and production must target DIFFERENT Modal apps so a `modal deploy`
+    can be soaked on staging before it reaches prod's paying users. This is the
+    SINGLE source of truth for the name; `video_processing.py` keeps a byte-for-byte
+    copy of this logic (it CANNOT import this module -- the deployed Modal container
+    image does not mount the `app` package, see the comments at its top). The parity
+    is enforced structurally by `test_modal_app_name.py`, which imports both and
+    asserts they agree, so the two copies cannot silently drift.
+
+    No silent fallback: an unrecognized/misconfigured `app_env` RAISES rather than
+    defaulting to the prod name. Pointing staging (or a typo'd env) at the prod Modal
+    app is exactly the failure this task exists to prevent, so it must fail loudly.
+    `dev`/`development`/`local`/`test` get their own clearly-non-prod name (Modal is
+    off in dev, T4180, but the name must still never collide with prod).
+    """
+    if app_env == "production":
+        return "reel-ballers-video-v2"
+    if app_env == "staging":
+        return "reel-ballers-video-v2-staging"
+    if app_env in ("dev", "development", "local", "test"):
+        return "reel-ballers-video-v2-dev"
+    raise RuntimeError(
+        f"Cannot resolve Modal app name: unrecognized APP_ENV={app_env!r}. "
+        "Expected one of production/staging/dev/development/local/test. "
+        "Refusing to guess -- a wrong guess could point traffic at the prod Modal app."
+    )
+
+
+# Modal app name, resolved per-environment (must match video_processing.py's copy).
+from app.storage import APP_ENV  # noqa: E402  (env source of truth; no circular import)
+
+MODAL_APP_NAME = resolve_modal_app_name(APP_ENV)
 
 # Cached function references
 _render_overlay_fn = None

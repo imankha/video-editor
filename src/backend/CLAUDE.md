@@ -90,8 +90,27 @@ cursor.execute(
 
 ## Modal Functions
 
-When altering any file in `app/modal_functions/`, ask the user if they want to redeploy:
+Staging and production are SEPARATE Modal apps (T8270): `reel-ballers-video-v2-staging`
+vs `reel-ballers-video-v2`, resolved from `APP_ENV` (single source of truth:
+`resolve_modal_app_name` in `app/services/modal_client.py`, mirrored self-contained at the
+top of `video_processing.py` because the Modal image can't import `app`). So a deploy is
+per-environment: `modal deploy` names the app from `APP_ENV` in the *deploying shell*.
+
+When altering any file in `app/modal_functions/`, ask the user if they want to redeploy.
+**Default rollout order: deploy STAGING, verify, THEN prod** -- never a single shared deploy.
+Use the wrapper (it sets `APP_ENV` for you, so you can't accidentally hit the wrong app):
 
 ```bash
-cd src/backend && PYTHONUTF8=1 .venv/Scripts/python.exe -m modal deploy app/modal_functions/video_processing.py
+# 1) Staging (safe default):
+cd src/backend && .venv/Scripts/python.exe app/modal_functions/deploy.py
+# 2) Verify on staging: real non-30fps upload + ffprobe check (Tbug49p repro pattern).
+# 3) Prod (deliberate, only after staging verification passes):
+cd src/backend && .venv/Scripts/python.exe app/modal_functions/deploy.py --prod
+```
+
+Raw form (equivalent; `APP_ENV` MUST be set or the app resolves to the dev name):
+
+```bash
+cd src/backend && APP_ENV=staging    PYTHONUTF8=1 .venv/Scripts/python.exe -m modal deploy app/modal_functions/video_processing.py
+cd src/backend && APP_ENV=production PYTHONUTF8=1 .venv/Scripts/python.exe -m modal deploy app/modal_functions/video_processing.py
 ```

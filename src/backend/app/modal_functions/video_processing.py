@@ -24,8 +24,37 @@ import time
 
 import modal
 
-# Define the Modal app
-app = modal.App("reel-ballers-video-v2")
+
+# Modal app name, resolved per-environment (T8270). Staging and production target
+# DIFFERENT Modal apps so a `modal deploy` can be soaked on staging first.
+#
+# This is a byte-for-byte copy of `app.services.modal_client.resolve_modal_app_name`.
+# It CANNOT import that module: this file is deployed into a Modal container whose
+# image does not mount the `app` package (see the header comments below and the
+# in-function imports at the bottom of this file). The parity between the two copies
+# is enforced by `tests/test_modal_app_name.py`, which imports both and asserts they
+# agree -- so they cannot silently drift.
+#
+# `modal deploy` names the app from whatever APP_ENV is set in the DEPLOYING shell,
+# so the deploy command must set it explicitly (see backend/CLAUDE.md "Modal Functions").
+# No silent fallback: an unrecognized APP_ENV RAISES at import (deploy) time rather
+# than defaulting to the prod name.
+def _resolve_modal_app_name(app_env: str) -> str:
+    if app_env == "production":
+        return "reel-ballers-video-v2"
+    if app_env == "staging":
+        return "reel-ballers-video-v2-staging"
+    if app_env in ("dev", "development", "local", "test"):
+        return "reel-ballers-video-v2-dev"
+    raise RuntimeError(
+        f"Cannot resolve Modal app name: unrecognized APP_ENV={app_env!r}. "
+        "Expected one of production/staging/dev/development/local/test. "
+        "Refusing to guess -- a wrong guess could point traffic at the prod Modal app."
+    )
+
+
+# Define the Modal app (name mirrors storage.APP_ENV's default of "dev" when unset)
+app = modal.App(_resolve_modal_app_name(os.environ.get("APP_ENV", "dev")))
 
 # Define the container image with all dependencies
 image = (
