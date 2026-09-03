@@ -1,10 +1,16 @@
 # T8490: Add Play sheet: star semantics made visible (5-star reel default ALREADY EXISTS)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-03
 **Updated:** 2026-09-03 (fully specced from source; scope corrected)
+**Updated:** 2026-09-03 (pre-flight re-read against T8600's merged strip layout, PR #322 -
+badge map is now a 5-entry `RATING_NOTATION` already exported from `clipConstants.js` with
+4 stale duplicate copies to consolidate, not the `{4:'!',5:'!!'}` this file originally
+described; ClipDetailsEditor.jsx does not currently render the glyph at all; the caption
+needs adding in 3 layout branches, not 1 - see kickoff `C:\tmp\kickoff-t8490.md` for the full
+corrected spec, spawned to container reel-task-t8490)
 
 ## Problem + scope correction
 
