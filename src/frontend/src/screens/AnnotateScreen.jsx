@@ -257,6 +257,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     fetchProjects,
     onBackToProjects: handleBackToProjects,
     setEditorMode,
+    // T8480: the creation toast's "Open Focus" action reuses T8040's
+    // select+navigate gesture (persists annotate progress, awaits selectProject,
+    // then delegates the mode change) - the same path the details-panel button
+    // uses, NOT a bare setEditorMode that would skip progress persistence.
+    onOpenReelInFocus: openClipInFocus,
   });
 
   const {
