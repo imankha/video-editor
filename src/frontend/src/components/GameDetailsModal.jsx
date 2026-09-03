@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
-import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, Coins } from 'lucide-react';
+import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, ChevronRight, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
@@ -11,9 +11,21 @@ import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 
+// Local calendar day as YYYY-MM-DD for the date input's default. NOT
+// toISOString() - that is UTC and rolls to tomorrow/yesterday near midnight.
+export function localTodayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Shown in the game tile name when the user submits without opening the
+// details disclosure ("Vs Unnamed opponent Sep 3"); editable via Edit Game.
+// An empty opponent would make the backend fall back to the bare "New Game".
+const OPPONENT_PLACEHOLDER = 'Unnamed opponent';
+
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [opponentName, setOpponentName] = useState('');
-  const [gameDate, setGameDate] = useState('');
+  const [gameDate, setGameDate] = useState(localTodayISO);
   const [gameType, setGameType] = useState(GameType.HOME);
   const [tournamentName, setTournamentName] = useState('');
   const [existingTournaments, setExistingTournaments] = useState([]);
@@ -161,7 +173,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   }, [isSubmitting, getVideoFile, recordFileSelected]);
 
   const hasVideo = videoMode === VideoMode.PER_GAME ? selectedFile : (halfFiles[0] && halfFiles[1]);
-  const isValid = opponentName.trim() && gameDate && hasVideo;
+  // T8500: only the video gates submit - every metadata field has a default.
+  const isValid = Boolean(hasVideo);
 
   const uploadCost = useMemo(() => {
     if (videoMode === VideoMode.PER_GAME && selectedFile) {
@@ -173,9 +186,14 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     return null;
   }, [videoMode, selectedFile, halfFiles]);
 
+  // Cost shown before a file is picked: calculateUploadCost(0) is the 1-credit
+  // storage minimum + the auto-export surcharge (= 2 credits today). Once a
+  // file is selected the real size-based cost replaces it.
+  const displayCost = uploadCost ?? calculateUploadCost(0);
+
   const resetForm = useCallback(() => {
     setOpponentName('');
-    setGameDate('');
+    setGameDate(localTodayISO());
     setGameType(GameType.HOME);
     setTournamentName('');
     setShowTournamentDropdown(false);
@@ -188,7 +206,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setIsSubmitting(true);
     try {
       const gameDetails = {
-        opponentName: opponentName.trim(),
+        opponentName: opponentName.trim() || OPPONENT_PLACEHOLDER,
         gameDate,
         gameType,
         tournamentName: gameType === GameType.TOURNAMENT ? tournamentName.trim() : null,
@@ -266,161 +284,18 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
           </button>
         </div>
 
-        {/* Form */}
+        {/* Form - video-first (T8500): cost up top, dropzone as the hero,
+            every metadata field defaulted inside a collapsed disclosure so an
+            upload takes two gestures (pick file, submit). */}
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Opponent Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Opponent Team *
-            </label>
-            <input
-              type="text"
-              value={opponentName}
-              onChange={(e) => setOpponentName(e.target.value)}
-              placeholder="e.g., Carlsbad SC"
-              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-              disabled={isSubmitting}
-              autoFocus
-            />
-          </div>
-
-          {/* Game Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              <Calendar size={14} className="inline mr-1.5" />
-              Game Date *
-            </label>
-            <input
-              type="date"
-              value={gameDate}
-              onChange={(e) => setGameDate(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 [color-scheme:dark]"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {/* Game Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              <MapPin size={14} className="inline mr-1.5" />
-              Game Type *
-            </label>
-            <div className="flex gap-2">
-              {[
-                { value: GameType.HOME, label: 'Home' },
-                { value: GameType.AWAY, label: 'Away' },
-                { value: GameType.TOURNAMENT, label: 'Tournament' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setGameType(option.value)}
-                  disabled={isSubmitting}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    gameType === option.value
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  } disabled:opacity-50`}
-                >
-                  {option.label}
-                </button>
-              ))}
+          {/* Upload cost - visible BEFORE any file is selected (the first
+              mention of credits/expiry a new user sees). */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
+            <div className="flex items-center gap-2">
+              <Coins size={14} className="text-yellow-400 shrink-0" />
+              <span>{displayCost} credit{displayCost !== 1 ? 's' : ''} - keeps your video for 30 days</span>
             </div>
-          </div>
-
-          {/* Tournament Name (conditional) */}
-          {gameType === GameType.TOURNAMENT && (
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                <Trophy size={14} className="inline mr-1.5" />
-                Tournament Name
-              </label>
-              <div className="relative">
-                <input
-                  ref={tournamentInputRef}
-                  type="text"
-                  value={tournamentName}
-                  onChange={(e) => {
-                    setTournamentName(e.target.value);
-                    setShowTournamentDropdown(true);
-                  }}
-                  onFocus={() => setShowTournamentDropdown(true)}
-                  placeholder={existingTournaments.length > 0 ? "Select or type new tournament" : "e.g., West Coast Tournament"}
-                  className="w-full px-3 py-2 pr-8 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                  disabled={isSubmitting}
-                />
-                {existingTournaments.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTournamentDropdown(!showTournamentDropdown)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    disabled={isSubmitting}
-                  >
-                    <ChevronDown size={18} className={`transition-transform ${showTournamentDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                )}
-              </div>
-
-              {/* Tournament dropdown */}
-              {showTournamentDropdown && filteredTournaments.length > 0 && (
-                <div
-                  ref={dropdownRef}
-                  className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto"
-                >
-                  {filteredTournaments.map((tournament) => (
-                    <button
-                      key={tournament}
-                      type="button"
-                      onClick={() => {
-                        setTournamentName(tournament);
-                        setShowTournamentDropdown(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-700 transition-colors ${
-                        tournamentName === tournament ? 'bg-green-600/20 text-green-400' : 'text-gray-200'
-                      }`}
-                    >
-                      {tournament}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Show hint if there are existing tournaments but none match */}
-              {showTournamentDropdown && tournamentName && filteredTournaments.length === 0 && existingTournaments.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2">
-                  <p className="text-xs text-gray-400">
-                    Press Enter to create new tournament: <span className="text-green-400">{tournamentName}</span>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Video Format */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Video Format *
-            </label>
-            <div className="flex gap-2">
-              {[
-                { value: VideoMode.PER_GAME, label: 'Full Game' },
-                { value: VideoMode.PER_HALF, label: 'Per Half' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setVideoMode(option.value)}
-                  disabled={isSubmitting}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    videoMode === option.value
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  } disabled:opacity-50`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <span className="font-medium text-white">Balance: {creditsLoaded ? creditBalance : '…'}</span>
           </div>
 
           {/* Game Video */}
@@ -526,16 +401,170 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             )}
           </div>
 
-          {/* Upload cost info */}
-          {uploadCost !== null && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
-              <div className="flex items-center gap-2">
-                <Coins size={14} className="text-yellow-400" />
-                <span>{uploadCost} credit{uploadCost !== 1 ? 's' : ''} for 30 days of storage</span>
+          {/* Game details - collapsed by default; every field has a default so
+              submitting without ever opening this is fully supported. */}
+          <details className="group rounded-lg border border-gray-700 bg-gray-900/30" data-testid="game-details-disclosure">
+            <summary className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 cursor-pointer select-none list-none hover:text-white [&::-webkit-details-marker]:hidden">
+              <ChevronRight size={16} className="text-gray-400 shrink-0 transition-transform group-open:rotate-90" />
+              Game details (optional - you can edit these later)
+            </summary>
+            <div className="px-3 pb-3 pt-1 space-y-4">
+              {/* Opponent Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Opponent Team
+                </label>
+                <input
+                  type="text"
+                  value={opponentName}
+                  onChange={(e) => setOpponentName(e.target.value)}
+                  placeholder="e.g., Carlsbad SC"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  disabled={isSubmitting}
+                />
               </div>
-              <span className="font-medium text-white">Balance: {creditsLoaded ? creditBalance : '…'}</span>
+
+              {/* Game Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  <Calendar size={14} className="inline mr-1.5" />
+                  Game Date
+                </label>
+                <input
+                  type="date"
+                  value={gameDate}
+                  onChange={(e) => setGameDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 [color-scheme:dark]"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Game Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  <MapPin size={14} className="inline mr-1.5" />
+                  Game Type
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    { value: GameType.HOME, label: 'Home' },
+                    { value: GameType.AWAY, label: 'Away' },
+                    { value: GameType.TOURNAMENT, label: 'Tournament' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setGameType(option.value)}
+                      disabled={isSubmitting}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        gameType === option.value
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      } disabled:opacity-50`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tournament Name (conditional) */}
+              {gameType === GameType.TOURNAMENT && (
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    <Trophy size={14} className="inline mr-1.5" />
+                    Tournament Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      ref={tournamentInputRef}
+                      type="text"
+                      value={tournamentName}
+                      onChange={(e) => {
+                        setTournamentName(e.target.value);
+                        setShowTournamentDropdown(true);
+                      }}
+                      onFocus={() => setShowTournamentDropdown(true)}
+                      placeholder={existingTournaments.length > 0 ? "Select or type new tournament" : "e.g., West Coast Tournament"}
+                      className="w-full px-3 py-2 pr-8 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                      disabled={isSubmitting}
+                    />
+                    {existingTournaments.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTournamentDropdown(!showTournamentDropdown)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        disabled={isSubmitting}
+                      >
+                        <ChevronDown size={18} className={`transition-transform ${showTournamentDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tournament dropdown */}
+                  {showTournamentDropdown && filteredTournaments.length > 0 && (
+                    <div
+                      ref={dropdownRef}
+                      className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto"
+                    >
+                      {filteredTournaments.map((tournament) => (
+                        <button
+                          key={tournament}
+                          type="button"
+                          onClick={() => {
+                            setTournamentName(tournament);
+                            setShowTournamentDropdown(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-700 transition-colors ${
+                            tournamentName === tournament ? 'bg-green-600/20 text-green-400' : 'text-gray-200'
+                          }`}
+                        >
+                          {tournament}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Show hint if there are existing tournaments but none match */}
+                  {showTournamentDropdown && tournamentName && filteredTournaments.length === 0 && existingTournaments.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2">
+                      <p className="text-xs text-gray-400">
+                        Press Enter to create new tournament: <span className="text-green-400">{tournamentName}</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Video Format */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Video Format
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    { value: VideoMode.PER_GAME, label: 'Full Game' },
+                    { value: VideoMode.PER_HALF, label: 'Per Half' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setVideoMode(option.value)}
+                      disabled={isSubmitting}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        videoMode === option.value
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      } disabled:opacity-50`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </div>
-          )}
+          </details>
 
           {/* Submit Button */}
           <div className="pt-2">

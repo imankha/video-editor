@@ -4,6 +4,7 @@ import fs from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 
 /**
  * New User Flow E2E Test — Complete quest journey from landing page to "Vamos!" dialog.
@@ -409,7 +410,14 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.locator('button:has-text("Add Game")').click();
     await page.waitForTimeout(500);
 
-    // Fill the Add Game form
+    // T8500: cost line + 30-day expiry render BEFORE any file is selected,
+    // and the metadata fields live in a collapsed disclosure.
+    await expect(page.getByText(/keeps your video for 30 days/)).toBeVisible({ timeout: 10000 });
+    const disclosure = page.getByTestId('game-details-disclosure');
+    expect(await disclosure.evaluate(el => el.open)).toBe(false);
+
+    // Fill the Add Game form (typed metadata still wins over the defaults)
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
     const today = new Date().toISOString().split('T')[0];
     await page.locator('input[type="date"]').fill(today);
@@ -785,10 +793,9 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.locator('button:has-text("Add Game")').click();
     await page.waitForTimeout(500);
 
-    await page.getByPlaceholder('e.g., Carlsbad SC').fill('SD Surf');
-    await page.locator('input[type="date"]').fill(today);
-    await page.getByRole('button', { name: 'Away' }).click();
-
+    // T8500 zero-typing path: pick a file and submit with NO other input -
+    // every metadata field is defaulted (opponent placeholder, today, Home,
+    // Full Game). Two gestures from open modal to upload started.
     const videoInput2 = page.locator('form input[type="file"][accept*="video"]');
     await expect(videoInput2).toBeAttached({ timeout: 10000 });
     await videoInput2.setInputFiles(GAME2_VIDEO);

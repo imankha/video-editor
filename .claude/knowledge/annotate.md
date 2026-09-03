@@ -1,5 +1,20 @@
 ---
 domain: annotate
+updated: 2026-09-03 (T8500 Add Game goes video-first: `GameDetailsModal.jsx` create-mode
+reorders to cost line -> dropzone -> collapsed `<details data-testid="game-details-disclosure">`
+("Game details (optional...)") holding opponent/date/type/format -> submit. Submit now gates on
+`hasVideo` alone (was all-four-fields + file); opponent/date/type/format all default (opponent
+empty -> "Unnamed opponent" placeholder client-side, date -> `localTodayISO()`, type -> Home,
+format -> Full Game) so a game can be created with two gestures (pick file, submit). The
+opponent input's `autoFocus` (see the T7590 landmine below) was REMOVED entirely in this
+reorder - it now lives inside the collapsed disclosure and is never auto-focused, so that
+specific iOS-keyboard-shrinks-viewport case no longer applies to create mode. Edit mode
+(`EditGameModal.jsx`) is untouched. `CreditBalance.jsx` gained an in-memory-only
+(no localStorage, no backend) first-run "You start with N free credits" caption, shown via
+`showFirstRunHint` when `games.length === 0`, dismissed forever-per-session on first click
+anywhere. Form height dropped sharply (four fields collapsed to one summary line), which is
+relevant to the T7590 short-viewport landmine below - T8550 owns re-verifying/adapting that
+regression pattern for the new, much shorter layout.)
 updated: 2026-09-03 (T8590 fixes desktop non-fullscreen "Edit Play" opening the CREATE form:
 `ClipsSidePanel.jsx`'s inline `AnnotateFullscreenOverlay` render was missing `existingClip`
 -- the fullscreen render (`AnnotateModeView.jsx:604-621`) already passed it, but the
@@ -655,6 +670,15 @@ The full checklist for an 11th→Nth sport:
   anti-vacuous), the panel is capped (`clientH <= vp.height`, `overflow-y:auto`), and submit + close
   both scroll into the viewport with the never-disabled X hit-testable. Negative-control verified:
   fails on the pre-fix code at `clientH(629) <= 498/541`, passes post-fix.
+  **T8500 update (2026-09-03):** the create-mode form this bug was measured against (opponent,
+  date, game type, video format, dropzone, cost, submit, ~630px) no longer exists — T8500
+  reordered to cost line -> dropzone -> collapsed details disclosure -> submit and REMOVED the
+  opponent input's `autoFocus` entirely (it now lives inside the collapsed disclosure, never
+  auto-focused), so the keyboard-shrinks-viewport case described below is no longer applicable to
+  create mode. The `max-h-[90vh] overflow-y-auto` panel fix and this regression spec's pattern
+  (empty-session bypass, anti-vacuous overflow assertion, submit+close reachability) still stand
+  and should still be run against the new layout; T8550 owns re-verifying/adapting the spec's
+  concrete assertions (field text, exact heights) for the shorter form.
   **Candidate failure modes accounting (this container = chromium engine + iPhone viewport, NOT real
   WebKit — see playwright.config.js):** CHECKED & RULED OUT via emulation — CTA tap handler fires
   and opens the modal (no z-index/overlay intercept; QuestPanel NUF is a `z-50` ~340px corner panel,
