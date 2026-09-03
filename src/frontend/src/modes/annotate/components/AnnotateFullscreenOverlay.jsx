@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Plus } from 'lucide-react';
+import { Star, X, Plus, Pencil, Crop, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
@@ -11,7 +11,9 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
+import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
+import { AddDetailsPopup } from './AddDetailsPopup';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -113,6 +115,12 @@ export function AnnotateFullscreenOverlay({
   onScrubDragChange,
   newClipLayerIsMine = true,
   nextClipNumber = 1,
+  // T8600: desktop strip only — opens the clip's reel in Focus mode. Same
+  // prop name/semantics ClipDetailsEditor already uses.
+  onOpenInFocus,
+  // T8600 §2.5: required per-render-site discriminator for the
+  // add_clip_opened_no_save beacon (no default — see the effect below).
+  surface,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
@@ -164,6 +172,17 @@ export function AnnotateFullscreenOverlay({
   const [notes, setNotes] = useState('');
   const [taggedTeammates, setTaggedTeammates] = useState([]);
   const [myAthlete, setMyAthlete] = useState(true);
+  // T8600: Tags + Notes move behind an "Add details" disclosure — one boolean,
+  // two presentations (desktop expand-in-place, mobile full-screen popup).
+  // Deliberately NOT reset by the [existingClip] effect below: the component
+  // unmounts when the editor closes (parent gates the render), so it resets
+  // naturally; re-seeding on a clip switch leaves the panel open, which is
+  // harmless and avoids a second reset path.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // T8600 §2.8: strip-only — Focus mid-edit must never silently discard the
+  // open form, so the Focus button opens this confirm-then-save-then-navigate
+  // prompt instead of navigating directly.
+  const [focusConfirmOpen, setFocusConfirmOpen] = useState(false);
   const [createProject, setCreateProject] = useState(false);
   const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
   const notesRef = useRef(null);
@@ -228,36 +247,49 @@ export function AnnotateFullscreenOverlay({
   // close/unmount if no save happened. Keyed on the open (isVisible/isEditMode),
   // NOT on renders or keystrokes, so it beacons at most once per open. Edit opens
   // never arm it. Uses the existing T7515 `dialog` vocabulary (no schema change).
+  // T8600 §2.5: `surface` (required, no default) discriminates the 4 render
+  // sites via a `:surface` suffix — a render site that forgets to pass it
+  // shows up as its own distinct `unknown_surface` row instead of silently
+  // blending into a real surface's count (no-silent-fallback rule).
   useEffect(() => {
     if (!isVisible || isEditMode) return;
     savedThisOpenRef.current = false;
     return () => {
       if (!savedThisOpenRef.current) {
-        recordUiImpression('dialog', 'add_clip_opened_no_save');
+        if (!surface) {
+          console.warn('[AnnotateFullscreenOverlay] missing `surface` prop on a create-mode open — beacon logged as unknown_surface');
+        }
+        recordUiImpression('dialog', `add_clip_opened_no_save:${surface || 'unknown_surface'}`);
       }
     };
-  }, [isVisible, isEditMode]);
+  }, [isVisible, isEditMode, surface]);
 
   // Handle keyboard shortcuts — uses handleSaveRef to avoid stale closures
-  // (taggedTeammates, myAthlete, createProject would be stale without the ref)
+  // (taggedTeammates, myAthlete, createProject would be stale without the ref).
+  // T8600 §2.6: Escape is handled in ONE place for typing and non-typing
+  // targets alike, so it can close the details surface (desktop panel / mobile
+  // popup) first, without discarding the whole play — then the editor itself
+  // on a second Escape. 1-5 and Enter keep ignoring INPUT/TEXTAREA, unchanged.
   useEffect(() => {
     if (!isVisible) return;
 
     const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          onClose();
+      const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (detailsOpen) {
+          setDetailsOpen(false);
+          return;
         }
+        onClose();
         return;
       }
+      if (typing) return;
 
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSaveRef.current();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
       } else if (e.key >= '1' && e.key <= '5') {
         handleRatingChangeRef.current(parseInt(e.key, 10));
       }
@@ -265,7 +297,7 @@ export function AnnotateFullscreenOverlay({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, onClose]);
+  }, [isVisible, onClose, detailsOpen]);
 
   const handleRatingChange = (newRating) => {
     setRating(newRating);
@@ -309,8 +341,11 @@ export function AnnotateFullscreenOverlay({
     const autoGenName = generateClipName(rating, selectedTags, notes);
     const nameToSave = isNameManuallyEdited ? clipName : (autoGenName ? '' : defaultClipName);
     const clipDuration = scrubEndTime - scrubStartTime;
+    // T8600 §2.8: capture the create/update promise so the Focus mid-edit
+    // prompt's "Save & open Focus" can await it before navigating.
+    let savePromise;
     if (isEditMode) {
-      onUpdateClip(existingClip.id, {
+      savePromise = onUpdateClip(existingClip.id, {
         startTime: scrubStartTime,
         endTime: scrubEndTime,
         rating,
@@ -333,7 +368,7 @@ export function AnnotateFullscreenOverlay({
         my_athlete: myAthlete,
         createProject,
       };
-      onCreateClip(clipData);
+      savePromise = onCreateClip(clipData);
     }
     setRating(DEFAULT_RATING);
     setSelectedTags([]);
@@ -347,10 +382,19 @@ export function AnnotateFullscreenOverlay({
     setCreateProject(DEFAULT_RATING === 5 && newClipLayerIsMine);
     setCreateProjectManuallySet(false);
     onResume();
+    return savePromise;
   };
   handleSaveRef.current = handleSave;
 
   if (!isVisible) return null;
+
+  // T8600: shared disclosure label — surfaces existing tag/note content so an
+  // edit-mode user can see there's hidden content before opening it.
+  const tagCount = selectedTags.length;
+  const hasNote = notes.trim().length > 0;
+  const detailsLabel = !tagCount && !hasNote
+    ? 'Add details'
+    : `Details (${[tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}` : null, hasNote ? 'note' : null].filter(Boolean).join(', ')})`;
 
   const formBody = (
     <>
@@ -400,8 +444,24 @@ export function AnnotateFullscreenOverlay({
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
         </div>
 
-        {/* Tag Selection */}
-        {tagSet ? (
+        {/* Tag Selection — T8600: on mobile, Tags (+ Notes, newly available)
+            move behind the "Add details" disclosure, which opens a full-screen
+            popup (AddDetailsPopup). Desktop keeps them inline here, unchanged,
+            until the strip layout (C2) gives desktop its own in-place panel. */}
+        {isMobile ? (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              aria-expanded={detailsOpen}
+              data-testid="add-details-button"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-sm text-gray-300 transition-colors"
+            >
+              <ChevronDown size={14} />
+              {detailsLabel}
+            </button>
+          </div>
+        ) : tagSet ? (
           <div className="mb-4">
             <label className="block text-gray-400 text-sm mb-2">Tags</label>
             <TagSelector
@@ -412,7 +472,7 @@ export function AnnotateFullscreenOverlay({
               size="lg"
             />
           </div>
-        ) : (!isMobile && sport === NO_SPORT) ? (
+        ) : sport === NO_SPORT ? (
           // T8140: the amber no_sport prompt is kept ONLY on desktop (which also
           // has the top-bar sport control). On mobile the first-clip path is kept
           // clean — no amber wall in the form — and a full-screen "What sport is
@@ -444,8 +504,9 @@ export function AnnotateFullscreenOverlay({
         {/* Notes — desktop only */}
         {!isMobile && (
           <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+            <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
             <textarea
+              id="clip-notes"
               ref={notesRef}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -551,6 +612,221 @@ export function AnnotateFullscreenOverlay({
     </div>
   );
 
+  if (layout === 'strip') {
+    // T8600 C2: the desktop under-canvas editor. Entirely separate markup
+    // from formBody (like landscape-inline below) — full canvas width, tinted
+    // by mode, header + scrub row + controls row + in-place details panel,
+    // with the Layer/Focus row rendered OUTSIDE the tinted card as its own
+    // sibling (this component owns myAthlete state, so the button row lives
+    // here rather than being lifted to a state-less parent).
+    const clipDisplayName = existingClip
+      ? (existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play')
+      : '';
+    return (
+      <>
+        <div
+          data-testid="annotate-editor-strip"
+          className={`rounded-lg border ${isEditMode ? 'bg-yellow-950/20 border-yellow-800/40' : 'bg-green-950/20 border-green-800/40'}`}
+        >
+          {/* Header row */}
+          <div className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              {isEditMode
+                ? <Pencil size={16} className="text-yellow-400 shrink-0" />
+                : <Plus size={16} className="text-green-400 shrink-0" />}
+              <span className="text-sm font-semibold text-white truncate">
+                {isEditMode ? `Editing: ${clipDisplayName}` : 'Adding new play'}
+              </span>
+            </div>
+            <button onClick={onClose} title="Cancel (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
+              <X size={18} className="text-gray-400" />
+            </button>
+          </div>
+
+          {/* Scrub row — non-compact, full strip width */}
+          <div className="px-4 pt-3">
+            <ClipScrubRegion
+              currentTime={currentTime}
+              videoDuration={videoDuration}
+              existingClip={existingClip}
+              startTime={scrubStartTime}
+              endTime={scrubEndTime}
+              onStartTimeChange={setScrubStartTime}
+              onEndTimeChange={setScrubEndTime}
+              onSeek={onSeek}
+              onDragStart={() => onScrubDragChange?.(true)}
+              onDragEnd={() => onScrubDragChange?.(false)}
+              videoController={videoController}
+            />
+          </div>
+
+          {/* Controls row */}
+          <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
+            <StarRating rating={rating} onRatingChange={handleRatingChange} size={22} />
+
+            {/* Create Reel — next to Rating (its state auto-flips with rating) */}
+            {isEditMode ? (
+              existingClip?.autoProjectId ? (
+                <span className="text-xs text-green-400 shrink-0">Reel created</span>
+              ) : (
+                <Button
+                  variant="cyan"
+                  size="sm"
+                  icon={Plus}
+                  onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
+                >
+                  Create Reel
+                </Button>
+              )
+            ) : (
+              <div className="flex items-center gap-1.5 shrink-0" title="Auto-create a reel from this play">
+                <span className={`text-xs font-medium ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>Reel</span>
+                <Toggle
+                  checked={createProject}
+                  onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
+                  size="sm"
+                  accent="cyan"
+                />
+              </div>
+            )}
+
+            <div className="hidden sm:block h-6 w-px bg-gray-700/50 shrink-0" />
+
+            <input
+              type="text"
+              value={clipName}
+              onChange={handleNameChange}
+              aria-label="Clip name"
+              placeholder={defaultClipName || 'Clip name'}
+              className="w-36 lg:w-44 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white
+                         placeholder-gray-500 focus:border-green-500 focus:outline-none shrink-0"
+            />
+
+            {!myAthlete && (
+              <div className="min-w-[180px] max-w-xs flex-1">
+                <TeammateTagInput teammates={taggedTeammates} onChange={setTaggedTeammates} suggestions={teammateSuggestions} />
+              </div>
+            )}
+
+            {/* Q3: no_sport promotes into the controls row (always visible),
+                rather than hiding behind the details disclosure. */}
+            {!tagSet && sport === NO_SPORT && (
+              <div className="min-w-[220px]">
+                <NoSportTagWarning onChange={handleSetSport} />
+              </div>
+            )}
+
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(o => !o)}
+                aria-expanded={detailsOpen}
+                data-testid="add-details-button"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700
+                           rounded text-sm text-gray-300 transition-colors"
+              >
+                {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {detailsLabel}
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+              >
+                {isEditMode ? 'Update' : 'Save'}
+              </button>
+              <button
+                onClick={onClose}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {/* Details panel — desktop expand-in-place, own max-height scroll.
+              Dismissal is the toggle button itself; no separate Done/X. */}
+          {detailsOpen && (
+            <div className={`border-t px-4 py-3 max-h-64 overflow-y-auto ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+              {tagSet && (
+                <div className="mb-4">
+                  <label className="block text-gray-400 text-sm mb-2">Tags</label>
+                  <TagSelector
+                    positions={getPositions(sport)}
+                    tagsByPosition={tagSet.tags}
+                    selectedTags={selectedTags}
+                    onTagToggle={handleTagToggle}
+                    size="lg"
+                  />
+                </div>
+              )}
+              <div>
+                <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+                <textarea
+                  id="clip-notes"
+                  ref={notesRef}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add a note about this clip..."
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Button row (outside the card): Layer + Focus (edit mode only) */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <LayerSegmentedControl
+            size="sm"
+            value={myAthlete}
+            onChange={(mine) => {
+              setMyAthlete(mine);
+              // T5725: switching TO My Athlete clears teammate tags.
+              if (mine) setTaggedTeammates([]);
+              if (!createProjectManuallySet) setCreateProject(rating === 5 && mine);
+            }}
+            disabled={!!existingClip?.shared_by}
+            disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+          />
+          {isEditMode && existingClip?.autoProjectId && (
+            <Button
+              variant="cyan"
+              size="sm"
+              icon={Crop}
+              title="Open in Focus mode"
+              onClick={() => setFocusConfirmOpen(true)}
+            >
+              Focus
+            </Button>
+          )}
+        </div>
+
+        {/* T8600 §2.8: Focus mid-edit — never a silent discard. Save & open
+            Focus awaits the same save handleSave/Enter/1-5 already use. */}
+        <ConfirmationDialog
+          isOpen={focusConfirmOpen}
+          title="Save this play first?"
+          message="Opening Focus closes the play editor."
+          onClose={() => setFocusConfirmOpen(false)}
+          impressionKey="focus_while_editing_play"
+          buttons={[
+            { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
+            {
+              label: 'Save & open Focus',
+              variant: 'primary',
+              onClick: async () => {
+                setFocusConfirmOpen(false);
+                await handleSave();
+                onOpenInFocus?.(existingClip.autoProjectId);
+              },
+            },
+          ]}
+        />
+      </>
+    );
+  }
+
   if (layout === 'landscape-inline') {
     return (
       <div data-add-clip-form className="border-t border-gray-700 px-3 py-2">
@@ -614,6 +890,22 @@ export function AnnotateFullscreenOverlay({
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
         <div className="p-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
+        {/* T8600: mobile-only full-screen "Add details" popup — the bottom
+            sheet (T8140) and the mobile fullscreen portrait sheet both use
+            this layout, so both inherit it. */}
+        {isMobile && detailsOpen && (
+          <AddDetailsPopup
+            isEditMode={isEditMode}
+            tagSet={tagSet}
+            sport={sport}
+            positions={getPositions(sport)}
+            selectedTags={selectedTags}
+            onTagToggle={handleTagToggle}
+            notes={notes}
+            onNotesChange={(e) => setNotes(e.target.value)}
+            onDone={() => setDetailsOpen(false)}
+          />
+        )}
       </div>
     );
   }

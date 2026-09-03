@@ -40,6 +40,9 @@ const baseProps = {
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
+  // T8600: required render-site discriminator for the abandonment beacon.
+  // Default layout (no `layout` prop) is the desktop fullscreen dock.
+  surface: 'dock_fullscreen',
 };
 
 const saveButton = (container) => container.querySelector('button.bg-green-600');
@@ -121,7 +124,7 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
     expect(recordUiImpression).not.toHaveBeenCalled();
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} />);
     expect(recordUiImpression).toHaveBeenCalledTimes(1);
-    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save');
+    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:dock_fullscreen');
   });
 
   it('does NOT fire when the open ends in a save', () => {
@@ -138,5 +141,25 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={clip} />);
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} existingClip={clip} />);
     expect(recordUiImpression).not.toHaveBeenCalled();
+  });
+});
+
+// T8600 §2.5: `surface` is a required, no-silent-fallback discriminator so a
+// missed render site shows up as its own distinct row instead of quietly
+// polluting a real surface's count.
+describe('AnnotateFullscreenOverlay — beacon surface discriminator (T8600)', () => {
+  it('interpolates the given surface into the beacon name', () => {
+    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} surface="sheet_mobile" isVisible={true} />);
+    rerender(<AnnotateFullscreenOverlay {...baseProps} surface="sheet_mobile" isVisible={false} />);
+    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:sheet_mobile');
+  });
+
+  it('falls back to :unknown_surface and warns when surface is missing (no silent fallback)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} surface={undefined} isVisible={true} />);
+    rerender(<AnnotateFullscreenOverlay {...baseProps} surface={undefined} isVisible={false} />);
+    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:unknown_surface');
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

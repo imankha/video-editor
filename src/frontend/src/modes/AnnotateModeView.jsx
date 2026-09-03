@@ -109,6 +109,8 @@ export function AnnotateModeView({
   onSharePlayback,
   // T5700: which layer NEW clips default to (mode toggle)
   newClipLayerIsMine = true,
+  // T8600: desktop strip only — opens the clip's reel in Focus mode.
+  onOpenClipInFocus,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -134,8 +136,14 @@ export function AnnotateModeView({
   const mobileFs = annotateFullscreen && isMobile;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
 
-  // Mobile inline add/edit form: replaces timeline + buttons below video
-  const mobileInlineForm = isMobile && showAnnotateOverlay && !annotateFullscreen;
+  // T8600: the under-canvas editor (strip on desktop, inline sheet on mobile)
+  // replaces the timeline + CTA/Playback/Share block below the video whenever
+  // the add/edit overlay is open and we're not in fullscreen. `isMobile`
+  // partitions the two device halves, so they're mutually exclusive by
+  // construction — "two editors open at once" is impossible at this level.
+  const underCanvasEditor = showAnnotateOverlay && !annotateFullscreen;
+  const desktopEditorOpen = underCanvasEditor && !isMobile;
+  const mobileInlineForm = underCanvasEditor && isMobile;
 
   // T8140: one-tap first clip helpers.
   // "Play N" default name for a new clip = existing clip count + 1.
@@ -614,6 +622,7 @@ export function AnnotateModeView({
                 onSeek={seek}
                 videoController={videoController}
                 isFullscreen={annotateFullscreen}
+                surface="dock_fullscreen"
                 teammateSuggestions={teammateSuggestions}
                 onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
                 newClipLayerIsMine={newClipLayerIsMine}
@@ -638,7 +647,7 @@ export function AnnotateModeView({
                     onSpeedChange={onSpeedChange}
                     isFullscreen={annotateFullscreen}
                     onToggleFullscreen={onToggleFullscreen}
-                    onAddClip={mobileInlineForm ? undefined : onAddClip}
+                    onAddClip={underCanvasEditor ? undefined : onAddClip}
                     isEditMode={isEditMode}
                     videoController={videoController}
                   />
@@ -686,6 +695,7 @@ export function AnnotateModeView({
                     videoController={videoController}
                     isFullscreen={false}
                     layout={isLandscape ? 'landscape-inline' : 'inline'}
+                    surface="fullscreen_mobile"
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
                     newClipLayerIsMine={newClipLayerIsMine}
@@ -757,8 +767,8 @@ export function AnnotateModeView({
             </>
           )}
 
-          {/* Annotate Mode Timeline - non-fullscreen (hidden when mobile inline form is open) */}
-          {!annotateFullscreen && !mobileInlineForm && (
+          {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
+          {!annotateFullscreen && !underCanvasEditor && (
             <div className="mt-6">
               <AnnotateMode
                 currentTime={currentTime}
@@ -772,6 +782,32 @@ export function AnnotateModeView({
                 selectedLayer={annotateSelectedLayer}
                 onLayerSelect={onLayerSelect}
                 boundaryOffsets={boundaryOffsets}
+              />
+            </div>
+          )}
+
+          {/* T8600: desktop under-canvas editor strip — replaces the timeline
+              in place while Add Play / Edit Play is open (desktop, non-fullscreen). */}
+          {desktopEditorOpen && (
+            <div className="mt-6">
+              <AnnotateFullscreenOverlay
+                isVisible={showAnnotateOverlay}
+                currentTime={currentTime}
+                videoDuration={duration || annotateVideoMetadata?.duration || 0}
+                existingClip={existingClip}
+                onCreateClip={handleCreateClipWithSportPrompt}
+                onUpdateClip={onFullscreenUpdateClip}
+                onResume={onOverlayResume}
+                onClose={onOverlayClose}
+                onSeek={seek}
+                videoController={videoController}
+                isFullscreen={false}
+                layout="strip"
+                surface="inline_desktop"
+                teammateSuggestions={teammateSuggestions}
+                newClipLayerIsMine={newClipLayerIsMine}
+                nextClipNumber={nextClipNumber}
+                onOpenInFocus={onOpenClipInFocus}
               />
             </div>
           )}
@@ -796,6 +832,7 @@ export function AnnotateModeView({
               videoController={videoController}
               isFullscreen={false}
               layout="inline"
+              surface="sheet_mobile"
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
               nextClipNumber={nextClipNumber}
@@ -816,11 +853,11 @@ export function AnnotateModeView({
           />
         )}
 
-        {/* Primary "Add Play" CTA + secondary actions (hidden when mobile inline
-            form is open). T8130: the Add Play button is the single loudest element
+        {/* Primary "Add Play" CTA + secondary actions (hidden while the under-canvas
+            editor is open). T8130: the Add Play button is the single loudest element
             on the screen; Playback Annotations + Share are demoted to text-level
             prominence until the first clip exists. */}
-        {!annotateFullscreen && !mobileInlineForm && (
+        {!annotateFullscreen && !underCanvasEditor && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-3">
               {/* PRIMARY CTA — full-width, high-contrast, >=44pt tap target.

@@ -1,5 +1,25 @@
 ---
 domain: annotate
+updated: 2026-09-03 (T8600 inline play editor: Add Play / Edit Play on desktop non-fullscreen now
+opens a compact editor STRIP under the canvas (`AnnotateFullscreenOverlay layout="strip"`,
+`AnnotateModeView.jsx`) instead of a form in the sidebar — the `ClipsSidePanel.jsx` sidebar
+render is DELETED (not hidden behind a flag), re-homing the T8590 `existingClip` invariant to
+the strip render site (`AnnotateModeView.strip.test.jsx`). One predicate,
+`underCanvasEditor = showAnnotateOverlay && !annotateFullscreen`, replaces the old
+`mobileInlineForm`-only gate for the timeline/CTA-block hide and the transport-bar Add
+suppression; `desktopEditorOpen`/`mobileInlineForm` both derive from it and are mutually
+exclusive by construction (`isMobile` partitions them) — two live editors open at once is
+structurally impossible, not just disciplined. `ClipsSidePanel`'s `showAddClipForm` prop is
+renamed `clipEditorOpen` (same derivation) since the panel renders no form anymore; it still
+gates `ClipDetailsEditor` so the strip and the per-field-persisting details editor can never
+co-render. Tags + Notes move behind an "Add details" disclosure on both surfaces: desktop
+expands in place inside the strip (own `max-h-64` scroll); mobile opens a new full-screen
+`AddDetailsPopup.jsx` portaled to `document.body` at `Z.MODAL` (a z-index cannot escape an
+ancestor's stacking context — same landmine as the T5700 clip-marker tooltip below). Notes is
+newly available on mobile via that popup (was desktop-only before this task) — a deliberate
+capability gain, not a relocation. Esc now closes the details surface first, then the editor
+(one handler, typing and non-typing targets alike) — see Landmines "Two-layer Esc + no-dual-
+editor invariants (T8600)" below for the render-site/beacon-discriminator details.)
 updated: 2026-09-03 (T8470+T8480: reel creation now selects the new project so the Focus tab
 unlocks immediately + one Draft/Ready-to-share status vocabulary; see the four new entries at the
 top of Invariants & rules. Prior:)
@@ -594,8 +614,33 @@ The full checklist for an 11th→Nth sport:
   duplicate clip. Same invisibility mechanism as T8130 — no error, no crash, just silently wrong
   mode — and same fix shape: derive `existingClip` from the already-selected region
   (`clipRegions.find(r => r.id === selectedRegionId)`) at EVERY render site, never assume a
-  sibling site's correctness covers this one. See the frontmatter T8590 entry above for the full
-  writeup and regression coverage.
+  sibling site's correctness covers this one. **T8600 (2026-09-03) DELETED the non-fullscreen
+  `ClipsSidePanel.jsx` render this bug lived in** — the desktop under-canvas strip
+  (`AnnotateModeView.jsx`) is now that surface's only render site, and the invariant check
+  re-homed to `AnnotateModeView.strip.test.jsx`. The invariant itself (every render site passes
+  `existingClip`) is UNCHANGED and still applies to all 4 current sites (desktop fullscreen dock,
+  mobile fullscreen sheet, mobile bottom sheet, desktop strip) — see the T8600 landmine below.
+- **Two-layer Esc + no-dual-editor invariants, and the beacon surface discriminator (T8600,
+  2026-09-03).** Three related rules a new render site or a new details surface must preserve:
+  1. **No dual editor is reachable, by shape not discipline.** `AnnotateModeView`'s
+     `desktopEditorOpen`/`mobileInlineForm` both derive from one `underCanvasEditor` boolean and
+     are partitioned by `isMobile`, so they can never both be true. `ClipsSidePanel`'s
+     `clipEditorOpen` (renamed from `showAddClipForm`) is the only thing gating
+     `ClipDetailsEditor` — do not add a second gate. On mobile, `ClipsSidePanel`'s
+     `mobileShowDetail` also carries `&& !clipEditorOpen` (Q1 hardening) so the full-panel
+     `ClipDetailsEditor` can't co-render with the bottom sheet either.
+  2. **Esc is handled in ONE place** (`AnnotateFullscreenOverlay`'s window keydown listener):
+     `detailsOpen` first (closes the details panel/popup), THEN `onClose` (closes the editor) —
+     for typing and non-typing targets alike, so Esc while typing a note closes the note surface,
+     not the whole play. Any new details-like surface must join this same `detailsOpen` state,
+     not add a second Esc handler.
+  3. **`surface` is a required prop on every `AnnotateFullscreenOverlay` render site** — it
+     suffixes the existing `add_clip_opened_no_save` beacon (`:inline_desktop` /
+     `:sheet_mobile` / `:fullscreen_mobile` / `:dock_fullscreen`; no schema change, prefix `LIKE`
+     queries still return the whole family). A missing `surface` fires
+     `:unknown_surface` + `console.warn` rather than silently reusing the bare pre-T8600 name —
+     if you add a 5th render site and its beacon events show up as `unknown_surface`, you forgot
+     this prop. Render-site inventory test: `AnnotateModeView.beaconSurfaces.test.jsx`.
 - **`annotation_completed` fires on WATCHED VIDEO, not a clip created — its label is display-only (T7930, 2026-08-28).**
   `POST /{game_id}/finish-annotation` (games.py, fired from `AnnotateScreen` mode-change/unmount via
   `gamesDataStore.finishAnnotation`) emits `record_milestone("annotation_completed")` purely on
