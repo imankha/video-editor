@@ -10,7 +10,7 @@
 
 On desktop non-fullscreen, clicking the "Edit Play" CTA (or the transport-bar edit button) with a clip selected opens the sidebar inline form in CREATE mode instead of EDIT mode. The user sees "Add Play" with fresh 12s default bounds instead of their clip's data, and pressing Save creates a DUPLICATE clip instead of updating the selected one.
 
-Found by the ux-designer review of the T8600 proposal (2026-09-03), then verified in code:
+Found by the ux-investigator review of the T8600 proposal (2026-09-03), then verified in code:
 
 - "Edit Play" -> `handleAddClipFromButton` (`AnnotateContainer.jsx:838`) -> `editClip` -> `EDITING` state -> `isOverlayOpen` true (`useClipSelection.js:79`) -> `showAddClipForm` (`AnnotateScreen.jsx:676`).
 - `ClipsSidePanel.jsx:343-359` renders `AnnotateFullscreenOverlay` with **no `existingClip` prop**. Compare the fullscreen render at `AnnotateModeView.jsx:604-621`, which passes it. With `existingClip` null the overlay's `isEditMode` is false: create heading, default bounds, `onCreateClip` on save.

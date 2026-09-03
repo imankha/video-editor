@@ -56,7 +56,7 @@ pre-fix Save POSTed a 4th `raw_clip` alongside 3 existing ones; post-fix it PUTs
 clip's id. Regression coverage: `ClipsSidePanel.editMode.test.jsx` (unit, mocks the overlay to
 assert the prop) and the new T8590 block in `e2e/clip-selection-state-machine.spec.js` (proven
 to fail on the pre-fix code). See Landmines "Add Play CTA must gate on isEditMode (T8130)" below
--- this is the sibling bug on the same surface, caught by the T8600 ux-designer review.)
+-- this is the sibling bug on the same surface, caught by the T8600 ux-investigator review.)
 prior_update: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
 tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
 and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).

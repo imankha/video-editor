@@ -7,7 +7,7 @@
 
 ## Problem
 
-Second, lower-confidence anomaly noticed during the 2026-08-31 ux-designer investigation
+Second, lower-confidence anomaly noticed during the 2026-08-31 ux-investigator investigation
 and confirmed as a SEPARATE root cause while fixing T8150 (vanishing game after "Game
 ready!"): after an upload with a pre-existing game already present, Annotate opened the
 OLD game while the toast announced the new one.

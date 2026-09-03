@@ -8,7 +8,7 @@ completion criteria are post-ship metrics, not yet measurable)
 ## Goal
 
 Close the decisive activation cliff: upload -> FIRST CLIP. Prod evidence (2026-08-31
-ux-designer investigation, read-only prod data, N=45 last-30d):
+ux-investigator investigation, read-only prod data, N=45 last-30d):
 last-30d, 11 users watched their uploaded game on Annotate, only 5 ever opened the clip
 form, 6 created a clip; `clip_save_failed` = 0 all-time (the system never refuses - users
 never arrive). 15 users watched the how-to-clip tutorial; only 3 of them ever clipped.

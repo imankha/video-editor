@@ -1,7 +1,7 @@
 # UX Review: Add Play / Edit Play relocation (inline play editor)
 
 **Date:** 2026-09-03
-**Agent:** ux-designer (spawned for pre-filing review of the T8600 proposal; found and verified the T8590 bug)
+**Agent:** ux-investigator (spawned for pre-filing review of the T8600 proposal; found and verified the T8590 bug)
 **Feeds:** [T8600](../tasks/T8600-inline-play-editor-under-canvas.md), [T8590](../tasks/T8590-desktop-edit-play-opens-create-form.md), decision artifact (claude.ai artifact "Inline Play Editor - Design Proposal")
 
 ## Verdict up front

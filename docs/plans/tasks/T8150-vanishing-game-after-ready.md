@@ -7,7 +7,7 @@
 
 ## Problem
 
-During the 2026-08-31 ux-designer investigation's dev reproduction, a freshly uploaded
+During the 2026-08-31 ux-investigator investigation's dev reproduction, a freshly uploaded
 game showed the "Game ready!" success toast and then was ABSENT from the games list.
 Credits were debited; the R2 object was durable; the game row was gone. This is the same
 shape as the ojedalucas19 prod incident (T7870: charged + orphaned upload) and adjacent
