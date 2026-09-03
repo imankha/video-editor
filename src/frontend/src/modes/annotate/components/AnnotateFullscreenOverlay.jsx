@@ -117,6 +117,9 @@ export function AnnotateFullscreenOverlay({
   // T8600: desktop strip only — opens the clip's reel in Focus mode. Same
   // prop name/semantics ClipDetailsEditor already uses.
   onOpenInFocus,
+  // T8600 §2.5: required per-render-site discriminator for the
+  // add_clip_opened_no_save beacon (no default — see the effect below).
+  surface,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
@@ -239,15 +242,22 @@ export function AnnotateFullscreenOverlay({
   // close/unmount if no save happened. Keyed on the open (isVisible/isEditMode),
   // NOT on renders or keystrokes, so it beacons at most once per open. Edit opens
   // never arm it. Uses the existing T7515 `dialog` vocabulary (no schema change).
+  // T8600 §2.5: `surface` (required, no default) discriminates the 4 render
+  // sites via a `:surface` suffix — a render site that forgets to pass it
+  // shows up as its own distinct `unknown_surface` row instead of silently
+  // blending into a real surface's count (no-silent-fallback rule).
   useEffect(() => {
     if (!isVisible || isEditMode) return;
     savedThisOpenRef.current = false;
     return () => {
       if (!savedThisOpenRef.current) {
-        recordUiImpression('dialog', 'add_clip_opened_no_save');
+        if (!surface) {
+          console.warn('[AnnotateFullscreenOverlay] missing `surface` prop on a create-mode open — beacon logged as unknown_surface');
+        }
+        recordUiImpression('dialog', `add_clip_opened_no_save:${surface || 'unknown_surface'}`);
       }
     };
-  }, [isVisible, isEditMode]);
+  }, [isVisible, isEditMode, surface]);
 
   // Handle keyboard shortcuts — uses handleSaveRef to avoid stale closures
   // (taggedTeammates, myAthlete, createProject would be stale without the ref).

@@ -622,6 +622,7 @@ export function AnnotateModeView({
                 onSeek={seek}
                 videoController={videoController}
                 isFullscreen={annotateFullscreen}
+                surface="dock_fullscreen"
                 teammateSuggestions={teammateSuggestions}
                 onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
                 newClipLayerIsMine={newClipLayerIsMine}
@@ -694,6 +695,7 @@ export function AnnotateModeView({
                     videoController={videoController}
                     isFullscreen={false}
                     layout={isLandscape ? 'landscape-inline' : 'inline'}
+                    surface="fullscreen_mobile"
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
                     newClipLayerIsMine={newClipLayerIsMine}
@@ -830,6 +832,7 @@ export function AnnotateModeView({
               videoController={videoController}
               isFullscreen={false}
               layout="inline"
+              surface="sheet_mobile"
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
               nextClipNumber={nextClipNumber}
