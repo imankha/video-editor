@@ -86,3 +86,52 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
     expect(screen.getByRole('radio', { name: /^Team layer/ }).disabled).toBe(false);
   });
 });
+
+// T8490: edit-mode caption mirrors the Add Play sheet's, but reads off
+// hasReel (region.autoProjectId) instead of promising a future "will be
+// created" — the reel either already exists or the Reel control below is the
+// live action to create one.
+describe('ClipDetailsEditor — rating caption (T8490)', () => {
+  it('rating 1-3 shows "Saved to your library."', () => {
+    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 2, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
+    expect(screen.getByText('Saved to your library.')).toBeTruthy();
+  });
+
+  it('rating 4 shows the "Big play" caption', () => {
+    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
+    expect(screen.getByText('Big play (!) - saved to your library.')).toBeTruthy();
+  });
+
+  it('rating 5 + My Athlete + no reel yet points at the Reel control below, never "will be created"', () => {
+    render(
+      <ClipDetailsEditor
+        region={{ ...baseRegion, rating: 5, my_athlete: true, autoProjectId: null }}
+        onUpdate={() => {}}
+        onDelete={() => {}}
+      />
+    );
+    expect(screen.getByText("Can't-miss play (!!) - create a reel below.")).toBeTruthy();
+  });
+
+  it('rating 5 + My Athlete + reel already exists says so, does not re-offer creation', () => {
+    render(
+      <ClipDetailsEditor
+        region={{ ...baseRegion, rating: 5, my_athlete: true, autoProjectId: 42 }}
+        onUpdate={() => {}}
+        onDelete={() => {}}
+      />
+    );
+    expect(screen.getByText("Can't-miss play (!!) - reel already created.")).toBeTruthy();
+  });
+
+  it('rating 5 + Team shows the team-clips-dont-start-reels caption', () => {
+    render(
+      <ClipDetailsEditor
+        region={{ ...baseRegion, rating: 5, my_athlete: false, autoProjectId: null }}
+        onUpdate={() => {}}
+        onDelete={() => {}}
+      />
+    );
+    expect(screen.getByText("Can't-miss team play (!!) - team clips don't start reels.")).toBeTruthy();
+  });
+});

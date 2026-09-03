@@ -212,15 +212,6 @@ const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
 const MAX_NOTES_LENGTH = 280; // characters (like a tweet)
 const DEFAULT_RATING = 4; // default star rating ("Good")
 
-// Rating to notation map
-const RATING_NOTATION = {
-  1: '??',
-  2: '?',
-  3: '!?',
-  4: '!',
-  5: '!!'
-};
-
 // Color palette for clip regions (auto-assigned cyclically)
 const CLIP_COLORS = [
   '#3B82F6', // blue
@@ -797,6 +788,5 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     MAX_CLIP_DURATION,
     DEFAULT_CLIP_DURATION,
     DEFAULT_RATING,
-    RATING_NOTATION
   };
 }

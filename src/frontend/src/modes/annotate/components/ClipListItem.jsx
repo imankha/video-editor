@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Info, Play, Users, Share2 } from 'lucide-react';
-import { getRatingDisplay } from '../../../components/shared/clipConstants';
+import { getRatingDisplay, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
 
 /**
@@ -106,7 +106,8 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
             textShadow: '0 1px 2px rgba(0,0,0,0.5)',
             fontSize: isMobile ? '11px' : '10px',
           }}
-          title={`Rating: ${rating}/5`}
+          title={`${RATING_ADJECTIVES[rating]} (${rating}/5)`}
+          aria-label={`${RATING_ADJECTIVES[rating]} (${rating}/5)`}
         >
           {notation}
         </div>

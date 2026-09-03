@@ -11,6 +11,7 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
+import { getEditRatingCaption } from '../../../components/shared/clipConstants';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -281,6 +282,11 @@ export function ClipDetailsEditor({
             onRatingChange={handleRatingChange}
           />
         </div>
+        {/* T8490: edit-mode caption — mirrors the Add Play sheet's, but reads
+            off hasReel instead of promising a future "will be created". */}
+        <p className="text-xs text-gray-400 -mt-1.5 ml-[4.5rem]">
+          {getEditRatingCaption(rating, !isTeamLayer, hasReel)}
+        </p>
 
         {/* Tags Selection */}
         {tagSet ? (

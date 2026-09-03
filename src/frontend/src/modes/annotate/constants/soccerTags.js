@@ -53,6 +53,11 @@ export const soccerTags = {
   goalie: [
     {
       name: "Save",
+      // T8490: display-only rename ("Save" reads ambiguous next to the form's
+      // real Save button). Stored value stays "Save" so existing clips' tags
+      // still match and the backend curated-combo match (['Goal','Save'] in
+      // hockey/collections.py-style lookups) is untouched.
+      displayName: "Keeper Save",
       description: "All shot-stopping and 1v1 saves."
     },
     {

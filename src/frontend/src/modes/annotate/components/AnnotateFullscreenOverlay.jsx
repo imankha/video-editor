@@ -14,6 +14,7 @@ import { Toggle, Button } from '../../../components/shared/Button';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
+import { RATING_NOTATION, RATING_ADJECTIVES, getRatingCaption } from '../../../components/shared/clipConstants';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -40,15 +41,6 @@ function DockPositionSelector({ position, onPositionChange }) {
   );
 }
 
-// Rating notation map
-const RATING_NOTATION = {
-  1: '??',
-  2: '?',
-  3: '!?',
-  4: '!',
-  5: '!!'
-};
-
 const DEFAULT_CLIP_BEFORE = 9;  // seconds before playhead
 const DEFAULT_CLIP_AFTER = 3;   // seconds after playhead
 const DEFAULT_RATING = 4; // "Good"
@@ -74,7 +66,11 @@ function StarRating({ rating, onRatingChange, size = 24 }) {
           />
         </button>
       ))}
-      <span className="ml-2 text-lg font-bold text-white">
+      <span
+        className="ml-2 text-lg font-bold text-white"
+        title={RATING_ADJECTIVES[rating]}
+        aria-label={RATING_ADJECTIVES[rating]}
+      >
         {RATING_NOTATION[rating]}
       </span>
     </div>
@@ -442,6 +438,11 @@ export function AnnotateFullscreenOverlay({
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">Rating{isMobile ? '' : ' (press 1-5)'}</label>
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
+          {/* T8490: create-mode-only caption explaining what the rating means
+              for the reel — mirrors the auto-flip gate's `mine` check. */}
+          {!isEditMode && (
+            <p className="text-xs text-gray-400 mt-1.5">{getRatingCaption(rating, myAthlete)}</p>
+          )}
         </div>
 
         {/* Tag Selection — T8600: on mobile, Tags (+ Notes, newly available)
@@ -743,6 +744,14 @@ export function AnnotateFullscreenOverlay({
             </div>
           </div>
 
+          {/* T8490: create-mode-only caption, own row below Controls so it
+              never widens the flex-wrap row and risks pushing Save off-screen. */}
+          {!isEditMode && (
+            <div className="px-4 pb-3 -mt-2">
+              <p className="text-xs text-gray-400">{getRatingCaption(rating, myAthlete)}</p>
+            </div>
+          )}
+
           {/* Details panel — desktop expand-in-place, own max-height scroll.
               Dismissal is the toggle button itself; no separate Done/X. */}
           {detailsOpen && (
@@ -846,7 +855,13 @@ export function AnnotateFullscreenOverlay({
         />
         <div className="flex items-center gap-2 mt-1.5">
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} />
-          <span className="text-xs text-gray-500 w-4 text-center">{RATING_NOTATION[rating]}</span>
+          <span
+            className="text-xs text-gray-500 w-4 text-center"
+            title={RATING_ADJECTIVES[rating]}
+            aria-label={RATING_ADJECTIVES[rating]}
+          >
+            {RATING_NOTATION[rating]}
+          </span>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
           <div className="flex-1 overflow-x-auto scrollbar-hide">
             {tagSet ? (
@@ -877,6 +892,12 @@ export function AnnotateFullscreenOverlay({
             <X size={18} className="text-gray-400" />
           </button>
         </div>
+        {/* T8490: create-mode-only caption. Single truncated line — this
+            layout is the most height-starved surface (landscape phone, T5700
+            two-lane note), so no wrapping. */}
+        {!isEditMode && (
+          <p className="text-xs text-gray-400 mt-1 truncate">{getRatingCaption(rating, myAthlete)}</p>
+        )}
       </div>
     );
   }

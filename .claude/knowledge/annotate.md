@@ -1,5 +1,28 @@
 ---
 domain: annotate
+updated: 2026-09-03 (T8490 star-scale caption + glyph labels + Keeper Save rename: the 5-entry
+`RATING_NOTATION`/`RATING_ADJECTIVES` maps had FOUR duplicate local copies —
+`AnnotateFullscreenOverlay.jsx`, `ClipRegionLayer.jsx`, `useAnnotate.js` (dead — returned from the
+hook but never destructured by its one caller, `AnnotateContainer.jsx`; deleted outright, not
+imported), `NotesOverlay.jsx` — all now import the single canonical
+`src/frontend/src/components/shared/clipConstants.js` export instead (`ClipListItem.jsx` and
+`ClipSelectorSidebar.jsx` already did, via `getRatingDisplay`). Every glyph render site now carries
+a `title`/`aria-label` built from `RATING_ADJECTIVES[rating]`. New invariant: **do not reintroduce a
+local `RATING_NOTATION`/`RATING_ADJECTIVES` copy** — import from `clipConstants.js`.
+`clipConstants.js` also gained `getRatingCaption(rating, mine)` (create mode) and
+`getEditRatingCaption(rating, mine, hasReel)` (edit mode) — pure functions, no new store state,
+implementing the one-line "what does this rating mean for the reel" caption. Create-mode caption
+renders in THREE places in `AnnotateFullscreenOverlay.jsx` (`formBody`'s rating block, the `strip`
+layout as its own full-width row BELOW the controls row so it can never widen the flex-wrap row and
+risk pushing Save off-screen at 320px, and `landscape-inline` as a single truncated line — the most
+height-starved surface per the T5700 two-lane note below), gated on `!isEditMode`. Edit-mode caption
+renders once in `ClipDetailsEditor.jsx`'s rating row, reading `hasReel`/`isTeamLayer` instead of
+promising a future "reel will be created". Also: `soccerTags.js`'s goalie "Save" tag gained a
+`displayName: "Keeper Save"` field (stored `name` unchanged so existing clips still match and the
+backend curated-combo exact-name guard is untouched) — `TagSelector.jsx` renders
+`tag.displayName || tag.name`, everywhere else (`onTagToggle`, `selectedTags.includes`, `key`) still
+keys off `tag.name`. This is the general pattern for any future tag-display rename: add
+`displayName`, never change `name`.)
 updated: 2026-09-03 (T8600 inline play editor: Add Play / Edit Play on desktop non-fullscreen now
 opens a compact editor STRIP under the canvas (`AnnotateFullscreenOverlay layout="strip"`,
 `AnnotateModeView.jsx`) instead of a form in the sidebar — the `ClipsSidePanel.jsx` sidebar
