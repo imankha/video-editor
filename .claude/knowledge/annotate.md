@@ -3,6 +3,40 @@ domain: annotate
 updated: 2026-09-03 (T8470+T8480: reel creation now selects the new project so the Focus tab
 unlocks immediately + one Draft/Ready-to-share status vocabulary; see the four new entries at the
 top of Invariants & rules. Prior:)
+updated: 2026-09-03 (T8500 Add Game goes video-first: `GameDetailsModal.jsx` create-mode
+reorders to cost line -> dropzone -> collapsed `<details data-testid="game-details-disclosure">`
+("Game details (optional...)") holding opponent/date/type/format -> submit. Submit now gates on
+`hasVideo` alone (was all-four-fields + file); opponent/date/type/format all default (opponent
+empty -> "Unnamed opponent" placeholder client-side, date -> `localTodayISO()`, type -> Home,
+format -> Full Game) so a game can be created with two gestures (pick file, submit). The
+opponent input's `autoFocus` (see the T7590 landmine below) was REMOVED entirely in this
+reorder - it now lives inside the collapsed disclosure and is never auto-focused, so that
+specific iOS-keyboard-shrinks-viewport case no longer applies to create mode. Edit mode
+(`EditGameModal.jsx`) is untouched. `CreditBalance.jsx` gained an in-memory-only
+(no localStorage, no backend) first-run "You start with N free credits" caption, shown via
+`showFirstRunHint` when `games.length === 0`, dismissed forever-per-session on first click
+anywhere. Form height dropped sharply (four fields collapsed to one summary line), which is
+relevant to the T7590 short-viewport landmine below - T8550 owns re-verifying/adapting that
+regression pattern for the new, much shorter layout.)
+updated: 2026-09-03 (T8590 fixes desktop non-fullscreen "Edit Play" opening the CREATE form:
+`ClipsSidePanel.jsx`'s inline `AnnotateFullscreenOverlay` render was missing `existingClip`
+-- the fullscreen render (`AnnotateModeView.jsx:604-621`) already passed it, but the
+non-fullscreen sidebar render did not, so `isEditMode` (`!!existingClip`,
+`AnnotateFullscreenOverlay.jsx:117`) was always false on that path: heading/defaults/Save
+all behaved as CREATE, producing a duplicate clip instead of updating the selected one, and
+misarming the T8140 `add_clip_opened_no_save` beacon on every edit-open. Fixed by passing
+`existingClip={selectedRegion || null}` (`ClipsSidePanel.jsx` already computed `selectedRegion
+= clipRegions.find(r => r.id === selectedRegionId)` for `ClipDetailsEditor` a few lines above
+-- same derivation `AnnotateModeView`'s own `existingClip` memo uses). **Invariant going
+forward: every `AnnotateFullscreenOverlay` render site (fullscreen desktop, fullscreen mobile,
+mobile inline sheet, non-fullscreen sidebar) must pass `existingClip` whenever the overlay can
+open in EDIT mode** -- a new render site that omits it silently falls back to CREATE mode with
+no error, exactly like this bug. Verified live via dev-verify (dev stack + TSV-imported clips):
+pre-fix Save POSTed a 4th `raw_clip` alongside 3 existing ones; post-fix it PUTs the selected
+clip's id. Regression coverage: `ClipsSidePanel.editMode.test.jsx` (unit, mocks the overlay to
+assert the prop) and the new T8590 block in `e2e/clip-selection-state-machine.spec.js` (proven
+to fail on the pre-fix code). See Landmines "Add Play CTA must gate on isEditMode (T8130)" below
+-- this is the sibling bug on the same surface, caught by the T8600 ux-designer review.)
 prior_update: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
 tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
 and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).
@@ -551,6 +585,17 @@ The full checklist for an 11th→Nth sport:
   button and the full-width CTA are visible at once in non-fullscreen mode, so an identical
   `title` creates a Playwright strict-mode multi-match on `button[title="..."]` locators (see
   `clip-selection-state-machine.spec.js`). Use distinct title text per button instance instead.
+- **Every `AnnotateFullscreenOverlay` render site must pass `existingClip` when EDITING (T8590,
+  2026-09-03) — the sibling bug to the CTA-gating landmine above.** T8130 fixed the CTA's
+  label/routing; it did NOT guarantee the overlay it opens actually renders in edit mode. The
+  non-fullscreen `ClipsSidePanel.jsx` render omitted `existingClip` (only the fullscreen
+  `AnnotateModeView.jsx` render passed it), so `isEditMode` (`!!existingClip`) was always false
+  there: correctly-routed "Edit Play" clicks still opened a CREATE-mode form and Save produced a
+  duplicate clip. Same invisibility mechanism as T8130 — no error, no crash, just silently wrong
+  mode — and same fix shape: derive `existingClip` from the already-selected region
+  (`clipRegions.find(r => r.id === selectedRegionId)`) at EVERY render site, never assume a
+  sibling site's correctness covers this one. See the frontmatter T8590 entry above for the full
+  writeup and regression coverage.
 - **`annotation_completed` fires on WATCHED VIDEO, not a clip created — its label is display-only (T7930, 2026-08-28).**
   `POST /{game_id}/finish-annotation` (games.py, fired from `AnnotateScreen` mode-change/unmount via
   `gamesDataStore.finishAnnotation`) emits `record_milestone("annotation_completed")` purely on
@@ -660,6 +705,15 @@ The full checklist for an 11th→Nth sport:
   anti-vacuous), the panel is capped (`clientH <= vp.height`, `overflow-y:auto`), and submit + close
   both scroll into the viewport with the never-disabled X hit-testable. Negative-control verified:
   fails on the pre-fix code at `clientH(629) <= 498/541`, passes post-fix.
+  **T8500 update (2026-09-03):** the create-mode form this bug was measured against (opponent,
+  date, game type, video format, dropzone, cost, submit, ~630px) no longer exists — T8500
+  reordered to cost line -> dropzone -> collapsed details disclosure -> submit and REMOVED the
+  opponent input's `autoFocus` entirely (it now lives inside the collapsed disclosure, never
+  auto-focused), so the keyboard-shrinks-viewport case described below is no longer applicable to
+  create mode. The `max-h-[90vh] overflow-y-auto` panel fix and this regression spec's pattern
+  (empty-session bypass, anti-vacuous overflow assertion, submit+close reachability) still stand
+  and should still be run against the new layout; T8550 owns re-verifying/adapting the spec's
+  concrete assertions (field text, exact heights) for the shorter form.
   **Candidate failure modes accounting (this container = chromium engine + iPhone viewport, NOT real
   WebKit — see playwright.config.js):** CHECKED & RULED OUT via emulation — CTA tap handler fires
   and opens the modal (no z-index/overlay intercept; QuestPanel NUF is a `z-50` ~340px corner panel,

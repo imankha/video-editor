@@ -78,6 +78,60 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
   });
 });
 
+describe('ExportButtonView — T8510 unframed-clip export guard (Option A, reverses T3700 P0)', () => {
+  it('(a) Focus + zero keyframes: button disabled and reason caption rendered under it', () => {
+    render(<ExportButtonView {...baseProps}
+      hasUnframedClips={true} unframedCount={1} isButtonDisabled={true}
+      estimatedCredits={12} creditBalance={42} />);
+    const btn = screen.getByRole('button', { name: /Export Focused Video/ });
+    expect(btn.disabled).toBe(true);
+    const caption = screen.getByTestId('export-unframed-caption');
+    expect(caption.textContent).toContain('Set at least one focus point to export');
+    expect(caption.textContent).toContain('~12 credits');
+    expect(caption.className).toContain('text-amber-400');
+  });
+
+  it('(b) framed clip: button enabled, no caption', () => {
+    render(<ExportButtonView {...baseProps}
+      hasUnframedClips={false} isButtonDisabled={false}
+      estimatedCredits={9} creditBalance={42} />);
+    expect(screen.getByRole('button', { name: /Export Focused Video/ }).disabled).toBe(false);
+    expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
+  });
+
+  it('(c) multi-clip partial (Option A: ANY unframed clip blocks): disabled + every-clip wording', () => {
+    render(<ExportButtonView {...baseProps}
+      isMultiClipMode={true} totalExtractedClips={3} unframedCount={1}
+      hasUnframedClips={true} isButtonDisabled={true}
+      estimatedCredits={20} creditBalance={42} />);
+    const btn = screen.getByRole('button', { name: /Export Focused Video \(2\/3\)/ });
+    expect(btn.disabled).toBe(true);
+    expect(screen.getByTestId('export-unframed-caption').textContent)
+      .toContain('Set at least one focus point on every clip to export');
+  });
+
+  it('(d) Overlay mode unaffected: no caption, button stays enabled', () => {
+    render(<ExportButtonView {...baseProps}
+      isFramingMode={false} hasUnframedClips={true} isButtonDisabled={false} />);
+    expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add Overlay' }).disabled).toBe(false);
+  });
+
+  it('caption is hidden while an export is in progress', () => {
+    render(<ExportButtonView {...baseProps}
+      hasUnframedClips={true} isButtonDisabled={true} isCurrentlyExporting={true} />);
+    expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
+  });
+
+  it('caption omits the credit suffix when the estimate is unknown (no fabricated number)', () => {
+    render(<ExportButtonView {...baseProps}
+      hasUnframedClips={true} isButtonDisabled={true} estimatedCredits={null} />);
+    const caption = screen.getByTestId('export-unframed-caption');
+    expect(caption.textContent).toContain('Set at least one focus point to export');
+    expect(caption.textContent).not.toContain('credit');
+  });
+});
+
 describe('ExportButtonView — T8280 high-fps 30fps-choice note (Option B-simple)', () => {
   // Design doc docs/plans/tasks/T8280-design.md Q4/Q4a: when a clip's surfaced
   // fps >= HIGH_FPS_THRESHOLD (31), render a one-line note ADJACENT to the

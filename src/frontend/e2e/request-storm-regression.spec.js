@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -110,6 +111,7 @@ test.describe.serial('request storm regression', () => {
     await page.locator('button:has-text("Add Game")').click();
     await page.waitForTimeout(500);
 
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Storm Test Opponent');
     const today = new Date().toISOString().split('T')[0];
     await page.locator('input[type="date"]').fill(today);

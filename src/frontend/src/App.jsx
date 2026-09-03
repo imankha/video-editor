@@ -773,8 +773,8 @@ function App() {
     if (value === null) {
       clearExport();
     } else {
-      // Note: startExport expects (exportId, projectId, type)
-      startExport(value.exportId, value.projectId, value.stage);
+      // Note: startExport expects (exportId, projectId, type, projectName)
+      startExport(value.exportId, value.projectId, value.stage, value.projectName ?? null);
     }
   }, [clearExport, startExport]);
 

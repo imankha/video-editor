@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -575,6 +576,7 @@ async function ensureAnnotateModeWithClips(page) {
   console.log('[Test] Filling Add Game modal...');
 
   // Fill opponent team name
+  await openGameDetailsDisclosure(page);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('Test Opponent');
 
   // Fill game date (use today's date)
@@ -1111,6 +1113,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Smoke Test Team');
     const today = new Date().toISOString().split('T')[0];
     const dateInput = page.locator('input[type="date"]');
@@ -1142,6 +1145,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('TSV Test Team');
     const today = new Date().toISOString().split('T')[0];
     const dateInput = page.locator('input[type="date"]');
@@ -1187,6 +1191,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Timeline Test Team');
     const today = new Date().toISOString().split('T')[0];
     const dateInput = page.locator('input[type="date"]');
@@ -1451,6 +1456,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Library Test Team');
     const today = new Date().toISOString().split('T')[0];
     const dateInput = page.locator('input[type="date"]');
@@ -2093,6 +2099,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(500);
 
     // Fill modal form
+    await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Full Pipeline Test');
     const today = new Date().toISOString().split('T')[0];
     const dateInput = page.locator('input[type="date"]');
