@@ -46,7 +46,8 @@ import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
 import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
-import { deriveDraftSourceExpiry } from '../utils/draftSourceExpiry';
+import { deriveDraftSourceExpiry, computeStorageExpiryRisk } from '../utils/draftSourceExpiry';
+import { StorageExpiryBanner } from './StorageExpiryBanner';
 
 // Shared layout class strings for the Games tab poster grid (T5681/T6310). The
 // loaded games grid AND its loading skeleton both consume these so the skeleton
@@ -431,6 +432,19 @@ export function ProjectManager({
   // Drafts (DraftTile) use to surface expired/expiring source videos. Built from
   // the games list ProjectManager already holds — a pure computed map, not state.
   const gamesById = useMemo(() => new Map(games.map(g => [g.id, g])), [games]);
+  // T8330: account-level "your drafts' source games are expiring" signal.
+  // Pure render-time join over the games list + drafts' game_ids already held —
+  // no fetch, no new backend endpoint, no persisted state (reuses T8320's
+  // classification via computeStorageExpiryRisk, aggregated across drafts).
+  const storageExpiryRisk = useMemo(
+    () => computeStorageExpiryRisk(projects, gamesById),
+    [projects, gamesById],
+  );
+  // Dismissal is SESSION-ONLY by design: no gesture-based DB write, no persisted
+  // "seen" marker (the banner recomputes from data on the next load, so a still-
+  // at-risk account is warned again — exactly the acceptance criterion). Cleared
+  // on reload with the rest of component state.
+  const [storageBannerDismissed, setStorageBannerDismissed] = useState(false);
   // T8360: the Clips tab shows single-clip auto-drafts ONLY. is_auto_created (the
   // raw_clips.auto_project_id link) is the routing key, not clip_count -- see
   // T8360-design.md "The signal we can trust". Multi-clip drafts (is_auto_created
@@ -1069,6 +1083,17 @@ export function ProjectManager({
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
         <p className="text-gray-400 text-sm">Share Your Player's Brilliance</p>
       </div>
+
+      {/* T8330: proactive storage-expiry banner. Deep-links to the Games tab
+          (where the per-game Extend affordance lives); dismissal is session-only. */}
+      {!storageBannerDismissed && (
+        <StorageExpiryBanner
+          atRiskGameCount={storageExpiryRisk.atRiskGameCount}
+          dependentDraftCount={storageExpiryRisk.dependentDraftCount}
+          onExtend={() => setActiveTab('games')}
+          onDismiss={() => setStorageBannerDismissed(true)}
+        />
+      )}
 
       {/* Continue Where You Left Off - compact 2-up on mobile, full on desktop */}
       {showRecentSection && (
