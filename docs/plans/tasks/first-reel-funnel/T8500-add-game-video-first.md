@@ -1,6 +1,6 @@
 # T8500: Add Game: video first, cost up front
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-03

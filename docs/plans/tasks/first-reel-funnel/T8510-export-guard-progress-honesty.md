@@ -1,6 +1,6 @@
 # T8510: Export guard + progress honesty
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-03
