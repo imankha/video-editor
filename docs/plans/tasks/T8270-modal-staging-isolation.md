@@ -1,6 +1,6 @@
 # T8270: Give staging its own Modal app (stop sharing GPU render infra with prod)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-01
