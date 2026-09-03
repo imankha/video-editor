@@ -1,5 +1,24 @@
 ---
 domain: annotate
+updated: 2026-09-03 (T8590 fixes desktop non-fullscreen "Edit Play" opening the CREATE form:
+`ClipsSidePanel.jsx`'s inline `AnnotateFullscreenOverlay` render was missing `existingClip`
+-- the fullscreen render (`AnnotateModeView.jsx:604-621`) already passed it, but the
+non-fullscreen sidebar render did not, so `isEditMode` (`!!existingClip`,
+`AnnotateFullscreenOverlay.jsx:117`) was always false on that path: heading/defaults/Save
+all behaved as CREATE, producing a duplicate clip instead of updating the selected one, and
+misarming the T8140 `add_clip_opened_no_save` beacon on every edit-open. Fixed by passing
+`existingClip={selectedRegion || null}` (`ClipsSidePanel.jsx` already computed `selectedRegion
+= clipRegions.find(r => r.id === selectedRegionId)` for `ClipDetailsEditor` a few lines above
+-- same derivation `AnnotateModeView`'s own `existingClip` memo uses). **Invariant going
+forward: every `AnnotateFullscreenOverlay` render site (fullscreen desktop, fullscreen mobile,
+mobile inline sheet, non-fullscreen sidebar) must pass `existingClip` whenever the overlay can
+open in EDIT mode** -- a new render site that omits it silently falls back to CREATE mode with
+no error, exactly like this bug. Verified live via dev-verify (dev stack + TSV-imported clips):
+pre-fix Save POSTed a 4th `raw_clip` alongside 3 existing ones; post-fix it PUTs the selected
+clip's id. Regression coverage: `ClipsSidePanel.editMode.test.jsx` (unit, mocks the overlay to
+assert the prop) and the new T8590 block in `e2e/clip-selection-state-machine.spec.js` (proven
+to fail on the pre-fix code). See Landmines "Add Play CTA must gate on isEditMode (T8130)" below
+-- this is the sibling bug on the same surface, caught by the T8600 ux-designer review.)
 updated: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
 tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
 and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).
@@ -516,6 +535,17 @@ The full checklist for an 11th→Nth sport:
   button and the full-width CTA are visible at once in non-fullscreen mode, so an identical
   `title` creates a Playwright strict-mode multi-match on `button[title="..."]` locators (see
   `clip-selection-state-machine.spec.js`). Use distinct title text per button instance instead.
+- **Every `AnnotateFullscreenOverlay` render site must pass `existingClip` when EDITING (T8590,
+  2026-09-03) — the sibling bug to the CTA-gating landmine above.** T8130 fixed the CTA's
+  label/routing; it did NOT guarantee the overlay it opens actually renders in edit mode. The
+  non-fullscreen `ClipsSidePanel.jsx` render omitted `existingClip` (only the fullscreen
+  `AnnotateModeView.jsx` render passed it), so `isEditMode` (`!!existingClip`) was always false
+  there: correctly-routed "Edit Play" clicks still opened a CREATE-mode form and Save produced a
+  duplicate clip. Same invisibility mechanism as T8130 — no error, no crash, just silently wrong
+  mode — and same fix shape: derive `existingClip` from the already-selected region
+  (`clipRegions.find(r => r.id === selectedRegionId)`) at EVERY render site, never assume a
+  sibling site's correctness covers this one. See the frontmatter T8590 entry above for the full
+  writeup and regression coverage.
 - **`annotation_completed` fires on WATCHED VIDEO, not a clip created — its label is display-only (T7930, 2026-08-28).**
   `POST /{game_id}/finish-annotation` (games.py, fired from `AnnotateScreen` mode-change/unmount via
   `gamesDataStore.finishAnnotation`) emits `record_milestone("annotation_completed")` purely on
