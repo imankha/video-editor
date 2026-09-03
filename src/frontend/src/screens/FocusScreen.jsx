@@ -409,6 +409,15 @@ export function FocusScreen({
   const clipVideoConfigCacheRef = useRef(new Map()); // clipId -> { promise, ts }
   const CLIP_CONFIG_CACHE_TTL_MS = 60000;
 
+  // T8310: when the selected clip's source game was reclaimed (playback-url 410
+  // source_expired), render a deliberate expired panel instead of a broken
+  // player. Set at every clip load from the resolved config (cache-safe), so an
+  // expired->healthy clip switch clears it. { canExtend } | null.
+  const [sourceExpired, setSourceExpired] = useState(null);
+  const applySourceExpiry = useCallback((cfg) => {
+    setSourceExpired(cfg?.sourceExpired ? { canExtend: !!cfg.canExtend } : null);
+  }, []);
+
   /**
    * Get the video URL and clip range for a clip.
    * Game clips use the game video URL with a clip offset; uploaded/extracted clips use file_url directly.
@@ -424,6 +433,17 @@ export function FocusScreen({
           const res = await apiFetch(
             `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/playback-url`
           );
+          // T8310: the source game video was reclaimed post-expiry. Do NOT fall
+          // back to the /stream proxy (it 410s the same way) — surface a
+          // deliberate expired state so no <video> mounts against a dead URL.
+          if (res.status === 410) {
+            let canExtend = false;
+            try {
+              const body = await res.json();
+              canExtend = !!(body?.detail?.code === 'source_expired' && body?.detail?.can_extend);
+            } catch { /* body optional */ }
+            return { url: null, gameUrl: null, clipRange: null, sourceExpired: true, canExtend };
+          }
           if (!res.ok) throw new Error(`${res.status}`);
           const data = await res.json();
           return {
@@ -511,7 +531,9 @@ export function FocusScreen({
     const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
 
     (async () => {
-      const { url: clipUrl, gameUrl, clipRange } = await getClipVideoConfig(targetClip);
+      const cfg = await getClipVideoConfig(targetClip);
+      const { url: clipUrl, gameUrl, clipRange } = cfg;
+      applySourceExpiry(cfg);
       if (!clipUrl || clipUrl.startsWith('blob:')) return;
       if (controller.signal.aborted) return;
       const meta = clipMetadataCache[targetClip.id];
@@ -533,7 +555,9 @@ export function FocusScreen({
     const controller = new AbortController();
 
     (async () => {
-      const { url: clipUrl, gameUrl: firstGameUrl, clipRange } = await getClipVideoConfig(firstClip);
+      const cfg = await getClipVideoConfig(firstClip);
+      const { url: clipUrl, gameUrl: firstGameUrl, clipRange } = cfg;
+      applySourceExpiry(cfg);
       if (!clipUrl) return;
       if (controller.signal.aborted) return;
 
@@ -647,7 +671,9 @@ export function FocusScreen({
         }
 
         // 3. Load new clip's video (or just seek if same video URL)
-        const { url: newClipUrl, gameUrl: newGameUrl, clipRange: newClipRange } = await getClipVideoConfig(newClip);
+        const newCfg = await getClipVideoConfig(newClip);
+        const { url: newClipUrl, gameUrl: newGameUrl, clipRange: newClipRange } = newCfg;
+        applySourceExpiry(newCfg);
         if (newClipUrl) {
           if (!newClipUrl.startsWith('blob:')) {
             warmVideoCache(newClipUrl);
@@ -1149,6 +1175,8 @@ export function FocusScreen({
       isProjectLoading={isLoadingProjectData}
       loadingStage={loadingStage}
       error={error}
+      isSourceExpired={!!sourceExpired}
+      canExtendSource={!!sourceExpired?.canExtend}
       isUrlExpiredError={isUrlExpiredError}
       onRetryVideo={handleRetryVideo}
       clipRange={currentClipRange}

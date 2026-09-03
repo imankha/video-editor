@@ -150,6 +150,8 @@ export function FocusModeView({
   isProjectLoading = false,
   loadingStage = null,
   error,
+  isSourceExpired = false,
+  canExtendSource = false,
   isUrlExpiredError = () => false,
   onRetryVideo,
   clipRange = null,
@@ -462,6 +464,8 @@ export function FocusModeView({
               loadingProgress={loadingProgress}
               loadingElapsedSeconds={loadingElapsedSeconds}
               error={error}
+              isSourceExpired={isSourceExpired}
+              canExtendSource={canExtendSource}
               isUrlExpiredError={isUrlExpiredError}
               onRetryVideo={onRetryVideo}
               loadingMessage={

@@ -2094,6 +2094,69 @@ def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
         return True
 
 
+class GameSourceExpired(HTTPException):
+    """T8310: a clip's source game video has been reclaimed post-expiry.
+
+    Raised by the clip playback/stream seams (and the Focus export entry) INSTEAD
+    of presigning a deleted `games/{hash}.mp4` object. A presigned URL for a gone
+    object still succeeds, so the browser <video> gets an R2 404 and reports
+    MEDIA_ERR_SRC_NOT_SUPPORTED -- indistinguishable from a bad codec (bug 50p).
+    Returning a structured 410 lets the reel editors render a deliberate expired
+    panel (message + Extend affordance) instead of a "Video format not supported"
+    banner + retry loop.
+
+    Body: {"code": "source_expired", "game_id": ..., "can_extend": ...}.
+    """
+
+    def __init__(self, game_id: int | None, can_extend: bool):
+        super().__init__(
+            status_code=410,
+            detail={
+                "code": "source_expired",
+                "game_id": game_id,
+                "can_extend": can_extend,
+            },
+        )
+
+
+def resolve_game_source_status(cursor, blake3_hash: str | None, auto_export_status) -> tuple[str, bool]:
+    """T8310: (storage_status, can_extend) for a clip's source game.
+
+    Single source of truth shared with list_games/load_game: reuses
+    `_compute_storage_status` (with the T8320 `has_hash` fix so a reclaimed
+    hash-backed game whose game_storage row was deleted at reclaim reports
+    'expired', not 'active') and mirrors list_games' `can_extend` (the game still
+    has a storage ref, or is inside the post-expiry grace window). Deliberately
+    NOT a third fork of the expiry logic. References are excluded by the caller
+    (they pass their own None); every game the clip seams resolve is real.
+    """
+    storage_row = None
+    if blake3_hash:
+        storage_row = cursor.execute(
+            "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+            (blake3_hash,),
+        ).fetchone()
+    expires_at_val = storage_row['storage_expires_at'] if storage_row else None
+    status = _compute_storage_status(expires_at_val, auto_export_status, bool(blake3_hash))
+    can_extend = False
+    if status == 'expired' and blake3_hash:
+        # Extendable while a ref survives or during the grace window; a fully
+        # reclaimed source (row deleted at reclaim, past grace) is not.
+        can_extend = storage_row is not None or blake3_hash in get_grace_deletion_hashes()
+    return status, can_extend
+
+
+def assert_clip_source_available(cursor, *, game_id: int | None, blake3_hash: str | None, auto_export_status) -> None:
+    """T8310: raise GameSourceExpired if the clip's source game has been reclaimed.
+
+    Shared gate for the clip playback-url seam, the /stream proxy, and the Focus
+    export entry so all three agree and none presigns a dead object.
+    """
+    status, can_extend = resolve_game_source_status(cursor, blake3_hash, auto_export_status)
+    if status == 'expired':
+        raise GameSourceExpired(game_id, can_extend)
+
+
 def _game_video_r2_key(blake3_hash: str | None, video_filename: str | None) -> str | None:
     """The fully-qualified R2 key the code resolves for a game source video.
 

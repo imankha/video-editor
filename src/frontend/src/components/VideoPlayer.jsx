@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
+import { SourceExpiredPanel } from './SourceExpiredPanel';
 import { useVideoStore } from '../stores/videoStore';
 
 /**
@@ -48,6 +49,12 @@ export function VideoPlayer({
   loadingProgress = null,
   loadingElapsedSeconds = 0,
   error = null,
+  // T8310: when true, the source game video was reclaimed (backend 410
+  // `source_expired`). Render a deliberate expired panel instead of mounting a
+  // <video> against a dead URL — that avoids the "format not supported" banner +
+  // retry loop (bug 50p). Shared by Focus and Overlay.
+  isSourceExpired = false,
+  canExtendSource = false,
   isUrlExpiredError = () => false,
   onRetryVideo,
   onVideoClick,
@@ -196,7 +203,12 @@ export function VideoPlayer({
       onMouseDown={handleMouseDown}
       style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 ? 'grab' : 'default') }}
     >
-      {videoUrl ? (
+      {isSourceExpired ? (
+        <SourceExpiredPanel
+          canExtend={canExtendSource}
+          className={isFullscreen ? 'w-full h-full' : fitToAspect ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'}
+        />
+      ) : videoUrl ? (
         <div
           className={`relative video-container overflow-hidden ${
             isFullscreen ? 'w-full h-full' : fitToAspect ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'
