@@ -1,6 +1,6 @@
 # T8590: Desktop "Edit Play" opens the Add Play form (missing existingClip) - duplicate clip on Save
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-03
