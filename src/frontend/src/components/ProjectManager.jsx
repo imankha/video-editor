@@ -1036,10 +1036,12 @@ export function ProjectManager({
         className="hidden"
       />
 
-      {/* Credits anchored far left */}
+      {/* Credits anchored far left. First-run hint derives "never uploaded a
+          game" from the loaded games list (T8500) - a pure render-time
+          derivation, no persisted view state. */}
       {isAuthenticated && (
         <div className="fixed top-4 left-4 z-30">
-          <CreditBalance />
+          <CreditBalance showFirstRunHint={!gamesLoading && games.length === 0} />
         </div>
       )}
 
