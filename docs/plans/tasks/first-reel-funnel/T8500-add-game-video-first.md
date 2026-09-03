@@ -1,6 +1,6 @@
 # T8500: Add Game: video first, cost up front
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-03
