@@ -521,7 +521,7 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
     await waitFor(() =>
       expect(mockUpdateClip).toHaveBeenCalledWith(1, { create_project: true })
     );
-    expect(mockToastSuccess).toHaveBeenCalledWith('Reel created!', { duration: 5000 });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Reel started - find it on the Clips tab', { duration: 5000 });
     expect(mockFetchProjects).toHaveBeenCalledWith({ force: true });
 
     // Optimistic flip: the button now reflects the clip being a draft and is disabled.

@@ -419,7 +419,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
 
   // Short status label + tint for the corner chip (Q7: kept alongside the slim
   // progress strip). Mirrors the old metadata-row status logic, condensed to one word.
-  let statusLabel = 'Not started';
+  let statusLabel = 'Draft';
   let statusTint = 'text-gray-200';
   if (isComplete) { statusLabel = 'Done'; statusTint = 'text-green-300'; }
   else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
@@ -570,19 +570,21 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </span>
       )}
 
-      {/* "Ready" is a STATUS, not a control (T6180): a non-interactive badge. The
-          publish gesture is the primary button in the bottom action bar. */}
+      {/* "Ready to share" is a STATUS, not a control (T6180): a non-interactive
+          badge. The publish gesture is the primary button in the bottom action
+          bar. T8470 qualifies the bare "Ready" (it had a final video but was not
+          yet shared) so it can never read as the ambiguous lifecycle word. */}
       {isReadyToPublish && (
         <span
           className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm text-cyan-300 shadow"
         >
           <CheckCircle size={11} />
-          Ready
+          Ready to share
         </span>
       )}
 
       {/* Status chip (Q7) — suppressed in the ready state (Q1): a ready tile shows
-          only the top-left "Ready" badge. Every other state is byte-for-byte unchanged. */}
+          only the top-left "Ready to share" badge. Every other state is byte-for-byte unchanged. */}
       {!isReadyToPublish && (
         <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
           {statusLabel}
