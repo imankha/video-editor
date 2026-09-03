@@ -46,6 +46,25 @@ describe('UserTable Games column (T8220 tries vs succeeded)', () => {
   });
 });
 
+describe('UserTable Clips Saved column (T8240 relabel)', () => {
+  it('labels the clip_created_count column "Clips Saved", not "Clips" or "Published"', () => {
+    render(<UserTable users={[BASE_USER]} onUserClick={() => {}} funnelTotals={{}} />);
+
+    // The header reads "Clips Saved" (activity/save events), which honestly
+    // describes clip_created_count and does not claim to be published output.
+    expect(screen.getByText('Clips Saved')).toBeTruthy();
+    expect(screen.queryByText('Clips')).toBeNull();
+    expect(screen.queryByText('Published')).toBeNull();
+  });
+
+  it('still renders clip_created_count in the Clips Saved cell (metric unchanged)', () => {
+    const users = [{ ...BASE_USER, clip_created_count: 12 }];
+    render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
+
+    expect(screen.getByText('12')).toBeTruthy();
+  });
+});
+
 describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
   it('renders Focus and Overlay columns alongside the retained Exports total', () => {
     const users = [
