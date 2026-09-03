@@ -16,7 +16,7 @@ import { API_BASE } from '../config';
  * - Poster image (recap or live-source poster) or a SPORT-AWARE branded fallback
  *   (the current profile's sport ball; unknown/custom sport -> the app logo, never
  *   another sport's ball).
- * - Minimal overlay: date + clip count
+ * - Minimal overlay: date + annotation count (and published reel count, T8260)
  * - Expiry chip (if near/expired)
  * - A single kebab button (top-right) opening the same portal menu pattern ReelTile
  *   uses: full labels, flip-aware desktop popover, bottom action sheet on coarse
@@ -60,6 +60,17 @@ export function GameTile({
 
   const isExpired = game.storage_status === 'expired';
   const hasRecap = Boolean(game.recap_video_url);
+
+  // T8260: secondary-line counts. "annotations" = the existing clip_count (raw_clips
+  // rows saved while annotating), relabeled here only. "reels" = reel_count, the
+  // published reels attributable to this game (see games.py _compute_reel_counts).
+  // Built in ONE place so T8130's Play/Highlight-Reel rename can update it in a
+  // single edit. The reels segment is omitted entirely when there are none.
+  const annotationsLabel = `${game.clip_count} annotation${game.clip_count !== 1 ? 's' : ''}`;
+  const reelCount = game.reel_count || 0;
+  const countsLabel = reelCount > 0
+    ? `${annotationsLabel} • ${reelCount} reel${reelCount !== 1 ? 's' : ''}`
+    : annotationsLabel;
   const canExtend = game.can_extend !== false;
   const daysLeft = getDaysUntil(game.storage_expires_at);
   const isNearExpiry = !isExpired && daysLeft !== null && daysLeft < 14;
@@ -253,8 +264,8 @@ export function GameTile({
         <div className="absolute inset-0 z-[5] bg-gradient-to-b from-rose-950/50 via-black/45 to-black/80" aria-hidden />
       )}
 
-      {/* Bottom scrim: game name (primary line) + clip count (secondary line; T7290
-          dropped the date that used to share it).
+      {/* Bottom scrim: game name (primary line) + date and annotation/reel counts
+          (secondary line; T8260 relabeled "clips" -> "annotations" and added reels).
           One structure for BOTH the poster and the fallback -- this div is always
           rendered (not gated on posterState), so it overlays whichever variant is
           showing beneath it. Name is a single truncated line (tiles run as small
@@ -296,15 +307,13 @@ export function GameTile({
         {isUploadFailed ? (
           <p className="mt-0.5 text-[11px] text-rose-200/90 leading-snug">
             {game.clip_count > 0
-              ? `Upload didn't finish. ${game.clip_count} clip${game.clip_count !== 1 ? 's' : ''} saved — Retry to keep them.`
+              ? `Upload didn't finish. ${game.clip_count} annotation${game.clip_count !== 1 ? 's' : ''} saved — Retry to keep them.`
               : "Upload didn't finish. Retry to resume, or discard."}
           </p>
         ) : (
-          <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
+          <div className="mt-0.5 flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-2 text-xs">
             <span className="text-gray-300 truncate">{formatMatchDateLabel(game.game_date)}</span>
-            <span className="flex-shrink-0 text-gray-400">
-              {game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}
-            </span>
+            <span className="flex-shrink-0 whitespace-nowrap text-gray-400">{countsLabel}</span>
           </div>
         )}
       </div>

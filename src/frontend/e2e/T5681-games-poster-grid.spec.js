@@ -110,9 +110,9 @@ test.describe('T5681 games tab poster grid @staging-gate @gate-c', () => {
 
     const firstTile = page.locator('[data-game-id]').first();
     await expect(firstTile).toBeVisible();
-    // Clip count text ("N clips" / "1 clip") is always rendered in the overlay.
-    await expect(firstTile.getByText(/clip/i)).toBeVisible();
-    await saveEvidence(page, 'criterion-4-minimal-overlay-date-clipcount');
+    // T8260: annotation count text ("N annotations" / "1 annotation") is always rendered in the overlay.
+    await expect(firstTile.getByText(/annotation/i)).toBeVisible();
+    await saveEvidence(page, 'criterion-4-minimal-overlay-date-annotationcount');
 
     // Expiry chip only guaranteed to exist if a near/expired game is present;
     // probe without failing the suite when the account has none in that state.

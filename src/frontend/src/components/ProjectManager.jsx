@@ -1094,7 +1094,7 @@ export function ProjectManager({
                     {recentItems.recentGame.name}
                   </span>
                   <div className="hidden sm:block text-xs text-gray-500">
-                    {recentItems.recentGame.clip_count} clip{recentItems.recentGame.clip_count !== 1 ? 's' : ''} annotated
+                    {recentItems.recentGame.clip_count} annotation{recentItems.recentGame.clip_count !== 1 ? 's' : ''}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />

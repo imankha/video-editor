@@ -169,8 +169,8 @@ describe('GameTile — upload_failed state (T7490)', () => {
   it('renders the "Upload incomplete" badge and a clip-preserving explainer', () => {
     render(<GameTile game={failedGame} {...failedHandlers()} />);
     expect(screen.getByText('Upload incomplete')).toBeTruthy();
-    // clip_count=3 -> reassurance the annotations survive on Retry.
-    expect(screen.getByText(/3 clips saved — Retry to keep them/)).toBeTruthy();
+    // clip_count=3 -> reassurance the annotations survive on Retry (T8260: "annotations", not "clips").
+    expect(screen.getByText(/3 annotations saved — Retry to keep them/)).toBeTruthy();
   });
 
   it('shows the no-clips explainer variant when clip_count is 0', () => {
@@ -233,13 +233,40 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     expect(heading.getAttribute('title')).toBe(longName);
   });
 
-  it('keeps the clip count as the secondary line under the name', () => {
+  it('keeps the annotation count as the secondary line under the name (T8260)', () => {
     render(<GameTile game={baseGame} {...handlers()} />);
     const heading = screen.getByRole('heading', { level: 3 });
     // T6890: the name shares a row with the edit pencil, so the secondary line
-    // (clip count) sits below that name-row wrapper, not the bare heading.
+    // (annotation count) sits below that name-row wrapper, not the bare heading.
     const secondary = heading.closest('div').nextElementSibling;
-    expect(secondary.textContent).toContain('3 clips');
+    expect(secondary.textContent).toContain('3 annotations');
+    // T8260: the word "clips" must appear nowhere on the tile.
+    expect(secondary.textContent).not.toMatch(/clip/i);
+  });
+
+  // T8260: published reels surface as a second segment; omitted entirely at 0.
+  it('appends "N reels" when the game has published reels', () => {
+    render(<GameTile game={{ ...baseGame, reel_count: 3 }} {...handlers()} />);
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
+    expect(secondary.textContent).toContain('3 annotations');
+    expect(secondary.textContent).toContain('3 reels');
+    expect(secondary.textContent).toContain('•');
+  });
+
+  it('omits the reels segment when reel_count is 0 or absent', () => {
+    render(<GameTile game={{ ...baseGame, reel_count: 0 }} {...handlers()} />);
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
+    expect(secondary.textContent).not.toContain('reel');
+    expect(secondary.textContent).not.toContain('•');
+  });
+
+  it('uses singular forms for one annotation and one reel', () => {
+    render(<GameTile game={{ ...baseGame, clip_count: 1, reel_count: 1 }} {...handlers()} />);
+    const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
+    expect(secondary.textContent).toContain('1 annotation •');
+    expect(secondary.textContent).toContain('1 reel');
+    expect(secondary.textContent).not.toContain('annotations');
+    expect(secondary.textContent).not.toContain('reels');
   });
 
   // T7330 (reversing T7290's removal): the footer shows the MATCH date with its weekday.
@@ -252,7 +279,7 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
 
     expect(secondary.textContent).toContain('Mar 21');
     expect(secondary.textContent).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/);
-    expect(secondary.textContent).toContain('3 clips');
+    expect(secondary.textContent).toContain('3 annotations');
     // The UPLOAD date is never shown -- it would contradict the match-date header above.
     expect(secondary.textContent).not.toContain('Jul');
   });
@@ -267,7 +294,7 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     render(<GameTile game={game} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
 
-    expect(secondary.textContent.trim()).toBe('3 clips');
+    expect(secondary.textContent.trim()).toBe('3 annotations');
     expect(secondary.textContent).not.toMatch(/Jul|Invalid|NaN/);
     warn.mockRestore();
   });

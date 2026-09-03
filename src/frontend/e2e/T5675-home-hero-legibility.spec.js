@@ -111,8 +111,9 @@ test('T5675 home hero + GameCard legibility across widths', async ({ context, pa
   });
   expect(scrim.name, 'tile names the game').toBeTruthy();
   expect(
-    scrim.spans.some((t) => /\d+\s+clips?$/.test(t)),
-    `clip count is labeled with its unit (got ${JSON.stringify(scrim.spans)})`,
+    // T8260: secondary line is "N annotations" optionally followed by " • M reels".
+    scrim.spans.some((t) => /\d+\s+annotations?( • \d+ reels?)?$/.test(t)),
+    `annotation count is labeled with its unit (got ${JSON.stringify(scrim.spans)})`,
   ).toBe(true);
   // T7330: the scrim carries the MATCH date again, with its weekday ("Sat, Mar 21") --
   // T7290 removed it as redundant with the title suffix, but the truncated title loses
