@@ -1,5 +1,5 @@
 import { Clock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useEditorStore } from '../stores';
 
 /**
  * SourceExpiredPanel (T8310)
@@ -11,14 +11,22 @@ import { useNavigate } from 'react-router-dom';
  * tells the same truth: the file is gone because storage expired, NOT because the
  * format is unsupported (bug 50p).
  *
- * Presentational: the only side effect is navigating to the storage-management
- * surface when the source is still extendable.
+ * Presentational except for the Extend affordance, which navigates to the Games
+ * tab (where StorageExtensionModal lives) via the editor store — this app has no
+ * react-router; the active home tab is URL state read on mount, so we set both
+ * the mode and the `/home/games` path.
  *
  * @param {boolean} canExtend  Source is still within grace / has a live ref.
  * @param {string} [className]  Layout classes from the mounting video area.
  */
 export function SourceExpiredPanel({ canExtend = false, className = '' }) {
-  const navigate = useNavigate();
+  const goToGamesToExtend = () => {
+    // Navigate home as one atomic transition, then pin the Games tab. The tab is
+    // URL state (/home/games), read by ProjectManager on mount — replaceState
+    // runs before React re-renders the home screen, so the Games tab is active.
+    useEditorStore.getState().goToProjectManager();
+    window.history.replaceState({ mode: 'project-manager' }, '', '/home/games');
+  };
   return (
     <div
       className={`flex items-center justify-center bg-yellow-950/20 ${className}`}
@@ -37,7 +45,7 @@ export function SourceExpiredPanel({ canExtend = false, className = '' }) {
         {canExtend && (
           <button
             type="button"
-            onClick={() => navigate('/home/games')}
+            onClick={goToGamesToExtend}
             className="mt-4 inline-flex items-center gap-2 rounded-md bg-yellow-600 hover:bg-yellow-500 px-4 py-2 text-sm font-medium text-white transition-colors"
             data-testid="source-expired-extend"
           >

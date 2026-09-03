@@ -271,6 +271,38 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   expired->healthy switch doesn't flash the panel); reset in `resetAnnotateState`.
   Re-materialization stays deferred (T4130). The recap viewer has separate expired handling
   (`RecapPlayerModal` `recapVideoMissing`).
+- **Reel-editor expired source = the SAME truth, told at the clip seams (T8310, bug 50p).**
+  Annotate learns expiry from `/load`'s `game.storage_status`; the Focus/Overlay reel editors have
+  no such field, so before T8310 a reclaimed game source presigned fine, the `<video>` got an R2
+  404, and `useVideo` burned the T5620 format-error retry loop then showed **"Video format not
+  supported."** Two defenses now:
+  1. **Backend gate (parity with `load_game`).** `games.py` exposes
+     `resolve_game_source_status(cursor, blake3_hash, auto_export_status) -> (status, can_extend)`
+     (REUSES `_compute_storage_status`; `can_extend` mirrors `list_games`: a `game_storage` ref
+     survives OR the hash is in `get_grace_deletion_hashes()`) and
+     `assert_clip_source_available(...)` which raises `GameSourceExpired` → **HTTP 410
+     `{"code": "source_expired", "game_id", "can_extend"}`**. Wired into the ONLY two clip
+     seams that presign the game source: `clips.py:get_clip_playback_url` and
+     `stream_working_clip_bounded` (both before their `get_game_video_url` call), plus the Focus
+     export entry `exports.py:start_framing_export` (refuses up front instead of failing mid-Modal).
+     NOT gated (deliberately, not gaps): the `/file` redirect serves working-clip files
+     (`get_working_clip_url`), not the game source; `list_working_clips`' per-clip preview
+     `game_video_url` is never set as a `<video>` src (actual playback always flows through the
+     gated `playback-url`).
+  2. **Frontend.** `FocusScreen.getClipVideoConfig` reads the 410 and returns
+     `{sourceExpired:true, canExtend}` (does NOT fall back to `/stream`); `VideoPlayer` renders
+     `SourceExpiredPanel` (mirrors Annotate's yellow Clock language; Extend button navigates via
+     `editorStore.goToProjectManager()` + `/home/games`, since this app has NO react-router) when
+     `isSourceExpired`, so no `<video>` mounts against a dead URL. Universal net:
+     `videoErrorClassifier` adds `VIDEO_UNAVAILABLE` for a probe-confirmed **404 or 410**, and
+     `useVideo.handleError` (now async) probes a code-4 non-blob URL BEFORE classifying, routing a
+     gone source to that kind — which **skips the format-error retry loop** and shows an honest
+     message. **Overlay scope caveat:** Overlay plays the independent `working_video`
+     (projects.py), immune to game-source reclaim, so it never hits the 410 panel; a reclaimed
+     working_video is caught only by the `VIDEO_UNAVAILABLE` net (honest message, no retry, no
+     Extend affordance) — the acceptance criterion's "expired state in Overlay" is satisfied by
+     that net, not the full panel. No endpoint-level 410 integration test yet (unit-covered;
+     deferred to staging).
 - **Resume position**: `computeResumePosition` prefers `last_playhead_position`, falls back to
   viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
 - **Team / My Athlete layer (T5700).** `raw_clips.my_athlete` (existing bit, no schema change) is
