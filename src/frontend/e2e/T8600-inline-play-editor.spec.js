@@ -18,7 +18,6 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const API_PORT = 8000;
 const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
-const TEST_USER_ID = `e2e_t8600_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,9 +25,21 @@ const __dirname = path.dirname(__filename);
 const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/test.short');
 const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 
-async function setupTestUserContext(page) {
+// Each test drives the full add-game + create-clip flow, so tests MUST NOT share
+// a backend account: POST /api/games dedupes by blake3_hash (games.py:307-341 and
+// :343-382), so a second test uploading the same fixture lands back in the FIRST
+// test's game, WITH its clips. A clip under the playhead then auto-selects
+// (AnnotateContainer.jsx:1216) and flips the CTA to "Edit Play" - the strip opens
+// in edit mode and there is no "Save" button. (clip-selection-state-machine.spec.js
+// can use one module-scoped id because it has a single test.)
+let testUserSeq = 0;
+function newTestUserId() {
+  return `e2e_t8600_${Date.now()}_${++testUserSeq}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function setupTestUserContext(page, userId) {
   await page.setExtraHTTPHeaders({
-    'X-User-ID': TEST_USER_ID,
+    'X-User-ID': userId,
     'X-Test-Mode': 'true',
   });
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
@@ -96,6 +107,13 @@ async function enterAnnotateMode(page) {
   await page.evaluate(() => {
     document.querySelectorAll('.quest-overlay').forEach(el => el.remove());
   });
+
+  // Every test in this file assumes a virgin account (see newTestUserId) - a
+  // leaked shared account would auto-select a pre-existing clip under the
+  // playhead and silently flip Add Play into Edit Play. Fail fast and legibly
+  // here instead of hanging 300s waiting for a "Save" button that will never
+  // appear in that state.
+  await expect(page.locator('[data-testid="clip-row"]')).toHaveCount(0);
 }
 
 async function ensurePaused(page) {
@@ -124,7 +142,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await setupTestUserContext(page);
+    await setupTestUserContext(page, newTestUserId());
     await page.goto('/');
     await clearBrowserState(page);
   });
