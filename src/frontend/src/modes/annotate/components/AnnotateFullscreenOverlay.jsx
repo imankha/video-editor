@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Plus } from 'lucide-react';
+import { Star, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
@@ -12,6 +12,7 @@ import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
+import { AddDetailsPopup } from './AddDetailsPopup';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -164,6 +165,13 @@ export function AnnotateFullscreenOverlay({
   const [notes, setNotes] = useState('');
   const [taggedTeammates, setTaggedTeammates] = useState([]);
   const [myAthlete, setMyAthlete] = useState(true);
+  // T8600: Tags + Notes move behind an "Add details" disclosure — one boolean,
+  // two presentations (desktop expand-in-place, mobile full-screen popup).
+  // Deliberately NOT reset by the [existingClip] effect below: the component
+  // unmounts when the editor closes (parent gates the render), so it resets
+  // naturally; re-seeding on a clip switch leaves the panel open, which is
+  // harmless and avoids a second reset path.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [createProject, setCreateProject] = useState(false);
   const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
   const notesRef = useRef(null);
@@ -239,25 +247,31 @@ export function AnnotateFullscreenOverlay({
   }, [isVisible, isEditMode]);
 
   // Handle keyboard shortcuts — uses handleSaveRef to avoid stale closures
-  // (taggedTeammates, myAthlete, createProject would be stale without the ref)
+  // (taggedTeammates, myAthlete, createProject would be stale without the ref).
+  // T8600 §2.6: Escape is handled in ONE place for typing and non-typing
+  // targets alike, so it can close the details surface (desktop panel / mobile
+  // popup) first, without discarding the whole play — then the editor itself
+  // on a second Escape. 1-5 and Enter keep ignoring INPUT/TEXTAREA, unchanged.
   useEffect(() => {
     if (!isVisible) return;
 
     const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          onClose();
+      const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (detailsOpen) {
+          setDetailsOpen(false);
+          return;
         }
+        onClose();
         return;
       }
+      if (typing) return;
 
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSaveRef.current();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
       } else if (e.key >= '1' && e.key <= '5') {
         handleRatingChangeRef.current(parseInt(e.key, 10));
       }
@@ -265,7 +279,7 @@ export function AnnotateFullscreenOverlay({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, onClose]);
+  }, [isVisible, onClose, detailsOpen]);
 
   const handleRatingChange = (newRating) => {
     setRating(newRating);
@@ -352,6 +366,14 @@ export function AnnotateFullscreenOverlay({
 
   if (!isVisible) return null;
 
+  // T8600: shared disclosure label — surfaces existing tag/note content so an
+  // edit-mode user can see there's hidden content before opening it.
+  const tagCount = selectedTags.length;
+  const hasNote = notes.trim().length > 0;
+  const detailsLabel = !tagCount && !hasNote
+    ? 'Add details'
+    : `Details (${[tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}` : null, hasNote ? 'note' : null].filter(Boolean).join(', ')})`;
+
   const formBody = (
     <>
         {/* Header */}
@@ -400,8 +422,24 @@ export function AnnotateFullscreenOverlay({
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
         </div>
 
-        {/* Tag Selection */}
-        {tagSet ? (
+        {/* Tag Selection — T8600: on mobile, Tags (+ Notes, newly available)
+            move behind the "Add details" disclosure, which opens a full-screen
+            popup (AddDetailsPopup). Desktop keeps them inline here, unchanged,
+            until the strip layout (C2) gives desktop its own in-place panel. */}
+        {isMobile ? (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              aria-expanded={detailsOpen}
+              data-testid="add-details-button"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-sm text-gray-300 transition-colors"
+            >
+              <ChevronDown size={14} />
+              {detailsLabel}
+            </button>
+          </div>
+        ) : tagSet ? (
           <div className="mb-4">
             <label className="block text-gray-400 text-sm mb-2">Tags</label>
             <TagSelector
@@ -412,7 +450,7 @@ export function AnnotateFullscreenOverlay({
               size="lg"
             />
           </div>
-        ) : (!isMobile && sport === NO_SPORT) ? (
+        ) : sport === NO_SPORT ? (
           // T8140: the amber no_sport prompt is kept ONLY on desktop (which also
           // has the top-bar sport control). On mobile the first-clip path is kept
           // clean — no amber wall in the form — and a full-screen "What sport is
@@ -444,8 +482,9 @@ export function AnnotateFullscreenOverlay({
         {/* Notes — desktop only */}
         {!isMobile && (
           <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+            <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
             <textarea
+              id="clip-notes"
               ref={notesRef}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -614,6 +653,22 @@ export function AnnotateFullscreenOverlay({
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
         <div className="p-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
+        {/* T8600: mobile-only full-screen "Add details" popup — the bottom
+            sheet (T8140) and the mobile fullscreen portrait sheet both use
+            this layout, so both inherit it. */}
+        {isMobile && detailsOpen && (
+          <AddDetailsPopup
+            isEditMode={isEditMode}
+            tagSet={tagSet}
+            sport={sport}
+            positions={getPositions(sport)}
+            selectedTags={selectedTags}
+            onTagToggle={handleTagToggle}
+            notes={notes}
+            onNotesChange={(e) => setNotes(e.target.value)}
+            onDone={() => setDetailsOpen(false)}
+          />
+        )}
       </div>
     );
   }
