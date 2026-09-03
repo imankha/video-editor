@@ -162,7 +162,13 @@ test.describe('T690: Clip Selection State Machine', () => {
   // Pages BUILD, and the empty-session premise means it can't migrate to the real
   // seeded account. Skip loudly on a deployed target.
   skipOnDeployedTarget(test, "import()s /src/stores/authStore.js for an empty test-login session (Vite-dev path; 404s on a deployed build)");
-  // Use a small viewport so fullscreen button appears (useFullscreenWorthwhile)
+  // Use a small viewport so fullscreen button appears (useFullscreenWorthwhile).
+  // T8600: useIsMobile() classifies width<1024 as MOBILE, so this 900x600
+  // viewport exercises the MOBILE bottom sheet (AnnotateModeView's
+  // mobileInlineForm), NOT the desktop under-canvas strip added in T8600 —
+  // do not read the T8590/T8130 guards above as desktop coverage. The
+  // dedicated desktop-strip e2e spec is e2e/T8600-inline-play-editor.spec.js
+  // at 1280x800.
   test.use({ viewport: { width: 900, height: 600 } });
 
   test.beforeAll(async ({ request }) => {
