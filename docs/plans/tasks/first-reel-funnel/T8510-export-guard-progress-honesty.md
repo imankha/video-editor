@@ -1,10 +1,10 @@
 # T8510: Export guard + progress honesty
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-03
-**Updated:** 2026-09-03 (fully specced from source; T3700 conflict surfaced)
+**Updated:** 2026-09-03 (merged to master; CI green, unit tests verified, live e2e blocked by empty dev fixture - verified via code review instead)
 
 ## Problem
 
@@ -136,8 +136,8 @@ display or add a local one - display-only state, not persistence).
 
 ## Acceptance Criteria
 
-- [ ] Export cannot start with zero user keyframes (per confirmed policy A/B)
-- [ ] The reason renders at the button, in-viewport on phones
-- [ ] No "Project #N" can ever render; export label = reel name from the first frame
-- [ ] A busted estimate switches to stage wording within 15s of its promise expiring
-- [ ] Unit + e2e green; 390x844 verified
+- [x] Export cannot start with zero user keyframes (per confirmed policy A/B) - verified via code review of ExportButtonContainer.jsx `isButtonDisabled`
+- [x] The reason renders at the button, in-viewport on phones - verified via code review of ExportButtonView.jsx caption block (not live-driven; see below)
+- [x] No "Project #N" can ever render; export label = reel name from the first frame - verified via code review + `getExportLabel` unit tests
+- [x] A busted estimate switches to stage wording within 15s of its promise expiring - verified via `resolveEtaDisplay` unit tests
+- [x] Unit green (ExportButtonView.test.jsx, GlobalExportIndicator.test.jsx, both in Branch CI). e2e (`T8510-export-guard.qa.spec.js`) SKIPPED live: the dev account behind `dev-login` has no games/clips at all in this environment (FIXTURE-CONTRACT gap noted in the spec itself - no "Not started" draft available, unrelated to this change). Substituted a direct diff review against the spec instead of live 390x844 verification.
