@@ -116,6 +116,19 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   game `storage_status==='expired'` → expired chip; else min days-left `<14` → countdown; an
   absent/deleted game row is skipped (no chip, no crash — data-always-ready); a reference-only
   draft yields no chip.
+- **Account-level expiry banner (T8330).** `ProjectManager` mounts a dismissible
+  `StorageExpiryBanner` on the home screen when ≥1 Reel Draft depends on a source game that is
+  at risk. Same file/primitives as T8320 (no forked expiry path): `draftSourceExpiry.js`
+  `computeStorageExpiryRisk(projects, gamesById)` aggregates `isGameStorageAtRisk` across drafts,
+  returning `{ atRiskGameCount, dependentDraftCount }` — O(total game references), a pure
+  render-time join (no fetch/endpoint/persisted state). `isGameStorageAtRisk` is the single
+  predicate: active game `<EXPIRY_WARNING_DAYS` days OR EXPIRED-but-`can_extend` (grace, still
+  rescuable); a permanently-deleted game (`expired`+`!can_extend`) is EXCLUDED so the "Extend
+  storage" CTA is never dead. A bare expiring game NO draft depends on never triggers it.
+  Threshold is the shared `EXPIRY_WARNING_DAYS` (14) in `ExpirationBadge.jsx` — the chip's old
+  literal `14`, now one constant for both. Dismissal is SESSION-ONLY React state in
+  `ProjectManager` (no persisted "seen" marker, no reactive persistence); the banner deep-links
+  to the Games tab (`setActiveTab('games')`). Banner-only by product decision — no email digest.
 - **One annotation = one `raw_clips` row** (per-user SQLite, not Postgres). Region shape:
   `{id, rawClipId, startTime, endTime, name, tags, notes(≤280), rating(1-5, default 4),
   videoSequence, tagged_teammates, my_athlete, autoProjectId}` (useAnnotate.js:10-30, constants

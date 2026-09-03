@@ -1,6 +1,12 @@
 import React, { useMemo } from 'react';
 import { Clock } from 'lucide-react';
 
+// Single source of truth for the storage-expiry warning window (T4280 chip
+// precedent, reused by T8320's draft chip and T8330's account banner). One
+// number to reason about across the app: a game is "expiring soon" once it is
+// inside this many days of deletion.
+export const EXPIRY_WARNING_DAYS = 14;
+
 export function getDaysUntil(isoDateStr) {
   if (!isoDateStr) return null;
   const now = new Date();
@@ -11,7 +17,7 @@ export function getDaysUntil(isoDateStr) {
 export function ExpirationBadge({ expiresAt, canExtend = true, onClick }) {
   const daysLeft = useMemo(() => getDaysUntil(expiresAt), [expiresAt]);
 
-  if (daysLeft === null || daysLeft >= 14) return null;
+  if (daysLeft === null || daysLeft >= EXPIRY_WARNING_DAYS) return null;
 
   const label = daysLeft <= 0 ? 'Expired' : `${daysLeft}d`;
   const isExpired = daysLeft <= 0;
