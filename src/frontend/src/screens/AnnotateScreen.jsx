@@ -678,15 +678,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           videoController={videoController}
           onScrubLock={lockScrub}
           onScrubUnlock={unlockScrub}
-          showAddClipForm={showAnnotateOverlay && !annotateFullscreen}
-          currentTime={effectiveCurrentTime}
-          onCreateClip={handleFullscreenCreateClip}
-          onUpdateClip={handleFullscreenUpdateClip}
-          onOverlayResume={handleOverlayResume}
-          onOverlayClose={handleOverlayClose}
+          clipEditorOpen={showAnnotateOverlay && !annotateFullscreen}
           teammateSuggestions={teammateSuggestions}
           boundaryOffsets={multiVideo?.boundaryOffsets}
-          newClipLayerIsMine={newClipLayerIsMine}
           layerFilter={layerFilter}
           onSetLayerFilter={setLayerFilter}
           onOpenClipInFocus={openClipInFocus}
@@ -717,7 +711,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               boundaryOffsets={multiVideo?.boundaryOffsets}
               onSeek={effectiveSeek}
               videoController={videoController}
-              newClipLayerIsMine={newClipLayerIsMine}
               layerFilter={layerFilter}
               onSetLayerFilter={setLayerFilter}
               onJumpToClip={(regionId, endTime) => {
@@ -831,6 +824,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         isUploadingGameVideo={isUploadingGameVideo}
         // T5700: which layer NEW clips default to (mode toggle)
         newClipLayerIsMine={newClipLayerIsMine}
+        // T8600: desktop strip's Focus button (edit mode, existingClip.autoProjectId)
+        onOpenClipInFocus={openClipInFocus}
         // T710: Annotation playback
         playback={playback}
         lockScrub={lockScrub}

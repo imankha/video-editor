@@ -25,7 +25,11 @@ vi.mock('./annotate', () => ({
   ),
   NotesOverlay: () => <div />,
   AnnotateFullscreenOverlay: (props) => (
-    <div data-testid="strip" data-layout={props.layout} data-surface={props.surface}>
+    <div
+      data-testid={props.layout === 'strip' ? 'strip' : 'overlay'}
+      data-layout={props.layout}
+      data-surface={props.surface}
+    >
       {props.existingClip ? `existingClip:${props.existingClip.id}` : 'existingClip:null'}
     </div>
   ),

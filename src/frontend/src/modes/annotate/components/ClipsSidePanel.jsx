@@ -3,7 +3,6 @@ import { Scissors, Upload, Download, X, AlertCircle, Loader, ArrowLeft } from 'l
 import { Button } from '../../../components/shared/Button';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
-import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 import { clipGameClock } from '../../../utils/timeFormat';
 
@@ -45,18 +44,12 @@ export function ClipsSidePanel({
   videoController,
   onScrubLock,
   onScrubUnlock,
-  showAddClipForm = false,
-  currentTime,
-  onCreateClip,
-  onUpdateClip,
-  onOverlayResume,
-  onOverlayClose,
+  // T8600 D2/D10: renamed from showAddClipForm now that this panel renders no
+  // form — it's the ONLY reason the panel still knows an editor is open (it
+  // must not render a second live editor, i.e. ClipDetailsEditor, alongside it).
+  clipEditorOpen = false,
   teammateSuggestions = [],
   boundaryOffsets,
-  // T8030: which layer a NEW clip lands on. No toggle here — it always defaults
-  // to My Athlete (reset on game open). Still threaded to the inline add-clip
-  // overlay below.
-  newClipLayerIsMine = true,
   layerFilter = 'all',
   onSetLayerFilter,
   onOpenClipInFocus,
@@ -75,8 +68,12 @@ export function ClipsSidePanel({
   // Mobile: local view state — always starts on list, detail view via explicit action
   const [mobileForceList, setMobileForceList] = useState(true);
 
-  // On mobile: show detail view when a clip is selected AND not forced to list
-  const mobileShowDetail = isMobile && selectedRegion && !mobileForceList;
+  // On mobile: show detail view when a clip is selected AND not forced to list.
+  // T8600 Q1: also hidden while clipEditorOpen — closes the same "two live
+  // editors" hole on mobile that the desktop side closes structurally (the
+  // strip and the mobile sheet already can't co-render; this was the one
+  // remaining mobile-only gap, pre-existing and not introduced by this task).
+  const mobileShowDetail = isMobile && selectedRegion && !mobileForceList && !clipEditorOpen;
 
   // When viewing details for a clip on mobile, switch to detail view
   const handleMobileViewDetails = (regionId) => {
@@ -320,7 +317,7 @@ export function ClipsSidePanel({
               min-h-0 overflow-y-auto gives the editor its own scroll region so its
               controls (Delete Clip / Create Reel) stay reachable when the sidebar is
               shorter than the editor content — e.g. the landscape-phone sm sidebar (T4933). */}
-          {!isMobile && selectedRegion && !showAddClipForm && (
+          {!isMobile && selectedRegion && !clipEditorOpen && (
             <div className="min-h-0 overflow-y-auto">
               <ClipDetailsEditor
                 region={selectedRegion}
@@ -339,25 +336,10 @@ export function ClipsSidePanel({
             </div>
           )}
 
-          {/* Add Clip form (desktop, non-fullscreen only) */}
-          {!isMobile && showAddClipForm && (
-            <AnnotateFullscreenOverlay
-              isVisible={true}
-              currentTime={currentTime}
-              videoDuration={videoDuration}
-              existingClip={selectedRegion || null}
-              onCreateClip={onCreateClip}
-              onUpdateClip={onUpdateClip}
-              onResume={onOverlayResume}
-              onClose={onOverlayClose}
-              onSeek={onSeek}
-              videoController={videoController}
-              layout="inline"
-              teammateSuggestions={teammateSuggestions}
-              newClipLayerIsMine={newClipLayerIsMine}
-              nextClipNumber={(clipRegions?.length || 0) + 1}
-            />
-          )}
+          {/* T8600 D2: the desktop add/edit form used to render here. DELETED,
+              not hidden behind a flag — the under-canvas strip (AnnotateModeView)
+              is now the ONLY desktop non-fullscreen editor. This panel shows the
+              clip list only while clipEditorOpen (guard above). */}
         </>
       )}
 
