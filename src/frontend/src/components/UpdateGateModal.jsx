@@ -1,68 +1,59 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 /**
- * UpdateGateModal — blocking, non-dismissible update gate (T5070).
+ * UpdateGateModal — passive, non-blocking update progress card (T8460).
  *
- * Reuses AuthGateModal's full-screen layout but drops every dismiss
- * affordance (no X, no backdrop-close, no ESC) per project rule: an
- * un-updated client must not be able to log in or interact until it
- * refreshes onto the latest version. Mounted ABOVE AuthGateModal in
- * main.jsx (z-[60] > z-50) so it blocks the login surface too.
+ * The update itself now runs automatically (updateGateStore.requireUpdate ->
+ * isQuiescent -> runUpdate) with no click gate. This component is a pure
+ * View of that store: it renders NOTHING while idle, and a small bottom-right
+ * corner card (visual language borrowed from GlobalExportIndicator) only
+ * while phase is 'flushing' or 'error'. It never covers the rest of the UI --
+ * there is no backdrop, no fixed inset-0, no role=alertdialog. Add Game and
+ * every other control stay tappable underneath it at all times.
  *
- * Fires via useUpdateGateStore.requireUpdate(), raised solely by the Tbug40p
- * truth check (appVersion.checkServerVersion) when the deployed server's build
- * number is strictly newer than this running client's baked __APP_BUILD__.
+ * The error state's "Retry" button is the ONE remaining interactive surface,
+ * and it re-invokes the same runUpdate() gesture -- it never blocks the app
+ * behind it while waiting.
  */
 export function UpdateGateModal() {
-  const isUpdateRequired = useUpdateGateStore((s) => s.isUpdateRequired);
   const phase = useUpdateGateStore((s) => s.phase);
   const error = useUpdateGateStore((s) => s.error);
   const runUpdate = useUpdateGateStore((s) => s.runUpdate);
 
-  if (!isUpdateRequired) return null;
+  if (phase === 'idle') return null;
 
   const isFlushing = phase === 'flushing';
 
   return (
-    <div
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60]"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="update-gate-title"
-    >
-      <div className="bg-gray-800 rounded-lg border border-gray-700 max-w-md w-full mx-4">
-        <div className="p-6 space-y-6 text-center">
-          <div className="flex justify-center">
-            <RefreshCw
-              size={32}
-              className={`text-purple-400 ${isFlushing ? 'animate-spin' : ''}`}
-            />
-          </div>
-
-          <div>
-            <h2 id="update-gate-title" className="text-lg font-semibold text-white">
-              A new version is ready
-            </h2>
-            <p className="text-sm text-gray-300 mt-2">
-              We need to update before you continue. Your work is saved automatically.
-            </p>
-          </div>
-
-          {error && (
-            <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
-              {error}
-            </div>
+    <div className="fixed bottom-4 right-4 z-50 w-72" data-testid="update-progress-card">
+      <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl px-4 py-3">
+        <div className="flex items-center gap-3">
+          {isFlushing ? (
+            <RefreshCw size={18} className="text-purple-400 animate-spin shrink-0" />
+          ) : (
+            <AlertTriangle size={18} className="text-amber-400 shrink-0" />
           )}
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-white">
+              {isFlushing ? 'Updating to the latest version...' : 'Update paused'}
+            </div>
+            {!isFlushing && (
+              <div className="text-xs text-gray-400 mt-0.5">
+                Could not save your latest changes.
+              </div>
+            )}
+          </div>
+        </div>
 
+        {error && !isFlushing && (
           <button
             onClick={runUpdate}
-            disabled={isFlushing}
-            className="w-full py-2.5 px-4 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium transition-colors"
+            className="mt-3 w-full py-1.5 px-3 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors"
           >
-            {isFlushing ? 'Saving your work...' : error ? 'Try again' : 'Update now'}
+            Retry
           </button>
-        </div>
+        )}
       </div>
     </div>
   );

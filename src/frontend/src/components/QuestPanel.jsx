@@ -6,46 +6,22 @@ import { useAuthStore } from '../stores/authStore';
 import { STEP_TITLES, STEP_DESCRIPTIONS, WatchTutorialButton, TUTORIAL_STEP_QUEST } from '../config/questDefinitions.jsx';
 import { Z } from '../constants/zLayers';
 import { toast } from './shared/Toast';
+import { isAnyModalOpen } from '../utils/modalOcclusion';
 
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
-// T8120: z-index rungs (from the Z ladder) that mark a full-screen overlay as a
-// modal-or-above surface the quest/help panel must never sit over. Derived from
-// the Z ladder itself (everything at Z.MODAL or above) so a new rung added to
-// zLayers.js is automatically covered here instead of needing a second,
-// independently-maintained copy. Read as class tokens (works in jsdom, where
-// computed z-index is unavailable) — see useModalOcclusion below.
-const Z_VALUES = Object.values(Z);
-const MODAL_Z_TOKENS = Z_VALUES.slice(Z_VALUES.indexOf(Z.MODAL));
-
 /**
  * T8120 occlusion contract: the quest/help surface may NEVER overlap an open
- * modal/form/dialog. This detects ANY full-screen fixed overlay (`.fixed.inset-0`)
- * at a modal-or-above z rung anywhere in the document (excluding the panel's own
- * subtree) and returns true while one is present, so the panel can auto-hide fully.
- * Generic — no per-modal wiring — matching the app convention that every modal is a
- * `fixed inset-0` overlay on the Z ladder. z-order (panel below Z.MODAL) is the
- * defense-in-depth backstop; this is the primary "hide it entirely" mechanism.
- * A MutationObserver re-checks on mount/unmount of any subtree, not a poll.
+ * modal/form/dialog. Wraps isAnyModalOpen() (utils/modalOcclusion.js) as a
+ * subscribable hook so the panel can auto-hide fully while one is present.
+ * z-order (panel below Z.MODAL) is the defense-in-depth backstop; this is
+ * the primary "hide it entirely" mechanism. A MutationObserver re-checks on
+ * mount/unmount of any subtree, not a poll.
  */
 function useModalOcclusion() {
   const [modalOpen, setModalOpen] = useState(false);
   useEffect(() => {
-    const isModalOverlay = (el) => {
-      if (el.closest('[data-quest-panel]')) return false; // our own overlays don't count
-      const cls = el.getAttribute('class') || '';
-      if (!MODAL_Z_TOKENS.some((t) => cls.split(/\s+/).includes(t))) return false;
-      // Visible? getClientRects is empty for display:none / detached nodes.
-      return el.getClientRects().length > 0;
-    };
-    const check = () => {
-      const overlays = document.querySelectorAll('.fixed.inset-0');
-      let found = false;
-      for (const el of overlays) {
-        if (isModalOverlay(el)) { found = true; break; }
-      }
-      setModalOpen(found);
-    };
+    const check = () => setModalOpen(isAnyModalOpen());
     // T8120 perf: MutationObserver fires on every class/style mutation anywhere
     // in the body (e.g. TimelineBase's scrub-thumb style updates during playback,
     // up to ~60x/sec), and check() forces layout via getClientRects(). Coalesce

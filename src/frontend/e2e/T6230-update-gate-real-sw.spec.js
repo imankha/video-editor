@@ -14,7 +14,7 @@ import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
  * right answer against a real `registration.update()`/`.waiting`/`.installing`. If the
  * probe silently never resolves truthy in a real browser, the gate never fires, users
  * sit on a stale bundle forever, and NOTHING goes red. This spec is that missing layer:
- * case 2 goes RED if the probe stops reporting a waiting bundle; case 3 goes RED if the
+ * case 2+4 goes RED if the probe stops reporting a waiting bundle; case 3 goes RED if the
  * T6210 loop (gate on server-ahead alone) is reintroduced.
  *
  * WHY NOT THE DEV SERVER. The Vite dev server builds no real ServiceWorker, so the probe
@@ -44,7 +44,22 @@ import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
  * probe. The tests drive the gate with reloads and NEVER touch the production throttle
  * (lowering it or adding a test bypass would weaken exactly what T6210 shipped).
  *
- * DETERMINISM (the on-load-probe poison, and how case 2 avoids it). The gate's positive
+ * T8460 UPDATE (no more blocking modal — read before touching case 2/4). The gate no
+ * longer raises a `role="alertdialog"` the user clicks through; `requireUpdate()`
+ * auto-runs `runUpdate()` (flush + land the bundle) once the app is quiescent, with
+ * NO visible signal while `phase` stays 'idle' (the passive progress card only renders
+ * during 'flushing'/'error'). This fixture is deliberately logged out (no backend
+ * attached), so updateGateStore's first-session guard (never auto-run within 30s of a
+ * cold, unauthenticated boot — see updateGateStore.js) would otherwise mask a probe
+ * regression: if `probeForWaitingBundle` wrongly answered, the gate would raise
+ * `isUpdateRequired` but the guard would suppress the auto-run, and NOTHING would be
+ * observable either way. Case 2+4 (merged below) waits out that 30s window before
+ * triggering, so the ONLY thing that can make the page reload on its own is a correct
+ * probe finding the real waiting bundle — same regression-catching power as the old
+ * "does the modal appear" assertion, now proven via the real end-to-end auto-run +
+ * reload instead of a click.
+ *
+ * DETERMINISM (the on-load-probe poison, and how case 2+4 avoids it). The gate's positive
  * case has one real race: pwaUpdate's `registration` closure is populated by
  * `onRegisteredSW`, and if the on-load probe fires (server already ahead) BEFORE that,
  * it answers false and sets `lastProbeAt`, throttling the real probe for 5 min. Case 2
@@ -72,10 +87,21 @@ const SERVER_AHEAD = 9_000_000;
 // probe fires (keeps the throttle pristine for the deterministic post-load trigger).
 const SERVER_BEHIND = 1;
 
+// T8460: the app never auto-runs an update within the first 30s of a cold,
+// unauthenticated boot (updateGateStore.js's first-session guard). This fixture is
+// always logged out, so anything that triggers an auto-run must wait this out first.
+const FIRST_SESSION_GUARD_MS = 30_000;
+
 // ---- SW lifecycle helpers (proper waitFor on real SW state, never a bare sleep) ----
 
-/** Locator for the blocking update-gate modal (UpdateGateModal.jsx). */
-const gateDialog = (page) => page.getByRole('alertdialog');
+/** Locator for the passive, non-blocking update progress card (UpdateGateModal.jsx). */
+const progressCard = (page) => page.getByTestId('update-progress-card');
+
+/** Wait out the first-session guard, measured from a given navigation start time. */
+async function waitOutColdBootGuard(page, navigatedAt) {
+  const remaining = FIRST_SESSION_GUARD_MS - (Date.now() - navigatedAt);
+  if (remaining > 0) await page.waitForTimeout(remaining);
+}
 
 /**
  * Resolve once THIS page load has an active, controlling SW. On a first install this
@@ -119,8 +145,8 @@ async function dispatchReturnToApp(page) {
  * build as a `waiting` worker. Two things depend on discovering it via Workbox (not
  * via the app's raw registration.update): (1) it arms vite-plugin-pwa's
  * controlling->reload listener, which only fires for Workbox-discovered updates — so
- * "Update now" actually reloads (case 4), matching a real deploy where Workbox finds
- * the new SW on load; (2) a non-null `waiting` proves register() resolved, hence
+ * the auto-run's reload actually lands (case 2+4), matching a real deploy where
+ * Workbox finds the new SW on load; (2) a non-null `waiting` proves register() resolved, hence
  * pwaUpdate's onRegisteredSW ran and its `registration` closure is populated, so the
  * gate-raising probe below cannot lose the registration race. */
 async function waitForWaitingWorker(page) {
@@ -186,58 +212,52 @@ test.describe('T6230 update gate — real ServiceWorker', () => {
       const state = await swState(page);
       expect(state.hasActive, 'SW should be active after first install').toBe(true);
       expect(state.hasWaiting, 'first install has nothing waiting to supersede').toBe(false);
-      await expect(gateDialog(page)).toHaveCount(0);
+      await expect(progressCard(page)).toHaveCount(0);
       // Negative settle: a wrongly-truthy probe would gate within a beat of the check.
       await page.waitForTimeout(1500);
-      await expect(gateDialog(page)).toHaveCount(0);
+      await expect(progressCard(page)).toHaveCount(0);
     });
 
-    test('case 2 (OVER-CORRECTION GUARD): second build published -> registration.waiting set -> gate appears', async () => {
+    test('case 2+4 (OVER-CORRECTION GUARD, T8460 auto-run): waiting bundle -> gate auto-runs and lands the new bundle, no click', async () => {
       server.setCurrentDir(dirB); // B is now the newest published bundle
 
       // Load with the server held BEHIND so the on-load check early-returns and NO
       // probe runs — the throttle (lastProbeAt) stays pristine for the deterministic
       // trigger below.
       server.setServerBuild(SERVER_BEHIND);
+      const navigatedAt = Date.now();
       await page.reload({ waitUntil: 'domcontentloaded' });
       await waitForSwReady(page);
       // Let Workbox's own register() discover B and stage it as a waiting worker
-      // (deterministic; also arms the reload listener case 4 relies on).
+      // (deterministic; also arms the controlling->reload listener the auto-run relies on).
       await waitForWaitingWorker(page);
 
+      // T8460: this fixture is logged out, so the first-session guard would otherwise
+      // swallow the auto-run below with zero observable signal (see the file header).
+      // Clear it before triggering.
+      await waitOutColdBootGuard(page, navigatedAt);
+
       // Now flip the server ahead and fire one real return-to-app check. The probe
-      // finds B already waiting AND the server strictly ahead -> the gate raises. If
-      // probeForWaitingBundle stops reporting the waiting bundle (the over-correction
-      // this task guards), the gate never appears and this case fails RED.
+      // finds B already waiting AND the server strictly ahead -> requireUpdate() fires
+      // and (quiescent: logged out, no export/upload/modal) runUpdate auto-runs
+      // immediately -- flush is skipped (unauthenticated) and the SW reloader
+      // (landLatestBundle) lands B with NO click. If probeForWaitingBundle stops
+      // reporting the waiting bundle (the over-correction this task guards), or if the
+      // auto-run regresses, nothing reloads and this case fails RED.
       server.setServerBuild(SERVER_AHEAD);
+      const navigationPromise = page.waitForEvent('framenavigated', { timeout: 30_000 });
       await dispatchReturnToApp(page);
+      await navigationPromise;
 
-      await expect(gateDialog(page)).toBeVisible();
-      // Assert the user-visible modal copy (UpdateGateModal.jsx), not internal state.
-      await expect(page.getByText('A new version is ready')).toBeVisible();
-      await expect(page.getByRole('button', { name: /Update now/i })).toBeVisible();
-      // And confirm the MECHANISM: a real waiting worker is what raised it, so a failure
-      // localizes to SW-lifecycle vs gate-decision.
-      const state = await swState(page);
-      expect(state.hasWaiting, 'registration.waiting must be non-null when the gate fires').toBe(true);
-    });
-
-    test('case 4: "Update now" lands the new bundle and the gate does NOT reappear (escapable)', async () => {
-      // Logged out (auth/me 401), so runUpdate skips the flush and calls the SW reloader
-      // (landLatestBundle): skipWaiting -> controllerchange -> reload onto B. B shares
-      // A's __APP_BUILD__ (same commit), so the server is STILL ahead after landing — the
-      // gate stays down purely because the probe now finds NO waiting bundle (B active,
-      // nothing superseded). That is the escapable half of T6210's invariant.
-      await page.getByRole('button', { name: /Update now/i }).click();
-      await expect(gateDialog(page)).toBeHidden({ timeout: 30_000 });
       await waitForSwReady(page);
-
       const state = await swState(page);
       expect(state.hasActive, 'the new bundle is now the active SW').toBe(true);
       expect(state.hasWaiting, 'the waiting worker was consumed on update — nothing left waiting').toBe(false);
-      // Stays down (server still ahead, but no newer bundle exists to gate on).
+      // Stays down afterward (server still ahead, but B shares A's __APP_BUILD__ —
+      // same commit — so no newer bundle exists to gate on; the escapable half of
+      // T6210's invariant).
       await page.waitForTimeout(1500);
-      await expect(gateDialog(page)).toHaveCount(0);
+      await expect(progressCard(page)).toHaveCount(0);
     });
   });
 
@@ -263,7 +283,7 @@ test.describe('T6230 update gate — real ServiceWorker', () => {
         await waitForSwReady(page);
         // Let the on-load async probe run and (correctly) decline before asserting.
         await page.waitForTimeout(1000);
-        await expect(gateDialog(page), `gate must not appear on reload ${i}`).toHaveCount(0);
+        await expect(progressCard(page), `gate must not appear on reload ${i}`).toHaveCount(0);
         expect((await swState(page)).hasWaiting, `nothing waiting on reload ${i}`).toBe(false);
       }
     } finally {

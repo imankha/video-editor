@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useUpdateGateStore } from './updateGateStore';
 import { useAuthStore } from './authStore';
+import { useExportStore } from './exportStore';
+import { useUploadStore } from './uploadStore';
+import { checkServerVersion, setBundleProbe, __setClientBuildForTest, __resetProbeStateForTest } from '../utils/appVersion';
 
 const { flushDurableStateMock } = vi.hoisted(() => ({
   flushDurableStateMock: vi.fn(),
@@ -42,9 +45,19 @@ describe('updateGateStore', () => {
       value: originalLocation,
     });
     useAuthStore.setState(originalAuthState);
+    useExportStore.setState({ activeExports: {} });
+    useUploadStore.setState({ uploads: [] });
   });
 
-  describe('requireUpdate', () => {
+  describe('requireUpdate — flag semantics', () => {
+    // T8460: requireUpdate now auto-runs when quiescent (its own describe
+    // block below). These cases are about the flag/needsMigration bookkeeping
+    // in isolation, so force a non-quiescent environment (an active export)
+    // to keep that auto-run from firing and contaminating the assertions.
+    beforeEach(() => {
+      useExportStore.setState({ activeExports: { 'e-non-quiescent': {} } });
+    });
+
     it('raises the gate (app-code reload by default, no migration)', () => {
       useUpdateGateStore.getState().requireUpdate();
       const state = useUpdateGateStore.getState();
@@ -68,6 +81,89 @@ describe('updateGateStore', () => {
       useUpdateGateStore.getState().requireUpdate({ needsMigration: true });
       useUpdateGateStore.getState().requireUpdate({ needsMigration: false });
       expect(useUpdateGateStore.getState().needsMigration).toBe(true);
+    });
+  });
+
+  describe('requireUpdate — auto-run (T8460)', () => {
+    it('(a) does not auto-run while an export is active — no flush, no reload', () => {
+      useExportStore.setState({ activeExports: { 'e1': {} } });
+
+      useUpdateGateStore.getState().requireUpdate();
+
+      expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
+      expect(useUpdateGateStore.getState().phase).toBe('idle');
+      expect(flushDurableStateMock).not.toHaveBeenCalled();
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('(b) auto-runs while quiescent: flushes then invokes the reloader', async () => {
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      useUpdateGateStore.getState().requireUpdate();
+
+      await vi.waitFor(() => expect(reloader).toHaveBeenCalledTimes(1));
+      expect(flushDurableStateMock).toHaveBeenCalledTimes(1);
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('(c) auto-run flush failure lands the error card state, never reloads', async () => {
+      flushDurableStateMock.mockRejectedValue(new Error('Could not save your latest changes.'));
+      const reloader = vi.fn();
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      useUpdateGateStore.getState().requireUpdate();
+
+      await vi.waitFor(() => expect(useUpdateGateStore.getState().phase).toBe('error'));
+      expect(useUpdateGateStore.getState().error).toBe('Could not save your latest changes.');
+      expect(reloader).not.toHaveBeenCalled();
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('(d) a second requireUpdate after conditions clear runs the update', async () => {
+      useExportStore.setState({ activeExports: { 'e1': {} } });
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      useUpdateGateStore.getState().requireUpdate();
+      expect(useUpdateGateStore.getState().phase).toBe('idle');
+      expect(reloader).not.toHaveBeenCalled();
+
+      useExportStore.setState({ activeExports: {} });
+      useUpdateGateStore.getState().requireUpdate();
+
+      await vi.waitFor(() => expect(reloader).toHaveBeenCalledTimes(1));
+      expect(flushDurableStateMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('(e) real caller path: checkServerVersion (not requireUpdate() called directly) re-tests quiescence on every subsequent response', async () => {
+      // requireUpdate() has exactly one production caller: checkServerVersion
+      // (appVersion.js). checkServerVersion short-circuits once isUpdateRequired
+      // is true, so this proves the RETRY actually happens through that real
+      // entry point -- (d) above only proves requireUpdate() itself is correct
+      // when called directly, which the real re-check cadence never does on its
+      // own unless checkServerVersion re-invokes it.
+      __resetProbeStateForTest();
+      __setClientBuildForTest(100);
+      setBundleProbe(async () => true);
+      useExportStore.setState({ activeExports: { 'e1': {} } });
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      await checkServerVersion(101);
+      expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
+      expect(useUpdateGateStore.getState().phase).toBe('idle');
+      expect(reloader).not.toHaveBeenCalled();
+
+      // The export finishes; the next API response carries the same header.
+      useExportStore.setState({ activeExports: {} });
+      await checkServerVersion(101);
+
+      await vi.waitFor(() => expect(reloader).toHaveBeenCalledTimes(1));
+      expect(flushDurableStateMock).toHaveBeenCalledTimes(1);
     });
   });
 

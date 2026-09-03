@@ -21,10 +21,14 @@
  *      response throws so the caller (updateGateStore.runUpdate) never
  *      proceeds to the destructive cache flush with unsynced state.
  *
- * This is invoked from the "Update now" click handler ONLY -- never from a
- * useEffect watching state (CLAUDE.md: Persistence: Gesture-Based, Never
- * Reactive). Runtime fixups (ensurePermanentKeyframes, origin normalization)
- * and banned view-state are never read or sent here.
+ * This is invoked from the update path ONLY (updateGateStore.runUpdate) --
+ * never from a useEffect watching state (CLAUDE.md: Persistence:
+ * Gesture-Based, Never Reactive). Runtime fixups (ensurePermanentKeyframes,
+ * origin normalization) and banned view-state are never read or sent here.
+ * T8460: runUpdate is no longer gated behind an "Update now" click -- it now
+ * also fires from an automatic quiescence check (updateGateStore.isQuiescent,
+ * itself a plain state read, not a reactive effect). That auto-run IS the
+ * gesture equivalent this barrier assumes; the flush semantics are unchanged.
  */
 
 import { API_BASE } from '../config';

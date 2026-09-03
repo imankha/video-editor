@@ -355,10 +355,10 @@ export const LOCAL_ONLY_SPECS = [
   },
   // --- T5420: in-page store/module unit tests (import()s a Vite-dev /src path) --------
   {
-    file: 'T5070-blocking-update-gate.spec.js',
+    file: 'update-gate.spec.js',
     category: 'vite-module',
     depends: ['/src/stores/updateGateStore.js'],
-    reason: 'drives the blocking update gate by import()ing the updateGateStore in-page; the /src path 404s on a deployed BUILD (gate logic also Vitest-covered).',
+    reason: 'drives the silent update gate (T8460) by import()ing the updateGateStore in-page; the /src path 404s on a deployed BUILD (gate logic also Vitest-covered).',
   },
   {
     file: 'T4900-overlay-action-failure-visibility.spec.js',
