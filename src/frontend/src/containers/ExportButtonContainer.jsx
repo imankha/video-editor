@@ -149,7 +149,10 @@ export function ExportButtonContainer({
       setExportingProject({
         projectId: selectedProjectId,
         stage: editorMode === EDITOR_MODES.FRAMING ? EDITOR_MODES.FRAMING : EDITOR_MODES.OVERLAY,
-        exportId: exportId
+        exportId: exportId,
+        // T8510: carry the reel name from the click context so the export record
+        // never renders an internal id while waiting for the first WS message.
+        projectName: projectName ?? null
       });
     }
   };
@@ -1066,20 +1069,23 @@ export function ExportButtonContainer({
   const totalClips = isMultiClipMode ? (clips?.length || 1) : 1;
 
   // Button disabled state
-  // T3700 P0: unframed clips are NO LONGER a hard block — a centered default crop is
-  // applied on export (visible in the editor for opened clips, applied server-side for
-  // never-opened clips), so a zero-effort export always produces a valid job. The
-  // unframed count remains a soft, non-blocking nudge in the button title.
+  // T8510: reverses T3700 P0, Option A (any unframed clip blocks). The 2026-09-02
+  // walkthrough showed a zero-effort export burning credits on a centered default
+  // crop indistinguishable from the raw clip, so unframed clips hard-block again.
+  // Focus mode only; Overlay export is unaffected. The server-side
+  // centered-default-crop path stays for policy-B-eligible multi-clip cases.
   const isButtonDisabled = disabled ||
     isCurrentlyExporting ||
-    (!videoFile && !projectId);
+    (!videoFile && !projectId) ||
+    (isFramingMode && hasUnframedClips);
 
-  // Button title/tooltip (soft nudge only — does not gate export)
-  const framedCount = totalClips - unframedCount;
+  // Button title/tooltip
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
     ? "Some edits haven't saved — retry saving before exporting"
     : (isFramingMode && hasUnframedClips
-      ? `${framedCount}/${totalClips} clips framed — the rest will use a centered default`
+      ? (totalClips > 1
+        ? 'Set at least one focus point on every clip to export'
+        : 'Set at least one focus point to export')
       : undefined);
 
   return {

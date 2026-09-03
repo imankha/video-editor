@@ -193,8 +193,8 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
                 segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export Focus to complete') :
-                segment.status === 'ready' ? 'Ready' :
-                'Not Started'
+                segment.status === 'ready' ? 'Ready to share' :
+                'Draft'
               } (click to open)${segment.stale ? ' — clip edited since this reel was made' : ''}`}
             >
               {isInProgress && (

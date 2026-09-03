@@ -138,6 +138,22 @@ export function ClipDetailsEditor({
     region.startTime === region.reelSourceStartTime &&
     region.endTime === region.reelSourceEndTime;
 
+  // T8470 (Part D): a reel EXISTS the moment project_created lands (autoProjectId
+  // is set), but a fresh draft has no reel-source snapshot yet (only set at export
+  // completion) and no produced video - so reelReflectsClip is false and the
+  // control used to fall through to an ACTIONABLE "Create Reel", a dead-end that
+  // offers to create a reel that already exists. Detect that state and turn it
+  // into a live "Open reel (Draft)" link instead. Deliberately narrow: a
+  // below-migration reel with a produced video but a null snapshot (has_working_
+  // video / has_final_video) still shows "Create Reel" so it can be re-produced,
+  // and a DRIFTED reel (non-null snapshot) is untouched.
+  const reelIsFreshDraft =
+    hasReel &&
+    region.reelSourceStartTime == null &&
+    region.reelSourceEndTime == null &&
+    !linkedProject?.has_working_video &&
+    !linkedProject?.has_final_video;
+
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
   // (`my_athlete ?? true` => My Athlete) — never read region.my_athlete bare.
   const isTeamLayer = (region.my_athlete ?? true) === false;
@@ -396,6 +412,18 @@ export function ClipDetailsEditor({
                 onClick={() => onOpenInFocus(region.autoProjectId)}
               >
                 Focus
+              </Button>
+            ) : reelIsFreshDraft ? (
+              // T8470 (Part D): existing draft reel, not yet produced -> a live
+              // link into Focus (same select+navigate the T8480 toast performs),
+              // never an actionable "Create Reel".
+              <Button
+                variant="cyan"
+                size="sm"
+                icon={Crop}
+                onClick={() => onOpenInFocus(region.autoProjectId)}
+              >
+                Open reel (Draft)
               </Button>
             ) : (
               <Button

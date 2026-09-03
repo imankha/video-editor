@@ -12,6 +12,7 @@ import {
   selectActiveUpload,
 } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useProjectsStore } from '../stores/projectsStore';
 import { useQuestStore } from '../stores/questStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -68,6 +69,28 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
 }
 
 /**
+ * T8480: what every `result.project_created` save/update response triggers.
+ * Selecting the new project is part of the same Save gesture (memory-only
+ * selection state, no backend write) - it's what enables the Focus tab
+ * (ModeSwitcher's hasProject) the moment the reel exists. Annotate is inert
+ * to selection changes (App.jsx's selectedProjectId effects are all gated on
+ * FRAMING/OVERLAY mode), so this never navigates or reloads the video.
+ * Module-scope (not a closure) so unit tests can exercise it directly.
+ */
+export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects }) {
+  useProjectsStore.getState().selectProject(projectId);
+  toast.success('Reel started, click Focus to complete', {
+    duration: 6000,
+    dedupKey: 'reel-created',
+    action: {
+      label: 'Open Focus',
+      onClick: () => onOpenReelInFocus?.(projectId),
+    },
+  });
+  fetchProjects({ force: true });
+}
+
+/**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
  *
  * This container manages:
@@ -105,6 +128,7 @@ export function AnnotateContainer({
   // Navigation
   _onBackToProjects,
   setEditorMode,
+  onOpenReelInFocus, // T8480: select + navigate to Focus for a reel (AnnotateScreen.openClipInFocus)
 
   // Downloads
   _onOpenDownloads,
@@ -848,6 +872,12 @@ export function AnnotateContainer({
     }
   }, [effectivePause, selectionState, editClip, startCreating, requireAuth]);
 
+  // T8480: shared handler for the three `result.project_created` sites below
+  // (see announceReelCreated at module scope).
+  const notifyReelCreated = useCallback((projectId) => {
+    announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects });
+  }, [onOpenReelInFocus, fetchProjects]);
+
   /**
    * Handle creating a clip from fullscreen overlay
    * Now saves to backend in real-time (if video is uploaded and we have a gameId)
@@ -921,14 +951,13 @@ export function AnnotateContainer({
 
           if (result.project_created) {
             setAutoProjectId(newRegion.id, result.project_id);
-            toast.success('Reel created!', { duration: 5000 });
-            fetchProjects({ force: true });
+            notifyReelCreated(result.project_id);
           }
         }
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects]);
+  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, notifyReelCreated]);
 
   /**
    * Update a clip region - syncs to backend
@@ -1007,9 +1036,7 @@ export function AnnotateContainer({
 
         if (result.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          const clipName = actualUpdates.name || region.name || 'Untitled';
-          toast.success(`Reel created: ${clipName}`, { duration: 5000 });
-          fetchProjects({ force: true });
+          notifyReelCreated(result.project_id);
         }
       }
     } else {
@@ -1042,15 +1069,13 @@ export function AnnotateContainer({
         }
         if (result?.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          const clipName = region.name || 'Untitled';
-          toast.success(`Reel created: ${clipName}`, { duration: 5000 });
-          fetchProjects({ force: true });
+          notifyReelCreated(result.project_id);
         }
       } else if (updates.createProject != null) {
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, notifyReelCreated]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay

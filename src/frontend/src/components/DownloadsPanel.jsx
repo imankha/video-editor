@@ -62,6 +62,7 @@ export function DownloadsPanel({
   onSelectProject, // (projectId) => void - open a Highlights draft
   onSelectProjectWithMode, // (projectId, options) => void
   onDeleteProject, // (projectId) => void
+  onViewClips, // T8470 (Part C): () => void - switch home to the Clips tab (ProjectManager owns tab state, lifted here like onOpenAssembly)
   exportingProject,
   pendingGameIds = new Set(),
 }) {
@@ -73,6 +74,10 @@ export function DownloadsPanel({
   // separate fetch, no migration (see design doc Sec 5.1).
   const projects = useProjectsStore((state) => state.projects);
   const highlightDrafts = projects.filter((p) => !p.is_auto_created);
+  // T8470 (Part C): the Clips-tab population - single-clip auto-drafts. Same
+  // predicate ProjectManager's clipDrafts uses, so the drawer's empty-state
+  // count can never disagree with the Clips tab's badge count.
+  const draftClipCount = projects.filter((p) => p.is_auto_created).length;
   const readyGames = useReadyGames();
   const hasClips = readyGames.some((g) => g.clip_count > 0);
   // Header chip = NEW (unwatched) reels, matching the home "My Reels" badge so the
@@ -819,6 +824,12 @@ export function DownloadsPanel({
             onIntroCollection={onIntroCollection}
             onDownloadCollection={onDownloadCollection}
             introBadgesByKey={introBadgesByKey}
+            draftClipCount={draftClipCount}
+            onViewDraftClips={() => {
+              // Same gesture, two effects: leave the drawer, land on the Clips tab.
+              close();
+              onViewClips?.();
+            }}
           />
         </div>
       </div>

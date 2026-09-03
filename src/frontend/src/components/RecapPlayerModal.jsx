@@ -254,7 +254,11 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
       }
       useProjectsStore.getState().fetchProjects({ force: true });
       toast.success(
-        result.project_created ? 'Reel created!' : 'This clip is already a draft reel',
+        // T8470: one status story - a created reel is a Draft that lives on the
+        // Clips tab. Point there (this modal has no Focus affordance to offer the
+        // funnel's "click Focus" tap) instead of the old, location-blind
+        // "Reel created!".
+        result.project_created ? 'Reel started - find it on the Clips tab' : 'This clip is already a draft reel',
         { duration: 5000 },
       );
     }

@@ -2,6 +2,7 @@ import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
 import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
 import { SCREENS } from '../../stores/editorStore';
+import { toast } from './Toast';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -85,12 +86,34 @@ export function ModeSwitcher({
       reel: REEL.bg,
     }[modeOption.color] || REEL.bg;
 
+    const titleText =
+      isLoadingWorkingVideo && modeOption.id === 'overlay'
+        ? 'Loading working video...'
+        : !isAvailable && modeOption.id === 'framing'
+          ? 'Select a reel first'
+          : !isAvailable && modeOption.id === 'overlay'
+            ? hasProject ? 'Export from Focus first to enable Overlay mode' : 'Select a reel first'
+            : modeOption.showWarning
+              ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
+              : modeOption.description;
+
     return (
       <button
         key={modeOption.id}
         data-testid={`mode-${modeOption.id}`}
-        onClick={() => !disabled && isAvailable && onModeChange(modeOption.id)}
-        disabled={disabled || !isAvailable}
+        onClick={() => {
+          if (disabled) return;
+          if (!isAvailable) {
+            // T8480: a locked tab must explain itself on tap, not just on hover
+            // (native title is unreachable on touch). aria-disabled instead of
+            // the disabled attribute below, or this click never fires.
+            toast.info(titleText, { dedupKey: 'mode-locked' });
+            return;
+          }
+          onModeChange(modeOption.id);
+        }}
+        disabled={disabled}
+        aria-disabled={disabled || !isAvailable}
         className={`
           flex items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 relative
           ${isActive
@@ -101,17 +124,7 @@ export function ModeSwitcher({
           }
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
-        title={
-          isLoadingWorkingVideo && modeOption.id === 'overlay'
-            ? 'Loading working video...'
-            : !isAvailable && modeOption.id === 'framing'
-              ? 'Select a reel first'
-              : !isAvailable && modeOption.id === 'overlay'
-                ? hasProject ? 'Export from Focus first to enable Overlay mode' : 'Select a reel first'
-                : modeOption.showWarning
-                  ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
-                  : modeOption.description
-        }
+        title={titleText}
       >
         {isLoadingWorkingVideo && modeOption.id === 'overlay' ? (
           <Loader2 size={16} className="animate-spin" />

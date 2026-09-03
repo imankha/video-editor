@@ -1,6 +1,6 @@
 # T8470: One status story for a reel (created = visible)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-03

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
@@ -62,6 +63,7 @@ async function enterAnnotateMode(page) {
   await page.waitForTimeout(500);
 
   console.log('[Setup] Filling Add Game modal...');
+  await openGameDetailsDisclosure(page);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
   await page.locator('input[type="date"]').fill('2026-03-21');
   await page.getByRole('button', { name: 'Home' }).click({ force: true });
@@ -292,6 +294,50 @@ test.describe('T690: Clip Selection State Machine', () => {
     const addVisSel = await addBtn.isVisible().catch(() => false);
     const editVisSel = await page.locator('button:has-text("Edit Play")').isVisible().catch(() => false);
     console.log(`[Test] REQ 4: SELECTED — Add: ${addVisSel}, Edit: ${editVisSel} (expect both false)`);
+
+    // ========================================================================
+    // T8590: Non-FS Edit Play opens EDIT mode, not CREATE. Regression guard for
+    // a bug where ClipsSidePanel's inline (non-fullscreen) overlay render
+    // omitted existingClip, so clicking Edit Play silently opened a fresh
+    // "Add Play" form and Save created a duplicate clip instead of updating
+    // the selected one. The T8130 guard above only asserted the CTA label, not
+    // what opens after the click, so it never caught this.
+    // ========================================================================
+    console.log('\n[Test] === T8590: Non-FS Edit Play opens edit mode, Save updates (no duplicate) ===');
+
+    const clipCountBeforeEdit = await page.locator('[data-testid="clip-row"]').count();
+    console.log(`[Test] T8590: clip count before edit-open: ${clipCountBeforeEdit}`);
+
+    const primaryCtaT8590 = page.locator('[data-testid="annotate-primary-cta"]');
+    await expect(primaryCtaT8590).toHaveText(/Edit Play/);
+    await primaryCtaT8590.click();
+    await page.waitForTimeout(800);
+
+    // Inline overlay must open in EDIT mode: heading "Edit Play", the clip's
+    // own name pre-filled (not the fresh-clip default "Play N"), and an
+    // "Update" action button (CREATE mode reads "Save").
+    const overlayHeading = page.locator('h3', { hasText: /Edit Play|Add Play/ }).first();
+    await expect(overlayHeading).toHaveText('Edit Play');
+
+    // .first(): at this viewport (900x600), AnnotateModeView's own mobileInlineForm
+    // (useIsMobile is width<1024, a different breakpoint than the sidebar's `sm:`
+    // 640px Tailwind class — the same landscape-phone distinction noted in
+    // annotate.md T5700/T4933) can mount alongside ClipsSidePanel's inline form,
+    // rendering two identical fields. Both must agree post-fix, so either matches.
+    const nameField = page.locator('input[placeholder="Enter clip name..."]').first();
+    const prefilledName = await nameField.inputValue();
+    console.log(`[Test] T8590: prefilled name field: "${prefilledName}"`);
+    expect(prefilledName.length).toBeGreaterThan(0);
+    expect(prefilledName).not.toMatch(/^Play \d+$/);
+
+    const updateBtn = page.locator('button.bg-green-600:has-text("Update")').first();
+    await expect(updateBtn).toBeVisible();
+    await updateBtn.click();
+    await page.waitForTimeout(1000);
+
+    const clipCountAfterEdit = await page.locator('[data-testid="clip-row"]').count();
+    console.log(`[Test] T8590: clip count after Save: ${clipCountAfterEdit} (expect unchanged: ${clipCountBeforeEdit})`);
+    expect(clipCountAfterEdit).toBe(clipCountBeforeEdit);
 
     // ========================================================================
     // REQ 3, 5, 6, 7, 8, 9, 10, 11, 12: Fullscreen workflow

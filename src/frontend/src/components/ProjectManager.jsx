@@ -420,6 +420,10 @@ export function ProjectManager({
   // trigger it. The modal itself stays here (design doc Sec 8 ownership note).
   showNewProjectModal = false,
   onCloseNewProjectModal,
+  // T8470 (Part C): incrementing nonce - the drawer's "find them on the Clips
+  // tab" link bumps it, and the effect below switches to Clips. A nonce (not a
+  // boolean) so a repeat click re-fires even if Clips is already active.
+  clipsTabRequest = 0,
 }) {
   // Get downloads and export state from context
   const { unseenReelsCount: contextUnseenReelsCount, exportingProject: contextExportingProject } = useAppState();
@@ -902,6 +906,17 @@ export function ProjectManager({
     }
   }, [clipsTabDisabled, activeTab, setActiveTab]);
 
+  // T8470 (Part C): honor an explicit "go to Clips" request from the drawer. Keyed
+  // on the nonce alone (a user GESTURE, not reactive state) so it fires once per
+  // click. Skips the initial 0 so a cold mount never force-switches the tab.
+  const lastClipsTabRequest = useRef(clipsTabRequest);
+  useEffect(() => {
+    if (clipsTabRequest !== lastClipsTabRequest.current) {
+      lastClipsTabRequest.current = clipsTabRequest;
+      setActiveTab('projects');
+    }
+  }, [clipsTabRequest, setActiveTab]);
+
   // Refetch games when opening "new project" modal (needs fresh game list)
   useEffect(() => {
     if (showNewProjectModal && onFetchGames) {
@@ -1036,10 +1051,12 @@ export function ProjectManager({
         className="hidden"
       />
 
-      {/* Credits anchored far left */}
+      {/* Credits anchored far left. First-run hint derives "never uploaded a
+          game" from the loaded games list (T8500) - a pure render-time
+          derivation, no persisted view state. */}
       {isAuthenticated && (
         <div className="fixed top-4 left-4 z-30">
-          <CreditBalance />
+          <CreditBalance showFirstRunHint={!gamesLoading && games.length === 0} />
         </div>
       )}
 
@@ -1159,9 +1176,12 @@ export function ProjectManager({
                   <div className="hidden sm:block text-xs text-gray-500">
                     {recentItems.recentProject.clip_count} clip{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
                     {' · '}
+                    {/* T8470: one status story - a fresh record is a Draft, not
+                        "Not Started". Terminal 'Complete' keeps its own CheckCircle
+                        cue above and covers both ready + published finals. */}
                     {recentItems.recentProject.has_final_video ? 'Complete' :
-                     recentItems.recentProject.has_working_video ? 'In Overlay' :
-                     recentItems.recentProject.clips_in_progress > 0 ? 'Focus started' : 'Not Started'}
+                     recentItems.recentProject.has_working_video ? 'Draft - in Overlay' :
+                     recentItems.recentProject.clips_in_progress > 0 ? 'Draft - in Focus' : 'Draft'}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
@@ -1467,7 +1487,7 @@ export function ProjectManager({
                       { value: 'overlay', label: 'In Overlay', color: 'blue' },
                       { value: 'editing', label: 'Focus Started', color: 'blue' },
                       { value: 'exported', label: 'Exported', color: 'purple' },
-                      { value: 'not_started', label: 'Not Started', color: 'gray' }
+                      { value: 'not_started', label: 'Draft', color: 'gray' }
                     ].map(opt => {
                       const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
                       // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear

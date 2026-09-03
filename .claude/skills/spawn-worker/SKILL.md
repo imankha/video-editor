@@ -160,8 +160,9 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    complete the test matrix, map every acceptance criterion to evidence. Report the evidence."`
    Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
 
-5. **Push for the user to test:** once implementation done + QA evidence per criterion +
-   tests green + knowledge doc(s) updated (Stage 7), sanity-check the diffstat, then:
+5. **Push, then merge if provably verified (else hand off for user test):** once
+   implementation done + QA evidence per criterion + tests green + knowledge doc(s) updated
+   (Stage 7), sanity-check the diffstat, then:
    ```
    bash scripts/task.sh push <SLUG>
    ```
@@ -190,7 +191,27 @@ generated the kickoff, and checked file-ownership against other live workers. `S
         known-failures attribution so the CI signal stays meaningful.
      After triage, include `CI verdict: red — <job>/<step> — attributed to known-failures /
      fixed in commit <sha> / task T<id> filed` in the push report before telling the user.
-   Report: fetch origin -> switch to `feature/T<id>-…` -> CI verdict -> test -> merge.
+
+   **Once CI is green, decide merge vs hand-off — [[feedback_merge_when_provably_verified]]
+   is the standing default, not a per-task question:**
+   - **Provably verified** (a test that would have failed before the fix and passes after, on
+     the real production code path — not an argument-shape/mock check — plus CI green) ->
+     merge without waiting for a reply: `gh pr create` -> `gh pr merge --merge
+     --delete-branch` -> flip the task's PLAN.md row + task-file `**Status:**` to STAGING ->
+     commit and push that status flip in the supervisor checkout -> THEN tell the user what
+     merged and why it's proven. If the worker's status file doesn't already contain an
+     explicit red->green transition, produce it yourself before merging rather than skipping
+     it or asking the user to: `git checkout <pre-fix-commit> -- <the changed source files>`
+     (leave the new/updated test files alone), run just the directly-affected test file(s),
+     confirm they fail, `git checkout HEAD -- <those source files>`, confirm they pass again.
+     If the merge needs a `git merge origin/master` first (branch is behind — common when
+     several workers land close together), resolve any conflicts, re-run the same tests to
+     confirm still-green, then push and merge.
+   - **Not provable without a human** (visual/UX judgment, a live external integration, a step
+     only reproducible in staging) -> this is the real "push for the user to test" path: leave
+     the branch open, report CI verdict + specific test steps mapped to acceptance criteria,
+     and wait for their word.
+   - Topic sensitivity (security, payments, P0) is never its own exception to the proof bar.
 
 6. **Cleanup is automatic** via the committed `post-merge` hook (`.githooks/post-merge`)
    when the branch lands on master. Only step in if `/c/tmp/post-merge-cleanup.log` shows the

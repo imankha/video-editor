@@ -151,7 +151,7 @@ export function CollapsibleGroup({
               {showNotStartedLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
-                  Not Started
+                  Draft
                 </span>
               )}
             </div>

@@ -773,8 +773,8 @@ function App() {
     if (value === null) {
       clearExport();
     } else {
-      // Note: startExport expects (exportId, projectId, type)
-      startExport(value.exportId, value.projectId, value.stage);
+      // Note: startExport expects (exportId, projectId, type, projectName)
+      startExport(value.exportId, value.projectId, value.stage, value.projectName ?? null);
     }
   }, [clearExport, startExport]);
 
@@ -994,6 +994,14 @@ function App() {
             .finally(() => useProjectDataStore.getState().setLoading(false));
           // Default to framing mode when opening a completed reel
           setEditorMode(EDITOR_MODES.FRAMING);
+        }}
+        onViewClips={() => {
+          // T8470 (Part C): from the global (editor-context) drawer, "find them on
+          // the Clips tab" returns Home and lands on Clips via the existing
+          // projectManagerTab hint, which ProjectManager reads on mount.
+          sessionStorage.setItem('projectManagerTab', 'projects');
+          clearSelection();
+          setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
         }}
       />
 
