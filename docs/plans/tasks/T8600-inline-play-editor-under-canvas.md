@@ -17,7 +17,7 @@ Falsifiable version (from the UX review): "moving the create form under the canv
 Decision artifact (mockups + choices, user-reviewed): claude.ai artifact "Inline Play Editor - Design Proposal" (session 2026-09-03). UX review: [../ux/UX-inline-play-editor-2026-09-03.md](../ux/UX-inline-play-editor-2026-09-03.md).
 
 1. **Editor replaces the timeline (desktop non-fullscreen only).** Clicking Add Play / Edit Play swaps the timeline area under the canvas for a compact editor strip until Save or close/discard; the sidebar form render goes away on desktop and the sidebar keeps showing the clip list. The strip: row 1 = ClipScrubRegion with live start/end time chips (the ONLY required input); row 2 = rating stars, compact name field ("Play N" default stays), Teammates input (Team layer only - must stay visible, see invariants), "Add details" button, Save/Cancel. Strip is tinted green (add) / yellow (edit) with an "Editing: {clip name}" header so the mode change is loud.
-2. **Button row swap, existing gating logic unchanged.** While the editor is open, the Add/Edit Play CTA + Playback Annotations + Shared w/ Tagged rows are replaced by: Layer (LayerSegmentedControl), Create Reel (current create-toggle/edit-button logic), and Focus (EDIT MODE ONLY, gated on `region.autoProjectId` as today). Each control keeps its existing conditions - only position changes.
+2. **Button row swap, existing gating logic unchanged.** While the editor is open, the Add/Edit Play CTA + Playback Annotations + Shared w/ Tagged rows are replaced by: Layer (LayerSegmentedControl) and Focus (EDIT MODE ONLY, gated on `region.autoProjectId` as today). Create Reel stays a labeled toggle INSIDE the strip next to Rating (user decision 2026-09-03, per UX rec - its state auto-flips with rating, so it must sit near the control that drives it, not in an action row). Each control keeps its existing conditions - only position changes.
 3. **Tags + Notes move behind "Add details"** (both optional). Surface decided per screen size (user decision 2026-09-03, simulated in the artifact):
    - Desktop (>=1024px): expand-in-place - the strip grows downward with its own max-height scroll for the tag grid; canvas stays fully visible.
    - Mobile (<1024px / coarse pointer, i.e. `useIsMobile()`): full-screen popup over the T8140 bottom sheet (the sheet's layout + pinned Save stay); explicit Done/X only, never backdrop-close; never stacks with the T8140 sport question (details closes before save runs).
@@ -50,10 +50,10 @@ Decision artifact (mockups + choices, user-reviewed): claude.ai artifact "Inline
 - **Focus mid-edit:** navigating to Focus with unsaved form state must resolve explicitly (save-first prompt), never silent discard.
 - UX evidence caveat: beacon has ~zero prod days (T8140 just landed). Prefer letting it accumulate 1-2 weekend cycles before judging the redesign; mobile stays the control group for the RELOCATION (not for the details collapse, which touches mobile too).
 
-### Open choices (recorded in the decision artifact, defaults chosen)
-1. Create Reel placement: user proposed the button row; UX recommends a labeled toggle near Rating (its state auto-flips with rating). DEFAULT: button row per user proposal unless user says otherwise.
-2. Timeline context while editing: (a) none (v1 default), (b) slim read-only mini-timeline above the strip (UX-recommended), (c) scrub-as-zoomed-inset (most work).
-3. Split: UX recommends shipping the details collapse (all form factors) separately from the desktop relocation. DEFAULT: one task, both halves, per user framing.
+### Choices - DECIDED by user 2026-09-03 (via decision artifact + question round)
+1. Create Reel placement: **toggle near Rating inside the strip** (UX rec accepted). Button row = Layer + Focus (edit mode) only.
+2. Timeline context while editing: **none for v1** (strip only, as mocked); the slim read-only mini-timeline is the recorded fallback if the abandonment beacon worsens or boundary-overlap complaints appear.
+3. Sequencing: **one task, both halves (details collapse + relocation), starts right after T8590 lands.** No baseline-wait hold; the per-surface beacon discriminator is the compensating measure.
 
 ## Implementation
 
