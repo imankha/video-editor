@@ -35,7 +35,10 @@ hides for accounts past first-reel (probably yes: orientation scaffold, not chro
 ### Relevant Files (REQUIRED)
 - Design doc target: `docs/plans/tasks/T8560-design.md`
 - `.claude/knowledge/annotate.md`, tutorial-redesign EPIC.md + T7620-design.md (read first)
-- Mode header components (ModeSwitcher.jsx) as the likely mount point
+- Mode header components (`src/frontend/src/components/shared/ModeSwitcher.jsx`) as the
+  likely mount point - note its availability model (Focus needs a selected project via
+  useAppState; Overlay additionally needs a working/overlay video): the stepper's
+  step-state can derive from the SAME inputs plus draftStage.js stages, no new state
 
 ### Related Tasks
 - Blocked by nothing technically; sequenced LAST in the epic, immediately before the

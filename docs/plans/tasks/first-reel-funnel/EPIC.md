@@ -19,7 +19,11 @@ start an upload, and NO real user has ever exported a reel.
    click update; update silently and report progress while it happens (T8460).
 2. Reel is NOT on by default globally. Below 4 stars a play is probably not reel-worthy.
    Instead: communicate what the stars mean, and at 5 stars the Reel toggle defaults ON
-   (T8490).
+   (T8490). **Spec-time correction (2026-09-03): the 5-star auto-enable ALREADY EXISTS**
+   (AnnotateFullscreenOverlay.jsx:476 - rating 5 + My Athlete layer flips the switch on;
+   explicit user toggle wins; covered by layer tests). T8490 is therefore a
+   COMMUNICATION task (star-scale caption, label the !/!! badges, Keeper Save rename),
+   not a behavior change - the walkthrough misread its own toggling as a default-off.
 3. Focus staying disabled after a reel exists is a bug: if a reel has been created, Focus
    must be enabled and working. Add a toast: "Reel started, click Focus to complete"
    (T8480).
