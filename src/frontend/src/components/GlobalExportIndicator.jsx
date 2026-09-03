@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Download, Check, X, ChevronUp, ChevronDown, Loader, Clock } from 'lucide-react';
 import { useExportStore } from '../stores/exportStore';
 import { toast } from './shared';
@@ -6,15 +6,25 @@ import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
 
+// T8510: honesty rules for the linear ETA extrapolation below. Once an estimate's
+// promised completion time has passed by this grace period, the number is a lie -
+// switch to stage wording instead of a frozen countdown.
+export const ETA_BUST_GRACE_MS = 15000;
+// T8510: "Less than a minute" is never shown while percent has been frozen this long.
+export const ETA_STALL_MS = 30000;
+
 /**
  * Get display label for an export.
  * For annotate exports, shows game name. For others, shows project name.
+ * T8510: the record now carries the reel name from the export click
+ * (exportStore.startExport); the fallback is a safety net and must never
+ * surface an internal id.
  */
-function getExportLabel(exp) {
+export function getExportLabel(exp) {
   if (exp.type === 'annotate') {
     return exp.gameName || 'Annotation';
   }
-  return exp.projectName || `Project #${exp.projectId}`;
+  return exp.projectName || 'Your reel';
 }
 
 /**
@@ -24,7 +34,7 @@ function getExportLabel(exp) {
  * @param {Object} exp - Export object with startedAt and progress
  * @returns {{ seconds: number, formatted: string } | null}
  */
-function calculateETA(exp) {
+export function calculateETA(exp) {
   if (!exp.startedAt || !exp.progress?.percent) return null;
 
   const percent = exp.progress.percent;
@@ -59,6 +69,39 @@ function calculateETA(exp) {
 }
 
 /**
+ * T8510: decide what the ETA slot should show, honestly.
+ *
+ * Pure derivation from timestamps (no persistence): `deadlines` maps exportId to
+ * the epoch-ms completion time the FIRST estimate promised, `percentTracks` maps
+ * exportId to { percent, changedAt } for stall detection. Both are component-local
+ * bookkeeping (refs), updated in an effect as progress arrives.
+ *
+ * Returns null (nothing to show), or { stale, formatted, fallbackText }:
+ * - stale=false: show `formatted` (the live estimate)
+ * - stale=true: the estimate broke its promise (deadline exceeded by
+ *   ETA_BUST_GRACE_MS) or percent has been frozen past ETA_STALL_MS while the
+ *   estimate reads under a minute - show `fallbackText` (stage message or
+ *   "Still working...") instead of a number.
+ */
+export function resolveEtaDisplay(exp, now, deadlines, percentTracks) {
+  const eta = calculateETA(exp);
+  if (!eta) return null;
+
+  const deadline = deadlines.get(exp.exportId);
+  const track = percentTracks.get(exp.exportId);
+
+  const pastPromise = deadline != null && now > deadline + ETA_BUST_GRACE_MS;
+  const stalledUnderMinute = eta.seconds < 60 &&
+    track != null && (now - track.changedAt) > ETA_STALL_MS;
+
+  return {
+    stale: pastPromise || stalledUnderMinute,
+    formatted: eta.formatted,
+    fallbackText: exp.progress?.message || 'Still working...',
+  };
+}
+
+/**
  * GlobalExportIndicator - Persistent indicator for active exports
  *
  * TRUE MVC ARCHITECTURE:
@@ -85,6 +128,46 @@ export function GlobalExportIndicator() {
   const processingExports = Object.values(activeExports).filter(
     (exp) => exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING
   );
+
+  // T8510: display-only ETA-honesty bookkeeping (never persisted).
+  // etaDeadlinesRef: exportId -> epoch-ms deadline the first estimate promised.
+  // percentChangeRef: exportId -> { percent, changedAt } for stall detection.
+  // nowTick re-renders once a second while exports run, so a stalled export
+  // (no store updates) still gets its frozen estimate re-evaluated.
+  const etaDeadlinesRef = useRef(new Map());
+  const percentChangeRef = useRef(new Map());
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const hasProcessingExports = processingExports.length > 0;
+
+  useEffect(() => {
+    if (!hasProcessingExports) return undefined;
+    const interval = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [hasProcessingExports]);
+
+  useEffect(() => {
+    const deadlines = etaDeadlinesRef.current;
+    const tracks = percentChangeRef.current;
+    const now = Date.now();
+    for (const exp of Object.values(activeExports)) {
+      if (exp.status !== ExportStatus.PENDING && exp.status !== ExportStatus.PROCESSING) continue;
+      const percent = exp.progress?.percent;
+      const track = tracks.get(exp.exportId);
+      if (!track || track.percent !== percent) {
+        tracks.set(exp.exportId, { percent, changedAt: now });
+      }
+      if (!deadlines.has(exp.exportId)) {
+        const eta = calculateETA(exp);
+        if (eta) deadlines.set(exp.exportId, now + eta.seconds * 1000);
+      }
+    }
+    for (const id of [...deadlines.keys()]) {
+      if (!activeExports[id]) deadlines.delete(id);
+    }
+    for (const id of [...tracks.keys()]) {
+      if (!activeExports[id]) tracks.delete(id);
+    }
+  }, [activeExports]);
 
   // Show toast notification when export completes (exactly once per export)
   useEffect(() => {
@@ -158,11 +241,12 @@ export function GlobalExportIndicator() {
     (a, b) => new Date(b.startedAt) - new Date(a.startedAt)
   )[0];
 
-  // Calculate ETA for primary export (recalculate on progress changes)
+  // Calculate ETA display for primary export (recalculate on progress changes AND
+  // on the 1s tick, so a stalled estimate flips to stage wording without new data)
   const primaryETA = useMemo(() => {
     if (!primaryExport) return null;
-    return calculateETA(primaryExport);
-  }, [primaryExport?.progress?.percent, primaryExport?.startedAt]);
+    return resolveEtaDisplay(primaryExport, nowTick, etaDeadlinesRef.current, percentChangeRef.current);
+  }, [primaryExport, nowTick]);
 
   // Don't render if no active exports
   if (processingExports.length === 0) {
@@ -224,7 +308,7 @@ export function GlobalExportIndicator() {
                   {getExportLabel(primaryExport)} - {primaryExport.progress?.percent >= 0 ? `${primaryExport.progress.percent}%` : 'Processing...'}
                   {primaryETA && (
                     <span className="ml-1 text-gray-500">
-                      ({primaryETA.formatted})
+                      ({primaryETA.stale ? primaryETA.fallbackText : primaryETA.formatted})
                     </span>
                   )}
                 </div>
@@ -302,13 +386,14 @@ export function GlobalExportIndicator() {
                         <div className="h-full bg-blue-500 animate-pulse w-full opacity-50" />
                       )}
                     </div>
-                    {/* ETA display */}
+                    {/* ETA display - the stage message already renders above this row,
+                        so a busted estimate degrades to plain "Still working..." here */}
                     {(() => {
-                      const eta = calculateETA(exp);
+                      const eta = resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current);
                       return eta ? (
                         <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                           <Clock className="w-3 h-3" />
-                          <span>{eta.formatted} remaining</span>
+                          <span>{eta.stale ? 'Still working...' : `${eta.formatted} remaining`}</span>
                         </div>
                       ) : null;
                     })()}

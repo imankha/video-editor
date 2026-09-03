@@ -183,8 +183,26 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate @gate
     await openDraftCard(page, target.name);
     await page.locator('.crop-handle').first().waitFor({ timeout: 120000 }).catch(() => {});
     await page.screenshot({ path: `${EVID}/02-framing-loaded.png` });
+
+    // T8510: unframed clips now HARD-BLOCK the export button (Option A reversal of
+    // T3700 P0), so a zero-effort export on this un-framed draft would hang on a
+    // disabled button. Frame the clip with one real crop gesture (drag a handle a
+    // few px -> add_crop_keyframe) before clicking Export.
+    const cropHandle = page.locator('.crop-handle').first();
+    if (await cropHandle.count()) {
+      const hb = await cropHandle.boundingBox();
+      if (hb) {
+        await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(hb.x + hb.width / 2 + 24, hb.y + hb.height / 2 + 24, { steps: 5 });
+        await page.mouse.up();
+        await page.waitForTimeout(800);
+      }
+    }
+
     const exportBtn = page.getByRole('button', { name: FRAMING_EXPORT_BTN }).first();
     await exportBtn.waitFor({ timeout: 30000 });
+    await expect(exportBtn, 'T8510: export unlocks once the clip has a focus point').toBeEnabled({ timeout: 10000 });
     await exportBtn.click();
     console.log('[derisk] framing Export clicked');
     await page.screenshot({ path: `${EVID}/03-export-clicked.png` });
