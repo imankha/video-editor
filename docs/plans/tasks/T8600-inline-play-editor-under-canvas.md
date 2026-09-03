@@ -1,6 +1,6 @@
 # T8600: Inline Play Editor - add/edit plays under the canvas, details behind a popup
 
-**Status:** WAITING ON USER
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-03

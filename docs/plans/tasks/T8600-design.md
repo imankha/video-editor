@@ -528,20 +528,30 @@ Live-drive QA at 1280px and 390x844 per the task file, using `dev-login`.
 
 ---
 
-## 6. Open questions for the approver
+## 6. Open questions for the approver — DECIDED 2026-09-03
 
-- [ ] **Q1.** In scope: the one-line mobile hardening
-      `mobileShowDetail = isMobile && selectedRegion && !mobileForceList && !clipEditorOpen`?
-      It closes the same "two live editors" hole on mobile that §2.3 closes on
-      desktop. Pre-existing, so strictly optional.
-- [ ] **Q2.** Focus prompt buttons: "Save & open Focus" plus "Cancel" only (my
-      recommendation), or also a "Discard & open Focus" third button?
-- [ ] **Q3.** Where does the `no_sport` amber prompt live on the desktop strip:
-      inside the details panel with Tags (simplest, one code path, less visible),
-      or promoted into the strip's controls row when `sport === NO_SPORT`?
-- [ ] **Q4.** Keep T8140's "You can change all of this later." reassurance line in
-      the compact strip? Recommendation: drop it in the strip (the strip is small
-      enough to read at a glance), keep it in the mobile sheet where it shipped.
-- [ ] **Q5.** Confirm C1 may merge on its own if C2/C3 slip. It is the details
-      collapse alone, which the UX review argues may be the larger abandonment
-      lever, and it is measurable independently on mobile.
+All five approved via the updated decision artifact
+(`https://claude.ai/code/artifact/0917dc83-de9c-41fa-9c2a-25baeb0ea0dc`, section 8), which
+carries the real-screenshot grounding and mockup comparisons for each:
+
+- [x] **Q1 — YES.** Ship the one-line mobile hardening
+      `mobileShowDetail = isMobile && selectedRegion && !mobileForceList && !clipEditorOpen`
+      in the same commit as the desktop `existingClip` fix's sibling work — closes the mobile
+      twin of the T8590 bug class rather than leaving it known-but-unpatched.
+- [x] **Q2 — Option A.** Focus prompt is two buttons only: "Save & open Focus" + "Cancel".
+      No third "Discard & open Focus" button — a destructive action one tap from Save is a
+      real slip risk for this audience (rushed, interrupted, on a phone or laptop at a game).
+- [x] **Q3 — Option B.** The `no_sport` amber prompt promotes into the strip's controls row
+      (not hidden inside the "Add details" disclosure) — it's a one-time first-clip event that
+      a first-time user has no reason yet to open a details panel to find.
+- [x] **Q4 — Option B.** Drop the "You can change all of this later." reassurance line from
+      the compact desktop strip; keep it in the mobile sheet (untouched by this task, still
+      the denser full form where the reassurance keeps earning its place).
+- [x] **Q5 — YES.** C1 (details collapse, desktop + mobile) may merge and land on its own if
+      C2/C3 (desktop strip relocation) slip — independently measurable, and the UX review
+      argues it may be the larger of the two abandonment levers.
+
+**User confirmed the mode-swap trigger explicitly while approving:** the editor strip only
+replaces the timeline while actively adding or editing a play — Add Play or Edit Play enters
+the mode, Save or Close/Cancel returns to the timeline. This matches §2.1's design exactly
+(`underCanvasEditor = showAnnotateOverlay && !annotateFullscreen`), no change needed.
