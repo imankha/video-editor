@@ -12,6 +12,7 @@ with 404 / "Method Not Allowed" until the implementation is added.
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -50,6 +51,20 @@ def game_with_clip():
         """)
         game_id = cursor.lastrowid
 
+        # T8310/T8320: a real LIVE hash-backed game ALWAYS has a game_storage row
+        # with a future expiry (written at upload; backfilled for legacy games by
+        # v017/v047). Without it, _compute_storage_status(has_hash=True, no
+        # row) correctly reports 'expired' and the T8310 clip-playback gate 410s
+        # before the R2 code paths these tests exercise. This row makes the
+        # fixture a genuine non-expired game (status 'active'). DO NOT REMOVE.
+        cursor.execute(
+            """INSERT OR REPLACE INTO game_storage
+               (blake3_hash, game_size_bytes, storage_expires_at)
+               VALUES (?, ?, ?)""",
+            ('abc123hash', 1000000000,
+             (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()),
+        )
+
         cursor.execute("""
             INSERT INTO raw_clips (game_id, start_time, end_time, filename, rating)
             VALUES (?, 10.0, 20.0, 'test_raw.mp4', 3)
@@ -77,6 +92,7 @@ def game_with_clip():
         cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (raw_clip_id,))
         cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+        cursor.execute("DELETE FROM game_storage WHERE blake3_hash = 'abc123hash'")
         conn.commit()
 
 
