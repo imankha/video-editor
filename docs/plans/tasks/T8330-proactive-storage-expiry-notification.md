@@ -1,6 +1,6 @@
 # T8330: Proactive storage-expiry notification (product decision + implementation)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-01
