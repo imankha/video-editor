@@ -101,11 +101,30 @@ burn into merges.
 
 6. **Land:** per worker, sanity-check diffstat -> `bash scripts/task.sh push <SLUG>` ->
    **fetch and report the Branch CI verdict** (see spawn-worker step 5 for the exact poll
-   commands and triage paths) -> update the WAVE.md row (`stage: pushed`, `next gate: user
-   test`) -> tell the user which branch is ready -> start the next queued task. A red verdict
-   must be triaged — fix, attribute to known-failures.md, or task it — before the user is
-   told to test. Cleanup is automatic on merge (post-merge hook); see spawn-worker for the
-   fallback. On merge, delete the task's WAVE.md row.
+   commands and triage paths). A red verdict must be triaged — fix, attribute to
+   known-failures.md, or task it — before proceeding.
+
+   **Then decide merge vs hand-off using [[feedback_merge_when_provably_verified]] — this is
+   the standing default, not something to ask about each time:**
+   - **Provably verified** (a test that would have failed before the fix and passes after,
+     exercising the real production code path, plus CI green) -> merge WITHOUT waiting for a
+     reply: `gh pr create` -> `gh pr merge --merge --delete-branch` -> flip PLAN.md/task-file
+     status to STAGING -> commit + push that status flip -> report AFTER, not before. If the
+     worker's own status file doesn't already show a red->green transition (stash the
+     just-fixed source files back to the pre-fix commit, keep the new tests, confirm they
+     fail; restore, confirm they pass) — get that proof yourself in the supervisor session
+     before merging; don't ask the user to supply it and don't skip merging for lack of it
+     when you could produce it in a few minutes.
+   - **Genuinely not provable by a human-absent test** (visual/UX judgment call, a live
+     external integration, something only a human can eyeball) -> hold on the branch, update
+     the WAVE.md row (`stage: pushed`, `next gate: user test`), tell the user which branch is
+     ready with specific test steps mapped to acceptance criteria, and wait.
+   - Severity/sensitivity (security, payments, etc.) is NOT its own exception — the proof
+     standard gates the merge, not the topic.
+
+   Start the next queued task once this one is landed or handed off. Cleanup is automatic on
+   merge (post-merge hook); see spawn-worker for the fallback. On merge, delete the task's
+   WAVE.md row.
 
 ## Session lifetime (supervisor)
 
