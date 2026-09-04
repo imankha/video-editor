@@ -5,7 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
-import { TeammateTagInput, commitPendingTeammateText } from '../../../components/shared/TeammateTagInput';
+import { TeammateTagInput, commitPendingTeammateText, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { recordUiImpression } from '../../../utils/uiTelemetry';
@@ -381,6 +381,36 @@ export function AnnotateFullscreenOverlay({
     return savePromise;
   };
   handleSaveRef.current = handleSave;
+
+  // T8730: real unsaved-changes detection for the strip's Focus button. Compares
+  // the values handleSave WOULD persist (edit-mode payload, L344-354) against the
+  // loaded clip, so the false-positive "Save this play first?" dialog is gone when
+  // nothing changed. Conservative by design: any field diff — or a teammate typed
+  // but not yet Enter-committed — counts as dirty, because a false NEGATIVE would
+  // silently discard real edits when navigating to Focus. Called on click (not in
+  // render) so the hasUncommittedTeammateText() read reflects the live input.
+  const hasUnsavedEdits = () => {
+    if (!existingClip) return false;
+    const sortedEq = (a, b) =>
+      a.length === b.length &&
+      JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+    // Mirror handleSave's name logic: what would actually be saved, not the raw
+    // input (an auto-generated display name saves as '' and must not read dirty).
+    const autoGenName = generateClipName(rating, selectedTags, notes);
+    const nameToSave = isNameManuallyEdited ? clipName : (autoGenName ? '' : defaultClipName);
+    return (
+      rating !== (existingClip.rating || DEFAULT_RATING) ||
+      scrubStartTime !== existingClip.startTime ||
+      scrubEndTime !== existingClip.endTime ||
+      notes !== (existingClip.notes || '') ||
+      myAthlete !== (existingClip.my_athlete ?? true) ||
+      createProject !== !!existingClip.autoProjectId ||
+      nameToSave !== (existingClip.name || '') ||
+      !sortedEq(selectedTags, existingClip.tags || []) ||
+      !sortedEq(taggedTeammates, existingClip.tagged_teammates || []) ||
+      (!myAthlete && hasUncommittedTeammateText())
+    );
+  };
 
   if (!isVisible) return null;
 
@@ -784,10 +814,13 @@ export function AnnotateFullscreenOverlay({
           )}
         </div>
 
-        {/* Button row (outside the card): Layer + Focus (edit mode only) */}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        {/* Button row (outside the card): Layer + Focus (edit mode only).
+            T8730: more breathing room (mt-5 + gap-4) and Focus anchored right as
+            the edit-mode CTA. Touch targets floor at 44px on coarse pointers
+            (codebase convention — keyed off pointer type, not viewport width). */}
+        <div className="mt-5 flex flex-wrap items-center gap-4">
           <LayerSegmentedControl
-            size="sm"
+            size="md"
             value={myAthlete}
             onChange={(mine) => {
               setMyAthlete(mine);
@@ -801,10 +834,16 @@ export function AnnotateFullscreenOverlay({
           {isEditMode && existingClip?.autoProjectId && (
             <Button
               variant="cyan"
-              size="sm"
+              size="lg"
               icon={Crop}
               title="Open in Focus mode"
-              onClick={() => setFocusConfirmOpen(true)}
+              className="ml-auto coarse-pointer:min-h-[44px]"
+              // T8730: only prompt to save when there are ACTUAL unsaved changes;
+              // otherwise open Focus directly (no more false-positive dialog).
+              onClick={() => {
+                if (hasUnsavedEdits()) setFocusConfirmOpen(true);
+                else onOpenInFocus?.(existingClip.autoProjectId);
+              }}
             >
               Focus
             </Button>
@@ -816,7 +855,7 @@ export function AnnotateFullscreenOverlay({
         <ConfirmationDialog
           isOpen={focusConfirmOpen}
           title="Save this play first?"
-          message="Opening Focus closes the play editor."
+          message="Opening Focus closes the Annotate editor."
           onClose={() => setFocusConfirmOpen(false)}
           impressionKey="focus_while_editing_play"
           buttons={[
