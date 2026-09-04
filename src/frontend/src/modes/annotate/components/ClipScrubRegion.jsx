@@ -48,7 +48,15 @@ export function ClipScrubRegion({
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
   const [isPreviewing, setIsPreviewing] = useState(false);
-  const [previewTime, setPreviewTime] = useState(null); // null when not previewing
+  // T8720: the playhead marker mirrors the video's ACTUAL current time, so it
+  // is always visible (even when stopped) and tracks playback identically no
+  // matter how it was started — the Preview button, the transport play/pause
+  // button, or the spacebar. Seeded from the controller; a RAF (below) keeps it
+  // in sync. There is deliberately no separate preview-only playhead anymore.
+  const [playheadTime, setPlayheadTime] = useState(() => {
+    const t = videoController?.getCurrentTime?.();
+    return Number.isFinite(t) ? t : (currentTime ?? null);
+  });
   const previewRafRef = useRef(null);
 
   // Stable anchor: captured per-clip so the window doesn't shift during drag
@@ -92,10 +100,6 @@ export function ClipScrubRegion({
   useEffect(() => { startTimeRef.current = startTime; }, [startTime]);
   useEffect(() => { endTimeRef.current = endTime; }, [endTime]);
 
-  const clearPreviewPlayhead = useCallback(() => {
-    setPreviewTime(null);
-  }, []);
-
   // Stop preview helper (must be defined before handlePointerDown which references it)
   const stopPreview = useCallback(() => {
     videoController?.pause();
@@ -130,11 +134,10 @@ export function ClipScrubRegion({
     if (videoController && !videoController.isPaused()) {
       videoController.pause();
     }
-    // Stop any running preview and clear playhead when user starts dragging
+    // Stop any running preview when the user starts dragging
     if (isPreviewing) {
       stopPreview();
     }
-    clearPreviewPlayhead();
     // Calculate offset: where the user clicked vs where the handle center is
     const clickTime = pixelToTime(e.clientX);
     const handleTime = handle === 'start' ? startTimeRef.current : endTimeRef.current;
@@ -147,7 +150,7 @@ export function ClipScrubRegion({
     draggingRef.current = handle;
     setDragging(handle);
     e.target.setPointerCapture(e.pointerId);
-  }, [isPreviewing, stopPreview, clearPreviewPlayhead, pixelToTime]);
+  }, [isPreviewing, stopPreview, pixelToTime, videoController]);
 
   // Handle pointer move — reads everything from refs, never stale
   const handlePointerMove = useCallback((e) => {
@@ -212,16 +215,15 @@ export function ClipScrubRegion({
     videoController.seek(startTime);
     videoController.play();
     setIsPreviewing(true);
-    setPreviewTime(startTime);
 
     const tick = () => {
       const s = startTimeRef.current;
       const e = endTimeRef.current;
 
       if (videoController.isPaused() && previewRafRef.current) {
-        // Video was paused externally — stop animation but keep playhead visible
+        // Video was paused externally — stop the loop. The playhead keeps
+        // showing the paused position via the sync effect below.
         setIsPreviewing(false);
-        setPreviewTime(videoController.getCurrentTime());
         previewRafRef.current = null;
         return;
       }
@@ -231,21 +233,35 @@ export function ClipScrubRegion({
         videoController.seek(s);
       }
 
-      setPreviewTime(videoController.getCurrentTime());
       previewRafRef.current = requestAnimationFrame(tick);
     };
     previewRafRef.current = requestAnimationFrame(tick);
   }, [videoController, startTime, isPreviewing, stopPreview]);
 
-  // Clear stale playhead when main video starts playing (not via preview)
+  // T8720: keep the playhead marker locked to the video's real current time.
+  // A single RAF (while the editor is open) reads the controller each frame and
+  // updates state ONLY when the time actually changes — so a paused video costs
+  // no re-renders, and the marker follows playback started by ANY path (Preview
+  // button, transport play/pause button, spacebar) with no divergence. This is
+  // the single source of truth for the playhead; the old preview-only marker
+  // that vanished when stopped or on the main play event is gone.
   useEffect(() => {
-    if (isPreviewing || previewTime === null) return;
-    const el = videoController?.getActiveElement?.();
-    if (!el) return;
-    const onPlay = () => clearPreviewPlayhead();
-    el.addEventListener('play', onPlay);
-    return () => el.removeEventListener('play', onPlay);
-  }, [isPreviewing, previewTime, videoController, clearPreviewPlayhead]);
+    if (typeof videoController?.getCurrentTime !== 'function') return undefined;
+    let raf = null;
+    let last = null;
+    const follow = () => {
+      const t = videoController.getCurrentTime();
+      if (t !== last) {
+        last = t;
+        setPlayheadTime(t);
+      }
+      raf = requestAnimationFrame(follow);
+    };
+    raf = requestAnimationFrame(follow);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [videoController]);
 
   // Cleanup preview on unmount — only pause if a preview was actively running
   useEffect(() => {
@@ -261,6 +277,14 @@ export function ClipScrubRegion({
   const endPercent = timeToPercent(endTime);
   const anchorPercent = timeToPercent(anchor);
   const clipDuration = endTime - startTime;
+
+  // Playhead marker: shown whenever the real playhead is within the visible
+  // window (always the case while editing this clip), regardless of play state.
+  const playheadVisible =
+    Number.isFinite(playheadTime) &&
+    playheadTime >= windowStart &&
+    playheadTime <= windowEnd;
+  const playheadPercent = playheadVisible ? timeToPercent(playheadTime) : 0;
 
   // Tick marks for the timeline (every 5 seconds)
   const ticks = [];
@@ -291,10 +315,12 @@ export function ClipScrubRegion({
             className="absolute top-0 h-full w-px bg-yellow-500/50 pointer-events-none"
             style={{ left: `${anchorPercent}%` }}
           />
-          {previewTime !== null && (
+          {playheadVisible && (
             <div
+              data-testid="scrub-playhead"
+              data-playhead-time={playheadTime}
               className="absolute top-0 h-full w-0.5 bg-white pointer-events-none z-10"
-              style={{ left: `${timeToPercent(previewTime)}%` }}
+              style={{ left: `${playheadPercent}%` }}
             >
               <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
             </div>
@@ -418,11 +444,13 @@ export function ClipScrubRegion({
           style={{ left: `${anchorPercent}%` }}
         />
 
-        {/* Preview playhead */}
-        {previewTime !== null && (
+        {/* Playhead (always visible while editing; tracks the real video time) */}
+        {playheadVisible && (
           <div
+            data-testid="scrub-playhead"
+            data-playhead-time={playheadTime}
             className="absolute top-0 h-full w-0.5 bg-white pointer-events-none z-10"
-            style={{ left: `${timeToPercent(previewTime)}%` }}
+            style={{ left: `${playheadPercent}%` }}
           >
             <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
           </div>

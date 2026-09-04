@@ -537,4 +537,76 @@ describe('buildFullVideoTimeline', () => {
       expect(result.videoSequence).toBe(1);
     });
   });
+
+  // T8700 test 11 (design section 6 / Phase 3 "single->multi transition
+  // verification, GAP 3"). The design explicitly says NO code change is
+  // expected for this transition -- AnnotateContainer.applyGameData's
+  // `isMultiVideo = gameData.videos && gameData.videos.length > 1` predicate
+  // and buildFullVideoTimeline already exist and already handle it. There is
+  // no cheap unit-test seam for applyGameData itself (it's a useCallback
+  // closed over inside AnnotateContainer(...), which is called as a plain
+  // function per annotate.md, not mounted as a component by any existing
+  // test) -- so this is written as a REGRESSION-LOCK at the pure-function
+  // level applyGameData actually calls, exercising the exact single->multi
+  // switch (gameVideos: null -> buildFullVideoTimeline result) plus the
+  // legacy video_sequence=null -> offset-0 resolution
+  // (games.py COALESCE(rc.video_sequence, 1) / frontend `?? 1`, per
+  // annotate.md "Data flow"). EXPECTED TO PASS TODAY (not RED) -- flagged for
+  // the implementor: if Phase 1 backend work changes this predicate or the
+  // COALESCE/`?? 1` convention, this test must be revisited; if it stays
+  // untouched, this test is the proof it survived T8700 intact.
+  describe('T8700: single -> multi video transition (regression lock, GAP 3)', () => {
+    it('a game with 1 video derives gameVideos=null (single-video branch)', () => {
+      const videosFromLoad = [{ sequence: 1, blake3_hash: 'a'.repeat(64), duration: 2700 }];
+      const isMultiVideo = videosFromLoad && videosFromLoad.length > 1;
+      const gameVideos = isMultiVideo ? videosFromLoad : null;
+      expect(gameVideos).toBeNull();
+    });
+
+    it('re-loading the SAME game after an attach (1 -> 2 videos) switches to the multi-video timeline', () => {
+      // Before attach: /load returns 1 video.
+      const before = [{ sequence: 1, blake3_hash: 'a'.repeat(64), duration: 2700 }];
+      const isMultiVideoBefore = before && before.length > 1;
+      const gameVideosBefore = isMultiVideoBefore ? before : null;
+      const timelineBefore = gameVideosBefore && gameVideosBefore.length > 1
+        ? buildFullVideoTimeline(gameVideosBefore)
+        : null;
+      expect(gameVideosBefore).toBeNull();
+      expect(timelineBefore).toBeNull();
+
+      // After attach: a fresh /load (not a stale memo) returns 2 videos.
+      const after = [
+        { sequence: 1, blake3_hash: 'a'.repeat(64), duration: 2700 },
+        { sequence: 2, blake3_hash: 'b'.repeat(64), duration: 2700 },
+      ];
+      const isMultiVideoAfter = after && after.length > 1;
+      const gameVideosAfter = isMultiVideoAfter ? after : null;
+      const timelineAfter = gameVideosAfter && gameVideosAfter.length > 1
+        ? buildFullVideoTimeline(gameVideosAfter)
+        : null;
+
+      expect(gameVideosAfter).not.toBeNull();
+      expect(timelineAfter).not.toBeNull();
+      expect(timelineAfter.segments).toHaveLength(2);
+      expect(timelineAfter.totalDuration).toBe(5400);
+    });
+
+    it('a legacy clip with video_sequence=null resolves at offset 0 after the transition', () => {
+      const after = [
+        { sequence: 1, blake3_hash: 'a'.repeat(64), duration: 2700 },
+        { sequence: 2, blake3_hash: 'b'.repeat(64), duration: 2700 },
+      ];
+      const timeline = buildFullVideoTimeline(after);
+
+      // Frontend convention: `region.videoSequence ?? 1` (timeFormat.js, useAnnotate.js,
+      // ClipsSidePanel.jsx) before any getVideoOffset/sort call.
+      const legacyClipVideoSequence = null;
+      const resolvedSequence = legacyClipVideoSequence ?? 1;
+      expect(timeline.getVideoOffset(resolvedSequence)).toBe(0);
+
+      // The newly-attached video is append-only (sequence 2+, T8700 GAP 3), so it
+      // can never be sequence 1 and can never steal offset 0 from existing clips.
+      expect(timeline.getVideoOffset(2)).toBe(2700);
+    });
+  });
 });

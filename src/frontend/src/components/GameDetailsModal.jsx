@@ -401,43 +401,51 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             )}
           </div>
 
-          {/* Game details - collapsed by default; every field has a default so
-              submitting without ever opening this is fully supported. */}
+          {/* T8700: Opponent + Date are surfaced as first-class fields (out of
+              the old collapsed "optional" disclosure) — live-testing feedback was
+              that these feel wanted at creation, not skippable. Still non-blocking:
+              both carry defaults (placeholder opponent, today) so submit is gated
+              on the video alone (T8500). */}
+          <div className="space-y-4">
+            {/* Opponent Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Opponent Team
+              </label>
+              <input
+                type="text"
+                value={opponentName}
+                onChange={(e) => setOpponentName(e.target.value)}
+                placeholder="e.g., Carlsbad SC"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            {/* Game Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                <Calendar size={14} className="inline mr-1.5" />
+                Game Date
+              </label>
+              <input
+                type="date"
+                value={gameDate}
+                onChange={(e) => setGameDate(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 [color-scheme:dark]"
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+
+          {/* More options - the truly-advanced create-time settings stay in a
+              collapsed disclosure so the two-gesture upload (T8500) survives. */}
           <details className="group rounded-lg border border-gray-700 bg-gray-900/30" data-testid="game-details-disclosure">
             <summary className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 cursor-pointer select-none list-none hover:text-white [&::-webkit-details-marker]:hidden">
               <ChevronRight size={16} className="text-gray-400 shrink-0 transition-transform group-open:rotate-90" />
-              Game details (optional - you can edit these later)
+              More options
             </summary>
             <div className="px-3 pb-3 pt-1 space-y-4">
-              {/* Opponent Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Opponent Team
-                </label>
-                <input
-                  type="text"
-                  value={opponentName}
-                  onChange={(e) => setOpponentName(e.target.value)}
-                  placeholder="e.g., Carlsbad SC"
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {/* Game Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  <Calendar size={14} className="inline mr-1.5" />
-                  Game Date
-                </label>
-                <input
-                  type="date"
-                  value={gameDate}
-                  onChange={(e) => setGameDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 [color-scheme:dark]"
-                  disabled={isSubmitting}
-                />
-              </div>
 
               {/* Game Type */}
               <div>

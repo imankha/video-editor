@@ -1,6 +1,6 @@
 # T8690: Hide the quest_1-4 "Watch tutorial video" steps for now (keep code intact)
 
-**Status:** TODO
+**Status:** STAGING (merged to master 2026-09-04, PR #334)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-04

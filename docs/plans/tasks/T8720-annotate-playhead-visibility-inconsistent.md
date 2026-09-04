@@ -1,6 +1,6 @@
 # T8720: Playhead disappears/behaves inconsistently in Annotate's add/edit-play mode
 
-**Status:** WIP (dotask spawn)
+**Status:** STAGING (merged to master 2026-09-04, PR #332)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-04

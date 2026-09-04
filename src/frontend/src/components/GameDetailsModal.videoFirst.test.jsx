@@ -57,11 +57,25 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(screen.getByText(/Balance:\s*88/)).toBeTruthy();
   });
 
-  it('renders the details disclosure closed by default in create mode', () => {
+  it('renders the More options disclosure closed by default in create mode', () => {
     renderModal();
     const details = screen.getByTestId('game-details-disclosure');
     expect(details.open).toBe(false);
-    expect(screen.getByText('Game details (optional - you can edit these later)')).toBeTruthy();
+    // T8700: the advanced create-time settings (game type, tournament, video
+    // format) stay collapsed; the summary is now the neutral "More options".
+    expect(screen.getByText('More options')).toBeTruthy();
+  });
+
+  it('surfaces Opponent + Date as first-class fields OUTSIDE the collapsed disclosure (T8700)', () => {
+    const { container } = renderModal();
+    // Opponent input (its placeholder) and the date input are reachable without
+    // ever opening the "More options" disclosure — they read as wanted, not skippable.
+    expect(screen.getByPlaceholderText('e.g., Carlsbad SC')).toBeTruthy();
+    expect(container.querySelector('input[type="date"]')).toBeTruthy();
+    // And they are not descendants of the collapsed disclosure.
+    const details = screen.getByTestId('game-details-disclosure');
+    expect(details.contains(screen.getByPlaceholderText('e.g., Carlsbad SC'))).toBe(false);
+    expect(details.contains(container.querySelector('input[type="date"]'))).toBe(false);
   });
 
   it('disables submit until a file is selected, then enables it with zero typing', () => {

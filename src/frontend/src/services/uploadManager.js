@@ -637,7 +637,11 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     notify(UPLOAD_PHASE.FINALIZING, 100, 'Already uploaded - finishing up');
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
     return {
-      blake3_hash: hash,
+      // Prefer the server-confirmed hash for the object actually in R2 (matches
+      // the upload-required path, which returns finalizeData.blake3_hash). In
+      // production this equals the locally-computed `hash` we prepared with;
+      // sourcing it from the server keeps R2 authoritative on what's stored.
+      blake3_hash: prepareData.blake3_hash || hash,
       file_size: prepareData.file_size || file.size,
       uploaded: false,
     };
@@ -1092,6 +1096,65 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     notify(UPLOAD_PHASE.ERROR, 0, error.message);
     throw error;
   }
+}
+
+/**
+ * T8700: Attach ONE additional video to an existing, already-`ready` game.
+ *
+ * Reuses the exact create-time transport uploadMultiVideoGame runs for halves
+ * >= 2 — hashAndAnalyze -> ensureVideoInR2 (dedup-aware R2 multipart upload) ->
+ * addVideosToGame (POST /api/games/{id}/videos) — so create-time and attach-time
+ * share ONE upload path (DRY). The hardened endpoint (design Phase 1) charges
+ * credits, writes a storage ref, and assigns the append-only sequence
+ * server-side; this helper drives the client transport and, ONLY on success,
+ * re-loads the game so Annotate re-derives its virtual timeline (single->multi
+ * transition, design GAP 3). The re-load is a READ — no reactive write-back.
+ *
+ * The `blake3_hash` sent is the server-confirmed hash of the object in R2; the
+ * server assigns the sequence (append-only), so we do not send one.
+ *
+ * @param {number} gameId - Existing ready game to attach the video to
+ * @param {File} file - Video file (e.g. a second half)
+ * @param {function} [onProgress] - ({ phase, percent, message }) => void
+ * @returns {Promise<Object>} - addVideosToGame result incl. upload_cost_charged
+ */
+export async function attachVideoToExistingGame(gameId, file, onProgress) {
+  const notify = (phase, percent, message) => {
+    if (onProgress) onProgress({ phase, percent, message });
+  };
+
+  // Step 1: hash + faststart analysis (emits 'hashing' progress).
+  const hashResult = await hashAndAnalyze(file, onProgress);
+
+  // Step 2: ensure the bytes are durable in R2 (dedup-aware multipart upload).
+  const r2Result = await ensureVideoInR2(file, onProgress, {
+    precomputed: hashResult,
+  });
+
+  // Step 3: attach to the game. The endpoint assigns the append-only sequence
+  // (MAX(sequence)+1) server-side, so we intentionally omit `sequence`.
+  const videoRef = {
+    blake3_hash: r2Result.blake3_hash,
+    file_size: r2Result.file_size,
+    duration: null,
+    width: null,
+    height: null,
+  };
+  const result = await addVideosToGame(gameId, [videoRef]);
+
+  // Step 4 (success only): re-load the game via /load so AnnotateContainer
+  // re-derives gameVideos and buildFullVideoTimeline runs (single->multi). Also
+  // refresh the games list so its aggregate duration/size pick up the new half,
+  // and the quest progress in case a milestone fired. A throw in step 1-3 skips
+  // this entirely — no reload on failure.
+  const { useGamesDataStore } = await import('../stores/gamesDataStore');
+  await useGamesDataStore.getState().loadGame(gameId);
+  useGamesDataStore.getState().invalidateGames();
+  useQuestStore.getState().fetchProgress({ force: true });
+
+  notify(UPLOAD_PHASE.COMPLETE, 100, 'Video added');
+
+  return result;
 }
 
 /**
