@@ -30,6 +30,21 @@ vi.mock('../../hooks/useGameUpload', () => ({
 vi.mock('../../hooks/useProjectLoader', () => ({
   useProjectLoader: () => ({ loadProject: vi.fn() }),
 }));
+// Heavy, side-effectful store (pulls in uploadManager, creditStore, questStore, shared
+// toast) that this test doesn't exercise — stubbed for the same reason the mocks above
+// are, and its absence here (while every other heavy ProjectsScreen dependency already had
+// one) is the actual cause of the "useUploadStore is not a function" / vitest-worker RPC
+// crashes this file kept producing: without a mock, its real module competes with this
+// file's mocked siblings for Vite's SSR module graph and loses the race.
+vi.mock('../../stores/uploadStore', () => ({
+  useUploadStore: (selector) =>
+    selector({
+      uploads: [],
+      cancelUpload: vi.fn(),
+      insufficientCredits: false,
+      clearInsufficientCredits: vi.fn(),
+    }),
+}));
 vi.mock('../../services/ExportWebSocketManager', () => ({
   default: { addEventListener: () => () => {} },
 }));
@@ -84,19 +99,25 @@ describe('ProjectsScreen idle preload', () => {
     delete window.cancelIdleCallback;
   });
 
-  it('schedules an idle editor-screen preload on mount', () => {
+  it('schedules an idle editor-screen preload on mount', async () => {
     render(<ProjectsScreen />);
 
     // Mount schedules exactly one idle preload, and the scheduled work is the
-    // preload (a function returning a promise). We don't await the real dynamic
-    // import here — that timing is covered by the preloadEditorScreens test and is
-    // slow under full-suite transform contention.
+    // preload (a function returning a promise).
     expect(window.requestIdleCallback).toHaveBeenCalledTimes(1);
     const scheduled = idleCallbacks[0];
     expect(typeof scheduled).toBe('function');
     const result = scheduled();
     expect(typeof result.then).toBe('function');
-    result.catch(() => {}); // swallow the floating preload promise
+    // Await to completion rather than leaving it floating: an unawaited promise
+    // here races Vitest's per-file worker teardown against this promise's
+    // still-in-flight module resolution, producing "[vitest-worker]: Closing rpc
+    // while 'fetch' was pending" — the exact known-failures.md row 30 signature,
+    // and very likely the true origin of row 29's "useUploadStore is not a
+    // function" in this same file too (a corrupted module cache left behind by
+    // the race). preloadEditorScreens() already catches every importer's
+    // rejection internally, so this can never throw.
+    await result;
   });
 
   it('cancels the scheduled idle preload on unmount', () => {
