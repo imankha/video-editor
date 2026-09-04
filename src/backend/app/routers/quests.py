@@ -51,6 +51,12 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
+    # T8520: overlay-is-an-offer completion-choice events — analytics-only (NOT
+    # quest steps, so absent from _STEP_ACHIEVEMENT_KEYS). Bridge to identically
+    # named milestones via ACHIEVEMENT_TO_MILESTONE.
+    "overlay_offered",
+    "overlay_deferred",
+    "overlay_declined",
     # Publish-quest step events (Preview player + Move to My Reels button)
     "previewed_draft_reel_1s",  # T6840
     "moved_to_my_reels",
@@ -85,6 +91,10 @@ ACHIEVEMENT_TO_MILESTONE = {
     "overlay_players_assigned": "overlay_players_assigned",
     "overlay_color_set": "overlay_color_set",
     "overlay_shape_set": "overlay_shape_set",
+    # T8520: overlay-is-an-offer completion-choice events (key == milestone name).
+    "overlay_offered": "overlay_offered",
+    "overlay_deferred": "overlay_deferred",
+    "overlay_declined": "overlay_declined",
     "previewed_draft_reel_1s": "previewed_draft_reel_1s",  # T6840
     # T7510: `moved_to_my_reels` no longer bridges to a milestone — it emits
     # server-side as `move_succeeded` from downloads.py:move_reels_to_profile at

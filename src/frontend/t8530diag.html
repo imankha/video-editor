@@ -1,0 +1,29 @@
+<!doctype html>
+<!--
+  T8530 DEV-ONLY diagnostic harness for the draft preview publish surface
+  (DraftReelPreview -> CollectionPlayer, driven by reelPreviewStore.open()).
+  NOT a production page: Vite's default build entry is index.html only, and
+  this file is not added to rollupOptions.input, so it never ships in the
+  built app (same pattern as collectionplayerdiag.html / t8520diag.html).
+
+  Mounts the REAL DraftReelPreview (which reads reelPreviewStore + calls the
+  REAL usePublishProject hook, which does a REAL
+  POST /api/downloads/publish/{projectId}) so a Playwright spec can drive the
+  actual T8530 component tree and mock only the network boundary (the publish
+  endpoint response + the video stream), exactly like collectionplayerdiag.html
+  mocks nothing but serves a real local sample MP4.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T8530 draft preview diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="t8530diag-root"></div>
+    <script type="module" src="/src/t8530diag/main.jsx"></script>
+  </body>
+</html>

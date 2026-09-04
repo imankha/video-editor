@@ -557,4 +557,11 @@ export const LOCAL_ONLY_SPECS = [
     depends: ['/bug38diag.html'],
     reason: 'drives the dev-only bug38diag harness (REAL auto-select + frame-step modules) by a RELATIVE path; on a deployed target the harness never mounts. The auto-spotlight landing + frame-step proofs need real playback/decoding jsdom cannot give.',
   },
+  {
+    file: 'T8520-T8530-overlay-choice-and-publish.spec.js',
+    category: 'dev-harness',
+    depends: ['/t8520diag.html', '/t8530diag.html'],
+    reason:
+      'drives two dev-only harnesses (REAL ConfirmationDialog/OverlayEffectIllustration + REAL DraftReelPreview/CollectionPlayer/usePublishProject) by a RELATIVE path; on a deployed target neither harness mounts. Forced-entry fallback: no seeded account in this env has an exportable draft (real Focus/overlay renders need Modal, disabled here), so the completion-choice card and the draft-preview publish surface are proven via their own dedicated Vite entries instead of the live export pipeline.',
+  },
 ];

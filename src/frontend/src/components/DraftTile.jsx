@@ -11,10 +11,9 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useCurrentProfile } from '../stores/profileStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
-import { useGalleryStore } from '../stores/galleryStore';
 import { useQuestStore } from '../stores/questStore';
+import { usePublishProject } from '../hooks/usePublishProject';
 import { useIsCoarsePointer } from '../hooks/useIsMobile';
-import apiFetch from '../utils/apiFetch';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
@@ -45,11 +44,11 @@ import { staleClipCount } from '../utils/reelStaleness';
 export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set(), sourceExpiry = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  // T4050: when a durable publish fails to reach R2 (503 sync_failed), the card
-  // stays put and we stash the gesture args so the user can Retry the exact same
-  // "Move to My Reels" with one click (no refetch, no optimistic removal).
-  const [publishRetry, setPublishRetry] = useState(null);
+  // T8530: publish is the shared usePublishProject gesture (extracted from this
+  // component so DraftTile + the draft preview player run ONE publish path,
+  // carrying the T4050 durable-sync contract verbatim). `publishRetry` still
+  // drives the in-card Retry surface below on a 503 sync_failed.
+  const { publish: publishProject, isPublishing, publishRetry } = usePublishProject(project);
   const [isPreviewing, setIsPreviewing] = useState(false);
   // T6840: quest_4 "Watch Your Preview" fires after ~1s of preview playback
   // (autoPlay), mirroring watched_gallery_video_1s so opening and instantly
@@ -83,7 +82,6 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
-  const fetchProjects = useProjectsStore(state => state.fetchProjects);
   // Q3 (item 3): the draft whose project is currently loaded in the editor gets a
   // persistent accent ring so the user can spot "the one I'm working on" in the row.
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
@@ -123,61 +121,6 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       document.removeEventListener('touchstart', onOutside);
     };
   }, [menuOpen]);
-
-  const publishProject = async ({ openGallery }) => {
-    setIsPublishing(true);
-    // T4050 publish tracing: card removal is driven by fetchProjects re-reading
-    // backend state below (NOT an optimistic local removal). These [Publish] logs
-    // let a real "Move to My Reels" attempt be traced end-to-end (click -> POST ->
-    // 200 -> refetch) and correlated with the backend [Publish]/[SYNC] log lines.
-    console.log(`[Publish] click project=${project.id} openGallery=${openGallery} -> POST publish`);
-    try {
-      const response = await apiFetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
-        method: 'POST',
-      });
-      // T4050: a durable sync failure means the publish committed locally but never
-      // reached R2. Returning 200 would let fetchProjects remove the card while the
-      // reel silently reverts on the next session. Keep the card, skip the refetch,
-      // and surface Retry (same gesture) instead of the blunt alert.
-      if (response.status === 503) {
-        const error = await response.json().catch(() => ({}));
-        if (error.code === 'sync_failed') {
-          console.warn(`[Publish] project=${project.id} sync_failed (503) - card kept, offering Retry`);
-          setPublishRetry({ openGallery });
-          return;
-        }
-      }
-      if (!response.ok) {
-        const error = await response.json();
-        // Card is NOT removed on failure: we throw before fetchProjects, the catch
-        // alerts, and the draft stays put.
-        console.warn(`[Publish] project=${project.id} FAILED status=${response.status} - card kept in Drafts`);
-        throw new Error(error.detail || 'Failed to publish');
-      }
-      const result = await response.json();
-      setPublishRetry(null);
-      console.log(`[Publish] project=${project.id} 200 ok archived=${result.archived} final_video_id=${result.final_video_id}`);
-      if (!result.archived) {
-        console.warn(`[ProjectCard] Project ${project.id} published but archive failed - card stays in Drafts.`);
-      }
-      // Model changed (a reel was published) -> update count badge + dispatch the
-      // collections-changed event so the My Reels list refreshes itself.
-      useGalleryStore.getState().fetchCount({ force: true });
-      useGalleryStore.getState().notifyCollectionsChanged();
-      console.log(`[Publish] project=${project.id} refetching projects (card removal reflects backend state)`);
-      fetchProjects({ force: true });
-      // quest_4 "Move to My Reels" step — the publish gesture completes it.
-      useQuestStore.getState().recordAchievement('moved_to_my_reels');
-      if (openGallery) {
-        useGalleryStore.getState().open();
-      }
-    } catch (error) {
-      console.error('[Publish] error:', error);
-      alert(`Failed to move to ${SECTION_NAMES.LIBRARY}: ${error.message}`);
-    } finally {
-      setIsPublishing(false);
-    }
-  };
 
   const handlePublishToMyReels = (e) => {
     e.stopPropagation();
@@ -788,12 +731,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             type="button"
             onClick={handlePublishToMyReels}
             disabled={isPublishing}
-            aria-label={`Move to ${SECTION_NAMES.LIBRARY}`}
-            title={`Move to ${SECTION_NAMES.LIBRARY}`}
+            aria-label={`Publish to ${SECTION_NAMES.LIBRARY}`}
+            title={`Publish to ${SECTION_NAMES.LIBRARY}`}
             className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold tracking-tight bg-cyan-500 text-gray-950 shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 active:scale-[0.98] disabled:opacity-60 transition-all coarse-pointer:min-h-[44px]"
           >
             {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <FolderInput size={14} />}
-            Move to {SECTION_NAMES.LIBRARY}
+            Publish to {SECTION_NAMES.LIBRARY}
           </button>
           {/* Secondary — same footprint as the primary so they pair; outlined rather
               than a translucent slab, so it reads as a button and not as scrim. */}
