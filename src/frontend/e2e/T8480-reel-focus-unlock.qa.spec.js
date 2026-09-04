@@ -14,8 +14,8 @@ import { openAddClipForm } from './helpers/annotateClips.js';
  * Proves, against the running app (empty test-session bypass, local stack):
  *   - save with reel ON -> the Focus tab is enabled immediately (new project
  *     auto-selected), zero extra gestures
- *   - the toast reads exactly "Reel started, click Focus to complete" and its
- *     action opens Focus for the new reel
+ *   - the toast confirms the clip is now in "In Progress Clips" (T8760) and
+ *     its action opens Focus for the new reel
  *   - saving does NOT navigate away from Annotate or reload its video
  *   - tapping a locked tab fires a visible explanation toast (390x844 too)
  *
@@ -29,7 +29,8 @@ const __dirname = path.dirname(__filename);
 const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/test.short');
 const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 
-const TOAST_COPY = 'Reel started, click Focus to complete';
+// T8760: the reel-created toast now names the clip and confirms its home tab.
+const TOAST_COPY = /is now in In Progress Clips/;
 
 /** Fresh throwaway user per test run so reruns never collide. */
 function makeUserId(tag) {

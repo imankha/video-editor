@@ -84,6 +84,10 @@ export function AnnotateControls({
   onAddClip,
   isEditMode = false,
   videoController,
+  // T8760 item 10: while a clip is open for editing, the readout shows
+  // clip-relative time (elapsed / clip-duration) instead of the absolute
+  // game-time. `{ start, end }` when editing a clip, else null (unchanged).
+  clipEditBounds = null,
 }) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -159,10 +163,24 @@ export function AnnotateControls({
         />
       </div>
 
-      {/* Time display */}
-      <div className="text-white font-mono text-xs">
-        {formatTime(currentTime)}<span className="hidden sm:inline"> / {formatTime(duration)}</span>
-      </div>
+      {/* Time display — T8760 item 10: clip-relative while editing a clip
+          (the absolute game clock isn't relevant to the clip), absolute
+          otherwise. */}
+      {clipEditBounds ? (
+        (() => {
+          const clipLength = Math.max(0, clipEditBounds.end - clipEditBounds.start);
+          const elapsed = Math.max(0, Math.min(currentTime - clipEditBounds.start, clipLength));
+          return (
+            <div className="text-white font-mono text-xs" data-testid="clip-relative-time">
+              {elapsed.toFixed(1)}s<span> / {clipLength.toFixed(1)}s</span>
+            </div>
+          );
+        })()
+      ) : (
+        <div className="text-white font-mono text-xs">
+          {formatTime(currentTime)}<span className="hidden sm:inline"> / {formatTime(duration)}</span>
+        </div>
+      )}
 
       {/* Right side controls */}
       <div className="flex items-center gap-2">

@@ -119,6 +119,14 @@ export function AnnotateModeView({
     return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
 
+  // T8760 item 10: while a clip is open for editing, the transport readout is
+  // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
+  // the absolute game-time readout is unchanged there.
+  const clipEditBounds = useMemo(
+    () => (existingClip ? { start: existingClip.startTime, end: existingClip.endTime } : null),
+    [existingClip],
+  );
+
   // T4070/T4080: in-match soccer-notation clock (MM'SS") for a clip region, shown on the
   // NotesOverlay banner. Shared with the annotation clip lists via clipGameClock (T4080) so the
   // banner and the lists agree. boundaryOffsets are the per-half virtual starts; single-video
@@ -650,6 +658,7 @@ export function AnnotateModeView({
                     onAddClip={underCanvasEditor ? undefined : onAddClip}
                     isEditMode={isEditMode}
                     videoController={videoController}
+                    clipEditBounds={clipEditBounds}
                   />
                 </div>
                 {annotateFullscreen && (
@@ -727,6 +736,7 @@ export function AnnotateModeView({
                       onAddClip={onAddClip}
                       isEditMode={isEditMode}
                       videoController={videoController}
+                      clipEditBounds={clipEditBounds}
                     />
                     <div className="bg-gray-900/90 px-2 py-0.5">
                       <AnnotateMode

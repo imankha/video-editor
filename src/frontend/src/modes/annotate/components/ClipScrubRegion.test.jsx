@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, act, cleanup } from '@testing-library/react';
 import { ClipScrubRegion } from './ClipScrubRegion';
 
 /**
@@ -114,32 +114,13 @@ describe('ClipScrubRegion playhead (T8720)', () => {
     expect(playheadLeftPercent()).toBeCloseTo(70, 1);
   });
 
-  it('produces IDENTICAL playhead state for the Preview button and the main path (symptom 2)', () => {
-    // Preview path: click the Preview button (seeks to startTime, plays, loops).
-    const previewCtrl = makeController(100);
-    const { unmount } = render(<ClipScrubRegion {...baseProps(previewCtrl)} />);
-    const previewBtn = screen.getByTitle('Preview clip');
-    fireEvent.click(previewBtn);
-    // Preview seeks to startTime (98) and plays; advance to 102 (inside the clip
-    // so the loop doesn't seek it back) as it runs.
-    previewCtrl.state.time = 102;
-    flushFrame();
-    const previewLeft = playheadLeftPercent();
-    const previewTime = parseFloat(screen.getByTestId('scrub-playhead').dataset.playheadTime);
-    unmount();
-
-    // Main path: no Preview click; the element just plays and advances to 102.
-    const mainCtrl = makeController(100);
-    render(<ClipScrubRegion {...baseProps(mainCtrl)} />);
-    mainCtrl.state.paused = false;
-    mainCtrl.state.time = 102;
-    flushFrame();
-    const mainLeft = playheadLeftPercent();
-    const mainTime = parseFloat(screen.getByTestId('scrub-playhead').dataset.playheadTime);
-
-    // Both paths land the playhead at the same time AND the same position.
-    expect(previewTime).toBeCloseTo(mainTime, 3);
-    expect(previewLeft).toBeCloseTo(mainLeft, 1);
+  it('no longer renders a per-editor Preview button (T8760 single play control)', () => {
+    // T8760 item 5: the small in-editor play/preview button is gone — the main
+    // transport bar is the single playback control.
+    const controller = makeController(100);
+    render(<ClipScrubRegion {...baseProps(controller)} />);
+    expect(screen.queryByTitle('Preview clip')).toBeNull();
+    expect(screen.queryByTitle('Stop preview')).toBeNull();
   });
 
   it('keeps the playhead visible after playback stops (symptom 1)', () => {
@@ -174,5 +155,100 @@ describe('ClipScrubRegion playhead (T8720)', () => {
     controller.state.time = 100;
     flushFrame();
     expect(screen.queryByTestId('scrub-playhead')).toBeTruthy();
+  });
+});
+
+/**
+ * T8760 — clip-scoped looping playback + defaults, while EDITING a clip.
+ *
+ * The loop lives in the same playhead-follow RAF and is gated on `existingClip`
+ * (edit mode). Because the loop code only exists while this component is
+ * mounted (only while the clip editor is open), it cannot leak into normal game
+ * playback.
+ */
+const editProps = (controller, clip) => ({
+  ...baseProps(controller),
+  existingClip: clip,
+  startTime: clip.startTime,
+  endTime: clip.endTime,
+  // Primary editor (Add/Edit overlay) — the only surface where clip-scoped
+  // playback is active. The clips-sidebar scrub region omits this.
+  clipEditorActive: true,
+});
+
+describe('ClipScrubRegion clip-scoped loop (T8760)', () => {
+  it('seeds the playhead to the clip start when opened for editing (item 7)', () => {
+    const controller = makeController(200);
+    const clip = { id: 'c1', startTime: 98, endTime: 104 };
+    render(<ClipScrubRegion {...editProps(controller, clip)} />);
+    // On open, the video is seeked to the clip start (not left at 200).
+    expect(controller.seek).toHaveBeenCalledWith(98);
+    expect(controller.state.time).toBe(98);
+  });
+
+  it('loops playback back to the clip start when it runs past the clip end (item 6)', () => {
+    const controller = makeController(98);
+    const clip = { id: 'c1', startTime: 98, endTime: 104 };
+    render(<ClipScrubRegion {...editProps(controller, clip)} />);
+    controller.seek.mockClear();
+
+    // Playing, advance past the end -> the follow RAF seeks back to start.
+    controller.state.paused = false;
+    controller.state.time = 105;
+    flushFrame();
+
+    expect(controller.seek).toHaveBeenLastCalledWith(98);
+    expect(controller.state.time).toBe(98);
+  });
+
+  it('does NOT loop while paused, even past the clip end', () => {
+    const controller = makeController(98);
+    const clip = { id: 'c1', startTime: 98, endTime: 104 };
+    render(<ClipScrubRegion {...editProps(controller, clip)} />);
+    controller.seek.mockClear();
+
+    controller.state.paused = true;
+    controller.state.time = 105;
+    flushFrame();
+
+    expect(controller.seek).not.toHaveBeenCalled();
+  });
+
+  it('does NOT loop in create mode (no existingClip) — the loop is edit-scoped', () => {
+    // Regression proof that the clip-scoped loop cannot leak into normal game
+    // playback: with no clip being edited, playing past the region never seeks.
+    const controller = makeController(100);
+    render(<ClipScrubRegion {...baseProps(controller)} />); // existingClip: null
+    controller.state.paused = false;
+    controller.state.time = 300; // far past endTime (104)
+    flushFrame();
+    expect(controller.seek).not.toHaveBeenCalled();
+    expect(controller.state.time).toBe(300);
+  });
+
+  it('does NOT loop or seed in the clips SIDEBAR (existingClip set, clipEditorActive false)', () => {
+    // The sidebar ClipDetailsEditor mounts ClipScrubRegion with a clip but WITHOUT
+    // clipEditorActive — the merely-SELECTED state keeps whole-game playback and
+    // no seed-to-start. This is the exact non-leak the reviewer flagged.
+    const controller = makeController(200);
+    const clip = { id: 'c1', startTime: 98, endTime: 104 };
+    render(
+      <ClipScrubRegion
+        {...baseProps(controller)}
+        existingClip={clip}
+        startTime={clip.startTime}
+        endTime={clip.endTime}
+        // clipEditorActive intentionally omitted (defaults false)
+      />,
+    );
+    // No seed-to-start on mount.
+    expect(controller.seek).not.toHaveBeenCalled();
+    expect(controller.state.time).toBe(200);
+    // No loop while playing past the clip end.
+    controller.state.paused = false;
+    controller.state.time = 300;
+    flushFrame();
+    expect(controller.seek).not.toHaveBeenCalled();
+    expect(controller.state.time).toBe(300);
   });
 });

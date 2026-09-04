@@ -26,6 +26,7 @@ import { VideoMode, GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
+import { generateClipName } from '../utils/clipDisplayName';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
 
@@ -77,9 +78,13 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
  * FRAMING/OVERLAY mode), so this never navigates or reloads the video.
  * Module-scope (not a closure) so unit tests can exercise it directly.
  */
-export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects }) {
+export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName } = {}) {
   useProjectsStore.getState().selectProject(projectId);
-  toast.success('Reel started, click Focus to complete', {
+  // T8760 item 2: name the clip and confirm its new home — the "In Progress
+  // Clips" tab (T8555). The "Open Focus" action still carries T8480's
+  // Focus-unlock affordance. `dedupKey` unchanged so it collapses duplicates.
+  const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your clip';
+  toast.success(`${name} is now in In Progress Clips`, {
     duration: 6000,
     dedupKey: 'reel-created',
     action: {
@@ -88,6 +93,17 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
     },
   });
   fetchProjects({ force: true });
+}
+
+/**
+ * T8760: the display name a reel-created toast should show for a clip region.
+ * Mirrors how the annotate editor derives a clip's display name (stored name,
+ * else generated from rating/tags/notes).
+ */
+function reelToastClipName(region) {
+  const stored = region?.name?.trim();
+  if (stored) return stored;
+  return generateClipName(region?.rating, region?.tags, region?.notes) || '';
 }
 
 /**
@@ -874,8 +890,8 @@ export function AnnotateContainer({
 
   // T8480: shared handler for the three `result.project_created` sites below
   // (see announceReelCreated at module scope).
-  const notifyReelCreated = useCallback((projectId) => {
-    announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects });
+  const notifyReelCreated = useCallback((projectId, clipName) => {
+    announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName });
   }, [onOpenReelInFocus, fetchProjects]);
 
   /**
@@ -951,7 +967,7 @@ export function AnnotateContainer({
 
           if (result.project_created) {
             setAutoProjectId(newRegion.id, result.project_id);
-            notifyReelCreated(result.project_id);
+            notifyReelCreated(result.project_id, reelToastClipName(newRegion));
           }
         }
       }
@@ -1036,7 +1052,7 @@ export function AnnotateContainer({
 
         if (result.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          notifyReelCreated(result.project_id);
+          notifyReelCreated(result.project_id, reelToastClipName(region));
         }
       }
     } else {
@@ -1069,7 +1085,7 @@ export function AnnotateContainer({
         }
         if (result?.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          notifyReelCreated(result.project_id);
+          notifyReelCreated(result.project_id, reelToastClipName(region));
         }
       } else if (updates.createProject != null) {
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');

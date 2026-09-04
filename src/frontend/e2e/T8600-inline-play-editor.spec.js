@@ -200,7 +200,9 @@ test.describe('T8600: Desktop inline play editor strip', () => {
 
     const strip = getStrip(page);
     await expect(strip).toBeVisible();
-    await expect(strip).toContainText('Editing:');
+    // T8760 item 4: the header dropped "Editing:"; the pencil ("Rename this
+    // play") is the one name-edit affordance.
+    await expect(strip.locator('[title="Rename this play"]')).toBeVisible();
     await expect(strip.locator('button:has-text("Update")')).toBeVisible();
 
     await strip.locator('button:has-text("Update")').click();

@@ -146,6 +146,10 @@ export function AnnotateFullscreenOverlay({
   const [selectedTags, setSelectedTags] = useState([]);
   const [clipName, setClipName] = useState('');
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
+  // T8760 item 4: in the strip (desktop edit) layout the header name IS the one
+  // edit affordance — clicking the pencil turns it into an inline input. This
+  // replaces the standalone name field the button row used to duplicate (item 3).
+  const [isEditingName, setIsEditingName] = useState(false);
   // Mirror currentTime in a ref so the reset effect below reads the playhead
   // at transition time without re-running on seek-driven updates during drag.
   // Must NOT be frozen at open time: the overlay can switch edit->create while
@@ -192,6 +196,7 @@ export function AnnotateFullscreenOverlay({
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
     const t = currentTimeRef.current;
+    setIsEditingName(false); // T8760: close inline name editing on clip switch
     if (existingClip) {
       setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
@@ -462,6 +467,7 @@ export function AnnotateFullscreenOverlay({
           onDragStart={() => onScrubDragChange?.(true)}
           onDragEnd={() => onScrubDragChange?.(false)}
           videoController={videoController}
+          clipEditorActive
         />
 
         {/* Star Rating */}
@@ -601,7 +607,7 @@ export function AnnotateFullscreenOverlay({
                   icon={Plus}
                   onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
                 >
-                  Create Reel
+                  Clip Out Play
                 </Button>
               )
             ) : (
@@ -659,15 +665,54 @@ export function AnnotateFullscreenOverlay({
           data-testid="annotate-editor-strip"
           className={`rounded-lg border ${isEditMode ? 'bg-yellow-950/20 border-yellow-800/40' : 'bg-green-950/20 border-green-800/40'}`}
         >
-          {/* Header row */}
+          {/* Header row — T8760 items 3+4: in edit mode the header is the ONE
+              place the clip name shows and the ONE edit affordance. The pencil
+              (or the name) opens an inline input; there is no separate name
+              field in the controls row anymore. "Editing:" is dropped. */}
           <div className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
             <div className="flex items-center gap-2 min-w-0">
-              {isEditMode
-                ? <Pencil size={16} className="text-yellow-400 shrink-0" />
-                : <Plus size={16} className="text-green-400 shrink-0" />}
-              <span className="text-sm font-semibold text-white truncate">
-                {isEditMode ? `Editing: ${clipDisplayName}` : 'Adding new play'}
-              </span>
+              {isEditMode ? (
+                isEditingName ? (
+                  <>
+                    <Pencil size={16} className="text-yellow-400 shrink-0" />
+                    <input
+                      type="text"
+                      value={clipName}
+                      onChange={handleNameChange}
+                      onBlur={() => setIsEditingName(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === 'Escape') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsEditingName(false);
+                        }
+                      }}
+                      aria-label="Clip name"
+                      placeholder="Clip name"
+                      autoFocus
+                      className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
+                                 text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
+                    />
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingName(true)}
+                    title="Rename this play"
+                    className="flex items-center gap-2 min-w-0 group"
+                  >
+                    <Pencil size={16} className="text-yellow-400 shrink-0 group-hover:text-yellow-300" />
+                    <span className="text-sm font-semibold text-white truncate group-hover:underline">
+                      {clipDisplayName}
+                    </span>
+                  </button>
+                )
+              ) : (
+                <>
+                  <Plus size={16} className="text-green-400 shrink-0" />
+                  <span className="text-sm font-semibold text-white truncate">Adding new play</span>
+                </>
+              )}
             </div>
             <button onClick={onClose} title="Cancel (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
               <X size={18} className="text-gray-400" />
@@ -688,6 +733,7 @@ export function AnnotateFullscreenOverlay({
               onDragStart={() => onScrubDragChange?.(true)}
               onDragEnd={() => onScrubDragChange?.(false)}
               videoController={videoController}
+              clipEditorActive
             />
           </div>
 
@@ -706,7 +752,7 @@ export function AnnotateFullscreenOverlay({
                   icon={Plus}
                   onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
                 >
-                  Create Reel
+                  Clip Out Play
                 </Button>
               )
             ) : (
@@ -721,17 +767,23 @@ export function AnnotateFullscreenOverlay({
               </div>
             )}
 
-            <div className="hidden sm:block h-6 w-px bg-gray-700/50 shrink-0" />
-
-            <input
-              type="text"
-              value={clipName}
-              onChange={handleNameChange}
-              aria-label="Clip name"
-              placeholder={defaultClipName || 'Clip name'}
-              className="w-36 lg:w-44 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white
-                         placeholder-gray-500 focus:border-green-500 focus:outline-none shrink-0"
-            />
+            {/* T8760 item 3: the clip-name field lives here in CREATE mode only.
+                In edit mode the name is edited inline from the header (the pencil),
+                so this standalone field — the duplicate the user flagged — is gone. */}
+            {!isEditMode && (
+              <>
+                <div className="hidden sm:block h-6 w-px bg-gray-700/50 shrink-0" />
+                <input
+                  type="text"
+                  value={clipName}
+                  onChange={handleNameChange}
+                  aria-label="Clip name"
+                  placeholder={defaultClipName || 'Clip name'}
+                  className="w-36 lg:w-44 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white
+                             placeholder-gray-500 focus:border-green-500 focus:outline-none shrink-0"
+                />
+              </>
+            )}
 
             {!myAthlete && (
               <div className="min-w-[180px] max-w-xs flex-1">
@@ -890,6 +942,7 @@ export function AnnotateFullscreenOverlay({
           onDragStart={() => onScrubDragChange?.(true)}
           onDragEnd={() => onScrubDragChange?.(false)}
           videoController={videoController}
+          clipEditorActive
           compact
         />
         <div className="flex items-center gap-2 mt-1.5">
