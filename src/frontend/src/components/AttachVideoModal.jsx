@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { X, Upload, Film, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
 import { toast } from './shared';
