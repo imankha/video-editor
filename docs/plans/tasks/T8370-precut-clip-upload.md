@@ -1,6 +1,6 @@
 # T8370: Pre-cut clip upload support (clips without a full game)
 
-**Status:** WIP (Architect design APPROVED 2026-09-04 with amendments — see [T8370-design.md](T8370-design.md); ready for implementation)
+**Status:** STAGING (merged to master 2026-09-04, PR #328 — see [T8370-design.md](T8370-design.md) for the approved design)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-02
