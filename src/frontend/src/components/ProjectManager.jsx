@@ -5,6 +5,7 @@ import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
+import { AttachVideoModal } from './AttachVideoModal';
 import { DownloadsPanel } from './DownloadsPanel';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
@@ -524,6 +525,7 @@ export function ProjectManager({
   // component now.
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
+  const [attachVideoGame, setAttachVideoGame] = useState(null); // T8700: game to attach a video to
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
   // T5820: transient cross-profile-reference landing state (NOT persisted — pure
@@ -1460,6 +1462,8 @@ export function ProjectManager({
                                   // cascade delete of an abandoned upload.
                                   onRetryUpload={() => handleResumeClick(null)}
                                   onDiscardFailed={() => onDeleteGame(game.id)}
+                                  // T8700: attach another video to this existing game.
+                                  onAddVideo={() => setAttachVideoGame(game)}
                                 />
                               )}
                             </div>
@@ -1754,6 +1758,17 @@ export function ProjectManager({
         isOpen={showGameDetailsModal}
         onClose={() => setShowGameDetailsModal(false)}
         onCreateGame={handleCreateGame}
+      />
+
+      {/* T8700: attach an additional video to an existing game. The modal drives
+          the upload; on success the game is re-loaded + the games list is
+          invalidated (inside attachVideoToExistingGame), so a games refetch here
+          keeps the tile's aggregate duration/counts fresh. */}
+      <AttachVideoModal
+        isOpen={Boolean(attachVideoGame)}
+        game={attachVideoGame}
+        onClose={() => setAttachVideoGame(null)}
+        onAttached={() => { setAttachVideoGame(null); onFetchGames?.(); }}
       />
 
       {extensionGame && (
