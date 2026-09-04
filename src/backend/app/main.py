@@ -23,13 +23,25 @@ import subprocess
 import sys
 import time
 import traceback
-
-# Load environment variables from .env file (if exists)
-# Look in project root (two levels up from app/)
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Load environment variables from .env file (if exists) BEFORE any `app.*` import.
+# Must run first: several modules read env vars at import time (e.g. app.storage's
+# module-level R2_ENABLED), and app.migrations transitively imports app.storage via
+# one of its migration files -- if that import runs before load_dotenv(), R2_ENABLED
+# (and any other such constant) freezes to its os.getenv() default for the process's
+# whole life, regardless of what .env says.
+_project_root = Path(__file__).parent.parent.parent.parent
+_env_file = _project_root / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file)
+else:
+    load_dotenv()  # Fallback to current directory
+
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -38,13 +50,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.migrations import BelowMigrationFloor, MigrationBlocked
 from app.version import APP_BUILD, APP_VERSION
-
-_project_root = Path(__file__).parent.parent.parent.parent
-_env_file = _project_root / ".env"
-if _env_file.exists():
-    load_dotenv(_env_file)
-else:
-    load_dotenv()  # Fallback to current directory
 
 # Configure logging with timestamps
 # Use DEBUG level if DEBUG env var is set, otherwise INFO
