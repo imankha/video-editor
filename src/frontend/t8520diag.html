@@ -1,30 +1,48 @@
 <!doctype html>
 <!--
-  T8520 DEV-ONLY diagnostic harness proving the export-complete choice card
-  (ConfirmationDialog + OverlayEffectIllustration + the three gesture handlers
-  FocusScreen wires at FocusScreen.jsx:1040-1065,1299-1310). NOT a production
-  page: Vite's default build entry is index.html only, and this file is not
-  added to rollupOptions.input, so it never ships in the built app (same as
-  the other *diag.html harnesses, e.g. collectionplayerdiag.html).
+  T8390 DEV-ONLY diagnostic harness proving Focus's post-export preview +
+  publish-exit action bar (CollectionPlayer + FocusPublishActionBar + the four
+  gesture handlers FocusScreen wires at FocusScreen.jsx ~L1047-1103,
+  ~L1328-1352). Supersedes the old T8520 3-button completion-choice-card
+  harness this file used to mount. NOT a production page: Vite's default
+  build entry is index.html only, and this file is not added to
+  rollupOptions.input, so it never ships in the built app (same as the other
+  *diag.html harnesses, e.g. collectionplayerdiag.html).
 
-  Mounts the REAL ConfirmationDialog + REAL OverlayEffectIllustration with the
-  exact props/handler shape FocusScreen uses, including a REAL call to
-  questStore.recordAchievement (so the achievement POST network assertion in
-  the Playwright spec observes the real gesture-handler code path, not a
-  synthetic fetch). Only the "an export just finished" premise is synthetic —
+  Mounts the REAL CollectionPlayer + REAL FocusPublishActionBar with the exact
+  props/handler shape FocusScreen uses, including REAL calls to
+  questStore.recordAchievement and a REAL usePublishIntentStore stake on
+  Publish (so a Playwright spec asserting the achievement POST / flag state
+  observes the real gesture-handler code path, not a synthetic fetch). Only
+  the "an export just finished" premise + video source are synthetic —
   everything downstream of that is the real component tree.
 -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>T8520 export-complete choice diag (dev only)</title>
+    <title>T8390 Focus publish exit diag (dev only)</title>
     <style>
       html, body { margin: 0; padding: 0; background: #111827; }
     </style>
   </head>
   <body>
     <div id="t8520diag-root"></div>
+    <script>
+      // T8390 (found live-driving QA): editorStore.js has module-scope
+      // URL-canonicalization code that runs the INSTANT anything imports it
+      // (even transitively) -- and questStore.js -> utils/analytics.js does,
+      // for the `track` call. Since ES module imports always fully evaluate
+      // before the importing module's own body runs, by the time main.jsx's
+      // top-level code would read location.hash, editorStore has ALREADY
+      // replaceState'd this non-canonical path (/t8520diag.html isn't a real
+      // app route) to '/home', stripping the hash. Stash it here, in a plain
+      // (non-module, so it runs first) script, before that import chain can
+      // fire. Pre-existing gap in editorStore's isPublicRoute() allowlist,
+      // not a T8390 regression -- reproduces on t8530diag.html (unmodified by
+      // this task) on pre-T8390 master too; out of scope to fix here.
+      window.__T8390_DIAG_HASH__ = location.hash;
+    </script>
     <script type="module" src="/src/t8520diag/main.jsx"></script>
   </body>
 </html>

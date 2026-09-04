@@ -89,9 +89,11 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
           <p className="text-gray-300 whitespace-pre-wrap">{message}</p>
         </div>
 
-        {/* Footer — stacks full-width below sm (primary lowest via col-reverse),
-            right-aligned row at sm+ (primary rightmost). Order the buttons array
-            with the primary LAST. */}
+        {/* Footer — stacks full-width below sm (T8390: primary renders HIGHEST,
+            not lowest — column-reverse places the FIRST DOM child at the
+            bottom, so the LAST array entry lands at the top), right-aligned
+            row at sm+ (primary rightmost). Order the buttons array with the
+            primary LAST. */}
         <div className="px-6 py-4 border-t border-gray-700 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
           {buttons.map((button, index) => (
             <Button

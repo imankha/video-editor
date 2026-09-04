@@ -3,22 +3,31 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
- * T8520 / T8530 QA evidence — overlay-completion choice card + draft preview
- * publish surface.
+ * T8390 / T8530 QA evidence — Focus's post-export preview + publish-exit
+ * action bar, and the draft preview publish surface it lands on.
  *
- * T8520: a Focus (framing) export used to silently switch editorMode to
- * 'overlay'. Now it shows a completion choice card ("export-complete-choice",
- * FocusScreen.jsx:1296-1311) offering three gesture-driven outcomes: Add
- * Spotlight / Add Spotlight Later / Finish Now, each recording its own
- * analytics event (overlay_offered/overlay_deferred/overlay_declined) via
- * POST /api/quests/achievements/{key} (questStore.recordAchievement).
+ * T8390 (supersedes T8520's 3-button completion-choice card): a Focus
+ * (framing) export now mounts the SAME preview-player shell DraftReelPreview
+ * uses, immediately, full-screen, over the working video — no decision first.
+ * A new `actionBar` footer (FocusPublishActionBar) offers four gesture-driven
+ * outcomes: Publish (one-tap: fires the render then auto-completes the
+ * publish gesture, no second tap) / Add Spotlight / Add Spotlight Later /
+ * Refocus, each recording its own analytics event
+ * (overlay_offered/overlay_deferred/overlay_declined) via
+ * POST /api/quests/achievements/{key} (questStore.recordAchievement). Add
+ * Spotlight Later also shows an explainer toast routed by is_auto_created
+ * (T8360's split).
  *
- * T8530: once the OVERLAY (final) export completes, App.jsx's
- * handleExportComplete opens DraftReelPreview (a CollectionPlayer wrapper,
- * driven by reelPreviewStore) showing the finished reel with a cyan "Only you
- * can see this..." banner and a primary Publish button. Publishing swaps the
- * banner away and swaps the primary slot to Share, without reloading the
- * video; a 503 sync_failed publish shows an amber retry banner.
+ * T8530 (unchanged by T8390): once the OVERLAY (final) export completes,
+ * App.jsx's handleExportComplete opens DraftReelPreview (a CollectionPlayer
+ * wrapper, driven by reelPreviewStore) showing the finished reel with a cyan
+ * "Only you can see this..." banner and a primary Publish button. Publishing
+ * swaps the banner away and swaps the primary slot to Share, without
+ * reloading the video; a 503 sync_failed publish shows an amber retry banner.
+ * T8390 adds one variant: when Focus's one-tap Publish already ran the
+ * publish gesture before opening this preview, it opens directly in the
+ * published (Share) state — covered by the DraftReelPreview unit test
+ * (`alreadyPublished` payload field), not re-proven here.
  *
  * WHY DIAG HARNESSES (t8520diag.html / t8530diag.html), NOT the real flow.
  * A real end-to-end run needs an uploaded game, annotated clips, a real Focus
@@ -39,11 +48,12 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * earlier draft of this spec, which hit exactly that failure mode driving
  * reelPreviewStore from a bare in-page import against the full app).
  *
- * What's real in both harnesses: ConfirmationDialog, OverlayEffectIllustration,
- * DraftReelPreview, CollectionPlayer, Button, usePublishProject (real POST to
+ * What's real in both harnesses: CollectionPlayer, FocusPublishActionBar,
+ * DraftReelPreview, Button, usePublishProject (real POST to
  * /api/downloads/publish/{id}), questStore.recordAchievement (real POST to
- * /api/quests/achievements/{key}). What's synthetic: the "an export just
- * finished" premise that seeds each harness's props/store.
+ * /api/quests/achievements/{key}), usePublishIntentStore. What's synthetic:
+ * the "an export just finished" premise that seeds each harness's props/store,
+ * and the video source (data: URI, no real stream).
  *
  * Run:
  *   bash scripts/dev-verify.sh e2e/T8520-T8530-overlay-choice-and-publish.spec.js --reporter=line
@@ -54,8 +64,8 @@ skipOnDeployedTarget(
   'drives t8520diag.html/t8530diag.html dev-only harnesses (not in rollupOptions.input; 404 on a deployed CF Pages build)'
 );
 
-test.describe('T8520: export-complete choice card', () => {
-  test('card renders with 3 buttons, no "skip" text, illustration present; each path fires its event', async ({ page }) => {
+test.describe('T8390: Focus post-export preview + publish-exit action bar', () => {
+  test('preview mounts immediately (no decision first); all 4 choices present; data-tutorial-target once; each path fires its event', async ({ page }) => {
     const achievementCalls = [];
     page.on('request', (req) => {
       const m = req.url().match(/\/api\/quests\/achievements\/(overlay_\w+)/);
@@ -65,44 +75,43 @@ test.describe('T8520: export-complete choice card', () => {
     await page.goto('/t8520diag.html');
     await page.waitForLoadState('domcontentloaded');
 
-    const card = page.getByTestId('export-complete-choice');
-    await expect(card).toBeVisible();
+    // Preview-first: the player mounts with no prior decision screen.
+    const player = page.getByTestId('collection-player-video');
+    await expect(player).toBeVisible();
+    const bar = page.getByTestId('focus-publish-action-bar');
+    await expect(bar).toBeVisible();
 
-    // Acceptance: word "skip" appears nowhere in the card.
-    const cardText = (await card.textContent()) || '';
-    expect(cardText.toLowerCase()).not.toContain('skip');
+    // Acceptance: data-tutorial-target="focus-publish" present exactly once
+    // (guided-path rule 30 anchors here; a duplicate would break the anchor).
+    await expect(page.locator('[data-tutorial-target="focus-publish"]')).toHaveCount(1);
 
-    // Acceptance: exactly the three named actions, no "Skip" label anywhere.
-    await expect(card.getByRole('button', { name: 'Add Spotlight Later' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Finish Now' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Add Spotlight', exact: true })).toBeVisible();
+    // Acceptance: all four choices visible.
+    await expect(bar.getByRole('button', { name: 'Publish' })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Add Spotlight', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Add Spotlight Later' })).toBeVisible();
+    await expect(bar.getByText(/^Refocus/)).toBeVisible();
 
-    // Illustration present in a fixed-aspect box (no reflow while it loads).
-    await expect(card.locator('.aspect-video')).toBeVisible();
+    await saveEvidence(page, 'T8390-criterion-preview-actionbar-desktop');
 
-    await saveEvidence(page, 'T8520-criterion-card-desktop');
-
-    // Responsive: both 1280 and 390x844, all three buttons in-viewport, no overflow.
+    // Responsive: both 1280 and 390x844, all four choices in-viewport, no overflow.
     for (const vp of [{ width: 1280, height: 800, name: 'desktop-1280' }, { width: 390, height: 844, name: 'mobile-390x844' }]) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.waitForTimeout(200);
       await assertNoHorizontalOverflow(page);
-      for (const label of ['Add Spotlight Later', 'Finish Now']) {
-        const btn = card.getByRole('button', { name: label });
-        await expect(btn).toBeVisible();
-        const box = await btn.boundingBox();
-        expect(box, `${label} has a bounding box at ${vp.name}`).toBeTruthy();
-        expect(box.y, `${label} top in-viewport at ${vp.name}`).toBeGreaterThanOrEqual(0);
-        expect(box.y + box.height, `${label} bottom in-viewport at ${vp.name}`).toBeLessThanOrEqual(vp.height);
-        expect(box.x, `${label} left in-viewport at ${vp.name}`).toBeGreaterThanOrEqual(0);
-        expect(box.x + box.width, `${label} right in-viewport at ${vp.name}`).toBeLessThanOrEqual(vp.width);
+      for (const locatorFn of [
+        () => bar.getByRole('button', { name: 'Publish' }),
+        () => bar.getByRole('button', { name: 'Add Spotlight', exact: true }),
+        () => bar.getByRole('button', { name: 'Add Spotlight Later' }),
+        () => bar.getByText(/^Refocus/),
+      ]) {
+        const el = locatorFn();
+        await expect(el).toBeVisible();
+        const box = await el.boundingBox();
+        expect(box, `element has a bounding box at ${vp.name}`).toBeTruthy();
+        expect(box.y, `top in-viewport at ${vp.name}`).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height, `bottom in-viewport at ${vp.name}`).toBeLessThanOrEqual(vp.height);
       }
-      const spotlightBtn = card.getByRole('button', { name: 'Add Spotlight', exact: true });
-      await expect(spotlightBtn).toBeVisible();
-      const sBox = await spotlightBtn.boundingBox();
-      expect(sBox.y).toBeGreaterThanOrEqual(0);
-      expect(sBox.y + sBox.height).toBeLessThanOrEqual(vp.height);
-      await saveEvidence(page, `T8520-criterion-buttons-in-viewport-${vp.name}`);
+      await saveEvidence(page, `T8390-criterion-actionbar-in-viewport-${vp.name}`);
     }
     await page.setViewportSize({ width: 1280, height: 800 });
 
@@ -110,30 +119,32 @@ test.describe('T8520: export-complete choice card', () => {
     // via the "Reopen" gesture below to also cover re-arming; the FIRST render
     // in FocusScreen fires it from the completion callback itself, which this
     // harness's initial mount does not replay — verified instead by the unit
-    // test screens/__tests__/exportCompleteChoice.test.jsx). ----
+    // test screens/__tests__/focusPublishExit.test.jsx). ----
 
-    // ---- Path B: "Add Spotlight Later" -> overlay_deferred, card closes ----
-    await card.getByRole('button', { name: 'Add Spotlight Later' }).click();
-    await expect(card).not.toBeVisible();
+    // ---- Path B: "Add Spotlight Later" -> overlay_deferred, preview closes ----
+    await bar.getByRole('button', { name: 'Add Spotlight Later' }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight-later');
-    await saveEvidence(page, 'T8520-pathB-add-spotlight-later-closed');
+    // Explainer toast (multi-clip copy — the harness defaults isAutoCreated=0).
+    await expect(page.getByText('Saved to Highlight Reels, under Highlights')).toBeVisible();
+    await saveEvidence(page, 'T8390-pathB-add-spotlight-later-closed');
 
-    // ---- Path C: "Finish Now" -> overlay_declined, card closes ----
+    // ---- Path C: "Publish" -> overlay_declined + publish-intent staked, preview closes ----
     await page.getByTestId('diag-reopen').click();
-    await expect(card).toBeVisible();
-    await card.getByRole('button', { name: 'Finish Now' }).click();
-    await expect(card).not.toBeVisible();
-    await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'finish-now');
-    await saveEvidence(page, 'T8520-pathC-finish-now-closed');
+    await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Publish' }).click();
+    await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish');
+    const staked = await page.evaluate(() => window.__t8390PublishIntentStore.getState().projectId);
+    expect(staked).toBe(424242);
+    await saveEvidence(page, 'T8390-pathC-publish-closed');
+    await page.evaluate(() => window.__t8390PublishIntentStore.getState().clear());
 
     // ---- Path A: "Add Spotlight" -> no NEW analytics event (overlay_opened
     // already covers entry per the task's own design) ----
     await page.getByTestId('diag-reopen').click();
-    await expect(card).toBeVisible();
-    await card.getByRole('button', { name: 'Add Spotlight', exact: true }).click();
-    await expect(card).not.toBeVisible();
+    await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add Spotlight', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight');
-    await saveEvidence(page, 'T8520-pathA-add-spotlight-closed');
+    await saveEvidence(page, 'T8390-pathA-add-spotlight-closed');
 
     // Analytics: overlay_offered (harness reopen), overlay_deferred, overlay_declined
     // actually POSTed by the real questStore.recordAchievement call path.
@@ -141,34 +152,38 @@ test.describe('T8520: export-complete choice card', () => {
     expect(achievementCalls).toContain('overlay_offered');
     expect(achievementCalls).toContain('overlay_deferred');
     expect(achievementCalls).toContain('overlay_declined');
-    console.log('[T8520] achievement network calls observed:', achievementCalls);
+    console.log('[T8390] achievement network calls observed:', achievementCalls);
   });
 
-  test('X / Escape maps to "Add Spotlight Later" (not a silent dismiss, not "skip")', async ({ page }) => {
+  test('X / Escape maps to Refocus (not a silent dismiss, no Add-Spotlight-Later side effects)', async ({ page }) => {
     await page.goto('/t8520diag.html');
     await page.waitForLoadState('domcontentloaded');
-    const card = page.getByTestId('export-complete-choice');
-    await expect(card).toBeVisible();
+    await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
 
-    // No backdrop-close: click far outside the panel, card must stay open.
+    // No backdrop-close: click far outside the panel, player stays open.
     await page.mouse.click(5, 5);
-    await expect(card).toBeVisible();
+    await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
 
-    // Escape maps to onClose === handleAddSpotlightLater (never a "skip", never
-    // a no-op dismiss that starts a render).
+    // Escape maps to onClose === handleRefocus (never Add Spotlight Later's
+    // achievement/toast/navigation side effects — a dismiss is "nevermind").
     await page.keyboard.press('Escape');
-    await expect(card).not.toBeVisible();
-    await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight-later');
+    await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'refocus');
   });
 
-  test('X button (header close) maps to "Add Spotlight Later"', async ({ page }) => {
+  test('X button (header close) maps to Refocus', async ({ page }) => {
     await page.goto('/t8520diag.html');
     await page.waitForLoadState('domcontentloaded');
-    const card = page.getByTestId('export-complete-choice');
-    await expect(card).toBeVisible();
-    await card.getByRole('button', { name: 'Close dialog' }).click();
-    await expect(card).not.toBeVisible();
-    await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight-later');
+    await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'refocus');
+  });
+
+  test('Add Spotlight Later toast: single-clip copy when is_auto_created', async ({ page }) => {
+    await page.goto('/t8520diag.html#isAutoCreated=1');
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add Spotlight Later' }).click();
+    await expect(page.getByText('Saved to Clips')).toBeVisible();
+    await saveEvidence(page, 'T8390-criterion-single-clip-toast');
   });
 });
 

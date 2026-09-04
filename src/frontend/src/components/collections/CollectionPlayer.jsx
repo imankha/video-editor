@@ -45,6 +45,13 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     header and the video area (the draft/failure strip).
  *                                     A slot, not a boolean+copy, so the player never learns
  *                                     product vocabulary and the caller owns the tint swap.
+ * @param {ReactNode=} actionBar     - T8390: optional full-width row rendered AFTER the video
+ *                                     area (a footer, opposite end from statusBanner). A slot,
+ *                                     not a fixed button set, so the player stays presentational
+ *                                     and product-vocabulary-free — the caller (FocusScreen, for
+ *                                     its post-export publish exit) owns the actual buttons/copy.
+ *                                     Omitted -> no-op, byte-identical to today for every other
+ *                                     caller (DraftReelPreview, DownloadsPanel, etc.).
  * @param {Function=} onDownload    - (activeReel) => void; shows a Download button when set
  * @param {boolean=}  downloadLoading
  * @param {Function=} onReEdit      - (activeReel) => void; shows a "Re-edit" button when set
@@ -108,6 +115,7 @@ export function CollectionPlayer({
   onPublish,
   publishLoading,
   statusBanner,
+  actionBar,
   onDownload,
   downloadLoading,
   onReEdit,
@@ -474,6 +482,11 @@ export function CollectionPlayer({
           </div>
         )}
       </div>
+
+      {/* T8390: optional full-width footer rendered after the video area — the
+          mirror of statusBanner (header side). The caller (FocusScreen) owns
+          content/behavior; this component just reserves the slot. */}
+      {actionBar}
 
       <style>{`
         @keyframes collectionPlayerTitleFade {

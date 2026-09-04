@@ -16,8 +16,16 @@ import { useReelPreviewStore } from '../stores/reelPreviewStore';
  *
  * @param {Object} project - a completed draft ({ id, final_video_id, name,
  *   aspect_ratio, clip_count, clip_game_start_time, game_names? })
+ * @param {Object=} options
+ * @param {boolean=} options.alreadyPublished - T8390: Focus's one-tap Publish
+ *   auto-runs the publish gesture before opening this preview (see
+ *   FocusScreen.handlePublish + App.jsx handleExportComplete). Without this,
+ *   DraftReelPreview always initializes its local `published` state to false,
+ *   so a caller that already published would wrongly show the draft/Publish
+ *   UI again instead of Share — the "no landing on another decision screen"
+ *   requirement the approved design calls out by name.
  */
-export function openFinishedReel(project) {
+export function openFinishedReel(project, { alreadyPublished = false } = {}) {
   // No-op if already home; the preview is a fullscreen overlay over the manager.
   useEditorStore.getState().goToProjectManager();
   useReelPreviewStore.getState().open({
@@ -28,5 +36,6 @@ export function openFinishedReel(project) {
     clipCount: project.clip_count,
     gameName: project.game_names?.[0] ?? null,
     gameStartTime: project.clip_game_start_time ?? null,
+    alreadyPublished,
   });
 }
