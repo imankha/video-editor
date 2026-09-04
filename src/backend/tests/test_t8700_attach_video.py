@@ -124,6 +124,9 @@ def _patched_externalities(**overrides):
         _validate_video_in_r2=MagicMock(return_value=None),
         get_r2_client=MagicMock(return_value=None),  # R2 not configured -> ref-check skipped (mirrors profile_db fixture's R2_ENABLED=False)
         deduct_credits=MagicMock(return_value={"success": True, "balance": 100, "required": 0}),
+        # T8700: the pre-write affordability gate (no free video on 402). Default
+        # to plenty so tests reach the insert; individual tests override low.
+        get_balance=MagicMock(return_value=1_000_000),
     )
     defaults.update(overrides)
     target = defaults.pop("target")
@@ -215,15 +218,19 @@ async def test_attach_same_hash_twice_charges_once(profile_db):
             first_reference_id = mock_deduct.call_args.kwargs.get("reference_id")
 
             # Retry: attaching the identical hash again (e.g. client retry after
-            # a dropped response). Sequence collision with UNIQUE(game_id,sequence)
-            # is a separate concern -- what matters here is the reference_id must
-            # match so the ledger's own idempotency dedupes the charge.
-            await games_router.add_game_videos(
+            # a dropped response). The reference_id must match so the ledger's own
+            # idempotency dedupes the charge, AND the row must NOT be duplicated
+            # (T8700 dedup): re-appending the same hash at MAX+1 would list the
+            # half twice without tripping UNIQUE(game_id, sequence).
+            result2 = await games_router.add_game_videos(
                 game_id, _add_videos_request(_video_ref(HASH_2, sequence=99))
             )
             second_reference_id = mock_deduct.call_args.kwargs.get("reference_id")
 
     assert first_reference_id == second_reference_id
+    # No duplicate row: still just the seeded seq 1 + the single attached seq 2.
+    assert _sequences(profile_db, game_id) == [1, 2]
+    assert result2["videos_added"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +415,60 @@ async def test_attach_reaggregates_duration_and_size(profile_db):
 # ---------------------------------------------------------------------------
 # Q3: attach onto a non-ready (pending) game -> 409
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 10. Duration backfill (BLOCKING regression): the frontend attach path sends
+#     duration/width/height = null; the stored row must still get a real duration
+#     (probed from R2) or buildFullVideoTimeline computes NaN for the attached half.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_attach_backfills_null_duration_from_probe(profile_db):
+    from app.routers import games as games_router
+
+    game_id = _seed_game(profile_db, status="ready", sequences=(1,))
+
+    # The real client sends these as null; the R2 probe is authoritative.
+    null_ref = _video_ref(HASH_2, sequence=99, duration=None, width=None, height=None)
+    probe = MagicMock(return_value={"duration": 42.5, "width": 1280, "height": 720, "fps": 25.0})
+
+    with _patched_externalities(_probe_video_metadata=probe):
+        await games_router.add_game_videos(game_id, _add_videos_request(null_ref))
+
+    conn = _connect(profile_db)
+    row = conn.execute(
+        "SELECT duration, video_width, video_height, fps FROM game_videos WHERE game_id = ? AND sequence = 2",
+        (game_id,),
+    ).fetchone()
+    conn.close()
+    assert row["duration"] == pytest.approx(42.5), "attached row must get a real (non-null) duration"
+    assert row["video_width"] == 1280
+    assert row["video_height"] == 720
+    assert row["fps"] == pytest.approx(25.0)
+
+
+# ---------------------------------------------------------------------------
+# 11. No free video: a known-insufficient balance rejects BEFORE inserting the
+#     row (so an unaffordable attach never commits a usable-but-unpaid video).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_attach_insufficient_balance_rejects_before_insert(profile_db):
+    from app.routers import games as games_router
+
+    game_id = _seed_game(profile_db, status="ready", sequences=(1,))
+
+    with _patched_externalities(get_balance=MagicMock(return_value=0)):
+        with pytest.raises(HTTPException) as exc:
+            await games_router.add_game_videos(
+                game_id, _add_videos_request(_video_ref(HASH_2, sequence=99, file_size=2_000_000))
+            )
+
+    assert exc.value.status_code == 402
+    # The row must NOT have been committed — no free/unpaid video attached.
+    assert _sequences(profile_db, game_id) == [1]
+    assert _ref_count(profile_db, HASH_2) == 0
+
 
 @pytest.mark.asyncio
 async def test_attach_onto_pending_game_returns_409(profile_db):

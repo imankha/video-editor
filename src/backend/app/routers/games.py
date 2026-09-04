@@ -34,7 +34,7 @@ from app.services.auth_db import (
     get_grace_deletion_hashes,
     insert_game_storage_ref,
 )
-from app.services.credit_ledger import CreditsUnavailable, deduct_credits
+from app.services.credit_ledger import CreditsUnavailable, deduct_credits, get_balance
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
 from app.storage import (
     R2_ENABLED,
@@ -229,9 +229,26 @@ def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference], skip
     """
     for video in videos:
         fps = None
+        duration = video.duration
+        width = video.width
+        height = video.height
         if not skip_fps_probe:
             meta = _probe_video_metadata(video.blake3_hash.lower())
-            fps = meta.get("fps") if meta else None
+            if meta:
+                fps = meta.get("fps")
+                # T8700: backfill duration/dimensions from the AUTHORITATIVE R2
+                # probe when the caller didn't supply them. The post-creation
+                # attach path (attachVideoToExistingGame) sends these as null —
+                # a null duration makes buildFullVideoTimeline compute NaN offsets,
+                # rendering the attached half unusable in Annotate. Create-time
+                # callers pass a browser-probed duration, which we keep (only fill
+                # the gaps), so this changes nothing for them.
+                if duration is None:
+                    duration = meta.get("duration")
+                if width is None:
+                    width = meta.get("width")
+                if height is None:
+                    height = meta.get("height")
         cursor.execute("""
             INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
                                      video_width, video_height, video_size, fps)
@@ -240,9 +257,9 @@ def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference], skip
             game_id,
             video.blake3_hash.lower(),
             video.sequence,
-            video.duration,
-            video.width,
-            video.height,
+            duration,
+            width,
+            height,
             video.file_size,
             fps,
         ))
@@ -516,63 +533,100 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
                 },
             )
 
-        # APPEND-ONLY (GAP 3): assign sequences server-side from MAX(sequence)+1.
-        # Never trust the client's sequence — a prepend/reorder would shift every
-        # existing clip's virtual-timeline offset (getVideoOffset), silently
-        # mis-positioning clips. UNIQUE(game_id, sequence) is the backstop.
-        cursor.execute(
-            "SELECT COALESCE(MAX(sequence), 0) AS max_seq FROM game_videos WHERE game_id = ?",
-            (game_id,),
-        )
-        next_seq = cursor.fetchone()["max_seq"] + 1
-        for offset, video in enumerate(request.videos):
-            video.sequence = next_seq + offset
+        # Retry safety: never insert the same hash twice. A client retry after a
+        # dropped response would otherwise re-append the same video at MAX+1 (a
+        # NEW sequence, so UNIQUE(game_id, sequence) doesn't catch it), listing the
+        # half twice. Dedup incoming videos against what's already attached; the
+        # (idempotent) charge below still runs so an insert-but-no-charge crash
+        # self-heals on retry.
+        cursor.execute("SELECT blake3_hash FROM game_videos WHERE game_id = ?", (game_id,))
+        existing_hashes = {r["blake3_hash"] for r in cursor.fetchall()}
+        new_videos = [v for v in request.videos if v.blake3_hash.lower() not in existing_hashes]
 
-        # Insert new game_videos rows (now with append-only sequences)
-        _insert_game_videos(cursor, game_id, request.videos)
+        # Cost + reference_id key on the FULL request (stable across retries) so the
+        # ledger's (source, reference_id) idempotency dedupes the charge. Distinct
+        # from activate_game's game_upload:{game_id} pair — reusing it would be a
+        # silent no-op (already charged).
+        new_size = sum(v.file_size or 0 for v in request.videos)
+        cost = calculate_upload_cost(new_size) if new_size > 0 else 1
+        reference_id = f"{game_id}:" + ":".join(sorted(v.blake3_hash.lower() for v in request.videos))
 
-        # Update games table with video metadata
-        cursor.execute("""
-            SELECT COUNT(*) as cnt, SUM(duration) as total_duration, SUM(video_size) as total_size
-            FROM game_videos WHERE game_id = ?
-        """, (game_id,))
-        agg = cursor.fetchone()
+        if new_videos:
+            # No free video: refuse a NEW attach the user can't pay for BEFORE
+            # writing the row (parity with create-time's prepare-upload can_afford
+            # gate). The authoritative idempotent charge still runs after
+            # commit+refs; this pre-check prevents the common broke-user path from
+            # committing a usable-but-unpaid video, which can't be rolled back once
+            # _ensure_game_storage_refs opens its own connection (bug26p).
+            if get_balance(user_id) < cost:
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "message": "Insufficient credits to add video",
+                        "required": cost,
+                        "balance": get_balance(user_id),
+                    },
+                )
 
-        updates = []
-        params = []
-        if agg and agg['total_duration']:
-            updates.append("video_duration = ?")
-            params.append(agg['total_duration'])
-        if agg and agg['total_size']:
-            updates.append("video_size = ?")
-            params.append(agg['total_size'])
-
-        # For single-video games, set legacy fields + dimensions
-        total_videos = agg['cnt'] if agg else 0
-        if total_videos == 1:
-            v = request.videos[0]
-            h = v.blake3_hash.lower()
-            updates += ["blake3_hash = ?", "video_filename = ?"]
-            params += [h, f"{h}.mp4"]
-            if v.width:
-                updates.append("video_width = ?")
-                params.append(v.width)
-            if v.height:
-                updates.append("video_height = ?")
-                params.append(v.height)
-            # T1500: mirror fps from the game_videos row we just inserted+probed
+            # APPEND-ONLY (GAP 3): assign sequences server-side from MAX(sequence)+1.
+            # Never trust the client's sequence — a prepend/reorder would shift every
+            # existing clip's virtual-timeline offset (getVideoOffset), silently
+            # mis-positioning clips. UNIQUE(game_id, sequence) is the backstop.
             cursor.execute(
-                "SELECT fps FROM game_videos WHERE game_id = ? AND sequence = ?",
-                (game_id, v.sequence),
+                "SELECT COALESCE(MAX(sequence), 0) AS max_seq FROM game_videos WHERE game_id = ?",
+                (game_id,),
             )
-            gv_row = cursor.fetchone()
-            if gv_row and gv_row['fps']:
-                updates.append("video_fps = ?")
-                params.append(gv_row['fps'])
+            next_seq = cursor.fetchone()["max_seq"] + 1
+            for offset, video in enumerate(new_videos):
+                video.sequence = next_seq + offset
 
-        if updates:
-            params.append(game_id)
-            cursor.execute(f"UPDATE games SET {', '.join(updates)} WHERE id = ?", params)
+            # Insert new game_videos rows (append-only sequences; _insert_game_videos
+            # probes+backfills duration/dimensions from R2 so the attached half has a
+            # real duration for buildFullVideoTimeline).
+            _insert_game_videos(cursor, game_id, new_videos)
+
+            # Update games table with re-aggregated video metadata.
+            cursor.execute("""
+                SELECT COUNT(*) as cnt, SUM(duration) as total_duration, SUM(video_size) as total_size
+                FROM game_videos WHERE game_id = ?
+            """, (game_id,))
+            agg = cursor.fetchone()
+
+            updates = []
+            params = []
+            if agg and agg['total_duration']:
+                updates.append("video_duration = ?")
+                params.append(agg['total_duration'])
+            if agg and agg['total_size']:
+                updates.append("video_size = ?")
+                params.append(agg['total_size'])
+
+            # For single-video games, set legacy fields + dimensions
+            total_videos = agg['cnt'] if agg else 0
+            if total_videos == 1:
+                v = new_videos[0]
+                h = v.blake3_hash.lower()
+                updates += ["blake3_hash = ?", "video_filename = ?"]
+                params += [h, f"{h}.mp4"]
+                if v.width:
+                    updates.append("video_width = ?")
+                    params.append(v.width)
+                if v.height:
+                    updates.append("video_height = ?")
+                    params.append(v.height)
+                # T1500: mirror fps from the game_videos row we just inserted+probed
+                cursor.execute(
+                    "SELECT fps FROM game_videos WHERE game_id = ? AND sequence = ?",
+                    (game_id, v.sequence),
+                )
+                gv_row = cursor.fetchone()
+                if gv_row and gv_row['fps']:
+                    updates.append("video_fps = ?")
+                    params.append(gv_row['fps'])
+
+            if updates:
+                params.append(game_id)
+                cursor.execute(f"UPDATE games SET {', '.join(updates)} WHERE id = ?", params)
 
         # bug26p: commit the metadata writes BEFORE refs/credits so the storage-ref
         # insert (which opens its OWN connection) can't deadlock on our write lock —
@@ -587,15 +641,10 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
 
         videos_response = _get_game_videos_response(cursor, game_id)
 
-    # GAP 1: charge for the newly-attached bytes. Distinct (source, reference_id)
-    # from activate_game's game_upload:{game_id} charge — reusing that pair would
-    # be a silent no-op (deduct_credits is idempotent on it). Keying reference_id
-    # on the attached hash(es) also makes the charge idempotent per attached video,
-    # so a client retry after a dropped response can't double-charge. Refs-before-
+    # GAP 1: charge for the newly-attached bytes. Idempotent on (source,
+    # reference_id) — runs even for a pure retry (new_videos empty) so an
+    # insert-but-no-charge crash self-heals, and can't double-charge. Refs-before-
     # charge mirrors activate_game so we never charge for an unref'd source.
-    new_size = sum(v.file_size or 0 for v in request.videos)
-    cost = calculate_upload_cost(new_size) if new_size > 0 else 1
-    reference_id = f"{game_id}:" + ":".join(sorted(v.blake3_hash.lower() for v in request.videos))
     try:
         result = deduct_credits(user_id, cost, source="game_video_add", reference_id=reference_id)
     except CreditsUnavailable:
@@ -611,12 +660,12 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
         )
 
     # Q2: lightweight milestone for funnel visibility (no daily column).
-    record_milestone(user_id, "game_video_add", {"game_id": game_id, "videos_added": len(request.videos)})
+    record_milestone(user_id, "game_video_add", {"game_id": game_id, "videos_added": len(new_videos)})
 
-    logger.info(f"Added {len(request.videos)} video(s) to game {game_id}, cost={cost}cr")
+    logger.info(f"Added {len(new_videos)} video(s) to game {game_id}, cost={cost}cr")
     return {
         "game_id": game_id,
-        "videos_added": len(request.videos),
+        "videos_added": len(new_videos),
         "videos": videos_response,
         "upload_cost_charged": cost,
     }
