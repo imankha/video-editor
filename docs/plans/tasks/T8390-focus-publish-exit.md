@@ -41,6 +41,28 @@ anchors here).
   T7630 -> T7640
 - Related: [T8400](T8400-publish-lands-on-reel.md) (R4, sibling)
 
+## Scope expansion (2026-09-04, user direction — supersedes the pre-flight note's smaller recommendation)
+
+User rejected choosing before previewing. New required sequence, replacing T8520's shipped
+completion-card ordering (choose -> optionally preview) for the no-spotlight path:
+
+1. Export completes -> user is shown the **current preview first**, no decision yet.
+2. From the preview screen, three choices sit side by side: **Publish** (renamed from "Finish
+   Now" — appropriate now because they've actually watched what they're publishing),
+   **Add Spotlight Now**, **Add Spotlight Later**.
+3. **Add Spotlight Later**: shows a toast confirming where the video went, PLUS a plain-language
+   line explaining the Clips-vs-Highlight-Reels split (the user explicitly asked for this
+   explainer, it doesn't exist today). Destination follows the already-approved T8360 split, not
+   a new decision: **single-clip drafts land on the Clips tab; multi-clip drafts land on the
+   Highlight Reels tab's Highlights section.**
+4. The preview screen also offers **Refocus** (go back and reframe) — copy must make clear this
+   re-triggers a paid export (credits charged again), not a free redo.
+
+This reorders and relabels T8520's ALREADY-MERGED completion card (PR #325) — not just T8390's
+originally-scoped narrow gap. ui-designer pass launched to work out the concrete screen(s),
+grounded in the real shipped `ExportButtonView`/`FocusScreen`/`DraftReelPreview`/
+`usePublishProject` code, before implementation.
+
 ## Pre-flight note (2026-09-04)
 
 Filed 2026-09-02, before T8520 (overlay-optional-skip + draft preview player), T8530
