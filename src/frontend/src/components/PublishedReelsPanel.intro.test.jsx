@@ -1,4 +1,4 @@
-// T6700 -- owner in-app playback intro: DownloadsPanel fetches the
+// T6700 -- owner in-app playback intro: PublishedReelsPanel fetches the
 // intro-playback payload on the Play gesture (design §5.2, §7) and hands it
 // to the player. `handlePlay` (single reel) and `onPlayCollection`
 // (collection) fetch `/api/downloads/{id}/intro-playback` /
@@ -9,15 +9,15 @@
 // IntroPreRoll/CollectionPlayer SWAP ternary to a single composite,
 // `IntroStoryPlayer`, which owns the intro-vs-reels region ITSELF (see
 // IntroStoryPlayer.test.jsx for that composite's own region-routing
-// coverage). DownloadsPanel's job narrowed to "fetch on Play, hand the
+// coverage). PublishedReelsPanel's job narrowed to "fetch on Play, hand the
 // payload to the composite" -- this file mocks IntroStoryPlayer as a simple
 // test-id marker exposing the props it received, so these tests stay a
-// focused unit test of DownloadsPanel's OWN fetch/state logic without
+// focused unit test of PublishedReelsPanel's OWN fetch/state logic without
 // duplicating IntroStoryPlayer's internal region-switching coverage.
 //
 // Heavy child components (CollectionsTab, RankingGame, ConfidenceBanner) are
 // mocked to keep this a focused unit test of the fetch logic living in
-// DownloadsPanel itself, not a full-panel integration test. The mocked
+// PublishedReelsPanel itself, not a full-panel integration test. The mocked
 // CollectionsTab captures BOTH `renderCard` (the panel's per-reel card
 // factory, which wires handlePlay) and `onPlayCollection` so the test can
 // drive each play path exactly the way the real CollectionsTab does.
@@ -85,7 +85,7 @@ vi.mock('../hooks/useCollections', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Heavy child mocks -- keep this a DownloadsPanel-logic unit test. The mocked
+// Heavy child mocks -- keep this a PublishedReelsPanel-logic unit test. The mocked
 // CollectionsTab captures the two seams the panel's play paths route through:
 // `renderCard` (per-reel card, wired to handlePlay) and `onPlayCollection`.
 // ---------------------------------------------------------------------------
@@ -106,12 +106,12 @@ vi.mock('./collections/CollectionsTab', () => ({
 vi.mock('./ranking/ConfidenceBanner', () => ({ ConfidenceBanner: () => null }));
 vi.mock('./ranking/RankingGame', () => ({ RankingGame: () => null }));
 
-// T6710: DownloadsPanel now mounts ONE composite (IntroStoryPlayer) instead
+// T6710: PublishedReelsPanel now mounts ONE composite (IntroStoryPlayer) instead
 // of separately mounting CollectionPlayer/IntroPreRoll itself -- mock the
 // composite as a marker exposing the intro/reels props it received. `onClick`
 // simulates the composite's own onClose forwarding (mirrors the old
 // CollectionPlayer mock's onClose wiring) so the close-then-reopen (R6) flow
-// still exercises DownloadsPanel's real state, not IntroStoryPlayer's
+// still exercises PublishedReelsPanel's real state, not IntroStoryPlayer's
 // internals (covered separately by IntroStoryPlayer.test.jsx).
 vi.mock('./introcards/IntroStoryPlayer', () => ({
   IntroStoryPlayer: (props) => (
@@ -125,7 +125,7 @@ vi.mock('./introcards/IntroStoryPlayer', () => ({
   ),
 }));
 
-import { DownloadsPanel } from './DownloadsPanel';
+import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProfileStore } from '../stores/profileStore';
 import { useIntroCardStore } from '../stores/introCardStore';
@@ -166,7 +166,7 @@ afterEach(() => {
   cleanup();
 });
 
-// Fires the SAME click DownloadsPanel wires to ReelTile's Play control --
+// Fires the SAME click PublishedReelsPanel wires to ReelTile's Play control --
 // ReelTile renders a dedicated `aria-label="Play video"` button whose onClick
 // is `onPlay(e, download)` (ReelTile.jsx:262), which the panel wires straight
 // to `handlePlay` via `renderDownloadCard`'s `onPlay={handlePlay}` prop.
@@ -175,12 +175,12 @@ async function clickPlayOnFirstReel() {
   fireEvent.click(playButton);
 }
 
-describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)', () => {
+describe('PublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6710)', () => {
   describe('single-reel play', () => {
     it('fetches intro-playback and mounts IntroStoryPlayer with a non-null intro', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
-      render(<DownloadsPanel active onOpenProject={() => {}} />);
+      render(<PublishedReelsPanel active onOpenProject={() => {}} />);
       expect(capturedRenderCard).toBeTruthy();
 
       await clickPlayOnFirstReel();
@@ -191,7 +191,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
         );
       });
 
-      // T6710: DownloadsPanel mounts ONE composite regardless of intro
+      // T6710: PublishedReelsPanel mounts ONE composite regardless of intro
       // presence -- IntroStoryPlayer itself owns the intro-vs-reels region
       // (covered by IntroStoryPlayer.test.jsx). This file only proves the
       // fetched intro reached the composite.
@@ -203,7 +203,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('mounts IntroStoryPlayer with intro=null when intro-playback returns intro: null', async () => {
       mockApiFetch(null);
 
-      render(<DownloadsPanel active onOpenProject={() => {}} />);
+      render(<PublishedReelsPanel active onOpenProject={() => {}} />);
       await clickPlayOnFirstReel();
 
       await waitFor(() => {
@@ -216,7 +216,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('does not leave a stale intro on reopen when the second play has no intro', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
-      render(<DownloadsPanel active onOpenProject={() => {}} />);
+      render(<PublishedReelsPanel active onOpenProject={() => {}} />);
       await clickPlayOnFirstReel();
       await waitFor(() => expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('true'));
 
@@ -241,7 +241,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
       mockApiFetch(null);
       useIntroCardStore.setState({ cards: [{ id: 1, name: 'Kept card' }] });
 
-      render(<DownloadsPanel active onOpenProject={() => {}} />);
+      render(<PublishedReelsPanel active onOpenProject={() => {}} />);
       const before = useIntroCardStore.getState().deleteRevision;
 
       // What deleteCard does after a successful DELETE: the surviving library
@@ -263,7 +263,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('fetches /api/collections/intro-playback and passes a non-null intro to IntroStoryPlayer', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
-      render(<DownloadsPanel active onOpenProject={() => {}} />);
+      render(<PublishedReelsPanel active onOpenProject={() => {}} />);
       expect(capturedOnPlayCollection).toBeTruthy();
 
       capturedOnPlayCollection(

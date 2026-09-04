@@ -23,7 +23,7 @@ vi.mock('../OverlayScreen', () => {
 // Stub the heavy children / side-effectful hooks so ProjectsScreen mounts without hitting
 // the network. The test only exercises the idle-preload wiring.
 vi.mock('../../components/ProjectManager', () => ({ ProjectManager: () => null }));
-vi.mock('../../components/DownloadsPanel', () => ({ DownloadsPanel: () => null }));
+vi.mock('../../components/PublishedReelsPanel', () => ({ PublishedReelsPanel: () => null }));
 vi.mock('../../hooks/useGameUpload', () => ({
   useGameUpload: () => ({ pendingUploads: [], fetchPendingUploads: vi.fn() }),
 }));

@@ -1,5 +1,43 @@
 ---
 domain: annotate
+updated: 2026-09-04 (T8555 "Published" becomes its own tab; "Highlights" narrows to multiclip-only:
+ProjectManager's segmented tab bar goes from THREE peers to FOUR --
+**Games / In Progress Clips / In Progress Reels / Published**. This SUPERSEDES the T8545 entry's IA
+below (that mechanism note stays accurate; the tab STRUCTURE changed). Root cause it fixes: T8360 +
+T8545 relabeled the ENTIRE published-reels gallery as "Highlights" without ever filtering it to
+multiclip-only -- `unseenReelsCount` (the old Highlights badge) always counted PUBLISHED reels, so the
+"Highlights" tab showed every published reel regardless of single-/multi-clip origin. **The split:**
+(1) `DownloadsPanel.jsx` was RENAMED to `PublishedReelsPanel.jsx` and narrowed to published-only -- the
+in-progress `highlightDrafts` section + assembly button were REMOVED from it (moved out, see (2)); its
+testid `highlights-tab-panel` -> `published-tab-panel`; its props narrowed to
+`{active, onOpenProject, onViewClips}` (it gates all four of its former `active` gates -- useCollections,
+fetchIntroCards, the `!active && !storyPlayer` early-return, and the `{active && body}` JSX -- on ONE
+`active = activeTab === 'published'` flag now); still ALWAYS-MOUNTED so its story-player/share-modal state
+survives a tab switch. (2) **In Progress Reels renders INLINE in ProjectManager's content ternary** (new
+`activeTab === 'inProgressReels'` branch, testid `in-progress-reels-tab-panel`) -- it holds no
+survives-a-tab-switch state (the GameClipSelectorModal stays ProjectManager-owned), so it is a plain
+conditionally-rendered branch, not a second always-mounted component. It shows `highlightDrafts`
+(`projects.filter(p => !p.is_auto_created)`, now memoized in ProjectManager next to `clipDrafts`) + the
+assembly button. **Tab registry** (`TAB_PATHS`): `games`=/home/games, `projects`=/home/reels
+(id + URL FROZEN for deep-link compat, LABEL only changed "Clips" -> "In Progress Clips"),
+`inProgressReels`=/home/reels-in-progress (the `highlights` id was RENAMED so a repo grep for a
+`'highlights'` tab id returns zero -- an acceptance criterion), `published`=/home/published (new).
+**Badges:** In Progress Reels shows `highlightDrafts.length`; Published shows `unseenReelsCount`
+(relocated -- it always belonged there). **Publish-landing effect** (`galleryStore.isOpen` fire-once
+signal from DraftTile's publish action) now `setActiveTab('published')` (was `'highlights'`) -- T8400
+owns any richer landing and must design against these four tabs. **Config:** `SECTION_NAMES.CLIPS` =
+"In Progress Clips", `.HIGHLIGHTS` = "In Progress Reels", new `.PUBLISHED` = "Published";
+`.LIBRARY` = "Highlight Reels" is UNCHANGED -- it is the published-reel NOUN (DraftTile "Publish to
+Highlight Reels" button, export toasts, quests), NOT a tab, and the assembly button is now "New Highlight
+Reel" (user-chosen, T8555). New `PUBLISHED` amber theme token (`themeColors.js`, amber-600/700); icons
+Games `Gamepad2` / In Progress Clips `Scissors` / In Progress Reels `Clapperboard` / Published `Send`;
+tab bar container `grid-cols-3` -> `grid-cols-4`; the `SegmentedTabButton` label span gained
+`whitespace-normal break-words` + `text-[10px] sm:text-sm` so the two-word labels wrap at 320px (no `xs`
+breakpoint in tailwind.config). The T8545 DOM-order landmine (label-first so the accessible name reads
+"{label}{count}") is UNCHANGED and now load-bearing for four tabs. Tests: `ProjectManager.fourTabIA.test.jsx`
+is the canonical four-tab-nav suite (the old "three-way tab navigation (T8545)" describe block in
+`ProjectManager.homeTabDefaults.test.jsx` was deleted as superseded). Design: `docs/plans/tasks/T8555-design.md`
++ `T8555-ui-spec.md`.)
 updated: 2026-09-04 (T8370 pre-cut clip upload: a NEW clip-creation origin that bypasses Annotate
 entirely — `POST /api/clips/upload` (clips.py) creates `raw_clips(game_id=NULL)` rows directly from
 an uploaded file, never through the game→annotate→save_raw_clip path this doc otherwise covers.

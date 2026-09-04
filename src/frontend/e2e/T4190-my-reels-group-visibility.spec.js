@@ -75,16 +75,16 @@ test('T4190: Highlight Reels group headers show real game names + collapsed-grou
   console.log(`[T4190] expanded group: "${expandedGroup.game_name}" (new=${expandedGroup.unwatched_count})`);
   console.log(`[T4190] collapsed+new group: "${collapsedNewGroup.game_name}" (new=${collapsedNewGroup.unwatched_count})`);
 
-  // --- switch to the Highlights tab (DownloadsPanel's inline body) ------------------
+  // --- switch to the Published tab (DownloadsPanel's inline body) ------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.getByRole('button', { name: /^Highlights/ }).first().click({ timeout: 30000 });
+  await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 30000 });
 
-  // Scope EVERYTHING to the Highlights tab panel so we assert the collections
+  // Scope EVERYTHING to the Published tab panel so we assert the collections
   // view, not the Games/Clips tab content (T8545: the tab bar swap is a
   // ternary, so those never co-render with this panel, but scoping stays
   // cheap defense-in-depth).
-  const panel = page.getByTestId('highlights-tab-panel');
+  const panel = page.getByTestId('published-tab-panel');
   await panel.waitFor({ timeout: 30000 });
 
   // Wait for the collections summary to render the first game group's header.

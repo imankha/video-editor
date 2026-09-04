@@ -231,11 +231,11 @@ test.describe('T4770 new-user-flow perf walkthrough', () => {
     // ---- 3. FRAMING: open an existing draft -> video + crop load -----------
     await leg('framing', async () => {
       await stamp(page, 'framing:navStart');
-      // Home -> "Clips" -> a project card's FRAMING chip opens Framing
+      // Home -> "In Progress Clips" -> a project card's FRAMING chip opens Framing
       // (onSelectProject). Selectors mirror tutorial-capture-framing.spec.js.
       await page.goto('/', { waitUntil: 'commit' });
-      await page.getByRole('button', { name: 'Clips' }).first().waitFor({ state: 'visible', timeout: 15000 });
-      await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 8000 });
+      await page.getByRole('button', { name: /^In Progress Clips/ }).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.getByRole('button', { name: /^In Progress Clips/ }).first().click({ timeout: 8000 });
       const card = page.locator('[data-testid="project-card"]').first();
       await card.waitFor({ state: 'visible', timeout: 20000 });
       await stamp(page, 'framing:draftsVisible');
@@ -261,8 +261,8 @@ test.describe('T4770 new-user-flow perf walkthrough', () => {
       // Open an overlay-ready draft directly via its card's "Open in Overlay"
       // button (needs has_working_video — projects 50/49/47 qualify).
       await page.goto('/', { waitUntil: 'commit' });
-      await page.getByRole('button', { name: 'Clips' }).first().waitFor({ state: 'visible', timeout: 15000 });
-      await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 8000 });
+      await page.getByRole('button', { name: /^In Progress Clips/ }).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.getByRole('button', { name: /^In Progress Clips/ }).first().click({ timeout: 8000 });
       const overlayBtn = page.getByTitle('Open in Overlay').first();
       await overlayBtn.waitFor({ state: 'visible', timeout: 12000 });
       await overlayBtn.click({ timeout: 8000 });
@@ -283,7 +283,7 @@ test.describe('T4770 new-user-flow perf walkthrough', () => {
     await leg('myreels', async () => {
       await stamp(page, 'myreels:navStart');
       await page.goto('/', { waitUntil: 'commit' });
-      const myReels = page.getByRole('button', { name: /^Highlights/ }).first();
+      const myReels = page.getByRole('button', { name: /^Published/ }).first();
       await myReels.waitFor({ state: 'visible', timeout: 15000 });
       await myReels.click({ timeout: 8000 });
       await stamp(page, 'myreels:clicked');

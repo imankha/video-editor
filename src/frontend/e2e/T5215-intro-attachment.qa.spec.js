@@ -35,8 +35,8 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
-  await expect(page.getByTestId('highlights-tab-panel').first())
+  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -44,7 +44,7 @@ async function openDrawer(page) {
 async function expandFirstGroup(page) {
   const alreadyShown = await page.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (alreadyShown) return true;
-  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   for (let i = 0; i < n; i++) {
@@ -219,7 +219,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // RELOAD -- the exact path the user took ("left"), not a same-session reopen.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
 
     // Confirm the VALUE side independently (same as criterion b) before
     // touching the UI, so a failure below is unambiguously presentation-only.
@@ -229,8 +229,8 @@ test.describe('T5215 intro attachment (real account)', () => {
     expect(persistedReel, 'PERSISTENCE: the value must round-trip after reload').toBeTruthy();
 
     // Navigate back into Highlight Reels and reopen the SAME reel's picker.
-    await page.getByRole('button', { name: /^Highlights/ }).first().click();
-    await expect(page.getByTestId('highlights-tab-panel').first())
+    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
     await expandFirstGroup(page);
     const tileAfterReload = page.getByTestId('reel-card').first();
@@ -283,7 +283,7 @@ test.describe('T5215 intro attachment (real account)', () => {
 
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
     // Same rationale as criterion b: hit the real endpoint directly rather than
     // sniffing an incidental frontend fetch that isn't guaranteed to fire here.
     const dl = await page.request.get('/api/downloads');
@@ -415,13 +415,13 @@ test.describe('T5215 intro attachment (real account)', () => {
     await page.keyboard.press('Escape');
 
     await openDrawer(page);
-    const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+    const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
     await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     const n = await headers.count();
     test.skip(n === 0, 'no game/mix collection groups available on this account');
     await clickChecked(page, headers.first(), 'collection group header');
 
-    const collectionKebab = page.getByTestId('highlights-tab-panel').getByRole('button', { name: /More actions/i }).first();
+    const collectionKebab = page.getByTestId('published-tab-panel').getByRole('button', { name: /More actions/i }).first();
     await expect(collectionKebab).toBeVisible({ timeout: 10000 });
     await clickChecked(page, collectionKebab, 'collection kebab');
 
@@ -457,7 +457,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // RELOAD (not same-session) -- the exact verification path required.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
 
     // Confirm the VALUE round-trips via the real endpoint with the SAME query
     // params the UI used (unambiguous persistence check, independent of UI).
@@ -469,13 +469,13 @@ test.describe('T5215 intro attachment (real account)', () => {
     // Navigate back in and reopen the SAME collection's picker -- the
     // PRESENTATION half: the DOM must mark the persisted selection, exactly
     // the property the round-2 bug fix established for reels.
-    await page.getByRole('button', { name: /^Highlights/ }).first().click();
-    await expect(page.getByTestId('highlights-tab-panel').first())
+    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
-    const headersAfter = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+    const headersAfter = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
     await headersAfter.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     await clickChecked(page, headersAfter.first(), 'collection group header (reopened)');
-    const kebabAfter = page.getByTestId('highlights-tab-panel').getByRole('button', { name: /More actions/i }).first();
+    const kebabAfter = page.getByTestId('published-tab-panel').getByRole('button', { name: /More actions/i }).first();
     await clickChecked(page, kebabAfter, 'collection kebab (reopened)');
     // The picker's listbox mounts SYNCHRONOUSLY on click, but its selection
     // (collectionIntroSelectedId) resolves via a separate async GET that

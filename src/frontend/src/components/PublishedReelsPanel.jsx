@@ -1,15 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { CollectionShareModal } from './CollectionShareModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
-import { Button } from './shared/Button';
 import { CollectionsTab } from './collections/CollectionsTab';
 import { ReelTile } from './collections/ReelTile';
-import { DraftTile } from './DraftTile';
-import { CardCarousel } from './shared/CardCarousel';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useReadyGames } from '../stores/gamesDataStore';
 import { IntroStoryPlayer } from './introcards/IntroStoryPlayer';
 import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
@@ -33,55 +28,40 @@ import { toast } from './shared/Toast';
 import { track } from '../utils/analytics';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES } from '../config/displayNames';
 import { formatGameClock } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
- * DownloadsPanel - the Highlight Reels surface: renders inline as
- * ProjectManager's Highlights tab body (T8545; was a slide-out drawer).
+ * PublishedReelsPanel - the Published reels surface: renders inline as
+ * ProjectManager's Published tab body (T8555; was the published half of the
+ * old DownloadsPanel / Highlights tab, split off into its own top-level tab).
+ * The in-progress multiclip drafts + assembly button that used to sit above
+ * this list moved to ProjectManager's inline In Progress Reels tab (T8555).
  *
  * Features:
- * - Lists all final videos grouped by date
- * - Each item shows: project name, filename, date, file size
- * - Actions: Download to local, Open project, Delete
+ * - Lists all published reels grouped by game (CollectionsTab), regardless of
+ *   single- or multi-clip origin
+ * - Each reel shows: name, poster, meta; Actions: play/share/download/rank/etc.
  *
  * Race-safe:
- * - Uses useDownloads hook with AbortController
+ * - Uses useDownloads/useCollections hooks with AbortController
  * - Shows loading skeleton while fetching
  * - Guards against stale state updates
  */
-export function DownloadsPanel({
-  // T8545: whether the Highlights tab (ProjectManager owns tab state) is the
+export function PublishedReelsPanel({
+  // T8555: whether the Published tab (ProjectManager owns tab state) is the
   // active tab -- this panel is always mounted, gating its own render on this
-  // prop instead of a drawer's isOpen, so a story-player/modal open when the
-  // user switches tabs survives (mirrors how the old drawer survived being
-  // closed without unmounting).
+  // prop, so a story-player/modal open when the user switches tabs survives
+  // (mirrors how the old drawer survived being closed without unmounting).
   active,
-  onOpenProject,  // (projectId) => void - Navigate to project
-  // T8360: in-progress "Highlights" section + relocated assembly button (moved
-  // here from ProjectManager's Clips tab). The GameClipSelectorModal itself
-  // stays owned by ProjectManager (design doc Sec 8 ownership note, option b) --
-  // this panel only triggers it via onOpenAssembly.
-  onOpenAssembly, // () => void - open the Create Highlight Reel modal (owned by ProjectManager)
-  onSelectProject, // (projectId) => void - open a Highlights draft
-  onSelectProjectWithMode, // (projectId, options) => void
-  onDeleteProject, // (projectId) => void
-  onViewClips, // T8470 (Part C): () => void - switch home to the Clips tab (ProjectManager owns tab state, lifted here like onOpenAssembly)
-  exportingProject,
-  pendingGameIds = new Set(),
+  onOpenProject,  // (projectId) => void - Navigate to project (re-edit a reel)
+  onViewClips, // T8470 (Part C): () => void - switch home to the In Progress Clips tab (ProjectManager owns tab state)
 }) {
-  // T8360: Highlights = in-progress multi-clip drafts (is_auto_created === false).
-  // Same `projects` array the Clips tab reads, partitioned client-side -- no
-  // separate fetch, no migration (see design doc Sec 5.1).
+  // T8470 (Part C): the In Progress Clips-tab population - single-clip
+  // auto-drafts. Same predicate ProjectManager's clipDrafts uses, so the
+  // published-list empty-state count can never disagree with the Clips badge.
   const projects = useProjectsStore((state) => state.projects);
-  const highlightDrafts = projects.filter((p) => !p.is_auto_created);
-  // T8470 (Part C): the Clips-tab population - single-clip auto-drafts. Same
-  // predicate ProjectManager's clipDrafts uses, so the drawer's empty-state
-  // count can never disagree with the Clips tab's badge count.
   const draftClipCount = projects.filter((p) => p.is_auto_created).length;
-  const readyGames = useReadyGames();
-  const hasClips = readyGames.some((g) => g.clip_count > 0);
 
   // useDownloads supplies the per-reel action helpers + formatters. The full-list
   // fetch is disabled (false) — the single view sources members from
@@ -143,7 +123,7 @@ export function DownloadsPanel({
           intro = data.intro ?? null;
         }
       } catch (err) {
-        console.error('[DownloadsPanel] failed to fetch collection intro-playback:', err);
+        console.error('[PublishedReelsPanel] failed to fetch collection intro-playback:', err);
       }
     }
     setStoryPlayer({ reels, title, intro });
@@ -249,7 +229,7 @@ export function DownloadsPanel({
         setCollectionIntroSelectedId(data.intro_card_id);
       }
     } catch (err) {
-      console.error('[DownloadsPanel] failed to resolve collection intro:', err);
+      console.error('[PublishedReelsPanel] failed to resolve collection intro:', err);
     }
   };
 
@@ -276,7 +256,7 @@ export function DownloadsPanel({
         }
       }
     } catch (err) {
-      console.error('[DownloadsPanel] failed to set collection intro:', err);
+      console.error('[PublishedReelsPanel] failed to set collection intro:', err);
     }
   };
 
@@ -338,7 +318,7 @@ export function DownloadsPanel({
         results.forEach((r) => { map[r.key] = r; });
         if (!cancelled) setIntroBadgesByKey(map);
       } catch (err) {
-        console.error('[DownloadsPanel] failed to batch-resolve collection intro badges:', err);
+        console.error('[PublishedReelsPanel] failed to batch-resolve collection intro badges:', err);
       }
     })();
     return () => { cancelled = true; };
@@ -386,7 +366,7 @@ export function DownloadsPanel({
     try {
       await downloadCollection(definition, { onProgress });
     } catch (err) {
-      console.error('[DownloadsPanel] collection download failed:', err);
+      console.error('[PublishedReelsPanel] collection download failed:', err);
       toast.error('Could not download collection');
     }
   };
@@ -401,7 +381,7 @@ export function DownloadsPanel({
   const canMoveProfiles = profiles.length >= 2;
 
   // T5215: the current profile's intro-card library, for the reel picker.
-  // Fetched when the Highlights tab becomes active (mirrors useCollections(active));
+  // Fetched when the Published tab becomes active (mirrors useCollections(active));
   // the store dedupes concurrent/repeat calls.
   const introCards = useIntroCardStore((state) => state.cards);
   const fetchIntroCards = useIntroCardStore((state) => state.fetchCards);
@@ -498,7 +478,7 @@ export function DownloadsPanel({
     try {
       await downloadFile(download.id);
     } catch (err) {
-      console.error('[DownloadsPanel] reel download failed:', err);
+      console.error('[PublishedReelsPanel] reel download failed:', err);
       toast.error('Could not download reel');
     }
   };
@@ -522,7 +502,7 @@ export function DownloadsPanel({
         intro = data.intro ?? null;
       }
     } catch (err) {
-      console.error('[DownloadsPanel] failed to fetch intro-playback:', err);
+      console.error('[PublishedReelsPanel] failed to fetch intro-playback:', err);
     }
     setStoryPlayer({
       reels: [toPlayerReel(download)],
@@ -531,7 +511,7 @@ export function DownloadsPanel({
       intro,
     });
     // T8545: the player renders above this panel (Z.PLAYER) regardless of the
-    // Highlights tab's own active/inactive state -- there is no "close the
+    // Published tab's own active/inactive state -- there is no "close the
     // panel" action anymore (it was a drawer-only concept), so exiting the
     // player always drops the user back on My Reels, never out of the app.
     // T540: Record achievements for viewing gallery video
@@ -596,7 +576,7 @@ export function DownloadsPanel({
       URL.revokeObjectURL(url);
 
     } catch (error) {
-      console.error('[DownloadsPanel] Before/After export error:', error);
+      console.error('[PublishedReelsPanel] Before/After export error:', error);
       alert(`Failed to generate comparison: ${error.message}`);
     } finally {
       setExportingBeforeAfter(null);
@@ -760,60 +740,14 @@ export function DownloadsPanel({
   return (
     <>
       {active && (
-      /* T8545: inline Highlights tab body (was a right-side drawer -- backdrop,
-         fixed shell, header/X button, and slide-in animation all deleted; the
-         segmented tab bar above already carries the "Highlights" label +
-         unseen-count badge, so this body starts straight into content, same as
-         the Games/Clips tab bodies). Width mirrors the old drawer's own
-         breakpoints (T5673) so CollectionsTab/CardCarousel's tuned grid density
-         is unaffected by the move from a right-docked panel to inline content. */
-      <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="highlights-tab-panel">
-        {/* T8360: relocated assembly button (was ProjectManager's Clips-tab
-            "Create Highlight Reel" button) + the Highlights (in-progress)
-            section, both above the published Highlight Reels list -- moved,
-            not rewritten (design doc Sec 4.2). */}
-        <div className="mb-4">
-          <Button
-            variant="cyan"
-            size="lg"
-            icon={Plus}
-            disabled={!hasClips}
-            title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
-            onClick={onOpenAssembly}
-            className="w-full"
-          >
-            Create Highlight Reel
-          </Button>
-        </div>
-
-        <div className="mb-4">
-          <div className="flex items-center gap-2 px-3 py-2 min-h-11">
-            <span className="text-sm font-medium text-gray-200 flex-1">{SECTION_NAMES.HIGHLIGHTS}</span>
-            <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
-              {highlightDrafts.length}
-            </span>
-          </div>
-          {highlightDrafts.length === 0 ? (
-            <p className="px-3 text-sm text-gray-500">
-              No highlights in progress. Tap Create Highlight Reel to assemble one.
-            </p>
-          ) : (
-            <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`}>
-              {highlightDrafts.map((project) => (
-                <DraftTile
-                  key={project.id}
-                  project={project}
-                  onSelect={() => onSelectProject?.(project.id)}
-                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                  onDelete={() => onDeleteProject?.(project.id)}
-                  exportingProject={exportingProject}
-                  pendingGameIds={pendingGameIds}
-                />
-              ))}
-            </CardCarousel>
-          )}
-        </div>
-
+      /* T8555: Published tab body -- every published reel grouped by game
+         (CollectionsTab), regardless of single- or multi-clip origin. The
+         in-progress multiclip drafts + "New Highlight Reel" assembly button
+         that used to sit above this list moved to ProjectManager's inline
+         In Progress Reels tab (T8555 split). Width mirrors the old drawer's
+         own breakpoints (T5673) so CollectionsTab/CardCarousel's tuned grid
+         density is unaffected. */
+      <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="published-tab-panel">
         <ConfidenceBanner
           onRank={() => setShowRankingGame(true)}
           refreshKey={rankRefreshKey}
@@ -903,7 +837,7 @@ export function DownloadsPanel({
           onClose={closeStoryPlayer}
           onShare={sharePlayerReel}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId).catch((err) => {
-            console.error('[DownloadsPanel] story-player download failed:', err);
+            console.error('[PublishedReelsPanel] story-player download failed:', err);
             toast.error('Could not download reel');
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
@@ -918,4 +852,4 @@ export function DownloadsPanel({
   );
 }
 
-export default DownloadsPanel;
+export default PublishedReelsPanel;

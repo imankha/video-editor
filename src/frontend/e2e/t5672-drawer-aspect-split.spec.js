@@ -66,7 +66,7 @@ test('T5672 drawer aspect split at 1280px: two rows, portrait first, legible chi
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: /^Highlights/ }).click();
+  await page.getByRole('button', { name: /^Published/ }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -103,7 +103,7 @@ test('T5672 drawer aspect split at 390px: two rows still legible on mobile', asy
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: /^Highlights/ }).click();
+  await page.getByRole('button', { name: /^Published/ }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -126,14 +126,14 @@ test('T5672 drawer: single-aspect game shows no aspect chip (unchanged look)', a
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: /^Highlights/ }).click();
+  await page.getByRole('button', { name: /^Published/ }).click();
   await page.waitForTimeout(800);
 
-  // Scope to the Highlights tab panel. The Clips tab's content is a ternary
-  // that renders null while Highlights is active (T8545 -- no more "screen
+  // Scope to the Published tab panel. The Clips tab's content is a ternary
+  // that renders null while Published is active (T8545 -- no more "screen
   // BEHIND a drawer" to accidentally match), but scoping stays cheap
   // defense-in-depth against a future surface reusing the same testids.
-  const drawer = page.getByTestId('highlights-tab-panel');
+  const drawer = page.getByTestId('published-tab-panel');
 
   // The real account's games are single-aspect today -- expand the first
   // real game and confirm no bare "9:16"/"16:9" text chip appears.

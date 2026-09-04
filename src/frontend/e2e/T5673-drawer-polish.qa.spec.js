@@ -30,20 +30,20 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
-// Panel scope: T8545 turned the drawer into ProjectManager's inline Highlights
-// tab body, carrying its own `data-testid="highlights-tab-panel"` (no more bare
+// Panel scope: T8545 turned the drawer into ProjectManager's inline Published
+// tab body, carrying its own `data-testid="published-tab-panel"` (no more bare
 // `fixed right-0 top-0` classes to collide with ConnectionStatus's banner,
 // T7740's original problem). The Games/Clips tab content is a ternary that
-// renders null while Highlights is active, so there is no more "home screen
+// renders null while Published is active, so there is no more "home screen
 // behind the drawer" duplicate-testid risk either -- scoping through `panel`
 // below is now defense-in-depth rather than a hard requirement, kept for
 // resilience against a future surface reusing the same testids.
-const PANEL_SELECTOR = '[data-testid="highlights-tab-panel"]';
+const PANEL_SELECTOR = '[data-testid="published-tab-panel"]';
 
 async function openMyReels(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  // T8545: galleryStore.open() is still the "land on the Highlights tab" signal
+  // T8545: galleryStore.open() is still the "land on the Published tab" signal
   // (ProjectManager now reacts to it by switching activeTab, was the drawer's
   // open() directly) -- this in-page trigger is unchanged.
   await page.evaluate(async () => {

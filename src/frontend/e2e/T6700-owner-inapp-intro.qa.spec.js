@@ -39,8 +39,8 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
-  await expect(page.getByTestId('highlights-tab-panel').first())
+  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -48,7 +48,7 @@ async function openDrawer(page) {
 async function expandFirstGroup(page) {
   const alreadyShown = await page.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (alreadyShown) return true;
-  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   for (let i = 0; i < n; i++) {
@@ -130,13 +130,13 @@ async function attachCardToFirstReel(page, targetCard) {
 
 // Attach `targetCard` to the first collection group via kebab -> Intro (T5215 precedent).
 async function attachCardToFirstCollection(page, targetCard) {
-  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   if (n === 0) return false;
   await headers.first().click();
 
-  const collectionKebab = page.getByTestId('highlights-tab-panel').getByRole('button', { name: /More actions/i }).first();
+  const collectionKebab = page.getByTestId('published-tab-panel').getByRole('button', { name: /More actions/i }).first();
   await expect(collectionKebab).toBeVisible({ timeout: 10000 });
   await collectionKebab.click();
 
@@ -240,7 +240,7 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
   // ==========================================================================
   test('criterion-2-and-3: owner collection play shows exactly ONE pre-roll then auto-continues', async ({ page }) => {
     await openDrawer(page);
-    const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+    const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
     await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     const n = await headers.count();
     test.skip(n === 0, 'no game/mix collection groups available on this account');
@@ -256,15 +256,15 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
     // Reload so the "Play all" button we press next reads freshly-attached state.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 20000 });
-    await page.getByRole('button', { name: /^Highlights/ }).first().click();
-    await expect(page.getByTestId('highlights-tab-panel').first())
+    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
-    const headersAfter = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+    const headersAfter = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
     await headersAfter.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     await headersAfter.first().click();
 
-    const playAllBtn = page.getByTestId('highlights-tab-panel').getByTitle('Play all').first();
+    const playAllBtn = page.getByTestId('published-tab-panel').getByTitle('Play all').first();
     const hasPlayAll = await playAllBtn.count() > 0;
     test.skip(!hasPlayAll, '"Play all" control not present on this collection (UI drift)');
 
@@ -373,13 +373,13 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
 
     // Collection path.
     await openDrawer(page);
-    const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+    const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
     await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     const n = await headers.count();
     test.skip(n === 0, 'no game/mix collection groups available on this account -- cannot verify the collection routing leg');
     await headers.first().click();
 
-    const playAllBtn = page.getByTestId('highlights-tab-panel').getByTitle('Play all').first();
+    const playAllBtn = page.getByTestId('published-tab-panel').getByTitle('Play all').first();
     test.skip(await playAllBtn.count() === 0, '"Play all" control not present on this collection (UI drift)');
 
     const collectionResp = page.waitForResponse(

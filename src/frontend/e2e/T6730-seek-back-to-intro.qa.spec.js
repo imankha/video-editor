@@ -43,15 +43,15 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
-  await expect(page.getByTestId('highlights-tab-panel').first())
+  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
 
 async function expandFirstGroup(page) {
   const alreadyShown = await page.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (alreadyShown) return true;
-  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   for (let i = 0; i < n; i++) {

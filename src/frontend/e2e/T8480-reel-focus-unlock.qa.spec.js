@@ -176,21 +176,21 @@ test.describe('T8470 - one status story for a fresh draft (desktop)', () => {
     await expect(continueCard).toBeVisible({ timeout: 10000 });
     await expect(continueCard).not.toContainText('Not Started');
 
-    // Clips tab: the chip counts the same single-clip draft.
-    await page.getByRole('button', { name: /Clips/ }).click();
+    // In Progress Clips tab: the chip counts the same single-clip draft.
+    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
     await expect(page.getByTestId('project-card').first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('project-card').getByText('Draft', { exact: true })).toBeVisible();
 
-    // Highlight Reels drawer: published-reels list is empty, but the empty state
+    // Published tab: published-reels list is empty, but the empty state
     // is count-aware - it must never claim "No reels yet" while the draft exists
-    // (T8470 Part C), and its link switches to the Clips tab.
-    await page.getByRole('button', { name: /^Highlights/ }).click();
+    // (T8470 Part C), and its link switches to the In Progress Clips tab.
+    await page.getByRole('button', { name: /^Published/ }).click();
     await expect(page.getByText('No reels yet')).toBeVisible({ timeout: 10000 });
     const draftLink = page.getByRole('button', { name: /draft clip.*in progress.*Clips tab/ });
     await expect(draftLink).toBeVisible();
     await draftLink.click();
 
-    // The drawer closed and the Clips tab is now active.
+    // The drawer closed and the In Progress Clips tab is now active.
     await expect(page.getByText('No reels yet')).toHaveCount(0);
     await expect(page.getByTestId('project-card').first()).toBeVisible({ timeout: 10000 });
   });
