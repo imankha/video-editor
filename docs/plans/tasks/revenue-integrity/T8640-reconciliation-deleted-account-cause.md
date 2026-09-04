@@ -103,13 +103,45 @@ deletion row exists (payments predating T8630), say that too: "no local account"
 ### Technical Notes
 - Keep the `set(local) | set(stripe_agg)` union in `classify_users`. It is what surfaced
   this incident in the first place.
-- The test-account exclusion in `_load_local_spent_positive`
-  ([admin.py:693](../../../../src/backend/app/routers/admin.py#L693)) is applied to the
-  LOCAL side only, so a test account with live Stripe history would appear as a
-  Stripe-only row with local 0, indistinguishable in shape from a deleted payer. Not the
-  cause of this incident (that id has no `users` row at all, so it is not a test account),
-  but the same visual and worth resolving while in here: either exclude those ids from the
-  Stripe side too, or label them.
+
+### REQUIRED: the test-account exclusion is one-sided, and it breaks the moment v026 hits prod
+
+Not a hypothetical and not optional. `_load_local_spent_positive`
+([admin.py:693](../../../../src/backend/app/routers/admin.py#L693)) applies
+`NOT u.is_test_account` to the LOCAL side only. The Stripe side has no such filter, and
+`_emails_for` ([admin.py:706](../../../../src/backend/app/routers/admin.py#L706)) has none
+either. So a flagged account WITH live Stripe history is dropped from the local map, then
+re-enters through the `stripe_only` backfill with `local_cents: 0`, and lands in the report
+as a drifted row with cause `unknown`, visually identical to a genuinely deleted payer.
+
+**Known case, already loaded and waiting:** v026 flags `imankh@gmail.com`, which is the
+owner's real admin account, and that account has a real live charge (399 cents, 2026-07-23,
+`pi_3TwPFMIxob3dHqK044Ye5tgk`). Prod has not run v026 yet, which is the only reason the
+panel currently reads "Drifted 1/4". The first prod deploy that runs it turns that into
+two drifted rows, drops the local total from $20.97 to $16.98, and reports a net drift of
+-$7.98, of which only $3.99 is real.
+
+The imankh row fails DIFFERENTLY from the deleted-payer row, and worse:
+
+| | bigajosue (deleted) | imankh (flagged) |
+|---|---|---|
+| `user_segments` row | gone | exists, holds the correct 399 |
+| Heal outcome | `set_total_spent` returns None, `healed: false` | returns 399, writes 399, **`healed: true`** |
+| After heal | row still drifted | row still drifted |
+
+So the flagged-account row is a heal that REPORTS SUCCESS and changes nothing observable,
+which is the worst of the three failure shapes on this panel. Fixing the classifier's
+causes without fixing this leaves a permanent red row that also lies about being fixed.
+
+**Fix:** resolve the excluded user_id set ONCE in `_compute_reconciliation` and apply it to
+BOTH sides, so a flagged account is either absent from the report entirely or labelled as
+excluded, never rendered as unexplained drift. Do not solve it by removing the exclusion
+from the local side: excluding staff self-payments from customer-revenue reporting is the
+intended behavior of the flag.
+
+Note the flag itself is admin-view-only (`_test_exclusion`, the UserTable badge, and the
+`markTestAccount` toggle at [admin.py:626](../../../../src/backend/app/routers/admin.py#L626));
+it changes nothing about the account's own app experience.
 
 ## Acceptance Criteria
 
@@ -120,5 +152,9 @@ deletion row exists (payments predating T8630), say that too: "no local account"
 - [ ] A heal that fails is visible on the row it failed for
 - [ ] The panel explains an id-only row instead of showing a bare UUID
 - [ ] Classifier stays pure; new fact arrives as a parameter
+- [ ] A flagged test account with live Stripe history does NOT appear as unexplained
+      drift, and no heal on this panel can report success while changing nothing
+      (regression test seeded with the imankh case: flagged, `user_segments` present,
+      local value already correct)
 - [ ] Unit tests cover: deleted payer, test-mode-era, refund, dispute, aligned, and a
       deleted payer that ALSO has a refund (account_deleted wins)
