@@ -1,6 +1,6 @@
 # T8535: Consolidate DraftTile's separate draft-preview modal into the DraftReelPreview player
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 3
 **Created:** 2026-09-04

@@ -1,6 +1,6 @@
 # T8545: Highlight Reels becomes a third peer tab + rename "Build" → "Create Highlight Reel"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-03
