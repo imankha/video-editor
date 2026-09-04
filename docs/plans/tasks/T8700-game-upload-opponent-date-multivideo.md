@@ -1,6 +1,6 @@
 # T8700: Game upload — surface Opponent/Date, keep video optional-not-hidden, support multiple videos per game
 
-**Status:** TODO
+**Status:** WIP (dotask spawn)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-04

@@ -1,6 +1,6 @@
 # T8710: Sport picker dropdown — white popup background drowns out light-colored text
 
-**Status:** TODO
+**Status:** WIP (dotask spawn)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-04
