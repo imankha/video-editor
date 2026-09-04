@@ -63,6 +63,49 @@ originally-scoped narrow gap. ui-designer pass launched to work out the concrete
 grounded in the real shipped `ExportButtonView`/`FocusScreen`/`DraftReelPreview`/
 `usePublishProject` code, before implementation.
 
+## Design APPROVED (2026-09-04)
+
+Decision artifact: https://claude.ai/code/artifact/851b5ae6-4e6d-4c35-962a-7790b781cd5a
+
+**Layout — Option 1**: export completion mounts the existing preview-player shell (same one
+`DraftReelPreview` already uses — scrubber, header, Escape, no backdrop-close, portrait/landscape
+aspect box) over the working video immediately, full-screen. One new optional slot on
+`CollectionPlayer`: `actionBar`, rendered after the video area. The three choices could not fit
+in the header cluster (same width math that already dropped Download from the draft toolbar), so
+they render in the new action-bar footer: **Publish** full-width primary
+(`data-tutorial-target="focus-publish"`, caption "Puts it in Highlight Reels so you can share
+it."), then **Add Spotlight** / **Add Spotlight Later** as an equal-weight pair beneath it
+(caption "A spotlight is a glowing highlight that follows your athlete."), then a divider and a
+quiet ghost **Refocus** row ("Refocus (reframe and export again, uses credits)"). Desktop: one
+right-aligned row, Refocus pushed left, primary rightmost.
+
+**Publish semantics — one tap, true publish (APPROVED).** Tapping Publish fires the render, then
+automatically completes the publish gesture the instant it finishes — no second tap, no landing
+on another decision screen. Needs a small new mechanism: an ephemeral flag (e.g.
+`publishAfterRenderRef` in `FocusScreen`) consumed by the existing completion handler
+(`App.jsx:597-604`) to auto-publish instead of waiting for another tap. This is a deliberate
+departure from T8530's original two-tap design — that design predates a preview existing at this
+point; now that the user has already watched and decided, a "Publish" button that doesn't publish
+would read as dishonest per the app's own copy-honesty rule (T8520).
+
+**"Add Spotlight Later" toast**, routed by `is_auto_created` (T8360's already-approved split, not
+a new decision):
+- Single-clip: **"Saved to Clips"** — "Clips are single plays. Highlight Reels join several clips
+  into one video. Yours is still a draft, so add a spotlight or publish it from here whenever you
+  want."
+- Multi-clip: **"Saved to Highlight Reels, under Highlights"** — "Highlight Reels join several
+  clips into one video. Single plays stay in Clips. Yours is still a draft, so add a spotlight or
+  publish it from here whenever you want."
+- `toast.success(title, { message, duration: 10000 })`, no action button.
+
+**Minor findings to fix in passing (no decision needed):** two shipped comments
+(`ConfirmationDialog.jsx:92-95`, `FocusScreen.jsx:1296-1298`) claim `flex-col-reverse` puts the
+primary action lowest on mobile — it actually renders it highest (first DOM child = bottom in
+`column-reverse`). Correct the comments; the new action bar uses explicit order and avoids the
+pattern entirely. Existing `overlay_offered`/`overlay_deferred`/`overlay_declined` events still
+sum correctly under this design (declined = Publish); Refocus has no event of its own — optional
+future addition, not required here.
+
 ## Pre-flight note (2026-09-04)
 
 Filed 2026-09-02, before T8520 (overlay-optional-skip + draft preview player), T8530
