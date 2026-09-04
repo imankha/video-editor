@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle } from 'lucide-react';
+import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle, Film } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useProfileStore } from '../stores';
 import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
@@ -37,6 +37,7 @@ export function GameTile({
   onEdit,
   onRetryUpload,   // T7490: re-select the original file + resume the multipart upload
   onDiscardFailed, // T7490: full cascade delete (the ONE case cascade is correct)
+  onAddVideo,      // T8700: attach another video (e.g. a second half) to this game
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // T7490: an upload that never finished (R2 multipart reaped). No video, no poster;
@@ -177,6 +178,9 @@ export function GameTile({
   // mobile sheet (Delete is separate: it carries the two-tap confirm).
   const actions = [
     hasRecap && { key: 'play', label: 'Watch recap', icon: Play, onClick: onPlayRecap },
+    // T8700: attach another video to a live (non-expired) game. Hidden when
+    // expired — the source is gone, so there's nothing to append to.
+    !isExpired && onAddVideo && { key: 'addVideo', label: 'Add video', icon: Film, onClick: onAddVideo },
     !isExpired && { key: 'share', label: 'Share game', icon: Share2, onClick: onShare },
     // T6890: Edit game moved to the pencil beside the name in the scrim (below).
     canExtend && (isExpired || isNearExpiry) &&
