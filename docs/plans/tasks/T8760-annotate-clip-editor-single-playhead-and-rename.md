@@ -1,6 +1,6 @@
 # T8760: Annotate clip editor — single play control, clip-scoped looping playhead, remove duplicate name field, rename Create Reel
 
-**Status:** WIP (dotask spawn)
+**Status:** STAGING (merged to master 2026-09-04, PR #336)
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-04
