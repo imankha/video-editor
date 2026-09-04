@@ -1,6 +1,6 @@
 # T8730: Annotate clip-editor polish — Focus button sizing, false-positive save dialog, "Play Editor" naming
 
-**Status:** WIP (dotask spawn)
+**Status:** STAGING (merged to master 2026-09-04, PR #331)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-04
