@@ -191,8 +191,12 @@ it does not block and can run in parallel. Every other Next Up row (T8200/T8210/
 T8230/T8240/T8260/T8280/T8310/T8320/T8330 + the Cross-Profile Game Attribution epic) has
 a real UI surface and gates this group. **2026-09-03: the First Reel Funnel epic
 (T8460-T8560, section above, user-ordered START NEXT) is UI-visible and joins this gate
-set — the guided path must be built on the fixed flow, and T8560's stepper decision
-feeds T7620's engine.** Originally sequenced in Milestone TOP right after
+set — the guided path must be built on the fixed flow.** **T8545 (filed 2026-09-03,
+Highlight Reels third-tab + rename) is also in this epic's UI-visible set and gates this
+group the same way.** **T8560 resolved 2026-09-03: FOLDED into T7620/T7630 (no longer a
+separate stepper decision) — its substance ships as Round 3 of T7620's own design, so
+T7630 already carries it; nothing further gates on T8560 itself.** Originally sequenced
+in Milestone TOP right after
 the First-Clip Funnel epic (user-ordered 2026-08-24, SEQUENCED AFTER all P1 bug fixes +
 upload-integrity epic — the guided path would otherwise walk users into the broken
 upload/save walls); that
