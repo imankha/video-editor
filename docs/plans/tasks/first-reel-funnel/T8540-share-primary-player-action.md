@@ -1,6 +1,6 @@
 # T8540: Share is the primary player action
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-03

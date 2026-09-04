@@ -1,6 +1,6 @@
 # T8490: Add Play sheet: star semantics made visible (5-star reel default ALREADY EXISTS)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-03
