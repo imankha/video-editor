@@ -49,7 +49,7 @@ Row order = intended execution order (bugs first, then flow, then polish).
 | T8530 | [Done means done: auto-advance finished reels](T8530-auto-advance-finished-reel.md) | TODO |
 | T8540 | [Share is the primary player action](T8540-share-primary-player-action.md) | TODO |
 | T8550 | [Mobile CTA visibility sweep](T8550-mobile-cta-visibility-sweep.md) | TODO |
-| T8560 | [Persistent journey stepper (design gate)](T8560-journey-stepper-design.md) | TODO |
+| T8560 | [Persistent journey stepper (design gate)](T8560-journey-stepper-design.md) | FOLDED - folded into T7620/T7630 (Round 3), see T8560-design.md |
 
 ## Vocabulary constraint (binding)
 
@@ -72,8 +72,11 @@ touches vocabulary must reconcile with T8130's table and T8260, never overwrite 
   Reels drawer; T8470's drawer changes build on that IA.
 - The Tutorial Redesign guided path ships AFTER this epic (user order 2026-09-03: this
   epic starts next; the tutorial group's standing rule is that UI-visible work lands
-  before the tutorial is built on top of it). T8560's stepper needs an explicit design
-  decision against the guided-tour engine to avoid two competing orientation systems.
+  before the tutorial is built on top of it). **T8560 resolved 2026-09-03: FOLDED into
+  T7620/T7630** rather than built standalone - the stepper is T7620's already-approved
+  5-rung goal ladder, unnamed and only half-drawn (see T8560-design.md). This epic ships
+  with no journey-stepper code of its own; the named-rungs + full-map amendment lands
+  inside T7630 instead.
 
 ## Completion Criteria
 

@@ -98,13 +98,13 @@ Everything is oriented toward **one terminal outcome: a published reel that has 
 Guidance is never "here is a feature". It is always "here is the next action that shortens your
 distance to that outcome".
 
-| Rung | Milestone reached | Derived from |
-|---|---|---|
-| **L1** | A game (or an uploaded clip) is in the app | `upload_game`, `game_upload_succeeded`, `clip_uploaded` |
-| **L2** | A play is captured as a clip | `add_clip`, `clip_created` |
-| **L3** | The clip is framed and exported (a working video exists) | `export_framing`, `wait_for_export` |
-| **L4** | The reel is published to Highlight Reels | `move_to_my_reels`, `move_succeeded` |
-| **L5** | The reel is shared | `share_completed` |
+| Rung | Stop name (Round 3) | Milestone reached | Derived from |
+|---|---|---|---|
+| **L1** | Game | A game (or an uploaded clip) is in the app | `upload_game`, `game_upload_succeeded`, `clip_uploaded` |
+| **L2** | Plays | A play is captured as a clip | `add_clip`, `clip_created` |
+| **L3** | Focus | The clip is framed and exported (a working video exists) | `export_framing`, `wait_for_export` |
+| **L4** | Highlight Reel | The reel is published to Highlight Reels | `move_to_my_reels`, `move_succeeded` |
+| **L5** | Share | The reel is shared | `share_completed` |
 
 Rules:
 
@@ -115,9 +115,14 @@ Rules:
    between L3 and L4, offered as fork F3, never as a required rung. This is a change from the old
    quest chain, which forced the whole Overlay quest before Publish and is a plausible
    contributor to the framing-to-publish drop-off.
-3. **The gradient is visible.** The chip shows `Step {rung} of 5` while the ladder is incomplete,
-   and dialogs name the outcome ("two more steps and your reel is live"). An invisible gradient
-   motivates nobody. This replaces the chip's current quest-count slot (recommendation R5).
+3. **The gradient is visible and named.** The chip shows `{stop label}  ·  Step {rung} of 5`
+   (e.g. "Plays  ·  Step 2 of 5") while the ladder is incomplete, and dialogs name the outcome
+   ("two more steps and your reel is live"). An invisible, anonymous gradient motivates nobody.
+   This replaces the chip's current quest-count slot (recommendation R5). **Round 3 (T8560
+   fold, 2026-09-03):** the five stop labels above (Game / Plays / Focus / Highlight Reel /
+   Share) are canonical, drawn from `guide/journeyLadder.js`'s `LADDER_STOPS`, and the Help
+   panel additionally opens onto a `GuideLadder` map showing all five stops at once (done /
+   current / remaining) - see section 21 Round 3 for the full amendment.
 4. **At L4 the guide asks rather than stopping.** Reaching L4 fires fork **F8** ("Nice. What
    next?": share this reel / show me what else I can do / make another reel). L5 remains a
    critical rung and is F8's first answer, so the share push is never lost.
@@ -1187,7 +1192,7 @@ mobile is where the funnel evidence is worst. F6's `stuck` answer routes straigh
 | **R2** | The drafts tile's Focus entry is a small clip segment inside a progress strip (T7790b), a weak target for the most important L3 action | Give a Not Started tile an explicit "Frame this clip" button | **NOT ACCEPTED** | Rules 39 and 40 anchor to `draft-tile-open`. Higher mis-tap risk on mobile; measurable |
 | **R3** | **Focus has no publish exit.** After export the user must navigate home and re-find the draft: a genuine dead end at the L3-to-L4 transition | On successful framing export, surface "Publish this reel" and "Add a spotlight" on Focus. This IS fork F3 rendered as real UI | **ACCEPTED** | Rule 30 anchors to `focus-publish`. Shortest path to publish loses a navigation step |
 | **R4** | Publishing hides the thing you just made: the tile leaves the Clips surface with a toast, and the reel is on a surface the user has never visited | On publish success, land the user on the Highlight Reels panel scrolled to the new reel | **ACCEPTED** | Rule 13 becomes a fallback for the leave-and-return case only; the normal path goes straight to rule 44 (Share) |
-| **R5** | No visible progress toward the goal; the chip's count slot becomes meaningless once the panel dies | Chip shows "Step n of 5" while the ladder is incomplete | **IN SCOPE** (part of this design) | Section 3 rule 3 |
+| **R5** | No visible progress toward the goal; the chip's count slot becomes meaningless once the panel dies | Chip shows "Step n of 5" while the ladder is incomplete | **IN SCOPE** (part of this design); **named + mappable per Round 3 (T8560 fold)** | Section 3 rule 3, section 21 Round 3 |
 | **R6** | Mobile users cannot report a problem at all (`hidden lg:block hide-on-touch`) | Reach `ReportProblemButton` through the Help panel | **IN SCOPE** (part of this design) | Section 15 |
 
 ### 17.1 R3 and R4 land as two sibling tasks, not inside T7630
@@ -1349,6 +1354,34 @@ Safari pass, default flip per D1).
 | **Q2** | After the first published reel the guide **asks** (fork **F8**: share it / show me what else / make another). First publish also **unlocks an advanced tier** (section 3.1): A1 play your annotations, A2 share the whole game, A3 share annotations with a teammate's family, A4 create and attach an Athlete Intro Card, A5 rank your reels (capability-gated on T3630 being deployed and unlocked), plus A6 to A10 carrying the rest of the retired video curriculum. Surfaced through F8's second answer, the Help chip menu, and one earned nudge per set. Reconciled with round 1: this **replaces** S1 to S7 and moves the gate from ladder-complete (L5) to **first publish (L4)** | **ACCEPTED** |
 | **Q3** | The pre-cut branch is resolved by product work, not a design fallback. F1's `pre_cut` answer points at **T8380's "Add Video" button** on the Clips tab (`data-tutorial-target="clips-add-video"`, reserved) backed by **T8370's** clip-upload capability. Both **gate the T7640 rollout**; `caps.clipUpload` keeps rules 5 and 38 inert until then. F1 still fires **before** the first Add Game tap | **ACCEPTED** |
 | **Q4** | Rule 8 stands: the guide drives the user into Annotate during an active upload, with a dedicated e2e regression proving a mid-session upload failure never loses work | **ACCEPTED** |
+
+### Round 3 (2026-09-03) - the T8560 journey-stepper fold
+
+T8560 (First Reel Funnel epic) proposed a persistent 4-stop journey stepper on every screen.
+Architect review found it is not a second system: it shares input data, audience, lifetime,
+and message with this design's own goal ladder (section 3) - it is that ladder, unnamed and
+only partly drawn. **Verdict: fold, do not build a standalone stepper.** T8560 closes as
+FOLDED (see its task file). Full rationale, code-smell analysis, and the rejected standalone
+option (kept as a safe fallback spec) live in `docs/plans/tasks/T8560-design.md`.
+
+Three amendments to this design, now part of T7630's build scope:
+
+| # | Amendment | Cost |
+|---|-----------|------|
+| **A1** | The five ladder rungs get **names** (section 3's table above), in one pure array `guide/journeyLadder.js` exporting `LADDER_STOPS = [{ rung, label, chipLabel }]`. The chip renders `"{stop.label}  ·  Step n of 5"` instead of a bare counter (section 3 rule 3, updated above) | One data file, one string change in `HelpChip` |
+| **A2** | The Help panel opens onto **the map**: a new presentational `guide/GuideLadder.jsx` renders all five stops with done / current / remaining state, driven purely by `facts.ladderRung`. It is the panel's header on every screen, and the visual used by the fork F8 celebration moment | One presentational component, no logic |
+| **A3** | **No second mount, no new chrome row.** The ladder never renders into `UnifiedHeader`, `ModeSwitcher`, or `ProjectManager`'s tab strip. Persistent orientation stays the chip's named label; the full map is one tap away, inside the panel that already exists | Zero - this is a constraint, not code |
+
+Non-negotiable constraint: **one derivation.** `facts.ladderRung` is the only place a rung is
+computed; `journeyLadder.js` and `GuideLadder.jsx` both consume it, never re-derive it.
+
+Test obligations added to T7630's existing list:
+
+| Test | Proves |
+|------|--------|
+| `journeyLadder.test.js` | `LADDER_STOPS` has exactly five entries, ascending rung order, every label from the locked vocabulary set (Plays / Clips / Highlight Reels, T8130), no new coinages |
+| `guideLadder.render.test.jsx` | Given `ladderRung = n`, exactly n stops render done, one renders current, the rest remaining; at ladder-complete no stop renders current |
+| `placement.test.js` (extended) | The map lays out vertically below 384px and never exceeds the panel's usable width at 320px |
 
 ---
 

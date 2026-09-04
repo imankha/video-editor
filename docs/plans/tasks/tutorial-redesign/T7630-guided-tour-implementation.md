@@ -23,6 +23,14 @@ Implement the approved T7620 design exactly:
 4. Step copy per design (aligned with T7580's "reel" language).
 5. Tests: engine unit tests (anchoring math, step state machine), e2e spec driving the
    full guided path with the real UI (auth-bypass pattern), reduced-motion snapshot.
+6. **Round 3 (T8560 fold, 2026-09-03):** `guide/journeyLadder.js` (pure data, `LADDER_STOPS`
+   - five named rungs) + `guide/GuideLadder.jsx` (presentational map, done/current/remaining
+   from `facts.ladderRung`) as the Help panel's header on every screen. `HelpChip` renders
+   `"{stop.label} · Step n of 5"` instead of a bare counter. One derivation only -
+   `journeyLadder.js`/`GuideLadder.jsx` read `facts.ladderRung`, never re-derive it. Full
+   rationale: `docs/plans/tasks/T8560-design.md`. Adds `journeyLadder.test.js`,
+   `guideLadder.render.test.jsx`, and an extension to `placement.test.js` to the test list
+   in item 5 above.
 
 Out of scope: screen-size matrix sign-off + quest reconciliation rollout (T7640).
 

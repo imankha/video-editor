@@ -1,10 +1,15 @@
 # T8560: Persistent journey stepper (design gate)
 
-**Status:** TODO
+**Status:** FOLDED
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-03
-**Updated:** 2026-09-03
+**Updated:** 2026-09-03 (Architect design gate resolved: FOLD, user-approved 2026-09-03.
+Full rationale, discriminator analysis, and the rejected standalone-stepper fallback spec:
+[T8560-design.md](../T8560-design.md). The stepper is not a second system - it is T7620's
+already-approved 5-rung goal ladder, unnamed and only half-drawn. Its substance (naming the
+rungs + showing the whole map) is folded into T7620's design as "Round 3" and into T7630's
+build scope. Zero product code ships from this task; nothing further to do here.)
 
 ## Problem
 
@@ -48,11 +53,13 @@ hides for accounts past first-reel (probably yes: orientation scaffold, not chro
 ## Implementation
 
 ### Steps
-1. [ ] Read T7620-design.md + this epic's landed state
-2. [ ] Design doc with the coexistence decision + mockups (user approval gate)
-3. [ ] Implement per approved design (or close as folded)
+1. [x] Read T7620-design.md + this epic's landed state
+2. [x] Design doc with the coexistence decision + mockups (user approval gate) - verdict: FOLD
+3. [x] Implement per approved design (or close as folded) - closed as FOLDED, no implementation
 
 ## Acceptance Criteria
 
-- [ ] Explicit approved decision on stepper vs guided-tour coexistence
-- [ ] If built: visible on every journey screen, correct at 320px+, uses T8130 vocabulary
+- [x] Explicit approved decision on stepper vs guided-tour coexistence - **FOLD** (user-approved
+      2026-09-03; see T8560-design.md)
+- [ ] ~~If built: visible on every journey screen, correct at 320px+, uses T8130 vocabulary~~ N/A
+      under FOLD - this criterion's substance ships instead as T7620/T7630's Round 3 amendment
