@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { generateClipName } from '../../../utils/clipDisplayName';
+import { RATING_NOTATION, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
 
 /**
  * T6400: the marker tooltip is PORTALLED to document.body and positioned `fixed`.
@@ -47,15 +48,6 @@ const formatTime = (seconds) => {
     return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
   return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
-
-// Rating to notation map
-const RATING_NOTATION = {
-  1: '??',
-  2: '?',
-  3: '!?',
-  4: '!',
-  5: '!!'
 };
 
 // Rating to color map (color-blind safe palette)
@@ -238,6 +230,8 @@ export default function ClipRegionLayer({
                   borderBottom: `2px solid ${layerColor}`,
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
+                title={RATING_ADJECTIVES[rating]}
+                aria-label={RATING_ADJECTIVES[rating]}
               >
                 {notation}
               </div>

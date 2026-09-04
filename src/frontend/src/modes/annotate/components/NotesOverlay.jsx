@@ -1,13 +1,5 @@
 import React from 'react';
-
-// Rating notation symbols (chess-inspired)
-const RATING_NOTATION = {
-  1: '??',  // Blunder
-  2: '?',   // Mistake
-  3: '!?',  // Interesting
-  4: '!',   // Good
-  5: '!!'   // Brilliant
-};
+import { RATING_NOTATION, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
 
 // Rating colors for border (matching ClipRegionLayer)
 const RATING_COLORS = {
@@ -74,7 +66,11 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
           {gameClock && (
             <span className="tabular-nums text-[#666] sm:absolute sm:left-0 sm:top-0">{gameClock}</span>
           )}
-          {notation && <span className="text-[#666] sm:mr-1.5">{notation}</span>}
+          {notation && (
+            <span className="text-[#666] sm:mr-1.5" aria-label={RATING_ADJECTIVES[rating]}>
+              {notation}
+            </span>
+          )}
           <span>{name}</span>
         </div>
       )}

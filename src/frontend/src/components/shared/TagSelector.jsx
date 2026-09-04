@@ -34,7 +34,7 @@ export function TagSelector({ positions, tagsByPosition, selectedTags = [], onTa
         type="button"
       >
         {isSelected && <Check size={cfg.checkSize} />}
-        {tag.name}
+        {tag.displayName || tag.name}
       </button>
     );
   };

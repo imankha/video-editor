@@ -44,6 +44,33 @@ export const RATING_BACKGROUND_COLORS = {
 // Default rating when none is set
 export const DEFAULT_RATING = 3;
 
+// T8490: one-line caption explaining what a rating means for the reel,
+// mirroring the auto-flip gate's `mine` (My Athlete layer) check — bound to
+// rating + layer only, not the live createProject toggle, so it always
+// communicates the RULE regardless of a manual override.
+export function getRatingCaption(rating, mine) {
+  if (!rating) return "1-5: how big was this play? 5 starts a reel automatically.";
+  if (rating <= 3) return 'Saved to your library.';
+  if (rating === 4) return `Big play (${RATING_NOTATION[4]}) - saved to your library.`;
+  return mine
+    ? `Can't-miss play (${RATING_NOTATION[5]}) - reel will be created.`
+    : `Can't-miss team play (${RATING_NOTATION[5]}) - team clips don't start reels.`;
+}
+
+// T8490: edit-mode variant for ClipDetailsEditor — no auto-flip happens here
+// (the Reel control's own button/link is the only way a reel gets created),
+// so the 5-star/My Athlete state reads off `hasReel` instead of promising a
+// future "will be created".
+export function getEditRatingCaption(rating, mine, hasReel) {
+  if (!rating) return "1-5: how big was this play? 5 starts a reel automatically.";
+  if (rating <= 3) return 'Saved to your library.';
+  if (rating === 4) return `Big play (${RATING_NOTATION[4]}) - saved to your library.`;
+  if (!mine) return `Can't-miss team play (${RATING_NOTATION[5]}) - team clips don't start reels.`;
+  return hasReel
+    ? `Can't-miss play (${RATING_NOTATION[5]}) - reel already created.`
+    : `Can't-miss play (${RATING_NOTATION[5]}) - create a reel below.`;
+}
+
 /**
  * Get rating display info for a given rating value
  * @param {number} rating - Rating value (1-5)

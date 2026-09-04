@@ -95,4 +95,18 @@ describe('tag registry — all supported sports', () => {
       }
     }
   });
+
+  // T8490: the soccer goalie "Save" tag reads ambiguous next to the form's own
+  // real Save button, so the GRID DISPLAY was renamed to "Keeper Save". The
+  // stored/identity value stays "Save" (unchanged) so existing clips tagged
+  // "Save" still match, and the backend curated-combo exact-name match (the
+  // guard above) is untouched.
+  it('the soccer "Save" tag keeps its stored name but carries a displayName for the grid', () => {
+    const saveTag = getTagSet('soccer').tags.goalie.find((t) => t.name === 'Save');
+    expect(saveTag, 'soccer goalie tag set must still contain a tag with stored name "Save"').toBeTruthy();
+    expect(saveTag.displayName).toBe('Keeper Save');
+    // Identity (toggle/selectedTags matching) is by name, not displayName.
+    expect(getAllTagNames('soccer').has('Save')).toBe(true);
+    expect(getAllTagNames('soccer').has('Keeper Save')).toBe(false);
+  });
 });

@@ -140,3 +140,62 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
     expect(screen.getByRole('radio', { name: /^Team layer/ }).disabled).toBe(true);
   });
 });
+
+// T8490: the star-scale caption is create-mode-only, derived render state (no
+// new store state), covered on both the default (formBody) and strip layouts
+// per the 5-state table in the task file. Default rating is 4 (DEFAULT_RATING),
+// so the "no rating yet" branch is exercised at the getRatingCaption unit-test
+// level (clipConstants.test.js), not through this component's initial render.
+describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
+  it('rating 4 (default) shows the "Big play" caption, formBody layout', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
+    expect(screen.getByText('Big play (!) - saved to your library.')).toBeTruthy();
+  });
+
+  it('rating 1-3 shows "Saved to your library.", formBody layout', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
+    fireEvent.click(screen.getByRole('button', { name: '2 stars' }));
+    expect(screen.getByText('Saved to your library.')).toBeTruthy();
+  });
+
+  it('rating 5 + My Athlete shows the reel-will-be-created caption, formBody layout', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
+    fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
+    expect(screen.getByText("Can't-miss play (!!) - reel will be created.")).toBeTruthy();
+  });
+
+  it('rating 5 + Team shows the team-clips-dont-start-reels caption, formBody layout', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
+    fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
+    expect(screen.getByText("Can't-miss team play (!!) - team clips don't start reels.")).toBeTruthy();
+  });
+
+  it('the caption never renders in edit mode (existingClip set)', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 5, tags: [], my_athlete: true }}
+      />
+    );
+    expect(screen.queryByText(/reel will be created/)).toBeNull();
+    expect(screen.queryByText(/saved to your library/i)).toBeNull();
+  });
+
+  it('rating 5 + My Athlete shows the reel-will-be-created caption, strip layout', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
+    fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
+    expect(screen.getByText("Can't-miss play (!!) - reel will be created.")).toBeTruthy();
+  });
+
+  it('the caption never renders in edit mode, strip layout', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        surface="inline_desktop"
+        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 5, tags: [], my_athlete: true }}
+      />
+    );
+    expect(screen.queryByText(/reel will be created/)).toBeNull();
+  });
+});
