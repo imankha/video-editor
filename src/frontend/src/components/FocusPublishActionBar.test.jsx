@@ -53,4 +53,29 @@ describe('FocusPublishActionBar (T8390)', () => {
     expect(screen.getByRole('button', { name: 'Publish' }).disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Add Spotlight', exact: true }).disabled).toBe(false);
   });
+
+  it('orders the three main choices Add Spotlight, Publish, Add Spotlight Later on both breakpoints, with Publish centered', () => {
+    const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
+    const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
+    expect(buttons).toEqual([
+      'Refocus (reframe and export again, uses credits)',
+      'Add Spotlight',
+      'Publish',
+      'Add Spotlight Later',
+    ]);
+
+    const addSpotlightItem = screen.getByRole('button', { name: 'Add Spotlight', exact: true }).closest('div');
+    const publishItem = screen.getByRole('button', { name: 'Publish' }).closest('div');
+    const addSpotlightLaterItem = screen.getByRole('button', { name: 'Add Spotlight Later' }).closest('div');
+
+    // Mobile (no sm: prefix): top -> bottom Add Spotlight, Publish, Add Spotlight Later.
+    expect(addSpotlightItem.className).toContain('order-1');
+    expect(publishItem.className).toContain('order-2');
+    expect(addSpotlightLaterItem.className).toContain('order-3');
+
+    // Desktop (sm:): left -> right Add Spotlight, Publish, Add Spotlight Later, Publish still center.
+    expect(addSpotlightItem.className).toContain('sm:order-2');
+    expect(publishItem.className).toContain('sm:order-3');
+    expect(addSpotlightLaterItem.className).toContain('sm:order-4');
+  });
 });
