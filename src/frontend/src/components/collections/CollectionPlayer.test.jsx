@@ -187,6 +187,37 @@ describe('CollectionPlayer Re-rank button gating (T4030)', () => {
   });
 });
 
+// T8540: Share is the player's primary action -- renders for every reel (no
+// gating, unlike Re-rank/Re-edit above), and Download stays present alongside it.
+describe('CollectionPlayer Share button (T8540)', () => {
+  const plainReel = [{ id: 5, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null }];
+
+  it('renders when onShare is set, with no gating on reel shape', () => {
+    render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onShare={vi.fn()} />);
+    expect(screen.getByTitle('Share')).toBeTruthy();
+  });
+
+  it('is absent when onShare is omitted (e.g. the public viewer)', () => {
+    render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} />);
+    expect(screen.queryByTitle('Share')).toBeNull();
+  });
+
+  it('invokes onShare with the active reel on click', () => {
+    const onShare = vi.fn();
+    render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onShare={onShare} />);
+    fireEvent.click(screen.getByTitle('Share'));
+    expect(onShare).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
+  });
+
+  it('Download still renders alongside Share', () => {
+    render(
+      <CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onShare={vi.fn()} onDownload={vi.fn()} />,
+    );
+    expect(screen.getByTitle('Share')).toBeTruthy();
+    expect(screen.getByText('Download')).toBeTruthy();
+  });
+});
+
 // T6710: additive `renderScrubber` seam (design §4(v)/§8) — the composite
 // (IntroStoryPlayer) mounts CollectionPlayer with renderScrubber={false} and
 // supplies its own single bar; every OTHER existing caller (SharedCollectionView,

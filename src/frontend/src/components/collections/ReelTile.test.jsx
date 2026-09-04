@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // jsdom lacks matchMedia. ReelTile's kebab visibility runs through the REAL
@@ -74,10 +74,13 @@ describe('T6300 ReelTile persistent actions', () => {
     coarsePointer = true;
     renderTile({ canOpenSource: () => true, canMoveProfiles: true, showBeforeAfter: true });
     fireEvent.click(kebabBtn());
-    // Bottom sheet renders on coarse pointers.
-    expect(screen.getByText('Download')).toBeTruthy();
-    expect(screen.getByText('Share')).toBeTruthy();
-    expect(screen.getByText('Copy Link')).toBeTruthy();
+    // Bottom sheet renders on coarse pointers. Scoped to the menu itself
+    // (T8540: `getByText('Share')` alone is now ambiguous -- the card face
+    // ALSO carries a persistent Share button beside Play).
+    const menu = within(screen.getByTestId('reel-tile-menu'));
+    expect(menu.getByText('Download')).toBeTruthy();
+    expect(menu.getByText('Share')).toBeTruthy();
+    expect(menu.getByText('Copy Link')).toBeTruthy();
     // T6890: Rename is no longer a kebab item — it moved to the pencil by the name.
     expect(screen.queryByText('Rename')).toBeNull();
     expect(screen.getByText('Before / After')).toBeTruthy();
@@ -90,8 +93,10 @@ describe('T6300 ReelTile persistent actions', () => {
     coarsePointer = false;
     renderTile();
     fireEvent.click(kebabBtn());
-    expect(screen.getByText('Share')).toBeTruthy();
-    expect(screen.getByText('Copy Link')).toBeTruthy();
+    // T8540: scoped to the popover -- the card face also has its own Share button.
+    const menu = within(screen.getByTestId('reel-tile-menu'));
+    expect(menu.getByText('Share')).toBeTruthy();
+    expect(menu.getByText('Copy Link')).toBeTruthy();
   });
 
   it('every action handler still fires from the kebab (coarse sheet)', () => {
@@ -102,13 +107,15 @@ describe('T6300 ReelTile persistent actions', () => {
     const onDelete = vi.fn();
     renderTile({ onDownload, onWebShare, onCopyLink, onDelete });
     fireEvent.click(kebabBtn());
-    fireEvent.click(screen.getByText('Download'));
+    // T8540: scoped to the sheet -- the card face's own Share button also
+    // wires onWebShare, so an unscoped query would be ambiguous.
+    fireEvent.click(within(screen.getByTestId('reel-tile-menu')).getByText('Download'));
     expect(onDownload).toHaveBeenCalledTimes(1);
     fireEvent.click(kebabBtn());
-    fireEvent.click(screen.getByText('Share'));
+    fireEvent.click(within(screen.getByTestId('reel-tile-menu')).getByText('Share'));
     expect(onWebShare).toHaveBeenCalledTimes(1);
     fireEvent.click(kebabBtn());
-    fireEvent.click(screen.getByText('Copy Link'));
+    fireEvent.click(within(screen.getByTestId('reel-tile-menu')).getByText('Copy Link'));
     expect(onCopyLink).toHaveBeenCalledTimes(1);
     fireEvent.click(kebabBtn());
     fireEvent.click(screen.getByText('Delete'));
@@ -120,6 +127,37 @@ describe('T6300 ReelTile persistent actions', () => {
     renderTile({ onPlay });
     fireEvent.click(playBtn());
     expect(onPlay).toHaveBeenCalledTimes(1);
+  });
+
+  describe('T8540 card-face Share', () => {
+    const shareBtn = () => screen.getByTestId('reel-card-share');
+
+    it('is visible on the card face on a FINE pointer, no kebab needed', () => {
+      coarsePointer = false;
+      renderTile();
+      expect(shareBtn()).toBeTruthy();
+      expect(shareBtn().className).not.toMatch(/opacity-0/);
+    });
+
+    it('is visible on the card face on a COARSE pointer, no kebab needed', () => {
+      coarsePointer = true;
+      renderTile();
+      expect(shareBtn()).toBeTruthy();
+      expect(shareBtn().className).not.toMatch(/opacity-0/);
+    });
+
+    it('fires the same onWebShare handler the kebab Share item uses', () => {
+      const onWebShare = vi.fn();
+      renderTile({ onWebShare });
+      fireEvent.click(shareBtn());
+      expect(onWebShare).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides while renaming (matches Play)', () => {
+      renderTile();
+      fireEvent.click(screen.getByRole('button', { name: 'Rename reel' }));
+      expect(screen.queryByTestId('reel-card-share')).toBeNull();
+    });
   });
 
   it('the NEW dot shifts right (right-11) to clear the persistent kebab corner', () => {
