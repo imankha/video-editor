@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button } from './shared/Button';
 import { FOCUS_PUBLISH } from '../config/displayNames';
 
