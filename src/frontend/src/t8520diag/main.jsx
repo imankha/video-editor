@@ -30,7 +30,12 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes ne
  * real: CollectionPlayer, FocusPublishActionBar, Button, questStore.
  * recordAchievement's fetch, publishIntentStore.
  */
-const params = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+// T8390: read the hash stashed by t8520diag.html's inline script, NOT
+// location.hash directly -- by the time this module's top-level code runs,
+// the questStore->analytics->editorStore import chain below has already
+// fired editorStore's module-scope URL canonicalization and stripped it
+// (see t8520diag.html's inline script comment for the full mechanism).
+const params = new URLSearchParams((window.__T8390_DIAG_HASH__ || location.hash || '').replace(/^#/, ''));
 const isAutoCreated = params.get('isAutoCreated') === '1';
 const PROJECT_ID = Number(params.get('projectId') || 424242);
 

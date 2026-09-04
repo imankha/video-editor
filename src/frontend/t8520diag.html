@@ -28,6 +28,21 @@
   </head>
   <body>
     <div id="t8520diag-root"></div>
+    <script>
+      // T8390 (found live-driving QA): editorStore.js has module-scope
+      // URL-canonicalization code that runs the INSTANT anything imports it
+      // (even transitively) -- and questStore.js -> utils/analytics.js does,
+      // for the `track` call. Since ES module imports always fully evaluate
+      // before the importing module's own body runs, by the time main.jsx's
+      // top-level code would read location.hash, editorStore has ALREADY
+      // replaceState'd this non-canonical path (/t8520diag.html isn't a real
+      // app route) to '/home', stripping the hash. Stash it here, in a plain
+      // (non-module, so it runs first) script, before that import chain can
+      // fire. Pre-existing gap in editorStore's isPublicRoute() allowlist,
+      // not a T8390 regression -- reproduces on t8530diag.html (unmodified by
+      // this task) on pre-T8390 master too; out of scope to fix here.
+      window.__T8390_DIAG_HASH__ = location.hash;
+    </script>
     <script type="module" src="/src/t8520diag/main.jsx"></script>
   </body>
 </html>
