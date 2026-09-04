@@ -4,8 +4,9 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useToastStore } from '../components/shared/Toast';
 
 // T8480: every `result.project_created` response must select the new project
-// (which is what enables the Focus tab) and fire ONE toast with the exact
-// user-decided copy, whose action opens Focus.
+// (which is what enables the Focus tab) and fire ONE toast whose action opens
+// Focus. T8760 item 2: the copy now names the clip and confirms its new home,
+// the "In Progress Clips" tab.
 
 const originalSelectProject = useProjectsStore.getState().selectProject;
 
@@ -33,13 +34,19 @@ describe('announceReelCreated (T8480)', () => {
     expect(selectProject).toHaveBeenCalledWith(42);
   });
 
-  it('fires one success toast with the exact user-decided copy', () => {
-    announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
+  it('fires one success toast naming the clip and its new home (In Progress Clips)', () => {
+    announceReelCreated(42, { onOpenReelInFocus, fetchProjects, clipName: 'Brilliant Interception' });
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);
     expect(toasts[0].type).toBe('success');
-    expect(toasts[0].title).toBe('Reel started, click Focus to complete');
+    expect(toasts[0].title).toBe('Brilliant Interception is now in In Progress Clips');
     expect(toasts[0].duration).toBe(6000);
+  });
+
+  it('falls back to a generic clip name when none is supplied', () => {
+    announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts[0].title).toBe('Your clip is now in In Progress Clips');
   });
 
   it('the toast action opens Focus for the new project via the select+navigate gesture', () => {

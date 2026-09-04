@@ -106,6 +106,8 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
   });
 
   test('name edit is detected as dirty @staging-gate @gate-a', async ({ page }) => {
+    // T8760: the edit-mode name field is inline in the header — open via pencil.
+    await page.getByTitle('Rename this play').click();
     const nameInput = page.getByLabel('Clip name');
     await expect(nameInput).toBeVisible();
     await nameInput.fill(`${targetClip.name} EDITED T8730`);
@@ -158,6 +160,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
   });
 
   test('dialog copy says "Annotate", not "the play editor" @staging-gate @gate-a', async ({ page }) => {
+    await page.getByTitle('Rename this play').click();
     await page.getByLabel('Clip name').fill(`${targetClip.name} EDITED`);
     await page.getByTitle('Open in Focus mode').click();
     await expect(page.getByText('Opening Focus closes the Annotate editor.')).toBeVisible({ timeout: 5000 });

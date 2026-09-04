@@ -1496,7 +1496,7 @@ export function ProjectManager({
         ) : clipDrafts.length === 0 ? (
           <div className="text-gray-500 text-center">
             <p className="mb-2">No clips yet</p>
-            <p className="text-sm">Tap &apos;Create Reel&apos; on a clip in Annotate to start one.</p>
+            <p className="text-sm">Tap &apos;Clip Out Play&apos; on a clip in Annotate to start one.</p>
           </div>
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /

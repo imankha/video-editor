@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Square } from 'lucide-react';
 
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
@@ -17,9 +16,20 @@ function formatTime(seconds) {
 /**
  * ClipScrubRegion - Mini-timeline with two draggable handles for selecting clip start/end.
  *
- * Replaces the duration slider in the fullscreen overlay. Shows a 30-second window
- * around the clip point with draggable start/end handles. Dragging a handle seeks
- * the video to that frame for real-time visual feedback.
+ * Replaces the duration slider in the fullscreen overlay. Shows a window around
+ * the clip point with draggable start/end handles. Dragging a handle seeks the
+ * video to that frame for real-time visual feedback.
+ *
+ * T8760: the single playback control while editing is the MAIN transport bar
+ * (play/pause + spacebar). This component no longer renders its own Preview
+ * button — instead, while a clip is open for EDITING, the playhead-follow loop
+ * below constrains playback to the clip's [start, end] region and loops back to
+ * the start when it runs past the end. That looping is scoped structurally to
+ * this component being mounted (it is only mounted while the clip editor is
+ * open), so normal game scrubbing/playback outside clip-edit mode is never
+ * affected. All the clip-scoped behaviors here are gated on `existingClip`
+ * (edit mode); create mode (placing a NEW play) keeps the wide game-context
+ * window and unconstrained playback.
  *
  * @param {number} currentTime - The "Add Clip" point (playhead time when paused)
  * @param {number} videoDuration - Total video duration in seconds
@@ -44,20 +54,29 @@ export function ClipScrubRegion({
   onDragEnd,
   videoController,
   compact,
+  // T8760: true ONLY for the primary clip editor (the Add/Edit overlay + strip),
+  // false for the clips-sidebar ClipDetailsEditor's scrub region. Gates ALL the
+  // clip-scoped edit behaviors — looping playback, seed-to-clip-start, and the
+  // zoom-to-green-region timeline — so they fire exactly where the transport
+  // readout also goes clip-relative (showAnnotateOverlay), and never leak into
+  // the merely-SELECTED sidebar state (where playback stays whole-game).
+  clipEditorActive = false,
 }) {
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
-  const [isPreviewing, setIsPreviewing] = useState(false);
   // T8720: the playhead marker mirrors the video's ACTUAL current time, so it
   // is always visible (even when stopped) and tracks playback identically no
-  // matter how it was started — the Preview button, the transport play/pause
-  // button, or the spacebar. Seeded from the controller; a RAF (below) keeps it
-  // in sync. There is deliberately no separate preview-only playhead anymore.
+  // matter how it was started — the transport play/pause button or the spacebar.
+  // Seeded from the controller; a RAF (below) keeps it in sync.
   const [playheadTime, setPlayheadTime] = useState(() => {
     const t = videoController?.getCurrentTime?.();
     return Number.isFinite(t) ? t : (currentTime ?? null);
   });
-  const previewRafRef = useRef(null);
+
+  // "Editing" — for the clip-scoped zoom/loop/seed — means the PRIMARY editor is
+  // open on an existing clip. The sidebar's scrub region (clipEditorActive false)
+  // keeps the wide game-context window and unconstrained playback.
+  const isEditing = clipEditorActive && !!existingClip;
 
   // Stable anchor: captured per-clip so the window doesn't shift during drag
   // (onSeek updates currentTime, which would otherwise recalculate the window).
@@ -75,8 +94,17 @@ export function ClipScrubRegion({
       : currentTime;
   }
   const anchor = anchorRef.current;
-  const windowStart = Math.max(0, anchor - WINDOW_BEFORE);
-  const windowEnd = Math.min(videoDuration, anchor + WINDOW_AFTER);
+  // T8760 item 8: while EDITING, zoom the timeline to (roughly) the clip's own
+  // green region — dropping the ±30s game-context window and its 5-second
+  // game-clock ticks the user asked to remove. A margin (half the clip length,
+  // min 2s) on each side keeps room for the start/end handles to still extend
+  // the clip. Create mode keeps the wide ±30s window for game context.
+  const editHalfWindow = isEditing
+    ? Math.abs(existingClip.endTime - existingClip.startTime) * 0.5
+      + Math.max(2, Math.abs(existingClip.endTime - existingClip.startTime) * 0.5)
+    : 0;
+  const windowStart = Math.max(0, anchor - (isEditing ? editHalfWindow : WINDOW_BEFORE));
+  const windowEnd = Math.min(videoDuration, anchor + (isEditing ? editHalfWindow : WINDOW_AFTER));
   const windowDuration = windowEnd - windowStart;
 
   // Convert time to percentage within the window
@@ -100,15 +128,11 @@ export function ClipScrubRegion({
   useEffect(() => { startTimeRef.current = startTime; }, [startTime]);
   useEffect(() => { endTimeRef.current = endTime; }, [endTime]);
 
-  // Stop preview helper (must be defined before handlePointerDown which references it)
-  const stopPreview = useCallback(() => {
-    videoController?.pause();
-    setIsPreviewing(false);
-    if (previewRafRef.current) {
-      cancelAnimationFrame(previewRafRef.current);
-      previewRafRef.current = null;
-    }
-  }, [videoController]);
+  // T8760: whether a clip is being EDITED (gates the clip-scoped loop below).
+  // Read from a ref so the always-running follow RAF sees the live value
+  // without being re-created each render.
+  const isEditingRef = useRef(isEditing);
+  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
 
   // All drag state in refs to avoid stale closures when switching handles
   const draggingRef = useRef(null);
@@ -134,10 +158,6 @@ export function ClipScrubRegion({
     if (videoController && !videoController.isPaused()) {
       videoController.pause();
     }
-    // Stop any running preview when the user starts dragging
-    if (isPreviewing) {
-      stopPreview();
-    }
     // Calculate offset: where the user clicked vs where the handle center is
     const clickTime = pixelToTime(e.clientX);
     const handleTime = handle === 'start' ? startTimeRef.current : endTimeRef.current;
@@ -150,7 +170,7 @@ export function ClipScrubRegion({
     draggingRef.current = handle;
     setDragging(handle);
     e.target.setPointerCapture(e.pointerId);
-  }, [isPreviewing, stopPreview, pixelToTime, videoController]);
+  }, [pixelToTime, videoController]);
 
   // Handle pointer move — reads everything from refs, never stale
   const handlePointerMove = useCallback((e) => {
@@ -203,48 +223,13 @@ export function ClipScrubRegion({
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  // Play preview: loop from startTime to endTime with visual playhead
-  const handlePreviewPlay = useCallback(() => {
-    if (!videoController) return;
-
-    if (isPreviewing) {
-      stopPreview();
-      return;
-    }
-
-    videoController.seek(startTime);
-    videoController.play();
-    setIsPreviewing(true);
-
-    const tick = () => {
-      const s = startTimeRef.current;
-      const e = endTimeRef.current;
-
-      if (videoController.isPaused() && previewRafRef.current) {
-        // Video was paused externally — stop the loop. The playhead keeps
-        // showing the paused position via the sync effect below.
-        setIsPreviewing(false);
-        previewRafRef.current = null;
-        return;
-      }
-
-      if (videoController.getCurrentTime() >= e) {
-        // Loop back to start
-        videoController.seek(s);
-      }
-
-      previewRafRef.current = requestAnimationFrame(tick);
-    };
-    previewRafRef.current = requestAnimationFrame(tick);
-  }, [videoController, startTime, isPreviewing, stopPreview]);
-
-  // T8720: keep the playhead marker locked to the video's real current time.
-  // A single RAF (while the editor is open) reads the controller each frame and
-  // updates state ONLY when the time actually changes — so a paused video costs
-  // no re-renders, and the marker follows playback started by ANY path (Preview
-  // button, transport play/pause button, spacebar) with no divergence. This is
-  // the single source of truth for the playhead; the old preview-only marker
-  // that vanished when stopped or on the main play event is gone.
+  // T8720 + T8760: keep the playhead marker locked to the video's real current
+  // time, AND (edit mode only) enforce clip-scoped looping. A single RAF runs
+  // the whole time the editor is open: it reads the controller each frame,
+  // updates the marker only when the time changes (a paused video costs no
+  // re-renders), and — while EDITING and PLAYING — seeks back to the clip start
+  // the instant playback runs past the clip end. The loop lives here, gated on
+  // this mounted component, so it can never leak into normal game playback.
   useEffect(() => {
     if (typeof videoController?.getCurrentTime !== 'function') return undefined;
     let raf = null;
@@ -255,6 +240,16 @@ export function ClipScrubRegion({
         last = t;
         setPlayheadTime(t);
       }
+      // T8760 item 6: clip-scoped looping playback (edit mode only).
+      if (isEditingRef.current
+          && typeof videoController.isPaused === 'function'
+          && !videoController.isPaused()) {
+        const s = startTimeRef.current;
+        const e = endTimeRef.current;
+        if (Number.isFinite(s) && Number.isFinite(e) && e > s && t >= e) {
+          videoController.seek(s);
+        }
+      }
       raf = requestAnimationFrame(follow);
     };
     raf = requestAnimationFrame(follow);
@@ -263,15 +258,18 @@ export function ClipScrubRegion({
     };
   }, [videoController]);
 
-  // Cleanup preview on unmount — only pause if a preview was actively running
+  // T8760 item 7: on opening a clip for EDITING, default the playhead to the
+  // clip's start — not wherever the game video happened to be positioned. Once
+  // per clip id (the id is stable during scrub), so dragging a handle never
+  // yanks the playhead back to the start.
+  const seededClipRef = useRef(null);
   useEffect(() => {
-    return () => {
-      if (previewRafRef.current) {
-        cancelAnimationFrame(previewRafRef.current);
-        videoController?.pause();
-      }
-    };
-  }, [videoController]);
+    if (!clipEditorActive || !existingClip || typeof videoController?.seek !== 'function') return;
+    if (seededClipRef.current === existingClip.id) return;
+    seededClipRef.current = existingClip.id;
+    videoController.seek(existingClip.startTime);
+    setPlayheadTime(existingClip.startTime);
+  }, [existingClip, videoController, clipEditorActive]);
 
   const startPercent = timeToPercent(startTime);
   const endPercent = timeToPercent(endTime);
@@ -286,7 +284,8 @@ export function ClipScrubRegion({
     playheadTime <= windowEnd;
   const playheadPercent = playheadVisible ? timeToPercent(playheadTime) : 0;
 
-  // Tick marks for the timeline (every 5 seconds)
+  // Tick marks for the timeline (every 5 seconds) — game-context only, so they
+  // are suppressed while editing (item 8: only the green area is shown).
   const ticks = [];
   const tickInterval = 5;
   const firstTick = Math.ceil(windowStart / tickInterval) * tickInterval;
@@ -359,17 +358,6 @@ export function ClipScrubRegion({
           </div>
         </div>
         <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{clipDuration.toFixed(1)}s</span>
-        <button
-          onClick={handlePreviewPlay}
-          className="p-1 rounded hover:bg-gray-700 transition-colors"
-          title={isPreviewing ? 'Stop preview' : 'Preview clip'}
-        >
-          {isPreviewing ? (
-            <Square size={14} className="text-red-400" />
-          ) : (
-            <Play size={14} className="text-green-400" />
-          )}
-        </button>
       </div>
     );
   }
@@ -383,20 +371,7 @@ export function ClipScrubRegion({
           {' '}&rarr;{' '}
           <span className="font-mono text-white">{formatTime(endTime)}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-mono text-gray-400">{clipDuration.toFixed(1)}s</span>
-          <button
-            onClick={handlePreviewPlay}
-            className="p-1.5 rounded-lg hover:bg-gray-700 transition-colors"
-            title={isPreviewing ? 'Stop preview' : 'Preview clip'}
-          >
-            {isPreviewing ? (
-              <Square size={16} className="text-red-400" />
-            ) : (
-              <Play size={16} className="text-green-400" />
-            )}
-          </button>
-        </div>
+        <span className="text-sm font-mono text-gray-400">{clipDuration.toFixed(1)}s</span>
       </div>
 
       {/* Timeline track */}
@@ -405,29 +380,29 @@ export function ClipScrubRegion({
         className="relative h-10 bg-gray-800 rounded-lg select-none touch-none"
         style={{ cursor: dragging ? 'col-resize' : 'default' }}
       >
-        {/* Tick marks — clipped to the track. A tick's centered time label can
-            extend a few px past the track edge when a 5s mark lands near the
-            window boundary; unclipped it overflowed the fixed-width Annotate
-            sidebar and drew a stray horizontal scrollbar (T5674). The clip layer
-            wraps ONLY the ticks, so the drag handles / region / playhead (siblings
-            below) keep their edge overhang and are untouched. */}
-        <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
-          {ticks.map((t) => {
-            const pct = timeToPercent(t);
-            return (
-              <div
-                key={t}
-                className="absolute top-0 h-full flex flex-col items-center"
-                style={{ left: `${pct}%` }}
-              >
-                <div className="w-px h-2 bg-gray-600" />
-                <span className="text-[9px] text-gray-600 mt-0.5 font-mono">
-                  {Math.floor(t / 60)}:{String(Math.floor(t % 60)).padStart(2, '0')}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {/* Tick marks — clipped to the track. Game-context only; suppressed
+            while editing so only the clip's own green region is shown (T8760
+            item 8). The clip layer wraps ONLY the ticks, so the drag handles /
+            region / playhead (siblings below) keep their edge overhang. */}
+        {!isEditing && (
+          <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
+            {ticks.map((t) => {
+              const pct = timeToPercent(t);
+              return (
+                <div
+                  key={t}
+                  className="absolute top-0 h-full flex flex-col items-center"
+                  style={{ left: `${pct}%` }}
+                >
+                  <div className="w-px h-2 bg-gray-600" />
+                  <span className="text-[9px] text-gray-600 mt-0.5 font-mono">
+                    {Math.floor(t / 60)}:{String(Math.floor(t % 60)).padStart(2, '0')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Selected region highlight */}
         <div
@@ -493,11 +468,13 @@ export function ClipScrubRegion({
         </div>
       </div>
 
-      {/* Window range label */}
-      <div className="flex justify-between mt-1">
-        <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowStart)}</span>
-        <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowEnd)}</span>
-      </div>
+      {/* Window range label — game-context only, hidden while editing (item 8) */}
+      {!isEditing && (
+        <div className="flex justify-between mt-1">
+          <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowStart)}</span>
+          <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowEnd)}</span>
+        </div>
+      )}
     </div>
   );
 }

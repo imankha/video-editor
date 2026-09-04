@@ -88,10 +88,11 @@ test.describe('T8720 — add/edit-play scrub playhead: always visible, consisten
 
     const playhead = page.locator('[data-testid="scrub-playhead"]');
 
-    // Wait for the editor's scrub region to actually mount (its Preview button
-    // is a stable, always-rendered anchor for the scrub region existing).
-    await expect(page.locator('button[title="Preview clip"], button[title="Stop preview"]').first())
-      .toBeVisible({ timeout: 10000 });
+    // Wait for the editor's scrub region to actually mount. T8760 removed the
+    // in-editor Preview button (the main transport is the single play control
+    // now), so the always-visible playhead marker itself — the thing this test
+    // exercises — is the anchor for the scrub region existing.
+    await expect(playhead.first()).toBeVisible({ timeout: 10000 });
 
     // --- Symptom 1: visible on open, WHILE STOPPED (no play action yet). ---
     await expect(playhead).toBeVisible({ timeout: 5000 });

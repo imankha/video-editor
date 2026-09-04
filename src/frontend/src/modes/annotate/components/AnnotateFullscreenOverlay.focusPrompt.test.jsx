@@ -20,6 +20,9 @@ function dialogScope() {
 // Make the edit form dirty by typing a new clip name (flips isNameManuallyEdited
 // so nameToSave diverges from the loaded clip's empty name).
 function dirtyEdit() {
+  // T8760: the edit-mode name field is now inline in the header — open it via
+  // the pencil ("Rename this play") before typing.
+  fireEvent.click(screen.getByTitle('Rename this play'));
   fireEvent.change(screen.getByLabelText('Clip name'), { target: { value: 'Edited name' } });
 }
 

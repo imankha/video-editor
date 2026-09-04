@@ -1,5 +1,45 @@
 ---
 domain: annotate
+updated: 2026-09-04 (T8760 single play control + clip-scoped looping playhead in the clip editor:
+the per-editor Preview button in `ClipScrubRegion.jsx` is DELETED — the main transport bar
+(`AnnotateControls.jsx`, play/pause + spacebar, both already converged by T8720) is now the SINGLE
+playback control while editing. **NEW INVARIANT — clip-scoped looping is structurally scoped to the
+mounted editor:** the loop lives in `ClipScrubRegion.jsx`'s existing playhead-follow RAF (the T8720
+one that mirrors `videoController.getCurrentTime()`), gated on a NEW `clipEditorActive` prop AND `existingClip` — while
+playing, the instant `getCurrentTime() >= endTime` it calls `videoController.seek(startTime)` (loop,
+not stop). **`clipEditorActive` is the leak guard:** it is `true` ONLY on the primary Add/Edit editor's three
+`ClipScrubRegion` renders (`AnnotateFullscreenOverlay.jsx` overlay/strip/landscape-inline) and FALSE
+(default) on the clips-sidebar `ClipDetailsEditor.jsx` render — the sidebar mounts the SAME
+`ClipScrubRegion` with `existingClip` set in the merely-SELECTED state (`showAnnotateOverlay` false),
+so `existingClip` alone would have looped playback there while the transport readout stayed absolute
+(item 6 firing without item 10). `clipEditorActive` also gates the seed-to-start and the
+zoom-to-green-region, keeping them aligned with `clipEditBounds` (which `AnnotateModeView` derives only
+when `showAnnotateOverlay`). Because that code only exists while `ClipScrubRegion` is mounted and only
+acts under `clipEditorActive`, it CANNOT leak into normal game scrubbing/playback OR the sidebar — do
+NOT move this loop into `useVideo.js` or the shared `videoController`, and do NOT drop the
+`clipEditorActive`+`existingClip` gate (create mode / "Add Play" and the sidebar deliberately keep
+unconstrained playback + the wide ±30s window). **Multi-video caveat (inherited, NOT fixed here):** the
+loop/seed do a raw `videoController.seek(rawStartTime)`, but the multi-video controller expects VIRTUAL
+time, so a sequence-≥2 clip would loop to the wrong absolute spot; the deleted Preview button did the
+identical raw seek, so this is pre-existing, a separate task if multi-video clip-edit is supported. `useVideo.js` already
+has a SEPARATE clip clamp (`clipDuration`/`clipOffset`, lines ~837) for extracted/Focus clips — that
+one is inert in Annotate (game loaded whole, offset 0) and is unrelated; the two must not be merged.
+Other edit-mode-only behaviors added here, all gated on `clipEditorActive`+`existingClip`: playhead seeds to
+`clip.start` on open (once per clip id via `seededClipRef`); the timeline zooms to the clip span
+(±half-clip margin) and drops the 5s game-clock ticks + window labels (item 8); the transport time
+readout switches to clip-relative `elapsed / clip-duration` (`AnnotateControls` gets a new
+`clipEditBounds={{start,end}}` prop from `AnnotateModeView`, null outside edit mode). UI/copy: the
+edit-mode "+ Create Reel" button in `AnnotateFullscreenOverlay.jsx` (formBody + strip) is renamed
+**"Clip Out Play"** (create-mode Reel TOGGLE labels + `ClipDetailsEditor`'s reel button + the
+multi-clip-assembly / overlay-export "Create Reel" of OTHER features are deliberately UNCHANGED —
+this rename is scoped to the annotate overlay's clip->reel action button the screenshots flagged);
+the reel-created toast (`announceReelCreated`) now reads "{clip name} is now in In Progress Clips"
+(T8555 tab name) instead of "Reel started..." — still selects the project + keeps the "Open Focus"
+action (T8480). Strip header (items 3+4): "Editing:" dropped; the clip name shows once, and the
+pencil (`title="Rename this play"`) opens an INLINE header input (the one edit affordance) — the
+standalone control-row name field is gone in edit mode (kept in CREATE mode, where the header shows
+"Adding new play"). Persistence unchanged: inline name edits are local until the Save/Update gesture,
+loop/seed write no store/backend state.)
 updated: 2026-09-04 (T8370 pre-cut clip upload: a NEW clip-creation origin that bypasses Annotate
 entirely — `POST /api/clips/upload` (clips.py) creates `raw_clips(game_id=NULL)` rows directly from
 an uploaded file, never through the game→annotate→save_raw_clip path this doc otherwise covers.
