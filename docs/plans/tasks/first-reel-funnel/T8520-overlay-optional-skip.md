@@ -1,6 +1,6 @@
 # T8520: Overlay is an offer, not a stage
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-03
