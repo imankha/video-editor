@@ -1,6 +1,6 @@
 # T8370: Pre-cut clip upload support (clips without a full game)
 
-**Status:** TODO
+**Status:** WIP (Architect design pass launched 2026-09-04)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-02

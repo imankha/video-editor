@@ -1,6 +1,6 @@
 # T8390: Focus gets a publish exit (guided-path R3)
 
-**Status:** TODO (spawned briefly 2026-09-02, zero real progress before a quota gap; container reaped. Held per user order: Tutorial Redesign group waits for Next Up's UI-visible tasks to clear first — see PLAN.md's Tutorial Redesign section note)
+**Status:** WIP (design pass launched 2026-09-04; spawned briefly 2026-09-02, zero real progress before a quota gap, container reaped)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-02
@@ -40,6 +40,17 @@ anchors here).
 - Sequencing (recorded in T7620-design.md 18.3): R3, R4 -> T8360 -> T8370 -> T8380 ->
   T7630 -> T7640
 - Related: [T8400](T8400-publish-lands-on-reel.md) (R4, sibling)
+
+## Pre-flight note (2026-09-04)
+
+Filed 2026-09-02, before T8520 (overlay-optional-skip + draft preview player), T8530
+(one-tap publish, shared `usePublishProject` hook), and T8540 (Share as the primary player
+action) shipped (all merged 2026-09-04). Those may have already substantially or fully
+closed this gap — the export-completion card (T8520) already offers "Finish Now" leading
+into a completion surface with Publish (T8530). **Before any design/implementation work:
+re-read the current `FocusScreen.jsx` + `ExportButtonContainer.jsx` + the T8520/T8530
+completion flow and confirm whether a real gap still exists.** If it's already closed,
+close this task with the evidence recorded here rather than building anything.
 
 ## Acceptance Criteria
 

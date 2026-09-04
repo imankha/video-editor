@@ -174,37 +174,65 @@ Redesign group below. Row order = execution order (bugs first, then flow, then p
 | T8550 | ↳ [Mobile CTA visibility sweep](tasks/first-reel-funnel/T8550-mobile-cta-visibility-sweep.md) | 6 | 3 | 2.0 | TODO | [ ] | User report: export buttons sometimes below the scroll line. Audit every journey-primary CTA at 320/375/390/428 (keyboard open/closed), fix with sticky action bars, add viewport e2e assertions. Runs LAST (audits the epic's own surfaces post-change, including T8545's new tab bar); matrix feeds T7640's screen-size work. |
 | T8560 | ↳ [Persistent journey stepper (design gate)](tasks/first-reel-funnel/T8560-journey-stepper-design.md) | 7 | 5 | 1.4 | FOLDED | [ ] | **RESOLVED 2026-09-03: FOLDED into T7620/T7630, user-approved.** Architect found the stepper is not a second system - it's T7620's already-approved 5-rung goal ladder, unnamed and only half-drawn. Naming the rungs + a full-map view ship inside T7630 as "Round 3" instead. Zero product code from this task. Full rationale: [T8560-design.md](tasks/T8560-design.md). |
 
-### Tutorial Redesign: guided essential path
+### Clip Upload & Reel Completion (split out of Tutorial Redesign, user order 2026-09-04)
 
-**Moved here 2026-09-02 (user order, refined same day): every UI-VISIBLE task in "Next
-Up" above ships before this group starts** — the user's stated reason is not wanting to
-build the tutorial while UI work is still outstanding. Scope is Next Up specifically, not
-every UI-visible task on the whole roadmap. **T8270 (Modal staging isolation) is the one
-Next Up task excluded from this gate** — it is backend/infra-only with no UI surface, so
-it does not block and can run in parallel. Every other Next Up row (T8200/T8210/T8220/
-T8230/T8240/T8260/T8280/T8310/T8320/T8330 + the Cross-Profile Game Attribution epic) has
-a real UI surface and gates this group. **2026-09-03: the First Reel Funnel epic
-(T8460-T8560, section above, user-ordered START NEXT) is UI-visible and joins this gate
-set — the guided path must be built on the fixed flow.** **T8545 (filed 2026-09-03,
-Highlight Reels third-tab + rename) is also in this epic's UI-visible set and gates this
-group the same way.** **T8560 resolved 2026-09-03: FOLDED into T7620/T7630 (no longer a
-separate stepper decision) — its substance ships as Round 3 of T7620's own design, so
-T7630 already carries it; nothing further gates on T8560 itself.** Originally sequenced
-in Milestone TOP right after
-the First-Clip Funnel epic (user-ordered 2026-08-24, SEQUENCED AFTER all P1 bug fixes +
-upload-integrity epic — the guided path would otherwise walk users into the broken
-upload/save walls); that
-prerequisite is still satisfied, this is an ADDITIONAL sequencing constraint stacked on
-top of it. T7620's design is APPROVED (2026-09-02) and T8390/T8400/T8370/T8380 were filed
-from that approval to unblock T7630/T7640 — none of the five rows below are blocked
-technically, they are held by this explicit priority order.
+**User question 2026-09-04: why was T8370 filed under "Tutorial Redesign" when it isn't
+tutorial-building work?** Correct catch — T8390/T8400/T8370/T8380 were filed FROM the
+T7620 guided-tour design round only because the guided tour needs them live to anchor its
+steps to; each is independently justified in its own task file as a real product fix
+("standalone... a product win on its own" for T8390/T8400; T8370 closes a real observed
+failure — pre-cut clips uploaded as nonsense "games", credits burned for nothing). Split
+into this standalone epic so it competes and reads on its own merits, sequenced BEFORE
+Tutorial Redesign (the dependency always ran this direction — T7630/T7640 were blocked ON
+these, never the reverse, so nothing about the work itself changes). Row order = the
+existing dependency order from T7620-design.md 18.3: R3, R4 -> T8370 -> T8380.
+
+**Next Up's gate is now moot for this epic.** The old Tutorial-Redesign gate text required
+every UI-visible Next Up task to "ship" first — checked 2026-09-04, and T8200/T8210/T8220/
+T8230/T8240/T8260/T8270/T8280/T8310/T8320/T8330 are ALL already STAGING (merged, deployed
+to staging, awaiting user promotion to DONE). That prerequisite is satisfied; it no longer
+blocks anything here or in Tutorial Redesign itself.
+
+**Pre-flight note for T8390/T8400 (added 2026-09-04):** both were filed 2026-09-02, before
+T8520/T8530/T8540 shipped (merged 2026-09-04). T8530's shared `usePublishProject` hook +
+draft preview player and T8540's Share-primary player action may have already
+substantially or fully satisfied "Focus gets a publish exit" and "publish lands on the
+reel with share at hand" — re-verify against the CURRENT shipped code before implementing
+either (same pattern as the T8490-vs-T8600 pre-flight check earlier this session). A task
+that turns out to already be satisfied gets closed with a note recording why, not
+implemented redundantly. See the pre-flight note appended to each task file.
+
+**File-ownership note:** T8380 and T8400 both touch `ProjectManager.jsx`/
+`DownloadsPanel.jsx` — the SAME files [T8545](first-reel-funnel/T8545-highlight-reels-third-tab-and-rename.md)
+is currently mid-redesign on (third peer tab, drawer -> inline rendering). Their design
+passes can run now (reading/designing, not touching app code — no conflict), but their
+CONTAINER implementation must wait for T8545 to land first, same reasoning as T8550.
+T8390 (FocusScreen.jsx) and T8370 (backend upload/clip-source work) are file-disjoint from
+T8545 and can implement as soon as their own design/Architect gate clears.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T8390 | [Focus gets a publish exit (guided-path R3)](tasks/T8390-focus-publish-exit.md) | 7 | 3 | 2.3 | TODO | [ ] | Filed 2026-09-02 from the approved T7620 design (R3, user-accepted): Focus is a genuine dead end at the framed-to-published transition; add a visible publish exit with `data-tutorial-target="focus-publish"` so guided rule 30 anchors to real product UI. Standalone per T7620-design.md 17.1 (product win on its own, keeps T7630 reviewable). Blocks T7630. Recorded order: R3, R4 -> T8360 -> T8370 -> T8380 -> T7630 -> T7640. |
-| T8400 | [Publishing lands the user on the reel they just made (guided-path R4)](tasks/T8400-publish-lands-on-reel.md) | 6 | 3 | 2.0 | TODO | [ ] | Filed 2026-09-02 from the approved T7620 design (R4, user-accepted): publish currently hides the payoff - land the user ON the published reel (DownloadsPanel per T8360's IA) with share at hand; guided fork F8 fires there, and the old walk-to-your-reel step gets deleted. Blocks T7630. Coordinate with T8360 (in flight, same landing surface). |
-| T8370 | [Pre-cut clip upload support (clips without a full game)](tasks/T8370-precut-clip-upload.md) | 8 | 7 | 1.1 | TODO | [x] | Filed 2026-09-02 (user directive from the T7620 design round). Uploaded video files become CLIPS (ready for Focus/publish), not games - closes the observed failure of pre-cut clips uploaded as 4 nonsense "games" with credits burned. L-tier, Architect gate: clips have NO independent source today (T4130), so the design decides wrapper-game vs independent clip source ref. Implements T7860's reserved `clip_uploaded` event + deferred `daily_counters.clips_uploaded` column (Migration agent, postgres track; profile_db track too if shape 2). Reuses the hardened upload rails (T8160/T8150/upload-integrity lessons). **Gates T7640 (tutorial launch) with T8380 - user order: these ship before the tutorial rolls out.** |
-| T8380 | [&quot;Add Video&quot; button on the Clips screen](tasks/T8380-clips-screen-add-video.md) | 7 | 4 | 1.8 | TODO | [ ] | Filed 2026-09-02 with T8370 (depends on it + on T8360's Clips surface, in flight). The user-named entry point: Add Video on the Clips tab, file picker (multi-select, mobile camera-roll first), uploads land as clip tiles. Reworks the Clips tab's empty state into the two-path story (extract in Annotate OR upload directly) and removes/inverts the dead-end guard - a zero-content account must be able to START on Clips (first-session routing change, explicit e2e). ui-designer pass before implementation; reconcile "Add Video" vs T8130's reserved "New Clip" vocabulary; bakes in `data-tutorial-target="clips-add-video"` for T7630's guided path. **Gates T7640 (tutorial launch).** |
+|  | **[Clip Upload & Reel Completion](tasks/clip-upload-reel-completion/EPIC.md)** | 8 | 5 | 1.6 |  |  | Two related product gaps: (1) the create-to-publish flow still has dead ends (Focus has no publish exit; publish doesn't land you on the result) that R3/R4 of the T7620 design already diagnosed and the user accepted: (2) uploading pre-cut clips (phone captures, Veo/Trace exports) is unsupported — the app only ingests full games, so users have burned credits uploading clips as nonsense "games". Completion = both gaps closed, independent of whether/when the guided tour ships. |
+| T8390 | ↳ [Focus gets a publish exit](tasks/T8390-focus-publish-exit.md) | 7 | 3 | 2.3 | WIP | [ ] | Filed 2026-09-02 from the approved T7620 design (R3, user-accepted): Focus is a genuine dead end at the framed-to-published transition; add a visible publish exit with `data-tutorial-target="focus-publish"` so guided rule 30 anchors to real product UI. Standalone per T7620-design.md 17.1 (product win on its own). **Pre-flight (2026-09-04): re-verify against T8520/T8530/T8540 (shipped after filing) before designing/implementing — may already be substantially satisfied.** Still blocks T7630 if any gap remains. |
+| T8400 | ↳ [Publishing lands the user on the reel they just made](tasks/T8400-publish-lands-on-reel.md) | 6 | 3 | 2.0 | TODO | [ ] | Filed 2026-09-02 from the approved T7620 design (R4, user-accepted): publish currently hides the payoff - land the user ON the published reel with share at hand; guided fork F8 fires there. **Pre-flight (2026-09-04): re-verify against T8520/T8530/T8540 (shipped after filing) — may already be substantially satisfied.** Coordinate with T8545 (in flight, same landing surface) - container waits for T8545 to land. Still blocks T7630 if any gap remains. |
+| T8370 | ↳ [Pre-cut clip upload support (clips without a full game)](tasks/T8370-precut-clip-upload.md) | 8 | 7 | 1.1 | WIP | [x] | Filed 2026-09-02 (user directive from the T7620 design round). Uploaded video files become CLIPS (ready for Focus/publish), not games - closes the observed failure of pre-cut clips uploaded as 4 nonsense "games" with credits burned. L-tier, Architect gate: clips have NO independent source today (T4130), so the design decides wrapper-game vs independent clip source ref. Implements T7860's reserved `clip_uploaded` event + deferred `daily_counters.clips_uploaded` column (Migration agent, postgres track; profile_db track too if shape 2). Reuses the hardened upload rails (T8160/T8150/upload-integrity lessons). Gates T7640 (tutorial launch) with T8380, but ships on its own merit regardless. |
+| T8380 | ↳ [&quot;Add Video&quot; button on the Clips screen](tasks/T8380-clips-screen-add-video.md) | 7 | 4 | 1.8 | TODO | [ ] | Filed 2026-09-02 with T8370 (depends on it + on T8360's Clips surface, shipped). The user-named entry point: Add Video on the Clips tab, file picker (multi-select, mobile camera-roll first), uploads land as clip tiles. Reworks the Clips tab's empty state into the two-path story (extract in Annotate OR upload directly) and removes/inverts the dead-end guard - a zero-content account must be able to START on Clips (first-session routing change, explicit e2e). ui-designer pass before implementation; container waits for T8545 to land (shared ProjectManager.jsx). Gates T7640 (tutorial launch) but ships on its own merit regardless. |
+
+### Tutorial Redesign: guided essential path
+
+**Moved here 2026-09-02 (user order): every UI-VISIBLE task in "Next Up" ships before this
+group starts** — checked 2026-09-04, Next Up is entirely STAGING already, so that gate is
+satisfied. **2026-09-04: T8390/T8400/T8370/T8380 split out into their own epic above** (user
+order — they aren't tutorial-authoring work, they were only filed here because the guided
+tour needs them live to anchor to). This section now covers only the tutorial engine itself
+(T7620/T7630/T7640); T7630/T7640 still functionally depend on the split-out epic's tasks
+landing first (recorded in their own rows below), that dependency just isn't what makes them
+members of THIS epic anymore. **T8560 resolved 2026-09-03: FOLDED into T7620/T7630** (no
+longer a separate stepper decision) — its substance ships as Round 3 of T7620's own design,
+so T7630 already carries it; nothing further gates on T8560 itself.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
 |  | **[Tutorial Redesign: guided essential path](tasks/tutorial-redesign/EPIC.md)** | 9 | 7 | 1.3 |  |  | Replaces quest "watch a video" with an on-by-default (toggleable) in-context guide: modal shade + bouncy arrow anchored to the real element for each step of the essential path (upload -> clip -> Framing -> Create Reel -> share), advancing on the user's real actions. Evidence basis: 3 mobile users finished the tutorial then stopped dead at the very next step; lisagee finished the quest and never found reel creation. Tested on all screen sizes (320px+, keyboard open/closed, real-device pass). **2026-08-31: binding Help-button directive added to EPIC.md** - the quest surface becomes a context-aware Help button (T8120 ships the collapse early); NO more tutorial videos (guided question-branches must cover the full video curriculum); totally-modal steps (one control OR one input OR one intent question, bouncy arrow, explainer never overlaps essential UI); stall-pulse push trigger; report-a-problem via T7515; credits upfront (T8120); voice-ready step copy (TTS is V2). P1 gate status: the gate tasks deployed to prod 2026-08-26; upload-reliability fixes shipped but not yet verified in the wild - verify before the T7640 rollout step. |
 | T7620 | ↳ [Architect design: guided-tour engine + steps](tasks/tutorial-redesign/T7620-guided-tour-design.md) | 8 | 4 | 2.0 | DECIDED | [ ] | Epic 1/3, design gate (user approval). Engine (shade portal, data-tutorial-target registry, re-anchoring, step advance via existing gesture handlers, interrupt/resume, escape hatches), full step table incl. mobile anchoring, state model (toggle + step bookmark, existing-accounts default = explicit user decision), quest reconciliation, failure-mid-tour behavior. |
 | T7630 | ↳ [Implement engine + essential-path steps](tasks/tutorial-redesign/T7630-guided-tour-implementation.md) | 9 | 6 | 1.5 | TODO | [ ] | Epic 2/3. T7620 design APPROVED 2026-09-02 (GUIDANCE_MAP spine, 69 rules incl. post-publish advanced tier + fork F8); now blocked by **T8390+T8400 (R3/R4 app changes)** per the recorded order R3, R4 -> T8360 -> T8370 -> T8380 -> T7630 -> T7640. Engine + target attributes + toggle/bookmark persistence (gesture-written only) + step copy aligned with T7580 language; e2e drives the full guided path; a failing guided step surfaces the real error, never traps. |
