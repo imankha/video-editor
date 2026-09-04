@@ -290,6 +290,20 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   concatenates per-half videos into one virtual timeline (`getVideoOffset`, `clampToVideo`);
   `buildVirtualTimeline(clips)` (L12-116) is the separate clip-playback stitcher. Single-video ⇒
   `gameVideos = null`.
+- **Attach-more-videos to an existing game (T8700)** is a first-class post-creation gesture, not
+  just a create-time step. Frontend: `attachVideoToExistingGame` (uploadManager.js) behind
+  GameTile's "Add video" kebab action → `AttachVideoModal`; reuses the create-time
+  hash→R2→`POST /api/games/{id}/videos` transport then `loadGame` re-loads so the single→multi
+  transition renders (append-only guarantees the new half is sequence ≥2, so seq-1 clips keep
+  offset 0). Backend `add_game_videos` (games.py) is hardened: **409** unless `status='ready'`;
+  **append-only** server-assigned `MAX(sequence)+1` (client sequence ignored); **dedup** incoming
+  hashes vs existing rows so a retry can't list the same half twice; **duration/dimensions
+  backfilled from the R2 probe** in `_insert_game_videos` when the client omits them (attach sends
+  null — a NULL `game_videos.duration` makes `buildFullVideoTimeline` compute NaN and the half is
+  unusable); charges credits (`source="game_video_add"`, `reference_id=f"{game_id}:{hashes}"` —
+  distinct from activate's `game_upload:{game_id}` so it's not a silent no-op, idempotent on retry)
+  refs-before-charge like `activate_game`, with a `get_balance` pre-check so an unaffordable attach
+  402s BEFORE committing the row (no free video). No schema change.
 - **boundaries_version** is the annotate↔framing invalidation signal on `raw_clips`: bumped by
   `save_raw_clip` on start_time change (clips.py:958-975) and `update_raw_clip` on duration change
   (L1158-1161); `update_working_clip` snapshots it into `working_clips.raw_clip_version`
