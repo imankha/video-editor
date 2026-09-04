@@ -28,7 +28,7 @@
 | Landing | Effect on this design |
 |---|---|
 | **T8120** (merged) | Quest panel already collapsed to a **Help chip**; collapsed state persists in `user_settings`; a generic modal-occlusion auto-hide exists (`useModalOcclusion`, rAF-coalesced); credit drip retired, `QUEST_CHAIN_CREDIT_TOTAL = 80` granted upfront. This design replaces what the chip OPENS. |
-| **T8130** (merged) | Vocabulary is live: **Add Play**, **Clips**, **Highlight Reels**, **Build Highlight Reel**, **Move to Highlight Reels**. All copy below uses those exact words. |
+| **T8130** (merged) | Vocabulary is live: **Add Play**, **Clips**, **Highlight Reels**, **Create Highlight Reel**, **Move to Highlight Reels**. All copy below uses those exact words. |
 | **T8140** (merged) | First clip is genuinely **one tap**: all fields defaulted, sticky Save, sport asked once as a full-screen question. Clip guidance is therefore 2 rules, and must not re-teach rating or naming. |
 | **T8360** (design approved 2026-09-02, in flight) | Settled IA: the **Highlights section (multi-clip, in progress) lives on the Highlight Reels panel**, **renaming never moves a draft between surfaces**, and the drafts tab becomes **Clips**. Every rule binds to that IA. Its `clipsTabDisabled` dead-end guard is reworked by T8380. |
 | **T8370 + T8380** (TODO, **gate T7640 rollout**) | Pre-cut clip upload becomes real: an uploaded file becomes a **clip**, entered through an **Add Video** button on the Clips tab carrying the reserved literal `data-tutorial-target="clips-add-video"`. Fork F1's pre-cut branch points here (section 8). |
@@ -534,7 +534,7 @@ wins while it is incomplete.
 | 66 | `adv.reels.collections` | A9 | home.reels | `publishedCount >= 2` | `collection-group-header` | "Your reels group into compilations by tournament and month." |
 | 67 | `adv.reels.collection-download` | A9 | home.reels | a collection exists | `collection-download` | "Download a whole compilation as one video." |
 | 68 | `adv.reels.ask-build` | A10 | home.reels | `publishedCount >= 3 && !hasMultiClipHighlight && !moment.buildHighlight` | ASK F5 | "Want to make one highlight video from several of these?" |
-| 69 | `adv.reels.build` | A10 | home.reels | `moment.buildHighlight === 'yes'` | `build-highlight-reel` | "Tap Build Highlight Reel and pick the plays you want." |
+| 69 | `adv.reels.build` | A10 | home.reels | `moment.buildHighlight === 'yes'` | `build-highlight-reel` | "Tap Create Highlight Reel and pick the plays you want." |
 
 **69 rules across 7 surfaces**, of which 48 are the critical ladder plus recovery and 21 are the
 post-publish advanced tier. Compare with the old model: 24 linear checklist entries with no screen
@@ -1170,7 +1170,7 @@ mobile is where the funnel evidence is worst. F6's `stuck` answer routes straigh
 1. **One string per rule.** `say` is the dialog body verbatim. No separate spoken variant to drift.
 2. One sentence, 14 words or fewer, plain spoken English.
 3. Name controls exactly as labeled: "Add Play", "Add Video", "Save", "Export", "Publish",
-   "Move to Highlight Reels", "Build Highlight Reel", "Share", "Playback Annotations",
+   "Move to Highlight Reels", "Create Highlight Reel", "Share", "Playback Annotations",
    "Athlete Intro Card".
 4. Outcome before mechanics where a clause is affordable ("we grab the last few seconds").
 5. No markup, no emoji, no em dashes, no parentheticals. Say "tap", not "click".

@@ -12,7 +12,7 @@ T8070 `auto_project_id` + `reel_source_*`, T8350 (queued next — this doc only 
 **Design APPROVED.**
 
 **OQ-1 (§10) = Option A (recommended).** In-progress "Highlights" live as a section on the
-Highlight Reels panel (`DownloadsPanel`), with the "Build Highlight Reel" button relocated
+Highlight Reels panel (`DownloadsPanel`), with the "Create Highlight Reel" button relocated
 there, exactly as §3.1 Q3 / §4.2 specify. Home stays two tabs (Games | Clips).
 
 **Rename ruling — STOP the `auto_project_id` clearing on rename.** The user required renaming
@@ -70,7 +70,7 @@ a fix to where it lives while it's alive.
 ## 1. One-line recommendation
 
 **Rename the existing single Home tab in place: `Reel Drafts` → `Clips`, keep it as the
-single-clip surface, and MOVE the multi-clip world (the "Build Highlight Reel" assembly button
+single-clip surface, and MOVE the multi-clip world (the "Create Highlight Reel" assembly button
 + its resulting multi-clip drafts) onto the existing Highlight Reels surface (`DownloadsPanel`) as
 an in-progress "Highlights" section above the published reels — so Home stays a two-tab structure
 (Games | Clips) and the "Highlights → Highlight Reels" lifecycle lives together on one surface.**
@@ -93,7 +93,7 @@ an in-progress "Highlights" section above the published reels — so Home stays 
 - **Single-clip auto-drafts:** created by tapping "Create Reel" on one clip (T8070
   `auto_project_id`). Backend flags them `is_auto_created = true` — computed as
   `EXISTS(SELECT 1 FROM raw_clips rc WHERE rc.auto_project_id = p.id)` (`projects.py:361-364`).
-- **Multi-clip assembled drafts:** created by the "Build Highlight Reel" button (`:1205-1215`,
+- **Multi-clip assembled drafts:** created by the "Create Highlight Reel" button (`:1205-1215`,
   renamed from "New Reel" by T8130) → `GameClipSelectorModal` multi-select → `POST /projects/from-clips`,
   which lands back on this SAME tab (`handleProjectCreated`, `:992-1003`; `is_auto_created = false`).
 - Today disambiguated only by a `Layers` "Contains N clips" badge when `clip_count > 1`
@@ -117,7 +117,7 @@ not by `clip_count`.** `clip_count` remains the display badge only.
 | Per-clip work | (n/a as tab) | approved vocabulary: **"Clips"** |
 | In-progress multi-clip assembly | "Reel Drafts" (mixed) | user 2026-09-02: **"Highlights"** |
 | Published multi-clip video | "Highlight Reels" | `SECTION_NAMES.LIBRARY` |
-| Assembly button | "Build Highlight Reel" | `ProjectManager.jsx:1213` |
+| Assembly button | "Create Highlight Reel" | `ProjectManager.jsx:1213` |
 
 ---
 
@@ -147,7 +147,7 @@ out of scope. The change here is subtractive (remove the multi-clip entries + th
 Created-By filter) + a rename, not a new editor.
 
 **Q3 — the assembly flow AND multi-clip "Highlights" drafts both move to the Highlight Reels
-surface.** "Build Highlight Reel" (the `GameClipSelectorModal` entry) relocates from the Clips tab
+surface.** "Create Highlight Reel" (the `GameClipSelectorModal` entry) relocates from the Clips tab
 onto `DownloadsPanel` (matching T8130's approved table row "Assembly button location → moves to the
 Highlight Reels surface"). The multi-clip drafts it produces render on that SAME surface, in a new
 **"Highlights" (in-progress)** section that sits ABOVE the published Highlight Reels list.
@@ -156,7 +156,7 @@ Highlight Reels surface"). The multi-clip drafts it produces render on that SAME
   They live on one surface (`DownloadsPanel`) as two stacked sections of the same lifecycle. The word
   "Highlights" is a SECTION HEADING on that surface, not a new Home tab and not a rename of the
   published `SECTION_NAMES.LIBRARY`.
-- **Assembly-flow copy scope:** the button KEEPS "Build Highlight Reel" (approved, unchanged). The
+- **Assembly-flow copy scope:** the button KEEPS "Create Highlight Reel" (approved, unchanged). The
   `GameClipSelectorModal` internal copy ("Create a project from library clips", "Select games")
   is out of scope for the string sweep except where it literally says "project"/"reel draft" in
   user-facing headings — see §6 sweep list. "Highlights" does NOT extend into the modal's field
@@ -175,11 +175,11 @@ HOME (two tabs, unchanged structure)
 └── Clips            /home/reels   id=projects   ← was "Reel Drafts"
         renders ONLY projects where is_auto_created === true
         (single-clip auto-drafts; DraftTile + stage rows, unchanged tile chrome)
-        NO "Build Highlight Reel" button here anymore
+        NO "Create Highlight Reel" button here anymore
         NO "Created By: Auto/Custom" filter here anymore (all rows are Auto now)
 
 HIGHLIGHT REELS SURFACE  (DownloadsPanel, opened by top-right button — unchanged entry)
-├── [Build Highlight Reel]  ← relocated assembly button (opens GameClipSelectorModal)
+├── [Create Highlight Reel]  ← relocated assembly button (opens GameClipSelectorModal)
 ├── Highlights (in-progress)      ← NEW section: projects where is_auto_created === false
 │       renders DraftTile (multi-clip), same stage strip + By Phase/By Game affordances
 └── Highlight Reels (published)   ← existing DownloadsPanel content, unchanged
@@ -202,7 +202,7 @@ Tab bar (`ProjectManager.jsx:1150-1191`) — only the label token changes:
 ```
 - Active tab keeps `REEL.bg text-white shadow-lg`; label = `SECTION_NAMES.CLIPS` (new token, §6).
 - Count pill unchanged (`:1183-1189`) — now counts only auto-drafts (see §5 count note).
-- **No action button row** under the tab for Clips (the `Build Highlight Reel` `<Button variant="cyan">`
+- **No action button row** under the tab for Clips (the `Create Highlight Reel` `<Button variant="cyan">`
   block `:1204-1215` is REMOVED from this tab; the `activeTab === 'games'` Add Game branch is
   untouched). This removes the awkward "create a multi-clip thing from the single-clip surface".
 
@@ -220,7 +220,7 @@ in snap carousels (`DraftTile` / `CardCarousel`), 44px coarse-pointer floors alr
 ```
 ┌─ Highlight Reels ──────────────────────────────── [X] ┐
 │                                                        │
-│   [ + Build Highlight Reel ]   ← relocated assembly    │  cyan Button, icon={Plus}
+│   [ + Create Highlight Reel ]   ← relocated assembly    │  cyan Button, icon={Plus}
 │                                                         │
 │   HIGHLIGHTS (IN PROGRESS)          3                   │  section heading + count pill
 │   ┌────┐ ┌────┐ ┌────┐                                  │  DraftTile row (CardCarousel)
@@ -240,7 +240,7 @@ Tailwind, following existing conventions:
           disabled={!hasClips}
           title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
           onClick={() => setShowNewProjectModal(true)}>
-    Build Highlight Reel
+    Create Highlight Reel
   </Button>
   ```
   Same props as the current `ProjectManager.jsx:1205-1215` block — moved, not rewritten.
@@ -288,7 +288,7 @@ Highlights section counts `projects.filter(p => !p.is_auto_created)`.
 |---|---|---|
 | **Clips tab (populated → empty)** | no auto-drafts but user has extracted clips | Keep today's structure at `:1428-1432` but re-copy: heading **"No clips yet"**, sub **"Tap 'Create Reel' on a clip in Annotate to start one."** (points at the real single-clip gesture, not the assembly button which no longer lives here). |
 | **Clips tab (dead-end)** | `clipDrafts.length===0 && !hasClips` | Tab stays disabled with tooltip **"Extract clips from a game first using Annotate mode"** (existing `:1172` copy) and bounces to Games — see §5.3. |
-| **Highlights section** | no in-progress multi-clip drafts | Section renders a one-line placeholder under the Build button: **"No highlights in progress. Tap Build Highlight Reel to assemble one."** (Do NOT hide the Build button — it is the surface's entry point.) The published Highlight Reels list below shows its own existing empty/loading states, unchanged. |
+| **Highlights section** | no in-progress multi-clip drafts | Section renders a one-line placeholder under the Build button: **"No highlights in progress. Tap Create Highlight Reel to assemble one."** (Do NOT hide the Build button — it is the surface's entry point.) The published Highlight Reels list below shows its own existing empty/loading states, unchanged. |
 | **Highlight Reels surface (fully empty)** | no highlights AND no published reels | Build button + the "No highlights in progress" line + DownloadsPanel's existing empty published state. No dead-end here (the panel is opened deliberately, not a persistent tab that can trap the user). |
 
 ### 5.3 Dead-end-tab logic under the new shape (`reelDraftsDisabled`, `:426-427`, `:885-889`)
@@ -335,7 +335,7 @@ export const SECTION_NAMES = {
 | `components/ProjectManager.jsx:1182` | tab label `SECTION_NAMES.DRAFTS` | → `SECTION_NAMES.CLIPS`. |
 | `ProjectManager.jsx:1415,1420,1430` | Loading/error/empty "reel drafts" | → `CLIPS_LOWER` + re-copy per §5.2. |
 | `ProjectManager.jsx:1553-1556` | "Your Reel Drafts" / "Showing N of M Reel Drafts" | → `CLIPS` and count `clipDrafts`. |
-| `ProjectManager.jsx:1204-1215` | Build Highlight Reel button block | **Relocate** to DownloadsPanel (§4.2). |
+| `ProjectManager.jsx:1204-1215` | Create Highlight Reel button block | **Relocate** to DownloadsPanel (§4.2). |
 | `ProjectManager.jsx:1509-1548` | Created By: Auto/Custom filter + `:1542` "Manually created reel drafts" title | **Remove** the filter group from the Clips tab (vacuous — all Auto). Drop `creationFilter` from `filteredProjects` for this surface. |
 | `ProjectManager.jsx:689-693` | multi-clip "sort last" special case | Remove/simplify (no multi-clip rows on Clips). |
 | `stores/editorStore.js:95` | `PROJECT_MANAGER.label = SECTION_NAMES.DRAFTS` (breadcrumb/mode label) | → `SECTION_NAMES.CLIPS`. |
@@ -344,7 +344,7 @@ export const SECTION_NAMES = {
 | `config/questDefinitions.jsx:163,169` | "Switch to [Reel Drafts]…" / "under Reel Drafts" | → `SECTION_NAMES.CLIPS`. **Coordinate with T7620 tutorial copy** (CLAUDE/T8130 note: guided path must say the same words). |
 | `questDefinitions.jsx:84,176` | comments/"Reel Draft card" preview copy | Re-word to "Clip" (single-clip context) — verify the quest still points at the right surface. |
 | `DownloadsPanel.jsx` (new) | — | Add Build button + Highlights section (§4.2). |
-| **Tests** `ProjectManager.homeTabDefaults.test.jsx:91,98,103-104,122,128-140` | assert on `/Reel Drafts/i`, "Build Highlight Reel" on the drafts tab | Update to `Clips` tab + assert Build button is NOT on Home (moved). |
+| **Tests** `ProjectManager.homeTabDefaults.test.jsx:91,98,103-104,122,128-140` | assert on `/Reel Drafts/i`, "Create Highlight Reel" on the drafts tab | Update to `Clips` tab + assert Build button is NOT on Home (moved). |
 | **Tests** `config/questDefinitions.test.jsx:9,15-17` | expects `/Reel Drafts/` | → `/Clips/`. |
 | Comments only (no UI): `ProjectManager.jsx:361,420,689,869,880`; `DraftTile.jsx:27`; `utils/draftStage.js:1`; `settingsStore.js:28`; `utils/timeFormat.js:115`; `ClipsSidePanel.jsx:296`; `ClipDetailsEditor.jsx:121`; `constants/aspectRatios.test.js:9`; `CropOverlay.test.jsx:31-32`; `*.gameClock.test.jsx:5` | "Reel Drafts" in comments | Update opportunistically for accuracy; non-blocking (not user-visible). |
 | **e2e** (grep `Reel Drafts` / `New Reel` in `src/frontend/e2e/`) | nav-tab locators | Sweep in full (T8130 already swept "My Reels"/"New Reel" specs; mirror that for the tab label). |
@@ -376,7 +376,7 @@ only NAMES the spot; the cue's visual is T8350's to design.
 |---|---|
 | `src/frontend/src/config/displayNames.js` | New `CLIPS`/`HIGHLIGHTS` tokens; remove `DRAFTS`/`DRAFTS_LOWER`. |
 | `src/frontend/src/components/ProjectManager.jsx` | Tab label → Clips; partition `projects` by `is_auto_created`; count/guard off `clipDrafts`; remove Build button + Created-By filter + multi-clip sort-last from this tab; empty-state copy. |
-| `src/frontend/src/components/DownloadsPanel.jsx` | Add relocated **Build Highlight Reel** button + **Highlights (in-progress)** section (DraftTile rows via CardCarousel) above the published list. |
+| `src/frontend/src/components/DownloadsPanel.jsx` | Add relocated **Create Highlight Reel** button + **Highlights (in-progress)** section (DraftTile rows via CardCarousel) above the published list. |
 | `src/frontend/src/components/GameClipSelectorModal.jsx` | No API change; ensure it can be opened from the Downloads surface (ownership question below). |
 | `src/frontend/src/config/questDefinitions.jsx` (+`.test.jsx`) | Re-point Reel-Drafts references to Clips; coordinate T7620. |
 | `src/frontend/src/stores/editorStore.js`, `App.jsx`, `components/shared/Breadcrumb.jsx` | Breadcrumb/mode label `DRAFTS` → `CLIPS`. |
@@ -441,7 +441,7 @@ the binding decisions and needs no user pick.)*
 ## 11. Recommendation summary
 
 Rename Home's `Reel Drafts` tab to **Clips** in place (single-clip auto-drafts only, routed by
-`is_auto_created`), and move the **Build Highlight Reel** button plus its multi-clip **Highlights**
+`is_auto_created`), and move the **Create Highlight Reel** button plus its multi-clip **Highlights**
 drafts onto the existing **Highlight Reels** (`DownloadsPanel`) surface as an in-progress section
 above the published reels — keeping Home two tabs and the Highlights→Highlight Reels lifecycle on one
 surface.

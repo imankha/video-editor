@@ -28,9 +28,9 @@ const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
   // The drawer header is the stable anchor (reels themselves live in collapsed groups).
-  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
+  await expect(page.getByTestId('highlights-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
 
@@ -41,7 +41,7 @@ async function expandFirstGroup(page) {
   if (alreadyShown) return true;
   // Scope to the drawer panel: the home "Clips" section renders its OWN
   // CollapsibleGroups behind the backdrop, and those are not clickable (covered).
-  const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
   // Wait for the collections summary to render at least one group header before
   // iterating (the drawer heading appears before the summary finishes fetching).
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});

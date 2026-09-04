@@ -174,13 +174,13 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
   // in a real browser: the PLAYER rung (CollectionPlayer) covers the panel, and the
   // ALERT rung (LockedReasonModal) covers the player. The rung classes injected are
   // the exact strings the migrated components render (Z.PLAYER / Z.ALERT).
-  // Which layer is topmost at (x,y)? Report the DownloadsPanel drawer as
-  // 'downloads-panel' (a RIGHT-side panel, so the probe point comes from its own
-  // bounding box), else the topmost element's testid.
+  // Which layer is topmost at (x,y)? Report the DownloadsPanel (Highlights tab
+  // body, T8545) as 'downloads-panel' via its own data-testid, else the
+  // topmost element's testid.
   const topTestIdAt = (page, x, y) => page.evaluate(([px, py]) => {
     let n = document.elementsFromPoint(px, py)[0];
     while (n && n !== document.body) {
-      if ((n.className || '').toString().includes('animate-slide-in-right')) return 'downloads-panel';
+      if (n.getAttribute('data-testid') === 'highlights-tab-panel') return 'downloads-panel';
       const t = n.getAttribute('data-testid');
       if (t) return t;
       n = n.parentElement;
@@ -193,9 +193,10 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
 
-    // Open the REAL DownloadsPanel (Highlight Reels) — it opens even with zero reels.
-    await page.getByRole('button', { name: /my reels/i }).first().click();
-    const drawer = page.locator('.animate-slide-in-right').first();
+    // Switch to the REAL Highlights tab (DownloadsPanel's inline body, T8545)
+    // — it renders even with zero reels.
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
+    const drawer = page.getByTestId('highlights-tab-panel').first();
     await drawer.waitFor({ timeout: 15000 });
     const dbox = await drawer.boundingBox();
     // Probe just inside the drawer's LEFT edge, clamped into the viewport, so the

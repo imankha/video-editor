@@ -283,7 +283,7 @@ test.describe('T4770 new-user-flow perf walkthrough', () => {
     await leg('myreels', async () => {
       await stamp(page, 'myreels:navStart');
       await page.goto('/', { waitUntil: 'commit' });
-      const myReels = page.getByRole('button', { name: /Highlight Reels/i }).first();
+      const myReels = page.getByRole('button', { name: /^Highlights/ }).first();
       await myReels.waitFor({ state: 'visible', timeout: 15000 });
       await myReels.click({ timeout: 8000 });
       await stamp(page, 'myreels:clicked');

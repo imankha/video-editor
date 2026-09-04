@@ -130,7 +130,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await page.setViewportSize({ width: 1280, height: 800 });
 
   // Published state unregressed: Highlight Reels tiles still render.
-  const myReelsTab = page.locator('button:has-text("Highlight Reels")');
+  const myReelsTab = page.getByRole('button', { name: /^Highlights/ });
   if (await myReelsTab.count()) {
     await myReelsTab.first().click();
     await page.waitForTimeout(1000);

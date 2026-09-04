@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
@@ -10,8 +10,14 @@ import { AppStateProvider } from '../contexts';
 //
 // T8360: the tab was renamed "Reel Drafts" -> "Clips" and now shows only
 // single-clip auto-drafts (`clipDrafts = projects.filter(is_auto_created)`).
-// The "Build Highlight Reel" button moved off this tab entirely (to
+// The "Create Highlight Reel" button moved off this tab entirely (to
 // DownloadsPanel), so it is no longer asserted here as a Clips-tab action.
+//
+// T8545: Highlight Reels is now a third peer tab (was a top-right icon
+// button/drawer). DownloadsPanel is stubbed here (like the other heavy
+// children) since this file's focus is tab-selection logic, not the
+// Highlights tab's own content -- the stub echoes its `active` prop so tests
+// can assert which tab is showing.
 
 // jsdom lacks IntersectionObserver (used by the games-grid cache-warming effect).
 class MockIntersectionObserver {
@@ -65,8 +71,12 @@ vi.mock('./ProfileSportButton', () => ({ ProfileSportButton: () => <div />, defa
 vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => <div /> }));
 vi.mock('./GameTile', () => ({ GameTile: () => <div data-testid="game-tile" /> }));
 vi.mock('./DraftTile', () => ({ DraftTile: () => <div data-testid="draft-tile" />, default: () => <div /> }));
+vi.mock('./DownloadsPanel', () => ({
+  DownloadsPanel: (props) => <div data-testid="downloads-panel" data-active={String(!!props.active)} />,
+}));
 
 import { ProjectManager } from './ProjectManager';
+import { useGalleryStore } from '../stores/galleryStore';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
@@ -99,10 +109,12 @@ function renderManager(props = {}, path = '/home') {
 // "Clips" with the count chip digit appended directly (no separating space,
 // e.g. "Clips1"), so don't require a trailing word boundary.
 const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const highlightsTab = () => screen.getByRole('button', { name: /^Highlights/i });
 
 describe('ProjectManager home tab defaults (T6830)', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
+    useGalleryStore.setState({ isOpen: false });
   });
 
   it('fresh account (no games, no drafts): lands on Games, Clips tab disabled with tooltip', async () => {
@@ -110,9 +122,9 @@ describe('ProjectManager home tab defaults (T6830)', () => {
 
     // Games tab is active -> its action button (Add Game) is shown.
     expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
-    // Build Highlight Reel is NOT shown here (T8360: it moved off Home entirely,
+    // Create Highlight Reel is NOT shown here (T8360: it moved off Home entirely,
     // to DownloadsPanel's Highlight Reels surface).
-    expect(screen.queryByRole('button', { name: 'Build Highlight Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create Highlight Reel' })).toBeNull();
 
     const tab = clipsTab();
     expect(tab.disabled).toBe(true);
@@ -144,12 +156,14 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     const tab = clipsTab();
     expect(tab.disabled).toBe(false);
     // Projects-count default flips the active tab to Clips once projects load,
-    // so its count chip appears. The Build Highlight Reel action no longer lives
-    // on this tab (T8360 relocated it to DownloadsPanel).
+    // so its count chip appears. T8545: the button renders TWO count badges
+    // (mobile corner + desktop inline, one hidden per breakpoint via CSS that
+    // jsdom doesn't evaluate) -- getAllByText covers both. The Create Highlight
+    // Reel action no longer lives on this tab (T8360 relocated it to DownloadsPanel).
     await waitFor(() => {
-      expect(within(tab).getByText('1')).toBeTruthy();
+      expect(within(tab).getAllByText('1').length).toBeGreaterThan(0);
     });
-    expect(screen.queryByRole('button', { name: 'Build Highlight Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create Highlight Reel' })).toBeNull();
   });
 
   it('user with only multi-clip (Highlights) drafts: Clips tab stays on the dead-end guard (T8360)', async () => {
@@ -167,5 +181,60 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // A user who actually has clips would render disabled for a frame if we didn't
     // gate on load settling; keep it enabled until both lists settle.
     expect(clipsTab().disabled).toBe(false);
+  });
+});
+
+describe('ProjectManager three-way tab navigation (T8545)', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/home');
+    useGalleryStore.setState({ isOpen: false });
+  });
+
+  it('renders Games, Clips, and Highlights as three peer tabs; no top-right icon button', () => {
+    renderManager();
+
+    expect(screen.getByRole('button', { name: /^Games/i })).toBeTruthy();
+    expect(clipsTab()).toBeTruthy();
+    expect(highlightsTab()).toBeTruthy();
+    // The old top-right Gallery icon button (SECTION_NAMES.LIBRARY = "Highlight
+    // Reels") is gone -- Highlights is never disabled, so this can't collide
+    // with a legitimate disabled-tab title lookup.
+    expect(screen.queryByTitle('Highlight Reels')).toBeNull();
+  });
+
+  it('clicking Highlights switches to it, mounts DownloadsPanel active, and updates the URL', () => {
+    renderManager();
+
+    fireEvent.click(highlightsTab());
+
+    expect(screen.getByTestId('downloads-panel').dataset.active).toBe('true');
+    expect(window.location.pathname).toBe('/home/highlights');
+  });
+
+  it('Highlights tab shows the unseenReelsCount badge (not a total)', () => {
+    renderManager({ unseenReelsCount: 3 });
+
+    // Two badges render (mobile corner + desktop inline pill, one hidden per
+    // breakpoint via CSS jsdom doesn't evaluate) -- both carry the same count.
+    expect(within(highlightsTab()).getAllByText('3').length).toBeGreaterThan(0);
+  });
+
+  it('a deep link to /home/highlights lands directly on the Highlights tab', () => {
+    renderManager({}, '/home/highlights');
+
+    expect(screen.getByTestId('downloads-panel').dataset.active).toBe('true');
+  });
+
+  it('T8400/T8470: galleryStore.open() (e.g. publish-to-My-Reels) switches to Highlights and consumes the signal', async () => {
+    renderManager();
+    expect(screen.getByTestId('downloads-panel').dataset.active).toBe('false');
+
+    useGalleryStore.getState().open();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('downloads-panel').dataset.active).toBe('true');
+    });
+    // Fire-once: the signal is consumed so a later publish can re-trigger it.
+    expect(useGalleryStore.getState().isOpen).toBe(false);
   });
 });

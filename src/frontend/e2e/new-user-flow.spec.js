@@ -842,14 +842,15 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // --- Q4 Step 3: Create a Custom Multi-Game Project ---
     console.log('[Q4.3] Create custom project');
 
-    // T8360: "Build Highlight Reel" moved off the Clips Home tab into the
-    // Highlight Reels drawer (DownloadsPanel) -- open that drawer instead.
+    // T8545: "Create Highlight Reel" moved off the Clips Home tab onto the
+    // Highlights tab (was a top-right icon button opening a drawer) -- switch
+    // to that tab instead.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
     await page.waitForTimeout(1000);
 
-    const newProjectBtn = page.locator('button:has-text("Build Highlight Reel")');
+    const newProjectBtn = page.locator('button:has-text("Create Highlight Reel")');
     await expect(newProjectBtn).toBeVisible();
     await newProjectBtn.click();
     await page.waitForTimeout(1500);
@@ -889,11 +890,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Navigate to the custom (multi-clip) project and click Frame Video. T8360:
     // multi-clip "Highlights" drafts (is_auto_created===false) no longer render on
-    // the Clips Home tab -- they live in the Highlight Reels drawer's Highlights
-    // (in-progress) section.
+    // the Clips Home tab -- they live in the Highlights tab's Highlights
+    // (in-progress) section (T8545: that tab, was a drawer).
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
     await page.waitForTimeout(1000);
 
     const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');

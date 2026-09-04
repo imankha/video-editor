@@ -66,7 +66,7 @@ test('T5672 drawer aspect split at 1280px: two rows, portrait first, legible chi
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Highlight Reels', exact: true }).click();
+  await page.getByRole('button', { name: /^Highlights/ }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -103,7 +103,7 @@ test('T5672 drawer aspect split at 390px: two rows still legible on mobile', asy
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Highlight Reels', exact: true }).click();
+  await page.getByRole('button', { name: /^Highlights/ }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -126,21 +126,14 @@ test('T5672 drawer: single-aspect game shows no aspect chip (unchanged look)', a
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Highlight Reels', exact: true }).click();
+  await page.getByRole('button', { name: /^Highlights/ }).click();
   await page.waitForTimeout(800);
 
-  // Scope to the Highlight Reels drawer panel. The Clips screen BEHIND the drawer can
-  // also render [data-testid="collapsible-group-header"] game groups (full-width,
-  // x~64) when its own classification is switched to "By Game" (T8080 -- the screen
-  // now defaults to "By Phase", which renders no such elements), so an unscoped
-  // .first() is never safe to rely on -- and the drawer's z-40 backdrop intentionally
-  // blocks the page behind it, so clicking that header hangs on the backdrop
-  // intercept (it never receives the event). The real target is the first game
-  // header INSIDE the panel (pinned right, above the backdrop), which is what a
-  // user actually clicks.
-  const drawer = page.locator('.max-w-md.bg-gray-800', {
-    has: page.getByRole('heading', { name: 'Highlight Reels', exact: true }),
-  });
+  // Scope to the Highlights tab panel. The Clips tab's content is a ternary
+  // that renders null while Highlights is active (T8545 -- no more "screen
+  // BEHIND a drawer" to accidentally match), but scoping stays cheap
+  // defense-in-depth against a future surface reusing the same testids.
+  const drawer = page.getByTestId('highlights-tab-panel');
 
   // The real account's games are single-aspect today -- expand the first
   // real game and confirm no bare "9:16"/"16:9" text chip appears.

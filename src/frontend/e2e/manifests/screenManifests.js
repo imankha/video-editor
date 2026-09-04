@@ -65,7 +65,7 @@ export const SCREENS = [
     actions: [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
       { label: 'Clips tab', locator: (p) => p.getByRole('button', { name: 'Clips' }).first() },
-      { label: 'Highlight Reels tab', locator: (p) => p.getByRole('button', { name: /Highlight Reels/i }).first() },
+      { label: 'Highlight Reels tab', locator: (p) => p.getByRole('button', { name: /^Highlights/ }).first() },
     ],
   },
   {
@@ -168,7 +168,7 @@ export const SCREENS = [
     name: 'Gallery / Highlight Reels',
     setup: async (page) => {
       await reachHome(page);
-      const myReels = page.getByRole('button', { name: /Highlight Reels/i }).first();
+      const myReels = page.getByRole('button', { name: /^Highlights/ }).first();
       await myReels.click();
       // T5673: reels render as poster tiles INSIDE collapsed game/mix groups, so the
       // drawer shows no reel-card until a group is expanded. Expand the first group
@@ -179,7 +179,7 @@ export const SCREENS = [
       if (!appeared) {
         // Scope to the drawer panel: the home Clips section renders its own
         // CollapsibleGroups behind the backdrop, which are covered (not clickable).
-        const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+        const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
         // Wait for the summary to render group headers before iterating (the drawer
         // opens before the collections summary finishes fetching).
         await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});

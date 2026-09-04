@@ -184,7 +184,7 @@ test.describe('T8470 - one status story for a fresh draft (desktop)', () => {
     // Highlight Reels drawer: published-reels list is empty, but the empty state
     // is count-aware - it must never claim "No reels yet" while the draft exists
     // (T8470 Part C), and its link switches to the Clips tab.
-    await page.getByRole('button', { name: /Highlight Reels/ }).click();
+    await page.getByRole('button', { name: /^Highlights/ }).click();
     await expect(page.getByText('No reels yet')).toBeVisible({ timeout: 10000 });
     const draftLink = page.getByRole('button', { name: /draft clip.*in progress.*Clips tab/ });
     await expect(draftLink).toBeVisible();

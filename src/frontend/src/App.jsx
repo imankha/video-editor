@@ -2,7 +2,6 @@ import { useState, useMemo, useRef, useCallback, useEffect, lazy, Suspense } fro
 import { scheduleWarmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
-import { DownloadsPanel } from './components/DownloadsPanel';
 import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { SharedCollectionView } from './components/SharedCollectionView';
@@ -133,7 +132,6 @@ function App() {
   const selectedProject = useProjectsStore(state => state.selectedProject);
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
-  const selectProject = useProjectsStore(state => state.selectProject);
   const clearSelection = useProjectsStore(state => state.clearSelection);
   const discardUncommittedChanges = useProjectsStore(state => state.discardUncommittedChanges);
 
@@ -987,41 +985,6 @@ function App() {
 
       {/* Sync Status Indicator - shows when R2 sync has failed */}
       <SyncStatusIndicator />
-
-      {/* Downloads Panel */}
-      <DownloadsPanel
-        onOpenProject={async (projectId) => {
-          // Reset stores to clear stale data from previous project
-          useProjectDataStore.getState().reset();
-          useFocusStore.getState().reset();
-          useOverlayStore.getState().reset();
-          useVideoStore.getState().reset();
-          // Always re-fetch: name may have changed via gallery rename
-          await Promise.all([
-            fetchProjects({ force: true }),
-            selectProject(projectId),
-          ]);
-          // T6190: this re-edit path never runs loadProject and FocusScreen no longer
-          // fetches clips on mount, so load the restored project's clips here — the
-          // "open reel" gesture owns its own fetch (reset() above cleared the old list).
-          // T8050: bracket with setLoading so FocusScreen shows its spinner instead of
-          // "No video loaded" for the gap before this fetch resolves (see the sibling
-          // call in handleModeChange for the full explanation).
-          useProjectDataStore.getState().setLoading(true, 'clips');
-          useProjectDataStore.getState().invalidateClips(projectId)
-            .finally(() => useProjectDataStore.getState().setLoading(false));
-          // Default to framing mode when opening a completed reel
-          setEditorMode(EDITOR_MODES.FRAMING);
-        }}
-        onViewClips={() => {
-          // T8470 (Part C): from the global (editor-context) drawer, "find them on
-          // the Clips tab" returns Home and lands on Clips via the existing
-          // projectManagerTab hint, which ProjectManager reads on mount.
-          sessionStorage.setItem('projectManagerTab', 'projects');
-          clearSelection();
-          setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
-        }}
-      />
 
       {/* Quest Panel (T540) — only on desktop in editor modes (shown inline on Home screen for mobile) */}
       {!isMobile && (

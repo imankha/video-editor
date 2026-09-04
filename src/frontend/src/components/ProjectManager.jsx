@@ -5,6 +5,7 @@ import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
+import { DownloadsPanel } from './DownloadsPanel';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
@@ -17,7 +18,7 @@ import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES } from '../config/displayNames';
-import { GAME, REEL } from '../config/themeColors';
+import { GAME, REEL, HIGHLIGHT } from '../config/themeColors';
 import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
@@ -26,6 +27,7 @@ import { EditGameModal } from './EditGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useGalleryStore } from '../stores/galleryStore';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
 import { useQuestStore } from '../stores/questStore';
@@ -364,20 +366,71 @@ export function gamesGridColumns(groups) {
   return Math.min(4, Math.max(2, biggest));
 }
 
-// The active tab is URL state (/home/games -> Games, /home/reels -> Clips),
-// never persisted. Map a pathname to its tab, or null when the URL names no tab
-// (bare /home) so callers can fall back to a default. (T5677)
+// The active tab is URL state (/home/games -> Games, /home/reels -> Clips,
+// /home/highlights -> Highlights), never persisted. One map drives both
+// directions (path -> tab below, tab -> path in setActiveTab) so a new tab
+// only needs an entry here, never two places kept in lockstep by hand. (T5677,
+// extended T8545 for the third tab.)
+const TAB_PATHS = { games: '/home/games', projects: '/home/reels', highlights: '/home/highlights' };
+
+// Map a pathname to its tab, or null when the URL names no tab (bare /home) so
+// callers can fall back to a default.
 function tabFromPath(pathname) {
-  if (pathname === '/home/games') return 'games';
-  if (pathname === '/home/reels') return 'projects';
-  return null;
+  return Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === pathname) ?? null;
+}
+
+// T8545: one button renderer shared by all three segmented-control tabs.
+// Below `sm` it stacks icon-over-label in an equal-width grid column, with
+// the count badge riding the icon's top-right corner; at `sm`+ it reflows to
+// today's single-row inline icon+label+badge (pixel-identical to the old
+// two-tab markup -- the icon's `size` prop wins below `sm`, the `sm:w-4 sm:h-4`
+// className wins at `sm`+ since CSS beats an SVG's width/height attributes).
+// Both badge variants render together, one hidden per breakpoint, rather than
+// switching DOM structure at the breakpoint.
+function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, count, activeBg, activeBgDark }) {
+  const badgeBg = active ? activeBgDark : 'bg-gray-700';
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 rounded-md font-medium transition-all duration-200 ${
+        disabled
+          ? 'text-gray-600 opacity-50 cursor-not-allowed'
+          : active
+            ? `${activeBg} text-white shadow-lg`
+            : 'text-gray-400 hover:text-white hover:bg-white/10'
+      }`}
+    >
+      {/* DOM order is label-first so the button's accessible name reads
+          "{label}{count}" (matching the existing Games/Clips convention, e.g.
+          "Clips1") regardless of which badge a breakpoint shows -- accessible
+          name computation follows document order, not CSS. `order-first` on
+          the icon span moves it to the FRONT visually (stacked-top on mobile,
+          row-start on desktop) while staying LAST in the DOM. */}
+      <span className="text-[11px] sm:text-sm leading-tight text-center">{label}</span>
+      <span className="order-first relative">
+        <Icon size={18} className="sm:w-4 sm:h-4" />
+        {count > 0 && (
+          <span className={`sm:hidden absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold leading-[14px] rounded-full text-white text-center ${badgeBg}`}>
+            {count}
+          </span>
+        )}
+      </span>
+      {count > 0 && (
+        <span className={`hidden sm:inline ml-1 px-2 py-0.5 text-xs rounded-full ${badgeBg}`}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
 }
 
 /**
  * ProjectManager - Shown when no project is selected
  *
  * Displays:
- * - Tab navigation: Games | Projects
+ * - Tab navigation: Games | Clips | Highlights
  * - Games: List of saved games with option to load into annotate mode
  * - Projects: List of existing projects with progress bars
  * - Buttons to add new game or create new project
@@ -402,7 +455,6 @@ export function ProjectManager({
   onFetchGames,
   // Downloads props - now optional, from context
   unseenReelsCount: unseenReelsCountProp,
-  onOpenDownloads,
   // Export state - now optional, from context
   exportingProject: exportingProjectProp,
   // Pending uploads props
@@ -415,15 +467,6 @@ export function ProjectManager({
   onCancelActiveUpload, // Cancel one upload by id
   // Pending game IDs - projects referencing these are blocked
   pendingGameIds = new Set(),
-  // T8360: the Build Highlight Reel modal's open state, lifted to the common
-  // parent (ProjectsScreen) so DownloadsPanel's relocated Build button can
-  // trigger it. The modal itself stays here (design doc Sec 8 ownership note).
-  showNewProjectModal = false,
-  onCloseNewProjectModal,
-  // T8470 (Part C): incrementing nonce - the drawer's "find them on the Clips
-  // tab" link bumps it, and the effect below switches to Clips. A nonce (not a
-  // boolean) so a repeat click re-fires even if Clips is already active.
-  clipsTabRequest = 0,
 }) {
   // Get downloads and export state from context
   const { unseenReelsCount: contextUnseenReelsCount, exportingProject: contextExportingProject } = useAppState();
@@ -469,11 +512,17 @@ export function ProjectManager({
   const [activeTab, setActiveTabRaw] = useState(initialTab);
   const setActiveTab = useCallback((tab) => {
     setActiveTabRaw(tab);
-    const path = tab === 'games' ? '/home/games' : '/home/reels';
+    const path = TAB_PATHS[tab];
     if (window.location.pathname !== path) {
       window.history.replaceState(null, '', path);
     }
   }, []);
+  // T8545: the Highlight Reels surface (DownloadsPanel) now renders inline as
+  // this tab's own body instead of as a sibling drawer, so the assembly
+  // modal's open state (and the GameClipSelectorModal it drives, still owned
+  // here) no longer needs lifting to a common parent -- both live in this
+  // component now.
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
@@ -906,23 +955,26 @@ export function ProjectManager({
     }
   }, [clipsTabDisabled, activeTab, setActiveTab]);
 
-  // T8470 (Part C): honor an explicit "go to Clips" request from the drawer. Keyed
-  // on the nonce alone (a user GESTURE, not reactive state) so it fires once per
-  // click. Skips the initial 0 so a cold mount never force-switches the tab.
-  const lastClipsTabRequest = useRef(clipsTabRequest);
+  // T8400/T8545: "land on the published reel" (e.g. DraftTile's Publish ->
+  // My Reels action) used to pop the Highlight Reels drawer via
+  // galleryStore.open(); the drawer is gone, so that same open() signal now
+  // switches to the Highlights tab instead. Treated as a fire-once gesture
+  // signal (like the old clipsTabRequest nonce) -- consumed immediately via
+  // close() so it can fire again on the next publish.
+  const galleryOpenRequested = useGalleryStore((s) => s.isOpen);
   useEffect(() => {
-    if (clipsTabRequest !== lastClipsTabRequest.current) {
-      lastClipsTabRequest.current = clipsTabRequest;
-      setActiveTab('projects');
+    if (galleryOpenRequested) {
+      setActiveTab('highlights');
+      useGalleryStore.getState().close();
     }
-  }, [clipsTabRequest, setActiveTab]);
+  }, [galleryOpenRequested, setActiveTab]);
 
   // Refetch games when opening "new project" modal (needs fresh game list)
   useEffect(() => {
-    if (showNewProjectModal && onFetchGames) {
+    if (showAssemblyModal && onFetchGames) {
       onFetchGames();
     }
-  }, [showNewProjectModal, onFetchGames]);
+  }, [showAssemblyModal, onFetchGames]);
 
   // T5730: post-claim landing = the claimed game's recap (watching first), with a
   // one-time "tag your athlete's plays" nudge toward Annotate. Consumed once the
@@ -1020,7 +1072,7 @@ export function ProjectManager({
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
     // Close modal first
-    onCloseNewProjectModal?.();
+    setShowAssemblyModal(false);
 
     // Refresh projects list to show the new project
     // The modal already created the project via API
@@ -1029,7 +1081,7 @@ export function ProjectManager({
     if (onRefreshProjects) {
       await onRefreshProjects();
     }
-  }, [onRefreshProjects, onCloseNewProjectModal]);
+  }, [onRefreshProjects]);
 
   return (
     <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
@@ -1060,26 +1112,11 @@ export function ProjectManager({
         </div>
       )}
 
-      {/* Top right controls - Gallery (auth only) + Invite + Sign-in/Profile */}
+      {/* Top right controls - Invite + Sign-in/Profile. T8545: the Gallery
+          (Highlight Reels) icon-button/drawer entry point that used to live
+          here is gone -- Highlight Reels is now the third peer tab below. */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4">
         <InstallButton />
-        {isAuthenticated && onOpenDownloads && (
-          <Button
-            variant="reelOutline"
-            icon={Image}
-            onClick={onOpenDownloads}
-            title={unseenReelsCount > 0
-              ? `${SECTION_NAMES.LIBRARY} (${unseenReelsCount} new)`
-              : SECTION_NAMES.LIBRARY}
-          >
-            <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
-            {unseenReelsCount > 0 && (
-              <span className={`px-1.5 py-0.5 ${REEL.bg} text-white text-xs font-bold rounded-full min-w-[20px] text-center`}>
-                {unseenReelsCount}
-              </span>
-            )}
-          </Button>
-        )}
         {isAuthenticated && (
           <Button
             variant="reelOutline"
@@ -1191,52 +1228,44 @@ export function ProjectManager({
         </div>
       )}
 
-      {/* Tab Navigation - styled to match ModeSwitcher */}
-      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-4">
-        <button
+      {/* Tab Navigation - styled to match ModeSwitcher. T8545: three peer tabs
+          (Games/Clips/Highlights) -- stacked icon-over-label equal-thirds grid
+          below `sm`, today's single-row content-width bar at `sm`+. */}
+      <div className="grid grid-cols-3 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
+        <SegmentedTabButton
+          active={activeTab === 'games'}
           onClick={() => setActiveTab('games')}
-          className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
-            activeTab === 'games'
-              ? `${GAME.bg} text-white shadow-lg`
-              : 'text-gray-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Gamepad2 size={16} />
-          Games
-          {games.length > 0 && (
-            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
-              activeTab === 'games' ? GAME.bgDark : 'bg-gray-700'
-            }`}>
-              {games.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('projects')}
+          Icon={Gamepad2}
+          label="Games"
+          count={games.length}
+          activeBg={GAME.bg}
+          activeBgDark={GAME.bgDark}
+        />
+        <SegmentedTabButton
+          active={activeTab === 'projects'}
           disabled={clipsTabDisabled}
           title={clipsTabDisabled ? 'Extract clips from a game first using Annotate mode' : undefined}
-          className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
-            clipsTabDisabled
-              ? 'text-gray-600 opacity-50 cursor-not-allowed'
-              : activeTab === 'projects'
-                ? `${REEL.bg} text-white shadow-lg`
-                : 'text-gray-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <FolderOpen size={16} />
-          {SECTION_NAMES.CLIPS}
-          {clipDrafts.length > 0 && (
-            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
-              activeTab === 'projects' ? REEL.bgDark : 'bg-gray-700'
-            }`}>
-              {clipDrafts.length}
-            </span>
-          )}
-        </button>
+          onClick={() => setActiveTab('projects')}
+          Icon={FolderOpen}
+          label={SECTION_NAMES.CLIPS}
+          count={clipDrafts.length}
+          activeBg={REEL.bg}
+          activeBgDark={REEL.bgDark}
+        />
+        <SegmentedTabButton
+          active={activeTab === 'highlights'}
+          onClick={() => setActiveTab('highlights')}
+          Icon={Image}
+          label={SECTION_NAMES.HIGHLIGHTS}
+          count={unseenReelsCount}
+          activeBg={HIGHLIGHT.bg}
+          activeBgDark={HIGHLIGHT.bgDark}
+        />
       </div>
 
       {/* Action Button — T8360: Clips tab has no create action here anymore;
-          "Build Highlight Reel" moved to the Highlight Reels surface (DownloadsPanel). */}
+          "Create Highlight Reel" moved to the Highlight Reels surface (DownloadsPanel,
+          T8545: now the inline Highlights tab body, not a drawer). */}
       {activeTab === 'games' && (
         <div className="mb-4 sm:mb-5">
           <Button
@@ -1444,7 +1473,7 @@ export function ProjectManager({
             })()}
           </div>
         )
-      ) : (
+      ) : activeTab === 'projects' ? (
         /* Clips List */
         loading ? (
           <div className="text-gray-400">{`Loading ${SECTION_NAMES.CLIPS_LOWER}...`}</div>
@@ -1691,13 +1720,30 @@ export function ProjectManager({
             </div>
           </div>
         )
-      )}
+      ) : null}
 
-      {/* Build Highlight Reel Modal - Game/Clip selector (opened from the
-          Highlight Reels surface; see onOpenAssembly/showNewProjectModal) */}
+      {/* T8545: Highlight Reels surface — renders inline as the Highlights
+          tab's own body (was a drawer opened from a top-right icon button).
+          Always mounted (not just when active) so its own story-player /
+          share-modal state survives a tab switch, same as the old drawer
+          survived being closed without unmounting. */}
+      <DownloadsPanel
+        active={activeTab === 'highlights'}
+        onOpenProject={(projectId) => onSelectProjectWithMode?.(projectId, { mode: 'framing' })}
+        onOpenAssembly={() => setShowAssemblyModal(true)}
+        onSelectProject={onSelectProject}
+        onSelectProjectWithMode={onSelectProjectWithMode}
+        onDeleteProject={onDeleteProject}
+        onViewClips={() => setActiveTab('projects')}
+        exportingProject={exportingProject}
+        pendingGameIds={pendingGameIds}
+      />
+
+      {/* Create Highlight Reel Modal - Game/Clip selector (opened from the
+          Highlight Reels surface; see onOpenAssembly/showAssemblyModal) */}
       <GameClipSelectorModal
-        isOpen={showNewProjectModal}
-        onClose={onCloseNewProjectModal}
+        isOpen={showAssemblyModal}
+        onClose={() => setShowAssemblyModal(false)}
         onCreate={handleProjectCreated}
         games={games}
         existingProjectNames={projects?.map(p => p.name) || []}

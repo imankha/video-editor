@@ -32,7 +32,7 @@ Surfaces + their primary CTAs (component refs verified):
 | Export-complete choice | "Add Overlay" + "Skip - my reel is ready" | T8520's card |
 | Ready board tile | "Publish to Highlight Reels" | `components/DraftTile.jsx` (post-T8530 label) |
 | Reel player | "Share" | `components/collections/CollectionPlayer.jsx` (post-T8540) |
-| Highlight Reels drawer | "Build Highlight Reel" | `components/DownloadsPanel.jsx` |
+| Highlights tab (T8545: was a drawer) | "Create Highlight Reel" | `components/DownloadsPanel.jsx` |
 
 ## Existing tooling to build on (do not invent new harnesses)
 

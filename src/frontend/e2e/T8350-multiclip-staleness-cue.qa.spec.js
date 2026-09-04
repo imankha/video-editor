@@ -110,8 +110,8 @@ async function injectProject(page, projectOverrides) {
 
 async function openHighlightsPanel(page) {
   await page.goto('/home');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /Highlight Reels/i }) });
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Highlights/ }) });
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
   await expect(page.getByText('Highlights', { exact: true })).toBeVisible({ timeout: 10000 });
 }
 

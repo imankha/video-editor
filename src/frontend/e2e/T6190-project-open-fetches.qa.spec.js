@@ -339,17 +339,17 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    // Open Highlight Reels; find a reel with an editable project and open its "More actions" menu.
-    // ReelTile.jsx: canOpenSource(download) gates a "Open as Draft" menu item (FolderOpen icon)
-    // that shares the same useReEditReel/onOpenProject path as the in-player Re-edit button
-    // (e2e/reedit-reel.spec.js covers that path's public-viewer gating, not this menu).
-    await page.getByRole('button', { name: /Highlight Reels/ }).click().catch(() => {});
-    // Scope everything to the open slide-over panel itself (DownloadsPanel.jsx renders a
-    // separate bg-black/50 backdrop div + the animate-slide-in-right panel). An unscoped
-    // page-wide locator can match a same-testid header still mounted behind the panel
-    // (e.g. a Drafts-panel project-card), whose stale position sits under the backdrop and
-    // intercepts pointer events forever — hence the prior 180s click timeout.
-    const panel = page.locator('div.animate-slide-in-right');
+    // Switch to the Highlights tab; find a reel with an editable project and open its
+    // "More actions" menu. ReelTile.jsx: canOpenSource(download) gates a "Open as Draft"
+    // menu item (FolderOpen icon) that shares the same useReEditReel/onOpenProject path
+    // as the in-player Re-edit button (e2e/reedit-reel.spec.js covers that path's
+    // public-viewer gating, not this menu).
+    await page.getByRole('button', { name: /^Highlights/ }).click().catch(() => {});
+    // T8545: DownloadsPanel is now the Highlights tab's inline body (no more separate
+    // backdrop + slide-over panel), scoped by its own data-testid. Still worth scoping
+    // (rather than an unscoped page-wide locator) so a same-testid element elsewhere on
+    // the Home screen (e.g. a Clips-tab project-card) can't be matched instead.
+    const panel = page.getByTestId('highlights-tab-panel');
     await panel.waitFor({ timeout: 15000 }).catch(() => {});
     // The Highlight Reels panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
     // individual ReelTile cards (and their "More actions" kebab) only render once a game

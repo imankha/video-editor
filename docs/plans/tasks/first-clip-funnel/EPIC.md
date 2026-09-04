@@ -20,7 +20,7 @@ Evidence base (binding on all children):
 
 User decisions recorded 2026-08-31:
 - Naming approved (refined 2026-08-31): **Plays -> Clips -> Highlight Reels**. The
-  assembly button becomes "Build Highlight Reel" and moves to the Highlight Reels
+  assembly button becomes "Create Highlight Reel" and moves to the Highlight Reels
   surface ("New Clip" rejected - reserved for T7860's future direct-clip upload). UI
   strings only, no identifier or schema renames.
 - Quest/tutorial surface collapses to a **Help button**; the full guided-help system is

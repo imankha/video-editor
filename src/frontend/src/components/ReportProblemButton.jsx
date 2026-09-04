@@ -3,7 +3,6 @@ import { X, MessageSquare } from 'lucide-react';
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
-import { useGalleryStore } from '../stores/galleryStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 import { getActionLog } from '../utils/analytics';
 import { getEditorContext } from '../utils/editorContext';
@@ -87,7 +86,6 @@ async function captureScreenshot() {
  */
 export function ReportProblemButton({ className = '', compact = false }) {
   const email = useAuthStore((s) => s.email);
-  const galleryOpen = useGalleryStore((s) => s.isOpen);
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [state, setState] = useState('idle'); // idle | sending | sent | error
@@ -193,7 +191,6 @@ export function ReportProblemButton({ className = '', compact = false }) {
         aria-label="Report a problem"
         title={compact ? 'Report a problem' : undefined}
         className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
-        style={galleryOpen ? { right: 'auto', left: '1rem' } : undefined}
       >
         {compact ? <MessageSquare size={18} aria-hidden="true" /> : 'Report a problem'}
       </button>

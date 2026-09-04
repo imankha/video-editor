@@ -54,17 +54,17 @@ async function stubShareCreate(page, shareCalls) {
 async function openCollectionShareModal(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
+  await expect(page.getByTestId('highlights-tab-panel').first())
     .toBeVisible({ timeout: 20000 });
 
-  const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   test.skip(n === 0, 'no game/mix collection groups available to share on this account');
   await headers.first().click();
 
-  const shareKebab = page.locator('.animate-slide-in-right').getByRole('button', { name: /More actions/i }).first();
+  const shareKebab = page.getByTestId('highlights-tab-panel').getByRole('button', { name: /More actions/i }).first();
   await expect(shareKebab).toBeVisible({ timeout: 10000 });
   await shareKebab.click();
   await page.getByRole('button', { name: 'Share' }).first().click();
