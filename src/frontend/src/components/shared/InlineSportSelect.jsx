@@ -10,6 +10,18 @@ import {
 // Sentinel value: picking it opens the full Edit form for a custom ("Other") sport.
 export const INLINE_SPORT_OTHER = '__other__';
 
+// Native-popup legibility (T8710): the invisible <select> uses the OS-native option
+// list, which by default paints a light popup. In the app's dark theme that left the
+// light option text on a near-white background (unreadable). Two reinforcing fixes:
+//  - `[color-scheme:dark]` on the <select> tells the browser to render its native
+//    control chrome (incl. the option popup) with a dark theme — the reliable,
+//    standards-based cross-browser lever (Chrome/Edge/Firefox all honor it), and the
+//    one that does NOT depend on browsers respecting author colors on <option>.
+//  - explicit dark bg + light text on each <option> as belt-and-suspenders for any
+//    ancestor that forces a light color-scheme.
+// gray-800 background / gray-50 text -> ~14:1 contrast, well past WCAG AA (4.5:1).
+export const SPORT_OPTION_STYLE = { backgroundColor: '#1f2937', color: '#f9fafb' };
+
 /**
  * InlineSportSelect - a big, tappable sport pill backed by a native <select>,
  * so we get the OS-native picker on mobile (and full a11y) while styling freely.
@@ -49,15 +61,15 @@ export function InlineSportSelect({ sport, onChange, onPickOther }) {
         onClick={(e) => e.stopPropagation()}
         aria-label="Change sport"
         title="Change sport"
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
       >
         {/* Custom sport (not in the supported list) stays selectable */}
-        {!isKnown && <option value={sport}>{`${sportEmoji(sport)} ${sport}`}</option>}
-        <option value={NO_SPORT}>{`${sportEmoji(NO_SPORT)} ${NO_SPORT_LABEL}`}</option>
+        {!isKnown && <option value={sport} style={SPORT_OPTION_STYLE}>{`${sportEmoji(sport)} ${sport}`}</option>}
+        <option value={NO_SPORT} style={SPORT_OPTION_STYLE}>{`${sportEmoji(NO_SPORT)} ${NO_SPORT_LABEL}`}</option>
         {SUPPORTED_SPORTS.map(s => (
-          <option key={s.id} value={s.id}>{`${sportEmoji(s.id)} ${s.name}`}</option>
+          <option key={s.id} value={s.id} style={SPORT_OPTION_STYLE}>{`${sportEmoji(s.id)} ${s.name}`}</option>
         ))}
-        {onPickOther && <option value={INLINE_SPORT_OTHER}>Other...</option>}
+        {onPickOther && <option value={INLINE_SPORT_OTHER} style={SPORT_OPTION_STYLE}>Other...</option>}
       </select>
     </div>
   );
