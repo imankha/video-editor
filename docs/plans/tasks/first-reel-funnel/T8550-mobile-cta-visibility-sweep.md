@@ -26,13 +26,14 @@ Surfaces + their primary CTAs (component refs verified):
 
 | Surface | Primary CTA | Component |
 |---|---|---|
-| Add Game modal | submit "Add Game" + dropzone | `components/GameDetailsModal.jsx` (post-T8500 order) |
-| Add Play sheet | "Save" | `modes/annotate/components/AnnotateFullscreenOverlay.jsx` (T8140 shipped a sticky Save - VERIFY it held, incl. with T8490's caption added) |
+| Add Game modal | submit "Add Game" + dropzone | `components/GameDetailsModal.jsx` (post-T8500 order; **T8700 moved Opponent/Date to first-class fields — re-verify the layout**) |
+| Add Play sheet | "Save" | `modes/annotate/components/AnnotateFullscreenOverlay.jsx` (T8140 shipped a sticky Save - VERIFY it held, incl. with T8490's caption AND **T8760's rework: "Clip Out Play" button, removed in-panel play button, inline-edit header, clip-relative time readout**) |
 | Focus panel | "Export Focused Video" + its reason caption | `components/ExportButtonView.jsx` (post-T8510) |
-| Export-complete choice | "Add Overlay" + "Skip - my reel is ready" | T8520's card |
+| Focus completion action bar (**T8390 replaced T8520's card**) | "Publish" (center) / "Add Spotlight" / "Add Spotlight Later" / "Refocus" | `components/FocusPublishActionBar.jsx` — preview-first, mounted over the preview player; audit the whole action bar at phone sizes (four choices stack vertically on mobile) |
 | Ready board tile | "Publish to Highlight Reels" | `components/DraftTile.jsx` (post-T8530 label) |
 | Reel player | "Share" | `components/collections/CollectionPlayer.jsx` (post-T8540) |
-| Highlights tab (T8545: was a drawer) | "Create Highlight Reel" | `components/DownloadsPanel.jsx` |
+| In Progress Reels tab (**T8555: four-tab split**) | "New Highlight Reel" | `components/ProjectManager.jsx` inline branch, testid `in-progress-reels-tab-panel` |
+| Published tab (**T8555: new top-level tab, was the Highlights drawer/DownloadsPanel**) | reel tiles + share | `components/PublishedReelsPanel.jsx` (renamed from DownloadsPanel), testid `published-tab-panel` |
 
 ## Existing tooling to build on (do not invent new harnesses)
 

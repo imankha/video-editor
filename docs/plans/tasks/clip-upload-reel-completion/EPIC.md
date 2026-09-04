@@ -51,31 +51,32 @@ Row order = dependency order (T7620-design.md 18.3: R3, R4 -> T8370 -> T8380).
 
 ## Sequencing / file-ownership notes
 
-- T8390 (FocusScreen.jsx) and T8370 (backend upload/clip-source work) are file-disjoint
-  from everything else in flight — their design/Architect passes and eventual container
-  implementation don't need to wait on First Reel Funnel's tail (T8545).
-- T8380 and T8400 both touch `ProjectManager.jsx`/`DownloadsPanel.jsx`, which
-  [T8545](../first-reel-funnel/T8545-highlight-reels-third-tab-and-rename.md) is currently
-  mid-redesign on. Their design passes can run in parallel (no code touched yet), but their
-  container implementation waits for T8545 to land.
-- T8380 depends on T8370 (the upload capability it exposes).
+- **T8390 (Focus publish exit): SHIPPED 2026-09-04** (PR #329) — preview-first action bar
+  with one-tap Publish. T8370 (backend upload/clip-source work): SHIPPED (PR #328).
+- T8380 and T8400 both touch `ProjectManager.jsx` and the published-reels surface — now
+  **`PublishedReelsPanel.jsx`** (renamed from DownloadsPanel by
+  [T8555](../first-reel-funnel/T8555-published-tab-and-highlights-multiclip-only.md), which
+  **SHIPPED 2026-09-04**, PR #335, replacing the old T8545 three-tab redesign with the
+  four-tab IA). **The landing surface has LANDED — no wait remains** for either task's
+  container implementation; both just need to build against the shipped four-tab structure
+  (Games / In Progress Clips / In Progress Reels / Published).
+- T8380 depends on T8370 (the upload capability it exposes — SHIPPED).
 
-## Pre-flight finding (2026-09-04)
+## Pre-flight finding (2026-09-04, UPDATED)
 
-T8390 and T8400 were filed 2026-09-02, before T8520 (overlay-optional-skip + draft preview
-player), T8530 (one-tap publish via shared `usePublishProject` hook), and T8540 (Share as
-the primary player action) shipped (all merged 2026-09-04). Those three tasks may have
-already substantially or fully closed both gaps. Each task file carries a pre-flight note
-to re-verify against the current shipped code before designing or implementing — closing
-either task as already-satisfied (with the evidence recorded) is a valid, expected outcome,
-not a shortcut.
+T8390 SHIPPED tonight (preview-first one-tap Publish). **T8400 may now be fully closed** —
+T8390's `openFinishedReel` landing + T8555's `setActiveTab('published')` publish-landing
+effect together cover most of "land the user on the published reel with share at hand." Its
+task file carries an updated pre-flight note to re-verify against the shipped code before
+designing or implementing — closing T8400 as already-satisfied (with evidence recorded) is a
+valid, expected outcome, not a shortcut.
 
 ## Completion Criteria
 
-- [ ] A user finishing in Focus has a visible, one-tap path toward publishing (T8390, or
-      confirmed already true post-T8520/T8530)
+- [x] A user finishing in Focus has a visible, one-tap path toward publishing (**T8390
+      SHIPPED** — preview-first action bar, one-tap Publish)
 - [ ] A successful publish lands the user on the reel with share at hand (T8400, or
-      confirmed already true post-T8530/T8540)
+      confirmed already true post-T8390/T8530/T8540/T8555 — likely the latter, re-verify)
 - [ ] An uploaded pre-cut clip becomes a clip ready for Focus/publish, no full-game
       semantics, no wrapper-game visible to the user (T8370)
 - [ ] "Add Video" on the Clips tab is a real, reachable entry point for a zero-content

@@ -8,11 +8,14 @@
 ## Blocked By
 
 **Do not start until the [First Reel Funnel epic](first-reel-funnel/EPIC.md) (T8460-T8560) is
-fully complete** (every child row STAGING/DONE). That epic is actively reshaping the exact
-screens this task will profile (Annotate primary CTA, Reel Drafts/Highlight Reels surfaces,
-Focus unlock flow, Overlay skip path) — capturing and optimizing a load waterfall against UI
-that is still being rewritten would measure a moving target and risk redoing the work once the
-funnel changes land. Not part of the funnel epic itself (it doesn't touch funnel UX/copy/flow),
+fully complete** (every child row STAGING/DONE). **As of 2026-09-04 only T8550 (mobile CTA
+sweep) remains TODO** — everything else in that range has landed, including T8555's four-tab
+home IA and T8390's Focus preview-first flow, so the gate is nearly met. That epic reshaped
+the exact screens this task will profile (Annotate primary CTA, the four home tabs
+Games/In Progress Clips/In Progress Reels/Published, Focus unlock flow, the T8390 preview-first
+Focus completion bar) — capturing and optimizing a load waterfall against UI that is still
+being rewritten would measure a moving target and risk redoing the work once the last funnel
+change (T8550) lands. Not part of the funnel epic itself (it doesn't touch funnel UX/copy/flow),
 so it is filed as a standalone task with an explicit ordering dependency rather than nested as
 an epic child.
 

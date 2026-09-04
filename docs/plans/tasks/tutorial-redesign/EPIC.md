@@ -25,9 +25,11 @@ the real UI instead.
    accounts start with it on. (A real preference, so persisting it is legitimate,
    gesture-based: the toggle click is the gesture.)
 2. **Guides the essential path of making a reel**: upload a game -> open it -> create a
-   clip (rate + save, including the tag field's Enter behavior) -> Framing (crop/follow
-   the athlete) -> Create Reel (export) -> see it in My Reels -> share. Each step
-   completes by the USER performing the real action, not by watching.
+   clip (rate + save, including the tag field's Enter behavior, then **"Clip Out Play"** —
+   renamed from "Create Reel" by T8760) -> **Focus** (crop/follow the athlete — renamed
+   from "Framing" by T7700) -> Publish (T8390's preview-first one-tap Publish) -> see it
+   in the **Published** tab (T8555's four-tab IA; NOT the old "My Reels") -> share. Each
+   step completes by the USER performing the real action, not by watching.
 3. **Modal shade + bouncy arrow**: dim everything except the one element that advances
    the path; an animated arrow points at it. The user is funneled to the right action
    (escape hatch: the off toggle + a "not now" affordance; never a hard lock).
@@ -103,9 +105,14 @@ Naming alignment: step copy uses the approved vocabulary - "Add Play", "Clips",
 - Quest UI: the existing quest system remains for post-tutorial goals, but the
   tutorial's essential path replaces quest_1's watch-video steps; reconcile with the
   quest definitions rather than running two competing guides (design call in T7620).
-- Tutorial assets contract (assets.reelballers.com) may become partially obsolete;
-  T5140's reshot videos stay for the help surface (watching stays available as optional
-  reference, no longer the primary mechanism).
+  **T8690 (SHIPPED 2026-09-04) already hid the quest_1-4 "Watch tutorial video" steps
+  behind `TUTORIAL_VIDEOS_ENABLED=false` (code kept) — so the watch-video steps are
+  already gone from the UI; reconciliation is now about the remaining quest steps vs the
+  guided tour, not re-retiring videos.**
+- Tutorial assets contract (assets.reelballers.com) is largely obsolete for the tutorial:
+  the 2026-08-31 directive retired the videos as the primary mechanism AND T8690 has now
+  turned the in-app watch-video steps off. Any remaining video use is optional-reference
+  only.
 
 ## Tasks
 

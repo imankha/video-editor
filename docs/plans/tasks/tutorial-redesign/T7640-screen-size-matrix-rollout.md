@@ -21,6 +21,13 @@
 2. **Quest reconciliation rollout**: apply the T7620 decision (quest_1 watch-video steps
    replaced/retired; quest panel and tour not competing), including any user_db
    migration if quest state shape changes (Migration agent per classification if so).
+   **NOTE: T8690 (SHIPPED 2026-09-04) already hid the quest_1-4 "Watch tutorial video"
+   steps behind `TUTORIAL_VIDEOS_ENABLED=false` (code kept, just off).** So the
+   watch-video steps are ALREADY not competing with anything — reconciliation here is
+   about the remaining quest steps + the guided tour, not re-retiring the videos. Decide
+   whether the guided tour fully replaces the quest panel (in which case
+   `TUTORIAL_VIDEOS_ENABLED` and the quest-video code become dead and can be a separate
+   cleanup) or they coexist.
 3. **Rollout**: default-on wiring confirmed for new signups on staging; the approved
    existing-accounts default applied; tutorial off-switch discoverable; staging
    walkthrough by the user as the final gate.
