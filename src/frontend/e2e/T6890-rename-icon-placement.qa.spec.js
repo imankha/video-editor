@@ -93,15 +93,15 @@ test('DraftTile: rename pencil sits beside the reel name and starts inline renam
 
 test('ReelTile: rename pencil sits beside the reel name and starts inline rename', async ({ page }) => {
   await page.goto('/');
-  // T8545: switch to the Highlights tab (DownloadsPanel's inline body, was a
+  // T8545/T8555: switch to the Published tab (DownloadsPanel's inline body, was a
   // top-right icon button opening a drawer) — the surface that renders ReelTile.
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
+  await page.getByRole('button', { name: /^Published/ }).first().click();
   await page.waitForTimeout(600);
 
-  // Scope to the Highlights tab panel. Reels live inside collapsed game groups —
+  // Scope to the Published tab panel. Reels live inside collapsed game groups —
   // expand the first one so its ReelTiles render, then act on the ReelTile
   // pencil beside the name.
-  const panel = page.getByTestId('highlights-tab-panel');
+  const panel = page.getByTestId('published-tab-panel');
   const group = panel.locator('[data-testid="collapsible-group-header"]').first();
   await group.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   test.skip((await group.count()) === 0, 'no reel collections on this account to exercise ReelTile');

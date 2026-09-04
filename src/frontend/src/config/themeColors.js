@@ -36,8 +36,17 @@ export const REEL = {
   shadow: 'shadow-cyan-900/30',
 };
 
-// T8545: the Highlight Reels home tab (was a separate top-right icon/drawer).
+// T8545: the In Progress Reels home tab (was "Highlights"; was a separate
+// top-right icon/drawer before that). Violet active/badge styling.
 export const HIGHLIGHT = {
   bg: 'bg-violet-600',
   bgDark: 'bg-violet-700',
+};
+
+// T8555: the Published reels home tab -- a new fourth peer tab. Amber, chosen
+// to read as distinct from GAME (green) / REEL (cyan) / HIGHLIGHT (violet).
+// Only bg/bgDark are consumed by SegmentedTabButton (active bg + badge).
+export const PUBLISHED = {
+  bg: 'bg-amber-600',
+  bgDark: 'bg-amber-700',
 };

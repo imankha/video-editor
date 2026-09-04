@@ -550,7 +550,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Clips")').click();
+    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
     await page.waitForTimeout(1000);
 
     // Click the auto-generated project from the 5-star clip
@@ -584,7 +584,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Clips")').click();
+    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -609,7 +609,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload page to ensure framing export result is reflected in UI
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Clips")').click();
+    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -710,7 +710,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Navigate to project and trigger export
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('button:has-text("Clips")').click();
+    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
     await page.waitForTimeout(1000);
 
     const q3ProjectCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
@@ -843,14 +843,14 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q4.3] Create custom project');
 
     // T8545: "Create Highlight Reel" moved off the Clips Home tab onto the
-    // Highlights tab (was a top-right icon button opening a drawer) -- switch
+    // In Progress Reels tab (was a top-right icon button opening a drawer) -- switch
     // to that tab instead.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Highlights/ }).first().click();
+    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
     await page.waitForTimeout(1000);
 
-    const newProjectBtn = page.locator('button:has-text("Create Highlight Reel")');
+    const newProjectBtn = page.locator('button:has-text("New Highlight Reel")');
     await expect(newProjectBtn).toBeVisible();
     await newProjectBtn.click();
     await page.waitForTimeout(1500);
@@ -890,11 +890,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Navigate to the custom (multi-clip) project and click Frame Video. T8360:
     // multi-clip "Highlights" drafts (is_auto_created===false) no longer render on
-    // the Clips Home tab -- they live in the Highlights tab's Highlights
-    // (in-progress) section (T8545: that tab, was a drawer).
+    // the Clips Home tab -- they live in the In Progress Reels tab's in-progress
+    // section (T8545: that tab, was a drawer).
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Highlights/ }).first().click();
+    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
     await page.waitForTimeout(1000);
 
     const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');

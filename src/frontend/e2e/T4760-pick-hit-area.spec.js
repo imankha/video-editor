@@ -98,7 +98,7 @@ async function setupRankingMocks(page) {
   );
 }
 
-/** Login, mock routes, navigate home, open the Highlights tab, click the ConfidenceBanner. */
+/** Login, mock routes, navigate home, open the Published tab, click the ConfidenceBanner. */
 async function openRankingGame(context, page) {
   await loginAsRealUser(context, REAL_EMAIL);
   await setupRankingMocks(page);
@@ -106,9 +106,9 @@ async function openRankingGame(context, page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-  // T8545: Highlight Reels is now the Highlights tab (was a top-right icon
+  // T8545: Highlight Reels is now the Published tab (was a top-right icon
   // button carrying title="Highlight Reels" / SECTION_NAMES.LIBRARY).
-  await page.getByRole('button', { name: /^Highlights/ }).first().click({ timeout: 15000 });
+  await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 15000 });
 
   // ConfidenceBanner shows "Rank reels" when kind === 'active' (eligible: true)
   const rankLink = page.getByText('Rank reels').first();

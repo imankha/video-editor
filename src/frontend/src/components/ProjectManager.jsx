@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Image, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Share2, Trophy } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Clapperboard, Send, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Share2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
+import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
-import { DownloadsPanel } from './DownloadsPanel';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
@@ -19,7 +19,7 @@ import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES } from '../config/displayNames';
-import { GAME, REEL, HIGHLIGHT } from '../config/themeColors';
+import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
 import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
@@ -367,12 +367,20 @@ export function gamesGridColumns(groups) {
   return Math.min(4, Math.max(2, biggest));
 }
 
-// The active tab is URL state (/home/games -> Games, /home/reels -> Clips,
-// /home/highlights -> Highlights), never persisted. One map drives both
-// directions (path -> tab below, tab -> path in setActiveTab) so a new tab
-// only needs an entry here, never two places kept in lockstep by hand. (T5677,
-// extended T8545 for the third tab.)
-const TAB_PATHS = { games: '/home/games', projects: '/home/reels', highlights: '/home/highlights' };
+// The active tab is URL state, never persisted. One map drives both directions
+// (path -> tab below, tab -> path in setActiveTab) so a new tab only needs an
+// entry here, never two places kept in lockstep by hand. (T5677, extended T8545
+// for the third tab, T8555 for the four-tab split.)
+//   games            -> /home/games            Games
+//   projects         -> /home/reels            In Progress Clips (id + URL FROZEN for deep-link compat)
+//   inProgressReels  -> /home/reels-in-progress In Progress Reels (was `highlights`, renamed T8555)
+//   published        -> /home/published         Published (new top-level tab T8555)
+const TAB_PATHS = {
+  games: '/home/games',
+  projects: '/home/reels',
+  inProgressReels: '/home/reels-in-progress',
+  published: '/home/published',
+};
 
 // Map a pathname to its tab, or null when the URL names no tab (bare /home) so
 // callers can fall back to a default.
@@ -409,7 +417,13 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, cou
           name computation follows document order, not CSS. `order-first` on
           the icon span moves it to the FRONT visually (stacked-top on mobile,
           row-start on desktop) while staying LAST in the DOM. */}
-      <span className="text-[11px] sm:text-sm leading-tight text-center">{label}</span>
+      {/* T8555: labels can now be two words ("In Progress Clips/Reels"). Allow
+          wrapping to two lines below `sm` and drop one font step at the base
+          class so the longest label fits a ~72px grid column at 320px; single
+          row + full size restored at `sm`+ where the bar is content-width, not
+          a 4-up grid. (tailwind.config defines no `xs` screen, so there is no
+          intermediate step -- text-[10px] then sm:text-sm.) */}
+      <span className="text-[10px] sm:text-sm leading-tight text-center whitespace-normal break-words">{label}</span>
       <span className="order-first relative">
         <Icon size={18} className="sm:w-4 sm:h-4" />
         {count > 0 && (
@@ -493,11 +507,15 @@ export function ProjectManager({
   // at-risk account is warned again — exactly the acceptance criterion). Cleared
   // on reload with the rest of component state.
   const [storageBannerDismissed, setStorageBannerDismissed] = useState(false);
-  // T8360: the Clips tab shows single-clip auto-drafts ONLY. is_auto_created (the
-  // raw_clips.auto_project_id link) is the routing key, not clip_count -- see
-  // T8360-design.md "The signal we can trust". Multi-clip drafts (is_auto_created
-  // === false) live on the Highlight Reels surface's Highlights section instead.
+  // T8360: the In Progress Clips tab shows single-clip auto-drafts ONLY.
+  // is_auto_created (the raw_clips.auto_project_id link) is the routing key, not
+  // clip_count -- see T8360-design.md "The signal we can trust".
   const clipDrafts = useMemo(() => projects.filter(p => p.is_auto_created), [projects]);
+  // T8555: multi-clip in-progress drafts (is_auto_created === false) populate
+  // the In Progress Reels tab (was DownloadsPanel's `highlightDrafts`, now
+  // owned here so this tab's badge count lives next to clipDrafts, single
+  // source = the projects prop). Published reels are NOT here (Published tab).
+  const highlightDrafts = useMemo(() => projects.filter(p => !p.is_auto_created), [projects]);
   // T6830: the Clips tab is a dead end when there are no clip drafts AND Create
   // Reel is unreachable (no game has extracted clips) — clicking in can only show
   // an empty list with no way to add one. Disable the tab in exactly that case.
@@ -518,11 +536,10 @@ export function ProjectManager({
       window.history.replaceState(null, '', path);
     }
   }, []);
-  // T8545: the Highlight Reels surface (DownloadsPanel) now renders inline as
-  // this tab's own body instead of as a sibling drawer, so the assembly
-  // modal's open state (and the GameClipSelectorModal it drives, still owned
-  // here) no longer needs lifting to a common parent -- both live in this
-  // component now.
+  // T8555: the "New Highlight Reel" assembly button lives on the In Progress
+  // Reels tab body (rendered inline in this component's content ternary), so
+  // the assembly modal's open state (and the GameClipSelectorModal it drives)
+  // both live in this component -- no lifting to a common parent needed.
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [attachVideoGame, setAttachVideoGame] = useState(null); // T8700: game to attach a video to
@@ -957,16 +974,18 @@ export function ProjectManager({
     }
   }, [clipsTabDisabled, activeTab, setActiveTab]);
 
-  // T8400/T8545: "land on the published reel" (e.g. DraftTile's Publish ->
-  // My Reels action) used to pop the Highlight Reels drawer via
-  // galleryStore.open(); the drawer is gone, so that same open() signal now
-  // switches to the Highlights tab instead. Treated as a fire-once gesture
-  // signal (like the old clipsTabRequest nonce) -- consumed immediately via
-  // close() so it can fire again on the next publish.
+  // T8400/T8545/T8555: "land on the published reel" (e.g. DraftTile's Publish ->
+  // My Reels action) fires galleryStore.open(); T8555 split published reels onto
+  // their own tab, so that open() signal now switches to the Published tab (was
+  // the Highlights tab pre-split -- the published content the user just created
+  // lives there now). Treated as a fire-once gesture signal (like the old
+  // clipsTabRequest nonce) -- consumed immediately via close() so it can fire
+  // again on the next publish. (T8400 owns any richer publish-landing behavior;
+  // it must be designed against this four-tab structure.)
   const galleryOpenRequested = useGalleryStore((s) => s.isOpen);
   useEffect(() => {
     if (galleryOpenRequested) {
-      setActiveTab('highlights');
+      setActiveTab('published');
       useGalleryStore.getState().close();
     }
   }, [galleryOpenRequested, setActiveTab]);
@@ -1230,10 +1249,12 @@ export function ProjectManager({
         </div>
       )}
 
-      {/* Tab Navigation - styled to match ModeSwitcher. T8545: three peer tabs
-          (Games/Clips/Highlights) -- stacked icon-over-label equal-thirds grid
-          below `sm`, today's single-row content-width bar at `sm`+. */}
-      <div className="grid grid-cols-3 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
+      {/* Tab Navigation - styled to match ModeSwitcher. T8555: four peer tabs
+          (Games / In Progress Clips / In Progress Reels / Published) -- stacked
+          icon-over-label equal-quarters grid below `sm`, single-row content-width
+          bar at `sm`+. (Was three tabs pre-T8555; the published reels split off
+          the old Highlights tab into their own Published tab.) */}
+      <div className="grid grid-cols-4 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
         <SegmentedTabButton
           active={activeTab === 'games'}
           onClick={() => setActiveTab('games')}
@@ -1248,26 +1269,35 @@ export function ProjectManager({
           disabled={clipsTabDisabled}
           title={clipsTabDisabled ? 'Extract clips from a game first using Annotate mode' : undefined}
           onClick={() => setActiveTab('projects')}
-          Icon={FolderOpen}
+          Icon={Scissors}
           label={SECTION_NAMES.CLIPS}
           count={clipDrafts.length}
           activeBg={REEL.bg}
           activeBgDark={REEL.bgDark}
         />
         <SegmentedTabButton
-          active={activeTab === 'highlights'}
-          onClick={() => setActiveTab('highlights')}
-          Icon={Image}
+          active={activeTab === 'inProgressReels'}
+          onClick={() => setActiveTab('inProgressReels')}
+          Icon={Clapperboard}
           label={SECTION_NAMES.HIGHLIGHTS}
-          count={unseenReelsCount}
+          count={highlightDrafts.length}
           activeBg={HIGHLIGHT.bg}
           activeBgDark={HIGHLIGHT.bgDark}
         />
+        <SegmentedTabButton
+          active={activeTab === 'published'}
+          onClick={() => setActiveTab('published')}
+          Icon={Send}
+          label={SECTION_NAMES.PUBLISHED}
+          count={unseenReelsCount}
+          activeBg={PUBLISHED.bg}
+          activeBgDark={PUBLISHED.bgDark}
+        />
       </div>
 
-      {/* Action Button — T8360: Clips tab has no create action here anymore;
-          "Create Highlight Reel" moved to the Highlight Reels surface (DownloadsPanel,
-          T8545: now the inline Highlights tab body, not a drawer). */}
+      {/* Action Button — T8360: the In Progress Clips tab has no create action
+          here; the "New Highlight Reel" assembly button lives on the In Progress
+          Reels tab body (T8555). This block is the Games tab's Add Game button. */}
       {activeTab === 'games' && (
         <div className="mb-4 sm:mb-5">
           <Button
@@ -1724,27 +1754,65 @@ export function ProjectManager({
             </div>
           </div>
         )
+      ) : activeTab === 'inProgressReels' ? (
+        /* T8555: In Progress Reels tab -- unpublished multiclip drafts ONLY
+           (is_auto_created === false) + the "New Highlight Reel" assembly button.
+           Rendered inline (not a separate always-mounted component) because it
+           holds no state that must survive a tab switch: the assembly modal is
+           ProjectManager-owned and the DraftTile carousel is stateless. Moved
+           out of the old DownloadsPanel body (now PublishedReelsPanel) so
+           published reels no longer share this surface -- the T8555 bug fix. */
+        <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="in-progress-reels-tab-panel">
+          <div className="mb-4">
+            <Button
+              variant="cyan"
+              size="lg"
+              icon={Plus}
+              disabled={!hasClips}
+              title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
+              onClick={() => setShowAssemblyModal(true)}
+              className="w-full"
+            >
+              New Highlight Reel
+            </Button>
+          </div>
+          {highlightDrafts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Clapperboard size={48} className="text-gray-600 mb-4" />
+              <p className="text-gray-400">No reels in progress</p>
+              <p className="text-sm text-gray-500 mt-1">Build one from your clips to get started</p>
+            </div>
+          ) : (
+            <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`}>
+              {highlightDrafts.map((project) => (
+                <DraftTile
+                  key={project.id}
+                  project={project}
+                  onSelect={() => onSelectProject?.(project.id)}
+                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                  onDelete={() => onDeleteProject?.(project.id)}
+                  exportingProject={exportingProject}
+                  pendingGameIds={pendingGameIds}
+                />
+              ))}
+            </CardCarousel>
+          )}
+        </div>
       ) : null}
 
-      {/* T8545: Highlight Reels surface — renders inline as the Highlights
-          tab's own body (was a drawer opened from a top-right icon button).
-          Always mounted (not just when active) so its own story-player /
+      {/* T8555: Published reels surface — renders inline as the Published tab's
+          own body (was the published half of the old DownloadsPanel/Highlights
+          tab). Always mounted (not just when active) so its own story-player /
           share-modal state survives a tab switch, same as the old drawer
           survived being closed without unmounting. */}
-      <DownloadsPanel
-        active={activeTab === 'highlights'}
+      <PublishedReelsPanel
+        active={activeTab === 'published'}
         onOpenProject={(projectId) => onSelectProjectWithMode?.(projectId, { mode: 'framing' })}
-        onOpenAssembly={() => setShowAssemblyModal(true)}
-        onSelectProject={onSelectProject}
-        onSelectProjectWithMode={onSelectProjectWithMode}
-        onDeleteProject={onDeleteProject}
         onViewClips={() => setActiveTab('projects')}
-        exportingProject={exportingProject}
-        pendingGameIds={pendingGameIds}
       />
 
-      {/* Create Highlight Reel Modal - Game/Clip selector (opened from the
-          Highlight Reels surface; see onOpenAssembly/showAssemblyModal) */}
+      {/* New Highlight Reel Modal - Game/Clip selector (opened from the
+          In Progress Reels tab; see setShowAssemblyModal/showAssemblyModal) */}
       <GameClipSelectorModal
         isOpen={showAssemblyModal}
         onClose={() => setShowAssemblyModal(false)}

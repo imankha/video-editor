@@ -1,6 +1,6 @@
 # T8555: "Published" becomes its own tab; "Highlights" narrows to multiclip-only work
 
-**Status:** WIP (dotask spawn)
+**Status:** STAGING (merged to master 2026-09-04, PR #335)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-04

@@ -36,12 +36,12 @@ async function setupAndAuth(page) {
 }
 
 async function openGallery(page) {
-  // T8545: Highlight Reels is now the Highlights tab (was a top-right icon
+  // T8545/T8555: Highlight Reels is now the Published tab (was a top-right icon
   // button opening a drawer). Click the real tab so the app's own store
   // instance switches (a page.evaluate import would resolve a separate
   // Zustand module instance).
-  await page.getByRole('button', { name: /^Highlights/ }).click();
-  await expect(page.getByTestId('highlights-tab-panel')).toBeVisible();
+  await page.getByRole('button', { name: /^Published/ }).click();
+  await expect(page.getByTestId('published-tab-panel')).toBeVisible();
 }
 
 test.afterEach(async ({ request }) => {

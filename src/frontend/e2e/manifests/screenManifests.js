@@ -35,7 +35,7 @@ async function reachHome(page) {
 /** Open the first Framing-ready reel draft; ready once the crop editor loaded. */
 async function reachFocus(page) {
   await reachHome(page);
-  const drafts = page.getByRole('button', { name: 'Clips' }).first();
+  const drafts = page.getByRole('button', { name: /^In Progress Clips/ }).first();
   await drafts.waitFor({ state: 'visible', timeout: 15000 });
   await drafts.click();
   const framingChip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
@@ -64,8 +64,9 @@ export const SCREENS = [
     setup: reachHome,
     actions: [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
-      { label: 'Clips tab', locator: (p) => p.getByRole('button', { name: 'Clips' }).first() },
-      { label: 'Highlight Reels tab', locator: (p) => p.getByRole('button', { name: /^Highlights/ }).first() },
+      { label: 'In Progress Clips tab', locator: (p) => p.getByRole('button', { name: /^In Progress Clips/ }).first() },
+      { label: 'In Progress Reels tab', locator: (p) => p.getByRole('button', { name: /^In Progress Reels/ }).first() },
+      { label: 'Published tab', locator: (p) => p.getByRole('button', { name: /^Published/ }).first() },
     ],
   },
   {
@@ -165,10 +166,10 @@ export const SCREENS = [
   },
   {
     id: 'my-reels',
-    name: 'Gallery / Highlight Reels',
+    name: 'Gallery / Published reels',
     setup: async (page) => {
       await reachHome(page);
-      const myReels = page.getByRole('button', { name: /^Highlights/ }).first();
+      const myReels = page.getByRole('button', { name: /^Published/ }).first();
       await myReels.click();
       // T5673: reels render as poster tiles INSIDE collapsed game/mix groups, so the
       // drawer shows no reel-card until a group is expanded. Expand the first group
@@ -179,7 +180,7 @@ export const SCREENS = [
       if (!appeared) {
         // Scope to the drawer panel: the home Clips section renders its own
         // CollapsibleGroups behind the backdrop, which are covered (not clickable).
-        const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+        const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
         // Wait for the summary to render group headers before iterating (the drawer
         // opens before the collections summary finishes fetching).
         await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
@@ -191,7 +192,7 @@ export const SCREENS = [
             .waitFor({ state: 'visible', timeout: 4000 }).then(() => true).catch(() => false);
         }
       }
-      if (!appeared) return { ready: false, reason: 'no published reels on this account (Highlight Reels drawer empty)' };
+      if (!appeared) return { ready: false, reason: 'no published reels on this account (Published tab empty)' };
       return { ready: true };
     },
     actions: [

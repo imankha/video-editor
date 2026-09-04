@@ -41,8 +41,11 @@ function DraftReelPreviewInner({ payload }) {
   const { copyLink, webShare, isMobile } = useWebShare();
 
   // Local publish state (the archived project drops from the store, so we can't
-  // derive "published" from it — §4.6/§4.7).
-  const [published, setPublished] = useState(false);
+  // derive "published" from it — §4.6/§4.7). T8390: initializes true when the
+  // caller already ran the publish gesture before opening this preview (Focus's
+  // one-tap Publish) — otherwise this would wrongly show the draft/Publish UI
+  // for an already-published reel instead of landing straight on Share.
+  const [published, setPublished] = useState(!!payload.alreadyPublished);
   const [failed, setFailed] = useState(false);
   const [ringOn, setRingOn] = useState(false);
   const ringTimer = useRef(null);

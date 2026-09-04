@@ -15,6 +15,8 @@ import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { DraftReelPreview } from './components/DraftReelPreview';
 import { openFinishedReel } from './utils/finishedReelNav';
+import { usePublishIntentStore } from './stores/publishIntentStore';
+import { usePublishProject } from './hooks/usePublishProject';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
@@ -567,6 +569,13 @@ function App() {
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
 
+  // T8390: Focus's one-tap Publish. `publishIntentProjectId` is read reactively
+  // (not just via getState()) so `publishFocusExit` below stays bound to the
+  // CURRENT intended project — usePublishProject's `publish` closes over
+  // `project.id` at hook-call time, so it must re-derive whenever the flag
+  // changes, not just whenever this component happens to re-render.
+  const publishIntentProjectId = usePublishIntentStore((s) => s.projectId);
+  const { publish: publishFocusExit } = usePublishProject({ id: publishIntentProjectId });
 
   // Export completion callback - used by Screen components to refresh data.
   // `completed` identifies which export finished: { projectId, mode }.
@@ -599,10 +608,27 @@ function App() {
         .getState()
         .projects?.find((p) => p.id === completed.projectId);
       if (finishedProject?.final_video_id) {
-        openFinishedReel(finishedProject);
+        // T8390: this export IS Focus's one-tap Publish render (FocusScreen.
+        // handlePublish staked the intent BEFORE triggering it) — auto-complete
+        // the publish gesture now instead of landing the user on another
+        // decision screen. Fresh getState() read (not the reactive selector
+        // above) so the match is against the CURRENT flag at the moment this
+        // callback actually runs, exactly like the currentMode/currentProjectId
+        // reads above.
+        const publishIntent = usePublishIntentStore.getState();
+        if (publishIntent.projectId === completed.projectId) {
+          publishIntent.clear();
+          const published = await publishFocusExit({ openGallery: false });
+          if (published) {
+            toast.success('Published', { message: 'Anyone with the link can watch it.' });
+          }
+          openFinishedReel(finishedProject, { alreadyPublished: published });
+        } else {
+          openFinishedReel(finishedProject);
+        }
       }
     }
-  }, [fetchProjects]);
+  }, [fetchProjects, publishFocusExit]);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode

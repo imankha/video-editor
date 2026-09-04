@@ -3,9 +3,9 @@ import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 /**
- * T5673 (Highlights tab desktop width) — live QA on the REAL account.
+ * T5673 (Published tab desktop width) — live QA on the REAL account.
  *
- * The Highlights tab body holds poster tiles, so max-w-md (448px) is cramped on
+ * The Published tab body holds poster tiles, so max-w-md (448px) is cramped on
  * desktop. It widens at lg+ (lg:max-w-2xl 672px, xl:max-w-3xl 768px) while leaving
  * mobile (w-full, capped at 448) untouched. The tile carousels are flex overflow-x
  * rows of fixed-width tiles, so a wider panel shows MORE tiles per row with no
@@ -26,12 +26,12 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 
-const PANEL = '[data-testid="highlights-tab-panel"]';
+const PANEL = '[data-testid="published-tab-panel"]';
 
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
+  await page.getByRole('button', { name: /^Published/ }).first().click();
   await expect(page.locator(PANEL)).toBeVisible({ timeout: 15000 });
 }
 
