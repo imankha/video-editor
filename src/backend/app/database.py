@@ -1597,6 +1597,7 @@ def ensure_database():
                 r2_upload_id TEXT NOT NULL,
                 parts_json TEXT,
                 label TEXT,
+                kind TEXT NOT NULL DEFAULT 'game',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)

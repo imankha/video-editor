@@ -153,6 +153,32 @@ def test_no_game_id_uses_extract():
     assert (url, in_off, out_off, flexible) == ("EXTRACT_URL", 0.0, 5.0, False)
 
 
+def test_t8370_uploaded_clip_resolves_to_raw_clips_hash_path_flexible_false():
+    """T8370 integration (design §5, item 11): a clip uploaded via the new
+    POST /api/clips/upload path is shaped exactly like any other game-less
+    raw_clips row -- game_id NULL, filename={blake3}.mp4, start=0, end=probed
+    duration (INV-U4/D1 fix) -- so it MUST resolve through the same
+    no-game-id/extract branch as test_no_game_id_uses_extract, returning the
+    per-profile raw_clips/{hash}.mp4 object with frozen bounds (flexible=False,
+    since an uploaded clip has no game video to stay flexible against)."""
+    blake3_hash = "a" * 64
+    with patch("app.storage.generate_presigned_url", return_value="CLIP_SOURCE_URL") as gp, \
+         patch("app.user_context.get_current_user_id", return_value=USER_ID):
+        url, in_off, out_off, flexible = resolve_clip_source(
+            _clip(
+                game_id=None,
+                game_blake3_hash=None,
+                raw_filename=f"{blake3_hash}.mp4",
+                raw_start_time=0.0,
+                raw_end_time=14.5,
+                raw_duration=14.5,
+            )
+        )
+
+    assert (url, in_off, out_off, flexible) == ("CLIP_SOURCE_URL", 0.0, 14.5, False)
+    gp.assert_called_once_with(USER_ID, f"raw_clips/{blake3_hash}.mp4")
+
+
 def test_extract_duration_from_start_end_when_no_raw_duration():
     """out_offset is raw_end - raw_start even when raw_duration is absent."""
     with patch("app.storage.generate_presigned_url", return_value="EXTRACT_URL"), \

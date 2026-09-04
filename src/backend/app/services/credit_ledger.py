@@ -86,6 +86,9 @@ KEY_PREFIX = {
     "storage_extension": "storage_ext",
     "framing_usage": "export",
     "framing_refund": "refund",
+    # T8370: pre-cut clip upload batch charge + its Q3 reconciliation refund.
+    "clip_upload": "clip_upload",
+    "clip_upload_refund": "clip_upload_refund",
 }
 
 

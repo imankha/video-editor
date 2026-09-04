@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.analytics import record_milestone
+from app.constants import MAX_CLIP_DURATION_S
 from app.database import (
     column_exists,
     get_db_connection,
@@ -30,11 +31,15 @@ from app.database import (
 )
 from app.highlight_transform import canonicalize_segments_data, to_splits_only
 from app.middleware.db_sync import durable_sync
+from app.profile_context import get_current_profile_id
 from app.queries import derive_clip_name, latest_working_clips_subquery, normalize_rating
+from app.services.credit_ledger import credit_key, debit, get_credit_balance
 from app.services.default_crop import refit_crop_keyframes
+from app.services.media_probe import probe_r2_video
 from app.services.pg import get_pg
 from app.services.poster import invalidate_draft_poster
-from app.storage import generate_presigned_url, upload_bytes_to_r2
+from app.services.storage_credits import calculate_storage_cost
+from app.storage import generate_presigned_url, r2_head_object, upload_bytes_to_r2
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.utils.clip_range import normalize_clip_range
@@ -1739,30 +1744,27 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
 async def add_clip_to_project(
     project_id: int,
     raw_clip_id: int | None = Form(None),
-    file: UploadFile | None = File(None),
     background_tasks: BackgroundTasks = None
 ):
     """
-    Add a clip to a project.
+    Add a library clip to a project.
 
-    Either provide:
-    - raw_clip_id: to add a clip from the library
-    - file: to upload a new clip directly
+    T8370 Slice D: the `file=` direct-upload branch (Path 2) is RETIRED — it
+    had no live frontend caller (`addClipFromLibrary` only ever sent
+    `raw_clip_id`) and wrote to a `uploads/{name}` prefix that
+    `multi_clip.py`/`orphan_raw_clips.py` never read (D2, the prefix
+    mismatch this removal closes). Any pre-existing `working_clips.
+    uploaded_filename` rows from before this change are UNAFFECTED — this
+    only removes the write side; `GET .../file` still reads them.
     """
     from fastapi import BackgroundTasks as BT
     if background_tasks is None:
         background_tasks = BT()
 
-    if raw_clip_id is None and file is None:
+    if raw_clip_id is None:
         raise HTTPException(
             status_code=400,
-            detail="Must provide either raw_clip_id or file"
-        )
-
-    if raw_clip_id is not None and file is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot provide both raw_clip_id and file"
+            detail="Must provide raw_clip_id"
         )
 
     with get_db_connection() as conn:
@@ -1774,13 +1776,12 @@ async def add_clip_to_project(
             raise HTTPException(status_code=404, detail="Project not found")
 
         # Prevent duplicate raw_clip_id in the same project
-        if raw_clip_id is not None:
-            cursor.execute(
-                "SELECT id FROM working_clips WHERE project_id = ? AND raw_clip_id = ?",
-                (project_id, raw_clip_id)
-            )
-            if cursor.fetchone():
-                raise HTTPException(status_code=409, detail="Clip already in project")
+        cursor.execute(
+            "SELECT id FROM working_clips WHERE project_id = ? AND raw_clip_id = ?",
+            (project_id, raw_clip_id)
+        )
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Clip already in project")
 
         # Get next sort order
         cursor.execute("""
@@ -1791,81 +1792,37 @@ async def add_clip_to_project(
         next_order = cursor.fetchone()['next_order']
 
         uploaded_filename = None
-        raw_filename = None
-        next_version = 1
 
-        if raw_clip_id is not None:
-            # Adding from library
-            cursor.execute("""
-                SELECT rc.id, rc.filename, rc.end_time
-                FROM raw_clips rc
-                WHERE rc.id = ?
-            """, (raw_clip_id,))
-            raw_clip = cursor.fetchone()
-            if not raw_clip:
-                raise HTTPException(status_code=404, detail="Raw clip not found")
+        # Adding from library
+        cursor.execute("""
+            SELECT rc.id, rc.filename, rc.end_time
+            FROM raw_clips rc
+            WHERE rc.id = ?
+        """, (raw_clip_id,))
+        raw_clip = cursor.fetchone()
+        if not raw_clip:
+            raise HTTPException(status_code=404, detail="Raw clip not found")
 
-            raw_filename = raw_clip['filename']
-            end_time = raw_clip['end_time']
+        raw_filename = raw_clip['filename']
+        end_time = raw_clip['end_time']
 
-            # Get next version for clips with THIS specific end_time
-            cursor.execute("""
-                SELECT COALESCE(MAX(wc.version), 0) + 1 as next_version
-                FROM working_clips wc
-                JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                WHERE wc.project_id = ? AND rc.end_time = ?
-            """, (project_id, end_time))
-            next_version = cursor.fetchone()['next_version']
+        # Get next version for clips with THIS specific end_time
+        cursor.execute("""
+            SELECT COALESCE(MAX(wc.version), 0) + 1 as next_version
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            WHERE wc.project_id = ? AND rc.end_time = ?
+        """, (project_id, end_time))
+        next_version = cursor.fetchone()['next_version']
 
-            # T1500: copies width/height/fps from the parent game_video
-            _insert_working_clip_with_dims(
-                cursor,
-                project_id=project_id,
-                raw_clip_id=raw_clip_id,
-                sort_order=next_order,
-                version=next_version,
-            )
-
-        else:
-            # Uploading new file directly to R2 (no local storage, no temp file)
-            ext = os.path.splitext(file.filename)[1] or '.mp4'
-            uploaded_filename = f"{uuid.uuid4().hex}{ext}"
-            user_id = get_current_user_id()
-
-            # Upload directly from memory to R2
-            content = await file.read()
-            if not upload_bytes_to_r2(user_id, f"uploads/{uploaded_filename}", content):
-                raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
-
-            # T1500: probe uploaded file for width/height/fps so project loads skip the metadata probe
-            upload_width: int | None = None
-            upload_height: int | None = None
-            upload_fps: float | None = None
-            try:
-                import tempfile as _tempfile
-
-                from app.ai_upscaler import get_video_metadata_ffprobe
-                with _tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
-                    tf.write(content)
-                    tf_path = tf.name
-                try:
-                    meta = get_video_metadata_ffprobe(tf_path)
-                    if meta:
-                        upload_width = meta.get('width') or None
-                        upload_height = meta.get('height') or None
-                        upload_fps = meta.get('fps')
-                finally:
-                    try:
-                        os.unlink(tf_path)
-                    except OSError:
-                        pass
-            except Exception as probe_err:
-                logger.warning(f"[T1500] ffprobe failed on uploaded clip {uploaded_filename}: {probe_err}")
-
-            cursor.execute("""
-                INSERT INTO working_clips (project_id, uploaded_filename, sort_order, version, width, height, fps)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (project_id, uploaded_filename, next_order, 1, upload_width, upload_height, upload_fps))
+        # T1500: copies width/height/fps from the parent game_video
+        _insert_working_clip_with_dims(
+            cursor,
+            project_id=project_id,
+            raw_clip_id=raw_clip_id,
+            sort_order=next_order,
+            version=next_version,
+        )
 
         conn.commit()
         clip_id = cursor.lastrowid
@@ -1925,6 +1882,206 @@ def _ensure_unique_name(cursor, name: str, game_id) -> str:
     while f"{name} ({counter})" in existing:
         counter += 1
     return f"{name} ({counter})"
+
+
+class ClipUploadItem(BaseModel):
+    blake3_hash: str
+    file_size: int
+    original_filename: str
+    name: str | None = None
+    rating: int | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+    my_athlete: bool | None = None
+
+
+class ClipUploadBatchRequest(BaseModel):
+    items: list[ClipUploadItem]
+
+
+@router.post("/upload")
+async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = Depends(durable_sync)):
+    """
+    T8370: batch pre-cut clip upload (design doc §3 Slice B). Each item's bytes
+    must already be durable in R2 (via prepare-upload/finalize-upload with
+    kind='clip') — this endpoint creates the `raw_clips` row it references, one
+    9:16 auto-draft per clip (INV-U5, also sidesteps D3's same-duration
+    collision — each upload gets its OWN draft), and charges ONE credit debit
+    for the whole batch on summed bytes, no auto-export surcharge (§4.2 — a
+    clip source never expires, INV-U2, so there is nothing to prepay auto-export
+    for). `game_id` is always NULL and no `games` row is ever created (INV-U3).
+
+    Partial failure is first class: a bad item never blocks its siblings.
+    Idempotent on the accepted-hash set: re-posting the same batch computes the
+    same debit reference_id, so credit_ledger.debit's key dedup no-ops the
+    second charge and the same raw_clip/project ids are returned.
+
+    Ordering (approved Q3 amendment): probe + validate everything -> DEBIT ->
+    insert rows -> milestones. A crash after the debit but before the rows land
+    is recovered by the idempotent reference_id on retry, or by the §7 Q3
+    hourly reconciliation reaper (cleanup.py) if the client never retries.
+    """
+    if not request.items:
+        raise HTTPException(status_code=400, detail="items must be non-empty")
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    results: list[dict] = []
+    # Validated-but-not-yet-written items, split by whether a row must still be
+    # created — populated in the FIRST pass (no DB writes) so the charge can
+    # happen before any row exists (charge-first ordering).
+    to_create: list[dict] = []
+    already_existing: list[dict] = []
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        for item in request.items:
+            blake3_hash = item.blake3_hash.lower()
+            key = f"raw_clips/{blake3_hash}.mp4"
+            filename = f"{blake3_hash}.mp4"
+
+            head = r2_head_object(user_id, key)
+            if not head:
+                results.append({"ok": False, "blake3_hash": blake3_hash, "error": "source_missing"})
+                continue
+
+            # Idempotent re-post: this exact clip source already landed a row.
+            cursor.execute(
+                "SELECT id, auto_project_id FROM raw_clips WHERE filename = ? AND game_id IS NULL",
+                (filename,),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                already_existing.append({
+                    "blake3_hash": blake3_hash,
+                    "file_size": item.file_size,
+                    "raw_clip_id": existing["id"],
+                    "project_id": existing["auto_project_id"],
+                })
+                continue
+
+            meta = probe_r2_video(key)
+            if not meta or not meta.get("duration"):
+                results.append({"ok": False, "blake3_hash": blake3_hash, "error": "probe_failed"})
+                continue
+
+            duration = meta["duration"]
+            if duration > MAX_CLIP_DURATION_S:
+                results.append({"ok": False, "blake3_hash": blake3_hash, "error": "duration_exceeds_cap"})
+                continue
+
+            to_create.append({
+                "blake3_hash": blake3_hash,
+                "file_size": item.file_size,
+                "filename": filename,
+                "item": item,
+                "meta": meta,
+            })
+
+        # §4.2: ONE charge per gesture, on summed bytes of ONLY the items being
+        # newly created THIS call (to_create) — NEVER already_existing ones.
+        # Reviewer-caught bug: charging over already_existing+to_create double-
+        # charges on a PARTIAL-then-full retry (batch [A,B] where A lands first
+        # and B fails source_missing; a later retry of [A,B] now sees A as
+        # already_existing — including it in the sum computes a NEW
+        # reference_id covering A+B, re-charging the already-paid-for A). Only
+        # the newly-created set can ever need a NEW debit; an already-existing
+        # item was charged in the batch that first created it. profile_id is
+        # embedded in reference_id so the §7 Q3 reconciliation reaper
+        # (cleanup.py) can open the RIGHT profile DB to check for landed
+        # raw_clips against an orphaned debit.
+        charged = 0
+        balance = None
+        if to_create:
+            total_bytes = sum(c["file_size"] for c in to_create)
+            charged = calculate_storage_cost(total_bytes)
+            reference_id = "clipbatch:{}:{}".format(
+                profile_id, ",".join(sorted(c["blake3_hash"] for c in to_create))
+            )
+            idem_key = credit_key("clip_upload", reference_id)
+            debit_result = debit(user_id, charged, "clip_upload", idem_key, reference_id=reference_id)
+            balance = debit_result["balance"]
+
+            if not debit_result["ok"]:
+                # Charge-first ordering (approved Q3 amendment): insufficient
+                # balance means NO new rows are created — never a free clip.
+                # Already-existing items are unaffected (already paid for).
+                logger.warning(
+                    f"[T8370] clip_upload batch debit refused (insufficient balance) "
+                    f"user={user_id} required={charged} balance={balance}"
+                )
+                for a in already_existing:
+                    results.append({
+                        "ok": True, "blake3_hash": a["blake3_hash"],
+                        "raw_clip_id": a["raw_clip_id"], "project_id": a["project_id"],
+                    })
+                for c in to_create:
+                    results.append({"ok": False, "blake3_hash": c["blake3_hash"], "error": "insufficient_credits"})
+                return {"results": results, "charged": charged, "balance": balance}
+        elif already_existing:
+            # Pure idempotent re-post (every accepted item already has a
+            # landed row) — nothing to charge, but still report the CURRENT
+            # balance rather than None so the client's display stays accurate.
+            balance = get_credit_balance(user_id)["balance"]
+
+        # Debit succeeded (or nothing to charge) — now write the rows.
+        created_clip_ids: list[int] = []
+        for a in already_existing:
+            results.append({
+                "ok": True, "blake3_hash": a["blake3_hash"],
+                "raw_clip_id": a["raw_clip_id"], "project_id": a["project_id"],
+            })
+
+        for c in to_create:
+            item = c["item"]
+            meta = c["meta"]
+            # T8370 Q8: defaults stand (rating 5 / My Athlete / filename name / no
+            # tags) but are fully editable afterward via the EXISTING
+            # ClipDetailsEditor surface — no new editor, this is just the
+            # create-time default (design §7 Q8 amendment).
+            name = item.name or os.path.splitext(item.original_filename)[0]
+            unique_name = _ensure_unique_name(cursor, name, None)
+            rating = item.rating if item.rating is not None else 5
+            tags = item.tags or []
+            notes = item.notes or ""
+            my_athlete_val = 0 if item.my_athlete is False else 1
+
+            # D1 fix: (0, probed_duration) — never NULL/NULL (a 0-second source
+            # range at export, the bug this closes).
+            cursor.execute("""
+                INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time,
+                                       game_id, my_athlete)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)
+            """, (c["filename"], rating, encode_data(tags), unique_name, notes, 0, meta["duration"], my_athlete_val))
+            raw_clip_id = cursor.lastrowid
+
+            project_id = _create_auto_project_for_clip(cursor, raw_clip_id, unique_name)
+
+            # T1500 parity: seed working_clips dims from the probe (explicit —
+            # there is no game_video to derive them from for a clip source).
+            cursor.execute(
+                "UPDATE working_clips SET width = ?, height = ?, fps = ? "
+                "WHERE project_id = ? AND raw_clip_id = ?",
+                (meta.get("width"), meta.get("height"), meta.get("fps"), project_id, raw_clip_id),
+            )
+
+            created_clip_ids.append(raw_clip_id)
+            results.append({
+                "ok": True, "blake3_hash": c["blake3_hash"],
+                "raw_clip_id": raw_clip_id, "project_id": project_id,
+            })
+
+        conn.commit()
+
+    # record_milestone per clip (not per batch) — five uploaded clips are five
+    # clip_uploaded events, matching clip_created's per-clip grain. Only for
+    # NEWLY created rows this call (an idempotent re-post must not re-emit).
+    for raw_clip_id in created_clip_ids:
+        record_milestone(user_id, "clip_uploaded", {"clip_id": raw_clip_id})
+
+    return {"results": results, "charged": charged, "balance": balance}
 
 
 @router.post("/projects/{project_id}/clips/upload-with-metadata", response_model=WorkingClipResponse)
