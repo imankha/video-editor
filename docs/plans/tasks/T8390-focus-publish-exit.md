@@ -1,6 +1,6 @@
 # T8390: Focus gets a publish exit (guided-path R3)
 
-**Status:** WIP (design pass launched 2026-09-04; spawned briefly 2026-09-02, zero real progress before a quota gap, container reaped)
+**Status:** STAGING (merged to master 2026-09-04, PR #329)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-02
