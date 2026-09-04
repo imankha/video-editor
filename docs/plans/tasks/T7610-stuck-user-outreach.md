@@ -108,6 +108,19 @@ stuck" (support framing rule); every email carries the booking link; short.
   The bug is fixed, your credits are intact, and I've added 50 extra credits to your
   account for the trouble. I'd love to personally make sure your first reel gets made:
   [BOOKING_LINK]"
+  **BLOCKED 2026-09-03: THIS ACCOUNT NO LONGER EXISTS.** Discovered while investigating a
+  revenue-reconciliation drift (see [Revenue Record Integrity](revenue-integrity/EPIC.md)):
+  user `fb40690a-edcf-4504-a51f-f9df6f84ac4f` has no `users`, `user_segments`, `credits`
+  or `credit_transactions` row in prod and its R2 prefix is empty, so the account was
+  deleted some time after 2026-08-24 05:05 UTC (self-serve CCPA delete or a manual
+  `delete_user.py --env prod` run; the residue cannot distinguish them). Consequences for
+  this segment, decide before any send: the copy above is now FALSE on two counts ("your
+  credits are intact" and "I've added 50 extra credits to your account"), and the pre-send
+  grant in step 4 has no account to grant against. Either rewrite this segment as a
+  genuine start-over invitation (no credit claims, offer the goodwill credits on their
+  next signup and grant them when it happens), or drop the segment. Their $3.99 was never
+  refunded (user decision 2026-09-03: accept the chargeback risk), which makes an accurate,
+  apologetic version of this email MORE worth sending, not less.
   **DECIDED 2026-08-24: 50 goodwill credits. GRANT THEM IMMEDIATELY BEFORE THE SEND**
   (admin grant-credits endpoint) so the email states a fact, not a promise - this is a
   pre-send checklist step, remind the user at send time.
@@ -222,6 +235,8 @@ visits total, still zero clips; his follow-up copy should acknowledge persistenc
       help with credits." added to the base template)
 - [x] Goodwill credit decision for bigajosue recorded (50 credits, 2026-08-24; granted at
       pre-send checklist time, never earlier)
+- [ ] bigajosue segment re-decided: the account was deleted (found 2026-09-03), so the
+      approved copy and the pre-send grant are both invalid as written
 - [ ] Booking link created (either path), verified working, recorded here
 - [ ] ALL gate tasks verified live on PROD with evidence logged here BEFORE any send
 - [ ] Sends executed + logged per user/segment
