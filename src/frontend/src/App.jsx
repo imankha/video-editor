@@ -14,6 +14,8 @@ import { useTutorialStore } from './stores/useTutorialStore';
 import { getTutorialAssets } from './config/tutorialVideos';
 import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
+import { DraftReelPreview } from './components/DraftReelPreview';
+import { openFinishedReel } from './utils/finishedReelNav';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
@@ -591,6 +593,16 @@ function App() {
       // Atomic transition: clear selection + reset video + switch mode together,
       // so an in-flight project refresh can't resurrect the selection afterward.
       useEditorStore.getState().goToProjectManager();
+      // T8530: land the user ON the finished reel — the SINGLE call site of
+      // openFinishedReel. Re-read the project from the store AFTER the forced
+      // fetchProjects above, so final_video_id (set by the overlay export) is
+      // present in the snapshot the preview player opens with.
+      const finishedProject = useProjectsStore
+        .getState()
+        .projects?.find((p) => p.id === completed.projectId);
+      if (finishedProject?.final_video_id) {
+        openFinishedReel(finishedProject);
+      }
     }
   }, [fetchProjects]);
 
@@ -960,6 +972,12 @@ function App() {
       </div>
       )}
 
+
+      {/* T8530: draft preview player — a single top-level mount, opened via the
+          ephemeral reelPreviewStore (finishedReelNav) after an overlay export
+          completes. Survives the post-publish fetchProjects drop because its
+          payload is a snapshot, not a live store lookup. */}
+      <DraftReelPreview />
 
       {/* Global Export Indicator - shows progress across all screens */}
       <GlobalExportIndicator />

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { X, Download, Loader, Pencil, Scale, Share2 } from 'lucide-react';
+import { X, Download, Loader, Pencil, Scale, Share2, FolderInput } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
@@ -31,6 +31,20 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     unlike Re-rank/Re-edit) -- the caller owns the actual
  *                                     share/copy split (see DownloadsPanel's `useWebShare`
  *                                     usage), this component only surfaces the gesture.
+ * @param {boolean=}  shareRing     - T8530: a one-shot attention ring on the Share button
+ *                                     right after a publish swaps Publish->Share, so the
+ *                                     swap is noticed. The caller clears it on a timer/first
+ *                                     interaction.
+ * @param {Function=} onPublish     - () => void; T8530: shows the PRIMARY Publish button
+ *                                     when set. Occupies the SAME primary slot as Share
+ *                                     (the draft state's occupant; Share is the published
+ *                                     state's). The caller (DraftReelPreview) owns the
+ *                                     publish logic; this component stays presentational.
+ * @param {boolean=}  publishLoading - spins + disables Publish
+ * @param {ReactNode=} statusBanner  - T8530: optional full-width row rendered between the
+ *                                     header and the video area (the draft/failure strip).
+ *                                     A slot, not a boolean+copy, so the player never learns
+ *                                     product vocabulary and the caller owns the tint swap.
  * @param {Function=} onDownload    - (activeReel) => void; shows a Download button when set
  * @param {boolean=}  downloadLoading
  * @param {Function=} onReEdit      - (activeReel) => void; shows a "Re-edit" button when set
@@ -90,6 +104,10 @@ export function CollectionPlayer({
   onReelChange,
   onEnded,
   onShare,
+  shareRing = false,
+  onPublish,
+  publishLoading,
+  statusBanner,
   onDownload,
   downloadLoading,
   onReEdit,
@@ -320,6 +338,26 @@ export function CollectionPlayer({
           ) : title}
         </h3>
         <div className="flex items-center gap-2 shrink-0">
+          {/* T8530: Publish is the PRIMARY action in the DRAFT state — first in the
+              cluster, occupying the same slot Share takes once published. Labeled
+              cyan button; the full gesture name lives in title/aria-label since the
+              label is shortened to fit the toolbar. coarse-pointer:min-h-11 floors
+              the 34px labeled button to the 44px touch target. State-exclusive with
+              onShare (the caller passes exactly one of them per publish state). */}
+          {onPublish && (
+            <Button
+              variant="cyan"
+              size="sm"
+              icon={FolderInput}
+              loading={publishLoading}
+              onClick={onPublish}
+              title="Publish to Highlight Reels"
+              aria-label="Publish to Highlight Reels"
+              className="coarse-pointer:min-h-11"
+            >
+              Publish
+            </Button>
+          )}
           {/* T8540: Share is the player's PRIMARY action -- one tap, no overflow
               menu (prod cliff 4: zero real users ever completed a share from
               here). Renders for every reel, unlike Re-rank -- the caller (not
@@ -331,6 +369,7 @@ export function CollectionPlayer({
               icon={Share2}
               onClick={() => onShare(activeReel)}
               title="Share"
+              className={shareRing ? 'ring-2 ring-cyan-400/70 animate-pulse' : ''}
             >
               Share
             </Button>
@@ -386,6 +425,11 @@ export function CollectionPlayer({
           <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} aria-label="Close" />
         </div>
       </div>
+
+      {/* T8530: optional full-width status row between the header and the video.
+          The caller (DraftReelPreview) owns its content/tint: cyan draft strip,
+          amber retry surface on publish failure, or nothing once published. */}
+      {statusBanner}
 
       {/* Video + tap/swipe zones */}
       <div
