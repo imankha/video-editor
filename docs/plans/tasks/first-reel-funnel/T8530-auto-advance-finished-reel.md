@@ -1,6 +1,6 @@
 # T8530: Done means done: one-tap publish on completion (remove the manual Move step)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-03

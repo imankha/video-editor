@@ -21,13 +21,11 @@ beforeEach(() => {
   });
 });
 
-// Stub MediaPlayer: the preview tests care about WHERE the modal mounts (portal)
-// and that it unmounts on close — not the player internals (which pull in
-// window.matchMedia via VideoControls, absent in jsdom). The stub echoes its src
-// so we can locate the mounted player.
-vi.mock('./MediaPlayer', () => ({
-  MediaPlayer: ({ src }) => <video data-testid="preview-video" src={src} />,
-}));
+// T8535: DraftTile no longer mounts its own preview player — Preview calls the
+// shared openFinishedReel helper, which opens the consolidated DraftReelPreview
+// surface (mounted once in App.jsx). Stub the helper so these tests assert the
+// CALL, not a player implementation this component no longer owns.
+vi.mock('../utils/finishedReelNav', () => ({ openFinishedReel: vi.fn() }));
 
 // DraftTile reads several stores; stub the minimal surface it touches.
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
@@ -69,6 +67,7 @@ vi.mock('../stores/profileStore', () => ({
 
 import { DraftTile } from './DraftTile';
 import { useProjectsStore } from '../stores/projectsStore';
+import { openFinishedReel } from '../utils/finishedReelNav';
 
 const baseProject = {
   id: 7,
@@ -101,6 +100,7 @@ function renderTile(overrides = {}, handlers = {}) {
 describe('DraftTile (T5672)', () => {
   afterEach(() => {
     useProjectsStore.getState().selectedProjectId = null;
+    openFinishedReel.mockClear();
   });
   it('renders a lazy poster img pointing at the T5671 endpoint', () => {
     const { container } = renderTile();
@@ -249,9 +249,12 @@ describe('DraftTile (T5672)', () => {
   });
 
   it('previews on body tap in the ready state (the tile is no longer inert) (T6180)', () => {
-    const { container } = renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
+    const project = { has_final_video: true, final_video_id: 99, is_published: false };
+    const { container } = renderTile(project);
     fireEvent.click(container.querySelector('[data-testid="project-card"]'));
-    expect(screen.getByTestId('preview-video')).toBeTruthy();
+    // T8535: body tap opens the consolidated DraftReelPreview surface, not a
+    // tile-local modal.
+    expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
   });
 
   it('drops the progress strip and the "Done" status chip in the ready state (Q1/Q2)', () => {
@@ -539,44 +542,29 @@ describe('DraftTile (T5672)', () => {
     });
   });
 
-  // T5900 — preview modal must PORTAL out of the tile subtree. The tile applies a
-  // hover transform/filter, which makes it the containing block for any fixed
-  // descendant; a modal rendered inline would size its video against the tile box
-  // (video overflows the panel, defect A) and leave the purple scrub bar burned on
-  // the tile (defect B). Portaling to document.body is the mechanism that prevents
-  // both — asserted here in a layout-free way (real geometry is the Playwright QA
-  // spec T5900-reel-preview-overflow.qa.spec.js).
-  describe('T5900 preview modal containment', () => {
+  // T8535 — DraftTile no longer mounts its own draft-preview modal (T5900's
+  // portaled MediaPlayer shell is gone). Preview calls the shared
+  // openFinishedReel(project) helper, which opens the ONE consolidated
+  // DraftReelPreview surface (mounted once in App.jsx) — so Publish is always
+  // reachable from the tile's Preview, not just the completion flow.
+  describe('T8535 consolidated draft preview', () => {
     const completed = { has_final_video: true, final_video_id: 99, is_published: false };
 
-    it('renders the preview modal OUTSIDE the tile subtree (portaled to body), not inline', () => {
-      const { container } = renderTile(completed);
+    it('the ready-state Preview button opens the consolidated surface instead of a tile-local modal', () => {
+      const project = completed;
+      renderTile(project);
       fireEvent.click(screen.getByTitle('Preview video'));
-      const card = container.querySelector('[data-testid="project-card"]');
-      const player = screen.getByTestId('preview-video');
-      expect(player.getAttribute('src')).toMatch(/\/api\/downloads\/99\/stream$/);
-      // The player is in the document but NOT a descendant of the tile card.
-      expect(document.body.contains(player)).toBe(true);
-      expect(card.contains(player)).toBe(false);
-    });
-
-    it('portals the modal out of the tile for a LANDSCAPE source too (aspect-independent)', () => {
-      const { container } = renderTile({ ...completed, aspect_ratio: '16:9' });
-      fireEvent.click(screen.getByTitle('Preview video'));
-      const card = container.querySelector('[data-testid="project-card"]');
-      expect(card.contains(screen.getByTestId('preview-video'))).toBe(false);
-    });
-
-    it('unmounts the modal (no player, no scrub chrome) after close via the X button', () => {
-      renderTile(completed);
-      fireEvent.click(screen.getByTitle('Preview video'));
-      expect(screen.queryByTestId('preview-video')).toBeTruthy();
-      // Close button is the only iconOnly ghost button inside the portaled modal.
-      const closeBtn = screen.getAllByRole('button').find((b) => b.closest('.fixed'));
-      fireEvent.click(closeBtn);
-      expect(screen.queryByTestId('preview-video')).toBeNull();
-      // No leftover fixed modal chrome anywhere in the document.
+      expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
+      // No tile-local modal chrome mounts anywhere in the document.
       expect(document.querySelector('.fixed.inset-4')).toBeNull();
+      expect(screen.queryByTestId('preview-video')).toBeNull();
+    });
+
+    it('opens the consolidated surface for a LANDSCAPE source too (aspect-independent)', () => {
+      const project = { ...completed, aspect_ratio: '16:9' };
+      renderTile(project);
+      fireEvent.click(screen.getByTitle('Preview video'));
+      expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
     });
   });
 

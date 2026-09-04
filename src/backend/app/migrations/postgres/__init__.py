@@ -27,6 +27,7 @@ from .v023_rename_pending_share_recipient_email import (
 from .v024_attempt_outcome_counters import V024AttemptOutcomeCounters
 from .v025_clear_stale_game_storage_refs import V025ClearStaleGameStorageRefs
 from .v026_test_account_flag import V026TestAccountFlag
+from .v027_daily_counters_clips_uploaded import V027DailyCountersClipsUploaded
 
 MIGRATIONS = [
     V001Baseline(),
@@ -55,6 +56,7 @@ MIGRATIONS = [
     V024AttemptOutcomeCounters(),
     V025ClearStaleGameStorageRefs(),
     V026TestAccountFlag(),
+    V027DailyCountersClipsUploaded(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

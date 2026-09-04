@@ -42,6 +42,17 @@ lands.
 - Related: [T8390](T8390-focus-publish-exit.md) (R3, sibling); T8360 (the landing
   surface - in flight, coordinate)
 
+## Pre-flight note (2026-09-04)
+
+Filed 2026-09-02, before T8520/T8530/T8540 shipped (all merged 2026-09-04). T8530's shared
+`usePublishProject` hook + draft preview player and T8540's Share-primary player action may
+have already substantially or fully closed this gap. **Before any design/implementation
+work: re-read the current publish gesture + `DownloadsPanel.jsx`/`CollectionPlayer.jsx`
+flow and confirm whether a real gap still exists.** If it's already closed, close this task
+with the evidence recorded here rather than building anything. Also: this task's container
+implementation must wait for T8545 (in-flight redesign of the same landing surface) to
+land, even once its own scope is confirmed.
+
 ## Acceptance Criteria
 
 - [ ] A successful publish navigates to/reveals the published reel, not a generic screen

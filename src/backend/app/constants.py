@@ -263,6 +263,25 @@ class UploadStatus(str, Enum):
     SUCCESS = "success"
 
 
+class UploadKind(str, Enum):
+    """T8370: what a prepare-upload/finalize-upload session is FOR, routing the
+    object namespace (games_upload.upload_object_key) and the finalize-time
+    success milestone (game_upload_succeeded is emitted ONLY for GAME). Stored
+    on pending_uploads.kind so finalize/reap/cancel can route without trusting
+    client-declared intent at finalize time."""
+    GAME = "game"
+    CLIP = "clip"
+
+
+# T8370 §4.3: clip sources are permanent (never expire, INV-U1/INV-U2), so an
+# unbounded upload at a ~1-credit charge is exploitable. Over either cap the
+# user is steered to Add Game (400), never silently truncated. Lives here
+# (not in games_upload.py) so clips.py's batch endpoint doesn't need a
+# cross-router import for a shared cap.
+MAX_CLIP_UPLOAD_BYTES = 500 * 1024 * 1024  # 500MB
+MAX_CLIP_DURATION_S = 600  # 10 minutes — enforced at probe time (clips.py batch endpoint)
+
+
 class GameStatus(str, Enum):
     """Lifecycle status for a game record.
 

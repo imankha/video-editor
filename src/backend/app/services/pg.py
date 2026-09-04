@@ -309,6 +309,9 @@ CREATE TABLE IF NOT EXISTS daily_counters (
     game_uploads_failed INTEGER NOT NULL DEFAULT 0,
     clips_attempted INTEGER NOT NULL DEFAULT 0,
     clips_failed INTEGER NOT NULL DEFAULT 0,
+    -- T8370: clip_uploaded daily rollup (direct-upload origin, distinct from
+    -- clips_created's annotation origin above).
+    clips_uploaded INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (counter_date, origin_type)
 );
 

@@ -1,6 +1,6 @@
 # T8545: Highlight Reels becomes a third peer tab + rename "Build" → "Create Highlight Reel"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-03
@@ -133,6 +133,31 @@ files):
   rule already governs tabs) — `activeTab` stays local state, not written to DB/store.
 - Greppability: after the rename, `grep -r "Build Highlight Reel"` across the repo must
   return zero hits.
+
+## Design decision (approved 2026-09-04)
+
+ui-designer pass presented as a decision artifact (https://claude.ai/code/artifact/d9c0af54-9995-4add-9853-26f7379b08fb);
+user approved all recommendations:
+
+- **Layout: Option 1** — stacked icon-over-label, full-width equal-thirds grid under `sm`
+  (each tab: 18px icon + 11px label allowed to wrap to 2 lines, count badge moves to the
+  icon's corner), reflows to today's exact single-row content-width bar at `sm`+.
+- **New color token**: `HIGHLIGHT` in `themeColors.js` — `bg: violet-600 (#7c3aed)`,
+  `bgDark: violet-700 (#6d28d9)`. Green (`GAME`) and cyan (`REEL`) are taken; amber
+  collides with the existing yellow reference-notice banner.
+- **Highlights tab gets NO disabled/empty state** — its `Create Highlight Reel` CTA
+  already self-disables with an explanatory title when there's nothing to build from, so
+  an empty tab is informative, not a dead end. No coupling to T8380's `clipsTabDisabled`
+  rework.
+- **Icon**: keep `Image` (continuity with the removed drawer button), not `Film`.
+- **Badge**: keep unseen-reels-count semantics (not a total), styled as an accent "new"
+  pill — consistent with `unseenReelsCount` already being the only value wired up today.
+
+Implementation note from the design pass: `DownloadsPanel` gates on `isOpen` in 4 places
+(`useCollections(isOpen)`, `fetchIntroCards`, early `return null`, the render itself) —
+inline rendering must swap that gate for "highlights tab is active". `close()` calls
+(e.g. the view-clips link) become plain tab switches. Drawer chrome to delete: backdrop,
+fixed shell, header/X button, slide-in keyframes.
 
 ## Implementation
 
