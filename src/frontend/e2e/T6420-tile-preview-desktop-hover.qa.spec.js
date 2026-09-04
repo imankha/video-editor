@@ -44,10 +44,10 @@ function trackStreamRequests(page) {
 async function openMyReels(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
-  await expect(page.getByTestId('highlights-tab-panel').first())
+  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
-  const panel = page.getByTestId('highlights-tab-panel');
+  const panel = page.getByTestId('published-tab-panel');
   const shown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (!shown) {
     const headers = panel.getByTestId('collapsible-group-header');

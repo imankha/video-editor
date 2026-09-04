@@ -68,7 +68,7 @@ async function connectionBannerVisible(page) {
 async function gotoDrafts(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Clips' }).click();
+  await page.getByRole('button', { name: /^In Progress Clips/ }).click();
 }
 
 /** Open the first Framing-ready reel draft; resolves once the crop editor is present. */
@@ -339,17 +339,17 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    // Switch to the Highlights tab; find a reel with an editable project and open its
+    // Switch to the Published tab; find a reel with an editable project and open its
     // "More actions" menu. ReelTile.jsx: canOpenSource(download) gates a "Open as Draft"
     // menu item (FolderOpen icon) that shares the same useReEditReel/onOpenProject path
     // as the in-player Re-edit button (e2e/reedit-reel.spec.js covers that path's
     // public-viewer gating, not this menu).
-    await page.getByRole('button', { name: /^Highlights/ }).click().catch(() => {});
-    // T8545: DownloadsPanel is now the Highlights tab's inline body (no more separate
+    await page.getByRole('button', { name: /^Published/ }).click().catch(() => {});
+    // T8545: DownloadsPanel is now the Published tab's inline body (no more separate
     // backdrop + slide-over panel), scoped by its own data-testid. Still worth scoping
     // (rather than an unscoped page-wide locator) so a same-testid element elsewhere on
     // the Home screen (e.g. a Clips-tab project-card) can't be matched instead.
-    const panel = page.getByTestId('highlights-tab-panel');
+    const panel = page.getByTestId('published-tab-panel');
     await panel.waitFor({ timeout: 15000 }).catch(() => {});
     // The Highlight Reels panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
     // individual ReelTile cards (and their "More actions" kebab) only render once a game

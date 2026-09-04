@@ -22,13 +22,13 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
-  await expect(page.getByTestId('highlights-tab-panel').first())
+  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
 
 async function openGameGroup(page, matchText) {
-  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   for (let i = 0; i < n; i++) {
@@ -48,7 +48,7 @@ test.describe('T5215 round 7 (real account)', () => {
     const opened = await openGameGroup(page, 'Legends');
     test.skip(!opened, 'no "at Legends Mar 28" group on this account');
 
-    const header = page.getByTestId('highlights-tab-panel').getByText('Game Highlights').first();
+    const header = page.getByTestId('published-tab-panel').getByText('Game Highlights').first();
     const visible = await header.isVisible().catch(() => false);
     test.skip(!visible, '"Game Highlights" card not present on this account');
     const cardRoot = header.locator('xpath=ancestor::div[contains(@class,"flex items-center gap-3")]').first();

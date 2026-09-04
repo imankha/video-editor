@@ -6,7 +6,7 @@ import { Z } from './zLayers';
  * depends on. jsdom can't prove pixel stacking (that's the real-browser QA spec,
  * e2e/T6600-modal-z-order.qa.spec.js), but it CAN lock the ORDER so a future edit
  * can't silently reorder a rung and regress the layering that the migrated call
- * sites (CollectionPlayer/DownloadsPanel/LockedReason/IntroCards) now read from.
+ * sites (CollectionPlayer/PublishedReelsPanel/LockedReason/IntroCards) now read from.
  */
 
 // 'z-40' -> 40, 'z-[70]' -> 70
@@ -42,7 +42,7 @@ describe('zLayers scale (T6600)', () => {
   });
 
   it('encodes every documented cross-component relationship', () => {
-    // CollectionPlayer / DraftTile preview cover a standard modal (DownloadsPanel).
+    // CollectionPlayer / DraftTile preview cover a standard modal (PublishedReelsPanel).
     expect(num(Z.PLAYER)).toBeGreaterThan(num(Z.MODAL));
     // A player's backdrop sits above the modal layer but below its own panel.
     expect(num(Z.OVERLAY_BACKDROP)).toBeGreaterThan(num(Z.MODAL));

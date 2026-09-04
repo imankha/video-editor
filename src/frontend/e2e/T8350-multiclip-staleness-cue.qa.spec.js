@@ -108,11 +108,11 @@ async function injectProject(page, projectOverrides) {
   });
 }
 
-async function openHighlightsPanel(page) {
+async function openInProgressReelsPanel(page) {
   await page.goto('/home');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Highlights/ }) });
-  await page.getByRole('button', { name: /^Highlights/ }).first().click();
-  await expect(page.getByText('Highlights', { exact: true })).toBeVisible({ timeout: 10000 });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^In Progress Reels/ }) });
+  await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+  await expect(page.getByTestId('in-progress-reels-tab-panel')).toBeVisible({ timeout: 10000 });
 }
 
 function staleTile(page) {
@@ -128,7 +128,7 @@ test('AC2: PRIMARY badge shows "1 outdated" on a produced multi-clip reel with o
     has_final_video: true, is_published: false, final_video_id: 555555,
     has_working_video: true, clips_exported: 2,
   });
-  await openHighlightsPanel(page);
+  await openInProgressReelsPanel(page);
 
   const tile = staleTile(page);
   await expect(tile).toBeVisible();
@@ -152,7 +152,7 @@ test('AC3: badge clears when the drifted clip is reverted to the exact producing
     has_working_video: true, clips_exported: 2,
     clips: REVERTED_CLIPS,
   });
-  await openHighlightsPanel(page);
+  await openInProgressReelsPanel(page);
 
   const tile = staleTile(page);
   await expect(tile).toBeVisible();
@@ -166,7 +166,7 @@ test('AC2: SECONDARY segment ring + tooltip on exactly the drifted clip, pre-pro
     has_final_video: false, has_working_video: false, is_published: false,
     clips_in_progress: 1,
   });
-  await openHighlightsPanel(page);
+  await openInProgressReelsPanel(page);
 
   const tile = staleTile(page);
   await expect(tile).toBeVisible();
@@ -194,7 +194,7 @@ test('AC2: TERTIARY Focus clip-list dot on exactly the drifted clip', async ({ p
   // project id to load; the drifted values are route-injected onto its clips
   // response, same non-destructive pattern as the tile tests above).
   await page.goto('/home/reels');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Clips/ }) });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^In Progress Clips/ }) });
 
   const projects = await page.evaluate(async () => {
     const r = await fetch('/api/projects', { credentials: 'include' });

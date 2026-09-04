@@ -59,8 +59,8 @@ async function setupAndAuth(page) {
   });
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Highlights/ }).click();
-  await expect(page.getByTestId('highlights-tab-panel')).toBeVisible();
+  await page.getByRole('button', { name: /^Published/ }).click();
+  await expect(page.getByTestId('published-tab-panel')).toBeVisible();
 }
 
 test.afterEach(async ({ request }) => {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
@@ -71,8 +71,8 @@ vi.mock('./ProfileSportButton', () => ({ ProfileSportButton: () => <div />, defa
 vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => <div /> }));
 vi.mock('./GameTile', () => ({ GameTile: () => <div data-testid="game-tile" /> }));
 vi.mock('./DraftTile', () => ({ DraftTile: () => <div data-testid="draft-tile" />, default: () => <div /> }));
-vi.mock('./DownloadsPanel', () => ({
-  DownloadsPanel: (props) => <div data-testid="downloads-panel" data-active={String(!!props.active)} />,
+vi.mock('./PublishedReelsPanel', () => ({
+  PublishedReelsPanel: (props) => <div data-testid="published-tab-panel" data-active={String(!!props.active)} />,
 }));
 
 import { ProjectManager } from './ProjectManager';
@@ -103,13 +103,10 @@ function renderManager(props = {}, path = '/home') {
   );
 }
 
-// Prefix match: a loose /Clips/i regex also catches the unrelated "Recent"
-// quick-access card's "N clips annotated" caption (accessible name includes
-// all descendant text), which isn't the tab. The tab's own accessible name is
-// "Clips" with the count chip digit appended directly (no separating space,
-// e.g. "Clips1"), so don't require a trailing word boundary.
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
-const highlightsTab = () => screen.getByRole('button', { name: /^Highlights/i });
+// Prefix match on the tab's own accessible name. T8555: the Clips tab label is
+// now "In Progress Clips" with the count chip digit appended directly (no
+// separating space, e.g. "In Progress Clips1"), so match the prefix.
+const clipsTab = () => screen.getByRole('button', { name: /^In Progress Clips/i });
 
 describe('ProjectManager home tab defaults (T6830)', () => {
   beforeEach(() => {
@@ -122,9 +119,9 @@ describe('ProjectManager home tab defaults (T6830)', () => {
 
     // Games tab is active -> its action button (Add Game) is shown.
     expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
-    // Create Highlight Reel is NOT shown here (T8360: it moved off Home entirely,
-    // to DownloadsPanel's Highlight Reels surface).
-    expect(screen.queryByRole('button', { name: 'Create Highlight Reel' })).toBeNull();
+    // The "New Highlight Reel" assembly button is NOT shown on the Games tab
+    // (T8555: it lives on the In Progress Reels tab body only).
+    expect(screen.queryByRole('button', { name: 'New Highlight Reel' })).toBeNull();
 
     const tab = clipsTab();
     expect(tab.disabled).toBe(true);
@@ -155,20 +152,20 @@ describe('ProjectManager home tab defaults (T6830)', () => {
 
     const tab = clipsTab();
     expect(tab.disabled).toBe(false);
-    // Projects-count default flips the active tab to Clips once projects load,
-    // so its count chip appears. T8545: the button renders TWO count badges
-    // (mobile corner + desktop inline, one hidden per breakpoint via CSS that
-    // jsdom doesn't evaluate) -- getAllByText covers both. The Create Highlight
-    // Reel action no longer lives on this tab (T8360 relocated it to DownloadsPanel).
+    // Projects-count default flips the active tab to In Progress Clips once
+    // projects load, so its count chip appears. T8545: the button renders TWO
+    // count badges (mobile corner + desktop inline, one hidden per breakpoint
+    // via CSS that jsdom doesn't evaluate) -- getAllByText covers both. The
+    // "New Highlight Reel" action lives on the In Progress Reels tab, not here.
     await waitFor(() => {
       expect(within(tab).getAllByText('1').length).toBeGreaterThan(0);
     });
-    expect(screen.queryByRole('button', { name: 'Create Highlight Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New Highlight Reel' })).toBeNull();
   });
 
-  it('user with only multi-clip (Highlights) drafts: Clips tab stays on the dead-end guard (T8360)', async () => {
+  it('user with only multi-clip (In Progress Reels) drafts: Clips tab stays on the dead-end guard (T8360)', async () => {
     // A multi-clip draft (is_auto_created: false) does NOT count toward clipDrafts
-    // -- it belongs to the Highlights section in DownloadsPanel, not the Clips tab.
+    // -- it belongs to the In Progress Reels tab, not the In Progress Clips tab.
     renderManager({ projects: [{ id: 8, name: 'A Highlight', game_ids: [], is_auto_created: false }] });
 
     const tab = clipsTab();
@@ -184,57 +181,9 @@ describe('ProjectManager home tab defaults (T6830)', () => {
   });
 });
 
-describe('ProjectManager three-way tab navigation (T8545)', () => {
-  beforeEach(() => {
-    window.history.replaceState(null, '', '/home');
-    useGalleryStore.setState({ isOpen: false });
-  });
-
-  it('renders Games, Clips, and Highlights as three peer tabs; no top-right icon button', () => {
-    renderManager();
-
-    expect(screen.getByRole('button', { name: /^Games/i })).toBeTruthy();
-    expect(clipsTab()).toBeTruthy();
-    expect(highlightsTab()).toBeTruthy();
-    // The old top-right Gallery icon button (SECTION_NAMES.LIBRARY = "Highlight
-    // Reels") is gone -- Highlights is never disabled, so this can't collide
-    // with a legitimate disabled-tab title lookup.
-    expect(screen.queryByTitle('Highlight Reels')).toBeNull();
-  });
-
-  it('clicking Highlights switches to it, mounts DownloadsPanel active, and updates the URL', () => {
-    renderManager();
-
-    fireEvent.click(highlightsTab());
-
-    expect(screen.getByTestId('downloads-panel').dataset.active).toBe('true');
-    expect(window.location.pathname).toBe('/home/highlights');
-  });
-
-  it('Highlights tab shows the unseenReelsCount badge (not a total)', () => {
-    renderManager({ unseenReelsCount: 3 });
-
-    // Two badges render (mobile corner + desktop inline pill, one hidden per
-    // breakpoint via CSS jsdom doesn't evaluate) -- both carry the same count.
-    expect(within(highlightsTab()).getAllByText('3').length).toBeGreaterThan(0);
-  });
-
-  it('a deep link to /home/highlights lands directly on the Highlights tab', () => {
-    renderManager({}, '/home/highlights');
-
-    expect(screen.getByTestId('downloads-panel').dataset.active).toBe('true');
-  });
-
-  it('T8400/T8470: galleryStore.open() (e.g. publish-to-My-Reels) switches to Highlights and consumes the signal', async () => {
-    renderManager();
-    expect(screen.getByTestId('downloads-panel').dataset.active).toBe('false');
-
-    useGalleryStore.getState().open();
-
-    await waitFor(() => {
-      expect(screen.getByTestId('downloads-panel').dataset.active).toBe('true');
-    });
-    // Fire-once: the signal is consumed so a later publish can re-trigger it.
-    expect(useGalleryStore.getState().isOpen).toBe(false);
-  });
-});
+// T8555: the four-tab navigation contract (Games / In Progress Clips /
+// In Progress Reels / Published), badge relocation, deep links, and the
+// publish-landing effect are covered in ProjectManager.fourTabIA.test.jsx
+// (this file's old "three-way tab navigation (T8545)" block was superseded by
+// that four-tab split). This file keeps only the home-tab-defaults (T6830)
+// dead-end/asymmetry coverage above.

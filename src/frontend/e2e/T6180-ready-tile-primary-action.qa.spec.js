@@ -30,8 +30,8 @@ const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
 async function gotoDrafts(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  const draftsTab = page.locator('button:has-text("Clips")');
-  await expect(draftsTab, 'Clips tab renders').toBeVisible({ timeout: 30000 });
+  const draftsTab = page.locator('button:has-text("In Progress Clips")');
+  await expect(draftsTab, 'In Progress Clips tab renders').toBeVisible({ timeout: 30000 });
   await draftsTab.click();
   await page.waitForTimeout(800); // let carousels + posters settle
 }
@@ -130,7 +130,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await page.setViewportSize({ width: 1280, height: 800 });
 
   // Published state unregressed: Highlight Reels tiles still render.
-  const myReelsTab = page.getByRole('button', { name: /^Highlights/ });
+  const myReelsTab = page.getByRole('button', { name: /^Published/ });
   if (await myReelsTab.count()) {
     await myReelsTab.first().click();
     await page.waitForTimeout(1000);

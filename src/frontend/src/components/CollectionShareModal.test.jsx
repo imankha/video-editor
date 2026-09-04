@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 
-// apiFetch mock (same convention as DownloadsPanel.intro.test.jsx): a factory
+// apiFetch mock (same convention as PublishedReelsPanel.intro.test.jsx): a factory
 // reading a globalThis hook the test body configures per-case.
 vi.mock('../utils/apiFetch', () => ({
   default: (...args) => globalThis.apiFetchImpl(...args),

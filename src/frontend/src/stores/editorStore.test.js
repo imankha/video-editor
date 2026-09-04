@@ -113,12 +113,17 @@ describe('editorStore', () => {
     });
   });
 
-  describe('HOME_TAB_PATHS (T5677)', () => {
+  describe('HOME_TAB_PATHS (T5677 / T8555)', () => {
     it('lists the deep-linkable home tab sub-routes preserved during URL canonicalization', () => {
       expect(HOME_TAB_PATHS).toContain('/home/games');
       expect(HOME_TAB_PATHS).toContain('/home/reels');
+      // T8555: the two new home tabs must also survive cold-load canonicalization.
+      expect(HOME_TAB_PATHS).toContain('/home/reels-in-progress');
+      expect(HOME_TAB_PATHS).toContain('/home/published');
       // Bare /home is NOT in the list — it is already canonical and needs no preserving.
       expect(HOME_TAB_PATHS).not.toContain('/home');
+      // The retired Highlights tab URL must be gone.
+      expect(HOME_TAB_PATHS).not.toContain('/home/highlights');
     });
   });
 
