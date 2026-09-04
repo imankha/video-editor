@@ -3,12 +3,21 @@ import { ListChecks, Check, ChevronRight, ChevronDown, HelpCircle } from 'lucide
 import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useAuthStore } from '../stores/authStore';
-import { STEP_TITLES, STEP_DESCRIPTIONS, WatchTutorialButton, TUTORIAL_STEP_QUEST } from '../config/questDefinitions.jsx';
+import { STEP_TITLES, STEP_DESCRIPTIONS, WatchTutorialButton, TUTORIAL_STEP_QUEST, TUTORIAL_VIDEOS_ENABLED } from '../config/questDefinitions.jsx';
 import { Z } from '../constants/zLayers';
 import { toast } from './shared/Toast';
 import { isAnyModalOpen } from '../utils/modalOcclusion';
 
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+
+/** T8690: quest step_ids to render — with tutorial videos disabled, the four
+ *  `watch_*_tutorial` steps are filtered out so every downstream derivation
+ *  (checklist rows, current-step highlight, x/N counters, completion fanfare)
+ *  reads cleanly. Returns the original array when the flag is on. */
+const visibleStepIdsFor = (stepIds) =>
+  TUTORIAL_VIDEOS_ENABLED
+    ? stepIds
+    : stepIds.filter((sid) => !TUTORIAL_STEP_QUEST[sid]);
 
 /**
  * T8120 occlusion contract: the quest/help surface may NEVER overlap an open
@@ -183,9 +192,13 @@ export function QuestPanel({ inline = false }) {
 
   // Detect step completions and quest completions for audio/animation
   const questDef = definitions?.find(q => q.id === activeQuestId) || definitions?.[0];
+  // T8690: render/count only the visible steps (tutorial steps filtered when the
+  // flag is off) so every derivation below stays consistent — a hidden step's
+  // backend completion boolean must not inflate counts or the fanfare trigger.
+  const visibleStepIds = questDef ? visibleStepIdsFor(questDef.step_ids) : [];
   const questProgress = quests.find(q => q.id === activeQuestId);
   const currentCompleted = questProgress
-    ? Object.values(questProgress.steps).filter(Boolean).length
+    ? visibleStepIds.filter((sid) => questProgress.steps[sid]).length
     : 0;
 
   useEffect(() => {
@@ -196,7 +209,7 @@ export function QuestPanel({ inline = false }) {
       return;
     }
     if (currentCompleted > prevCompletedRef.current) {
-      const questStepCount = questDef.step_ids.length;
+      const questStepCount = visibleStepIds.length;
       if (currentCompleted === questStepCount && !questProgress?.reward_claimed) {
         // All steps done — fanfare + celebration animation. T8120: do NOT
         // auto-expand — a collapsed panel stays collapsed (never auto-re-expands
@@ -228,10 +241,10 @@ export function QuestPanel({ inline = false }) {
     return null;
   }
   const steps = questProgress?.steps || {};
-  const completedCount = Object.values(steps).filter(Boolean).length;
-  const totalCount = questDef.step_ids.length;
+  const completedCount = visibleStepIds.filter((sid) => steps[sid]).length;
+  const totalCount = visibleStepIds.length;
   const isComplete = completedCount === totalCount;
-  const currentStepId = questDef.step_ids.find(sid => !steps[sid]);
+  const currentStepId = visibleStepIds.find(sid => !steps[sid]);
 
   const handleClaimReward = async () => {
     setClaiming(true);
@@ -355,7 +368,7 @@ export function QuestPanel({ inline = false }) {
 
             {/* Steps */}
             <div className="px-4 pb-2">
-              {questDef.step_ids.map((stepId, index) => {
+              {visibleStepIds.map((stepId, index) => {
                 const done = steps[stepId] || false;
                 const isCurrent = stepId === currentStepId;
                 // T7840: a current step is actionable only when its owning surface
@@ -377,7 +390,7 @@ export function QuestPanel({ inline = false }) {
                     className={`
                       ${isCurrent ? 'flex' : 'hidden sm:flex'} items-start gap-3.5 py-3
                       ${actionable ? 'w-full text-left cursor-pointer hover:bg-white/[0.02] transition-colors' : ''}
-                      ${index < questDef.step_ids.length - 1 ? 'sm:border-b border-white/5' : ''}
+                      ${index < visibleStepIds.length - 1 ? 'sm:border-b border-white/5' : ''}
                       ${isCurrent ? 'quest-step-current' : ''}
                     `}
                   >

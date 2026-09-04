@@ -66,6 +66,16 @@ test.describe('T4780 — Tutorial quest steps', () => {
     // Each test gets its own isolated user so achievement state doesn't bleed between tests.
     const safeId = testInfo.title.slice(0, 10).replace(/[^a-z0-9]/gi, '');
     await loginAsTestUser(page, safeId);
+    // T8690: the watch_*_tutorial quest steps (and their "Watch tutorial" CTA that
+    // every test here drives) are hidden behind TUTORIAL_VIDEOS_ENABLED, off by
+    // default. When off, this spec's UI has nothing to act on, so skip the whole
+    // suite until the flag is flipped back on — no code deleted, and the spec
+    // re-activates automatically. (Backend step_ids are untouched by T8690.)
+    const tutorialEnabled = await page.evaluate(async () => {
+      const mod = await import('/src/config/questDefinitions.jsx');
+      return mod.TUTORIAL_VIDEOS_ENABLED;
+    });
+    test.skip(!tutorialEnabled, 'T8690: tutorial quest steps hidden (TUTORIAL_VIDEOS_ENABLED=false)');
   });
 
   test('AC1 — Quest 1 shows the tutorial step first and modal opens', async ({ page }) => {

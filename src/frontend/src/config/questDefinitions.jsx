@@ -39,6 +39,16 @@ export const TUTORIAL_STEP_QUEST = {
   watch_publish_tutorial: 'quest_4',
 };
 
+/** T8690: off-by-default gate for the four `watch_*_tutorial` quest steps. When
+ *  false, QuestPanel filters these steps (and their WatchTutorialButton CTAs) out
+ *  of the checklist entirely — the step rows, current-step highlight, and x/N
+ *  counters all derive from the filtered list, so nothing looks "stuck". All the
+ *  underlying code (WatchTutorialButton, TutorialVideoModal, useTutorialStore,
+ *  TUTORIAL_STEP_QUEST, backend completion tracking) stays intact and unreached;
+ *  flip this to true to restore the previous behavior exactly. The steps remain
+ *  in quest_config.py's step_ids, so backend completion tracking is unaffected. */
+export const TUTORIAL_VIDEOS_ENABLED = false;
+
 /** "Watch tutorial" button — opens TutorialVideoModal for the quest's video.
  *  `variant="primary"` is the unmissable current-step CTA (standalone, pulsing);
  *  the default inline pill is for the low-key "Watch again" replay after done. */
