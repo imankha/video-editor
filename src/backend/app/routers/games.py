@@ -476,10 +476,16 @@ async def create_game(request: CreateGameRequest):
 @router.post("/{game_id:int}/videos")
 async def add_game_videos(game_id: int, request: AddVideosRequest):
     """
-    Add video(s) to an existing game.
+    Attach video(s) to an existing, READY game (e.g. a second half/part).
 
-    Videos must already exist in R2.
-    Use this to add a second half to an existing game, for example.
+    Videos must already exist in R2. T8700 hardened this endpoint: it was
+    previously called ONLY by the create-time multi-upload path
+    (uploadMultiVideoGame), which owns sequencing/credits/refs itself, so the
+    endpoint skipped all three. Now that it is a first-class post-creation
+    gesture it (1) charges credits for the attached bytes, (2) inserts storage
+    refs so the expiry sweep can't reclaim the attached source early, and (3)
+    assigns server-side append-only sequences. Attaching onto a non-ready game
+    is rejected (409) — a pending game is still uploading its first video(s).
     """
     if not request.videos:
         raise HTTPException(status_code=400, detail="No videos provided")
@@ -488,15 +494,41 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
     for video in request.videos:
         _validate_video_in_r2(video.blake3_hash.lower())
 
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Check game exists
-        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
-        if not cursor.fetchone():
+        # Check game exists AND is ready. Attach is a post-creation action; a
+        # pending game is still uploading its first video(s) via the create-time
+        # multi-upload path (uploadMultiVideoGame), which owns sequencing there.
+        cursor.execute("SELECT id, status FROM games WHERE id = ?", (game_id,))
+        game_row = cursor.fetchone()
+        if not game_row:
             raise HTTPException(status_code=404, detail="Game not found")
+        if game_row["status"] != GameStatus.READY:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "game_not_ready",
+                    "message": "Videos can only be added to a ready game",
+                },
+            )
 
-        # Insert new game_videos rows
+        # APPEND-ONLY (GAP 3): assign sequences server-side from MAX(sequence)+1.
+        # Never trust the client's sequence — a prepend/reorder would shift every
+        # existing clip's virtual-timeline offset (getVideoOffset), silently
+        # mis-positioning clips. UNIQUE(game_id, sequence) is the backstop.
+        cursor.execute(
+            "SELECT COALESCE(MAX(sequence), 0) AS max_seq FROM game_videos WHERE game_id = ?",
+            (game_id,),
+        )
+        next_seq = cursor.fetchone()["max_seq"] + 1
+        for offset, video in enumerate(request.videos):
+            video.sequence = next_seq + offset
+
+        # Insert new game_videos rows (now with append-only sequences)
         _insert_game_videos(cursor, game_id, request.videos)
 
         # Update games table with video metadata
@@ -542,15 +574,51 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
             params.append(game_id)
             cursor.execute(f"UPDATE games SET {', '.join(updates)} WHERE id = ?", params)
 
+        # bug26p: commit the metadata writes BEFORE refs/credits so the storage-ref
+        # insert (which opens its OWN connection) can't deadlock on our write lock —
+        # same ordering as activate_game.
         conn.commit()
+
+        # GAP 2: storage refs for the newly-attached hashes. Idempotent per hash
+        # and HEAD-checks the R2 source first (bug 27p), so existing videos'
+        # already-ref'd hashes are skipped and an absent source is never ref'd.
+        expires_str = storage_expires_at().isoformat()
+        _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str)
 
         videos_response = _get_game_videos_response(cursor, game_id)
 
-    logger.info(f"Added {len(request.videos)} video(s) to game {game_id}")
+    # GAP 1: charge for the newly-attached bytes. Distinct (source, reference_id)
+    # from activate_game's game_upload:{game_id} charge — reusing that pair would
+    # be a silent no-op (deduct_credits is idempotent on it). Keying reference_id
+    # on the attached hash(es) also makes the charge idempotent per attached video,
+    # so a client retry after a dropped response can't double-charge. Refs-before-
+    # charge mirrors activate_game so we never charge for an unref'd source.
+    new_size = sum(v.file_size or 0 for v in request.videos)
+    cost = calculate_upload_cost(new_size) if new_size > 0 else 1
+    reference_id = f"{game_id}:" + ":".join(sorted(v.blake3_hash.lower() for v in request.videos))
+    try:
+        result = deduct_credits(user_id, cost, source="game_video_add", reference_id=reference_id)
+    except CreditsUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
+    if not result["success"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "message": "Insufficient credits to add video",
+                "required": cost,
+                "balance": result["balance"],
+            },
+        )
+
+    # Q2: lightweight milestone for funnel visibility (no daily column).
+    record_milestone(user_id, "game_video_add", {"game_id": game_id, "videos_added": len(request.videos)})
+
+    logger.info(f"Added {len(request.videos)} video(s) to game {game_id}, cost={cost}cr")
     return {
         "game_id": game_id,
         "videos_added": len(request.videos),
         "videos": videos_response,
+        "upload_cost_charged": cost,
     }
 
 
