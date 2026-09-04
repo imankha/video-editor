@@ -12,6 +12,16 @@ function dialogScope() {
 // strip's Focus button (edit mode, existingClip.autoProjectId set) opens a
 // confirm-then-save-then-navigate prompt with exactly two buttons (Q2:
 // "Save & open Focus" + "Cancel", no third "Discard" button).
+//
+// T8730: the prompt now ONLY appears when there are real unsaved changes. The
+// dirty-path suite below therefore edits a field first (dirtyEdit) so the
+// dialog still fires; a separate not-dirty test asserts the direct-navigate path.
+
+// Make the edit form dirty by typing a new clip name (flips isNameManuallyEdited
+// so nameToSave diverges from the loaded clip's empty name).
+function dirtyEdit() {
+  fireEvent.change(screen.getByLabelText('Clip name'), { target: { value: 'Edited name' } });
+}
 
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
@@ -46,10 +56,11 @@ const baseProps = {
   layout: 'strip',
 };
 
-describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 §2.8)', () => {
-  it('clicking Focus opens a confirm prompt instead of navigating directly', () => {
+describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 §2.8, T8730 dirty path)', () => {
+  it('with unsaved changes, clicking Focus opens a confirm prompt instead of navigating directly', () => {
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={onOpenInFocus} />);
+    dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
     expect(onOpenInFocus).not.toHaveBeenCalled();
     expect(screen.getByText('Save this play first?')).toBeTruthy();
@@ -57,6 +68,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
 
   it('exactly two buttons: "Save & open Focus" and "Cancel" (no Discard, Q2)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
+    dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
     const dialog = dialogScope();
     expect(dialog.getByRole('button', { name: 'Save & open Focus' })).toBeTruthy();
@@ -69,6 +81,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     const onUpdateClip = vi.fn();
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
+    dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
     fireEvent.click(dialogScope().getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
@@ -80,9 +93,41 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     const onUpdateClip = vi.fn(() => Promise.resolve());
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
+    dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Save & open Focus' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onOpenInFocus).toHaveBeenCalledWith(42));
+  });
+
+  it('the dialog copy names Annotate, not "the play editor" (T8730 naming)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
+    dirtyEdit();
+    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    expect(screen.getByText('Opening Focus closes the Annotate editor.')).toBeTruthy();
+    expect(screen.queryByText(/play editor/i)).toBeNull();
+  });
+});
+
+describe('AnnotateFullscreenOverlay — Focus with no unsaved changes navigates directly (T8730)', () => {
+  it('clicking Focus with an untouched form opens Focus with no dialog', () => {
+    const onUpdateClip = vi.fn();
+    const onOpenInFocus = vi.fn();
+    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
+    // No edits — click Focus straight away.
+    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    expect(screen.queryByText('Save this play first?')).toBeNull();
+    expect(onUpdateClip).not.toHaveBeenCalled();
+    expect(onOpenInFocus).toHaveBeenCalledWith(42);
+  });
+
+  it('a non-name edit (rating change) is also detected as dirty and shows the prompt', () => {
+    const onOpenInFocus = vi.fn();
+    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={onOpenInFocus} />);
+    // Change the rating (4 -> 5): a genuine edit, so the prompt must appear.
+    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    expect(screen.getByText('Save this play first?')).toBeTruthy();
+    expect(onOpenInFocus).not.toHaveBeenCalled();
   });
 });
