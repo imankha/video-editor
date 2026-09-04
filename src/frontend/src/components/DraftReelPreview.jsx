@@ -3,6 +3,7 @@ import { EyeOff, AlertTriangle } from 'lucide-react';
 import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
 import { toast } from './shared/Toast';
@@ -46,6 +47,19 @@ function DraftReelPreviewInner({ payload }) {
   const [ringOn, setRingOn] = useState(false);
   const ringTimer = useRef(null);
   useEffect(() => () => clearTimeout(ringTimer.current), []);
+
+  // T8535 (moved from DraftTile, T6840 origin): quest_4 "Watch Your Preview"
+  // fires after ~1s of preview playback, mirroring watched_gallery_video_1s so
+  // opening and instantly closing (or scrubbing past) doesn't count. This
+  // component remounts fresh per open (keyed on finalVideoId by the parent), so
+  // a mount-scoped timer is a correct one-shot-per-open watch timer; unmounting
+  // before ~1s (closing the player) cancels it via the cleanup below.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      useQuestStore.getState().recordAchievement('previewed_draft_reel_1s');
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // One-reel payload for CollectionPlayer, mirroring the playerReels shape. The
   // draft's final video streams from the same endpoint a published reel uses

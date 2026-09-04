@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // apiFetch + store fns for the publish path (usePublishProject).
 const { apiFetchMock, fetchProjectsMock, toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
@@ -66,6 +66,7 @@ vi.mock('./collections/CollectionPlayer', async () => {
 
 import { DraftReelPreview } from './DraftReelPreview';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useQuestStore } from '../stores/questStore';
 
 const jsonResponse = (status, body) => ({
   ok: status >= 200 && status < 300,
@@ -145,5 +146,34 @@ describe('DraftReelPreview (T8530)', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
     // Still a draft (not published): Share must not have appeared.
     expect(screen.queryByTitle('Share')).toBeNull();
+  });
+
+  // T8535: the quest_4 "Watch Your Preview" timer moved here from DraftTile so it
+  // still fires from the consolidated draft-preview surface (T6840 behavior).
+  describe('T6840/T8535 preview-watched achievement', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      useQuestStore.getState().recordAchievement.mockClear();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('records previewed_draft_reel_1s after ~1s of playback, not on open', () => {
+      render(<DraftReelPreview />);
+      openPreview();
+      expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
+      act(() => vi.advanceTimersByTime(1000));
+      expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('previewed_draft_reel_1s');
+    });
+
+    it('does NOT record it if the preview is closed before ~1s', () => {
+      render(<DraftReelPreview />);
+      openPreview();
+      act(() => vi.advanceTimersByTime(500));
+      act(() => { useReelPreviewStore.getState().close(); });
+      act(() => vi.advanceTimersByTime(1000));
+      expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
+    });
   });
 });
