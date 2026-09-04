@@ -56,7 +56,9 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - **Failed:** reduce_log the output and report the failure; do **NOT** apply any promotions
      (nothing shipped to prod). Keep the analysis for after a fix + redeploy.
 
-6. **Post-deploy DATA steps — schema first, then data.**
+6. **Post-deploy DATA steps — schema first, then data.** Before running them, read
+   [Pending One-Time Steps](#pending-one-time-steps) below. That section is usually empty;
+   when it is not, it carries deploy-specific work that the routine steps here do not cover.
 
    `deploy_production.sh` itself does **not** migrate and does **not** backfill — it only ships code.
    `user_db`/`profile_db` schema migrations then apply themselves just-in-time per account (see
@@ -118,6 +120,21 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    [Post-Deploy: User Notification](#post-deploy-user-notification) below. This step is
    proposal-only until the user explicitly approves a send — never send email as a side effect
    of a deploy completing.
+
+## Pending One-Time Steps
+
+**Read this section on every deploy; it is normally EMPTY, and an empty section costs one
+glance.** Rows here are one-shot items that apply to the NEXT deploy only, not standing
+procedure. **Execute the row, verify it, then DELETE the row** in the same commit as the
+deploy's Plan Reconciliation (Step E). A row that survives a deploy it applied to is a bug
+in this file, not a recurring checklist item.
+
+Add a row only when a step is (a) genuinely one-time and (b) would otherwise be forgotten.
+Anything that recurs belongs in the numbered Procedure instead.
+
+| Added | Item | Why it cannot wait | Verify | Delete row when |
+|-------|------|--------------------|--------|-----------------|
+| 2026-09-03 | **Postgres migration v026 (`users.is_test_account`, T8110) has never run on prod.** Step 6a is MANDATORY on the next prod deploy, not "run it if convenient". | Prod `schema_migrations` was at max version **25** on 2026-09-03 while master's admin code already queries `u.is_test_account` (`_test_exclusion`, `admin.py:92`, used by `list_users` and the revenue reconciliation). Deploying that code against a table without the column makes those endpoints 500: the admin user list and the reconciliation panel both go dark until 6a runs. | After 6a, confirm `GET /api/admin/users` returns 200 and the Revenue Reconciliation panel loads. A clean 6a run reports `{"error": null, ...}`. | Both verified on prod |
 
 ## Post-Deploy: Plan Reconciliation
 
