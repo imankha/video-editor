@@ -317,7 +317,20 @@ migration of existing rows.
 **If this slice is judged out of scope** (§7 Q6), it must be filed as an explicit follow-up in the
 same PR, not left implicit — otherwise this task ships a fourth path.
 
-### Slice E — frontend plumbing (T8380 owns the UI)
+**Implementation note (2026-09-04) — the Path 3 audit above was incomplete, deviation taken:**
+grep-verification (the R4 risk mitigation this slice calls for) found Path 3
+(`upload-with-metadata`, via `projectDataStore.uploadClipWithMetadata`) has **two** live
+FocusScreen.jsx callers, not one — `handleFileSelect` (wired to the empty-project `FileUpload`
+dropzone) AND `handleUploadWithMetadata` (wired to the sidebar's `UploadClipModal`). Redirecting
+both to the new multipart/batch flow means wiring real client-side upload machinery
+(blake3 hash → prepare-upload → multipart PUT → finalize-upload → batch POST) into FocusScreen —
+substantially more than "redirect a caller," and squarely the entry-point wiring Slice E
+explicitly reserves for T8380 ("build the capability, not the entry point"). Per this section's
+own escape valve, **Path 3 is deferred, not deleted** — `POST /projects/{id}/clips/upload-with-metadata`
+stays live exactly as before. Path 2's `file=` branch WAS deleted (confirmed zero frontend
+callers — `addClipFromLibrary` only ever sends `raw_clip_id`), closing D2 for that path. Filed as
+an explicit follow-up: retiring Path 3 needs its own task once T8380 (or a FocusScreen-specific
+redirect) gives both callers a real multipart-upload replacement to redirect to.
 
 T8370 ships the reusable capability; T8380 ships the button, the modal and the warning copy.
 

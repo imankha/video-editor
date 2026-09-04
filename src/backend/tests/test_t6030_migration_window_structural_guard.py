@@ -58,6 +58,7 @@ POST_V023_COLUMNS = {
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time"],                  # v049
+    "pending_uploads": ["kind"],                                                       # v050
     # v048 (T7830) delete-only R2 cleanup, adds no columns.
     # v049 (T8070 reel status timestamp staleness) adds raw_clips.reel_source_start_time/
     #   reel_source_end_time (above). Every hot read/write is column_exists-guarded:
@@ -150,8 +151,17 @@ POST_V023_COLUMNS = {
     #   source_game_id) have guarded reads above; their write-side sibling is the
     #   cross-profile copy, which REFUSES (RecipientProfileBelowHead) rather than
     #   column-omit -- test_game_copy_below_head_refuses below.
+    # v050 (T8370 pre-cut clip upload) adds pending_uploads.kind (above). Every hot
+    #   read/write of it is column_exists-guarded in games_upload.py: prepare_upload
+    #   REFUSES (503 pending_migration) rather than column-omit for kind='clip' (a
+    #   mis-namespaced/mis-routed row would be worse than a retry); a kind='game'
+    #   prepare is unaffected (the column's own DEFAULT is correct). finalize_upload/
+    #   list_pending_uploads/cancel_upload all read via `_pending_kind(row)`, which
+    #   defaults to 'game' when the column is absent from the row (`'kind' in
+    #   row.keys()`) -- covered by
+    #   test_t8370_clip_upload.py::test_prepare_clip_upload_on_below_v050_db_returns_503_not_mis_namespaced_row.
 }
-HEAD_VERSION_AUDITED = 49  # v049 (T8070): raw_clips.reel_source_start_time/end_time, column_exists-guarded
+HEAD_VERSION_AUDITED = 50  # v050 (T8370): pending_uploads.kind, column_exists-guarded (503, not column-omit)
 
 
 def _cleanup(user_id: str) -> None:

@@ -134,13 +134,12 @@ FLOW_EVENTS = {
     # funnel/journey stop counting attempts as uploads (the reported prod lie).
     "game_created":         {"label": "Upload Attempted",   "daily_col": "games_created"},
     "clip_created":         {"label": "Clipped",            "daily_col": "clips_created"},
-    # T7860: RESERVED name + funnel position for the future direct-upload path (a
-    # clip that ENTERS via upload rather than annotation). Registered now so the
-    # phase inventory's "created" bucket can carry an origin dimension from day
-    # one, but it is NOT emitted anywhere yet and daily_col stays None — the
-    # daily_counters.clips_uploaded Postgres column is DEFERRED (no dead column)
-    # until the direct-upload feature ships and actually records this event.
-    "clip_uploaded":        {"label": "Clip Uploaded",      "daily_col": None},
+    # T7860 reserved this name + funnel position; T8370 SHIPS it (POST
+    # /api/clips/upload records one per landed clip) and adds the
+    # daily_counters.clips_uploaded column (postgres v027) that T7860
+    # deliberately deferred to avoid a dead column. Distinct origin dimension
+    # from clip_created (annotation-sourced) — that event is untouched.
+    "clip_uploaded":        {"label": "Clip Uploaded",      "daily_col": "clips_uploaded"},
     "export_completed":     {"label": "Exported",           "daily_col": "exports_completed"},
     "export_failed":        {"label": None,                 "daily_col": "exports_failed"},
     "share_completed":      {"label": "Shared",             "daily_col": "shares_completed"},
@@ -204,6 +203,14 @@ FLOW_EVENTS = {
     "game_upload_failed":           {"label": "Upload Failed",              "daily_col": "game_uploads_failed"},
     "clip_save_attempted":          {"label": "Clip Attempted",             "daily_col": "clips_attempted"},
     "clip_save_failed":             {"label": "Clip Failed",                "daily_col": "clips_failed"},
+    # T8370: the same attempt/outcome/failure triple as game_created/
+    # game_upload_succeeded/game_upload_failed, for the clip-upload path — a
+    # success-only event would make the clip-upload success rate 100% by
+    # construction (the exact lie T7510 fixed for games). clip_upload_attempted
+    # fires from the T8380 "Add Clip" gesture (before prepare-upload); this task
+    # ships the durable outcome pair (clip_uploaded / clip_upload_failed).
+    "clip_upload_attempted":        {"label": "Clip Upload Attempted",      "daily_col": None},
+    "clip_upload_failed":           {"label": "Clip Upload Failed",         "daily_col": None},
     "share_attempted":              {"label": "Share Attempted",            "daily_col": None},
     "move_attempted":               {"label": "Move Attempted",             "daily_col": None},
     "move_succeeded":               {"label": "Moved to Reels",             "daily_col": None},
@@ -255,7 +262,7 @@ FUNNEL_STEPS = [
     "game_created",           # T7510: upload ATTEMPT (pending insert)
     "game_upload_succeeded",  # T7510: durable upload OUTCOME (finalize)
     "clip_created",
-    "clip_uploaded",          # T7860: RESERVED direct-upload origin (no data yet)
+    "clip_uploaded",          # T7860 reserved, T8370 ships: direct-upload origin
     "annotation_completed",
     "framing_opened",
     "framing_exported",

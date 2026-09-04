@@ -46,6 +46,7 @@ from .v046_working_video_framing_snapshot import V046WorkingVideoFramingSnapshot
 from .v047_backfill_game_storage_refs import V047BackfillGameStorageRefs
 from .v048_cleanup_sweep_orphan_raw_clips import V048CleanupSweepOrphanRawClips
 from .v049_raw_clips_reel_source_window import V049RawClipsReelSourceWindow
+from .v050_pending_uploads_kind import V050PendingUploadsKind
 
 MIGRATIONS = [
     V001Baseline(),
@@ -95,6 +96,7 @@ MIGRATIONS = [
     V047BackfillGameStorageRefs(),
     V048CleanupSweepOrphanRawClips(),
     V049RawClipsReelSourceWindow(),
+    V050PendingUploadsKind(),
 ]
 
 # T5089: floor=0 is INERT (gate never fires). When the cross-env floor sweep

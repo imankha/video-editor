@@ -1,5 +1,11 @@
 ---
 domain: annotate
+updated: 2026-09-04 (T8370 pre-cut clip upload: a NEW clip-creation origin that bypasses Annotate
+entirely — `POST /api/clips/upload` (clips.py) creates `raw_clips(game_id=NULL)` rows directly from
+an uploaded file, never through the game→annotate→save_raw_clip path this doc otherwise covers.
+See backend-services.md "Pre-cut clip upload (T8370)" for the full model (INV-U1..U5); this doc
+only gets the one-line disambiguation added to "Recap clips ARE raw_clips" below, since an uploaded
+clip is the mirror-image case of a recap clip's "no independent source" claim.)
 updated: 2026-09-03 (T8490 star-scale caption + glyph labels + Keeper Save rename: the 5-entry
 `RATING_NOTATION`/`RATING_ADJECTIVES` maps had FOUR duplicate local copies —
 `AnnotateFullscreenOverlay.jsx`, `ClipRegionLayer.jsx`, `useAnnotate.js` (dead — returned from the
@@ -365,7 +371,11 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   raw_clip id" (L133-136); `handleCreateRecapClip` (L145-160) is a gesture-driven
   `updateClip(clipId, {create_project: true})` → `PUT /clips/raw/{id}`, optimistically flips
   `in_drafts`; button disabled while `in_drafts` is true. Clips have NO independent source video,
-  so re-materializing clips from an expired game was deferred.
+  so re-materializing clips from an expired game was deferred. **This is specifically true of
+  GAME-sourced clips** (`raw_clips.game_id` NOT NULL) — a T8370 uploaded clip (`game_id` NULL) is
+  the opposite case: its `raw_clips/{blake3}.mp4` object IS its one-and-only, permanent source
+  (never re-materialized because it never expires). See "Pre-cut clip upload (T8370)" in
+  backend-services.md for that model; the two clip categories never overlap the same row.
 - **T5710 — per-layer recap tabs + player-tag filter is a RAIL-ONLY filter, never a
   playback filter.** `RecapPlayerModal.jsx` splits the old single recap tab into Team Recap /
   {Athlete} Recap (see [export-pipeline.md](export-pipeline.md) § Active/upcoming work T5710 for

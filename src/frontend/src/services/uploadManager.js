@@ -594,6 +594,11 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   if (options.label) {
     prepareBody.label = options.label;
   }
+  // T8370: 'game' (default, omitted) or 'clip' — routes the upload's R2
+  // namespace + finalize-time milestone (games_upload.py upload_object_key).
+  if (options.kind) {
+    prepareBody.kind = options.kind;
+  }
   const prepareRes = await apiFetch(`${API_BASE}/api/games/prepare-upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -608,6 +613,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       reason: error.detail || `prepare_failed_${prepareRes.status}`,
       blake3_hash: hash,
       file_size: uploadSize,
+      kind: options.kind,
     });
     throw new Error(error.detail || `Prepare failed: ${prepareRes.status}`);
   }
@@ -681,6 +687,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       file_size: uploadSize,
       total_parts: prepareData.parts.length,
       elapsed_ms: Math.round(performance.now() - __diagUploadStart),
+      kind: options.kind,
     });
     throw uploadErr;
   }
@@ -724,6 +731,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       blake3_hash: hash,
       file_size: uploadSize,
       total_parts: parts.length,
+      kind: options.kind,
     });
     throw new Error(message);
   }
@@ -736,6 +744,31 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     file_size: finalizeData.file_size,
     uploaded: true,
   };
+}
+
+/**
+ * T8370: batch-create clips from already-durable R2 sources (each item's
+ * bytes must already be uploaded via ensureVideoInR2(file, onProgress,
+ * {kind: 'clip'}) — prepare-upload/finalize-upload with kind='clip'). ONE
+ * credit charge for the whole batch; idempotent on the accepted-hash set.
+ *
+ * @param {Array<{blake3_hash: string, file_size: number, original_filename: string,
+ *   name?: string, rating?: number, tags?: string[], notes?: string, my_athlete?: boolean}>} items
+ * @returns {Promise<{results: Array, charged: number, balance: number|null}>}
+ */
+export async function uploadClipsBatch(items) {
+  const response = await apiFetch(`${API_BASE}/api/clips/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Clip batch upload failed: ${response.status}`);
+  }
+
+  return await response.json();
 }
 
 /**

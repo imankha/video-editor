@@ -1,5 +1,18 @@
 ---
 domain: backend-services
+updated: 2026-09-04 (T8370 pre-cut clip upload: a video file becomes a CLIP directly, no game, no
+annotate step. `raw_clips(game_id=NULL)` already WAS the shipped model for this (Path 3's
+`upload-with-metadata`, pre-existing but half-broken) — T8370 promotes it to first class: batch
+endpoint `POST /api/clips/upload` (clips.py), `kind`-aware upload transport
+(games_upload.py `upload_object_key`), one-charge-per-batch pricing, and an hourly reconciliation
+reaper. Profile_db head v049->v050 (`pending_uploads.kind`), postgres head v026->v027
+(`daily_counters.clips_uploaded`). See "Pre-cut clip upload (T8370)" section below for the full
+model (INV-U1..U5) and annotate.md's "Recap clips ARE raw_clips" entry for the one-line
+disambiguation from game-sourced clips. **Known deviation from the design doc:** Path 3
+(`upload-with-metadata`) was assumed to have one frontend caller and be safely deletable — grep
+found two live callers in FocusScreen.jsx, so it was LEFT LIVE (not deleted); only Path 2
+(`add_clip_to_project`'s `file=` branch, zero live callers) was retired. Filed as an explicit
+follow-up, noted in T8370-design.md Slice D.)
 updated: 2026-09-02 (T8230: admin People table's single "Exports" column split into per-type detail. Pure read-surfacing -- the per-type events already existed in `user_actions` (`framing_exported`/`overlay_exported`, analytics.FLOW_EVENTS), just weren't read out. Added `framing_exported_count`/`overlay_exported_count` to `list_users` (admin.py) via the SAME 4-touch shape T8220 used for `game_upload_succeeded_count`: `SUM(count) FILTER (WHERE action = ...)` in the `act` CTE, the COALESCE in the outer SELECT, the response dict, AND `_SORT_COLUMNS`. **Landmine: `_SORT_COLUMNS` is NON-optional for a new UserTable column.** Every People-table `<th>` renders with `onClick={setSort(col.key)}` (UserTable.jsx, T8110 server-side sort), so a new column whose key is absent from the `_SORT_COLUMNS` whitelist makes clicking its header a 422 (`_order_by` rejects unknown keys before any SQL). This differs from T8220, which added NO column (it rendered `game_upload_succeeded_count` INSIDE the existing `game_created_count` cell as "N tried / M succeeded"), so it needed no sort entry -- adding a genuinely new column does. **Residual accounting:** `export_completed` is the generic Exports total, emitted at 3 sites -- framing worker (export_worker.py, paired with `framing_exported`), overlay sync (overlay.py, paired with `overlay_exported`), and the recovery finalize path (exports.py ~L247, type `"recovered"`, re-fires ONLY the generic event, no per-type sibling); `multi_clip`/`before_after` emit NO export milestone at all. So `export_completed >= framing_exported + overlay_exported` always, and the "other" bucket (recovered jobs) has NO dedicated FLOW_EVENT to count. Decision: KEEP the "Exports" total column and ADD Focus/Overlay beside it (rather than replacing), so the residual stays visible as `Exports - Focus - Overlay` and is never silently dropped -- no invented zero-data field. Guards: `tests/test_admin.py::TestAdminUsers::{test_export_types_split_focus_overlay,test_new_export_split_columns_are_sortable}`, `UserTable.test.jsx`.)
 updated: 2026-09-02 (T8220: `list_users`'s `act` CTE (admin.py, the T8110 rework) gained `game_upload_succeeded_count` alongside `game_created_count`, same `SUM(count) FILTER (WHERE action = ...)` shape, threaded through the SELECT/COALESCE and the response dict. Root cause fixed: the People table's "Games" column was rendering the raw `game_created` ATTEMPT count (pending-insert event, T7510) as if it were a completed-upload count -- for accounts hit by the 2026-08-30 self-aborting-multipart outage (T8160) this read as wildly wrong (bknoto 15 vs 1 real game; chenyh1225 7 vs 0). Fix renders BOTH counts as a pair ("7 tried / 0 succeeded"), never collapsed to one number -- explicit user directive (2026-09-01: "tries versus success is very important"). **`analytics_platforms` needed NO backend change** -- its `by_action` query (~L2200) already GROUPs BY every `ua.action` with no allowlist, so `game_upload_succeeded` rows were already present; the frontend's `PlatformBreakdown.jsx` `ACTION_LABELS` map was the only thing dropping them (only actions with a label render as a row) -- fixed by adding `game_upload_succeeded: 'Games Succeeded'` and relabeling `game_created` from the misleading "Games Uploaded" to "Games Tried". Landmine for future admin-metric additions: before assuming a new per-action metric needs a backend query change, check whether the read path is already generic (GROUP BY action with no filter) -- the gap may be purely in a frontend label allowlist. No new sortable column added (`_SORT_COLUMNS` unchanged) -- sort still ranks by `game_created_count` (tries), matching the existing UserTable column key. Guards: `tests/test_admin.py::TestAdminUsers::test_games_tried_vs_succeeded_never_conflated`, `UserTable.test.jsx`, `PlatformBreakdown.test.jsx`.)
 updated: 2026-09-02 (T8250: `GET /api/admin/analytics/pulse` computed its `today`/`start` window with Python's naive LOCAL `date.today()` (admin.py) while `daily_counters`/`user_actions` are UTC-keyed (`CURRENT_DATE`/`now()`, analytics.py) -- a stale comment directly above the line already documented the UTC intent (T7990-era) but the code regressed/was never applied. Fixed to `datetime.now(UTC).date()`, matching every other UTC call site in admin.py. Same fix applied to the `analytics_funnel`/`analytics_channels`/`analytics_cohorts` 365-day-back `date.today()` defaults (all three compare against `s.acquired_at`, a UTC timestamptz) for consistency, though their 1-day slip on a 365-day window was low-impact. `_build_segment_filter`'s `date.fromisoformat(acquired_from/acquired_to)` is a pure user-supplied echo with no `date.today()` default -- correctly left unchanged. Regression test: `TestPulseUtcDateWindow` in `tests/test_analytics_dashboards.py`, which patches `app.routers.admin.date` to a subclass whose `today()` returns "yesterday" relative to the real UTC date -- deterministic regardless of the host's real timezone.)
@@ -139,6 +152,123 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 - **`up(conn)` receives a TUPLE row factory for SQLite** (plain `sqlite3.connect`, migrations/__init__.py:91/119) — index rows positionally (`r[0]`), NOT `r['col']`. String-indexing crashed the v017 backfill for 4 prod users (memory: v017 rowfactory bug). Test the row-reading path with data, not just the empty case.
 - `PRAGMA user_version` (schema) and the `db_version` table / R2 `db-version` metadata (sync) are independent — see persistence-sync.md.
 - Status check: `get_migration_status()` (migrations/__init__.py) reports CODE head versions only. `get_migration_status_for_user(user_id)` (T5970) additionally reports each registered profile's ACTUAL R2 `PRAGMA user_version` vs head — READ-ONLY (temp download + read + unlink, no R2 write), one user only (never the mutating full-R2-walk). Exposed at `GET /api/admin/migration-status[?user_id=]` (admin-gated); no user_id -> head only (zero cost). Use it to answer "is this env at head?" without running migrate.
+
+## Pre-cut clip upload (T8370)
+
+A user with pre-cut clips (phone footage, Veo/Trace auto-cut highlights) can upload a video file
+and get a CLIP directly — no game, no Annotate step, no visible "game" anywhere. This is NOT a new
+data model: `raw_clips(game_id=NULL)` was already the shipped shape (Path 3's pre-existing
+`upload-with-metadata` endpoint, half-broken — D1/D2 below); T8370 promotes it to first class.
+
+**Entry points:**
+- `POST /api/games/prepare-upload` / `finalize-upload` (games_upload.py) gained a `kind` field
+  (`app.constants.UploadKind`: `GAME` default / `CLIP`). `upload_object_key(kind, blake3_hash,
+  user_id)` resolves the R2 key by kind: GAME → global `games/{hash}.mp4` (unchanged); CLIP →
+  per-profile `{r2_key(user_id, "raw_clips/{hash}.mp4")}`. Every R2 multipart helper already took a
+  raw key, so this needed no storage.py change.
+- `POST /api/clips/upload` (clips.py, NEW) — batch endpoint. Body `{items: [{blake3_hash,
+  file_size, original_filename, name?, rating?, tags?, notes?, my_athlete?}]}`. Each item's bytes
+  must already be durable in R2 (via the prepare/finalize pair above with `kind='clip'`). Creates
+  one `raw_clips(game_id=NULL, start_time=0, end_time=probed_duration)` row + one auto-created 9:16
+  project per clip (`_create_auto_project_for_clip`, reused verbatim). Partial failure is first
+  class (`{ok, error}` per item, never all-or-nothing). Idempotent by content: re-posting the same
+  accepted-hash set returns the same ids and does not re-charge.
+
+**Invariants (design doc §2.1, T8370-design.md):**
+- **INV-U1 — one owner, no ref count.** A clip-source R2 object is referenced by exactly one
+  `raw_clips` row in exactly one profile; deleting the row deletes the object (existing
+  `delete_raw_clip` path, unchanged). No `game_storage`/`game_storage_refs` row is ever inserted
+  for a clip-source hash (INV-U2) — those tables are keyed by the GLOBAL `games/` namespace and the
+  sweep would delete the wrong key if a clip hash ever landed there. This is why clip sources never
+  expire (a product decision, not a gap) and never enter the T6770 ref-count machinery.
+- **INV-U3 — no `games` row, ever.** A clip upload creates zero `games` rows and emits no
+  `game_created`/`game_upload_succeeded` — invisibility by ABSENCE, not a filter. `finalize_upload`
+  only emits `game_upload_succeeded` when `kind == UploadKind.GAME` (the D4 fix below).
+- **INV-U4 — source range is always `(0, probed_duration)`**, probed server-side
+  (`app/services/media_probe.py probe_r2_video`, a per-profile-key wrapper around the existing
+  `services/video_probe.probe_r2_video` games.py already uses) — never NULL/NULL (closes D1: the
+  pre-existing Path 3 endpoint inserted `start_time`/`end_time` NULL, which `resolve_clip_source`
+  read as a 0-second export range).
+- **INV-U5 — one clip, one draft.** Each uploaded file gets its OWN `raw_clips` row + its OWN
+  auto-project. This is what makes D3 (two same-duration clips colliding under
+  `latest_working_clips_subquery`'s `(project_id, COALESCE(end_time, uploaded_filename))` partition
+  key) structurally unreachable here — different projects, no collision.
+
+**Pricing (§4.2):** ONE `credit_ledger.debit` per batch gesture, `calculate_storage_cost` (NOT
+`calculate_upload_cost` — no `AUTO_EXPORT_SURCHARGE`, since a clip source is never auto-exported)
+on the SUMMED bytes of the NEWLY-CREATED items only (`to_create`, never `already_existing`).
+`credit_ledger.KEY_PREFIX` gained `"clip_upload"` and `"clip_upload_refund"`. Idempotency key:
+`credit_key("clip_upload", reference_id)` where `reference_id =
+f"clipbatch:{profile_id}:{sorted-comma-joined to_create blake3 hashes}"` — the literal hash list
+(not a digest), so the §7 Q3 reconciliation reaper below can recover which `raw_clips` rows to
+check for without needing a side table. **Charging/keying off `to_create` alone (not
+`already_existing + to_create`) is load-bearing, not a simplification** — a review round caught
+that including already-existing items in the sum double-charges on a PARTIAL-then-full retry
+(batch `[A,B]` where A lands first and B fails `source_missing`; a later retry of `[A,B]` now sees
+A as `already_existing` — folding it into the sum computes a NEW `reference_id` covering A+B,
+re-charging the already-paid-for A). Regression test:
+`test_partial_then_full_retry_never_recharges_the_already_landed_item`. **Ordering is
+charge-first** (approved Q3 amendment): validate + probe every item -> DEBIT `to_create`'s cost ->
+THEN insert rows -> THEN `record_milestone("clip_uploaded")` per newly-created clip. An
+insufficient-balance debit creates NO new rows (never a free clip); already-existing items are
+unaffected and their current balance is still reported (`get_credit_balance`) even when nothing is
+charged this call. Caps (`constants.MAX_CLIP_UPLOAD_BYTES` 500MB at prepare-upload,
+`constants.MAX_CLIP_DURATION_S` 600s at probe time in the batch endpoint — both live in
+`constants.py`, not either router, so neither router needs a cross-router import for a shared cap)
+keep the permanent-storage/one-time-charge combination from being exploitable.
+
+**Q3 reconciliation reaper (`app/services/cleanup.py`, piggybacked on the existing hourly
+session/OTP loop — NO new scheduler):** `reconcile_orphaned_clip_upload_debits()` finds
+`credit_transactions` rows with `source='clip_upload'` older than 24h with no matching
+`clip_upload_refund` row yet, and for each NOT covered by `_clip_upload_batch_has_raw_clips`
+(parses `reference_id`, opens the batch's OWN profile read-only via
+`materialization.open_profile_db_readonly`, checks for at least one matching `raw_clips.filename`)
+calls the existing `refund_credits(..., source="clip_upload_refund")` and logs CRITICAL (an
+orphaned debit is a bug signal — crash between debit and insert, or a client that gave up — not
+routine housekeeping). Doubly idempotent: the SQL excludes debits that already have a refund row,
+AND `refund_credits`'s own `credit_key` dedup no-ops a second grant() even if re-attempted.
+
+**Guarded write for `pending_uploads.kind` (T5630/T6550 pattern):** a `kind='clip'` prepare-upload
+on a below-v050 profile DB REFUSES with 503 `{"code": "pending_migration"}` rather than writing a
+row that would default to `'game'` and finalize into the wrong namespace/milestone — see
+`games_upload.py prepare_upload`'s `column_exists(cursor, "pending_uploads", "kind")` guard.
+`finalize_upload`/`list_pending_uploads`/`cancel_upload` all read the row's kind via
+`_pending_kind(row)` (defaults to `'game'` when the column is absent from THAT row, matching the
+column's own DEFAULT). **Landmine a review round caught: an explicit `SELECT col1, col2, ...` that
+forgets to list `kind` silently defeats `_pending_kind` even on an already-migrated DB** — the
+column exists in the TABLE but was never in the ROW this query returned, so `'kind' in
+row.keys()` is False regardless of migration state. `list_pending_uploads` had exactly this bug
+(an explicit column list omitting `kind`), which resolved every CLIP row's validity check onto the
+WRONG R2 key (`games/` instead of `raw_clips/`) and reaped-and-deleted a still-valid clip upload's
+resume record. Fixed by switching to `SELECT *` (matching `finalize_upload`'s existing pattern) —
+any NEW read site added later must do the same or use `cancel_upload`'s explicit
+`column_exists`-conditional SELECT; never a column list that quietly omits `kind`. Migrations:
+profile_db v050 (`pending_uploads.kind`), postgres v027
+(`daily_counters.clips_uploaded`) — both additive, both mirrored in `ensure_database()`/
+`_SCHEMA_DDL` for fresh DBs. `analytics.FLOW_EVENTS["clip_uploaded"].daily_col` flipped from `None`
+(T7860 reservation) to `"clips_uploaded"`; `clip_upload_attempted`/`clip_upload_failed` registered
+alongside (T7510-style attempt/outcome/failure triple) — `clip_upload_attempted` is NOT emitted
+anywhere yet (that's T8380's entry-point gesture), only registered so it doesn't 
+"Unknown event"-drop once T8380 wires it.
+
+**Known deviation from the design doc (Slice D):** the design assumed Path 3
+(`upload-with-metadata`) had one frontend caller (`UploadClipModal`) and could be deleted in this
+task. Grep found TWO live callers in `FocusScreen.jsx` (`handleFileSelect` → the empty-project
+`FileUpload` dropzone, and `handleUploadWithMetadata` → `UploadClipModal`) — redirecting both to
+the new multipart/batch flow is real entry-point wiring, which the design explicitly reserves for
+T8380. Path 3 was LEFT LIVE; only Path 2 (`add_clip_to_project`'s `file=` branch, zero live
+callers — `addClipFromLibrary` only ever sends `raw_clip_id`) was retired, closing D2 (its
+`uploads/{name}` prefix mismatch with the `raw_clips/` readers). Filed as an explicit follow-up
+(noted in T8370-design.md's Slice D section) — do not assume Path 3 is gone.
+
+**Frontend (Slice E, capability only — T8380 owns the entry point):**
+`services/uploadManager.js` `ensureVideoInR2(file, onProgress, {kind: 'clip'})` (same multipart
+pipeline, just routes `kind` through to prepare-upload) + new `uploadClipsBatch(items)` (POSTs the
+batch). `hooks/useClipUpload.js` (new) orchestrates: hash/land each file via `ensureVideoInR2`
+(partial failure per file, sequential), then ONE `uploadClipsBatch` call; on success, reuses
+`announceReelCreated`'s CONTRACT (T8480) — `useProjectsStore.selectProject(firstProjectId)` +
+`fetchProjects({force: true})` — WITHOUT its reel-specific toast copy (T8380's entry point has the
+full N-clips/partial-failure context to word that correctly).
 
 ## Intro card library (profile_db, T5195)
 The player-intro card library lives in `profile.sqlite` (epic decision 7 — a card names one athlete and its image sits under the per-profile R2 `intro/` prefix, so the row belongs beside the media). Storage layer only in T5195: no editor UI (T5205), no rendering (T5210).

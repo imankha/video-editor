@@ -412,9 +412,10 @@ def test_add_clip_invalidates_poster(db):
     rc = _seed_raw_clip(db)
 
     with patch.object(clips, "invalidate_draft_poster") as inval:
-        # file=None explicitly: FastAPI's File(None) default is a FieldInfo, not
-        # None, when the handler is called directly (not through the router).
-        res = asyncio.run(clips.add_clip_to_project(pid, raw_clip_id=rc, file=None,
+        # T8370 Slice D: add_clip_to_project's file= branch (Path 2) was
+        # retired -- it has no live frontend caller (addClipFromLibrary only
+        # ever sends raw_clip_id), so the handler no longer takes a `file` arg.
+        res = asyncio.run(clips.add_clip_to_project(pid, raw_clip_id=rc,
                                                     background_tasks=None))
     assert res.project_id == pid
     inval.assert_called_once_with(pid)

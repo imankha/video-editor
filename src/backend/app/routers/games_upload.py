@@ -17,11 +17,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.constants import GameStatus, UploadStatus
-from app.database import get_db_connection
+from app.constants import MAX_CLIP_UPLOAD_BYTES, GameStatus, UploadKind, UploadStatus
+from app.database import column_exists, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.services.credit_ledger import get_credit_balance
-from app.services.storage_credits import calculate_upload_cost
+from app.services.storage_credits import calculate_storage_cost, calculate_upload_cost
 from app.storage import (
     R2_ENABLED,
     generate_multipart_urls,
@@ -32,6 +32,7 @@ from app.storage import (
     r2_create_multipart_upload,
     r2_head_object_global,
     r2_is_multipart_upload_valid,
+    r2_key,
     r2_multipart_parts_match_size,
     r2_set_object_metadata_global,
 )
@@ -58,6 +59,33 @@ MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
 # so this is flat per upload (10GB max / 5MB = 2048 parts, well under the 10k cap).
 PART_SIZE = 5 * 1024 * 1024  # 5MB
 
+def upload_object_key(kind: str, blake3_hash: str, user_id: str | None = None) -> str:
+    """Resolve the R2 key an upload session's bytes land at, by kind.
+
+    GAME uploads share the global, blake3-deduped `games/{hash}.mp4` namespace
+    (cross-user dedup, ref-counted, swept). CLIP uploads land in the per-profile
+    `raw_clips/{hash}.mp4` prefix — exactly one owning `raw_clips` row, never
+    entering `game_storage`/the sweep (INV-U1/INV-U2, T8370 design §2.1). Every
+    R2 multipart helper already accepts a raw key, so this needs no storage.py
+    change. Fails loud on an unrecognized kind rather than defaulting — a
+    silently mis-namespaced upload would land bytes nobody can find.
+    """
+    if kind == UploadKind.GAME.value:
+        return f"games/{blake3_hash}.mp4"
+    if kind == UploadKind.CLIP.value:
+        if not user_id:
+            raise ValueError("upload_object_key(kind='clip') requires user_id")
+        return r2_key(user_id, f"raw_clips/{blake3_hash}.mp4")
+    raise ValueError(f"unknown upload kind: {kind!r}")
+
+
+def _pending_kind(row) -> str:
+    """Read pending_uploads.kind from a row, defaulting to GAME for a below-v050
+    DB (guarded-write pattern, T5630/T6550) — the column's own DEFAULT is 'game'
+    on any machine that HAS migrated, so this only matters mid rolling-deploy."""
+    # sqlite3.Row: `in row` tests VALUES, not keys — `.keys()` required (SIM118).
+    return row['kind'] if 'kind' in row.keys() else UploadKind.GAME.value  # noqa: SIM118
+
 
 def validate_blake3_hash(hash_value: str) -> bool:
     """Validate that a string is a valid BLAKE3 hash (64 hex chars)."""
@@ -69,9 +97,12 @@ def validate_file_size(size: int) -> bool:
     return 0 < size <= MAX_FILE_SIZE
 
 
-def _record_upload_failure(user_id: str | None, reason: str) -> None:
+def _record_upload_failure(user_id: str | None, reason: str, kind: str = UploadKind.GAME.value) -> None:
     """
-    T7970: record a `game_upload_failed` milestone at a REAL in-flight failure site.
+    T7970: record a `game_upload_failed`/`clip_upload_failed` milestone at a REAL
+    in-flight failure site (T8370: routed by `kind` — a clip upload's failures
+    must not inflate the GAME tried/succeeded pair, mirroring the finalize-time
+    D4 fix).
 
     Before T7970 the ONLY emitter of `game_upload_failed` was the stale-pending
     reaper (`list_pending_uploads`, reason=user_abandoned), so the admin "Upload
@@ -86,11 +117,12 @@ def _record_upload_failure(user_id: str | None, reason: str) -> None:
     """
     if not user_id:
         return
+    event = "clip_upload_failed" if kind == UploadKind.CLIP.value else "game_upload_failed"
     try:
         from app.analytics import record_milestone
-        record_milestone(user_id, "game_upload_failed", reason=reason)
+        record_milestone(user_id, event, reason=reason)
     except Exception:
-        logger.exception("[T7970] failed to record game_upload_failed milestone")
+        logger.exception(f"[T7970] failed to record {event} milestone")
 
 
 # T8170: an HTTP status embedded in an uploadPart rejection message (see
@@ -128,6 +160,8 @@ class PrepareUploadRequest(BaseModel):
     file_size: int = Field(..., description="File size in bytes")
     original_filename: str = Field(..., description="Original filename")
     label: str | None = Field(None, description="Display label (e.g. 'First Half')")
+    # T8370: default keeps every existing (pre-T8370) caller byte-identical.
+    kind: str = Field(UploadKind.GAME.value, description="'game' (default) or 'clip'")
 
 
 class PartInfo(BaseModel):
@@ -174,29 +208,69 @@ async def prepare_upload(request: PrepareUploadRequest):
 
     user_id = get_current_user_id()
 
+    # T8370: fail loud on an unrecognized kind rather than defaulting — a
+    # mis-namespaced upload would land bytes nobody can find.
+    kind = request.kind
+    if kind not in (UploadKind.GAME.value, UploadKind.CLIP.value):
+        _record_upload_failure(user_id, "refused")
+        raise HTTPException(status_code=400, detail=f"Invalid upload kind: {kind!r}")
+    is_clip = kind == UploadKind.CLIP.value
+
     # Validate inputs. A malformed hash/size is a real rejected upload attempt (T7970).
     blake3_hash = request.blake3_hash.lower()
     if not validate_blake3_hash(blake3_hash):
-        _record_upload_failure(user_id, "refused")
+        _record_upload_failure(user_id, "refused", kind=kind)
         raise HTTPException(
             status_code=400,
             detail="Invalid BLAKE3 hash format. Expected 64 hex characters."
         )
 
     if not validate_file_size(request.file_size):
-        _record_upload_failure(user_id, "refused")
+        _record_upload_failure(user_id, "refused", kind=kind)
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file size. Must be between 1 byte and {MAX_FILE_SIZE // (1024**3)}GB."
         )
 
-    r2_key = f"games/{blake3_hash}.mp4"
+    # T8370 §4.3: clip sources are permanent (never expire), so cap the size
+    # up front — never a silent truncation, steer to Add Game instead.
+    if is_clip and request.file_size > MAX_CLIP_UPLOAD_BYTES:
+        _record_upload_failure(user_id, "refused", kind=kind)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Clip uploads are limited to {MAX_CLIP_UPLOAD_BYTES // (1024*1024)}MB. "
+                "For longer footage, use Add Game instead."
+            ),
+        )
 
-    # Check if game already exists in R2
+    # T8370 guarded write (T5630/T6550 pattern): a kind='clip' prepare on a
+    # below-v050 profile DB has nowhere honest to record intent — refuse
+    # rather than write a row that finalize could route into the wrong
+    # namespace / emit the wrong milestone for.
+    with get_db_connection() as _guard_conn:
+        has_kind_column = column_exists(_guard_conn.cursor(), "pending_uploads", "kind")
+    if is_clip and not has_kind_column:
+        raise HTTPException(
+            status_code=503,
+            detail={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+        )
+
+    r2_key = upload_object_key(kind, blake3_hash, user_id)
+
+    # Check if the object already exists in R2 (global dedup for games; a
+    # per-profile clip source is never pre-existing under a fresh hash, but
+    # the same HEAD call is harmless and keeps the two kinds on one path).
     head_result = r2_head_object_global(r2_key)
 
-    # T1580: compute upload cost for all response paths
-    upload_cost = calculate_upload_cost(request.file_size)
+    # T1580: compute upload cost for all response paths. A clip's REAL charge
+    # is one debit per BATCH on summed bytes (POST /api/clips/upload, §4.2) —
+    # this per-file preview uses the same no-surcharge storage cost so the
+    # number shown here is in the right ballpark before the batch is posted.
+    upload_cost = (
+        calculate_storage_cost(request.file_size) if is_clip
+        else calculate_upload_cost(request.file_size)
+    )
     balance = get_credit_balance(user_id)["balance"]
 
     if head_result:
@@ -211,13 +285,25 @@ async def prepare_upload(request: PrepareUploadRequest):
             "can_afford": balance >= upload_cost,
         }
 
-    # Check for existing pending upload with same hash (resume support)
+    # Check for existing pending upload with same hash (resume support).
+    # T8370: scope the resume lookup to the SAME kind — the identical hash can
+    # legitimately be mid-upload as a game AND (separately) as a clip, and
+    # resuming across kinds would hand back an upload_id in the wrong
+    # namespace. A below-v050 DB has no kind column at all (every row is
+    # implicitly 'game' pre-T8370), so the plain lookup is still correct there.
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, r2_upload_id, parts_json FROM pending_uploads WHERE blake3_hash = ?",
-            (blake3_hash,)
-        )
+        if has_kind_column:
+            cursor.execute(
+                "SELECT id, r2_upload_id, parts_json FROM pending_uploads "
+                "WHERE blake3_hash = ? AND kind = ?",
+                (blake3_hash, kind)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, r2_upload_id, parts_json FROM pending_uploads WHERE blake3_hash = ?",
+                (blake3_hash,)
+            )
         existing_pending = cursor.fetchone()
 
         if existing_pending:
@@ -293,7 +379,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     # e.g. an executed-but-unacked create from a prior attempt).
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
-        _record_upload_failure(user_id, "sync_failed")
+        _record_upload_failure(user_id, "sync_failed", kind=kind)
         raise HTTPException(
             status_code=500,
             detail="Failed to initiate multipart upload"
@@ -319,7 +405,7 @@ async def prepare_upload(request: PrepareUploadRequest):
         # (if the keeper is truly dead this is a no-op; direct use of the
         # created id is safe — only cross-response comparison is broken).
         r2_abort_multipart_upload(r2_key, upload_id)
-        _record_upload_failure(user_id, "sync_failed")
+        _record_upload_failure(user_id, "sync_failed", kind=kind)
         raise HTTPException(
             status_code=500,
             detail="Failed to initiate multipart upload"
@@ -328,22 +414,41 @@ async def prepare_upload(request: PrepareUploadRequest):
     # Generate session ID
     session_id = f"upload_{uuid.uuid4().hex}"
 
-    # Store pending upload in user's database
+    # Store pending upload in user's database. kind is written only when the
+    # column exists (guarded above: a below-v050 DB already refused kind='clip',
+    # so reaching here with the column absent means kind is 'game' — the
+    # column's own DEFAULT is correct without us writing it).
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO pending_uploads (
-                id, blake3_hash, file_size, original_filename, r2_upload_id, label
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            session_id,
-            blake3_hash,
-            request.file_size,
-            request.original_filename,
-            upload_id,
-            request.label,
-        ))
+        if has_kind_column:
+            cursor.execute("""
+                INSERT INTO pending_uploads (
+                    id, blake3_hash, file_size, original_filename, r2_upload_id, label, kind
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                session_id,
+                blake3_hash,
+                request.file_size,
+                request.original_filename,
+                upload_id,
+                request.label,
+                kind,
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO pending_uploads (
+                    id, blake3_hash, file_size, original_filename, r2_upload_id, label
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                session_id,
+                blake3_hash,
+                request.file_size,
+                request.original_filename,
+                upload_id,
+                request.label,
+            ))
         conn.commit()
 
     # Generate presigned URLs for all parts (4 hour expiry)
@@ -411,7 +516,8 @@ async def finalize_upload(
             )
 
         blake3_hash = pending['blake3_hash']
-        r2_key = f"games/{blake3_hash}.mp4"
+        kind = _pending_kind(pending)
+        r2_key = upload_object_key(kind, blake3_hash, user_id)
         r2_upload_id = pending['r2_upload_id']
 
         # Convert parts to R2 format
@@ -430,7 +536,7 @@ async def finalize_upload(
                 f"reason=complete_multipart_failed"
             )
             # T7970: R2 refused/failed to assemble the multipart — a durable-sync failure.
-            _record_upload_failure(user_id, "sync_failed")
+            _record_upload_failure(user_id, "sync_failed", kind=kind)
             raise HTTPException(
                 status_code=500,
                 detail="Failed to complete multipart upload"
@@ -444,7 +550,7 @@ async def finalize_upload(
                 f"hash={blake3_hash} reason=object_not_found_after_complete"
             )
             # T7970: R2 completed but the object is not durably readable — sync failure.
-            _record_upload_failure(user_id, "sync_failed")
+            _record_upload_failure(user_id, "sync_failed", kind=kind)
             raise HTTPException(
                 status_code=500,
                 detail="Upload completed but object not found"
@@ -460,7 +566,7 @@ async def finalize_upload(
             )
             # T7970: bytes on R2 don't match the declared size — the transfer dropped/
             # duplicated data in flight (transport-level corruption) -> network.
-            _record_upload_failure(user_id, "network")
+            _record_upload_failure(user_id, "network", kind=kind)
             # Don't delete - let admin investigate
             raise HTTPException(
                 status_code=400,
@@ -500,14 +606,20 @@ async def finalize_upload(
     # intent-side game_created. Emitted synchronously so the impersonation guard
     # (record_milestone) resolves against this request's context. Never fires from
     # create_game (which only inserts the pending row).
-    from app.analytics import record_milestone
-    record_milestone(user_id, "game_upload_succeeded", context={"blake3_hash": blake3_hash})
+    # T8370 (D4 fix): a CLIP upload's bytes landing here is not yet a durable
+    # clip — that only happens once POST /api/clips/upload lands the raw_clips
+    # row (its own `clip_uploaded` milestone). Emitting game_upload_succeeded
+    # for a clip would count it as a game upload in T8220's tried/succeeded pair.
+    if kind == UploadKind.GAME.value:
+        from app.analytics import record_milestone
+        record_milestone(user_id, "game_upload_succeeded", context={"blake3_hash": blake3_hash})
 
     # Game creation is handled separately by POST /api/games
     return {
         "status": UploadStatus.SUCCESS,
         "blake3_hash": blake3_hash,
         "file_size": actual_size,
+        "kind": kind,
     }
 
 
@@ -597,6 +709,11 @@ async def upload_failure_beacon(request: Request):
     blake3_hash = payload.get("blake3_hash")
     attempts = payload.get("attempts")
     elapsed_ms = payload.get("elapsed_ms")
+    # T8370: client-declared, best-effort only — this beacon writes no DB row,
+    # so there is nothing to guard against a forged value; worst case a
+    # mislabeled beacon under/over-counts one of two purely informational
+    # failure-reason breakdowns.
+    beacon_kind = payload.get("kind") or UploadKind.GAME.value
 
     logger.error(
         f"[UPLOAD_BEACON] client upload failure user={user_id} "
@@ -617,7 +734,7 @@ async def upload_failure_beacon(request: Request):
     # and inflate the denominator. `_record_upload_failure` guards a None user_id
     # (anon beacon) and never throws, so the fire-and-forget/always-204 contract holds.
     if phase == "uploading":
-        _record_upload_failure(user_id, _classify_uploading_phase_failure(reason))
+        _record_upload_failure(user_id, _classify_uploading_phase_failure(reason), kind=beacon_kind)
 
     # 204 No Content — nothing to return.
     return None
@@ -632,14 +749,18 @@ async def list_pending_uploads():
     Validates each R2 session and auto-cleans stale ones.
     """
     user_id = get_current_user_id()
-    reaped_failures = 0  # T7510: count of orphaned uploads reaped as failures
+    reaped_failures = 0  # T7510: count of orphaned GAME uploads reaped as failures
+    reaped_clip_failures = 0  # T8370: same, for CLIP uploads (routed to clip_upload_failed)
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, blake3_hash, file_size, original_filename, parts_json, created_at, r2_upload_id, label
-            FROM pending_uploads
-            ORDER BY created_at DESC
-        """)
+        # T8370 (reviewer-caught bug): SELECT * (not an explicit column list) so
+        # `kind` is present when the column exists — an explicit list that
+        # omitted it made every `_pending_kind(row)` below resolve to GAME
+        # unconditionally (the column was never selected), even on an
+        # already-migrated DB. That mis-routed a legitimately in-progress CLIP
+        # upload's validity check onto the WRONG R2 key (games/ instead of
+        # raw_clips/), reaping-and-DELETING its still-valid resume record.
+        cursor.execute("SELECT * FROM pending_uploads ORDER BY created_at DESC")
         rows = cursor.fetchall()
 
         uploads = []
@@ -647,7 +768,7 @@ async def list_pending_uploads():
 
         for row in rows:
             # Validate R2 session is still valid
-            r2_key = f"games/{row['blake3_hash']}.mp4"
+            r2_key = upload_object_key(_pending_kind(row), row['blake3_hash'], user_id)
             if not r2_is_multipart_upload_valid(r2_key, row['r2_upload_id']):
                 # Mark for the honest reap below (abort R2 + surface orphaned game)
                 stale_rows.append(row)
@@ -667,6 +788,7 @@ async def list_pending_uploads():
                 # sqlite3.Row: `in row` tests VALUES (Row is a sequence), so
                 # `.keys()` is required here — SIM118 is a false positive.
                 'label': row['label'] if 'label' in row.keys() else None,  # noqa: SIM118
+                'kind': _pending_kind(row),
                 'completed_parts': len(completed_parts),
                 'total_parts': total_parts,
                 'progress_percent': round(len(completed_parts) / total_parts * 100) if total_parts > 0 else 0,
@@ -680,14 +802,17 @@ async def list_pending_uploads():
         # each stale row:
         #   1. Abort the orphaned R2 multipart (best-effort — never blocks the response),
         #   2. Flip a matching still-'pending' game to 'upload_failed' so it renders a
-        #      visible, user-actionable card (Retry / Discard),
+        #      visible, user-actionable card (Retry / Discard) — GAME kind only; a
+        #      CLIP upload never created a games row (T8370 INV-U3), so this UPDATE
+        #      is structurally a no-op for it. Never skip step 3 either way.
         #   3. Delete the dead pending_uploads row.
         # Idempotent: a second call finds no stale row (already deleted) and the UPDATE
         # is a no-op once the game has left 'pending'. Scoped to this profile's DB
         # (per-profile SQLite), so the hash match can only touch this user's games.
         if stale_rows:
             for row in stale_rows:
-                r2_key = f"games/{row['blake3_hash']}.mp4"
+                row_kind = _pending_kind(row)
+                r2_key = upload_object_key(row_kind, row['blake3_hash'], user_id)
                 # 1. r2_abort_multipart_upload swallows + logs its own errors and never
                 #    raises, so a failed abort cannot block the reap or the response.
                 #    Log loudly here too when it reports failure.
@@ -696,22 +821,28 @@ async def list_pending_uploads():
                         f"[T7490] Failed to abort stale R2 multipart for pending upload "
                         f"{row['id']} (hash={row['blake3_hash']}); continuing reap anyway"
                     )
-                # 2. Surface any orphaned pending game instead of leaving it invisible.
-                cursor.execute(
-                    "UPDATE games SET status = ? WHERE blake3_hash = ? AND status = ?",
-                    (GameStatus.UPLOAD_FAILED.value, row['blake3_hash'], GameStatus.PENDING.value),
-                )
-                if cursor.rowcount > 0:
-                    logger.warning(
-                        f"[T7490] Marked {cursor.rowcount} orphaned pending game(s) "
-                        f"upload_failed for hash={row['blake3_hash']} (dead resume "
-                        f"session {row['id']})"
+                if row_kind == UploadKind.CLIP.value:
+                    # T8370: no games row exists to surface — a dead clip upload
+                    # has no visible surface (design §7 Q5, session-only client
+                    # state). Count it for its own reason-carrying failure event.
+                    reaped_clip_failures += 1
+                else:
+                    # 2. Surface any orphaned pending game instead of leaving it invisible.
+                    cursor.execute(
+                        "UPDATE games SET status = ? WHERE blake3_hash = ? AND status = ?",
+                        (GameStatus.UPLOAD_FAILED.value, row['blake3_hash'], GameStatus.PENDING.value),
                     )
-                    # T7510: a reaped pending upload is a durable FAILURE — the
-                    # user started an upload that never finalized. Record it with a
-                    # coarse reason so the dashboard shows the attempt AND its cause
-                    # (user_abandoned = navigated away / dead resume session).
-                    reaped_failures += 1
+                    if cursor.rowcount > 0:
+                        logger.warning(
+                            f"[T7490] Marked {cursor.rowcount} orphaned pending game(s) "
+                            f"upload_failed for hash={row['blake3_hash']} (dead resume "
+                            f"session {row['id']})"
+                        )
+                        # T7510: a reaped pending upload is a durable FAILURE — the
+                        # user started an upload that never finalized. Record it with a
+                        # coarse reason so the dashboard shows the attempt AND its cause
+                        # (user_abandoned = navigated away / dead resume session).
+                        reaped_failures += 1
                 # 3. Drop the dead resume record.
                 cursor.execute("DELETE FROM pending_uploads WHERE id = ?", (row['id'],))
             conn.commit()
@@ -723,6 +854,10 @@ async def list_pending_uploads():
         from app.analytics import record_milestone
         for _ in range(reaped_failures):
             record_milestone(user_id, "game_upload_failed", reason="user_abandoned")
+    if reaped_clip_failures:
+        from app.analytics import record_milestone
+        for _ in range(reaped_clip_failures):
+            record_milestone(user_id, "clip_upload_failed", reason="user_abandoned")
 
     return {'pending_uploads': uploads}
 
@@ -743,7 +878,9 @@ async def cancel_upload(session_id: str):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT blake3_hash, r2_upload_id FROM pending_uploads WHERE id = ?",
+            "SELECT blake3_hash, r2_upload_id, kind FROM pending_uploads WHERE id = ?"
+            if column_exists(cursor, "pending_uploads", "kind")
+            else "SELECT blake3_hash, r2_upload_id FROM pending_uploads WHERE id = ?",
             (session_id,)
         )
         pending = cursor.fetchone()
@@ -755,7 +892,8 @@ async def cancel_upload(session_id: str):
                 detail="Upload session not found"
             )
 
-        r2_key = f"games/{pending['blake3_hash']}.mp4"
+        cancel_kind = _pending_kind(pending)
+        r2_key = upload_object_key(cancel_kind, pending['blake3_hash'], user_id)
 
         # Abort multipart upload in R2
         r2_abort_multipart_upload(r2_key, pending['r2_upload_id'])
@@ -773,7 +911,7 @@ async def cancel_upload(session_id: str):
     # same category as the reaper's silent abandonment (user_abandoned), but this is
     # the EXPLICIT gesture. It deletes the pending row above, so the reaper can never
     # re-count it (no double-count). Emitted outside the SQLite txn (reaper convention).
-    _record_upload_failure(user_id, "user_abandoned")
+    _record_upload_failure(user_id, "user_abandoned", kind=cancel_kind)
 
     return {"status": "cancelled"}
 
