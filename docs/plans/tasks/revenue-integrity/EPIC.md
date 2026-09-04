@@ -1,6 +1,6 @@
 # Revenue Record Integrity
 
-**Status:** TODO
+**Status:** TODO (sequenced AFTER the Tutorial Redesign group, user order 2026-09-03)
 **Started:** (not started)
 **Impact:** 7
 **Complexity:** 4

@@ -133,11 +133,40 @@ So the flagged-account row is a heal that REPORTS SUCCESS and changes nothing ob
 which is the worst of the three failure shapes on this panel. Fixing the classifier's
 causes without fixing this leaves a permanent red row that also lies about being fixed.
 
-**Fix:** resolve the excluded user_id set ONCE in `_compute_reconciliation` and apply it to
-BOTH sides, so a flagged account is either absent from the report entirely or labelled as
-excluded, never rendered as unexplained drift. Do not solve it by removing the exclusion
-from the local side: excluding staff self-payments from customer-revenue reporting is the
-intended behavior of the flag.
+**Fix (user directive 2026-09-03: "the flag is to be used by the filter"):** `is_test_account`
+is a FILTER input, not a permanent hard exclusion. `list_users` already treats it that way
+(`exclude_test` is a request parameter, [admin.py:223](../../../../src/backend/app/routers/admin.py#L223)),
+but the reconciliation hardcodes `_test_exclusion(True)`
+([admin.py:693](../../../../src/backend/app/routers/admin.py#L693)) with no way to turn it
+off. So:
+
+1. The reconciliation endpoint honours the same filter the rest of the admin panel uses,
+   defaulting to hiding test accounts like the user table does.
+2. Whatever the filter state, resolve the excluded user_id set ONCE and apply it to BOTH
+   sides (local map, Stripe aggregate, and `_emails_for`).
+
+That makes both filter states correct and neither produces a phantom row: filtered ON, the
+account is absent from both sides, so nothing to drift; filtered OFF, it appears on both
+sides with local 399 against Stripe 399, i.e. aligned. A flagged account must never be
+dropped from one side while surviving on the other.
+
+**Do NOT solve it by unflagging the account.** User decision 2026-09-03, taken against
+these prod numbers (69 users total):
+
+| Metric | imankh | All | Share |
+|--------|--------|-----|-------|
+| session_started | 194 | 488 | 40% |
+| clip_created | 124 | 339 | 37% |
+| framing_opened | 55 | 163 | 34% |
+| annotation_completed | 74 | 304 | 24% |
+| export_completed | 37 | 160 | 23% |
+| usage seconds | 62,080 | 267,222 | 23% |
+
+The owner's QA account is a quarter to 40% of every activity number on the dashboard, so
+the flag earns its keep on FUNNEL metrics regardless of the trivial revenue involved. The
+$3.99 itself is a deliberate one-time live-mode payment test by the owner, not customer
+revenue, and is not expected to recur. Keep the account flagged; make the panel filter on
+it symmetrically instead of excluding it on one side only.
 
 Note the flag itself is admin-view-only (`_test_exclusion`, the UserTable badge, and the
 `markTestAccount` toggle at [admin.py:626](../../../../src/backend/app/routers/admin.py#L626));
@@ -152,9 +181,11 @@ it changes nothing about the account's own app experience.
 - [ ] A heal that fails is visible on the row it failed for
 - [ ] The panel explains an id-only row instead of showing a bare UUID
 - [ ] Classifier stays pure; new fact arrives as a parameter
-- [ ] A flagged test account with live Stripe history does NOT appear as unexplained
-      drift, and no heal on this panel can report success while changing nothing
-      (regression test seeded with the imankh case: flagged, `user_segments` present,
-      local value already correct)
+- [ ] The reconciliation honours the admin test-account FILTER rather than hardcoding
+      exclusion, and applies whichever state is active to both the local and Stripe sides
+- [ ] A flagged account with live Stripe history is aligned when the filter is off and
+      absent when it is on, never unexplained drift in either state, and no heal on this
+      panel can report success while changing nothing (regression test seeded with the
+      imankh case: flagged, `user_segments` present, local value already correct)
 - [ ] Unit tests cover: deleted payer, test-mode-era, refund, dispute, aligned, and a
       deleted payer that ALSO has a refund (account_deleted wins)
