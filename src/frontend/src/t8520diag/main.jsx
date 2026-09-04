@@ -1,50 +1,77 @@
 import { useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ConfirmationDialog, OverlayEffectIllustration } from '../components/shared';
-import { Sparkles } from 'lucide-react';
+import { CollectionPlayer } from '../components/collections/CollectionPlayer';
+import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
+import { ToastContainer, toast } from '../components/shared/Toast';
+import { FOCUS_PUBLISH_LATER_TOAST } from '../config/displayNames';
+import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { useQuestStore } from '../stores/questStore';
-import '../index.css'; // Tailwind — ConfirmationDialog's fixed/inset classes need it
+import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes need it
 
 /**
- * T8520 — DEV-ONLY real-browser harness for the export-complete choice card.
+ * T8390 — DEV-ONLY real-browser harness for Focus's post-export preview +
+ * publish-exit action bar (supersedes the T8520 3-button completion-choice
+ * card this file used to mount — FocusScreen.jsx now shows the preview FIRST,
+ * decision after; see FocusScreen.jsx's handleAddSpotlight/
+ * handleAddSpotlightLater/handlePublish/handleRefocus, ~L1047-1103).
  *
- * Reproduces the exact card FocusScreen renders (FocusScreen.jsx:1296-1311):
- * same ConfirmationDialog props, same panelTestId ("export-complete-choice"),
- * same three buttons in the same order, same onClose semantics (maps to
- * "Add Spotlight Later", never a silent dismiss), and the SAME
- * `useQuestStore.getState().recordAchievement(...)` calls FocusScreen's real
- * handlers make — so a Playwright spec asserting the achievement POST fires
- * is asserting the real gesture-to-network path, not a mock.
+ * Mounts the REAL CollectionPlayer + REAL FocusPublishActionBar with the same
+ * `actionBar` wiring FocusScreen uses, including REAL
+ * `useQuestStore.getState().recordAchievement(...)` calls and a REAL
+ * `usePublishIntentStore` stake on Publish (Focus's one-tap-publish flag) — so
+ * a Playwright spec asserting the achievement POST / flag state is asserting
+ * the real gesture-handler code path, not a mock.
+ *
+ * Diag params (via location.hash): `#isAutoCreated=1` selects the single-clip
+ * "Add Spotlight Later" toast copy branch; omitted/0 selects multi-clip.
  *
  * What's synthetic: the premise "an export just finished" (no real Focus
- * render ran). What's real: ConfirmationDialog, OverlayEffectIllustration,
- * Button, and questStore.recordAchievement's fetch to
- * POST /api/quests/achievements/{key}.
+ * render ran) and the video source (a data: URI, no real stream). What's
+ * real: CollectionPlayer, FocusPublishActionBar, Button, questStore.
+ * recordAchievement's fetch, publishIntentStore.
  */
-function ExportCompleteChoiceDiagHarness() {
+const params = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+const isAutoCreated = params.get('isAutoCreated') === '1';
+const PROJECT_ID = Number(params.get('projectId') || 424242);
+
+function FocusPublishExitDiagHarness() {
   const [open, setOpen] = useState(true);
   const [lastAction, setLastAction] = useState('none');
 
-  // Mirrors FocusScreen.jsx handleAddSpotlight/handleAddSpotlightLater/handleFinishNow.
+  // Mirrors FocusScreen.jsx handleAddSpotlight (verbatim).
   const handleAddSpotlight = useCallback(() => {
     setOpen(false);
     setLastAction('add-spotlight');
   }, []);
 
+  // Mirrors FocusScreen.jsx handleAddSpotlightLater (verbatim, incl. the
+  // is_auto_created-routed toast).
   const handleAddSpotlightLater = useCallback(() => {
     setOpen(false);
     useQuestStore.getState().recordAchievement('overlay_deferred');
+    const copy = isAutoCreated ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    toast.success(copy.title, { message: copy.message, duration: 10000 });
     setLastAction('add-spotlight-later');
   }, []);
 
-  const handleFinishNow = useCallback(() => {
+  // Mirrors FocusScreen.jsx handlePublish (verbatim, incl. the publish-intent
+  // stake; the diag stops short of the 500ms triggerExport() timer since no
+  // real export button is mounted here — the flag stake is the assertable
+  // contract this harness exists to prove).
+  const handlePublish = useCallback(() => {
     setOpen(false);
     useQuestStore.getState().recordAchievement('overlay_declined');
-    setLastAction('finish-now');
+    usePublishIntentStore.getState().set(PROJECT_ID);
+    setLastAction('publish');
   }, []);
 
-  // Mirrors FocusScreen's export-complete callback firing overlay_offered once,
-  // available via a reset button so a spec can re-arm the card between paths.
+  // Mirrors FocusScreen.jsx handleRefocus (verbatim) — also CollectionPlayer's
+  // onClose (X / Escape), same as FocusScreen wires it.
+  const handleRefocus = useCallback(() => {
+    setOpen(false);
+    setLastAction('refocus');
+  }, []);
+
   const reopen = useCallback(() => {
     useQuestStore.getState().recordAchievement('overlay_offered');
     setOpen(true);
@@ -70,24 +97,34 @@ function ExportCompleteChoiceDiagHarness() {
         Reopen (fires overlay_offered)
       </button>
 
-      {/* Primary ("Add Spotlight") is LAST so the footer's flex-col-reverse puts
-          it lowest on mobile / rightmost on desktop — identical to
-          FocusScreen.jsx:1306-1310. */}
-      <ConfirmationDialog
-        isOpen={open}
-        panelTestId="export-complete-choice"
-        title="Your reel is exported"
-        illustration={<OverlayEffectIllustration />}
-        message={"Add a spotlight overlay? Optional - it draws a glowing highlight around your athlete and can add text on the video."}
-        onClose={handleAddSpotlightLater}
-        buttons={[
-          { label: 'Add Spotlight Later', variant: 'secondary', onClick: handleAddSpotlightLater },
-          { label: 'Finish Now', variant: 'secondary', onClick: handleFinishNow },
-          { label: 'Add Spotlight', variant: 'cyan', icon: Sparkles, onClick: handleAddSpotlight },
-        ]}
-      />
+      {open && (
+        <CollectionPlayer
+          reels={[{
+            id: PROJECT_ID,
+            name: 'QA Focus Draft',
+            streamUrl: 'data:video/mp4;base64,',
+            aspect_ratio: '9:16',
+            duration: null,
+          }]}
+          title="QA Focus Draft"
+          onClose={handleRefocus}
+          actionBar={(
+            <FocusPublishActionBar
+              onPublish={handlePublish}
+              onAddSpotlight={handleAddSpotlight}
+              onAddSpotlightLater={handleAddSpotlightLater}
+              onRefocus={handleRefocus}
+            />
+          )}
+        />
+      )}
+      <ToastContainer />
     </div>
   );
 }
 
-createRoot(document.getElementById('t8520diag-root')).render(<ExportCompleteChoiceDiagHarness />);
+// Expose for the spec to inspect the publish-intent flag without a second
+// module context (same technique t8530diag uses for reelPreviewStore).
+window.__t8390PublishIntentStore = usePublishIntentStore;
+
+createRoot(document.getElementById('t8520diag-root')).render(<FocusPublishExitDiagHarness />);

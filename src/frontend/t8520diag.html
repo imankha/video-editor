@@ -1,24 +1,27 @@
 <!doctype html>
 <!--
-  T8520 DEV-ONLY diagnostic harness proving the export-complete choice card
-  (ConfirmationDialog + OverlayEffectIllustration + the three gesture handlers
-  FocusScreen wires at FocusScreen.jsx:1040-1065,1299-1310). NOT a production
-  page: Vite's default build entry is index.html only, and this file is not
-  added to rollupOptions.input, so it never ships in the built app (same as
-  the other *diag.html harnesses, e.g. collectionplayerdiag.html).
+  T8390 DEV-ONLY diagnostic harness proving Focus's post-export preview +
+  publish-exit action bar (CollectionPlayer + FocusPublishActionBar + the four
+  gesture handlers FocusScreen wires at FocusScreen.jsx ~L1047-1103,
+  ~L1328-1352). Supersedes the old T8520 3-button completion-choice-card
+  harness this file used to mount. NOT a production page: Vite's default
+  build entry is index.html only, and this file is not added to
+  rollupOptions.input, so it never ships in the built app (same as the other
+  *diag.html harnesses, e.g. collectionplayerdiag.html).
 
-  Mounts the REAL ConfirmationDialog + REAL OverlayEffectIllustration with the
-  exact props/handler shape FocusScreen uses, including a REAL call to
-  questStore.recordAchievement (so the achievement POST network assertion in
-  the Playwright spec observes the real gesture-handler code path, not a
-  synthetic fetch). Only the "an export just finished" premise is synthetic —
+  Mounts the REAL CollectionPlayer + REAL FocusPublishActionBar with the exact
+  props/handler shape FocusScreen uses, including REAL calls to
+  questStore.recordAchievement and a REAL usePublishIntentStore stake on
+  Publish (so a Playwright spec asserting the achievement POST / flag state
+  observes the real gesture-handler code path, not a synthetic fetch). Only
+  the "an export just finished" premise + video source are synthetic —
   everything downstream of that is the real component tree.
 -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>T8520 export-complete choice diag (dev only)</title>
+    <title>T8390 Focus publish exit diag (dev only)</title>
     <style>
       html, body { margin: 0; padding: 0; background: #111827; }
     </style>

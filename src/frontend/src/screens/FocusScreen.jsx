@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { List, X, Sparkles } from 'lucide-react';
+import { List, X } from 'lucide-react';
 import { FocusModeView } from '../modes';
 import { FocusContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/focus';
@@ -12,7 +12,11 @@ import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
-import { ConfirmationDialog, OverlayEffectIllustration } from '../components/shared';
+import { toast } from '../components/shared';
+import { CollectionPlayer } from '../components/collections/CollectionPlayer';
+import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
+import { usePublishIntentStore } from '../stores/publishIntentStore';
+import { FOCUS_PUBLISH_LATER_TOAST } from '../config/displayNames';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -20,7 +24,7 @@ import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore, useWorkingVideo } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
 
@@ -77,8 +81,11 @@ export function FocusScreen({
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-  // T8520: post-export completion choice card (overlay is an offer, not a stage)
-  const [showExportCompleteChoice, setShowExportCompleteChoice] = useState(false);
+  // T8390: post-export preview + publish-exit action bar (overlay is an offer,
+  // not a stage; the preview mounts BEFORE any choice, replacing T8520's
+  // choose-then-preview card with preview-first per the approved design).
+  const [showExportCompletePreview, setShowExportCompletePreview] = useState(false);
+  const workingVideo = useWorkingVideo();
   const clipHasUserEditsRef = useRef(false);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
@@ -1023,47 +1030,72 @@ export function FocusScreen({
     }
 
     if (workingVideoSet) {
-      // T8520: overlay is an offer, not a mandatory stage. Instead of the old
-      // silent `setEditorMode('overlay')`, show the completion choice card. This
-      // is a gesture-driven completion callback (export finished), NOT a reactive
-      // useEffect watching state, so recording `overlay_offered` here is allowed.
-      console.log('[FocusScreen] Export complete — offering overlay choice');
-      setShowExportCompleteChoice(true);
+      // T8390: overlay is an offer, not a mandatory stage. Show the preview +
+      // publish-exit action bar IMMEDIATELY (preview-first, replacing T8520's
+      // choose-then-preview card). This is a gesture-driven completion callback
+      // (export finished), NOT a reactive useEffect watching state, so recording
+      // `overlay_offered` here is allowed.
+      console.log('[FocusScreen] Export complete — showing preview + publish exit');
+      setShowExportCompletePreview(true);
       useQuestStore.getState().recordAchievement('overlay_offered');
     } else {
       console.error('[FocusScreen] Cannot offer overlay — working video not set');
     }
   }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo]);
 
-  // T8520: the three completion-choice gesture handlers. Each emits its own
+  // T8390: the four post-preview gesture handlers. Each emits its own
   // FLOW_EVENT from the click handler (never a reactive watcher).
   const handleAddSpotlight = useCallback(() => {
     // Identical to today's behavior — everything is already staged. No new event:
     // App.jsx's effect emits the overlay-entry achievement when editorMode becomes
     // OVERLAY.
-    setShowExportCompleteChoice(false);
+    setShowExportCompletePreview(false);
     setEditorMode('overlay');
   }, [setEditorMode]);
 
-  // Also used for the X / onClose (the only choice that starts no work).
   const handleAddSpotlightLater = useCallback(() => {
-    setShowExportCompleteChoice(false);
+    setShowExportCompletePreview(false);
     useQuestStore.getState().recordAchievement('overlay_deferred');
+    // T8390: explainer toast — routed by is_auto_created (T8360's already-approved
+    // split), since that's also where the draft actually landed (single-clip auto
+    // drafts -> Clips tab; multi-clip drafts -> Highlights). Copy is verbatim from
+    // the approved design; centralized in displayNames.js, not inlined here.
+    const copy = project?.is_auto_created
+      ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP
+      : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    toast.success(copy.title, { message: copy.message, duration: 10000 });
     // Navigation only — lands on the drafts surface. Persists NOTHING; the draft
     // stays at its current stage and the Overlay tab remains enabled.
     useEditorStore.getState().goToProjectManager();
-  }, []);
+  }, [project?.is_auto_created]);
 
-  const handleFinishNow = useCallback(() => {
-    setShowExportCompleteChoice(false);
+  // T8390: Publish — renamed from "Finish Now" now that the user has actually
+  // watched the preview before deciding. ONE tap, TRUE publish: this fires the
+  // same spotlight-less overlay render "Finish Now" always fired (same 500ms
+  // cross-mode re-point pattern as App.jsx:381, still skips the per-second
+  // credit check), but also stakes the publish INTENT via publishIntentStore
+  // before triggering it. App.jsx's shared export-completion handler (the
+  // T8530 "land the user on the finished reel" block) reads that flag when
+  // THIS project's render completes and auto-runs the publish gesture instead
+  // of waiting for a second tap — see publishIntentStore.js for why a store
+  // (not a plain ref) is the right shape for a cross-component signal here.
+  const handlePublish = useCallback(() => {
+    setShowExportCompletePreview(false);
     useQuestStore.getState().recordAchievement('overlay_declined');
-    // Fire the OVERLAY (final) render with no spotlight. We switch to overlay mode
-    // so the overlay export button mounts and re-points `exportButtonRef`, then
-    // trigger it after it mounts (same 500ms cross-mode pattern as App.jsx:381).
-    // The overlay export skips the per-second credit check, so no extra charge.
+    usePublishIntentStore.getState().set(projectId);
     setEditorMode('overlay');
     setTimeout(() => exportButtonRef.current?.triggerExport(), 500);
-  }, [setEditorMode, exportButtonRef]);
+  }, [setEditorMode, exportButtonRef, projectId]);
+
+  // T8390: Refocus — go back and reframe. The preview is an overlay ON TOP of
+  // the still-mounted Focus editor, so closing it IS "back to editing"; no new
+  // navigation mechanism needed. Also the X-button/Escape handler (CollectionPlayer
+  // requires `onClose`): an incidental dismiss should never fire Add Spotlight
+  // Later's side effects (achievement + toast + navigation) — closing a preview
+  // is "nevermind", not an explicit choice.
+  const handleRefocus = useCallback(() => {
+    setShowExportCompletePreview(false);
+  }, []);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
@@ -1293,22 +1325,32 @@ export function FocusScreen({
 
       {/* T740: Outdated clips dialog removed — boundaries auto-refreshed silently */}
 
-      {/* T8520: post-export completion choice — overlay is an offer, not a stage.
-          Primary ("Add Spotlight") is LAST in the array so the footer's
-          flex-col-reverse puts it lowest on mobile / rightmost on desktop. */}
-      <ConfirmationDialog
-        isOpen={showExportCompleteChoice}
-        panelTestId="export-complete-choice"
-        title="Your reel is exported"
-        illustration={<OverlayEffectIllustration />}
-        message={"Add a spotlight overlay? Optional - it draws a glowing highlight around your athlete and can add text on the video."}
-        onClose={handleAddSpotlightLater}
-        buttons={[
-          { label: 'Add Spotlight Later', variant: 'secondary', onClick: handleAddSpotlightLater },
-          { label: 'Finish Now', variant: 'secondary', onClick: handleFinishNow },
-          { label: 'Add Spotlight', variant: 'cyan', icon: Sparkles, onClick: handleAddSpotlight },
-        ]}
-      />
+      {/* T8390: post-export preview + publish exit — overlay is an offer, not a
+          stage. Preview mounts FIRST (replacing T8520's choose-then-preview
+          card), decision comes after. Same CollectionPlayer DraftReelPreview
+          uses, mounted directly (not via reelPreviewStore) since there is no
+          final_videos row yet at this point — only the working video. */}
+      {showExportCompletePreview && workingVideo?.url && (
+        <CollectionPlayer
+          reels={[{
+            id: projectId,
+            name: project?.name,
+            streamUrl: workingVideo.url,
+            aspect_ratio: projectAspectRatio,
+            duration: null,
+          }]}
+          title={project?.name}
+          onClose={handleRefocus}
+          actionBar={(
+            <FocusPublishActionBar
+              onPublish={handlePublish}
+              onAddSpotlight={handleAddSpotlight}
+              onAddSpotlightLater={handleAddSpotlightLater}
+              onRefocus={handleRefocus}
+            />
+          )}
+        />
+      )}
     </div>
   );
 }

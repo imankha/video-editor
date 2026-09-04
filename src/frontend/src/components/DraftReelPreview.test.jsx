@@ -132,6 +132,16 @@ describe('DraftReelPreview (T8530)', () => {
     expect(mountSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('T8390: alreadyPublished payload opens straight into the published (Share) state, no draft banner', () => {
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open({ ...snapshot, alreadyPublished: true }); });
+
+    // No "landing on another decision screen": Publish never appears, Share does.
+    expect(screen.queryByTitle('Publish to Highlight Reels')).toBeNull();
+    expect(screen.getByTitle('Share')).toBeTruthy();
+    expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
+  });
+
   it('503 sync_failed shows the amber retry banner (copy matches DraftTile.jsx:849)', async () => {
     apiFetchMock.mockResolvedValueOnce(
       jsonResponse(503, { code: 'sync_failed', retryable: true })
